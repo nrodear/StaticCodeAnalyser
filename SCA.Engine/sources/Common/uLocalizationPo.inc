@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6743 Zeilen, 303797 Bytes
-  CPoLines_de: array[0..6742] of string = (
+  // i18n\de.po - 6749 Zeilen, 304205 Bytes
+  CPoLines_de: array[0..6748] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -4744,8 +4744,14 @@ const
     'msgid "comment without an end up to the end of the file"',
     'msgstr "Kommentar ohne Ende bis zum Dateiende"',
     '',
+    'msgid "documentation comment (leading \"*\" or <PRE> in line %d) - its sample code stays"',
+    'msgstr "Doku-Kommentar (f'#$00FC'hrender \"*\" oder <PRE> in Zeile %d) - sein Beispielcode bleibt"',
+    '',
     'msgid "comment before the first code of the file (license or header comment) - %s"',
     'msgstr "Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar) - %s"',
+    '',
+    'msgid "comment directly after the unit header (documentation of the unit) - %s"',
+    'msgstr "Kommentar direkt hinter dem Unit-Kopf (Doku der Unit) - %s"',
     '',
     'msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"',
     'msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kein begin/procedure/function)"',
@@ -4753,8 +4759,8 @@ const
     'msgid "no comment at the reported place"',
     'msgstr "kein Kommentar an der gemeldeten Stelle"',
     '',
-    'msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"',
-    'msgstr "mehrere Kommentare, und einer reicht mit Text '#$00FC'ber den Fund hinaus - der Schnitt w'#$00E4're nicht zusammenh'#$00E4'ngend; %s"',
+    'msgid "the finding covers only part of the comment (lines %d to %d), and its line %d is not plainly code - the rest would stay behind as a torso; %s"',
+    'msgstr "der Fund deckt nur einen Teil des Kommentars (Zeilen %d bis %d), und dessen Zeile %d ist nicht eindeutig Code - der Rest bliebe als Torso stehen; %s"',
     '',
     'msgid "the message has no column or line count"',
     'msgstr "Spalte oder Zeilenzahl fehlt in der Meldung"',
@@ -7032,8 +7038,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6739 Zeilen, 316014 Bytes
-  CPoLines_fr: array[0..6738] of string = (
+  // i18n\fr.po - 6745 Zeilen, 316467 Bytes
+  CPoLines_fr: array[0..6744] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -11759,8 +11765,14 @@ const
     'msgid "comment without an end up to the end of the file"',
     'msgstr "commentaire sans fin jusqu'''#$00E0' la fin du fichier"',
     '',
+    'msgid "documentation comment (leading \"*\" or <PRE> in line %d) - its sample code stays"',
+    'msgstr "commentaire de documentation (\"*\" en t'#$00EA'te ou <PRE> '#$00E0' la ligne %d) - son code d''exemple reste"',
+    '',
     'msgid "comment before the first code of the file (license or header comment) - %s"',
     'msgstr "commentaire avant le premier code du fichier (commentaire de licence ou d''en-t'#$00EA'te) - %s"',
+    '',
+    'msgid "comment directly after the unit header (documentation of the unit) - %s"',
+    'msgstr "commentaire juste apr'#$00E8's l''en-t'#$00EA'te de l''unit'#$00E9' (documentation de l''unit'#$00E9') - %s"',
     '',
     'msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"',
     'msgstr "la ligne %d ne ressemble pas '#$00E0' du code (pas de \";\" '#$00E0' la fin, pas de \":=\", pas de begin/procedure/function)"',
@@ -11768,8 +11780,8 @@ const
     'msgid "no comment at the reported place"',
     'msgstr "aucun commentaire '#$00E0' l''endroit signal'#$00E9'"',
     '',
-    'msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"',
-    'msgstr "plusieurs commentaires, et l''un d'#$00E9'passe le r'#$00E9'sultat avec du texte - la coupe ne serait pas d''un seul tenant; %s"',
+    'msgid "the finding covers only part of the comment (lines %d to %d), and its line %d is not plainly code - the rest would stay behind as a torso; %s"',
+    'msgstr "le r'#$00E9'sultat ne couvre qu''une partie du commentaire (lignes %d '#$00E0' %d), et sa ligne %d n''est pas clairement du code - le reste resterait comme un tron'#$00E7'on; %s"',
     '',
     'msgid "the message has no column or line count"',
     'msgstr "la colonne ou le nombre de lignes manque dans le message"',

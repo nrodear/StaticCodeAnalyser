@@ -3,11 +3,13 @@ unit uTestRdxCleanupFixes;
 // Quick-Fixes "Aufraeumen" (uRdxCleanupFixes, Charge H3a) auf Text - ohne
 // Parser, ohne Detektor (laeuft in reDelphix.Test UND im FPC-Pruefstand):
 //   SCA070 auskommentierten Code loeschen: '//'-Zeile, Kommentar hinter
-//          Code, Inhaltszeilen eines Blockkommentars (Begrenzer nur bei
-//          leerem Rest, Oeffner/Schliesser bleiben bei Prosa), mehrere
-//          Kommentare, letzte Zeile der Datei; Sperren (Direktive, Doku,
-//          Kopfkommentar, Absichts-/Unterdrueck-Marker, Code daneben,
-//          Spalte mitten im Kommentar, Mehrzeilenstring, kein Code-Merkmal).
+//          Code, Inhaltszeilen eines Blockkommentars (immer der ganze
+//          Kommentar: leerer Rest oder Rest aus Code geht mit, Prosa im
+//          Rest sperrt - Fix-Charge rwE29), mehrere Kommentare, letzte
+//          Zeile der Datei; Sperren (Direktive, Doku auch mit '*'-Rand und
+//          <PRE>, Kopfkommentar auch hinter 'unit X;', Absichts-/
+//          Unterdrueck-Marker, Code daneben, Spalte mitten im Kommentar,
+//          Mehrzeilenstring, kein Code-Merkmal).
 //   SCA053 ungenutzte Variable loeschen: Einzeldeklaration (mit '//'
 //          dahinter), leer werdende Section samt var, Gruppen (erstes,
 //          mittleres, letztes Element, ueber Zeilen), Inline-var; Sperren
@@ -31,8 +33,8 @@ type
     [Test] procedure Sca070_LineComment;
     [Test] procedure Sca070_CommentBehindCode;
     [Test] procedure Sca070_ContentLines_EmptyCommentGoes;
-    [Test] procedure Sca070_ContentLines_ProseStays;
-    [Test] procedure Sca070_OpenerOrCloserStays;
+    [Test] procedure Sca070_PartOfComment_ProseRefused;
+    [Test] procedure Sca070_PartOfComment_CodeWidens;
     [Test] procedure Sca070_SeveralComments;
     [Test] procedure Sca070_LastLineOfFile;
     [Test] procedure Sca070_KindRefusals;
@@ -202,39 +204,74 @@ begin
       8, OneMsg(1), R), R);
 end;
 
-procedure TTestRdxCleanupFixes.Sca070_ContentLines_ProseStays;
-var
-  R : string;
+// Fix-Charge rwE29: bis dahin loeschte die Hilfe nur die Region und liess
+// Oeffner/Schliesser mit der Prosa stehen - die Faelle hier boten sie an
+// (Gegenprobe: jeder Fall lieferte ohne den Fix einen Text statt der
+// Sperre). Seitdem: Prosa im Rest des Kommentars sperrt.
+procedure TTestRdxCleanupFixes.Sca070_PartOfComment_ProseRefused;
 begin
-  // Prosa vor und hinter der Region bleibt - nur die Region geht.
-  Assert.AreEqual(InProc(['  { Alte Fassung:', '    noch offen }', '  Foo;']),
-    Fix(ckComment, InProc(['  { Alte Fassung:', '    X := 1;', '    Y := 2;',
-      '    noch offen }', '  Foo;']), 7, BlockMsg(2, 1), R), R);
-  // Eine Leerzeile zwischen Oeffner und Region bleibt (der Bereich beginnt
-  // nie hinter einem Zeilenende oder auf einer leeren Zeile).
-  Assert.AreEqual(InProc(['(*', '', 'noch offen *)', '  Foo;']),
-    Fix(ckComment, InProc(['(*', '', 'X := 1;', 'noch offen *)', '  Foo;']), 8,
-      OneMsg(1), R), R);
+  // Prosa vor und hinter der Region.
+  AssertRefused(ckComment, InProc(['  { Alte Fassung:', '    X := 1;',
+    '    Y := 2;', '    noch offen }', '  Foo;']), 7, BlockMsg(2, 1),
+    'nur einen Teil des Kommentars (Zeilen 6 bis 9), und dessen Zeile 6');
+  // Leerzeile vor der Region (zaehlt nicht), Prosa dahinter.
+  AssertRefused(ckComment, InProc(['(*', '', 'X := 1;', 'noch offen *)',
+    '  Foo;']), 8, OneMsg(1), 'dessen Zeile 9');
+  // Der Kommentar beginnt an der Spalte, dahinter Prosa (bis dahin blieb
+  // der Oeffner stehen).
+  AssertRefused(ckComment, InProc(['  Foo; { X := 1;', '  Prosa }', '  Bar;']),
+    6, OneMsg(8), 'nur einen Teil');
+  // Prosa davor, die Region endet am Schliesser (bis dahin blieb er).
+  AssertRefused(ckComment, InProc(['  { Prosa', '    X := 1; }', '  Bar;']), 7,
+    OneMsg(1), 'nur einen Teil');
+  // rwE29 WrapDelphi.pas:806: das 'end;' eines Beispiels in einem
+  // Doku-Kommentar mit Fliesstext - bis dahin ging nur das 'end;'.
+  AssertRefused(ckComment, InProc(['  { Register wrappers like this:',
+    '      procedure TReg.Define;', '      begin', '        inherited;',
+    '      end;', '  }', '  Foo;']), 10, OneMsg(1), 'dessen Zeile 6');
+  // rwE29 JvInterpreter_SysUtils.pas:1485: eine Routine aus einem langen
+  // '(* *)', in dem '{ write X }' als Ueberschrift steht - ein '{ }' im
+  // Rest ist Prosa.
+  AssertRefused(ckComment, InProc(['(*', '{ write X }', 'procedure W;',
+    'begin', '  X := 1;', 'end;', '*)', '  Foo;']), 8, BlockMsg(4, 1),
+    'dessen Zeile 7');
+  // rwE29 wfxplugin.pas:364: ein Prototyp aus einer dokumentierten Liste;
+  // eine Zeile, die auf ',' endet, ist nicht eindeutig Code.
+  AssertRefused(ckComment, InProc(['(*', 'function A(X: Integer; B,',
+    '  C: Integer): Bool; stdcall;', '', 'function D(P: PChar): Bool; stdcall;',
+    '*)', '  Foo;']), 10, OneMsg(1), 'dessen Zeile 7');
 end;
 
-procedure TTestRdxCleanupFixes.Sca070_OpenerOrCloserStays;
+// Fix-Charge rwE29: der Rest des Kommentars ist Code - der ganze Kommentar
+// geht samt Begrenzern (Gegenprobe: ohne den Fix blieb je ein Torso, in
+// der Zeile darueber genannt).
+procedure TTestRdxCleanupFixes.Sca070_PartOfComment_CodeWidens;
 var
   R : string;
 begin
-  // Der Kommentar beginnt an der Spalte und traegt hinter der Region
-  // Prosa: der Oeffner bleibt.
-  Assert.AreEqual(InProc(['  Foo; {', '  Prosa }', '  Bar;']),
-    Fix(ckComment, InProc(['  Foo; { X := 1;', '  Prosa }', '  Bar;']), 6,
-      OneMsg(8), R), R);
-  // Prosa davor, die Region endet am Schliesser: er bleibt, eingerueckt
-  // wie die Zeile.
-  Assert.AreEqual(InProc(['  { Prosa', '    }', '  Bar;']),
-    Fix(ckComment, InProc(['  { Prosa', '    X := 1; }', '  Bar;']), 7,
-      OneMsg(1), R), R);
-  // Steht der Schliesser allein auf seiner Zeile, bleibt die Zeile ganz.
-  Assert.AreEqual(InProc(['  { Prosa', '  }', '  Bar;']),
-    Fix(ckComment, InProc(['  { Prosa', '    X := 1;', '  }', '  Bar;']), 7,
-      OneMsg(1), R), R);
+  // rwE29 JvShapedButton.pas:360 - die Region beginnt hinter
+  // 'if ... then' / 'begin' (blieben als '{ if ... then begin }').
+  Assert.AreEqual(InProc(['    Foo;']),
+    Fix(ckComment, InProc(['{    if Default or Focused then', '    begin',
+      '      Pen.Color := clWindowFrame;', '      // reduce the area',
+      '      InflateRect(R, -1, -1);', '    end;}', '    Foo;']), 8,
+      BlockMsg(4, 1), R), R);
+  // rwE29 fmain.pas:240 - Off-by-one am Schliesser: die Region endet vor
+  // der Zeile mit '*)' (blieben '(*' und 'Exit;*)').
+  Assert.AreEqual(InProc(['  if A then begin', '    Foo;', '  end;']),
+    Fix(ckComment, InProc(['  if A then begin', '    Foo;',
+      '(*  end else if B then begin', '    Bar := 1;', '    Exit;*)',
+      '  end;']), 8, BlockMsg(2, 1), R), R);
+  // rwE29 NativeAPI.pas:1270 - die Region ist die letzte Zeile (blieben
+  // '{initialization' / 'GetCPInfo(...);' / '}').
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.']),
+    Fix(ckComment, Join(['unit u;', 'interface', 'implementation',
+      '{initialization', '  GetCPInfo(CP_ACP, Info);',
+      '  with Info do Tag := Size <> 1;}', 'end.']), 6, OneMsg(1), R), R);
+  // rwE29 JvUtils.pas:2151 - blieb '{ with memEdit do }'.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '    with memEdit do',
+      '      Text := Replace(Text);', '}', '  Foo;']), 8, OneMsg(1), R), R);
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_SeveralComments;
@@ -245,10 +282,15 @@ begin
   Assert.AreEqual(InProc(['  Foo;']),
     Fix(ckComment, InProc(['  { X := 1; } (* Y := 2; *)', '  Foo;']), 6,
       OneMsg(3), R), R);
-  // Der zweite reicht mit Prosa ueber die Region hinaus: kein
-  // zusammenhaengender Schnitt.
+  // Der zweite reicht mit Code ueber die Region hinaus: beide gehen ganz
+  // (bis zur Fix-Charge rwE29 'mehrere Kommentare ... nicht
+  // zusammenhaengend').
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['  // X := 1;', '  { Y := 2;', '    Z := 3; }',
+      '  Foo;']), 6, BlockMsg(2, 3), R), R);
+  // ... mit Prosa: keine Hilfe.
   AssertRefused(ckComment, InProc(['  // X := 1;', '  { Y := 2;', '  Prosa }',
-    '  Foo;']), 6, BlockMsg(2, 3), 'mehrere Kommentare');
+    '  Foo;']), 6, BlockMsg(2, 3), 'nur einen Teil');
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_LastLineOfFile;
@@ -287,6 +329,21 @@ begin
   // Ein Kommentar ohne Schliesser bis zum Dateiende.
   AssertRefused(ckComment, InProc(['  { X := 1;', '  Foo;']), 6, OneMsg(3),
     'Kommentar ohne Ende');
+  // Fix-Charge rwE29 (CnWizMethodHook.pas:58, '{ |<PRE>' mit '*'-Rand):
+  // eine Zeile mit fuehrendem '*' bzw. '<PRE>' ist Doku. Gegenprobe: beide
+  // Faelle decken den ganzen Kommentar ab (der Rest ist leer) - ohne den
+  // Fix ging er ganz.
+  AssertRefused(ckComment, InProc(['  {', '  *  X := 1;', '  *  Y := 2;',
+    '  }', '  Foo;']), 7, BlockMsg(2, 1), '"*" oder <PRE> in Zeile 7)');
+  AssertRefused(ckComment, InProc(['  { <PRE> X := 1; }', '  Foo;']), 6,
+    OneMsg(3), '"*" oder <PRE> in Zeile 6)');
+  // Fix-Charge rwE29 (JvgXMLSerializer.pas:50): direkt hinter 'unit X;'
+  // steht die Doku der Unit - auch mit Punkten im Namen. Gegenprobe: ohne
+  // den Fix ging der Kommentar (vor ihm steht Code, 'unit u;').
+  AssertRefused(ckComment, Join(['unit u;', '{ X := 1; }', 'interface',
+    'implementation', 'end.']), 2, OneMsg(1), 'Unit-Kopf');
+  AssertRefused(ckComment, Join(['unit A.B;', '{ X := 1; }', 'interface',
+    'implementation', 'end.']), 2, OneMsg(1), 'Unit-Kopf');
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_MarkerRefusals;

@@ -234,12 +234,12 @@
     },
     "CommentedOutCode": {
       "titel": "Auskommentierten Code löschen",
-      "was": "Löscht genau die Region der Meldung ab Zeile und Spalte: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)`. Die Begrenzer gehen erst mit, wenn der Kommentar danach leer ist; Prosa vor oder hinter der Region bleibt. Bedeutungsgleich.",
+      "was": "Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`). Bedeutungsgleich.",
       "nichtAngeboten": [
-        "eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz)",
+        "eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`, eine Zeile mit führendem `*` oder `<PRE>`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz) oder direkt hinter `unit X;` (Doku der Unit)",
         "`noinspection` oder TODO/FIXME/HACK/XXX im gelöschten Text",
         "der Text passt nicht mehr zur Meldung (Spalte, Code-Merkmal der ersten und letzten Zeile) – Zeile verschoben",
-        "mehrere Kommentare in der Region, von denen einer mit Text über sie hinausreicht"
+        "ein Kommentar reicht mit Prosa oder nicht eindeutigem Code über die Region hinaus – ein Teil davon ließe einen Torso stehen"
       ],
       "beispielVorher": [
         "  Foo;",
@@ -264,6 +264,22 @@
           "nachher": [
             "  Foo;",
             "  Bar;"
+          ]
+        },
+        {
+          "titel": "Die Meldung deckt nur einen Teil, der Rest ist Code – der ganze Kommentar geht",
+          "vorher": [
+            "  if A then begin",
+            "    Foo;",
+            "(*  end else if B then begin",
+            "    Bar := 1;",
+            "    Exit;*)",
+            "  end;"
+          ],
+          "nachher": [
+            "  if A then begin",
+            "    Foo;",
+            "  end;"
           ]
         }
       ]

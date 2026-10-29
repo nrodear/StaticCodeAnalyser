@@ -4,10 +4,10 @@ unit uRdxCleanupFixes;
 // (Konzept_Editorhilfen_Recherche_2026-10-11, Abschnitt 6, Charge H3a):
 //   SCA070 CommentedOutCode: den auskommentierten Bereich loeschen - eine
 //          '//'-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte
-//          (der Leerraum am Zeilenende geht mit), die Inhaltszeilen eines
-//          mehrzeiligen '{ }'/'(* *)' (41 % der Korpusfunde zeigen auf eine
-//          Inhaltszeile, nicht auf den Oeffner) - die Begrenzer nur, wenn
-//          der Kommentar danach leer ist.
+//          (der Leerraum am Zeilenende geht mit), einen mehrzeiligen
+//          '{ }'/'(* *)' immer GANZ samt Begrenzern (41 % der Korpusfunde
+//          zeigen auf eine Inhaltszeile, nicht auf den Oeffner): reicht er
+//          ueber den Fund hinaus, nur wenn auch der Rest Code ist.
 //   SCA053 UnusedLocalVar: die Deklaration der ungenutzten Variable
 //          loeschen - 'X: T;' samt Zeile (ein '//'-Kommentar dahinter mit,
 //          ausser er traegt einen Marker - dann bleibt er als eigene
@@ -33,9 +33,16 @@ unit uRdxCleanupFixes;
 // Zeilen R1..R1+N-1 ab (R1, C) ab - NICHT den ganzen Blockkommentar: ein
 // '{ ... }' ueber 200 Zeilen mit Leerzeilen darin ergibt mehrere Funde, und
 // Prosa vor oder hinter der Region hat der Detektor nicht als Code gemeldet.
-// Deshalb loescht die Hilfe nur die Region; die Begrenzer gehen erst mit,
-// wenn der Kommentar danach nur noch Leerraum traegt (der letzte Fund eines
-// Blocks raeumt auf). Ein Begrenzer wird nie halbiert.
+// Bis zur Fix-Charge nach dem Realworld-Test rwE29 loeschte die Hilfe nur
+// die Region und liess die Begrenzer stehen, solange der Kommentar danach
+// Text trug - 15 von 50 Stellen waren falsch: verstuemmelte Reste ('{ with
+// memEdit do }', 'begin' ohne 'end'), ein Off-by-one am Schliesser
+// ('(*' / 'break;*)' blieben, fmain.pas:240), zerstoerte Doku-Beispiele.
+// Seitdem loescht sie nur GANZE Kommentare (bzw. ganze '//'-Zeilen):
+// reicht der Kommentar ueber die Region hinaus, muss jede Zeile ausserhalb
+// leer oder eindeutig Code sein (CodePiece, strenger als der Detektor) -
+// dann geht der ganze Kommentar, sonst gibt es keine Hilfe (der Rest
+// bliebe als Torso stehen oder Prosa ginge mit).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach, statt dem Detektor zu
@@ -72,12 +79,15 @@ type
     // ALine loeschen. Gegenprobe: ab (ALine, C) bis zum Ende der letzten
     // Zeile nur Kommentar und Leerraum, die Spalte am Anfang eines
     // Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit
-    // Code-Merkmal wie im Detektor. Keine Hilfe bei einer Direktive im
-    // Bereich, einem Doku-Kommentar ('///', '{*', '(**'), einem Kommentar
-    // vor dem ersten Code der Datei (Lizenz-/Kopfkommentar), 'noinspection'
-    // oder einem Absichtsmarker wie bei SCA019 im geloeschten Text und
-    // wenn mehrere Kommentare in der Region stehen und einer mit Text ueber
-    // sie hinausreicht (der Schnitt waere nicht zusammenhaengend).
+    // Code-Merkmal wie im Detektor. Geloescht werden immer ganze
+    // Kommentare; reicht einer ueber die Region hinaus, nur wenn sein Text
+    // dort leer oder Code ist (CodePiece). Keine Hilfe bei einer Direktive
+    // im Bereich, einem Doku-Kommentar ('///', '{*', '(**', eine Zeile mit
+    // fuehrendem '*' oder '<PRE>'), einem Kommentar vor dem ersten Code der
+    // Datei (Lizenz-/Kopfkommentar) oder direkt hinter 'unit X;' (Doku der
+    // Unit), 'noinspection' oder einem Absichtsmarker wie bei SCA019 im
+    // geloeschten Text und wenn ein Kommentar mit anderem Text ueber die
+    // Region hinausreicht (Prosa oder nicht eindeutiger Code).
     class function CommentedOutCode(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -197,6 +207,21 @@ const
   // FPC-Makro: '{$DEFINE M := X}' (MacroReason).
   MACRO_WORDS: array[0..1] of string = ('define', 'definec');
   MACRO_ASSIGN = ':=';
+  // SCA070, CodePiece: ein Wort allein auf der Zeile, das so nur Code ist.
+  CODE_SOLO_WORDS: array[0..21] of string = ('begin', 'end', 'else', 'try',
+    'finally', 'except', 'repeat', 'var', 'const', 'type', 'uses', 'label',
+    'resourcestring', 'threadvar', 'initialization', 'finalization',
+    'implementation', 'interface', 'private', 'protected', 'public',
+    'published');
+  // ... eine Steuerzeile: beginnt mit einem dieser Woerter ...
+  CODE_LEAD_WORDS: array[0..7] of string = ('if', 'while', 'for', 'with',
+    'case', 'else', 'end', 'on');
+  // ... und endet mit einem dieser ('if X then', 'end else begin').
+  CODE_TAIL_WORDS: array[0..6] of string = ('then', 'do', 'of', 'begin',
+    'else', 'try', 'repeat');
+  // SCA070: der Kopf einer Unit ('unit X;'), hinter dem ihre Doku steht.
+  UNIT_HEADS: array[0..3] of string = ('unit', 'program', 'library',
+    'package');
 
 type
   // SCA070: die Region der Meldung.
@@ -274,13 +299,6 @@ function SpanOf(const AFrom, ATo: TRdxTextPos;
 begin
   Result := TRefactorSpan.Make(ARole, AFrom.Line, AFrom.Col, ATo.Line,
     ATo.Col);
-end;
-
-// Steht von AFrom bis vor ATo nur Leerraum (Zeilenenden eingeschlossen)?
-function BlankText(AMap: TRdxCodeMap; const AFrom, ATo: TRdxTextPos): Boolean;
-begin
-  Result := not PosBefore(AFrom, ATo)
-    or (Trim(RangeText(AMap, SpanOf(AFrom, ATo, SPAN_070))) = '');
 end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
@@ -384,8 +402,9 @@ var
   From : TRdxTextPos;
 begin
   // Beginnt der Schnitt hinter einem Zeilenende oder auf einer leeren Zeile
-  // (SCA070: '(*' allein auf der Zeile, der Kommentar bleibt), beginnt er
-  // auf der naechsten Zeile - das Zeilenende bleibt.
+  // (bis zur Fix-Charge rwE29 bei SCA070: '(*' allein auf der Zeile, der
+  // Kommentar blieb), beginnt er auf der naechsten Zeile - das Zeilenende
+  // bleibt.
   From := AFrom;
   while (From.Col > Length(AMap.Raw(From.Line))) and (From.Line < ATo.Line) do
     From := TextPos(From.Line + 1, 1);
@@ -569,29 +588,6 @@ begin
     [ARegion.Col]));
 end;
 
-// Die Sperren je Kommentar: Direktive, Doku, offenes Ende - und ein
-// Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar).
-function KindReason(AMap: TRdxCodeMap; const AList: TRdxCommentList): string;
-var
-  C : TRdxComment;
-begin
-  Result := '';
-  for C in AList do
-  begin
-    if C.Directive then
-      Exit(_('directive in the range (line %d) - it is active code, not a '
-        + 'comment', [C.Open.Line]));
-    if C.Doc then
-      Exit(_('documentation comment (///, {* or (**, line %d) - its sample '
-        + 'code stays', [C.Open.Line]));
-    if not C.IsClosed then
-      Exit(_('comment without an end up to the end of the file'));
-  end;
-  if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
-    Result := _('comment before the first code of the file (license or '
-      + 'header comment) - %s', [MsgDecideByHand]);
-end;
-
 // Backtick-Spannen ('`code`') entfernen - wie der Detektor
 // (StripBacktickCodeSpans): Doku zitiert dort Code.
 function StripBackticks(const S: string): string;
@@ -670,6 +666,84 @@ begin
     + 'end, no ":=", no begin/procedure/function)', [ALine]));
 end;
 
+// Die erste Zeile eines Blockkommentars in Doku-Form: sie beginnt mit '*'
+// (der Rand der CnPack- und JavaDoc-Koepfe, '*  type' ueber dem Beispiel)
+// oder traegt '<PRE>' ('{ |<PRE>' der CnPack-Koepfe); 0 ohne. Realworld-
+// Test rwE29: CnWizMethodHook.pas:58 - die Hilfe loeschte 80 Zeilen aus
+// dem Beispiel eines Kopfkommentars, den kein '{*' eroeffnete.
+function DocShapeLine(AMap: TRdxCodeMap; const AComment: TRdxComment): Integer;
+var
+  Li : Integer;
+  S  : string;
+begin
+  Result := 0;
+  if AComment.CloserText = '' then
+    Exit;
+  for Li := AComment.Body.Line to AComment.CloseAt.Line do
+  begin
+    S := TrimLeft(PieceOn(AMap, AComment, Li, 1));
+    if (Copy(S, 1, 1) = '*') or (Pos('<pre>', LowerCase(S)) > 0) then
+      Exit(Li);
+  end;
+end;
+
+// Steht vor APos nur der Kopf der Unit - 'unit X;' (auch program, library,
+// package; der Name auch mit Punkten)? Der Kommentar direkt dahinter ist
+// ihre Doku (rwE29: JvgXMLSerializer.pas:50, die Schnittstelle der Unit
+// mit Signaturen und Beschreibung hinter 'unit JvgXMLSerializer;').
+function AfterUnitHeader(AMap: TRdxCodeMap; const APos: TRdxTextPos): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := PrevToken(AMap, APos.Line, APos.Col);
+  if T.Low <> ';' then
+    Exit;
+  T := Before(AMap, T);
+  if not T.IsWord then
+    Exit;
+  while Before(AMap, T).Low = '.' do
+  begin
+    T := Before(AMap, Before(AMap, T));
+    if not T.IsWord then
+      Exit;
+  end;
+  T := Before(AMap, T);
+  Result := InList(T.Low, UNIT_HEADS) and (Before(AMap, T).Low = '');
+end;
+
+// Die Sperren je Kommentar: Direktive, Doku, offenes Ende - und ein
+// Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar)
+// bzw. direkt hinter dem Kopf der Unit.
+function KindReason(AMap: TRdxCodeMap; const AList: TRdxCommentList): string;
+var
+  C  : TRdxComment;
+  Li : Integer;
+begin
+  Result := '';
+  for C in AList do
+  begin
+    if C.Directive then
+      Exit(_('directive in the range (line %d) - it is active code, not a '
+        + 'comment', [C.Open.Line]));
+    if C.Doc then
+      Exit(_('documentation comment (///, {* or (**, line %d) - its sample '
+        + 'code stays', [C.Open.Line]));
+    if not C.IsClosed then
+      Exit(_('comment without an end up to the end of the file'));
+    Li := DocShapeLine(AMap, C);
+    if Li > 0 then
+      Exit(_('documentation comment (leading "*" or <PRE> in line %d) - its '
+        + 'sample code stays', [Li]));
+  end;
+  if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
+    Result := _('comment before the first code of the file (license or '
+      + 'header comment) - %s', [MsgDecideByHand])
+  else if AfterUnitHeader(AMap, AList[0].Open) then
+    Result := _('comment directly after the unit header (documentation of '
+      + 'the unit) - %s', [MsgDecideByHand]);
+end;
+
 // Die Gegenproben am Kommentar: Anfang, Art, Code-Merkmal. '' oder der
 // Grund.
 function CommentReason(AMap: TRdxCodeMap; const ARegion: TRdxRegion;
@@ -688,46 +762,113 @@ begin
     Result := MarkerOnLineReason(ARegion.Last);
 end;
 
-// Wo der Schliesser von AComment beginnt; steht davor auf seiner Zeile nur
-// Leerraum, der Zeilenanfang (die Zeile bleibt ganz).
-function CloserStart(AMap: TRdxCodeMap; const AComment: TRdxComment): TRdxTextPos;
+// Das erste bzw. letzte Wort von S, klein; '' wenn S nicht mit einem
+// Bezeichner beginnt bzw. endet.
+function FirstWordOf(const S: string): string;
+var
+  i : Integer;
 begin
-  Result := AComment.CloseAt;
-  if SkipBlanks(AMap.Raw(Result.Line), 1) >= Result.Col then
-    Result.Col := 1;
+  Result := '';
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i < Length(S)) and IsIdentChar(S[i + 1]) do
+    Inc(i);
+  Result := LowerCase(Copy(S, 1, i));
 end;
 
-// Was geloescht wird (s. Kopf): der Inhalt der Region; die Begrenzer nur,
-// wenn der Kommentar danach leer ist. KeepFront: der erste Kommentar begann
-// vor R1 und traegt davor Text; KeepBack: der letzte endet hinter R2 und
-// traegt dahinter Text - dann bleibt der jeweilige Begrenzer. '' oder der
-// Grund.
+function LastWordOf(const S: string): string;
+var
+  i : Integer;
+begin
+  Result := '';
+  if (S = '') or not IsIdentChar(S[Length(S)]) then
+    Exit;
+  i := Length(S);
+  while (i > 1) and IsIdentChar(S[i - 1]) do
+    Dec(i);
+  if IsIdentStart(S[i]) then
+    Result := LowerCase(Copy(S, i, MaxInt));
+end;
+
+// Ist das Stueck eines Kommentars (ohne Begrenzer) leer oder eindeutig
+// Pascal-Code - so streng, dass Prosa es kaum trifft? Code ist: endet auf
+// ';' (ein '//' dahinter abgeschnitten), traegt ':=', ist eine Direktive
+// '{$...}' (in '(* *)' totgelegt) oder 'end.', ein Schluesselwort allein
+// (CODE_SOLO_WORDS) oder eine Steuerzeile (CODE_LEAD_WORDS ...
+// CODE_TAIL_WORDS: 'if X then', 'with Y do', 'end else begin'). Ein
+// '//'-Kommentar und ein '{ }' darin sind Prosa, ebenso eine Zeile, die auf
+// ',' oder ein anderes Wort endet ('CheckEquals', 'a,'). Anders als der
+// Detektor (zwei Merkmale, eines stark) prueft das nur Zeilen ausserhalb
+// des Funds; was hier nicht besteht, sperrt - der Detektor hat es nicht als
+// Code gemeldet.
+function CodePiece(const APiece: string): Boolean;
+var
+  S, W1 : string;
+  P     : Integer;
+begin
+  S := Trim(APiece);
+  if S = '' then
+    Exit(True);
+  if Copy(S, 1, 2) = '//' then
+    Exit(False);
+  P := Pos('//', S);
+  if P > 0 then
+    S := TrimRight(Copy(S, 1, P - 1));
+  if (S[Length(S)] = ';') or (Pos(':=', S) > 0) or SameText(S, 'end.') then
+    Exit(True);
+  if (Copy(S, 1, 2) = '{$') and (Pos('}', S) = Length(S)) then
+    Exit(True);
+  W1 := FirstWordOf(S);
+  if W1 = '' then
+    Exit(False);
+  if Length(W1) = Length(S) then
+    Exit(InList(W1, CODE_SOLO_WORDS));
+  Result := InList(W1, CODE_LEAD_WORDS)
+    and InList(LastWordOf(S), CODE_TAIL_WORDS);
+end;
+
+// Die erste Zeile von ALine1 bis ALine2, deren Text in AComment (ohne
+// Begrenzer) nicht CodePiece besteht; 0, wenn alle bestehen.
+function NonCodeLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine1, ALine2: Integer): Integer;
+var
+  Li : Integer;
+begin
+  Result := 0;
+  for Li := ALine1 to ALine2 do
+    if not CodePiece(PieceOn(AMap, AComment, Li, 1)) then
+      Exit(Li);
+end;
+
+// Was geloescht wird (s. Kopf): immer ganze Kommentare, vom Oeffner des
+// ersten bis hinter den Schliesser des letzten. Beginnt der erste vor R1
+// bzw. endet der letzte hinter R2, muss sein Text dort leer oder Code sein
+// (CodePiece) - sonst bliebe ein Torso stehen ('{ with X do }', '(*' /
+// 'break;*)') oder Prosa ginge mit: keine Hilfe. Bis zur Fix-Charge rwE29
+// blieb der Begrenzer dann stehen und nur die Region ging (KeepFront/
+// KeepBack). '' oder der Grund.
 function CommentCut(AMap: TRdxCodeMap; const ARegion: TRdxRegion;
   const AList: TRdxCommentList; out AFrom, ATo: TRdxTextPos): string;
 var
-  F, G                : TRdxComment;
-  KeepFront, KeepBack : Boolean;
+  F, G : TRdxComment;
+  Li   : Integer;
 begin
   Result := '';
   F := AList[0];
   G := AList[High(AList)];
-  KeepFront := (F.Open.Line < ARegion.First)
-    and not BlankText(AMap, F.Body, TextPos(ARegion.First, 1));
-  KeepBack := (G.CloseAt.Line > ARegion.Last)
-    and not BlankText(AMap, TextPos(ARegion.Last + 1, 1), G.CloseAt);
   AFrom := F.Open;
   ATo := G.Stop;
-  if (Length(AList) > 1) and (KeepFront or KeepBack) then
-    Exit(_('several comments, and one reaches beyond the finding with text - '
-      + 'the cut would not be contiguous; %s', [MsgDeleteByHand]));
-  if KeepFront then
-    AFrom := TextPos(ARegion.First, 1)
-  else if KeepBack then
-    AFrom := F.Body;
-  if KeepBack then
-    ATo := TextPos(ARegion.Last, Length(AMap.Raw(ARegion.Last)) + 1)
-  else if KeepFront then
-    ATo := CloserStart(AMap, G);
+  Li := 0;
+  if F.Open.Line < ARegion.First then
+    Li := NonCodeLine(AMap, F, F.Body.Line, ARegion.First - 1);
+  if (Li = 0) and (G.CloseAt.Line > ARegion.Last) then
+    Li := NonCodeLine(AMap, G, ARegion.Last + 1, G.CloseAt.Line);
+  if Li > 0 then
+    Result := _('the finding covers only part of the comment (lines %d to '
+      + '%d), and its line %d is not plainly code - the rest would stay '
+      + 'behind as a torso; %s', [F.Open.Line, G.CloseAt.Line, Li,
+      MsgDeleteByHand]);
 end;
 
 class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
