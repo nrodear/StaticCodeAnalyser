@@ -35,6 +35,11 @@ type
     [Test] procedure Review_Forms;
     // Review R3, verpasst (Charge FC): 'E := ..' zwischen Handler und raise.
     [Test] procedure Sca122_BoundReassigned_Refused;
+    // rwE29: raise ENotImplemented nicht in einen Haken (virtual/override,
+    // per inherited bzw. vom Framework gerufen) und nicht in einen Callback.
+    [Test] procedure Sca020_RaiseInHookOrCallback_Refused;
+    // rwE29: ein Kommentar nennt das fehlende raise - der Autor kennt es.
+    [Test] procedure Sca120_KnownMissingRaise_Refused;
   end;
 
 implementation
@@ -358,6 +363,70 @@ begin
   Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
     + 'begin Replace(A, E, B); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
   Assert.IsTrue(Pos('als Argument', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseInHookOrCallback_Refused;
+var
+  R, Src : string;
+begin
+  // doublecmd kascrypt dcpcrypt2.pas:307 (minimiert): TDCP_hash.Init ist
+  // 'virtual' und leer, die Nachfahren rufen 'inherited Init;' - mit raise
+  // scheiterte jedes Hashing. Ohne Fix angeboten (rot).
+  Src := Join(['unit u;', 'interface', 'type', '  TDCP_hash = class',
+    '    procedure Init; virtual;', '    procedure Burn;', '  end;',
+    'implementation', 'procedure TDCP_hash.Init;', 'begin', 'end;',
+    'procedure TDCP_hash.Burn;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 9, RAISE_NOT_IMPLEMENTED, R), 'virtual');
+  Assert.IsTrue(Pos('virtual', R) > 0, R);
+  // Der Absichtskommentar bleibt (bedeutungsgleich).
+  Assert.IsTrue(Fix(rkEmpty, Src, 9, '', R) <> '', R);
+  // Gegenprobe: dieselbe Klasse, Methode ohne Direktive.
+  Assert.IsTrue(Fix(rkEmpty, Src, 12, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+  // Ein leerer override schaltet den Vorfahren bewusst ab (cnwizards
+  // LoadSettings, doublecmd Finalize).
+  Src := Join(['unit u;', 'interface', 'type', '  TWiz = class(TBase)',
+    '    procedure LoadSettings(Ini: TObject); override;', '  end;',
+    'implementation', 'procedure TWiz.LoadSettings(Ini: TObject);', 'begin',
+    'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 8, RAISE_NOT_IMPLEMENTED, R), 'override');
+  Assert.IsTrue(Pos('override', R) > 0, R);
+  // doublecmd multithreadprocslaz.pas:15 (minimiert): Register geht per
+  // '@Register' an RegisterPackage - das raise braeche die Installation.
+  Src := InImpl(['procedure Register;', 'begin', 'end;', 'initialization',
+    '  RegisterPackage(''MultiThreadProcsLaz'', @Register);']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R), 'Callback');
+  Assert.IsTrue(Pos('@Register', R) > 0, R);
+  // Auch qualifiziert ('@Self.Bar').
+  Src := InImpl(['procedure TFoo.Bar;', 'begin', 'end;',
+    'procedure TFoo.Hook;', 'begin', '  SetHandler(@Self.Bar);', 'end;']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R),
+    '@Self.Bar');
+  Assert.IsTrue(Pos('@Bar', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca120_KnownMissingRaise_Refused;
+var
+  R : string;
+begin
+  // Indy IdHTTPWebBrokerBridge.pas:741 (minimiert): Arm eines Setters, der
+  // Kommentar fragt nach dem raise - der eigene Konstruktor ruft den Setter,
+  // mit raise scheiterte jede Antwort. Ohne Fix angeboten (rot).
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  case Index of',
+    '    1: EFoo.Create(''x''); // shouldn''t this be calling ''raise''?',
+    '    2: S := V;', '  end;']), 7, MissingMsg('EFoo'), R), 'Kommentar');
+  Assert.IsTrue(Pos('raise', R) > 0, R);
+  // Ebenso auf der Zeile darueber.
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  // no raise here: called while '
+    + 'constructing', '  EFoo.Create(''x'');']), 7, MissingMsg('EFoo'), R),
+    'Kommentar darueber');
+  // Gegenprobe: 'raised' ist ein anderes Wort (Katalog: '// never raised!'),
+  // 'raise' in einem String zaehlt nicht.
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''x''); // never raised!']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''x''); // never raised!']), 6,
+      MissingMsg('EFoo'), R), R);
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''raise'');']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''raise'');']), 6, MissingMsg('EFoo'),
+      R), R);
 end;
 
 initialization

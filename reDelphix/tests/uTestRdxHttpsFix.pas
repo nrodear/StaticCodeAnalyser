@@ -37,6 +37,8 @@ type
     [Test] procedure Detector_RoundTrip_SilencesFinding;
     [Test] procedure Detector_SilentWhereHelpRefuses;
     [Test] procedure Adapter_PlansLikeTheMap;
+    // rwE29: in einem Testordner vergleicht ein Test die Adresse woertlich.
+    [Test] procedure Adapter_TestFolder_NoHelp;
   end;
 
 implementation
@@ -389,6 +391,49 @@ begin
     Detect(Wrap(['  Url := ''' + EXAMPLE_URL + ''';']))[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual<Integer>(1, Length(O.Edits));
+end;
+
+procedure TTestRdxHttpsFix.Adapter_TestFolder_NoHelp;
+var
+  Finding : TLeakFinding;
+  O       : TRdxFixOutcome;
+  Lines   : TStringList;
+begin
+  // delphimvcframework unittests\general\TestServer\
+  // TestServerControllerU.pas:1334 (minimiert): die Adresse ist eine
+  // Vorgabe, LiveServerTestU.pas vergleicht sie woertlich. Ohne Fix
+  // angeboten (rot).
+  Lines := TStringList.Create;
+  try
+    Lines.Text := Wrap(['  Url := ''' + EXAMPLE_URL + ''';']);
+    Finding := TLeakFinding.New(
+      'D:\repo\unittests\general\TestServer\TestServerControllerU.pas', '',
+      FIRST_LINE, Msg(EXAMPLE_URL), fkHttpInsteadOfHttps);
+    try
+      O := TRdxFixTable.FixFor(nil, Lines, Finding, nil);
+      Assert.IsFalse(O.Enabled, 'Testordner');
+      Assert.IsTrue(Pos('"unittests"', O.Reason) > 0, O.Reason);
+      Assert.AreEqual<Integer>(0, Length(O.Edits));
+    finally
+      Finding.Free;
+    end;
+    // Gegenprobe: dieselbe Zeile ausserhalb eines Testordners ('TestServer'
+    // allein ist kein Testordner, der Dateiname zaehlt nicht).
+    Finding := TLeakFinding.New('D:\repo\samples\TestServer\TestU.pas', '',
+      FIRST_LINE, Msg(EXAMPLE_URL), fkHttpInsteadOfHttps);
+    try
+      O := TRdxFixTable.FixFor(nil, Lines, Finding, nil);
+      Assert.IsTrue(O.Enabled, O.Reason);
+    finally
+      Finding.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+  // Die Regel selbst: Verzeichnisse test/tests/unittest(s) und '...tests'.
+  Assert.IsTrue(TRdxHttpsFix.TestPathReason('C:/x/Tests/a.pas') <> '');
+  Assert.IsTrue(TRdxHttpsFix.TestPathReason('C:\x\IntegrationTests\a.pas') <> '');
+  Assert.AreEqual('', TRdxHttpsFix.TestPathReason('C:\x\src\tests.pas'));
 end;
 
 initialization

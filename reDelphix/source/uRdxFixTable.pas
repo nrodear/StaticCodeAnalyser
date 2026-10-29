@@ -1306,9 +1306,19 @@ end;
 
 function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Why : string;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxHttpsFix.Https);
+  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich.
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName);
+  if Result.Enabled and (Why <> '') then
+  begin
+    Result.Enabled := False;
+    Result.Reason := Why;
+    Result.Edits := nil;
+  end;
 end;
 
 function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;

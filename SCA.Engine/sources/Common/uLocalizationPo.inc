@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6761 Zeilen, 305258 Bytes
-  CPoLines_de: array[0..6760] of string = (
+  // i18n\de.po - 6792 Zeilen, 307762 Bytes
+  CPoLines_de: array[0..6791] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6775,7 +6775,38 @@ const
     'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"'
+    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"',
+    '',
+    '# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)',
+    'msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"',
+    'msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von Hand erg'#$00E4'nzen"',
+    '',
+    'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
+    'msgstr "das Abschnitts-Schl'#$00FC'sselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"',
+    '',
+    'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
+    'msgstr "die Deklaration tr'#$00E4'gt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise br'#$00E4'che sie"',
+    '',
+    'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
+    'msgstr "die Routine wird als Callback '#$00FC'bergeben (@%s) - raise br'#$00E4'che ihren Aufrufer"',
+    '',
+    'msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"',
+    'msgstr "die Differenz geht wieder in einen 32-Bit-Cast (%s(...)) - NativeInt '#$00E4'nderte nichts"',
+    '',
+    'msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"',
+    'msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt '#$00E4'nderte nichts (eine Vergleichsfunktion sollte vergleichen, nicht subtrahieren)"',
+    '',
+    'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
+    'msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"',
+    '',
+    'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
+    'msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" '#$00FC'berspr'#$00E4'nge es (kein finally)"',
+    '',
+    'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
+    'msgstr "ein Kommentar auf oder '#$00FC'ber der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"',
+    '',
+    'msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"',
+    'msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse w'#$00F6'rtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7050,8 +7081,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6757 Zeilen, 317525 Bytes
-  CPoLines_fr: array[0..6756] of string = (
+  // i18n\fr.po - 6788 Zeilen, 320093 Bytes
+  CPoLines_fr: array[0..6787] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13808,7 +13839,38 @@ const
     'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"'
+    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"',
+    '',
+    '# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)',
+    'msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"',
+    'msgstr "%s figure dans une clause uses '#$00E0' l''int'#$00E9'rieur d''une branche conditionnelle (ligne %d) - l''ajouter '#$00E0' la main"',
+    '',
+    'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
+    'msgstr "le mot-cl'#$00E9' de section '#$00E0' la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses '#$00E0' la main"',
+    '',
+    'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
+    'msgstr "la d'#$00E9'claration porte %s - un corps vide y est un crochet dont les appelants (inherited, le framework) attendent qu''il ne fasse rien ; raise les casserait"',
+    '',
+    'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
+    'msgstr "la routine est pass'#$00E9'e comme callback (@%s) - raise casserait son appelant"',
+    '',
+    'msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"',
+    'msgstr "la diff'#$00E9'rence repasse dans un transtypage 32 bits (%s(...)) - NativeInt ne changerait rien"',
+    '',
+    'msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"',
+    'msgstr "la diff'#$00E9'rence va dans Result: %s - ramen'#$00E9'e '#$00E0' 32 bits, NativeInt ne changerait rien (une fonction de comparaison devrait comparer, pas soustraire)"',
+    '',
+    'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
+    'msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code s'#$00E9'pare d'#$00E9'j'#$00E0' 32 et 64 bits"',
+    '',
+    'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
+    'msgstr "apr'#$00E8's le try..except, %s (ligne %d) annule %s d''avant le try - \"raise;\" le sauterait (pas de finally)"',
+    '',
+    'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
+    'msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l''auteur conna'#$00EE't le raise manquant et l''a laiss'#$00E9' ; d'#$00E9'cider '#$00E0' la main (un raise ici peut casser les appelants)"',
+    '',
+    'msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"',
+    'msgstr "le fichier se trouve dans le dossier de test \"%s\" - un test peut comparer cette adresse litt'#$00E9'ralement (aussi depuis un autre fichier) ; d'#$00E9'cider '#$00E0' la main"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

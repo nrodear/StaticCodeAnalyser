@@ -56,7 +56,9 @@ type
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten
     // Eintrag: bis zum Anfang des naechsten (Name, 'in'-Pfad, Komma,
     // Leerraum) - steht er allein auf seiner Zeile, die ganze Zeile samt
-    // '//'-Kommentar; der letzte: ab dem Komma davor bis vor das ';'; der
+    // '//'-Kommentar; steht er als letzter seiner Zeile hinter einem
+    // anderen, ab dem Komma davor bis zum Zeilenende (rwE29: sonst kaeme
+    // die Folgezeile herauf); der letzte: ab dem Komma davor bis vor das ';'; der
     // einzige: die ganze Klausel ab 'uses' bis hinter ';' - ganze Zeilen,
     // wenn sie allein stehen. Kein Kommentar und keine Direktive im
     // Bereich, und darin steht genau dieser Eintrag mit einem Trenner (ein
@@ -307,6 +309,37 @@ begin
     and ((Rest > Length(L)) or (Rest = AMap.LineCommentCol(AEntry.StartLine)));
 end;
 
+// Steht der Eintrag AIndex (weder der erste noch der letzte der Klausel)
+// als letzter auf seiner Zeile hinter einem anderen - davor auf derselben
+// Zeile das ',' des vorigen Eintrags, dahinter sein ',' und nur Leerraum,
+// der naechste Eintrag auf einer spaeteren Zeile (Stil 'A, B,' / '  C;')?
+// Dann geht er ab dem Komma des vorigen bis zum Zeilenende ('A, B,' ->
+// 'A,'). Der Schnitt bis vor den naechsten Eintrag zoege sonst die
+// Folgezeile samt Einrueckung herauf (rwE29, delphimvcframework
+// MainFormU.pas:30: 'System.Classes, Vcl.Graphics,' + '  Vcl.Controls, ...'
+// wurde eine Zeile von ~150 Zeichen).
+function LineEndSpan(AMap: TRdxCodeMap; const AClause: TRdxUsesClause;
+  AIndex: Integer; const ASep: TRdxToken; out ASpan: TRefactorSpan): Boolean;
+var
+  E    : TArray<TRefactorSpan>;
+  Prev : TRdxToken;
+  L    : string;
+begin
+  Result := False;
+  ASpan := Default(TRefactorSpan);
+  E := AClause.Entries;
+  if (AIndex < 1) or (AIndex >= High(E)) then Exit;
+  if (ASep.Low <> ',') or (ASep.Line <> E[AIndex].StartLine)
+     or (E[AIndex + 1].StartLine <= ASep.Line) then Exit;
+  L := AMap.Raw(ASep.Line);
+  if SkipBlanks(L, ASep.EndCol) <= Length(L) then Exit;
+  Prev := SeparatorAfter(AMap, E[AIndex - 1]);
+  if (Prev.Low <> ',') or (Prev.Line <> ASep.Line) then Exit;
+  ASpan := TRefactorSpan.Make(SPAN_007, Prev.Line, Prev.EndCol, ASep.Line,
+    Length(L) + 1);
+  Result := True;
+end;
+
 // Die Code-Token im Bereich nach Art gezaehlt (Strings und Kommentare
 // sieht der Token-Leser nicht).
 function CountRangeTokens(AMap: TRdxCodeMap;
@@ -363,6 +396,8 @@ var
   E           : TRefactorSpan;
   Sep         : TRdxToken;
   Span, Check : TRefactorSpan;
+  LineEnd     : TRefactorSpan;   // eigene Variable: LineEndSpan setzt sein
+                                 // out-Argument auch bei False zurueck
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -380,6 +415,11 @@ begin
     Span := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine + 1, 1);
     Check := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine,
       Sep.EndCol);
+  end
+  else if LineEndSpan(AMap, AClause, AIndex, Sep, LineEnd) then
+  begin
+    Span := LineEnd;
+    Check := LineEnd;
   end;
   AReason := RangeReason(AMap, Span, Check, E.Resolved);
   if AReason <> '' then Exit;
@@ -491,6 +531,27 @@ begin
   if AStatement <> '' then
     Result := Result + Indent + IndentStep(Indent, AArmLine) + AStatement + #10;
   Result := Result + Indent + EndText;
+end;
+
+// Die Zeile, nach der sich die Stufe der Anweisung im else richtet
+// (ElseText): die des ersten Arms - das Token hinter dem 'of' des case
+// ACase -, wenn er seine Zeile beginnt; sonst AFallback (die Zeile des
+// letzten Tokens vor dem end). Bis rwE29 galt immer die letzte Zeile -
+// endet der letzte Arm tief in einem begin..end, rueckte das raise mit
+// ein (skia4delphi Vcl.Styles.UxTheme.pas:1098: Spalte 57 statt 33).
+function ArmLineOf(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const AFallback: string): string;
+var
+  T : TRdxToken;
+begin
+  Result := AFallback;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and (T.Low <> 'of') do
+    T := After(AMap, T);
+  if T.Low = '' then Exit;
+  T := After(AMap, T);
+  if (T.Low <> '') and (SkipBlanks(AMap.Raw(T.Line), 1) = T.Col) then
+    Result := AMap.Raw(T.Line);
 end;
 
 // Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
@@ -613,7 +674,8 @@ begin
   AEdits[0].Span := TRefactorSpan.Make(SPAN_168, EndTok.Line, EndTok.Col,
     EndTok.Line, EndTok.EndCol);
   AEdits[0].Expected := Copy(L, EndTok.Col, EndTok.Len);
-  AEdits[0].NewText := ElseText(L, EndTok, AStatement, AMap.Raw(LastTok.Line));
+  AEdits[0].NewText := ElseText(L, EndTok, AStatement,
+    ArmLineOf(AMap, CaseTok, AMap.Raw(LastTok.Line)));
   AppendSemicolon(AMap, EndTok, AEdits);
   Result := True;
 end;

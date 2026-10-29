@@ -6759,3 +6759,34 @@ msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine
 
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"
+
+# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanUses liest auch den Text)
+msgid "%s is named in a uses clause inside a conditional branch (line %d) - add it by hand"
+msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von Hand ergänzen"
+
+msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
+msgstr "das Abschnitts-Schlüsselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"
+
+msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
+msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise bräche sie"
+
+msgid "the routine is passed as a callback (@%s) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (@%s) - raise bräche ihren Aufrufer"
+
+msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"
+msgstr "die Differenz geht wieder in einen 32-Bit-Cast (%s(...)) - NativeInt änderte nichts"
+
+msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"
+msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt änderte nichts (eine Vergleichsfunktion sollte vergleichen, nicht subtrahieren)"
+
+msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
+msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"
+
+msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
+msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" überspränge es (kein finally)"
+
+msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
+msgstr "ein Kommentar auf oder über der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"
+
+msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"

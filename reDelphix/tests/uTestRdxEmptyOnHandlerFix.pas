@@ -41,6 +41,9 @@ type
     [Test] procedure Sca159_Abort_NoHelp;
     [Test] procedure Sca159_Layout_NoHelp;
     [Test] procedure Sca159_Adapter_Outcome;
+    // rwE29 (HeidiSQL table_editor.pas:3209): hinter dem try..except steht
+    // die Freigabe zu einer Sperre vor dem try - 'raise;' ueberspraenge sie.
+    [Test] procedure Sca159_CleanupAfterExcept_NoHelp;
     {$IFNDEF FPC}
     [Test] procedure Sca159_Detector_CatalogExample;
     [Test] procedure Sca159_Detector_BlockForm;
@@ -329,6 +332,41 @@ begin
   AssertNoFix(['    on E: EFoo do', '    ;'], _(R_EOH_LAYOUT));
   // Der Kopf ueber zwei Zeilen: auf der gemeldeten Zeile steht kein Kopf.
   AssertNoFix(['    on E: EFoo', '    do ;'], Moved);
+end;
+
+procedure TTestRdxEmptyOnHandlerFix.Sca159_CleanupAfterExcept_NoHelp;
+var
+  R, Src : string;
+begin
+  // Muster der Fundstelle (minimiert): BeginUpdate vor dem try, EndUpdate
+  // hinter dem except ohne finally - mit 'raise;' bliebe die Liste in
+  // BeginUpdate. Ohne Fix angeboten (rot).
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  L.Items.BeginUpdate;', '  try', '    Load;', '  except',
+    '    on EDbError do;', '  end;', '  L.Items.EndUpdate;', '  Loaded := True;',
+    'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 10, Msg('EDbError'), R), 'EndUpdate dahinter');
+  Assert.AreEqual(_(R_EOH_CLEANUP, ['EndUpdate', 12, 'BeginUpdate']), R);
+  // Lock/Unlock ebenso, auch als Blockform.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  FCS.Enter;', '  try', '    Load;', '  except',
+    '    on EFoo do begin end;', '  end;', '  FCS.Leave;', 'end;', 'end.']);
+  Assert.AreEqual('', FixAt(Src, 10, Msg('EFoo'), R), 'Leave dahinter');
+  Assert.AreEqual(_(R_EOH_CLEANUP, ['Leave', 12, 'Enter']), R);
+  // Gegenprobe: die Freigabe steht im finally eines aeusseren try - die
+  // Hilfe bleibt.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  L.Items.BeginUpdate;', '  try', '    try', '      Load;',
+    '    except', '      on EDbError do;', '    end;', '  finally',
+    '    L.Items.EndUpdate;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'on EDbError do;', 'on EDbError do raise;',
+    []), FixAt(Src, 11, Msg('EDbError'), R), R);
+  // Gegenprobe: ohne Sperre vor dem try zaehlt ein EndUpdate dahinter nicht.
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P;',
+    'begin', '  try', '    Load;', '  except', '    on EDbError do;', '  end;',
+    '  L.Items.EndUpdate;', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'on EDbError do;', 'on EDbError do raise;',
+    []), FixAt(Src, 9, Msg('EDbError'), R), R);
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Adapter_Outcome;
