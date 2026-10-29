@@ -461,7 +461,7 @@ end;
 // SCA020 (b): implementiert die Methode ALowName der Klasse ab AClass
 // (das Token 'class') womoeglich ein Interface? Die Klasse nennt hinter
 // dem Vorfahren Interfaces ('class(TNotifierObject, IOTADebuggerNotifier,
-// ..)'); gesperrt wird, wenn eines die Methode deklariert, eine
+// ..)') oder nur Interfaces ('class(IFoo)'); gesperrt wird, wenn eines die Methode deklariert, eine
 // Methodenzuordnung auf sie zeigt oder ein Interface nicht in der Datei
 // steht - die Sichtbarkeit hilft nicht, eine Interface-Methode darf auch
 // protected oder private sein (skia4delphi Skia.Tests.Foundation.Runner.pas:
@@ -474,12 +474,21 @@ var
 begin
   Result := '';
   Names := TRdxBlocks.HeritageOf(AMap, AClass);
-  if Length(Names) < 2 then Exit;
+  if Length(Names) = 0 then Exit;
   if ResolvesTo(AMap, AClass, ALowName) then
     Exit(_('a method resolution clause of the class maps an interface method '
       + 'to %s - callers of the interface expect the empty body to do '
       + 'nothing; raise would break them', [ANameText]));
-  for i := 1 to High(Names) do
+  for i := 0 to High(Names) do
+  begin
+    // Der erste Eintrag ist die Basisklasse - ausser er heisst wie ein
+    // Interface oder steht in der Datei als eines: 'class(IFremd)' hat die
+    // Basis TObject (wie uRdxRoutineFixes.ImplementedInterfaces). Bis zur
+    // Review e/HilfeFixF uebersprang die Schleife ihn immer und bot raise
+    // in einer Methode von IFremd an.
+    if (i = 0) and not LooksLikeInterfaceName(Names[0])
+       and (Length(InterfaceHeads(AMap, LowerCase(Names[0]))) = 0) then
+      Continue;
     case IntfDeclares(AMap, LowerCase(Names[i]), ALowName, 0) of
       iaYes:
         Exit(_('the method implements %s.%s - callers of the interface '
@@ -493,6 +502,7 @@ begin
     else
       ;   // iaNo: das naechste Interface
     end;
+  end;
 end;
 
 // Der Anfang der Kette 'A.B.T' bis T (rueckwaerts ueber '.').

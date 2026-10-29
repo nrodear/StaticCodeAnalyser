@@ -555,6 +555,18 @@ begin
   Assert.AreEqual('', Fix(rkEmpty, Src, 11, RAISE_NOT_IMPLEMENTED, R),
     'Vorfahr extern');
   Assert.IsTrue(Pos('IMine', R) > 0, R);
+  // Review e/HilfeFixF: nur Interfaces in der Liste - 'class(IFremd)' hat
+  // die Basis TObject, IFremd steht an erster Stelle (bis dahin
+  // uebersprungen, raise angeboten: rot ohne Fix).
+  Src := Join(['unit u;', 'interface', 'type', '  TFoo = class(IFremd)',
+    '    procedure Bar;', '  end;', 'implementation', 'procedure TFoo.Bar;',
+    'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 8, RAISE_NOT_IMPLEMENTED, R),
+    'class(IFremd)');
+  Assert.IsTrue(Pos('IFremd', R) > 0, R);
+  // Gegenprobe: nur eine Basisklasse ('class(TFremd)') - raise bleibt.
+  Assert.IsTrue(Fix(rkEmpty, StringReplace(Src, 'IFremd', 'TFremd', []), 8,
+    RAISE_NOT_IMPLEMENTED, R) <> '', R);
 end;
 
 procedure TTestRdxRaiseFixes.Sca020_RaiseInValueCallbackOrSetter_Refused;
