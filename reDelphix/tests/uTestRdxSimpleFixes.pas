@@ -34,6 +34,15 @@ type
     // Gegen-Review R8 (Major 2): '{$' hinter '//' ist keine Direktive.
     [Test] procedure Sca085_LineCommentDirective_NotADirective;
     [Test] procedure Sca085_VariableContext;
+    // ---- SCA085, Realwelt-Test rwE30 (Fix-Runde 2) ----
+    [Test] procedure Sca085_DirectiveBranches;
+    [Test] procedure Sca085_NilLineComment;
+    [Test] procedure Sca085_NameInCaptionWhenRefused;
+    [Test] procedure Sca085_WithScope;
+    [Test] procedure Sca085_VariableProof_Local;
+    [Test] procedure Sca085_VariableProof_FieldAndGlobal;
+    [Test] procedure Sca085_VariableProof_Refused;
+    [Test] procedure Sca085_OldCompilerBranch;
     // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
     [Test] procedure Sca074_Variants;
     [Test] procedure Sca074_Refusals;
@@ -358,9 +367,12 @@ begin
   // Hinter X.Free; darf ein //-Kommentar stehen - auch mit '{$' darin.
   Assert.AreEqual(FreeOnly('  FreeAndNil(X); // {$IFDEF A}'),
     Fix085(FreeNil('  X.Free; // {$IFDEF A}', '  X := nil;'), 4, R), R);
-  // Gegenprobe: eine Blockdirektive davor bleibt gesperrt.
+  // Gegenprobe: eine echte Blockdirektive davor bleibt gesperrt - seit
+  // rwE30 nur, wenn ohne ihren Block 'then' davor stuende
+  // (Sca085_DirectiveBranches).
   Assert.AreEqual('', Fix085(Join(['unit u;', 'procedure P;', 'begin',
-    '  {$IFDEF A}{$ENDIF}', '  X.Free;', '  X := nil;', 'end;', 'end.']), 5, R));
+    '  if A then', '  {$IFDEF A}Log;{$ENDIF}', '  X.Free;', '  X := nil;',
+    'end;', 'end.']), 6, R));
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
 end;
 
@@ -422,6 +434,409 @@ begin
   end;
 end;
 
+// ---- SCA085, Realwelt-Test rwE30 (Fix-Runde 2) ----
+
+// Eine Unit u mit leerem interface-Teil; ALines ist der implementation-Teil.
+function InImplementation(const ALines: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'implementation']) + #13#10
+    + Join(ALines) + #13#10 + 'end.';
+end;
+
+// SCA085 im Rumpf von P (InProc) auf der Zeile mit AFreeText; '' bei
+// Ablehnung (AReason).
+function Fix085In(const ALines: array of string; const AFreeText: string;
+  out AReason: string): string;
+var
+  Src : string;
+begin
+  Src := InProc(ALines);
+  Result := Fix085(Src, LineOf(Src, AFreeText), AReason);
+end;
+
+// Der Text nach der Hilfe: AFreeLine wird AFixed, die Zeile danach (nil)
+// entfaellt.
+function Fixed085(const ALines: array of string; const AFreeLine,
+  AFixed: string): string;
+var
+  SL : TStringList;
+  i  : Integer;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := InProc(ALines);
+    i := SL.IndexOf(AFreeLine);
+    SL[i] := AFixed;
+    SL.Delete(i + 1);
+    Result := TrimRight(SL.Text);
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_DirectiveBranches;
+const
+  // gexperts GX_EditorEnhancements.pas:287 - ein geschlossener Einzeiler.
+  IFOPT_LINE: array[0..3] of string = ('  RemoveToolBar;',
+    '  {$IFOPT D+}SendDebug(''Freeing toolbar list''); {$ENDIF}',
+    '  FToolBarList.Free;', '  FToolBarList := nil;');
+  // GX_ClassBrowser.pas:393 - das ENDIF schliesst den Block davor.
+  CLOSED_BLOCK: array[0..5] of string = ('  {$IFNDEF STANDALONE}',
+    '  ProjectNotifier.Free;', '  ProjectNotifier := nil;',
+    '  {$ENDIF STANDALONE}', '  FClassList.Free;', '  FClassList := nil;');
+  // gexperts FileView.pas:131 - Free und nil im selben Zweig.
+  SAME_BRANCH: array[0..3] of string = ('  {$IFDEF SYNTAXMEMO}',
+    '  FSyntaxEd.Free;', '  FSyntaxEd := nil;', '  {$ENDIF}');
+  // Alcinoe.Common.pas:4355 - im ELSE-Zweig, der Zweig davor endet auf end;.
+  ELSE_BRANCH: array[0..8] of string = ('  {$IF defined(ALDPK)}',
+    '  if Temp <> nil then', '  begin', '    Temp.DisposeOf;',
+    '    Temp := nil;', '  end;', '  {$ELSE}', '  Temp.Free;',
+    '  Temp := nil;');
+var
+  R : string;
+begin
+  Assert.AreEqual(Fixed085(IFOPT_LINE, '  FToolBarList.Free;',
+      '  FreeAndNil(FToolBarList);'),
+    Fix085In(IFOPT_LINE, 'FToolBarList.Free', R), R);
+  Assert.AreEqual(Fixed085(CLOSED_BLOCK, '  FClassList.Free;',
+      '  FreeAndNil(FClassList);'),
+    Fix085In(CLOSED_BLOCK, 'FClassList.Free', R), R);
+  Assert.AreEqual(Fixed085(SAME_BRANCH, '  FSyntaxEd.Free;',
+      '  FreeAndNil(FSyntaxEd);'),
+    Fix085In(SAME_BRANCH, 'FSyntaxEd.Free', R), R);
+  Assert.AreEqual(Fixed085(ELSE_BRANCH, '  Temp.Free;',
+      '  FreeAndNil(Temp);'),
+    Fix085In(ELSE_BRANCH, 'Temp.Free', R), R);
+  // Gegenproben - eine Konfiguration stellt X.Free; hinter then:
+  // ohne A (ELSE-Zweig, davor 'if C then' vor dem IFDEF) ...
+  Assert.AreEqual('', Fix085In(['  if C then', '{$IFDEF A}', '    Foo;',
+    '{$ELSE}', '    X.Free;', '  X := nil;', '{$ENDIF}'], 'X.Free', R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  // ... mit A (der Zweig vor dem ELSE-Trenner endet auf then) ...
+  Assert.AreEqual('', Fix085In(['  {$IFDEF A}', '  if C then', '  {$ELSE}',
+    '  Foo;', '  {$ENDIF}', '  X.Free;', '  X := nil;'], 'X.Free', R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  // ... mit A, ohne B (verschachtelt) ...
+  Assert.AreEqual('', Fix085In(['  {$IFDEF A}', '  if C then',
+    '  {$IFDEF B}Log;{$ENDIF}', '  {$ENDIF}', '  X.Free;', '  X := nil;'],
+    'X.Free', R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  // ... und ein Include kann Code bringen.
+  Assert.AreEqual('', Fix085In(['  if C then Foo;', '  {$I extra.inc}',
+    '  X.Free;', '  X := nil;'], 'X.Free', R));
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_NilLineComment;
+var
+  R : string;
+begin
+  // PascalScript_2009 uPSCompiler.pas:11213 - ein leerer Kommentar geht mit.
+  Assert.AreEqual(FreeOnly('  FreeAndNil(FUnitInits); //nvds'),
+    Fix085(FreeNil('  FUnitInits.Free; //nvds', '  FUnitInits := nil;    //'),
+      4, R), R);
+  // HeidiSQL main.pas:2778 - ein Text wandert an die FreeAndNil-Zeile.
+  Assert.AreEqual(FreeOnly(
+      '  FreeAndNil(frmPreferences); // Important in SetupSynEditors'),
+    Fix085(FreeNil('  frmPreferences.Free;',
+      '  frmPreferences := nil; // Important in SetupSynEditors'), 4, R), R);
+  // Gegenproben: der Kommentar nennt FreeAndNil, die Free-Zeile hat schon
+  // einen, ein {..}-Kommentar.
+  Assert.AreEqual('', Fix085(FreeNil('  X.Free;',
+    '  X := nil; // no FreeAndNil here'), 4, R));
+  Assert.IsTrue(Pos('Kommentar oder String in der nil-Zeile', R) > 0, R);
+  Assert.AreEqual('', Fix085(FreeNil('  X.Free; // a', '  X := nil; // b'),
+    4, R));
+  Assert.IsTrue(Pos('Kommentar oder String in der nil-Zeile', R) > 0, R);
+  Assert.AreEqual('', Fix085(FreeNil('  X.Free;', '  X := nil; {b}'), 4, R));
+  Assert.IsTrue(Pos('Kommentar oder String in der nil-Zeile', R) > 0, R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_NameInCaptionWhenRefused;
+var
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Edits : TArray<TRdxEdit>;
+  Name_ : string;
+  R     : string;
+begin
+  // Auch eine Sperre hinter dem Treffer nennt X (Menuetext 'FreeAndNil(X)'
+  // statt 'FreeAndNil(FSelImage)', rwE30).
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := FreeNil('  FSelImage.Free;', '  FSelImage := nil; Y := 0;');
+    Map := TRdxCodeMap.Create(SL);
+    Assert.IsFalse(TRdxSimpleFixes.FreeAndNilFix(Map, 4, Edits, Name_, R));
+    Assert.AreEqual('FSelImage', Name_, R);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// WithBefore an der Zeile mit AText in ASource.
+function WithAt(const ASource, AText: string): Boolean;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxSimpleFixes.WithBefore(Map, LineOf(ASource, AText));
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_WithScope;
+var
+  Src : string;
+begin
+  // uPSCompiler.pas (PascalScript) CheckFurther: die with-Bloecke davor
+  // sind zu, eine verschachtelte Routine davor traegt eins - die Zeile
+  // liegt in keinem with-Rumpf.
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'procedure TComp.ProcessSub;',
+    '  procedure Sibling;',
+    '  begin',
+    '    with A do Foo;',
+    '  end;',
+    '  procedure CheckFurther(var x: TPSValue);',
+    '  var',
+    '    R: record case Integer of 0: (a: Integer); 1: (b: Byte); end;',
+    '  begin',
+    '    with tmp3.Parameters.Add do',
+    '    begin',
+    '      ExpectedType := nil;',
+    '    end;',
+    '    with B do Bar;',
+    '    if x = nil then',
+    '    begin',
+    '      x.Free; // line A',
+    '      x := nil;',
+    '    end;',
+    '  end;',
+    'begin',
+    'end;', 'end.']);
+  Assert.IsFalse(WithAt(Src, 'line A'), 'with davor geschlossen');
+  // Gegenproben: ein with-Rumpf umfasst die Zeile.
+  Assert.IsTrue(WithAt(InProc(['  with A do', '  begin', '    Foo;',
+    '    X.Free;', '  end;']), 'X.Free'), 'begin..end');
+  Assert.IsTrue(WithAt(InProc(['  with A do', '    if C then', '      X.Free;']),
+    'X.Free'), 'Einzelanweisung if');
+  Assert.IsTrue(WithAt(InProc(['  with A do', '  try', '    Foo;', '    X.Free;',
+    '  finally', '  end;']), 'X.Free'), 'try');
+  Assert.IsTrue(WithAt(InProc(['  with A do', '  repeat', '    Foo;',
+    '    X.Free;', '  until C;']), 'X.Free'), 'repeat');
+  Assert.IsTrue(WithAt(InProc(['  with A, B do Foo(procedure(a: Integer; b: Byte)',
+    '    begin', '      Bar;', '      X.Free;', '    end);']), 'X.Free'),
+    'anonyme Methode mit ; in der Parameterliste');
+  Assert.IsTrue(WithAt(InProc(['  with A do X.Free;']), 'X.Free'),
+    'with auf der Zeile');
+  Assert.IsTrue(WithAt(InProc(['  with A do', '    with B do', '    begin',
+    '      Foo;', '      X.Free;', '    end;']), 'X.Free'), 'with in with');
+  // Gegenproben zur Gegenprobe: der Rumpf ist zu Ende.
+  Assert.IsFalse(WithAt(InProc(['  with A do Foo;', '  X.Free;']), 'X.Free'),
+    'Einzelanweisung zu Ende');
+  Assert.IsFalse(WithAt(InProc(['  with A do', '  begin', '    Foo;', '  end;',
+    '  X.Free;']), 'X.Free'), 'begin..end zu Ende');
+  Assert.IsFalse(WithAt(InProc(['  with A do', '  case K of', '    1: Foo;',
+    '  end;', '  X.Free;']), 'X.Free'), 'case..end zu Ende');
+end;
+
+// VariableProof an der Zeile mit AText.
+function ProofAt(const ASource, AText, AName: string): TRdxVarProof;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxSimpleFixes.VariableProof(Map, LineOf(ASource, AText), AName);
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure AssertProof(const ASource, AText, AName: string;
+  AKind: TRdxVarProofKind; const ATypeLow, AWhat: string);
+var
+  P : TRdxVarProof;
+begin
+  P := ProofAt(ASource, AText, AName);
+  Assert.IsTrue(P.Kind = AKind, AWhat + ': Art ' + IntToStr(Ord(P.Kind)));
+  Assert.AreEqual(ATypeLow, P.TypeLow, AWhat);
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_VariableProof_Local;
+var
+  Src : string;
+begin
+  // uPSCompiler.pas: var-Parameter einer verschachtelten Routine, auch
+  // wenn die Unit eine Property gleichen Namens deklariert (Val).
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TPSParameter = class', '    property Val: TPSValue read FVal;',
+    '  end;', 'implementation',
+    'function TPSPascalCompiler.ProcessSub(B: TBlock): Boolean;',
+    '  procedure CheckNotificationVariant(var Val: TPSValue);',
+    '  begin',
+    '    Val.Free; // A',
+    '    Val := nil;',
+    '  end;',
+    '  function GetIdentifier(const FType: Byte): TPSValue;',
+    '  var',
+    '    tmp3: TPSValue;',
+    '    procedure CheckFurther(var x: TPSValue; ImplicitPeriod: Boolean);',
+    '    var',
+    '      t: TPSType;',
+    '    begin',
+    '      x.Free; // B',
+    '      x := nil;',
+    '    end;',
+    '  begin',
+    '    Result := nil;',
+    '    Result.Free; // C',
+    '    tmp3.Free; // D',
+    '  end;',
+    'begin',
+    'end;', 'end.']);
+  AssertProof(Src, '// A', 'Val', vpLocal, 'tpsvalue', 'Parameter vor Property');
+  AssertProof(Src, '// B', 'x', vpLocal, 'tpsvalue', 'var-Parameter, verschachtelt');
+  AssertProof(Src, '// C', 'Result', vpLocal, 'tpsvalue', 'Result der function');
+  AssertProof(Src, '// D', 'tmp3', vpLocal, 'tpsvalue', 'lokale Variable');
+  // MVCFramework.AsyncTask.pas:103 - eine anonyme Methode faengt die
+  // lokale Variable (andere Schreibweise).
+  Src := InImplementation(['procedure TAsync.Run<T>;', 'var',
+    '  LRes: T;', 'begin',
+    '  TTask.Run(procedure', '    begin', '      lRes.Free; // E',
+    '      lRes := nil;', '    end);', 'end;']);
+  AssertProof(Src, '// E', 'lRes', vpLocal, 't', 'gefangen in anonymer Methode');
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_VariableProof_FieldAndGlobal;
+var
+  Src : string;
+begin
+  // uPSCompiler.pas: ein Feld der Klasse in der verschachtelten Routine
+  // Cleanup von TPSPascalCompiler.Compile; gexperts GX_PeInfo.pas: ein
+  // lokaler resourcestring-Abschnitt; JvSpin.pas: das Feld unter IFDEF.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TPSPascalCompiler = class(TObject)', '  private',
+    '    FVars: TPSList;',
+    '  {$IFDEF WIN32}', '    FUpDown: TCustomUpDown;', '  {$ENDIF}',
+    '    procedure Compile;', '    procedure Load;', '  end;',
+    'var', '  fmGrepResults: TfmGrepResults = nil;',
+    'implementation', 'threadvar', '  ALStack: TALStack;',
+    'procedure TPSPascalCompiler.Compile;',
+    '  procedure Cleanup;', '  begin', '    FVars.Free; // A',
+    '    FVars := nil;', '  end;', 'begin', 'end;',
+    'procedure TPSPascalCompiler.Load;', 'resourcestring',
+    '  SCaption = ''x'';', 'var', '  I: Integer;', 'begin',
+    '  FUpDown.Free; // B', '  fmGrepResults.Free; // C',
+    'end;', 'procedure Done;', 'begin', '  ALStack.Free; // D', 'end;',
+    'finalization', '  fmGrepResults.Free; // E', 'end.']);
+  AssertProof(Src, '// A', 'FVars', vpField, 'tpslist', 'Feld in verschachtelter Routine');
+  AssertProof(Src, '// B', 'FUpDown', vpField, 'tcustomupdown', 'Feld unter IFDEF');
+  AssertProof(Src, '// C', 'fmGrepResults', vpGlobal, 'tfmgrepresults',
+    'Global mit Anfangswert in einer Methode');
+  AssertProof(Src, '// D', 'ALStack', vpGlobal, 'talstack', 'threadvar');
+  AssertProof(Src, '// E', 'fmGrepResults', vpGlobal, 'tfmgrepresults',
+    'finalization');
+  // cnwizards TestProgram.pas: Hauptblock eines Programms.
+  Src := Join(['program p;', 'uses SysUtils;', 'var',
+    '  CMandalaSettings: TSettings;', 'procedure Run;', 'begin', 'end;',
+    'begin', '  Run;', '  CMandalaSettings.Free; // A',
+    '  CMandalaSettings := nil;', 'end.']);
+  AssertProof(Src, '// A', 'CMandalaSettings', vpGlobal, 'tsettings',
+    'Programm-Hauptblock');
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_VariableProof_Refused;
+var
+  Src : string;
+begin
+  // Pin missed R2(3): ein Global, das wie ein geerbtes Member heisst, ist in
+  // einer Methode einer TForm-Ableitung nicht bewiesen.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TForm1 = class(TForm)', '    procedure Done;', '  end;', 'var',
+    '  Owner: TObject;', 'implementation',
+    'procedure TForm1.Done;', 'begin', '  Owner.Free; // A', 'end;', 'end.']);
+  AssertProof(Src, '// A', 'Owner', vpNone, '', 'Global in TForm-Ableitung');
+  // Review e/HilfeFixI: ein class helper hat keine Vorfahrenliste - Self
+  // ist die erweiterte Klasse (TStrings), ihr Member verdeckte das Global.
+  // Bis dahin vpGlobal ('class' ohne Vorfahren galt als TObject).
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TListHelper = class helper for TStrings', '    procedure Done;',
+    '  end;', 'var', '  Cache: TObject;', 'implementation',
+    'procedure TListHelper.Done;', 'begin', '  Cache.Free; // G', 'end;',
+    'end.']);
+  AssertProof(Src, '// G', 'Cache', vpNone, '', 'Global im class helper');
+  // Gegenprobe: dieselbe Methode einer Klasse ohne Vorfahren beweist es.
+  AssertProof(StringReplace(Src, 'class helper for TStrings', 'class', []),
+    '// G', 'Cache', vpGlobal, 'tobject', 'Global in Klasse ohne Vorfahren');
+  // Eine lokale Variable der aeusseren Routine HINTER der verschachtelten
+  // ist dort unsichtbar - der Quellstellen-Dienst saehe sie: offen.
+  Src := InImplementation(['procedure Outer;',
+    '  procedure Inner;', '  begin', '    X.Free; // B', '  end;',
+    'var', '  X: TObject;', 'begin', 'end;']);
+  AssertProof(Src, '// B', 'X', vpNone, '', 'spaetere Deklaration');
+  // Ein Parameter einer anonymen Methode gleichen Namens.
+  Src := InImplementation(['procedure Outer;', 'var', '  X: TObject;',
+    'begin', '  Run(procedure(X: TFoo)', '    begin', '      X.Free; // C',
+    '    end);', 'end;']);
+  AssertProof(Src, '// C', 'X', vpNone, '', 'Parameter der anonymen Methode');
+  // Eine Inline-Variable verdeckt den Parameter.
+  Src := InImplementation(['procedure Outer(X: TObject);', 'begin',
+    '  begin', '    var X: TFoo := nil;', '    X.Free; // D', '  end;',
+    'end;']);
+  AssertProof(Src, '// D', 'X', vpNone, '', 'Inline-Variable');
+  // Eine lokale Konstante ist keine Variable; ein class var kein Global.
+  Src := Join(['unit u;', 'interface', 'type', '  TFoo = class',
+    '    class var Shared: TObject;', '  end;', 'implementation',
+    'procedure Done;', 'const', '  K: TObject = nil;', 'begin',
+    '  K.Free; // E', '  Shared.Free; // F', 'end;', 'end.']);
+  AssertProof(Src, '// E', 'K', vpNone, '', 'lokale Konstante');
+  AssertProof(Src, '// F', 'Shared', vpNone, '', 'class var');
+end;
+
+procedure TTestRdxSimpleFixes.Sca085_OldCompilerBranch;
+const
+  FREE_NIL: array[0..1] of string = ('  X.Free;', '  X := nil;');
+var
+  R : string;
+
+  function Around(const AOpen, AElse: string): string;
+  begin
+    if AElse = '' then
+      Result := Fix085In([AOpen, FREE_NIL[0], FREE_NIL[1], '{$ENDIF}'],
+        'X.Free', R)
+    else
+      Result := Fix085In([AOpen, '  Foo;', AElse, FREE_NIL[0], FREE_NIL[1],
+        '{$ENDIF}'], 'X.Free', R);
+  end;
+
+begin
+  // gexperts GX_Actions.pas:315 (nur Delphi 4) und JvDBCtrl.pas:1089
+  // (16-Bit-Delphi 1): FreeAndNil gibt es dort nicht.
+  Assert.AreEqual('', Fix085In(['{$IFNDEF GX_VER130_up}', '{$IFDEF GX_VER120_up}',
+    FREE_NIL[0], FREE_NIL[1], '{$ENDIF}', '{$ENDIF}'], 'X.Free', R));
+  Assert.IsTrue(Pos('{$IFNDEF GX_VER130_up}', R) > 0, R);
+  Assert.AreEqual('', Around('{$IFNDEF WIN32}', ''));
+  Assert.IsTrue(Pos('WIN32', R) > 0, R);
+  Assert.AreEqual('', Around('{$IFDEF COMPILER5_UP}', '{$ELSE}'));
+  Assert.IsTrue(Pos('COMPILER5_UP', R) > 0, R);
+  Assert.AreEqual('', Around('{$IFDEF VER120}', ''));
+  Assert.AreEqual('', Around('{$IF CompilerVersion < 13}', ''));
+  // Gegenproben: der Zweig gilt (auch) fuer moderne Compiler - oder nur
+  // fuer alte, die FreeAndNil schon kennen (Delphi 6 bis 2007).
+  Assert.AreNotEqual('', Around('{$IFNDEF COMPILER12_UP}', ''), R);
+  Assert.AreNotEqual('', Around('{$IF CompilerVersion < 14}', ''), R);
+  Assert.AreNotEqual('', Around('{$IFDEF COMPILER6_UP}', ''), R);
+  Assert.AreNotEqual('', Around('{$IFNDEF COMPILER6_UP}', '{$ELSE}'), R);
+  Assert.AreNotEqual('', Around('{$IFDEF VER150}', ''), R);
+  Assert.AreNotEqual('', Around('{$IFDEF DEBUG}', ''), R);
+  Assert.AreNotEqual('', Around('{$IFNDEF DEBUG}', ''), R);
+end;
+
 procedure TTestRdxSimpleFixes.Sca085_Refusals;
 const
   // Zeile vor X.Free; - das nil wuerde bedingt
@@ -443,7 +858,9 @@ const
     ('  X.Free; {$IFDEF A}', '  X := nil;', 'hinter X.Free; steht noch etwas'),
     ('  X.Free;', '  X := nil; Y := 0;', 'hinter X := nil steht noch etwas'),
     ('  X.Free;', '  Y := nil;', 'ist nicht "X := nil;"'),
-    ('  X.Free;', '  X := nil; // weg', 'Kommentar oder String in der nil-Zeile'));
+    // Ein {..}-Kommentar wandert nicht (ein //-Kommentar schon, rwE30 -
+    // Sca085_NilLineComment).
+    ('  X.Free;', '  X := nil; { weg }', 'Kommentar oder String in der nil-Zeile'));
 var
   R   : string;
   Src : string;

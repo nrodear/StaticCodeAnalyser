@@ -313,15 +313,9 @@ const
   // 'Strg+Umschalt+E').
   R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename '
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
-  // SCA061 (rwE29): die Tabweite leitet uRdxTabsFix.TabWidth aus den
-  // Nachbarzeilen ab - der Hinweis nennt sie und woher sie kommt (bis dahin
-  // fest 'tab width 2 (assumption)' in FIX_HINTS). %d die Weite.
-  R_TABS_DERIVED_HINT = 'tabs in code become spaces - tab width %d, as the '
-    + 'alignment of the neighbouring lines shows; tabs in strings and '
-    + 'comments stay';
-  R_TABS_DEFAULT_HINT = 'tabs in code become spaces - tab width %d '
-    + '(assumption, the neighbouring lines do not show one); tabs in strings '
-    + 'and comments stay';
+  // SCA061: die Hinweise (Tabweite und woher sie kommt) stehen seit rwE30 in
+  // uRdxTabsFix (TRdxTabsFix.Hint; bis dahin R_TABS_DERIVED_HINT und
+  // R_TABS_DEFAULT_HINT hier).
 
   // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -1333,9 +1327,12 @@ var
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxHttpsFix.Https);
-  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich.
-  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName);
-  if Result.Enabled and (Why <> '') then
+  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich;
+  // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
+  // Frage liest die Platte, also nur fuer eine angebotene Hilfe.
+  if not Result.Enabled then Exit;
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines);
+  if Why <> '' then
   begin
     Result.Enabled := False;
     Result.Reason := Why;
@@ -1407,28 +1404,23 @@ begin
     Result.Hint := _(R_FORRANGE_SWAP_HINT);
 end;
 
-// SCA061: der Hinweis nennt die Tabweite des Plans (TabWidth rechnet sie
-// fuer dieselbe Zeile noch einmal; HintByPlanner).
+// SCA061: der Hinweis nennt die Tabweite des Plans und woher sie kommt
+// (TRdxTabsFix.Hint rechnet sie fuer dieselbe Zeile noch einmal - die
+// Belege der Datei aus dem Cache; HintByPlanner).
 function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map    : TRdxCodeMap;
-  W, Alt : Integer;
-  Source : TRdxTabWidthSource;
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxTabsFix.Tabs);
   if not Result.Enabled then Exit;
   Map := TRdxCodeMap.Acquire(ALines);
   try
-    W := TRdxTabsFix.TabWidth(Map, AFinding.LineInt, Source, Alt);
+    Result.Hint := TRdxTabsFix.Hint(Map, AFinding.LineInt);
   finally
     TRdxCodeMap.Release(Map);
   end;
-  if Source = twDerived then
-    Result.Hint := _(R_TABS_DERIVED_HINT, [W])
-  else
-    Result.Hint := _(R_TABS_DEFAULT_HINT, [W]);
 end;
 
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1696,13 +1688,22 @@ begin
 end;
 
 // SCA144 (Charge QF5): der deklarierte Typ eines Operanden; '' fuer eine
-// Zahl (sie braucht keinen Beweis).
-function FloatOperandType(APlaces: TSourcePlaces; ALine: Integer;
-  const AOperand: string): string;
+// Zahl (sie braucht keinen Beweis). Seit rwE30 zuerst der Feldtyp, wenn
+// der Operand ein Feld eines with-Records ist (AWithType,
+// WithMemberTypes), und - wenn DeclaredTypeOf schweigt - der Typ aus den
+// Routinen um die Zeile (LocalType: Parameter einer verschachtelten
+// Routine).
+function FloatOperandType(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AOperand, AWithType: string): string;
 begin
   Result := '';
-  if not TRdxFloatEqualityFix.IsLiteral(AOperand) then
-    Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if TRdxFloatEqualityFix.IsLiteral(AOperand) then
+    Exit;
+  if AWithType <> '' then
+    Exit(AWithType);
+  Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if Result = '' then
+    Result := TRdxFloatEqualityFix.LocalType(AMap, ALine, AOperand);
 end;
 
 // SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei
@@ -1718,8 +1719,10 @@ end;
 function PlanFloatEquality(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map      : TRdxCodeMap;
-  L, Op, R : string;
+  Map          : TRdxCodeMap;
+  L, Op, R     : string;
+  InWith       : Boolean;
+  WithL, WithR : string;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
@@ -1733,18 +1736,30 @@ begin
   try
     Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
       AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
+    // Ein with, dessen Ziele Records dieser Unit nur mit Feldern sind,
+    // bindet nur deren Felder (rwE30) - dann zaehlt der Blockbereich des
+    // Quellstellen-Dienstes nicht, und ein Operand, der ein Feld ist, hat
+    // dessen Typ.
+    InWith := False;
+    WithL := '';
+    WithR := '';
+    if Result.Enabled then
+    begin
+      TRdxFloatEqualityFix.WithMemberTypes(Map, AFinding.LineInt,
+        AFinding.Message, InWith, WithL, WithR);
+      Result.Reason := TRdxFloatEqualityFix.ContextReason(
+        AFinding.Confidence = fcLow,
+        APlaces.InWithBlock(AFinding.LineInt) and not InWith,
+        AFinding.Message);
+    end;
+    if Result.Enabled and (Result.Reason = '')
+       and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
+      Result.Reason := TRdxFloatEqualityFix.TypeReason(
+        L, FloatOperandType(APlaces, Map, AFinding.LineInt, L, WithL),
+        R, FloatOperandType(APlaces, Map, AFinding.LineInt, R, WithR));
   finally
     TRdxCodeMap.Release(Map);
   end;
-  if Result.Enabled then
-    Result.Reason := TRdxFloatEqualityFix.ContextReason(
-      AFinding.Confidence = fcLow, APlaces.InWithBlock(AFinding.LineInt),
-      AFinding.Message);
-  if Result.Enabled and (Result.Reason = '')
-     and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
-    Result.Reason := TRdxFloatEqualityFix.TypeReason(
-      L, FloatOperandType(APlaces, AFinding.LineInt, L),
-      R, FloatOperandType(APlaces, AFinding.LineInt, R));
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if not Result.Enabled then
   begin

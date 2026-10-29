@@ -46,6 +46,13 @@ type
     [Test] procedure TypeReason_ProvenFloats;
     [Test] procedure TypeReason_Refused;
     [Test] procedure ContextReason_LowAndWith;
+    // ---- Realwelt-Test rwE30 (Fix-Runde 2) ----
+    [Test] procedure OldCompilerBranch_NoHelp;
+    [Test] procedure WithClosedBefore_Help;
+    [Test] procedure WithFieldRecord_Help;
+    [Test] procedure WithOtherTargets_NoHelp;
+    [Test] procedure LocalType_NestedParam;
+    [Test] procedure TypeReason_SingleWithInteger;
   end;
 
 {$IFNDEF FPC}
@@ -64,7 +71,7 @@ type
     // ---- Adapter ----
     [Test] procedure Adapter_HintAndName;
     [Test] procedure Adapter_LowConfidence_NoHelp;
-    [Test] procedure Adapter_NestedRoutine_TypeUnknown;
+    [Test] procedure Adapter_NestedRoutine_ParamProven;
     [Test] procedure Adapter_NoFile_NoHelp;
   end;
 {$ENDIF}
@@ -466,6 +473,130 @@ begin
     TRdxFloatEqualityFix.ContextReason(False, True, Msg('Ratio', '=', '0')));
 end;
 
+{ ---- Realwelt-Test rwE30 (Fix-Runde 2) ---- }
+
+procedure TTestRdxFloatEqualityFix.OldCompilerBranch_NoHelp;
+var
+  R, Src : string;
+begin
+  // jvcl JvSimpleXml.pas:252: nur Delphi 5 und aelter sehen den Zweig, dort
+  // gibt es Math.IsZero nicht.
+  Assert.AreEqual('', PlanAt(Wrap(['{$IFNDEF COMPILER6_UP}',
+    '  if Ratio = 0 then Work;', '{$ENDIF}']), LINE + 1,
+    Msg('Ratio', '=', '0'), R));
+  Assert.IsTrue(Pos('{$IFNDEF COMPILER6_UP}', R) > 0, R);
+  // Gegenprobe: der Zweig fuer moderne Compiler.
+  Src := Wrap(['{$IFDEF COMPILER6_UP}', '  if Ratio = 0 then Work;',
+    '{$ENDIF}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE + 1, 'Ratio', '=', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.WithClosedBefore_Help;
+var
+  Src : string;
+begin
+  // issrc Resample.pas:65, Img32.SVG.Reader.pas:1398: die with-Anweisungen
+  // der Routine sind vor dem Vergleich zu Ende.
+  Src := Wrap(['  with Pt do', '  begin', '    X := 1;', '  end;',
+    '  with Pt do Y := 2;', '  if Ratio = 0.5 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0.5', 'SameValue(Ratio, 0.5)',
+    []), Applied(Src, LINE + 5, 'Ratio', '=', '0.5'));
+end;
+
+const
+  // Img32.SVG.Path.pas: TArcInfo, ein Record nur mit Feldern.
+  ARC_UNIT: array[0..18] of string = ('unit t;', 'interface', 'type',
+    '  TArcInfo = record', '    rec         : TRectD;',
+    '    startPos    : TPointD;', '    rectAngle   : double;',
+    '    sweepClockW : Boolean;', '  end;', 'implementation',
+    'procedure Foo(const fArcInfo: TArcInfo; Ratio: Double);', 'begin',
+    '  with fArcInfo do', '  begin', '    if rectAngle <> 0 then Work;',
+    '    if Ratio = 0.5 then Work;', '  end;', 'end;', 'end.');
+
+procedure TTestRdxFloatEqualityFix.WithFieldRecord_Help;
+var
+  Src, LT, RT : string;
+  Map         : TRdxCodeMap;
+  InWith      : Boolean;
+begin
+  Src := Join(ARC_UNIT);
+  Assert.AreEqual(StringReplace(Src, 'rectAngle <> 0', 'not IsZero(rectAngle)',
+    []), Applied(Src, 15, 'rectAngle', '<>', '0'));
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0.5', 'SameValue(Ratio, 0.5)',
+    []), Applied(Src, 16, 'Ratio', '=', '0.5'), 'kein Feld - bindet aussen');
+  // Der Adapter bekommt den Feldtyp bzw. nichts (dann DeclaredTypeOf).
+  Map := NewMap(Src);
+  try
+    TRdxFloatEqualityFix.WithMemberTypes(Map, 15,
+      Msg('rectAngle', '<>', '0'), InWith, LT, RT);
+    Assert.IsTrue(InWith);
+    Assert.AreEqual('double', LT);
+    Assert.AreEqual('', RT);
+    TRdxFloatEqualityFix.WithMemberTypes(Map, 16, Msg('Ratio', '=', '0.5'),
+      InWith, LT, RT);
+    Assert.IsTrue(InWith);
+    Assert.AreEqual('', LT);
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFloatEqualityFix.WithOtherTargets_NoHelp;
+var
+  Src : string;
+begin
+  // Ein Record mit Methode, ein Feld namens IsZero, ein Pfad als Ziel, ein
+  // Klassentyp: das with kann an mehr als Felder binden.
+  Src := StringReplace(Join(ARC_UNIT), '    sweepClockW : Boolean;',
+    '    function Area: Double;', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '    sweepClockW : Boolean;',
+    '    IsZero : Boolean;', []);
+  // (das Feld IsZero faengt schon die Sperre 'eigenes IsZero')
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_OWN, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '  with fArcInfo do',
+    '  with Self.fArcInfo do', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '  TArcInfo = record',
+    '  TArcInfo = class', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+end;
+
+procedure TTestRdxFloatEqualityFix.LocalType_NestedParam;
+var
+  Src : string;
+  Map : TRdxCodeMap;
+begin
+  // jcl JclGraphics.pas:822: SinC verdeckt den gleichnamigen Parameter.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'function Lanczos3Filter(Value: Double): Single;',
+    '  function SinC(Value: Single): Single;', '  begin',
+    '    if Value <> 0.0 then Result := Value', '    else Result := 1;',
+    '  end;', 'begin', '  Result := SinC(Value);', 'end;', 'end.']);
+  Map := NewMap(Src);
+  try
+    Assert.AreEqual('single', TRdxFloatEqualityFix.LocalType(Map, 7, 'Value'));
+    Assert.AreEqual('double', TRdxFloatEqualityFix.LocalType(Map, 11, 'Value'));
+    Assert.AreEqual('', TRdxFloatEqualityFix.LocalType(Map, 7, 'Other'));
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFloatEqualityFix.TypeReason_SingleWithInteger;
+begin
+  // CEF4Delphi uCEFBufferPanel.pas:1675 'SameValue(TempScale, 1)', Single:
+  // eine ganze Zahl waehlt die Single-Ueberladung.
+  Assert.AreEqual('', TRdxFloatEqualityFix.TypeReason('TempScale', 'single',
+    '1', ''));
+  Assert.AreEqual('', TRdxFloatEqualityFix.TypeReason('100', '', 'S',
+    'single'));
+  // Gegenprobe: eine Zahl mit Punkt bleibt gesperrt (TypeReason_Refused).
+  Assert.AreEqual(_(R_FLOAT_SINGLE, ['S', '1.0']),
+    TRdxFloatEqualityFix.TypeReason('S', 'single', '1.0', ''));
+end;
+
 {$IFNDEF FPC}
 
 { ---- Adapter und Detektor ---- }
@@ -697,16 +828,28 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
-procedure TTestRdxFloatEqualityDetector.Adapter_NestedRoutine_TypeUnknown;
+procedure TTestRdxFloatEqualityDetector.Adapter_NestedRoutine_ParamProven;
 var
   O : TRdxFixOutcome;
 begin
-  // In einer verschachtelten Routine liefert DeclaredTypeOf '' - ohne
-  // Beweis keine Hilfe.
+  // In einer verschachtelten Routine liefert DeclaredTypeOf '' - seit
+  // rwE30 beweist der Text den Parameter ('function SinC(Value: Single)'
+  // in Lanczos3Filter, JclGraphics.pas:822). Bis dahin: keine Hilfe.
   O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
     'uses System.Math;', 'procedure Foo;', '  procedure Inner(Ratio: Double);',
     '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
     '  Inner(1);', 'end;', 'end.']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  // Gegenprobe: ein Name, den keine umschliessende Routine deklariert,
+  // bleibt unbewiesen. Die Deklaration in der Nachbar-Routine Other braucht
+  // der Detektor (er sammelt Float-Variablen nur nach 'Name: Double' -
+  // ohne sie gaebe es keinen Fund und PlanFirst schluege fehl, Review
+  // e/HilfeFixI); Inner sieht sie nicht.
+  O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Math;', 'procedure Other(Ratio: Double);', 'begin',
+    'end;', 'procedure Foo;', '  procedure Inner;',
+    '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
+    '  Inner;', 'end;', 'end.']));
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(_(R_FLOAT_UNKNOWN, ['Ratio']), O.Reason);
 end;

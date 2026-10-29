@@ -924,17 +924,17 @@ end;
 |---|---|---|
 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
 
-**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen). Die Tabweite (2, 4 oder 8) leitet die Hilfe aus den acht Zeilen darüber und darunter ab: die Weite, bei der die Textspalten hinter den Tabs der Zeile am häufigsten mit denen der Nachbarn zusammenfallen (Einrückung, `=`, `:`, Kommentarspalte) – etwa Tab plus Leerzeichen gegen Nachbarn nur aus Leerzeichen oder Tabellen mit verschieden vielen Tabs vor derselben Spalte. Zeigen die Nachbarn keine, gilt die Annahme 2; der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung:** Ersetzt die Tabulatoren der gemeldeten Zeile im Code und in Kommentaren durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen); Leerraum mit Tab am Zeilenende entfällt ganz, eine Zeile nur aus Leerraum wird leer. Die Tabweite (2, 4 oder 8; 3 nur, wenn die ganze Datei sie belegt) leitet die Hilfe zuerst aus den acht Zeilen darüber und darunter ab, und wenn die nicht entscheiden, aus der ganzen Datei: Einrückung (hinter `begin`, `then`, `do` … steht die Folgezeile tiefer, und zwar um die Stufe der Datei; hinter einer abgeschlossenen Anweisung nicht tiefer) und Ausrichtung (Textspalten hinter den Tabs gegen Nachbarn nur aus Leerzeichen bzw. gegen dieselben Zeichen wie `= `, `: `, `//` in Tabellen). Ergeben alle in Frage kommenden Weiten dieselbe Zeile, spielt die Weite keine Rolle; belegt nichts eine, gilt die Annahme 2. Der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten Tab bis zum letzten ersetzten Tab bzw. bis zum Zeilenende; Tabs in Strings und Compiler-Direktiven dazwischen bleiben. Nur die gemeldete Zeile.
 
 **Nicht angeboten**
 
-- der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
-- die Nachbarzeilen passen zu zwei Tabweiten (4 und 8) gleich gut – welcher die Ausrichtung folgt, ist offen
+- der erste Tab der Zeile liegt in einem String, mehrzeiligen String oder einer Compiler-Direktive (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Nachbarzeilen passen zu zwei Tabweiten (etwa 4 und 8) gleich gut, die Datei entscheidet nicht, und die beiden ergeben verschiedene Zeilen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
 
-**Hinweis.** Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter.
+**Hinweis.** Bleibt hinter dem ersten Tab ein Tab in einem String oder einer Direktive stehen, meldet der Detektor die Zeile nach der Hilfe weiter.
 
 <a id="sca063"></a>
 
@@ -1165,14 +1165,14 @@ const
 |---|---|---|
 | `Delete commented-out code` | `Auskommentierten Code löschen` | `Supprimer le code mis en commentaire` |
 
-**Wirkung:** Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`). Bedeutungsgleich.
+**Wirkung:** Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`, ein case-Zweig `A:` unter `case … of` bzw. `A: begin`, ein Aufruf ohne `;` vor `else`); ein innerer Kommentar darin (eine `//`-Zeile, in `(* *)` ein `{ … }` allein auf der Zeile) zählt weder als Code noch als Prosa. Bedeutungsgleich.
 
 **Nicht angeboten**
 
 - eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`, eine Zeile mit führendem `*` oder `<PRE>`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz) oder direkt hinter `unit X;` (Doku der Unit)
 - `noinspection` oder TODO/FIXME/HACK/XXX im gelöschten Text
 - der Text passt nicht mehr zur Meldung (Spalte, Code-Merkmal der ersten und letzten Zeile) – Zeile verschoben
-- ein Kommentar reicht mit Prosa oder nicht eindeutigem Code über die Region hinaus – ein Teil davon ließe einen Torso stehen
+- ein Kommentar reicht mit Prosa oder nicht eindeutigem Code über die Region hinaus – ein Teil davon ließe einen Torso stehen; ebenso, wenn ein innerer Kommentar dort Herkunft oder Absicht nennt (`// reference implementation`, `// Taken from …`, `// In case you …`)
 
 **Beispiel**
 
@@ -1681,9 +1681,11 @@ Nachher:
 
 **Nicht angeboten**
 
-- X ist nicht in der Unit deklariert (Property, geerbtes Feld) oder steht im `with`-Block
+- X ist weder vom Quellstellen-Dienst noch aus dem Text als Variable bewiesen (Property, geerbtes Feld, Variable einer anderen Unit) oder ein `with`-Rumpf umfasst die Zeile; ein Parameter oder eine lokale Variable – auch einer verschachtelten Routine – verdeckt dabei eine gleichnamige Property der Unit, ein Feld der eigenen Klasse und eine Variable auf Unit-Ebene (auch `threadvar`, `X: T = nil`) gelten als bewiesen
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`
-- eine Direktive vor `X.Free;` (das nil würde bedingt)
+- eine Direktive vor `X.Free;`, wenn eine Konfiguration es dadurch allein hinter `then`/`else`/`do` stellt (das nil würde bedingt), oder ein Include davor
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 5 (`{$IFNDEF GX_VER130_up}`, `{$IFNDEF WIN32}`) – dort gibt es kein `FreeAndNil`
+- die nil-Zeile trägt einen `{..}`-Kommentar oder einen `//`-Kommentar, der `FreeAndNil` nennt, oder beide Zeilen tragen einen (ein anderer `//`-Kommentar wandert an die FreeAndNil-Zeile)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
 - ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar
 - `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
@@ -3170,7 +3172,7 @@ begin
 
 **Nicht angeboten**
 
-- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block
+- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht als Variable bewiesen (wie bei SCA085); ein `with`-Rumpf umfasst die Zeile
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger oder ein eigener Typ (`= type ..`; `Free` ist dort eine eigene Methode bzw. die des Ziels), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (auch hinter einem Alias der Unit)
 - X ist ein `const`- bzw. `constref`-Parameter (FPC: Fehler, Delphi bis 10.3: E2197; ab 10.4 würde nur die lokale Kopie nil)
 - `Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`
@@ -3208,9 +3210,10 @@ Nachher:
 **Nicht angeboten**
 
 - der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`
-- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (auch in einer verschachtelten Routine) oder ein eigener Alias wie `TFloat`; Single gegen etwas anderes als Single (die Überladungen von SameValue wären mehrdeutig)
+- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ oder ein eigener Alias wie `TFloat` (ein Parameter oder eine lokale Variable einer verschachtelten Routine ist bewiesen); Single gegen etwas anderes als Single oder eine ganze Zahl (die Überladungen von SameValue wären mehrdeutig)
 - das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft
-- eine `with`-Anweisung in der Routine, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- ein `with`-Rumpf um den Vergleich – außer jedes Ziel ist ein bloßer Name, dessen Typ ein Record dieser Unit nur mit Feldern ist (ein Operand, der ein Feld davon ist, hat dessen Typ) –, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 6 (`{$IFNDEF COMPILER6_UP}`) – dort gibt es `Math.IsZero`/`SameValue` nicht
 - der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`
 - `Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
 

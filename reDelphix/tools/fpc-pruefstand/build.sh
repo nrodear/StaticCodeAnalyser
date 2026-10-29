@@ -198,13 +198,21 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # und die uses-Fragen von SCA044, aus uRdxRecipeRunner umgezogen); seit
 # Charge C78 (C7/C8) auch ueber uRdxIfFixes/uRdxCondFixes (Ausdrucks-Leser
 # uRdxCondExpr) und uRdxDeepNestingFix (Waechter-Klausel, Kette von SCA018).
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxContextRunner; do
+# Seit HilfeFix I (rwE30) uRdxHttpsFix (SCA115, Textfaelle und die
+# Testcode-Frage TestPathReason).
+# Seit HilfeFix I (rwE30) auch uRdxFloatEqualityFix (SCA144, Planer und
+# Bindungsfragen aus uRdxTypeProof).
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else
     echo "WARNUNG: $RDX/source/$u.pas fehlt - Testunits, die $u brauchen, scheitern beim Bau" >&2
   fi
 done
+# Seit rwE30 Runde 2 (SCA061) auch uRdxTabsFix: uTestRdxTabsFix hat seither
+# eine FPC-sichtbare Text-Fixture (Adapter und Detektor nur unter Delphi).
+need "$RDX/source/uRdxTabsFix.pas"
+UNITS+=("$RDX/source/uRdxTabsFix.pas")
 # Die Hilfs-Unit der Testunits (Review R6-08: bis dahin je Testunit eine
 # Kopie von Join, Apply, LineOf ...) kommt bei JEDEM Lauf mit, unabhaengig
 # von den aufgerufenen Testunits - FPC uebersetzt sie nur, wenn eine sie

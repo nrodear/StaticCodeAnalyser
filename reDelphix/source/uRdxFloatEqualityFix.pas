@@ -37,17 +37,30 @@ unit uRdxFloatEqualityFix;
 //     SingleSameValue(Value, 0.0) then Value := 0.0' normalisiert fast-null
 //     Werte, IsZero davor uebersprange genau sie (Realwelt-Test rwE29,
 //     TES5Edit wbDataFormat.pas:3315);
-//   - die Datei deklariert selbst ein SameValue bzw. IsZero, oder vor der
-//     Zeile steht in der Routine ein 'with' (ein Operand oder die Funktion
-//     koennte an ein Member binden).
+//   - die Datei deklariert selbst ein SameValue bzw. IsZero;
+//   - ein with-Rumpf umfasst den Vergleich (ein Operand oder die Funktion
+//     koennte an ein Member binden) - seit dem Realwelt-Test rwE30 nur noch
+//     der Rumpf um die Stelle (TRdxTypeProof.EnclosingWiths; bis dahin
+//     JEDES with davor in der Routine, Img32.SVG.Reader.pas:1398,
+//     Resample.pas:65), und nicht, wenn jedes with-Ziel ein blosser Name
+//     ist, dessen Typ ein Record DIESER Unit nur mit Feldern ist (kein
+//     Feld heisst wie die Funktion): ein Operand, der ein Feld davon ist,
+//     hat dessen Typ (WithMemberTypes), jeder andere bindet wie ohne with
+//     (Img32.SVG.Path.pas:657 'with fArcInfo do .. rectAngle <> 0');
+//   - die Stelle liegt in einem Zweig, den nur alte Compiler uebersetzen
+//     ('{$IFNDEF COMPILER6_UP}': Math.IsZero/SameValue gibt es ab Delphi 6,
+//     JvSimpleXml.pas:252, rwE30; TRdxTypeProof.OldCompilerBranchReason).
 // Der TYPBEWEIS gehoert in den Adapter (Hausregel uRdxFixTable): er fragt
 // DeclaredTypeOf je Bezeichner und reicht die Typen an TypeReason; dazu
 // InWithBlock und die Herabstufung des Detektors (fcLow) an ContextReason.
 // Bewiesen sein muessen Single, Double, Extended oder Real - Currency ist
 // Festkomma und vergleicht exakt, ein unbekannter Typ heisst keine Hilfe
 // (der Detektor sammelt Float-Variablen nur nach Namen). Single mit etwas
-// anderem als Single (auch einem Literal) gesperrt: die drei Ueberladungen
-// von SameValue koennten mehrdeutig sein (E2251).
+// anderem als Single (auch einem Literal mit Punkt) gesperrt: die drei
+// Ueberladungen von SameValue koennten mehrdeutig sein (E2251). Eine
+// GANZE Zahl als andere Seite ist frei (rwE30): 'SameValue(FOpacity, 1)'
+// mit Single uebersetzt Alcinoe (Delphi, Alcinoe.FMX.StdCtrls.pas:6795),
+// FPC 3.2.2 ebenso (Probe 2026-10-29: SameValue(S, 1), SameValue(1, S)).
 //
 // OHNE ToolsAPI, ohne uEngineApi: bindet nur Code-Sicht, Ersetzung und
 // Texte (FPC-tauglich).
@@ -125,6 +138,25 @@ type
     class function TypeReason(const ALeft, ALeftType, ARight,
       ARightType: string): string; static;
 
+    // Was ein with um den Vergleich der Meldung auf ALine bindet (rwE30):
+    // AWith = True, wenn ein with-Rumpf ihn umfasst und alle with-Ziele
+    // Records dieser Unit nur mit Feldern sind (sonst sperrt
+    // ToleranceCompare); ALeftType/ARightType: der Feldtyp einer Seite, die
+    // ein Feld eines dieser Records ist, sonst ''. Der Adapter nimmt ihn
+    // statt DeclaredTypeOf und fragt InWithBlock nur ohne AWith.
+    class procedure WithMemberTypes(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AWith: Boolean; out ALeftType,
+      ARightType: string); static;
+
+    // Der Typ von AOperand an ALine aus den Deklarationen der Routinen um
+    // die Zeile (TRdxTypeProof.LocalBinding: Parameter, lokale Variable,
+    // auch einer verschachtelten Routine - 'function SinC(Value: Single)'
+    // in Lanczos3Filter, rwE30); '' ohne. Der Adapter fragt ihn, wenn
+    // DeclaredTypeOf schweigt (verschachtelte Routinen kennt der
+    // Quellstellen-Dienst nicht).
+    class function LocalType(AMap: TRdxCodeMap; ALine: Integer;
+      const AOperand: string): string; static;
+
     // Was nur der Adapter weiss: der Detektor hat den Fund herabgestuft
     // (fcLow: Waechter- oder Sentinel-Vergleich, exakt gewollt), die Zeile
     // liegt in einem with-Block (InWithBlock). '' oder der Grund.
@@ -137,6 +169,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,   // TRefactorSpan.Make
+  uRdxTypeProof,   // EnclosingWiths, RecordFields, LocalBinding, Zweige (rwE30)
   uRdxText;        // _(): in die reDelphix-Sprache, nie uLocalization
 
 const
@@ -169,6 +202,8 @@ const
   SAME_VALUE_LOW = 'samevalue';
   // So weit liest TolerantCheckLine den then-Zweig (Token).
   MAX_BRANCH = 2000;
+  // Math.IsZero und Math.SameValue gibt es ab Delphi 6 (rwE30).
+  MATH_SINCE_DELPHI = 6;
 
 // Eine Null wie der Detektor sie liest: '0', '00', '0.0', '0.00'.
 function IsZeroText(const S: string): Boolean;
@@ -190,6 +225,17 @@ begin
     else if S[i] <> '0' then
       Exit;
   Result := True;
+end;
+
+// Eine ganze Zahl ohne Punkt und Exponent ('1', '100').
+function IsIntegerText(const S: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := S <> '';
+  for i := 1 to Length(S) do
+    if not CharInSet(S[i], ['0'..'9']) then
+      Exit(False);
 end;
 
 class function TRdxFloatEqualityFix.IsLiteral(const AOperand: string): Boolean;
@@ -307,24 +353,78 @@ begin
   Result := False;
 end;
 
-// Steht vor ATok in seiner Routine ein 'with'? Rueckwaerts bis zum Kopf der
-// Routine (IsRoutineHead) bzw. 'implementation'; ein with in einer
-// verschachtelten Routine davor zaehlt mit (sperrt nur). Private Hilfe
-// dieser Unit (wie TRdxSimpleFixes.WithBefore, ohne die Planer-Unit).
-function WithBefore(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
+// Wie bindet ein with um ATok (rwE30)? True: kein with-Rumpf umfasst
+// ATok (AInWith = False), oder jedes umfassende with zielt nur auf blosse
+// Namen, deren Typ (Parameter/lokal - LocalBinding -, sonst ein Feld der
+// eigenen Klasse - OwnFieldType) ein Record dieser Unit nur mit Feldern ist
+// (RecordFields), und keines der Felder heisst wie die Funktion ACallLow
+// (AInWith = True). ALeftType/ARightType: der Feldtyp eines Operanden
+// (klein, ALeftLow/ARightLow; '' fuer eine Zahl), der ein Feld eines
+// dieser Records ist - das innerste with, darin das letzte Ziel zuerst;
+// sonst ''. False: das with kann an etwas anderes binden - sperren.
+function WithBinding(AMap: TRdxCodeMap; const ATok: TRdxToken;
+  const ACallLow, ALeftLow, ARightLow: string; out AInWith: Boolean;
+  out ALeftType, ARightType: string): Boolean;
 var
-  T : TRdxToken;
+  Withs         : TArray<TRdxToken>;
+  Targets       : TArray<TRdxToken>;
+  Names, Types  : TArray<string>;
+  T, N          : TRdxToken;
+  i, k, j, P    : Integer;
+  Find          : TRdxLocalFind;
+  Ty            : string;
 begin
   Result := False;
-  T := Before(AMap, ATok);
-  while T.Low <> '' do
+  AInWith := False;
+  ALeftType := '';
+  ARightType := '';
+  if not TRdxTypeProof.EnclosingWiths(AMap, ATok, Withs) then
+    Exit;
+  AInWith := Length(Withs) > 0;
+  for i := 0 to High(Withs) do
   begin
-    if (T.Low = 'with') and IsKeywordAfter(T, Before(AMap, T)) then
-      Exit(True);
-    if (T.Low = 'implementation') or IsRoutineHead(AMap, T) then
-      Exit;
-    T := Before(AMap, T);
+    // Die Ziele: Name (',' Name)* bis 'do'.
+    Targets := nil;
+    T := After(AMap, Withs[i]);
+    repeat
+      if not T.IsWord or IsKeyword(T.Low) then
+        Exit;
+      SetLength(Targets, Length(Targets) + 1);
+      Targets[High(Targets)] := T;
+      N := After(AMap, T);
+      if N.Low = 'do' then
+        Break;
+      if N.Low <> ',' then
+        Exit;   // Pfad, Aufruf, Cast, Index: Typ nicht lesbar
+      T := After(AMap, N);
+    until False;
+    for k := High(Targets) downto 0 do
+    begin
+      Find := TRdxTypeProof.LocalBinding(AMap, Withs[i], Targets[k].Low);
+      Ty := '';
+      if Find.Kind = lkVar then
+        Ty := Find.TypeLow
+      else if Find.Kind = lkNone then
+      begin
+        P := LastDelimiter('.', Find.OuterName);
+        if P > 0 then
+          Ty := TRdxTypeProof.OwnFieldType(AMap,
+            Copy(Find.OuterName, 1, P - 1), Targets[k].Low);
+      end;
+      if not TRdxTypeProof.RecordFields(AMap, Ty, Names, Types) then
+        Exit;
+      for j := 0 to High(Names) do
+      begin
+        if Names[j] = ACallLow then
+          Exit;   // IsZero bzw. SameValue waere ein Feld
+        if (ALeftType = '') and (ALeftLow <> '') and (Names[j] = ALeftLow) then
+          ALeftType := Types[j];
+        if (ARightType = '') and (ARightLow <> '') and (Names[j] = ARightLow) then
+          ARightType := Types[j];
+      end;
+    end;
   end;
+  Result := True;
 end;
 
 // Die oeffnende Klammer ('(' oder '['), in der ATok steht - rueckwaerts
@@ -440,6 +540,91 @@ begin
   end;
 end;
 
+// Ein Operand klein, '' fuer eine Zahl (sie bindet an nichts).
+function OperandLow(const AOperand: string): string;
+begin
+  if TRdxFloatEqualityFix.IsLiteral(AOperand) then
+    Result := ''
+  else
+    Result := LowerCase(AOperand);
+end;
+
+// Das erste Token des Vergleichs ALeft AOp ARight auf ALine, wenn er genau
+// einmal dort steht (wie ToleranceCompare zaehlt); Low = '' sonst.
+function ComparisonStart(AMap: TRdxCodeMap; ALine: Integer;
+  const ALeft, AOp, ARight: string): TRdxToken;
+var
+  T, OpTok, RTok : TRdxToken;
+  LEnd, REnd, n  : Integer;
+begin
+  Result := Default(TRdxToken);
+  n := 0;
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if OperandAt(AMap, ALine, T, ALeft, LEnd) then
+    begin
+      OpTok := NextToken(AMap, ALine, LEnd);
+      if (OpTok.Line = ALine) and (OpTok.Low = AOp) then
+      begin
+        RTok := After(AMap, OpTok);
+        if OperandAt(AMap, ALine, RTok, ARight, REnd) then
+        begin
+          Inc(n);
+          if n = 1 then
+            Result := T;
+        end;
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+  if n <> 1 then
+    Result := Default(TRdxToken);
+end;
+
+class procedure TRdxFloatEqualityFix.WithMemberTypes(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AWith: Boolean; out ALeftType,
+  ARightType: string);
+var
+  L, Op, R : string;
+  LTok     : TRdxToken;
+begin
+  AWith := False;
+  ALeftType := '';
+  ARightType := '';
+  if (ALine < 1) or (ALine > AMap.LineCount)
+     or not Operands(AMessage, L, Op, R) then
+    Exit;
+  LTok := ComparisonStart(AMap, ALine, L, Op, R);
+  if LTok.Low = '' then
+    Exit;
+  if not WithBinding(AMap, LTok, LowerCase(CallName(AMessage)),
+       OperandLow(L), OperandLow(R), AWith, ALeftType, ARightType) then
+  begin
+    // Sperrt ToleranceCompare schon - hier nichts als bewiesen melden.
+    AWith := False;
+    ALeftType := '';
+    ARightType := '';
+  end;
+end;
+
+class function TRdxFloatEqualityFix.LocalType(AMap: TRdxCodeMap;
+  ALine: Integer; const AOperand: string): string;
+var
+  At   : TRdxToken;
+  Find : TRdxLocalFind;
+begin
+  Result := '';
+  if IsLiteral(AOperand) or (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  At := NextToken(AMap, ALine, 1);
+  if (At.Low = '') or (At.Line <> ALine) then
+    Exit;
+  Find := TRdxTypeProof.LocalBinding(AMap, At, AOperand);
+  if Find.Kind = lkVar then
+    Result := Find.TypeLow;
+end;
+
 class function TRdxFloatEqualityFix.ToleranceCompare(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -450,6 +635,8 @@ var
   ZeroLeft, ZeroRight : Boolean;
   Names : array[0..1] of string;
   Li    : Integer;
+  InWith       : Boolean;
+  WithL, WithR : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -571,11 +758,16 @@ begin
     AReason := _(R_FLOAT_OWN, [Call]);
     Exit;
   end;
-  if WithBefore(AMap, LTok) then
+  if not WithBinding(AMap, LTok, LowerCase(Call), OperandLow(Left),
+       OperandLow(Right), InWith, WithL, WithR) then
   begin
     AReason := _(R_FLOAT_WITH, [Call]);
     Exit;
   end;
+  AReason := TRdxTypeProof.OldCompilerBranchReason(AMap, ALine,
+    MATH_SINCE_DELPHI);
+  if AReason <> '' then
+    Exit;
 
   if ZeroLeft or ZeroRight then
     Args := VarText
@@ -620,9 +812,10 @@ begin
     Exit;
   LSingle := (not IsLiteral(ALeft)) and SameText(ALeftType, TYPE_SINGLE);
   RSingle := (not IsLiteral(ARight)) and SameText(ARightType, TYPE_SINGLE);
-  if LSingle and not RSingle then
+  // Eine ganze Zahl neben Single waehlt die Single-Ueberladung (s. Kopf).
+  if LSingle and not RSingle and not IsIntegerText(ARight) then
     Result := _(R_FLOAT_SINGLE, [ALeft, ARight])
-  else if RSingle and not LSingle then
+  else if RSingle and not LSingle and not IsIntegerText(ALeft) then
     Result := _(R_FLOAT_SINGLE, [ARight, ALeft]);
 end;
 
