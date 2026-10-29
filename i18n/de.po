@@ -6996,3 +6996,12 @@ msgstr "das Programm %s im Verzeichnis %s enthält die Unit und stellt die globa
 
 msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"
 msgstr "die Anweisung trägt auch das Literal %s - mit TFormatSettings.Invariant schreibt %s ein anderes Format (Dezimalpunkt, MM/dd/yyyy), ein Vergleich mit dem Literal schlüge fehl"
+
+msgid "line %d evaluates %s together with %s - with TFormatSettings.Invariant here alone, the two would no longer fit together (decimal separator, date format)"
+msgstr "Zeile %d wertet %s zusammen mit %s aus - mit TFormatSettings.Invariant nur hier passten beide nicht mehr zusammen (Dezimaltrenner, Datumsformat)"
+
+msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormatSettings.Invariant schreibt - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
+
+msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
