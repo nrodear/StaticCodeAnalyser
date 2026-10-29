@@ -5347,6 +5347,9 @@ msgstr "%s est utilisé dans le texte"
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr "résultat heuristique - compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
 
+msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"
+msgstr "l'unité ne contient que des clauses uses - elles sont sa raison d'être (une unité de paquet compile les unités listées) ; sans %s, la compilation l'omet"
+
 msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr "pas dans l'ampoule : le fichier utilise %s (ligne %d), que le Quick-Fix ne peut attribuer à aucune autre unité des clauses uses - il peut venir de %s ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
 

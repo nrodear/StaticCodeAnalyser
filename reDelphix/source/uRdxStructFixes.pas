@@ -90,6 +90,13 @@ type
     class function ForeignIdent(AMap: TRdxCodeMap;
       const AKnown: TArray<string>; out ALine: Integer): string; static;
 
+    // SCA007 (rwE30 Stufe 2, Fragwuerdig Indy indyprotocolsfpc.pas:189):
+    // besteht die Unit nur aus ihrem Kopf und uses-Klauseln - kein Typ,
+    // keine Routine, kein Code? Dann ist die uses-Liste ihr Zweck (die
+    // Sammel-Unit eines Lazarus-Pakets uebersetzt so die gelisteten Units);
+    // ein Eintrag weniger nimmt die Unit aus dem Bau.
+    class function UsesOnlyUnit(AMap: TRdxCodeMap): Boolean; static;
+
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
@@ -767,6 +774,39 @@ begin
     end;
   finally
     Decl.Free;
+  end;
+end;
+
+class function TRdxStructFixes.UsesOnlyUnit(AMap: TRdxCodeMap): Boolean;
+var
+  Toks   : TArray<TRdxToken>;
+  k      : Integer;
+  InHead : Boolean;
+  InUses : Boolean;
+begin
+  Toks := AllCodeTokens(AMap);
+  Result := (Length(Toks) > 0) and (Toks[0].Low = 'unit');
+  if not Result then Exit;
+  InHead := False;
+  InUses := False;
+  for k := 0 to High(Toks) do
+  begin
+    if InHead or InUses then
+    begin
+      if Toks[k].Low = ';' then
+      begin
+        InHead := False;
+        InUses := False;
+      end;
+      Continue;
+    end;
+    if Toks[k].Low = 'unit' then
+      InHead := True
+    else if Toks[k].Low = 'uses' then
+      InUses := True
+    else if not InList(Toks[k].Low, ['interface', 'implementation', 'end',
+       '.']) then
+      Exit(False);
   end;
 end;
 

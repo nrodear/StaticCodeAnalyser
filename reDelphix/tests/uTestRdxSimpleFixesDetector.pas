@@ -155,6 +155,8 @@ type
     // Klausel sperrt nicht mehr; Gegenprobe: der Bereich beruehrt eine.
     [Test] procedure Sca007_DirectiveInOtherClause_Helps;
     [Test] procedure Sca007_RangeTouchesDirective_NoHelp;
+    // rwE30 Stufe 2 (Fragwuerdig Indy indyprotocolsfpc.pas:189).
+    [Test] procedure Sca007_PackageUnit_NoHelp;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1605,6 +1607,25 @@ begin
   Seen.Msg := 'System.Math';
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
   Assert.IsTrue(Pos('Direktive', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_PackageUnit_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Die Sammel-Unit eines Lazarus-Pakets: die uses-Liste ist ihr Zweck -
+  // ohne den Eintrag faellt die Unit aus dem Paketbau (vorher angeboten, in
+  // der Gluehbirne).
+  Src := Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  System.Classes,', '  System.Math;', 'implementation', '{$hints off}',
+    'end.']);
+  Seen.Line := 5;
+  Seen.Msg := 'System.Math';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('System.Math', Reason) > 0, Reason);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.

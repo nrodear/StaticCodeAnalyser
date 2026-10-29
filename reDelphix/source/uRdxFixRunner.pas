@@ -1087,6 +1087,10 @@ begin
     if UnitStillUsed(Map, Result.Name) then
       Result.Reason := MsgStaleSuffix(_('%s is used in the text',
         [Result.Name]))
+    else if TRdxStructFixes.UsesOnlyUnit(Map) then
+      Result.Reason := _('the unit consists of uses clauses only - they are '
+        + 'its purpose (a package unit compiles the listed units); without %s '
+        + 'the build drops it', [Result.Name])
     else
       Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
         Result.Edits[0], Result.Reason);

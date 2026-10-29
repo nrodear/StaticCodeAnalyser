@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6908 Zeilen, 319126 Bytes
-  CPoLines_de: array[0..6907] of string = (
+  // i18n\de.po - 6911 Zeilen, 319422 Bytes
+  CPoLines_de: array[0..6910] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -5368,6 +5368,9 @@ const
     'msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "heuristischer Fund - danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), l'#$00E4'uft er nicht mehr"',
     '',
+    'msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"',
+    'msgstr "die Unit besteht nur aus uses-Klauseln - sie sind ihr Zweck (eine Paket-Unit '#$00FC'bersetzt die gelisteten Units); ohne %s f'#$00E4'llt sie aus dem Bau"',
+    '',
     'msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "nicht in der Gl'#$00FC'hbirne: die Datei nutzt %s (Zeile %d), das die Hilfe keiner anderen Unit der uses-Klauseln zuordnen kann - es kann aus %s kommen; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), l'#$00E4'uft er nicht mehr"',
     '',
@@ -7197,8 +7200,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6904 Zeilen, 332060 Bytes
-  CPoLines_fr: array[0..6903] of string = (
+  // i18n\fr.po - 6907 Zeilen, 332372 Bytes
+  CPoLines_fr: array[0..6906] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -12547,6 +12550,9 @@ const
     '',
     'msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "r'#$00E9'sultat heuristique - compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s''ex'#$00E9'cute plus"',
+    '',
+    'msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"',
+    'msgstr "l''unit'#$00E9' ne contient que des clauses uses - elles sont sa raison d'''#$00EA'tre (une unit'#$00E9' de paquet compile les unit'#$00E9's list'#$00E9'es) ; sans %s, la compilation l''omet"',
     '',
     'msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "pas dans l''ampoule : le fichier utilise %s (ligne %d), que le Quick-Fix ne peut attribuer '#$00E0' aucune autre unit'#$00E9' des clauses uses - il peut venir de %s ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s''ex'#$00E9'cute plus"',

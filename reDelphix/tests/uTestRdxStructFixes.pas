@@ -58,6 +58,9 @@ type
     // uChildForm.pas:10) - der Zweig behaelt seine Kommafolge, der andere
     // bleibt unberuehrt; am Zweigrand lehnt RangeReason ab.
     [Test] procedure Sca007_EntryInBranch_CommaLogic;
+    // rwE30 Stufe 2 (Indy indyprotocolsfpc.pas:189): die Sammel-Unit eines
+    // Pakets besteht nur aus uses-Klauseln.
+    [Test] procedure Sca007_UsesOnlyUnit;
   end;
 
 implementation
@@ -676,6 +679,39 @@ begin
     Entry(4, Pos('uCEF', L), 'uCEF')]);
   Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+function UsesOnly(const ASource: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.UsesOnlyUnit(Map);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_UsesOnlyUnit;
+begin
+  // indyprotocolsfpc.pas (minimiert): uses, leeres implementation mit
+  // Kommentar und {$hints off}.
+  Assert.IsTrue(UsesOnly(Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  IdSMTP,', '  IdPOP3;', 'implementation', '{ compile the units }',
+    '{$hints off}', 'end.'])), 'Paket-Unit');
+  // Gegenproben: ein Typ, eine Routine, ein Programm.
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;', 'type',
+    '  TFoo = class end;', 'implementation', 'end.'])), 'Typ');
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;',
+    'implementation', 'procedure P; begin end;', 'end.'])), 'Routine');
+  Assert.IsFalse(UsesOnly(Join(['program p;', 'uses A;', 'begin', 'end.'])),
+    'Programm');
 end;
 
 initialization

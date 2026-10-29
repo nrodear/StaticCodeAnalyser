@@ -255,6 +255,7 @@ Nachher:
 - ein Kommentar im gelöschten Bereich, auch `{Form1}` hinter einer Formular-Unit
 - eine Compiler-Direktive im gelöschten Bereich (der Eintrag grenzt an einen `{$IFDEF}`-Zweig); eine Direktive anderswo in der Klausel oder der Datei sperrt nicht
 - im gelöschten Bereich steht mehr als dieser Eintrag
+- die Unit besteht nur aus uses-Klauseln – die Sammel-Unit eines Pakets übersetzt so die gelisteten Units
 
 **Beispiel**
 
