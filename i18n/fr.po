@@ -2845,6 +2845,16 @@ msgstr "\"%s\" protège une valeur par défaut (if X = 0 then X := ...) - la com
 msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
 msgstr "« %s » protège un test avec tolérance de la même valeur (ligne %d) - la comparaison exacte y est voulue"
 
+# reDelphix rwE31 Gruppe L (uRdxFloatEqualityFix: Divisionsschutz, Text-Schnellpfad, stored-Funktion)
+msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"
+msgstr "« %s » protège une division par %s (ligne %d) - toute valeur autre que 0 exactement est un diviseur valide, une tolérance rejetterait les petites"
+
+msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"
+msgstr "« %s » écrit un texte pour 0 exactement (ligne %d) - avec une tolérance, de petites valeurs deviendraient silencieusement ce texte"
+
+msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
+msgstr "« %s » décide si une propriété est enregistrée (stored %s) - avec une tolérance, des valeurs proches de la valeur par défaut ne seraient pas enregistrées"
+
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr "« %s » n'est pas déclarée dans le corps d'une classe de ce fichier (routine libre, record, interface, ou la classe se trouve dans un include)"
 
@@ -6843,6 +6853,10 @@ msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième co
 # reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanNewClause - Abschnitts-Schluesselwort im bedingten Zweig)
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr "le mot-clé de section à la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses à la main"
+
+# reDelphix rwE31 Gruppe L (uRdxPlacesRunner: PlanNewClause - uses-Klausel im Text, die der Baum nicht sah)
+msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"
+msgstr "la clause uses à la ligne %d n'est pas lue ici (elle se trouve dans une branche conditionnelle) - ajouter l'unité à la main"
 
 msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
 msgstr "la déclaration porte %s - un corps vide y est un crochet dont les appelants (inherited, le framework) attendent qu'il ne fasse rien ; raise les casserait"

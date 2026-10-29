@@ -1331,7 +1331,10 @@ begin
   // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
   // Frage liest die Platte, also nur fuer eine angebotene Hilfe.
   if not Result.Enabled then Exit;
-  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines);
+  // rwE31: mit Zeile und Meldung - ein Projekt nur mit 'test' im Namen
+  // sperrt ein Argument einer Aufruf-Anweisung nicht.
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines,
+    AFinding.LineInt, AFinding.Message);
   if Why <> '' then
   begin
     Result.Enabled := False;
@@ -1710,6 +1713,10 @@ begin
   Result := APlaces.DeclaredTypeOf(ALine, AOperand);
   if Result = '' then
     Result := TRdxFloatEqualityFix.LocalType(AMap, ALine, AOperand);
+  // Ein Alias bis zum Gleitkommatyp ('TFloat = single', auch aus einer
+  // Unit neben der Datei - rwE31).
+  Result := TRdxFloatEqualityFix.BaseFloatType(AMap, APlaces.FileName,
+    Result);
 end;
 
 // SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei
@@ -1774,7 +1781,7 @@ begin
   end;
   Result.Hint := _(R_FLOATEQ_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'Math', 'System.Math',
-    Result);
+    Result, AFinding.LineInt);
 end;
 
 // SCA154 (Charge QF5): 'SizeOf(PTyp)' -> 'SizeOf(Zieltyp)' fuer einen

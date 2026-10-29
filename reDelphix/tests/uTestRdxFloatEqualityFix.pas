@@ -53,6 +53,11 @@ type
     [Test] procedure WithOtherTargets_NoHelp;
     [Test] procedure LocalType_NestedParam;
     [Test] procedure TypeReason_SingleWithInteger;
+    // ---- Realwelt-Test rwE31 (Fix-Runde 3): exakte Sonderfaelle ----
+    [Test] procedure DivisorGuard_NoHelp;
+    [Test] procedure TextFastPath_NoHelp;
+    [Test] procedure StoredFunction_NoHelp;
+    [Test] procedure BaseFloatType_Aliases;
   end;
 
 {$IFNDEF FPC}
@@ -595,6 +600,150 @@ begin
   // Gegenprobe: eine Zahl mit Punkt bleibt gesperrt (TypeReason_Refused).
   Assert.AreEqual(_(R_FLOAT_SINGLE, ['S', '1.0']),
     TRdxFloatEqualityFix.TypeReason('S', 'single', '1.0', ''));
+end;
+
+procedure TTestRdxFloatEqualityFix.DivisorGuard_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl JvgUtils.pas:1516 (CalcMathString): jede von 0 verschiedene Zahl
+  // ist ein gueltiger Divisor - IsZero(Single) meldete fuer 1/0.00005
+  // 'Division durch Null'.
+  AssertRefused(Wrap(['  if Ratio <> 0 then', '    Other := Other / Ratio',
+    '  else', '    Work;']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0', 'Ratio', LINE + 1]));
+  // JvPaintFX.pas:264 / Jans JvResample.pas:223 'function SinC': geklammerte
+  // Bedingung, Division im begin-Block; auch durch eine Klammer mit ihm.
+  AssertRefused(Wrap(['  if (Ratio <> 0.0) then', '  begin',
+    '    Ratio := Ratio * Pi;', '    Other := Sin(Ratio) / Ratio', '  end',
+    '  else', '    Other := 1;']), LINE, 'Ratio', '<>', '0.0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0.0', 'Ratio', LINE + 3]));
+  AssertRefused(Wrap(['  if Ratio <> 0.0 then Other := Sin(Ratio * Pi) / '
+    + '(Ratio * Pi);']), LINE, 'Ratio', '<>', '0.0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0.0', 'Ratio', LINE]));
+  // jvcl JvCalc.pas:508: '=' mit der Division im else-Zweig ...
+  AssertRefused(Wrap(['  if Ratio = 0 then Work else Other := 1.0 / Ratio;']),
+    LINE, 'Ratio', '=', '0', _(R_FLOAT_DIVISOR, ['Ratio = 0', 'Ratio', LINE]));
+  // ... bzw. hinter einem Sprung im Rest des Blocks.
+  AssertRefused(Wrap(['  if Ratio = 0 then', '    Exit;',
+    '  Other := Other div Ratio;']), LINE, 'Ratio', '=', '0',
+    _(R_FLOAT_DIVISOR, ['Ratio = 0', 'Ratio', LINE + 2]));
+  // Gegenproben: keine Division durch den Operanden, die Division hinter
+  // dem if ohne Sprung, eine Division durch etwas anderes - die Hilfe
+  // bleibt.
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then', '    Other := Other * '
+    + 'Ratio', '  else', '    Work;']), Applied(Wrap(['  if Ratio <> 0 then',
+    '    Other := Other * Ratio', '  else', '    Work;']), LINE, 'Ratio', '<>',
+    '0'));
+  Src := Wrap(['  if Ratio = 0 then', '    Work;', '  Other := Other / Ratio;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Other := Ratio / Other;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.TextFastPath_NoHelp;
+var
+  Src : string;
+begin
+  // mormot.core.text.pas:6069 DoubleToString: mit IsZero wuerde jeder Wert
+  // unter 1E-12 still zu '0'.
+  AssertRefused(Wrap(['  if Ratio = 0 then', '    result := ''0''', '  else',
+    '    Work;']), LINE, 'Ratio', '=', '0',
+    _(R_FLOAT_TEXT, ['Ratio = 0', LINE + 1]));
+  // '<>': der Text steht im else-Zweig; Exit mit einem Zeichen-Literal.
+  AssertRefused(Wrap(['  if Ratio <> 0 then Work else Exit(#48);']), LINE,
+    'Ratio', '<>', '0', _(R_FLOAT_TEXT, ['Ratio <> 0', LINE]));
+  // Gegenproben: der Zweig fuer 0 setzt keinen String, der String steht im
+  // Zweig fuer 'nicht 0' - die Hilfe bleibt.
+  Src := Wrap(['  if Ratio = 0 then Caption := Other else Caption := ''x'';']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Caption := ''x'';']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+end;
+
+// Eine Klasse mit 'property Opacity .. AStored' und der Funktion
+// StoreOpacity; der Vergleich steht auf Zeile 14.
+function StoredUnit(const AStored: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type', '  TFoo = class',
+    '  private', '    FOpacity: Single;', '    function StoreOpacity: Boolean;',
+    '  published', '    property Opacity: Single read FOpacity write FOpacity'
+    + AStored + ';', '  end;', 'implementation',
+    'function TFoo.StoreOpacity: Boolean;', 'begin',
+    '  Result := FOpacity <> 1;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxFloatEqualityFix.StoredFunction_NoHelp;
+var
+  Src : string;
+begin
+  // Dev-Cpp FMX.SVGIconImage.pas:244 StoreOpacity: mit SameValue wuerde ein
+  // Wert nahe 1 nicht gespeichert und kaeme beim Laden als genau 1 zurueck.
+  AssertRefused(StoredUnit(' stored StoreOpacity'), 14, 'FOpacity', '<>', '1',
+    _(R_FLOAT_STORED, ['FOpacity <> 1', 'StoreOpacity']));
+  // Gegenprobe: keine Property nennt die Funktion mit 'stored'.
+  Src := StoredUnit('');
+  Assert.AreEqual(StringReplace(Src, 'FOpacity <> 1',
+    'not SameValue(FOpacity, 1)', []), Applied(Src, 14, 'FOpacity', '<>', '1'));
+end;
+
+// rwE31 (Dev-Cpp SVG.pas:3988, minimiert): 'X, Y: TFloat' mit 'TFloat =
+// single' in SVGTypes.pas (uses, gleiches Verzeichnis) - bis dahin 'als
+// tfloat deklariert - nicht Single ..'. Dazu die Alias-Kette der Datei
+// selbst. Gegenproben: ohne Datei, ein Alias nur im implementation-Teil,
+// verschiedene Typen in {$IFDEF}-Zweigen (mormot TSynExtended); eine
+// spaetere Unit, die den Typ nur benutzt, verdeckt nicht, eine, die ihn
+// neu deklariert, schon.
+procedure TTestRdxFloatEqualityFix.BaseFloatType_Aliases;
+var
+  Dir, Src, Main : string;
+  Map            : TRdxCodeMap;
+begin
+  Dir := NewTempDir('rdx_sca144a_');
+  try
+    WriteText(Dir + 'rdxtypes.pas', Join(['unit rdxtypes;', 'interface',
+      'type', '  TFloat = single;', '  {$IFDEF X}', '  TReal = extended;',
+      '  {$ELSE}', '  TReal = double;', '  {$ENDIF}', 'implementation', 'type',
+      '  THidden = double;', 'end.']));
+    WriteText(Dir + 'rdxuser.pas', Join(['unit rdxuser;', 'interface',
+      'type', '  TPoint2 = record X, Y: TFloat; end;', 'implementation',
+      'end.']));
+    WriteText(Dir + 'rdxnew.pas', Join(['unit rdxnew;', 'interface', 'type',
+      '  TFloat = double;', 'implementation', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'uses', '  rdxtypes, rdxuser;',
+      'type', '  TLocal = TFloat2;', '  TFloat2 = double;', 'implementation',
+      'end.']);
+    Map := NewMap(Src);
+    try
+      Assert.AreEqual('single', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'Alias aus der Unit daneben');
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tlocal'), 'Alias-Kette der Datei');
+      Assert.AreEqual('tfloat', TRdxFloatEqualityFix.BaseFloatType(Map, '',
+        'tfloat'), 'ohne Datei');
+      Assert.AreEqual('thidden', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'thidden'), 'nur im implementation-Teil');
+      Assert.AreEqual('treal', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'treal'), 'Zweige mit verschiedenen Typen');
+    finally
+      Map.Free;
+    end;
+    Map := NewMap(StringReplace(Src, 'rdxtypes, rdxuser;',
+      'rdxtypes, rdxnew;', []));
+    try
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'die spaetere Unit gilt');
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
 end;
 
 {$IFNDEF FPC}

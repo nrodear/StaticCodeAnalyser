@@ -141,8 +141,15 @@ type
     // Vorfahr koennte ein gleichnamiges Member tragen - der Code 'X.Free'
     // meinte dann dieses, FreeAndNil(X) ebenso (Feld) bzw. scheitert beim
     // Uebersetzen (Property). with prueft der Aufrufer vorher (WithBefore).
+    // Seit rwE31 mit AUnitFile (die Datei von AMap, '' = unbekannt) auch
+    // vpGlobal, wenn diese Unit den Namen gar nicht deklariert und eine
+    // Unit ihrer uses-Klauseln NEBEN der Datei ihn im interface-Teil als
+    // Variable deklariert (TRdxTypeProof.NeighbourVarType; HeidiSQL
+    // main.pas:2778 'frmPreferences' aus preferences.pas) - dieselben
+    // Bedingungen wie fuer ein Global dieser Unit.
     class function VariableProof(AMap: TRdxCodeMap; ALine: Integer;
-      const AName: string): TRdxVarProof; static;
+      const AName: string;
+      const AUnitFile: string = ''): TRdxVarProof; static;
     // True, wenn in der Routine um ALine vor dieser Zeile 'var AName :='
     // steht: eine Inline-Variable ohne Typangabe, die DeclaredTypeOf nicht
     // kennt.
@@ -883,7 +890,8 @@ begin
 end;
 
 class function TRdxSimpleFixes.VariableProof(AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): TRdxVarProof;
+  ALine: Integer; const AName: string;
+  const AUnitFile: string): TRdxVarProof;
 var
   At        : TRdxToken;
   Find      : TRdxLocalFind;
@@ -929,6 +937,16 @@ begin
   // Hauptprogramm) gibt es kein Self: ein zuweisbarer Name ohne lokale
   // Deklaration ist eine Variable einer Unit - bewiesen nur die dieser.
   Ty := TRdxTypeProof.UnitVarType(AMap, AName);
+  // rwE31: ein Global einer Unit neben der Datei - nur, wenn diese Unit
+  // den Namen weder als Variable noch sonst deklariert (sie verdeckte
+  // jede andere Unit).
+  if (Ty = '') and (AUnitFile <> '')
+     and (TRdxTypeProof.FieldTypeOf(AMap, AName) = '')
+     and not TRdxTypeProof.DeclaresProperty(AMap, AName)
+     and not TRdxTypeProof.DeclaresRoutine(AMap, AName)
+     and (TRdxTypeProof.DeclaredTypeKind(AMap, AName) = '')
+     and not DeclaresAfter(AMap, ['const', 'resourcestring'], AName) then
+    Ty := TRdxTypeProof.NeighbourVarType(AMap, AUnitFile, AName);
   if Ty <> '' then
   begin
     Result.Kind := vpGlobal;

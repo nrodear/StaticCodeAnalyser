@@ -40,6 +40,9 @@ type
     [Test] procedure TestFolder_TestUnit_NoHelp;
     [Test] procedure TestFolder_TestProject_NoHelp;
     [Test] procedure TestFolder_UnreadableOrTooDeep_NoHelp;
+    // ---- rwE31 (Fix-Runde 3): Projekt nur mit 'test' im Namen ----
+    [Test] procedure CallStatementArg_Shapes;
+    [Test] procedure TestFolder_NamedProject_CallArg_Help;
   end;
 
 {$IFNDEF FPC}
@@ -497,6 +500,92 @@ begin
     R := TestReason(Dir + 'helpers\data\Data.pas', ExampleFormUnit);
     Assert.IsTrue(Pos('"Runner.dpr"', R) > 0, R);
   finally
+    RemoveTree(Root);
+  end;
+end;
+
+// Ist das Literal von AUrl auf der ersten Anweisung von Wrap(AStatements)
+// nur Argument einer Aufruf-Anweisung?
+function CallArgIn(const AStatements: array of string;
+  const AUrl: string): Boolean;
+var
+  SL : TStringList;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := Wrap(AStatements);
+    Result := TRdxHttpsFix.CallStatementArg(SL, FIRST_LINE, Msg(AUrl));
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxHttpsFix.CallStatementArg_Shapes;
+begin
+  // jvcl TMTimeLine Main.pas:217 - geschachtelt in PChar(..).
+  Assert.IsTrue(CallArgIn(['  ShellExecute(Handle,PChar(''open''),'
+    + 'PChar(''' + EXAMPLE_URL + '''),nil,nil,SW_SHOWNORMAL);'], EXAMPLE_URL),
+    'ShellExecute');
+  Assert.IsTrue(CallArgIn(['  if Ok then Form.Open(''' + EXAMPLE_URL + ''')',
+    '  else Exit;'], EXAMPLE_URL), 'hinter then, vor else');
+  // Gegenproben: der Wert geht weiter - Zuweisung, Ergebnis, Bedingung,
+  // Menge, Funktionswert in einem Ausdruck.
+  Assert.IsFalse(CallArgIn(['  Url := ''' + EXAMPLE_URL + ''';'],
+    EXAMPLE_URL), 'Zuweisung');
+  Assert.IsFalse(CallArgIn(['  Url := Trim(''' + EXAMPLE_URL + ''');'],
+    EXAMPLE_URL), 'Argument eines Werts');
+  Assert.IsFalse(CallArgIn(['  if SameText(Url, ''' + EXAMPLE_URL
+    + ''') then Exit;'], EXAMPLE_URL), 'Bedingung');
+  Assert.IsFalse(CallArgIn(['  Check([''' + EXAMPLE_URL + ''']);'],
+    EXAMPLE_URL), 'Menge');
+  Assert.IsFalse(CallArgIn(['  Open(''' + EXAMPLE_URL + ''') + 1;'],
+    EXAMPLE_URL), 'Ausdruck hinter dem Aufruf');
+end;
+
+// rwE31 (jvcl tests\archive\jvcl\examples\TMTimeLine, minimiert): neben
+// TMTimeLineMainFormU.pas liegt SimpleTLTest1.dpr - eine Demo-Anwendung
+// ('Application.CreateForm', kein Test-Framework), 'test' nur im Namen. Das
+// Literal ist Argument von ShellExecute: keine Sperre (bis dahin der Grund
+// des Testprojekts). Gegenproben: eine Konstante neben demselben Projekt
+// (cnwizards AICoderUnit.pas:299 'A_URL = ''http://..''') und dasselbe
+// Argument neben einem Projekt mit Test-Framework im Kopf sperren weiter.
+procedure TTestRdxHttpsFix.TestFolder_NamedProject_CallArg_Help;
+var
+  Root, Dir, Src, Cst : string;
+  SL                  : TStringList;
+  Line                : Integer;
+begin
+  Root := NewTempDir('rdx_https_');
+  SL := TStringList.Create;
+  try
+    Dir := Root + 'tests\archive\jvcl\examples\TMTimeLine\';
+    ForceDirectories(Dir);
+    WriteText(Dir + 'SimpleTLTest1.dpr', ProgramText('SimpleTLTest1',
+      'Forms, TMTimeLineMainFormU'));
+    Src := Join(['unit TMTimeLineMainFormU;', 'interface', 'implementation',
+      'procedure TTMTimeLineMainForm.lblWebPageClick(Sender: TObject);',
+      'begin', '  ShellExecute(Handle,PChar(''open''),PChar(''' + EXAMPLE_URL
+      + '''),nil,nil,SW_SHOWNORMAL);', 'end;', 'end.']);
+    SL.Text := Src;
+    Line := LineOf(Src, 'ShellExecute');
+    Assert.AreEqual('', TRdxHttpsFix.TestPathReason(
+      Dir + 'TMTimeLineMainFormU.pas', SL, Line, Msg(EXAMPLE_URL)));
+    // Ohne Zeile (wie bis rwE31): der Name sperrt.
+    Assert.IsTrue(Pos('"SimpleTLTest1.dpr"', TRdxHttpsFix.TestPathReason(
+      Dir + 'TMTimeLineMainFormU.pas', SL)) > 0, 'ohne Zeile');
+    Cst := Join(['unit AICoderUnit;', 'interface', 'const',
+      '  A_URL = ''' + EXAMPLE_URL + ''';', 'implementation', 'end.']);
+    SL.Text := Cst;
+    Assert.IsTrue(Pos('"SimpleTLTest1.dpr"', TRdxHttpsFix.TestPathReason(
+      Dir + 'AICoderUnit.pas', SL, LineOf(Cst, 'A_URL'), Msg(EXAMPLE_URL)))
+      > 0, 'Konstante');
+    WriteText(Dir + 'Runner.dpr', ProgramText('Runner', 'Forms, GUITestRunner'));
+    SL.Text := Src;
+    Assert.IsTrue(Pos('"Runner.dpr"', TRdxHttpsFix.TestPathReason(
+      Dir + 'TMTimeLineMainFormU.pas', SL, Line, Msg(EXAMPLE_URL))) > 0,
+      'Projekt mit Test-Framework');
+  finally
+    SL.Free;
     RemoveTree(Root);
   end;
 end;

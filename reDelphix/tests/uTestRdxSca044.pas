@@ -1057,10 +1057,13 @@ procedure TTestRdxSca044.Uses_Missing_DirectiveInClause_Disabled;
 var
   O : TRdxFormatOutcome;
 begin
-  // 'uses Classes {$IFNDEF X}, Windows{$ENDIF};' - jede Einfuegestelle
-  // neben einem Eintrag kann in einem Zweig liegen: von Hand.
+  // 'uses {$IFDEF X}Windows{$ELSE}Classes{$ENDIF};' - jeder Eintrag
+  // steht in einem Zweig, jede Einfuegestelle neben einem Eintrag also
+  // auch: von Hand. Bis rwE31 'uses Classes {$IFNDEF X}, Windows
+  // {$ENDIF};' - seitdem geht 'SysUtils, Classes' (Classes ausserhalb
+  // jedes Zweigs, PlanIntoClause/UnconditionalPlace).
   Assert.IsFalse(RunRecipe(WithUses(CHAIN,
-    'uses Classes {$IFNDEF RDX_NEVER_DEFINED}, Windows{$ENDIF};'), 'Text := Marker', O));
+    'uses {$IFDEF RDX_NEVER_DEFINED}Windows{$ELSE}Classes{$ENDIF};'), 'Text := Marker', O));
   Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
 end;
 
@@ -1477,10 +1480,25 @@ procedure TTestRdxSca044.Uses_Missing_ParenStarDirectiveInClause_Disabled;
 var
   O : TRdxFormatOutcome;
 begin
-  // '(*$..*)' ist eine Direktive wie '{$..}' (strittiger Nit 5).
+  // '(*$..*)' ist eine Direktive wie '{$..}' (strittiger Nit 5): jeder
+  // Eintrag steht in einem Zweig - von Hand. Bis rwE31 'uses Classes
+  // (*$IFDEF FPC*), LCLIntf (*$ENDIF*);' - seitdem geht 'SysUtils,
+  // Classes' (Classes ausserhalb jedes Zweigs, UnconditionalPlace; Review
+  // e/HilfeFixL: der Test war nach cc2cb0eb rot).
   Assert.IsFalse(RunRecipe(WithUses(CHAIN,
-    'uses Classes (*$IFDEF FPC*), LCLIntf (*$ENDIF*);'), 'Text := Marker', O));
+    'uses (*$IFDEF FPC*)LCLIntf(*$ELSE*)Classes(*$ENDIF*);'), 'Text := Marker', O));
   Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
+  // Gegenproben: neben einem unbedingten Eintrag wird eingefuegt - als
+  // Kurzname auch in einer Datei mit Unit-Scopes (die Zweige koennen
+  // Compiler ohne Scopes bedienen, Review e/HilfeFixL).
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN,
+    'uses Classes (*$IFDEF RDX_NEVER_DEFINED*), Windows (*$ENDIF*);'),
+    'Text := Marker', O), O.Reason);
+  Assert.AreEqual('SysUtils, Classes', O.UsesEdit.NewText);
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN, 'uses System.Classes '
+    + '(*$IFDEF RDX_NEVER_DEFINED*), Winapi.Windows (*$ENDIF*);'),
+    'Text := Marker', O), O.Reason);
+  Assert.AreEqual('SysUtils, System.Classes', O.UsesEdit.NewText);
 end;
 
 procedure TTestRdxSca044.Uses_Missing_LineCommentAfterLast_InsertsBeforeLast;

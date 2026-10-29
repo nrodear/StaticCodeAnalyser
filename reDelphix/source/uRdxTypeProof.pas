@@ -21,7 +21,11 @@ unit uRdxTypeProof;
 //   * Bewiesen wird NUR, was diese Datei deklariert - plus, als zweiter
 //     Beweisweg fuer PointerLikeType, die Klassen und Interfaces der
 //     Delphi-Quellen (uRdxRtlTypes, Entscheid E27). Ein Typ einer anderen
-//     Unit ist sonst unbekannt: '' bzw. False, nie geraten.
+//     Unit ist sonst unbekannt: '' bzw. False, nie geraten. Ausnahme seit
+//     rwE31 (Fix-Runde 3): NeighbourVarType/NeighbourTypeBase lesen den
+//     interface-Teil der Units der uses-Klauseln, die NEBEN der Datei
+//     liegen (gleiches Verzeichnis bzw. 'in'-Pfad der Programmdatei) - nur
+//     auf Frage des Aufrufers, nie aus dem Netz, unter Deckeln.
 //   * Die Antworten sind "lieber keine Hilfe als eine falsche" gerichtet:
 //     wer True/'' falsch deutet, bekommt eine Sperre, keine falsche Hilfe -
 //     die Richtung steht je Funktion.
@@ -272,14 +276,50 @@ type
     // (msgid in dieser Unit), mit der Bedingung und ihrer Zeile.
     class function OldCompilerBranchReason(AMap: TRdxCodeMap;
       ALine, AFeatureDelphi: Integer): string; static;
+
+    // ---- Aliasse und Units neben der Datei (rwE31, Fix-Runde 3) ----
+
+    // Der Typ hinter ATypeName nach der Alias-Kette der Datei ('TFloat =
+    // Single' -> 'single'; bis drei Stufen, wie ResolvedTypeKind) - nur,
+    // wenn jede Stufe in der Datei genau EINE Deklaration hat oder alle
+    // gleich lauten: '{$IFDEF X} TSynExtended = extended; {$ELSE}
+    // TSynExtended = double;' (mormot.core.base) gibt ''. Verlaesst die
+    // Kette die Datei, der letzte Name; '' wenn die Datei ATypeName nicht
+    // deklariert. Klein.
+    class function UniqueAliasBase(AMap: TRdxCodeMap;
+      const ATypeName: string): string; static;
+
+    // Der Typ von AName, wenn eine Unit der uses-Klauseln von AMap, die
+    // neben der Datei AUnitFile liegt, AName in ihrem interface-Teil als
+    // Variable deklariert (UnitVarType auf diesem Teil; rwE31: HeidiSQL
+    // main.pas:2778 'frmPreferences' aus preferences.pas, jvcl
+    // JvDockControlForm.pas:5273 'JvGlobalDockManager' aus JvDockGlobals).
+    // Wie beim Compiler gilt die LETZTE Unit der uses-Reihenfolge, die den
+    // Namen nennt: nennt eine spaetere lesbare ihn im interface-Teil anders
+    // als als Variable, ''. Klein; '' ohne Beweis. GRENZE: eine spaetere
+    // Unit, die nicht neben der Datei liegt (RTL, Suchpfad), koennte den
+    // Namen ebenfalls deklarieren - sie ist nicht lesbar. Der Aufrufer
+    // fragt nur, wenn die Datei selbst den Namen nicht deklariert.
+    class function NeighbourVarType(AMap: TRdxCodeMap;
+      const AUnitFile, AName: string): string; static;
+
+    // Der Typ hinter ATypeName (UniqueAliasBase) aus der letzten Unit der
+    // uses-Klauseln neben AUnitFile, deren interface-Teil ATypeName
+    // deklariert (rwE31: Dev-Cpp SVG.pas:3988 'TFloat = single' aus
+    // SVGTypes.pas); '' ohne oder bei mehrdeutiger Deklaration. Klein.
+    // GRENZE wie NeighbourVarType.
+    class function NeighbourTypeBase(AMap: TRdxCodeMap;
+      const AUnitFile, ATypeName: string): string; static;
   end;
 
 implementation
 
 uses
   System.SysUtils,   // LowerCase
+  System.Classes,    // TStringList, TFileStream (Units neben der Datei, rwE31)
   System.StrUtils,   // EndsText
   uRdxBlocks,        // TRdxBlocks.HeadBefore/ReadRoutine/FindClassHeads (rwE30)
+  uRdxPaths,         // IsNetworkPath (Units neben der Datei nie aus dem Netz)
   uRdxRtlTypes,      // IsRtlClassOrInterface (zweiter Beweisweg, E27)
   uRdxText;          // _(): der Grund von OldCompilerBranchReason (E29)
 
@@ -357,13 +397,17 @@ begin
   until (Depth = 0) or (Result.Low = '') or (Result.Low = ';');
 end;
 
-class function TRdxTypeProof.DeclaredTypeKind(AMap: TRdxCodeMap;
-  const ATypeName: string): string;
+// Das erste Wort hinter JEDER Deklaration 'ATypeName =' der Datei, in
+// ihrer Reihenfolge (DeclaredTypeKind nimmt das erste; UniqueAliasBase
+// prueft, ob alle gleich sind - rwE31). AFirstOnly: nach dem ersten
+// Treffer aufhoeren.
+function DeclaredTypeKinds(AMap: TRdxCodeMap; const ATypeName: string;
+  AFirstOnly: Boolean): TArray<string>;
 var
   T, K    : TRdxToken;
   TypeLow : string;
 begin
-  Result := '';
+  Result := nil;
   TypeLow := LowerCase(ATypeName);
   if TypeLow = '' then Exit;
   // Nur die Token der Zeilen, die den Namen nennen (Review R3-03, Charge
@@ -389,10 +433,25 @@ begin
       K := After(AMap, AfterTypeParams(AMap, T));
       if K.Low = 'packed' then
         K := After(AMap, K);
-      Exit(K.Low);
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := K.Low;
+      if AFirstOnly then
+        Exit;
     end;
     T := NextTokenOnLineWith(AMap, T, TypeLow);
   end;
+end;
+
+class function TRdxTypeProof.DeclaredTypeKind(AMap: TRdxCodeMap;
+  const ATypeName: string): string;
+var
+  Kinds : TArray<string>;
+begin
+  Kinds := DeclaredTypeKinds(AMap, ATypeName, True);
+  if Length(Kinds) = 0 then
+    Result := ''
+  else
+    Result := Kinds[0];
 end;
 
 class function TRdxTypeProof.ResolvedTypeKind(AMap: TRdxCodeMap;
@@ -1695,6 +1754,295 @@ begin
         W := W + ' {$ELSE}';
       Exit(_(R_OLD_BRANCH, [W, Lines[i]]));
     end;
+end;
+
+{ ---- Aliasse und Units neben der Datei (rwE31, Fix-Runde 3) ---- }
+
+const
+  // Deckel des Plattenblicks je Frage (Hauptthread, Menueaufbau): so viele
+  // Units der uses-Klauseln, so viele Bytes je Unit und insgesamt.
+  MAX_NEIGHBOUR_UNITS = 128;
+  MAX_NEIGHBOUR_BYTES = 4 * 1024 * 1024;
+  MAX_NEIGHBOUR_TOTAL = 32 * 1024 * 1024;
+  // Bis so viele Stufen loest UniqueAliasBase auf (wie ResolvedTypeKind).
+  MAX_ALIAS_STEPS = 3;
+
+class function TRdxTypeProof.UniqueAliasBase(AMap: TRdxCodeMap;
+  const ATypeName: string): string;
+var
+  Kinds : TArray<string>;
+  i, k  : Integer;
+begin
+  Result := '';
+  Kinds := DeclaredTypeKinds(AMap, ATypeName, False);
+  if Length(Kinds) = 0 then
+    Exit;
+  Result := LowerCase(ATypeName);
+  for i := 1 to MAX_ALIAS_STEPS do
+  begin
+    if i > 1 then
+    begin
+      Kinds := DeclaredTypeKinds(AMap, Result, False);
+      if Length(Kinds) = 0 then
+        Exit;   // die Kette verlaesst die Datei: deren Name
+    end;
+    for k := 1 to High(Kinds) do
+      if Kinds[k] <> Kinds[0] then
+        Exit('');   // Zweige mit verschiedenen Typen
+    Result := Kinds[0];
+    if (Result = '') or not IsIdentStart(Result[1]) or IsKeyword(Result)
+       or InList(Result, TYPE_KIND_WORDS) then
+      Exit;
+  end;
+end;
+
+// Der String hinter 'in' (ATok) einer uses-Klausel ('Main in ''Main.pas''')
+// ohne Quotes; '' ohne.
+function InPathAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): string;
+var
+  L    : string;
+  c, e : Integer;
+begin
+  Result := '';
+  L := AMap.Raw(ATok.Line);
+  c := SkipBlanks(L, ATok.EndCol);
+  if (c > Length(L)) or (L[c] <> '''') then
+    Exit;
+  e := PosEx('''', L, c + 1);
+  if e > c then
+    Result := Copy(L, c + 1, e - c - 1);
+end;
+
+// Haengt die Datei der Unit AName (bzw. ihren 'in'-Pfad AInPath) an AFiles,
+// wenn sie neben der Datei liegt (Verzeichnis ADir) und keine schon
+// genannte oder die Datei selbst (AUnitFile) ist.
+procedure AddNeighbour(var AFiles: TArray<string>; const ADir, AUnitFile,
+  AName, AInPath: string);
+var
+  P : string;
+  i : Integer;
+begin
+  if AInPath <> '' then
+  begin
+    if ExtractFileDrive(AInPath) <> '' then
+      P := AInPath
+    else
+      P := ExpandFileName(ADir + AInPath);
+  end
+  else
+  begin
+    P := ADir + AName + '.pas';
+    if not FileExists(P) then
+      P := ADir + AName + '.pp';
+  end;
+  if IsNetworkPath(P) or not FileExists(P) or SameText(P, AUnitFile) then
+    Exit;
+  for i := 0 to High(AFiles) do
+    if SameText(AFiles[i], P) then
+      Exit;
+  SetLength(AFiles, Length(AFiles) + 1);
+  AFiles[High(AFiles)] := P;
+end;
+
+// Die Dateien der Units aus den uses-Klauseln von AMap (in deren
+// Reihenfolge: interface vor implementation), die neben AUnitFile liegen;
+// leer fuer eine Datei ohne Verzeichnis oder im Netz.
+function NeighbourFiles(AMap: TRdxCodeMap;
+  const AUnitFile: string): TArray<string>;
+var
+  T, N           : TRdxToken;
+  Dir            : string;
+  Name, InPath   : string;
+begin
+  Result := nil;
+  Dir := ExtractFilePath(AUnitFile);
+  if (Dir = '') or IsNetworkPath(Dir) then
+    Exit;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while (T.Low <> '') and (Length(Result) < MAX_NEIGHBOUR_UNITS) do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      Name := '';
+      InPath := '';
+      N := After(AMap, T);
+      while N.Low <> '' do
+      begin
+        if (N.Low = ',') or (N.Low = ';') then
+        begin
+          if Name <> '' then
+            AddNeighbour(Result, Dir, AUnitFile, Name, InPath);
+          Name := '';
+          InPath := '';
+          if N.Low = ';' then
+            Break;
+        end
+        else if N.Low = 'in' then
+          InPath := InPathAfter(AMap, N)
+        else if InPath = '' then
+          Name := Name + TokText(AMap, N);
+        N := After(AMap, N);
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+end;
+
+// Der Text der Datei APath nach ALines, wenn er ANameLow (klein, irgendwo)
+// enthaelt - unter den Deckeln (ABytes zaehlt ueber alle Dateien einer
+// Frage). Die Bytes als ANSI: die Namen sind ASCII. False, wenn die Datei
+// den Namen nicht enthaelt oder sich nicht lesen laesst.
+function ReadNeighbour(const APath, ANameLow: string; var ABytes: Int64;
+  ALines: TStringList): Boolean;
+var
+  FS    : TFileStream;
+  Bytes : TBytes;
+  Text  : string;
+begin
+  Result := False;
+  try
+    FS := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      if (FS.Size > MAX_NEIGHBOUR_BYTES)
+         or (ABytes + FS.Size > MAX_NEIGHBOUR_TOTAL) then
+        Exit;
+      Inc(ABytes, FS.Size);
+      SetLength(Bytes, FS.Size);
+      if Length(Bytes) > 0 then
+        SetLength(Bytes, FS.Read(Bytes[0], Length(Bytes)));
+    finally
+      FS.Free;
+    end;
+  except
+    on EStreamError do
+      Exit;
+  end;
+  Text := TEncoding.ANSI.GetString(Bytes);
+  if Pos(ANameLow, LowerCase(Text)) = 0 then
+    Exit;
+  ALines.Text := Text;
+  Result := True;
+end;
+
+// Die Code-Sicht des interface-Teils von ALines (bis vor das erste
+// 'implementation'); ALines wird dafuer gekuerzt. Der Aufrufer gibt die
+// Map frei.
+function InterfaceMap(ALines: TStringList): TRdxCodeMap;
+var
+  T    : TRdxToken;
+  Cut  : Integer;
+begin
+  Cut := 0;
+  Result := TRdxCodeMap.Create(ALines);
+  T := NextTokenOnLineWith(Result, Default(TRdxToken), 'implementation');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'implementation') and IsKeywordAfter(T, Before(Result, T)) then
+    begin
+      Cut := T.Line;
+      Break;
+    end;
+    T := NextTokenOnLineWith(Result, T, 'implementation');
+  end;
+  if Cut = 0 then
+    Exit;
+  Result.Free;
+  while ALines.Count >= Cut do
+    ALines.Delete(ALines.Count - 1);
+  Result := TRdxCodeMap.Create(ALines);
+end;
+
+// Nennt die Code-Sicht AMap den Namen ANameLow als Token?
+function NamesToken(AMap: TRdxCodeMap; const ANameLow: string): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), ANameLow);
+  while T.Low <> '' do
+  begin
+    if T.Low = ANameLow then
+      Exit(True);
+    T := NextTokenOnLineWith(AMap, T, ANameLow);
+  end;
+end;
+
+class function TRdxTypeProof.NeighbourVarType(AMap: TRdxCodeMap;
+  const AUnitFile, AName: string): string;
+var
+  Files   : TArray<string>;
+  NameLow : string;
+  Bytes   : Int64;
+  i       : Integer;
+  SL      : TStringList;
+  M       : TRdxCodeMap;
+  Ty      : string;
+begin
+  Result := '';
+  NameLow := LowerCase(Trim(AName));
+  if (NameLow = '') or (AUnitFile = '') then
+    Exit;
+  Files := NeighbourFiles(AMap, AUnitFile);
+  Bytes := 0;
+  for i := 0 to High(Files) do
+  begin
+    SL := TStringList.Create;
+    try
+      if not ReadNeighbour(Files[i], NameLow, Bytes, SL) then
+        Continue;
+      M := InterfaceMap(SL);
+      try
+        Ty := UnitVarType(M, NameLow);
+        // Die letzte Unit, die den Namen nennt, gilt; nennt sie ihn anders
+        // als als Variable, ist nichts bewiesen.
+        if Ty <> '' then
+          Result := Ty
+        else if NamesToken(M, NameLow) then
+          Result := '';
+      finally
+        M.Free;
+      end;
+    finally
+      SL.Free;
+    end;
+  end;
+end;
+
+class function TRdxTypeProof.NeighbourTypeBase(AMap: TRdxCodeMap;
+  const AUnitFile, ATypeName: string): string;
+var
+  Files   : TArray<string>;
+  TypeLow : string;
+  Bytes   : Int64;
+  i       : Integer;
+  SL      : TStringList;
+  M       : TRdxCodeMap;
+begin
+  Result := '';
+  TypeLow := LowerCase(Trim(ATypeName));
+  if (TypeLow = '') or (AUnitFile = '') then
+    Exit;
+  Files := NeighbourFiles(AMap, AUnitFile);
+  Bytes := 0;
+  for i := 0 to High(Files) do
+  begin
+    SL := TStringList.Create;
+    try
+      if not ReadNeighbour(Files[i], TypeLow, Bytes, SL) then
+        Continue;
+      M := InterfaceMap(SL);
+      try
+        // Nur eine Deklaration verdeckt - eine Unit, die den Typ nur
+        // benutzt (Parameter, Felder), nicht.
+        if Length(DeclaredTypeKinds(M, TypeLow, True)) > 0 then
+          Result := UniqueAliasBase(M, TypeLow);
+      finally
+        M.Free;
+      end;
+    finally
+      SL.Free;
+    end;
+  end;
 end;
 
 end.

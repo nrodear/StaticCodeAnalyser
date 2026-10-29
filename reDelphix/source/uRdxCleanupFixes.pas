@@ -48,7 +48,15 @@ unit uRdxCleanupFixes;
 // der Zeile - ausser er sagt, woher der Code stammt oder warum er bleibt:
 // KEEP_WORDS), ein case-Zweig 'A:' unter 'case ... of' bzw. 'A: begin' und
 // ein Aufruf ohne ';' vor 'else' als Code; eine Prosazeile ohne
-// Kommentarzeichen sperrt weiter.
+// Kommentarzeichen sperrt weiter. Seit der Fix-Runde 3 (rwE31, 12
+// unnoetige Sperren) auch ein Aufruf ohne ';' vor end/until/finally/
+// except, ein Typkopf 'TName = class(TBase)' und eine Anweisung ueber
+// mehrere Zeilen (WrappedStatement: umgebrochener Aufruf 'CheckEquals' /
+// '(..., x);', Fortsetzung mit and/or, eine Aufzaehlung ueber Zeilen) und
+// eine anonyme Methode als Argument ('X(' / 'procedure'), eine entschaerfte
+// Direktive ohne '}' in einem '{ }' ('{$IFDEF MSWINDOWS') -
+// nur wenn die zusammengezogenen Zeilen Code-Form haben und keine zwei
+// gewoehnlichen Woerter nebeneinander stehen (ProseFree).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach, statt dem Detektor zu
@@ -161,6 +169,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,   // PosEx (WrapPiece, rwE31)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
@@ -237,6 +246,18 @@ const
   KEEP_WORDS: array[0..15] of string = ('you', 'your', 'because',
     'reference', 'example', 'sample', 'demo', 'keep', 'kept', 'taken', 'from',
     'adapted', 'copied', 'see', 'note', 'why');
+  // SCA070, CallBeforeStop: vor diesen Woertern endet eine Anweisung ohne
+  // ';' ('Strings.Add(IntToStr(i))' / 'end;', rwE31 TestJclStrings.pas).
+  CALL_STOP_WORDS: array[0..4] of string = ('else', 'end', 'until',
+    'finally', 'except');
+  // SCA070, TypeHead: 'TName = class(TBase)' (rwE31 JclStreams.pas:107).
+  TYPE_HEAD_WORDS: array[0..4] of string = ('class', 'record', 'object',
+    'interface', 'dispinterface');
+  // SCA070, WrappedStatement: so viele Zeilen zieht sie hoechstens zusammen
+  // - und keinen Routinenkopf (WrapShape).
+  MAX_WRAP_LINES = 8;
+  WRAP_NOT_HEADS: array[0..7] of string = ('function', 'procedure',
+    'constructor', 'destructor', 'operator', 'property', 'class', 'method');
 
 type
   // SCA070: die Region der Meldung.
@@ -929,8 +950,11 @@ end;
 // Ein Aufruf ohne ';' vor einem 'else' auf ALine (S = CodeText): 'Name(...)'
 // bzw. 'A.B(...)', und die naechste nicht leere Zeile des Kommentars beginnt
 // mit 'else' und besteht CodePiece. rwE30: 'Match(Scaner.Token)'
-// (CnCodeFormatter.pas:4005), 'PutSFmt(...)' (DCURecs.pas:1772).
-function CallBeforeElse(AMap: TRdxCodeMap; const AComment: TRdxComment;
+// (CnCodeFormatter.pas:4005), 'PutSFmt(...)' (DCURecs.pas:1772). Seit rwE31
+// auch vor end, until, finally und except (CALL_STOP_WORDS;
+// TestJclStrings.pas:2288 'Strings.Add(inttostr(i))' / 'end;') - bis dahin
+// CallBeforeElse.
+function CallBeforeStop(AMap: TRdxCodeMap; const AComment: TRdxComment;
   ALine: Integer; const S: string): Boolean;
 var
   i, Li : Integer;
@@ -950,22 +974,368 @@ begin
   begin
     T := Trim(PieceOn(AMap, AComment, Li, 1));
     if T <> '' then
-      Exit((FirstWordOf(T) = 'else') and CodePiece(T));
+      Exit(InList(FirstWordOf(T), CALL_STOP_WORDS) and CodePiece(T));
+  end;
+end;
+
+// Die naechste (ADir = 1) bzw. vorige (ADir = -1) nicht leere Zeile des
+// Kommentars ab ALine, als CodeText; '' ohne.
+function NearPiece(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine, ADir: Integer): string;
+var
+  Li : Integer;
+begin
+  Result := '';
+  Li := ALine + ADir;
+  while (Li >= AComment.Body.Line) and (Li <= AComment.CloseAt.Line) do
+  begin
+    Result := CodeText(PieceOn(AMap, AComment, Li, 1));
+    if Result <> '' then
+      Exit;
+    Li := Li + ADir;
+  end;
+end;
+
+// Eine anonyme Methode als Argument (S = CodeText): der Aufruf 'X.Y(' am
+// Zeilenende vor einer Zeile 'procedure'/'function', bzw. diese Zeile
+// selbst ('procedure' allein oder mit Parameterliste) hinter einer Zeile,
+// die auf '(' oder ',' endet. rwE31 MessagingExtensionsTestU.pas:169
+// 'TThread.CreateAnonymousThread(' / 'procedure' / .. / 'end).Start;'.
+function AnonMethodLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  W, Near : string;
+  i       : Integer;
+begin
+  Result := False;
+  if S = '' then
+    Exit;
+  W := FirstWordOf(S);
+  if (W = 'procedure') or (W = 'function') then
+  begin
+    if (Length(S) > Length(W)) and (S[Length(W) + 1] <> '(') then
+      Exit;
+    Near := NearPiece(AMap, AComment, ALine, -1);
+    Exit((Near <> '') and CharInSet(Near[Length(Near)], ['(', ',']));
+  end;
+  if (S[Length(S)] <> '(') or not IsIdentStart(S[1]) then
+    Exit;
+  for i := 1 to Length(S) - 1 do
+    if not (IsIdentChar(S[i]) or (S[i] = '.')) then
+      Exit;
+  W := FirstWordOf(NearPiece(AMap, AComment, ALine, 1));
+  Result := (W = 'procedure') or (W = 'function');
+end;
+
+// Eine entschaerfte Direktive in einem '{ }' (S getrimmt): '{$IFDEF X'
+// ohne '}' - ein '}' beendete den Kommentar, darum fehlt er (rwE31
+// JclInstall.pas:3301 '{$IFDEF MSWINDOWS' .. '{$ENDIF MSWINDOWS' in einer
+// auskommentierten Methode). Gehoert zum toten Code.
+function DefusedDirective(const AComment: TRdxComment; const S: string): Boolean;
+begin
+  Result := (AComment.CloserText = '}') and (Copy(S, 1, 2) = '{$')
+    and (Pos('}', S) = 0) and (Length(S) > 2) and IsIdentStart(S[3]);
+end;
+
+// Ein Typkopf allein auf der Zeile (S = CodeText): 'TName = [packed]
+// class|record|object|interface|dispinterface', dahinter hoechstens die
+// Vorfahrenliste '(TBase, IFoo)' aus Namen mit Punkten. rwE31
+// JclStreams.pas:107 '{ TJclCustomMemoryStream = class(TJclStream)' /
+// 'end; ..}'.
+function TypeHead(const S: string): Boolean;
+var
+  i : Integer;
+  W : string;
+begin
+  Result := False;
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i <= Length(S)) and IsIdentChar(S[i]) do
+    Inc(i);
+  i := SkipBlanks(S, i);
+  if (i > Length(S)) or (S[i] <> '=') then
+    Exit;
+  i := SkipBlanks(S, i + 1);
+  W := FirstWordOf(Copy(S, i, MaxInt));
+  if W = 'packed' then
+  begin
+    i := SkipBlanks(S, i + Length(W));
+    W := FirstWordOf(Copy(S, i, MaxInt));
+  end;
+  if not InList(W, TYPE_HEAD_WORDS) then
+    Exit;
+  i := SkipBlanks(S, i + Length(W));
+  if i > Length(S) then
+    Exit(True);
+  if (S[i] <> '(') or (S[Length(S)] <> ')') then
+    Exit;
+  for i := i + 1 to Length(S) - 1 do
+    if not (IsIdentChar(S[i]) or CharInSet(S[i], ['.', ',', ' '])) then
+      Exit;
+  Result := True;
+end;
+
+// Der Text eines Kommentarstuecks fuer WrappedStatement: CodeText, ohne
+// innere '{ ... }' in einem '(* *)' (x86defs.pas:41 '({en_unknown,}en_alias,
+// ..'), String-Literale leer ('''x;y''' -> ''''''). '' fuer eine Zeile mit
+// offenem String.
+function WrapPiece(const AComment: TRdxComment; const APiece: string): string;
+var
+  i, j : Integer;
+  S    : string;
+begin
+  S := CodeText(APiece);
+  Result := '';
+  i := 1;
+  while i <= Length(S) do
+  begin
+    if S[i] = '''' then
+    begin
+      j := PosEx('''', S, i + 1);
+      if j = 0 then
+        Exit('');
+      Result := Result + '''''';
+      i := j + 1;
+    end
+    else if (S[i] = '{') and (AComment.CloserText = '*)') then
+    begin
+      j := PosEx('}', S, i + 1);
+      if j = 0 then
+        Exit('');
+      i := j + 1;
+    end
+    else
+    begin
+      Result := Result + S[i];
+      Inc(i);
+    end;
+  end;
+  Result := Trim(Result);
+end;
+
+// Stehen in S (WrapPiece) zwei gewoehnliche Woerter nebeneinander, nur
+// durch Leerraum getrennt ('This function', 'call Foo')? Code trennt Namen
+// durch Operatoren, Klammern, Kommas - oder ein reserviertes Wort steht
+// dazwischen ('if not Assigned(X)', 'X in [..]', 'then begin').
+function ProseFree(const S: string): Boolean;
+var
+  i, j      : Integer;
+  Prev, W   : string;
+  PrevEnd   : Integer;
+begin
+  Result := True;
+  Prev := '';
+  PrevEnd := 0;
+  i := 1;
+  while i <= Length(S) do
+  begin
+    if IsIdentStart(S[i]) and ((i = 1) or not IsIdentChar(S[i - 1])) then
+    begin
+      j := i;
+      while (j <= Length(S)) and IsIdentChar(S[j]) do
+        Inc(j);
+      W := LowerCase(Copy(S, i, j - i));
+      if (Prev <> '') and (Trim(Copy(S, PrevEnd, i - PrevEnd)) = '')
+         and not InList(Prev, RESERVED) and not InList(W, RESERVED) then
+        Exit(False);
+      Prev := W;
+      PrevEnd := j;
+      i := j;
+    end
+    else
+    begin
+      if not IsBlank(S[i]) then
+        Prev := '';
+      Inc(i);
+    end;
+  end;
+end;
+
+// Ist der zusammengezogene Text J (WrapPiece je Zeile, mit ' ' verbunden)
+// Code-Form: beginnt mit einem Namen, Klammern nie negativ und am Ende
+// ausgeglichen, CodePiece (';' am Ende, ':=', Steuerzeile 'if .. then'),
+// eine Klammer oder ':=' darin bzw. eine Steuerzeile, und ProseFree?
+// AStopNext: die naechste Zeile beginnt mit end/else/.. - dann reicht ein
+// Aufruf, der auf ')' endet. Kein Routinenkopf ueber Zeilen (WRAP_NOT_HEADS):
+// eine Liste von Prototypen ist meist Doku (rwE29 wfxplugin.pas:364,
+// Sca070_PartOfComment_ProseRefused).
+function WrapShape(const J: string; AStopNext: Boolean): Boolean;
+var
+  i, Depth : Integer;
+begin
+  Result := False;
+  if (J = '') or not IsIdentStart(J[1]) or not ProseFree(J)
+     or InList(FirstWordOf(J), WRAP_NOT_HEADS) then
+    Exit;
+  Depth := 0;
+  for i := 1 to Length(J) do
+  begin
+    if CharInSet(J[i], ['(', '[']) then
+      Inc(Depth)
+    else if CharInSet(J[i], [')', ']']) then
+    begin
+      Dec(Depth);
+      if Depth < 0 then
+        Exit;
+    end;
+  end;
+  if Depth <> 0 then
+    Exit;
+  if CodePiece(J) then
+    Result := (Pos('(', J) > 0) or (Pos(':=', J) > 0)
+      or InList(FirstWordOf(J), CODE_LEAD_WORDS)
+  else
+    Result := AStopNext and (J[Length(J)] = ')');
+end;
+
+// Laeuft eine Anweisung, die nicht auf einer Zeile Platz hatte, ueber die
+// Zeile ALine (WrapPiece-Text, nicht leer)? Gesucht wird ein Anfang A bis
+// MAX_WRAP_LINES Zeilen darueber und ein Ende M darunter im selben
+// Kommentar, beide ohne Leerzeile und ohne inneren Kommentar dazwischen; an
+// jeder Zeilengrenze ist eine Klammer offen oder die Zeile endet bzw. die
+// naechste beginnt wie eine Fortsetzung (',', '(', ')', ein Operator,
+// and/or/then/do ..), und die Zeilen A..M zusammen haben Code-Form
+// (WrapShape). rwE31: MessagingExtensionsTestU.pas:120 'CheckEquals' /
+// '(''/queue/..'',' / 'x);', JclInstall.pas:3294 'if not ..' / 'and (..)
+// then', ProcUniversalFixer.pas:999 'if (..) and' .. 'then begin',
+// wbImplementation.pas:2192 'Cardinal(..),  // Arbitrary ..' im Aufruf von
+// 'Result := CmpW32(', x86defs.pas:41 die Aufzaehlung ueber sechs Zeilen.
+// True mit der letzten Zeile in ALast.
+function WrappedStatement(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; out ALast: Integer): Boolean;
+const
+  CONT_TAIL: array[0..3] of string = ('and', 'or', 'xor', 'not');
+  CONT_HEAD: array[0..5] of string = ('and', 'or', 'xor', 'then', 'do', 'in');
+var
+  A, M, Lo, Hi, k, Depth, c : Integer;
+  Pieces                    : array of string;
+  J, Raw, T                 : string;
+  Stop                      : Boolean;
+
+  function Piece(ALi: Integer): string;
+  begin
+    Result := Pieces[ALi - Lo];
+  end;
+
+  // Ist die Grenze hinter Zeile ALi offen (s. o.)?
+  function OpenAfter(ALi: Integer): Boolean;
+  var
+    P, Q : string;
+  begin
+    P := Piece(ALi);
+    Q := Piece(ALi + 1);
+    Result := (Depth > 0)
+      or CharInSet(P[Length(P)], [',', '(', '[', '+'])
+      or (Copy(P, Length(P) - 1, 2) = ':=')
+      or InList(LastWordOf(P), CONT_TAIL)
+      or CharInSet(Q[1], ['(', ')', '.', '+', '*', '/', '['])
+      or InList(FirstWordOf(Q), CONT_HEAD);
+  end;
+
+  // Beginnt die Zeile ALi wie eine Anweisung: ein Steuerwort
+  // (CODE_LEAD_WORDS) oder ein Name mit Punkten, dahinter nichts, '(',
+  // '[', ',', '=' oder ':=' - nicht 'TypeId -> [UnitId ..]' (Grammatik in
+  // CnCodeFormatter.pas:3532)?
+  function StartsLikeCode(ALi: Integer): Boolean;
+  var
+    P : string;
+    i : Integer;
+  begin
+    P := Piece(ALi);
+    if InList(FirstWordOf(P), CODE_LEAD_WORDS) then
+      Exit(True);
+    i := 1;
+    while (i <= Length(P)) and (IsIdentChar(P[i]) or (P[i] = '.')) do
+      Inc(i);
+    i := SkipBlanks(P, i);
+    Result := (i > Length(P)) or CharInSet(P[i], ['(', '[', ',', '='])
+      or (Copy(P, i, 2) = ':=');
+  end;
+
+begin
+  Result := False;
+  ALast := 0;
+  Lo := ALine - MAX_WRAP_LINES + 1;
+  if Lo < AComment.Body.Line then
+    Lo := AComment.Body.Line;
+  Hi := ALine + MAX_WRAP_LINES - 1;
+  if Hi > AComment.CloseAt.Line then
+    Hi := AComment.CloseAt.Line;
+  SetLength(Pieces, Hi - Lo + 1);
+  for k := Lo to Hi do
+  begin
+    Raw := Trim(PieceOn(AMap, AComment, k, 1));
+    if (Raw = '') or InnerComment(AComment, Raw) then
+      Pieces[k - Lo] := ''
+    else
+      Pieces[k - Lo] := WrapPiece(AComment, Raw);
+  end;
+  if Piece(ALine) = '' then
+    Exit;
+  for A := ALine downto Lo do
+  begin
+    if Piece(A) = '' then
+      Break;
+    if not StartsLikeCode(A) then
+      Continue;
+    J := '';
+    Depth := 0;
+    for M := A to Hi do
+    begin
+      if Piece(M) = '' then
+        Break;
+      if M > A then
+      begin
+        if not OpenAfter(M - 1) then
+          Break;
+        J := J + ' ';
+      end;
+      J := J + Piece(M);
+      for c := 1 to Length(Piece(M)) do
+        if CharInSet(Piece(M)[c], ['(', '[']) then
+          Inc(Depth)
+        else if CharInSet(Piece(M)[c], [')', ']']) then
+          Dec(Depth);
+      if M < ALine then
+        Continue;
+      // Endet die Anweisung ohne ';' vor end/else/.. auf der naechsten Zeile?
+      Stop := False;
+      for k := M + 1 to AComment.CloseAt.Line do
+      begin
+        T := Trim(PieceOn(AMap, AComment, k, 1));
+        if T <> '' then
+        begin
+          Stop := InList(FirstWordOf(T), CALL_STOP_WORDS) and CodePiece(T);
+          Break;
+        end;
+      end;
+      if (M > A) and WrapShape(J, Stop) then
+      begin
+        ALast := M;
+        Exit(True);
+      end;
+    end;
   end;
 end;
 
 // Die erste Zeile von ALine1 bis ALine2, deren Text in AComment (ohne
-// Begrenzer) weder CodePiece noch ein case-Zweig (CaseLabel) oder ein
-// Aufruf vor 'else' (CallBeforeElse) ist und kein innerer Kommentar
-// (InnerComment) ohne KeepNote; 0, wenn alle bestehen.
+// Begrenzer) weder CodePiece noch ein case-Zweig (CaseLabel), ein Aufruf
+// vor 'else'/'end' .. (CallBeforeStop), ein Typkopf (TypeHead), eine
+// anonyme Methode als Argument (AnonMethodLine) oder eine entschaerfte
+// Direktive (DefusedDirective) ist,
+// nicht in einer Anweisung ueber mehrere Zeilen steht (WrappedStatement -
+// deren Zeilen gelten dann alle) und kein innerer Kommentar (InnerComment)
+// ohne KeepNote; 0, wenn alle bestehen.
 function NonCodeLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
   ALine1, ALine2: Integer): Integer;
 var
-  Li : Integer;
-  S  : string;
+  Li, Last : Integer;
+  S        : string;
 begin
   Result := 0;
-  for Li := ALine1 to ALine2 do
+  Li := ALine1;
+  while Li <= ALine2 do
   begin
     S := Trim(PieceOn(AMap, AComment, Li, 1));
     if InnerComment(AComment, S) then
@@ -975,8 +1345,16 @@ begin
     end
     else if not CodePiece(S)
        and not CaseLabel(AMap, AComment, Li, CodeText(S))
-       and not CallBeforeElse(AMap, AComment, Li, CodeText(S)) then
-      Exit(Li);
+       and not CallBeforeStop(AMap, AComment, Li, CodeText(S))
+       and not TypeHead(CodeText(S))
+       and not AnonMethodLine(AMap, AComment, Li, CodeText(S))
+       and not DefusedDirective(AComment, S) then
+    begin
+      if not WrappedStatement(AMap, AComment, Li, Last) then
+        Exit(Li);
+      Li := Last;
+    end;
+    Inc(Li);
   end;
 end;
 

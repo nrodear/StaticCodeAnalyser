@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7025 Zeilen, 330374 Bytes
-  CPoLines_de: array[0..7024] of string = (
+  // i18n\de.po - 7039 Zeilen, 331609 Bytes
+  CPoLines_de: array[0..7038] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2865,6 +2865,16 @@ const
     '',
     'msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"',
     'msgstr "\"%s\" sichert eine Toleranzpr'#$00FC'fung desselben Werts (Zeile %d) - der exakte Vergleich ist dort gewollt"',
+    '',
+    '# reDelphix rwE31 Gruppe L (uRdxFloatEqualityFix: Divisionsschutz, Text-Schnellpfad, stored-Funktion)',
+    'msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"',
+    'msgstr "\"%s\" sch'#$00FC'tzt eine Division durch %s (Zeile %d) - jeder Wert au'#$00DF'er genau 0 ist ein g'#$00FC'ltiger Teiler, eine Toleranz wiese kleine ab"',
+    '',
+    'msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"',
+    'msgstr "\"%s\" schreibt f'#$00FC'r genau 0 einen Text (Zeile %d) - mit Toleranz w'#$00FC'rden kleine Werte still zu diesem Text"',
+    '',
+    'msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"',
+    'msgstr "\"%s\" entscheidet, ob eine Property gespeichert wird (stored %s) - mit Toleranz w'#$00FC'rden Werte nahe am Vorgabewert nicht gespeichert"',
     '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"',
@@ -6865,6 +6875,10 @@ const
     'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
     'msgstr "das Abschnitts-Schl'#$00FC'sselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"',
     '',
+    '# reDelphix rwE31 Gruppe L (uRdxPlacesRunner: PlanNewClause - uses-Klausel im Text, die der Baum nicht sah)',
+    'msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"',
+    'msgstr "die uses-Klausel in Zeile %d wird hier nicht gelesen (sie steht in einem bedingten Zweig) - Unit von Hand erg'#$00E4'nzen"',
+    '',
     'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
     'msgstr "die Deklaration tr'#$00E4'gt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise br'#$00E4'che sie"',
     '',
@@ -7314,8 +7328,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7021 Zeilen, 343603 Bytes
-  CPoLines_fr: array[0..7020] of string = (
+  // i18n\fr.po - 7035 Zeilen, 344922 Bytes
+  CPoLines_fr: array[0..7034] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -10162,6 +10176,16 @@ const
     '',
     'msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"',
     'msgstr "'#$00AB' %s '#$00BB' prot'#$00E8'ge un test avec tol'#$00E9'rance de la m'#$00EA'me valeur (ligne %d) - la comparaison exacte y est voulue"',
+    '',
+    '# reDelphix rwE31 Gruppe L (uRdxFloatEqualityFix: Divisionsschutz, Text-Schnellpfad, stored-Funktion)',
+    'msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"',
+    'msgstr "'#$00AB' %s '#$00BB' prot'#$00E8'ge une division par %s (ligne %d) - toute valeur autre que 0 exactement est un diviseur valide, une tol'#$00E9'rance rejetterait les petites"',
+    '',
+    'msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"',
+    'msgstr "'#$00AB' %s '#$00BB' '#$00E9'crit un texte pour 0 exactement (ligne %d) - avec une tol'#$00E9'rance, de petites valeurs deviendraient silencieusement ce texte"',
+    '',
+    'msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"',
+    'msgstr "'#$00AB' %s '#$00BB' d'#$00E9'cide si une propri'#$00E9't'#$00E9' est enregistr'#$00E9'e (stored %s) - avec une tol'#$00E9'rance, des valeurs proches de la valeur par d'#$00E9'faut ne seraient pas enregistr'#$00E9'es"',
     '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "'#$00AB' %s '#$00BB' n''est pas d'#$00E9'clar'#$00E9'e dans le corps d''une classe de ce fichier (routine libre, record, interface, ou la classe se trouve dans un include)"',
@@ -14161,6 +14185,10 @@ const
     '# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanNewClause - Abschnitts-Schluesselwort im bedingten Zweig)',
     'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
     'msgstr "le mot-cl'#$00E9' de section '#$00E0' la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses '#$00E0' la main"',
+    '',
+    '# reDelphix rwE31 Gruppe L (uRdxPlacesRunner: PlanNewClause - uses-Klausel im Text, die der Baum nicht sah)',
+    'msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"',
+    'msgstr "la clause uses '#$00E0' la ligne %d n''est pas lue ici (elle se trouve dans une branche conditionnelle) - ajouter l''unit'#$00E9' '#$00E0' la main"',
     '',
     'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
     'msgstr "la d'#$00E9'claration porte %s - un corps vide y est un crochet dont les appelants (inherited, le framework) attendent qu''il ne fasse rien ; raise les casserait"',

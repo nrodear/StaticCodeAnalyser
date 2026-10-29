@@ -1165,7 +1165,7 @@ const
 |---|---|---|
 | `Delete commented-out code` | `Auskommentierten Code löschen` | `Supprimer le code mis en commentaire` |
 
-**Wirkung:** Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`, ein case-Zweig `A:` unter `case … of` bzw. `A: begin`, ein Aufruf ohne `;` vor `else`); ein innerer Kommentar darin (eine `//`-Zeile, in `(* *)` ein `{ … }` allein auf der Zeile) zählt weder als Code noch als Prosa. Bedeutungsgleich.
+**Wirkung:** Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`, ein case-Zweig `A:` unter `case … of` bzw. `A: begin`, ein Aufruf ohne `;` vor `else`, `end`, `until`, `finally` oder `except`, ein Typkopf `TName = class(TBase)`, eine Anweisung über mehrere Zeilen – umgebrochener Aufruf, Fortsetzung mit `and`/`or`, eine Aufzählung –, eine anonyme Methode als Argument, eine entschärfte Direktive `{$IFDEF X` ohne `}`); ein innerer Kommentar darin (eine `//`-Zeile, in `(* *)` ein `{ … }` allein auf der Zeile) zählt weder als Code noch als Prosa. Bedeutungsgleich.
 
 **Nicht angeboten**
 
@@ -1681,14 +1681,14 @@ Nachher:
 
 **Nicht angeboten**
 
-- X ist weder vom Quellstellen-Dienst noch aus dem Text als Variable bewiesen (Property, geerbtes Feld, Variable einer anderen Unit) oder ein `with`-Rumpf umfasst die Zeile; ein Parameter oder eine lokale Variable – auch einer verschachtelten Routine – verdeckt dabei eine gleichnamige Property der Unit, ein Feld der eigenen Klasse und eine Variable auf Unit-Ebene (auch `threadvar`, `X: T = nil`) gelten als bewiesen
+- X ist weder vom Quellstellen-Dienst noch aus dem Text als Variable bewiesen (Property, geerbtes Feld, Variable einer Unit, die nicht neben der Datei liegt) oder ein `with`-Rumpf umfasst die Zeile; ein Parameter oder eine lokale Variable – auch einer verschachtelten Routine – verdeckt dabei eine gleichnamige Property der Unit, ein Feld der eigenen Klasse, eine Variable auf Unit-Ebene (auch `threadvar`, `X: T = nil`) und eine Variable im interface-Teil einer Unit der uses-Klauseln neben der Datei gelten als bewiesen
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`
 - eine Direktive vor `X.Free;`, wenn eine Konfiguration es dadurch allein hinter `then`/`else`/`do` stellt (das nil würde bedingt), oder ein Include davor
 - die Stelle liegt in einem Zweig nur für Compiler vor Delphi 5 (`{$IFNDEF GX_VER130_up}`, `{$IFNDEF WIN32}`) – dort gibt es kein `FreeAndNil`
 - die nil-Zeile trägt einen `{..}`-Kommentar oder einen `//`-Kommentar, der `FreeAndNil` nennt, oder beide Zeilen tragen einen (ein anderer `//`-Kommentar wandert an die FreeAndNil-Zeile)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
 - ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar
-- `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Stelle umfasst
 
 **Beispiel**
 
@@ -3210,12 +3210,12 @@ Nachher:
 **Nicht angeboten**
 
 - der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`
-- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ oder ein eigener Alias wie `TFloat` (ein Parameter oder eine lokale Variable einer verschachtelten Routine ist bewiesen); Single gegen etwas anderes als Single oder eine ganze Zahl (die Überladungen von SameValue wären mehrdeutig)
-- das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft
+- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (ein Parameter oder eine lokale Variable einer verschachtelten Routine ist bewiesen, ein Alias wie `TFloat = single` der Datei oder einer Unit ihrer uses-Klauseln neben ihr auch – nicht, wenn `{$IFDEF}`-Zweige ihn verschieden deklarieren); Single gegen etwas anderes als Single oder eine ganze Zahl (die Überladungen von SameValue wären mehrdeutig)
+- das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft; ein Divisionsschutz (`if D <> 0 then R := R / D`, auch `if D = 0 then Exit; ... / D` und die Division im `else`-Zweig – jeder Wert außer genau 0 ist ein gültiger Teiler), ein Text für genau 0 (`if V = 0 then Result := '0'`) und `Result := F <> 1` in einer Funktion, die eine Property mit `stored` nennt
 - ein `with`-Rumpf um den Vergleich – außer jedes Ziel ist ein bloßer Name, dessen Typ ein Record dieser Unit nur mit Feldern ist (ein Operand, der ein Feld davon ist, hat dessen Typ) –, ein eigenes `SameValue` bzw. `IsZero` in der Datei
 - die Stelle liegt in einem Zweig nur für Compiler vor Delphi 6 (`{$IFNDEF COMPILER6_UP}`) – dort gibt es `Math.IsZero`/`SameValue` nicht
 - der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`
-- `Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `Math` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest (eine zweite Klausel davor bräche die Unit); steht `Math` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Stelle umfasst
 
 **Beispiel**
 
@@ -4636,7 +4636,7 @@ Rezepte des Anbieters (Kern `uRdxActionCore`), in der Reihenfolge des Menüs.
 - ein Zeiger am Kettenanfang (`P + N + '.txt'` mit `P: PChar` bzw. `PChar(S)` – Delphi rechnet zuerst Zeiger-Arithmetik); hinter `X +` beim Selbst-Anhängen nicht, dort ist X der Anfang
 - Nicht-Unicode-Strings als Ziel oder Operand (`AnsiString`, `RawByteString`, `UTF8String`, `ShortString`), ein `AnsiChar`-Operand
 - die Zeile trägt nicht mehr Ziel und `+`-Zahl des Funds (Zeile verschoben)
-- `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Stelle umfasst
 
 **Beispiel**
 

@@ -164,6 +164,14 @@ type
     // ein Aufruf aus SysUtils (keine Liste im Detektor) haelt die Hilfe
     // nicht mehr aus der Gluehbirne.
     [Test] procedure Sca007_SysUtilsCall_InBulb;
+    // rwE31 Stufe 3 (SCA144 Fehler, SCA085/SCA144 unnoetige Sperren):
+    // PlanUses mit der Zeile der Stelle, eine Klausel im Text ohne Baum,
+    // Direktiven in der Klausel neben einem unbedingten Eintrag.
+    [Test] procedure PlanUses_TextClauseInBranch_NoNewClause;
+    [Test] procedure PlanUses_EntryBranchCoversLine_Present;
+    [Test] procedure PlanUses_DirectiveInClause_UnconditionalEntry;
+    // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
+    [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1517,6 +1525,130 @@ begin
   Plan := PlanUsesIn(Join(['unit t;', 'interface', 'uses', '  SysUtils;',
     'implementation', 'end.']));
   Assert.IsFalse(Plan.Needed, Plan.Reason);
+end;
+
+// PlanUses wie PlanUsesIn fuer die Unit AShort/AQual, gefragt fuer die
+// Stelle in Zeile AAtLine (0 = ohne).
+function PlanUsesAt(const ASource, AShort, AQual: string;
+  AAtLine: Integer): TRdxUsesPlan;
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    P.SetIfdefDefines(['MSWINDOWS']);
+    Assert.IsTrue(P.OpenSource('t.pas', ASource));
+    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine);
+  finally
+    P.Free;
+  end;
+end;
+
+// rwE31 (cnwizards CnAICoderConfig.pas:649, minimiert): beide uses-
+// Klauseln stehen in '{$IFDEF CNWIZARDS_CNAICODERWIZARD}', der Baum sieht
+// keine. Bis dahin legte PlanUses hinter 'implementation' eine neue an -
+// vor dem Zweig, der dann eine zweite Klausel brachte (E2029, SCA144 mit
+// 'uses Math'). Jetzt: von Hand, mit der Zeile der Klausel im Text.
+// Gegenprobe ohne Klausel im Text: die neue Klausel wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_TextClauseInBranch_NoNewClause;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', '{$IFDEF RDX_X}', 'uses',
+    '  SysUtils;', '{$ENDIF RDX_X}', 'implementation', '{$IFDEF RDX_X}',
+    'uses', '  Classes;', 'procedure P(V: Double);', 'begin', 'end;',
+    '{$ENDIF RDX_X}', 'end.']), 'Math', 'System.Math', 11);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_('the uses clause in line %d is not read here (it lies '
+    + 'in a conditional branch) - add the unit by hand', [4]), Plan.Reason);
+  Assert.AreEqual('', Plan.Edit.NewText, 'keine neue Klausel');
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'procedure P(V: Double);', 'begin', 'end;', 'end.']), 'Math',
+    'System.Math', 4);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.IsTrue(Pos('uses', Plan.Edit.NewText) > 0, Plan.Edit.NewText);
+end;
+
+// rwE31 (gexperts GX_Toolbar.pas:167/440/443, GX_ProjOptionSets.pas,
+// GX_EditorEnhancements.pas, minimiert): '{$IFDEF GX_EII}' umschliesst die
+// ganze Unit samt uses-Klausel und Stelle - wo die Stelle uebersetzt wird,
+// ist SysUtils eingebunden. Bis dahin sperrte PlanUses jeden bedingten
+// Eintrag (R_USES_CONDITIONAL). Gegenproben: ohne Zeile (AAtLine = 0) und
+// mit einer Zeile im {$ELSE}-Zweig gesperrt wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_EntryBranchCoversLine_Present;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end;', '{$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 13);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+end;
+
+// rwE31 (jvcl JvCalc.pas:487 'uses {$IFNDEF WIN32} JvStr16, {$ENDIF}
+// JvVCLUtils, .. JvToolEdit;', minimiert): Direktiven in der Klausel
+// sperrten jede Einfuegung. Der Name kaeme vor Foo16 (unsortiert: vorn),
+// das in einem Zweig steht - eingefuegt wird hinter Baz, das wie 'uses'
+// ausserhalb jedes Zweigs steht. Gegenproben: jeder Eintrag in einem Zweig
+// bzw. ein {$I} in der Klausel - gesperrt wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_DirectiveInClause_UnconditionalEntry;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFNDEF WIN32} Foo16, {$ENDIF} Bar, Baz;', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, Math', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFDEF RDX_X}Foo{$ELSE}Bar{$ENDIF};', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.IsTrue(Pos('4', Plan.Reason) > 0, Plan.Reason);
+  Assert.AreEqual('', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses Bar, {$I extra.inc} Baz;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Edit.NewText, Plan.Reason);
+end;
+
+// Review e/HilfeFixL: Direktiven in der Klausel koennen Compiler-Zweige
+// trennen ('{$IFDEF D16} Vcl.Forms, .. {$ELSE} Forms, .. {$ENDIF} uCEF;',
+// uChildForm.pas; '{$IF CompilerVersion >= 23} System.SysUtils ..'). Der
+// Name kommt unbedingt hinein (hinter Baz) und gilt in jedem Zweig - als
+// 'Math', nicht 'System.Math', das Compiler vor XE2 nicht kennen. Ohne
+// den Fix 'Baz, System.Math' (die Datei schreibt Unit-Scopes).
+// Gegenprobe: ohne Direktive bleibt der qualifizierte Name.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_DirectiveInClause_ScopedNameShort;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFDEF MSWINDOWS} System.Classes, {$ELSE} Classes, {$ENDIF} Baz;',
+    'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Math', Plan.Name);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, Math', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes, Baz;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
 end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'

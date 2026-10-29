@@ -40,6 +40,10 @@ type
     [Test] procedure Sca070_CaseLabels_Widen;
     [Test] procedure Sca070_OtherCodeLines_Widen;
     [Test] procedure Sca070_CodeShapes_Refused;
+    // Fix-Runde 3 nach rwE31 (12 unnoetige Sperren).
+    [Test] procedure Sca070_WrappedStatements_Widen;
+    [Test] procedure Sca070_HeadsAndDirectives_Widen;
+    [Test] procedure Sca070_WrappedProse_Refused;
     [Test] procedure Sca070_SeveralComments;
     [Test] procedure Sca070_LastLineOfFile;
     [Test] procedure Sca070_KindRefusals;
@@ -412,6 +416,88 @@ begin
     '  1: X := 1;', '  end;', '}', '  Foo;']), 9, OneMsg(1), 'dessen Zeile 8');
   AssertRefused(ckComment, InProc(['{', '  Foo(1)', '  X := 1;', '}',
     '  Bar;']), 8, OneMsg(1), 'dessen Zeile 7');
+end;
+
+// Fix-Runde 3 nach rwE31: eine Anweisung ueber mehrere Zeilen, ein Aufruf
+// ohne ';' vor 'end' - Code. Gegenprobe: ohne den Fix sperrte jeder Fall
+// ("dessen Zeile .." an 'CheckEquals', 'Strings.Add(..)', 'if not ..',
+// 'Cardinal(..),', der ersten Zeile der Aufzaehlung).
+procedure TTestRdxCleanupFixes.Sca070_WrappedStatements_Widen;
+var
+  R : string;
+begin
+  // delphimvcframework MessagingExtensionsTestU.pas:120 - umgebrochener
+  // Aufruf, ';' im String.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  x := Trim(S);', '  CheckEquals',
+      '  (''/queue/a;/queue/b'',', '  x);', '}', '  Foo;']), 7, OneMsg(1), R),
+    R);
+  // jcl TestJclStrings.pas:2288 - Aufruf ohne ';' vor 'end;'.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  for i := 1 to 10 do', '  begin',
+      '    Strings.Add(IntToStr(i))', '  end;', '}', '  Foo;']), 7, OneMsg(1),
+      R), R);
+  // jcl JclInstall.pas:3294 - Bedingung, Fortsetzung mit 'and'.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  X := 1;', '  if not OptionSelected(A)',
+      '    and (MessageDlg(S, mtWarning, [mbYes], 0) <> mrYes) then',
+      '    Abort;', '}', '  Foo;']), 7, OneMsg(1), R), R);
+  // TES5Edit wbImplementation.pas:2192 - Argumentzeile mit Endkommentar,
+  // der Aufruf beginnt eine Zeile davor.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  Result := CmpW32(',
+      '    Cardinal((C1 as TwbContainer).Count),  // Arbitrary value',
+      '    Cardinal((C2 as TwbContainer).Count)', '  );', '}', '  Foo;']), 7,
+      OneMsg(1), R), R);
+  // cnwizards x86defs.pas:41 - Aufzaehlung ueber Zeilen, innere '{..}'.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['  (*TAttrExt = ({en_unknown,}en_alias,en_attr,',
+      '    en_doc,en_fpop{sign},', '    ed_Pref);', '', '  TAttr = en_alias..en_doc;',
+      '  TAttrs = set of TAttrExt;*)', '  Foo;']), 10, BlockMsg(2, 3), R), R);
+end;
+
+// Fix-Runde 3 nach rwE31: Typkoepfe, anonyme Methoden als Argument,
+// entschaerfte Direktiven - Code. Gegenprobe: ohne den Fix sperrte jeder
+// Fall (an 'TJclMemoryStream = class(..)', 'TThread.CreateAnonymousThread(',
+// '{$IFDEF MSWINDOWS').
+procedure TTestRdxCleanupFixes.Sca070_HeadsAndDirectives_Widen;
+var
+  R : string;
+begin
+  // jcl JclStreams.pas:107.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['  {', '  TJclMemoryStream = class(TJclStream)',
+      '  end;', '', '  TJclStringStream = packed record', '  end;', '  }',
+      '  Foo;']), 8, OneMsg(1), R), R);
+  // delphimvcframework MessagingExtensionsTestU.pas:169.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  X := 1;', '  TThread.CreateAnonymousThread(',
+      '  procedure', '  begin', '    Bar;', '  end).Start;', '}', '  Foo;']), 7,
+      OneMsg(1), R), R);
+  // jcl JclInstall.pas:3301 - '{$IFDEF MSWINDOWS' ohne '}' in einem '{ }'.
+  Assert.AreEqual(InProc(['  Foo;']),
+    Fix(ckComment, InProc(['{', '  X := 1;', '  {$IFDEF MSWINDOWS',
+      '  Y := 2;', '  {$ENDIF MSWINDOWS', '}', '  Foo;']), 7, OneMsg(1), R), R);
+end;
+
+// Gegenproben zu den Lockerungen der Fix-Runde 3: eine Grammatikzeile vor
+// einer Routine (cnwizards CnCodeFormatter.pas:3532 'TypeId -> [UnitId
+// ''.''] <type-identifier>' - beginnt nicht wie Code), Prosa ueber zwei
+// Zeilen mit ';' am Ende (zwei Woerter nebeneinander), ein Aufruf ohne ';'
+// vor einer weiteren Anweisung und ein Typkopf mit Text dahinter sperren
+// weiter.
+procedure TTestRdxCleanupFixes.Sca070_WrappedProse_Refused;
+begin
+  AssertRefused(ckComment, InProc(['{ TypeId -> [UnitId ''.''] <type-id>',
+    'procedure TFoo.FormatTypeID(N: Byte);', 'begin', '  Match(tokSymbol);',
+    'end;}', '  Foo;']), 8, OneMsg(1), 'dessen Zeile 6');
+  AssertRefused(ckComment, InProc(['{', '  X := 1;', '  This calls Foo(X) and',
+    '  returns Bar;', '}', '  Foo;']), 7, OneMsg(1), 'dessen Zeile 8');
+  AssertRefused(ckComment, InProc(['{', '  X := 1;', '  Foo(1)', '  Y := 2;',
+    '}', '  Bar;']), 7, OneMsg(1), 'dessen Zeile 8');
+  AssertRefused(ckComment, InProc(['{', '  X := 1;',
+    '  TFoo = class(TBar) is the old base', '}', '  Bar;']), 7, OneMsg(1),
+    'dessen Zeile 8');
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_SeveralComments;
