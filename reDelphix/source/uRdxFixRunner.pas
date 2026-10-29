@@ -393,25 +393,6 @@ begin
     Result := '';
 end;
 
-// SCA085/SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht
-// eine eigene Methode Free und nimmt X als TObject. Gesperrt (ATypeLow = der
-// deklarierte Typ von X):
-//   * ein record/object/interface, Zeiger ('PFoo = ^TFoo') oder eigener Typ
-//     ('PFoo = type ^TFoo') dieser Unit, auch ueber Aliasse der Unit
-//     (DeclaresNonClassType) - 'X.Free' ist dort eine eigene Methode, beim
-//     Zeiger die des Ziels;
-//   * eine Routine Free irgendwo in der Unit (eine Klasse, die zurueckgibt
-//     statt freizugeben: ein Pool mit 'procedure Free; reintroduce') -
-//     ohne Parser auch dann, wenn sie einer anderen Klasse gehoert (Korpus
-//     ab8: 1 SCA085-Angebot weniger, Alcinoe dwsUtils);
-//   * ein Typ einer anderen Unit, der nach Konvention ein Zeiger ist
-//     (PointerNamedType: 'PEVP_PKEY'), auch hinter einem Alias der Unit
-//     (ForeignTypeName: 'PMyKey = PEVP_PKEY').
-// Bis Review FB (R2-01/R3-01) pruefte das nur SCA139; SCA085 bot
-// 'FreeAndNil(result)' fuer 'result: PX509_CRL' an - Delphi 12: E2010, FPC
-// und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
-// anderer Units ohne Konventionsnamen sieht das nicht; ein Record dort
-// faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
 // Ist ATypeLow eine Klasse des alten Open Tools API mit eigenem Free
 // (OTA_FREE_CLASSES) oder erbt sie von einer? Verfolgt wird der erste
 // Vorfahr der Klassenkoepfe DIESER Unit ('TGxBoostNotifier =
@@ -499,6 +480,27 @@ begin
   end;
 end;
 
+// SCA085/SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht
+// eine eigene Methode Free und nimmt X als TObject. Gesperrt (ATypeLow = der
+// deklarierte Typ von X):
+//   * ein record/object/interface, Zeiger ('PFoo = ^TFoo') oder eigener Typ
+//     ('PFoo = type ^TFoo') dieser Unit, auch ueber Aliasse der Unit
+//     (DeclaresNonClassType) - 'X.Free' ist dort eine eigene Methode, beim
+//     Zeiger die des Ziels;
+//   * eine Routine Free irgendwo in der Unit (eine Klasse, die zurueckgibt
+//     statt freizugeben: ein Pool mit 'procedure Free; reintroduce') -
+//     ohne Parser auch dann, wenn sie einer anderen Klasse gehoert (Korpus
+//     ab8: 1 SCA085-Angebot weniger, Alcinoe dwsUtils);
+//   * ein Typ einer anderen Unit, der nach Konvention ein Zeiger ist
+//     (PointerNamedType: 'PEVP_PKEY'), auch hinter einem Alias der Unit
+//     (ForeignTypeName: 'PMyKey = PEVP_PKEY');
+//   * ein Erbe einer Klasse des alten Open Tools API mit eigenem Free
+//     (OtaFreeAncestor, Realwelt-Test rwE29).
+// Bis Review FB (R2-01/R3-01) pruefte das nur SCA139; SCA085 bot
+// 'FreeAndNil(result)' fuer 'result: PX509_CRL' an - Delphi 12: E2010, FPC
+// und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
+// anderer Units ohne Konventionsnamen sieht das nicht; ein Record dort
+// faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
 function FreeTypeReason(AMap: TRdxCodeMap;
   const AName, ATypeLow: string): string;
 var
