@@ -43,11 +43,18 @@ unit uRdxAvoidOutFix;
 //     steht nicht direkt in der Klasse,
 //   * die Deklaration einer Routine steht in einem Typ (Methode eines
 //     interface-Typs u. a.),
-//   * der andere Kopf traegt das 'out' nicht genau so ('out A, B: T').
-// GRENZE: Aufrufer in anderen Units bleiben uebersetzbar (out und var
-// verlangen beide eine Variable); nimmt eine andere Unit die Routine als
-// Methodenzeiger, passt dort der Typ nicht mehr - das sieht die Hilfe
-// nicht.
+//   * der andere Kopf traegt das 'out' nicht genau so ('out A, B: T'),
+//   * die Routine ist im interface-Teil deklariert bzw. die Methode ist
+//     ausserhalb der Unit sichtbar (Klasse im interface-Teil, nicht private/
+//     strict private): eine andere Unit kann sie als Prozedur- bzw.
+//     Methodenwert nehmen, dort passte der Typ nicht mehr (E2009) - die
+//     Hilfe liest nur diese Datei (Realwelt-Test rwE29: mORMot
+//     mormot.core.data.pas:948 '_BCI_ObjArray', in mormot.core.json als
+//     'fCompare[true] := _BCI_ObjArray' an TRttiCompare zugewiesen; dieselbe
+//     Sperre wie SCA170, uRdxConstStringParameterFix.LocalReason).
+// Aufrufer in anderen Units bleiben uebersetzbar (out und var verlangen
+// beide eine Variable) - sie gibt es nur fuer exportierte Routinen, und die
+// sperrt die Hilfe.
 //
 // OHNE ToolsAPI und ohne Delphi-only-Unit (FPC-Pruefstand): den Adapter
 // PlanAvoidOut (Form TRdxFixPlanner, Geruest TRdxFixFrame mit dem Plan)
@@ -85,6 +92,13 @@ const
   R_OUT_MISMATCH = 'the other header of %s has no matching "out %s"';
   R_OUT_INCLUDE = 'the file includes other files - they could declare %s';
   R_OUT_HEAD_UNSAFE = 'the header of %s is not safe to read';
+  // Realwelt-Test rwE29: wortgleich mit SCA170 (uRdxConstStringParameterFix
+  // R_CS_INTERFACE/R_CS_VISIBLE) - dieselbe msgid, dieselbe Uebersetzung.
+  R_OUT_INTERFACE = 'the routine is declared in the interface section (line '
+    + '%d) - other units can use it as a procedure value';
+  R_OUT_VISIBLE = 'the method is visible outside the unit (not private, '
+    + 'class in the interface section) - other units can use it as a method '
+    + 'pointer';
 
 type
   // Ergebnis des Planers (uRdxFixTable: Plan-Form im Geruest TRdxFixFrame).
@@ -137,6 +151,8 @@ const
   // Sichtbarkeiten, unter denen eine Formdatei die Methode binden kann - ''
   // ist der Abschnitt ohne Wort (published in TPersistent-Erben).
   STREAMED_VIS: array[0..1] of string = ('published', '');
+  // Sichtbarkeiten, die eine Methode nur in dieser Unit zeigen.
+  PRIVATE_VIS: array[0..1] of string = ('private', 'strict private');
   // Typen mit Rumpf, die einen Kopf umschliessen koennen (InsideType) ...
   TYPE_OPENERS: array[0..3] of string = ('class', 'object', 'interface',
     'dispinterface');
@@ -468,6 +484,7 @@ var
   ClassLow, Disp : string;
   CH             : TRdxClassHead;
   Heritage       : TArray<string>;
+  Impl           : TRdxToken;
 begin
   Result := ImplReason(AMap, AImpl, AName, IR);
   if Result <> '' then
@@ -481,6 +498,10 @@ begin
     Exit(_(R_OUT_NOT_IN_CLASS, [AName, Disp]));
   if InList(CH.Vis, STREAMED_VIS) then
     Exit(_(R_OUT_PUBLISHED, [AName, Disp]));
+  Impl := ImplementationTok(AMap);
+  if (Impl.Low <> '') and TokBefore(CH.ClassTok, Impl)
+     and not InList(CH.Vis, PRIVATE_VIS) then
+    Exit(_(R_OUT_VISIBLE));
   Heritage := TRdxBlocks.HeritageOf(AMap, CH.ClassTok);
   if (Length(Heritage) > 1)
      or ((Length(Heritage) = 1) and LooksLikeInterfaceName(Heritage[0])) then
@@ -511,8 +532,9 @@ begin
   Result := DirectiveReason(IR, AName);
 end;
 
-// Routine: ADecl im interface-Teil (nicht in einem Typ) oder forward,
-// AImpl mit Rumpf. '' oder der Grund.
+// Routine: ADecl forward, AImpl mit Rumpf. Im interface-Teil (nicht in
+// einem Typ) ist sie exportiert und gesperrt (R_OUT_INTERFACE, rwE29). ''
+// oder der Grund.
 function RoutineReason(AMap: TRdxCodeMap; const ADecl, AImpl: TRdxOutHead;
   const AName: string): string;
 var
@@ -528,8 +550,7 @@ begin
   begin
     if InsideType(AMap, HeadStart(AMap, ADecl.Kw)) then
       Exit(_(R_OUT_IN_TYPE, [AName]));
-    if TRdxBlocks.MethodDecl(AMap, HeadStart(AMap, ADecl.Kw), DR) <> '' then
-      Exit(_(R_OUT_HEAD_UNSAFE, [AName]));
+    Exit(_(R_OUT_INTERFACE, [ADecl.Kw.Line]));
   end
   else
   begin
