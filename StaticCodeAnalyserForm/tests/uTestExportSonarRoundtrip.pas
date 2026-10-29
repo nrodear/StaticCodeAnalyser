@@ -35,6 +35,9 @@ type
     [Test] procedure EndLineBeyondEof_IsClamped;
     [Test] procedure LoneCr_CountsAsLineLikeSonar;
     [Test] procedure UnreadableFile_KeepsTextRange;
+    // Custom-Regeln: YAML-Severity ist keine Herabstufung
+    [Test] procedure CustomRuleHint_IsExportedWithLowImpact;
+    [Test] procedure CustomRuleError_GetsHighImpactAndOwnName;
   end;
 
 implementation
@@ -264,6 +267,72 @@ begin
     Root := Report(Findings);
     Assert.IsNotNull(TextRangeOf(Root));
     Assert.AreEqual<Integer>(42, TextRangeOf(Root).GetValue<Integer>('startLine'));
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+{ ---- Custom-Regeln ---- }
+
+function CustomFinding(const AFile, ARuleID: string;
+  ASeverity: TLeakSeverity): TLeakFinding;
+// Wie uCustomRuleDetector: Kind per Feldzuweisung, Severity aus der YAML.
+begin
+  Result := MakeFinding(fkCustomRule, AFile, 4);
+  Result.RuleID   := ARuleID;
+  Result.Severity := ASeverity;
+end;
+
+function FirstRule(ARoot: TJSONObject): TJSONObject;
+begin
+  Result := ARoot.GetValue<TJSONArray>('rules').Items[0] as TJSONObject;
+end;
+
+function ImpactSeverityOf(ARule: TJSONObject): string;
+begin
+  Result := (ARule.GetValue<TJSONArray>('impacts').Items[0] as TJSONObject)
+              .GetValue<string>('severity');
+end;
+
+procedure TTestExportSonarRoundtrip.CustomRuleHint_IsExportedWithLowImpact;
+// Bis 2026-10-29 verglich IsDowngraded die YAML-Severity 'hint' mit dem
+// Katalog-Platzhalter SCA023 (Warning) und warf den Fund still raus.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(CustomFinding(TPath.Combine(FDir, 'X.pas'), 'MINI001', lsHint));
+    Root := Report(Findings);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'Custom-Regel mit severity hint gehoert in den Report');
+    Assert.AreEqual('MINI001', FirstRule(Root).GetValue<string>('id'));
+    Assert.AreEqual('LOW', ImpactSeverityOf(FirstRule(Root)));
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarRoundtrip.CustomRuleError_GetsHighImpactAndOwnName;
+// 'error' kam bisher als MEDIUM des Platzhalters an, und alle Custom-Regeln
+// hiessen in Sonar gleich.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+  Name     : string;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(CustomFinding(TPath.Combine(FDir, 'X.pas'), 'MINI002', lsError));
+    Root := Report(Findings);
+    Assert.AreEqual('HIGH', ImpactSeverityOf(FirstRule(Root)));
+    Name := FirstRule(Root).GetValue<string>('name');
+    Assert.IsTrue(Pos('MINI002', Name) > 0, 'Regelname nennt die ID: ' + Name);
   finally
     Root.Free;
     Findings.Free;

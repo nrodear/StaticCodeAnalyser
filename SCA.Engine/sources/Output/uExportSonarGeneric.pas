@@ -582,8 +582,50 @@ function IsDowngraded(const F: TLeakFinding; const M: TRuleMeta): Boolean;
 // hochgestufter Fund gehoert selbstverstaendlich in den Report. Ein
 // blosser Ungleichheitsvergleich haette ihn mitverschluckt - genau der
 // Fehler, den diese Funktion verhindert.
+//
+// CUSTOM-REGELN SIND NIE HERABGESTUFT (2026-10-29): ihre Severity steht in
+// der YAML-Regel und wird vom Detektor 1:1 in F.Severity geschrieben, M ist
+// dagegen nur der Katalog-Platzhalter SCA023 (Warning). Der Vergleich warf
+// deshalb jede als 'hint' deklarierte Custom-Regel still aus dem Export -
+// am Mini-Roundtrip belegt (MINI001: 6 Funde in Konsole/JSON, 0 im
+// Sonar-Report). Was die YAML sagt, ist keine Abschwaechung von irgendwas.
 begin
+  if F.Kind = fkCustomRule then Exit(False);
   Result := Ord(F.Severity) > Ord(M.DefaultSeverity);
+end;
+
+function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
+  const ARuleID: string): TRuleMeta;
+// Regel-Metadaten fuer eine Custom-Regel (fkCustomRule, eigene Regel-ID).
+//
+// Der Katalog kennt fuer ALLE Custom-Regeln nur EINEN Platzhalter (SCA023,
+// "User-defined custom rule", MAINTAINABILITY/MEDIUM). Ohne Anpassung
+// hiessen in Sonar alle Custom-Regeln gleich, und eine als 'error'
+// deklarierte Regel kaeme dort als MEDIUM an. Name und Impact-Severity
+// kommen deshalb aus dem Fund: die Regel-ID und die in der YAML deklarierte
+// Severity (error -> HIGH, warning -> MEDIUM, hint -> LOW, wie der
+// Fallback SeverityToSonarImpactSev). Die Software-Qualitaet bleibt die
+// des Platzhalters - die YAML hat dafuer kein ausgewertetes Feld.
+//
+// Massgeblich ist der ERSTE Fund der Regel (EmitRules dedupliziert nach
+// Regel-ID). Alle Funde einer Regel tragen dieselbe YAML-Severity; nur eine
+// Pfad-Ueberschreibung koennte einzelne davon verschieben.
+var
+  Imp : TSonarImpact;
+begin
+  Result := M;
+  Result.Name := Format('%s %s', [M.Name, ARuleID]);
+  if Length(M.Impacts) > 0 then
+    Imp.SoftwareQuality := M.Impacts[0].SoftwareQuality
+  else
+    Imp.SoftwareQuality := sqMaintainability;
+  case F.Severity of
+    lsError   : Imp.Severity := isHigh;
+    lsWarning : Imp.Severity := isMedium;
+  else
+    Imp.Severity := isLow;
+  end;
+  Result.Impacts := [Imp];
 end;
 
 // noinspection BooleanParam
@@ -624,6 +666,10 @@ begin
       Seen.Add(RuleID, True);
       if not First then WStr(AStream, ',');
       First := False;
+      // Custom-Regel: Name und Impact aus der YAML-Regel statt aus dem
+      // gemeinsamen Katalog-Platzhalter (s. CustomRuleMeta).
+      if F.Kind = fkCustomRule then
+        Meta := CustomRuleMeta(Meta, F, RuleID);
       // Dieselbe ID, die oben schon der Dedup-Schluessel war und die
       // EmitIssues fuer issue.ruleId bekommt - EINE Quelle, sonst
       // koppelt Sonar die beiden Eintraege nicht.
