@@ -53,6 +53,9 @@ type
     // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
     // Blockwort im case sperren nicht mehr.
     [Test] procedure Sca168_HarmlessDirective_Helps;
+    // rwE31 Stufe 3 (JsonDataObjects.pas:7695): Marken 'Ord('-'):' auf einem
+    // Byte-Zeiger sind Zeichen - kein raise.
+    [Test] procedure Sca168_OrdCharLabels_RaiseRefused;
     // rwE31 Stufe 3: EInvalidOpException gibt es vor Delphi 2009 nicht.
     [Test] procedure Sca168_RaiseOldCompiler_Refused;
     // rwE30 Stufe 2 (21 Fehler): der Bezeichner-Beweis (ForeignIdent) -
@@ -774,6 +777,34 @@ begin
     Entry(4, Pos('uCEF', L), 'uCEF')]);
   Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_OrdCharLabels_RaiseRefused;
+var
+  R, Src : string;
+begin
+  // JsonDataObjects.pas:7695 (minimiert): der Exponent einer Zahl, P ist ein
+  // PByte - jedes Zeichen ohne Vorzeichen ('1e5') ist Normalfall. Bis rwE31
+  // sah die Zeichen-Sperre nur ein Literal am Anfang der Marke: raise
+  // angeboten (rot ohne Fix).
+  Src := InProc(['  case P^ of', '    Ord(''-''):', '      begin',
+    '        {$IFNDEF KEEP_BIGDECIMAL_PRECISION}', '        NegE := True;',
+    '        {$ENDIF ~KEEP_BIGDECIMAL_PRECISION}', '        Inc(P);', '      end;',
+    '    Ord(''+''):', '      Inc(P);', '  end;']);
+  Assert.AreEqual('', FixCase(Src, 5, RAISE_UNHANDLED, R), 'Ord-Zeichen');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Das leere else bleibt (bedeutungsgleich).
+  Assert.AreEqual(StringReplace(Src, '      Inc(P);'#13#10'  end;',
+    '      Inc(P);'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // 'Chr(13):' ist immer ein Zeichen, 'Byte(#10):' ebenso.
+  Assert.AreEqual('', FixCase(InProc(['  case C of', '    Chr(13): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Chr');
+  Assert.AreEqual('', FixCase(InProc(['  case B of', '    Byte(#10): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Byte(#10)');
+  // Gegenprobe: Ord um einen Namen ist kein Zeichen - die Sperre greift
+  // nicht (ob raise in die Gluehbirne kommt, sagt CaseRaiseMenuReason).
+  Assert.AreNotEqual('', FixCase(InProc(['  case K of', '    Ord(kA): A;',
+    '  end;']), 5, RAISE_UNHANDLED, R), R);
 end;
 
 procedure TTestRdxStructFixes.Sca168_RaiseOldCompiler_Refused;

@@ -973,21 +973,45 @@ begin
     Result := AMap.Raw(Li);
 end;
 
+// Steht an (ALine, ACol) ein Zeichen- oder String-Literal ("'.'", '#13')?
+function LiteralCharAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+begin
+  Result := CharInSet(CharAt(AMap.Raw(ALine), ACol), ['''', '#']);
+end;
+
 // SCA168, raise-Variante: waehlt das case nach Zeichen oder Strings - die
-// erste Arm-Marke ist ein Literal ("'.':", '#13:')? Dann ist jeder andere
-// Wert gewoehnliche Eingabe (ein Lexer, ein Highlighter, ein Parser), und
-// raise braeche ihn (rwE30: cnwizards mwBCBTokenList.pas:1518, Dev-Cpp
-// SynHighlighterCpp.pas:1051 - jede Ziffer bzw. jedes Zeichen loeste die
-// Exception aus). '' oder der Grund.
+// erste Arm-Marke ist ein Literal ("'.':", '#13:') oder eine Umwandlung
+// eines Zeichens (CHAR_WRAPPERS: "Ord('-'):" auf einem Byte-Zeiger, 'Chr(13):')?
+// Dann ist jeder andere Wert gewoehnliche Eingabe (ein Lexer, ein
+// Highlighter, ein Parser), und raise braeche ihn (rwE30: cnwizards
+// mwBCBTokenList.pas:1518, Dev-Cpp SynHighlighterCpp.pas:1051 - jede Ziffer
+// bzw. jedes Zeichen loeste die Exception aus; rwE31 Stufe 3:
+// JsonDataObjects.pas:7695 'case P^ of Ord('-'): .. Ord('+'): ..' - jeder
+// Exponent ohne Vorzeichen loeste sie aus, bis dahin sah die Sperre nur
+// das Literal am Anfang der Marke). '' oder der Grund.
 function CharSelectorReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+const
+  CHAR_WRAPPERS: array[0..6] of string = ('ord', 'chr', 'byte', 'word',
+    'char', 'ansichar', 'widechar');
 var
   Li, Co : Integer;
-  L      : string;
+  W, P   : TRdxToken;
+  IsChar : Boolean;
 begin
   Result := '';
   if not FirstArmChar(AMap, ACase, Li, Co) then Exit;
-  L := AMap.Raw(Li);
-  if (Co <= Length(L)) and CharInSet(L[Co], ['''', '#']) then
+  IsChar := LiteralCharAt(AMap, Li, Co);
+  if not IsChar and AMap.IsCode(Li, Co) and IsIdentStart(CharAt(AMap.Raw(Li), Co))
+  then
+  begin
+    W := TokenAt(AMap, Li, Co);
+    P := After(AMap, W);
+    // 'Chr(..)' ist immer ein Zeichen, die anderen nur um ein Literal.
+    if InList(W.Low, CHAR_WRAPPERS) and (P.Low = '(') then
+      IsChar := (W.Low = 'chr')
+        or (FirstCharAfter(AMap, P, Li, Co) and LiteralCharAt(AMap, Li, Co));
+  end;
+  if IsChar then
     Result := _('the case selects on characters or strings - every other '
       + 'value is normal input there (a lexer, a parser); raise would break '
       + 'it');
