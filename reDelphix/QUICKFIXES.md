@@ -391,7 +391,7 @@ end;
 - die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung
 - eine Zahl mit Zifferntrennern (`if X > 200_000`, auch `200_000.5`): der Detektor meldet nur ihren ersten Block (`200`) – ein Fehlalarm, der Grund sagt es
 - die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare
-- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`), ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d102`, `D10_2`, `Tokyo`, `DXE6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 10.3 ist
+- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`), ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d102`, `D10_2`, `Tokyo`, `DXE6`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 10.3 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64)
 - ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)
 - der Hauptblock eines Programms bzw. einer Bibliothek
 
@@ -1128,7 +1128,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d104`, `D10_4`, `Sydney` …) oder `{$LIBSUFFIX}` für ein Delphi vor 11 ist, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
+- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d104`, `D10_4`, `Sydney`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 11 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64), Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
 - ein Include oder eine Skript-Unit ohne implementation-Teil
 - ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block
 - die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte

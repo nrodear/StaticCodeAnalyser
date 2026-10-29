@@ -49,6 +49,11 @@ type
     [Test] procedure Refuse_IntroContext;
     [Test] procedure Disk_LazarusProjectNearUnit;
     [Test] procedure Disk_IncludeTraces;
+    // rwE29 + Review e/HilfeFixB: Pakete, die die Unit enthalten.
+    [Test] procedure Package_FolderNames;
+    [Test] procedure Package_NumberAndLibSuffix;
+    [Test] procedure Disk_PackageFolderAndThreshold;
+    [Test] procedure Disk_PackageReadCap;
   end;
 
 implementation
@@ -541,6 +546,149 @@ begin
     Assert.AreEqual('', TRdxMagicFixes.IncludeReason(U, Map, lfInlineConst));
   finally
     Map.Free;
+    RemoveTree(Tmp);
+  end;
+end;
+
+// ---- Pakete, die die Unit enthalten (rwE29, Review e/HilfeFixB) ----
+
+const
+  // Ordnername -> CompilerVersion (TRdxPackageVersion.Folder), -1 = kein
+  // Beleg. Gegenprobe (Stand 775d13a7, damals FolderCompilerVersion): 'c6',
+  // 'bcb6', 'C6Per', 'D2007', 'Delphi2010', 'Delphi 11', 'Delphi_12' gaben
+  // -1 (der Deckel las dann die JVCL-Ordner nie), 'Deluxe' gab 22 (XE am
+  // Wortende) und 'v10.2' gab 32 - beides Fehlsperren.
+  FOLDER_NAMES: array[0..25] of string = ('d104', 'D10_4', 'DXE6',
+    'Delphi12.3', 'Sydney', 'Tokyo', 'c6', 'bcb6', 'C6Per', 'D2007',
+    'Delphi2010', 'Delphi 11', 'Delphi_12', 'd110', 'd100', 'D7', 'XE',
+    'RAD Studio 10.4+', 'RAD Studio 11 Alexandria', '10.4', 'Deluxe',
+    'v10.2', 'Common', 'packages', 'JVCL200_D50', 'Delphi');
+  FOLDER_VERSIONS: array[0..25] of Integer = (34, 34, 27,
+    36, 34, 32, 14, 14, 14, 18,
+    21, 35, 36, 35, 30, 15, 22,
+    34, 35, 34, -1,
+    -1, -1, -1, -1, -1);
+
+procedure TTestRdxMagicFix.Package_FolderNames;
+var
+  i : Integer;
+begin
+  for i := 0 to High(FOLDER_NAMES) do
+    Assert.AreEqual<Integer>(FOLDER_VERSIONS[i],
+      TRdxPackageVersion.Folder(FOLDER_NAMES[i]), FOLDER_NAMES[i]);
+end;
+
+// Zwei Lesarten einer Zahl, die hoechste zaehlt; LIBSUFFIX nur mit zwei
+// oder drei Ziffern.
+procedure TTestRdxMagicFix.Package_NumberAndLibSuffix;
+var
+  V : string;
+begin
+  Assert.AreEqual<Integer>(30, TRdxPackageVersion.Number(100), '100');
+  Assert.AreEqual<Integer>(35, TRdxPackageVersion.Number(110), '110');
+  Assert.AreEqual<Integer>(34, TRdxPackageVersion.Number(270), '270');
+  Assert.AreEqual<Integer>(35, TRdxPackageVersion.Number(280), '280');
+  Assert.AreEqual<Integer>(15, TRdxPackageVersion.Number(70), '70');
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.Number(200), '200');
+  Assert.AreEqual<Integer>(18, TRdxPackageVersion.Jedi(11), 'Jedi 11');
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.Product(10, 5), '10.5');
+  Assert.AreEqual<Integer>(20, TRdxPackageVersion.Year(2009), '2009');
+  Assert.AreEqual<Integer>(34, TRdxPackageVersion.LibSuffix(
+    'package rt;' + #13#10 + '{$libsuffix ''104''}', V), '104');
+  Assert.AreEqual('104', V);
+  Assert.AreEqual<Integer>(34, TRdxPackageVersion.LibSuffix(
+    '{$libsuffix ''270''}', V), '270');
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.LibSuffix(
+    '{$libsuffix auto}', V), 'auto');
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.LibSuffix(
+    '{$libsuffix ''$(auto)''}', V), '$(auto)');
+  Assert.AreEqual<Integer>(-1, TRdxPackageVersion.LibSuffix(
+    'package rt;', V), 'ohne');
+end;
+
+// Eine .dpk mit LIBSUFFIX ASuffix ('' ohne), die AUnit enthaelt.
+function DpkText(const ASuffix, AUnit: string): string;
+var
+  Lib : string;
+begin
+  Lib := '';
+  if ASuffix <> '' then
+    Lib := '{$LIBSUFFIX ''' + ASuffix + '''}';
+  Result := Join(['package RT;', Lib, 'requires', '  rtl;', 'contains',
+    '  ' + ChangeFileExt(AUnit, '') + ' in ''..\..\c\' + AUnit + ''';',
+    'end.']);
+end;
+
+// Der Ordner 'package' (Einzahl) ohne Version im Namen: LIBSUFFIX allein
+// belegt sie. Ein Paket fuer Delphi 10.4 sperrt Zifferntrenner (ab 11),
+// die Inline-Konstante (ab 10.3) nicht. Gegenprobe: vor rwE29 sah
+// FileReason keine .dpk und gab hier immer ''.
+procedure TTestRdxMagicFix.Disk_PackageFolderAndThreshold;
+var
+  Tmp, Root, Pkg, U, R : string;
+begin
+  Root := FreshDir('pkg', Tmp);
+  try
+    U := Root + 'a' + PathDelim + 'b' + PathDelim + 'c' + PathDelim
+      + 'u.pas';
+    ForceDirectories(ExtractFilePath(U));
+    Pkg := Root + 'a' + PathDelim + 'b' + PathDelim + 'package' + PathDelim;
+    ForceDirectories(Pkg);
+    WriteText(Pkg + 'RT.dpk', DpkText('270', 'u.pas'));
+    R := TRdxMagicFixes.FileReason(U, lfDigitSeparator);
+    Assert.IsTrue(Pos('RT.dpk', R) > 0, R);
+    Assert.IsTrue(Pos('(LIBSUFFIX ''270'')', R) > 0, R);
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(U, lfInlineConst),
+      '10.4 kennt Inline-Konstanten');
+    // Eine .dpk, die die Unit nicht nennt, sperrt nicht.
+    WriteText(Pkg + 'RT.dpk', DpkText('270', 'v.pas'));
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(U, lfDigitSeparator),
+      'v.pas statt u.pas');
+  finally
+    RemoveTree(Tmp);
+  end;
+end;
+
+// MAX_PACKAGE_READS + 1 .dpk in ADir, keine nennt u.pas.
+procedure FillPackages(const ADir: string);
+var
+  k : Integer;
+begin
+  ForceDirectories(ADir);
+  for k := 0 to MAX_PACKAGE_READS do
+    WriteText(ADir + PathDelim + Format('P%.3d.dpk', [k]),
+      DpkText('', 'other.pas'));
+end;
+
+// Der Deckel MAX_PACKAGE_READS: ein Ordner, dessen Name Delphi 11 belegt
+// (d110), wird nicht gelesen - auch mit mehr .dpk als dem Deckel kein
+// Grund; ein alter (c6, C++Builder 6) bzw. unbekannter (Common) mit mehr
+// .dpk, als der Deckel liest, sperrt. Gegenprobe (Stand 775d13a7): der
+// erschoepfte Deckel gab '' - die Hilfe wurde angeboten (JVCL:
+// packages\c6 mit 59 .dpk, d6/d7/d10 ungelesen).
+procedure TTestRdxMagicFix.Disk_PackageReadCap;
+var
+  Tmp, Root, Pkg, U, R : string;
+begin
+  Root := FreshDir('cap', Tmp);
+  try
+    U := Root + 'a' + PathDelim + 'b' + PathDelim + 'c' + PathDelim
+      + 'u.pas';
+    ForceDirectories(ExtractFilePath(U));
+    Pkg := Root + 'a' + PathDelim + 'b' + PathDelim + 'packages' + PathDelim;
+    FillPackages(Pkg + 'd110');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(U, lfDigitSeparator),
+      'd110 = Delphi 11 wird nicht gelesen');
+    FillPackages(Pkg + 'c6');
+    R := TRdxMagicFixes.FileReason(U, lfDigitSeparator);
+    Assert.IsTrue(Pos('bleiben ungelesen', R) > 0, R);
+    Assert.IsTrue(Pos('c6', R) > 0, R);
+    RemoveTree(Pkg + 'c6' + PathDelim);
+    FillPackages(Pkg + 'Common');
+    R := TRdxMagicFixes.FileReason(U, lfDigitSeparator);
+    Assert.IsTrue(Pos('bleiben ungelesen', R) > 0, R);
+    Assert.IsTrue(Pos('Common', R) > 0, R);
+  finally
     RemoveTree(Tmp);
   end;
 end;

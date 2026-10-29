@@ -130,6 +130,12 @@ uses
 const
   // Der Name der Konstante ohne Nummer (wie im Labor: MagicNr01 ...).
   MAGIC_NAME_BASE = 'MagicNr';
+  // So viele .dpk-Koepfe liest FileReason je Aufruf hoechstens (Pakete,
+  // die die Unit enthalten, rwE29). Bleibt danach eine .dpk in einem alten
+  // oder unbekannten Paketordner ungelesen, sperrt FileReason - lieber keine
+  // Hilfe als eine falsche (Review e/HilfeFixB: in JVCL frass packages\c6
+  // mit 59 .dpk den Deckel, und d6/d7/d10 wurden nie gelesen).
+  MAX_PACKAGE_READS = 64;
 
 type
   // Was die Hilfe schreibt, die den Plattenblick braucht (FileReason,
@@ -259,9 +265,13 @@ type
     // Unterordner packages (bzw. package) und eine Ebene darin, die die
     // Unit enthalten: ist eine nach Ordnername ('d104', 'Sydney') bzw.
     // {$LIBSUFFIX} fuer ein Delphi unter der Schwelle, sperrt sie (rwE29,
-    // PackagesReason; hoechstens MAX_PACKAGE_READS Koepfe je Aufruf). Ein
-    // Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) wird nicht gelesen. '' oder der Grund - er nennt
-    // AFeature. Die FPC-Weiche IN der Datei prueft schon TargetAt.
+    // PackagesReason; Ordner, deren Name schon eine Version ab der Schwelle
+    // belegt, liest sie nicht, alte vor unbekannten; hoechstens
+    // MAX_PACKAGE_READS Koepfe je Aufruf - bleibt danach eine .dpk in einem
+    // alten oder unbekannten Ordner ungelesen, sperrt sie auch). Ein
+    // Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) wird nicht gelesen.
+    // '' oder der Grund - er nennt AFeature. Die FPC-Weiche IN der Datei
+    // prueft schon TargetAt.
     class function FileReason(const AFileName: string;
       AFeature: TRdxLateFeature): string; static;
 
@@ -276,6 +286,40 @@ type
     // Hilfe dann nicht.
     class function IncludeReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature): string; static;
+  end;
+
+  // Die Delphi-Version eines Pakets als CompilerVersion (Delphi 7 = 15,
+  // 2009 = 20, XE = 22, 10.0 = 30, 10.4 = 34, 11 = 35, 13 = 37), -1 ohne
+  // Beleg - fuer FileReason (Pakete, die die Unit enthalten, rwE29); reine
+  // Textlogik, oeffentlich fuer die Tests (FPC-Pruefstand). Hat ein Beleg
+  // zwei Lesarten, gilt die HOECHSTE: alt ist ein Paket nur, wenn jede
+  // Lesart alt ist.
+  TRdxPackageVersion = class
+  public
+    // JEDI-Nummer J (DELPHIn; Paketversion J * 10): 5..10 = Delphi 5 bis
+    // 2006, 11 = 2007, 12 = 2009, 14..29 = 2010 bis 12, 37 = 13.
+    class function Jedi(J: Integer): Integer; static;
+    // Produktversion AMajor.AMinor: 10.0..10.4, 11, 12, 13.
+    class function Product(AMajor, AMinor: Integer): Integer; static;
+    // Eine Zahl wie in 'd104', 'D110', {$LIBSUFFIX '270'}: Paketversion
+    // (nur volle Zehner) oder Produkt ('104' = 10.4).
+    class function Number(N: Integer): Integer; static;
+    // Jahreszahl hinter 'D'/'Delphi' (2005, 2006, 2007, 2009, 2010).
+    class function Year(N: Integer): Integer; static;
+    // Der Name eines Paketordners: 'd104', 'D10_4', 'Delphi12.3',
+    // 'Delphi 11', 'Delphi_12', 'D2007', 'D7', 'DXE6', 'XE', 'c6'/'bcb6'
+    // (C++Builder 6 baut .pas mit dem Compiler von Delphi 6), 'RAD Studio
+    // 10.4', die Codenamen ('Sydney'). Eine Zahl zaehlt nur hinter 'd',
+    // 'delphi' (auch durch ' ', '_', '-' getrennt), 'xe', 'c'/'cb'/'bcb'
+    // bzw. als Haupt- und Unterversion hinter 'Studio' oder am
+    // Namensanfang - nicht 'v10.2', nicht 'Deluxe'. Mehrere Belege: der
+    // hoechste.
+    class function Folder(const AName: string): Integer; static;
+    // {$LIBSUFFIX 'nnn'} im Kopf einer .dpk (ALowText klein geschrieben),
+    // zwei oder drei Ziffern wie Number; -1 ohne oder bei 'AUTO',
+    // '$(Auto)'. AValue: der Wert.
+    class function LibSuffix(const ALowText: string;
+      out AValue: string): Integer; static;
   end;
 
 implementation
@@ -324,15 +368,23 @@ const
   // Delphi 10.0-10.4; die .dproj dort tragen ProjectVersion 20.3, neu
   // gespeichert - der Ordner und LIBSUFFIX nennen die Version). Gesucht
   // wird je Ebene der Suche in einem Unterordner dieses Namens und eine
-  // Ebene tiefer; je Aufruf hoechstens MAX_PACKAGE_READS Koepfe.
+  // Ebene tiefer; je Aufruf hoechstens MAX_PACKAGE_READS Koepfe (s.
+  // interface). Ordner, deren Name schon eine Version ab der Schwelle
+  // belegt, liest die Hilfe nicht; alte zuerst, dann unbekannte.
   PACKAGE_DIRS: array[0..1] of string = ('packages', 'package');
   DPK_EXTENSION = '.dpk';
-  MAX_PACKAGE_READS = 32;
   LIBSUFFIX_TAG = '{$libsuffix ''';
   // Codenamen in Ordnernamen, CompilerVersion = 30 + Index (Seattle = 10.0
   // = 30 ... Florence = 13 = 37).
   CODE_NAMES: array[0..7] of string = ('seattle', 'berlin', 'tokyo', 'rio',
     'sydney', 'alexandria', 'athens', 'florence');
+  // Woerter vor einer Versionszahl im Ordnernamen (TRdxPackageVersion.
+  // Folder): Delphi, XE, C++Builder ('c6' = C++Builder 6), Studio vor
+  // Haupt- und Unterversion.
+  DELPHI_WORDS: array[0..1] of string = ('d', 'delphi');
+  XE_WORDS: array[0..2] of string = ('xe', 'dxe', 'delphixe');
+  CBUILDER_WORDS: array[0..2] of string = ('c', 'cb', 'bcb');
+  STUDIO_WORD = 'studio';
   // Programm und Bibliothek haben einen Hauptblock (MainBlockReason).
   MAIN_BLOCK_WORDS: array[0..1] of string = ('program', 'library');
   // Die Gruende sind englische msgids, uebersetzt mit _() in DIESER Unit
@@ -404,6 +456,19 @@ const
       + 'Delphi before 11 (%s), which has no digit separators; %s',
     'package %s in the directory %s contains the unit and is meant for a '
       + 'Delphi before 10.3 (%s), which has no inline variables; %s');
+  // Der Deckel MAX_PACKAGE_READS ist erschoepft, in einem alten oder
+  // unbekannten Paketordner bleibt eine .dpk ungelesen (Review
+  // e/HilfeFixB): %s der Ordner, %d der Deckel, %s MsgByHand.
+  R_PACKAGES_UNREAD: array[TRdxLateFeature] of string = (
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 10.3, which has '
+      + 'no inline constants; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 11, which has '
+      + 'no digit separators; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 10.3, which has '
+      + 'no inline variables; %s');
   R_INC_FPC: array[TRdxLateFeature] of string = (
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
       + 'constants',
@@ -1068,9 +1133,17 @@ end;
 
 { ---- Pakete, die die Unit enthalten (rwE29) ---- }
 
-// Die CompilerVersion zur JEDI-Nummer J (DELPHIn; die Paketversion ist
-// J * 10: 7 = Delphi 7, 15 = XE, 28 = Delphi 11); -1 unbekannt.
-function JediCompilerVersion(J: Integer): Integer;
+function MaxOf(A, B: Integer): Integer;
+begin
+  if A > B then
+    Result := A
+  else
+    Result := B;
+end;
+
+{ TRdxPackageVersion }
+
+class function TRdxPackageVersion.Jedi(J: Integer): Integer;
 begin
   case J of
     5..10:  Result := J + 8;    // Delphi 5 = 13 ... Delphi 2006 = 18
@@ -1083,9 +1156,7 @@ begin
   end;
 end;
 
-// Die CompilerVersion zur Produktversion AMajor.AMinor (10.4 = 34, 11 = 35,
-// 12 = 36, 13 = 37); -1 ausserhalb von 10.0..13.
-function ProductCompilerVersion(AMajor, AMinor: Integer): Integer;
+class function TRdxPackageVersion.Product(AMajor, AMinor: Integer): Integer;
 begin
   if (AMajor = 10) and (AMinor >= 0) and (AMinor <= 4) then
     Result := 30 + AMinor
@@ -1095,38 +1166,46 @@ begin
     Result := -1;
 end;
 
-function MaxOf(A, B: Integer): Integer;
-begin
-  if A > B then
-    Result := A
-  else
-    Result := B;
-end;
-
-// Eine Zahl wie in 'd104', 'D110' oder {$LIBSUFFIX '270'}: zwei Lesarten -
-// Paketversion (J * 10, nur volle Zehner) und Produkt ('104' = 10.4). Die
-// HOECHSTE Version zaehlt: alt ist das Paket nur, wenn jede Lesart alt ist
-// ('d110' ist bei DMVC Delphi 11, als Paketversion Delphi 2007).
-function NumberCompilerVersion(N: Integer): Integer;
+// Zwei Lesarten - die hoechste zaehlt ('d110' ist bei DMVC Delphi 11, als
+// Paketversion Delphi 2007).
+class function TRdxPackageVersion.Number(N: Integer): Integer;
 begin
   Result := -1;
   if N mod 10 = 0 then
-    Result := JediCompilerVersion(N div 10);
+    Result := Jedi(N div 10);
   if N >= 100 then
-    Result := MaxOf(Result, ProductCompilerVersion(N div 10, N mod 10));
+    Result := MaxOf(Result, Product(N div 10, N mod 10));
 end;
 
-// Die Delphi-Version im Namen eines Paketordners als CompilerVersion; -1
-// ohne Beleg. Liest 'd104'/'D110' (Zahl hinter 'd' oder 'delphi', drei
-// Ziffern wie NumberCompilerVersion, bis zwei als DELPHIn bzw. Produkt),
-// 'D10_4'/'Delphi12.3'/'RAD Studio 10.4' (Haupt- und Unterversion), 'XE',
-// 'DXE6' und die Codenamen ('Sydney'). Mehrere Belege: der hoechste.
-function FolderCompilerVersion(const AName: string): Integer;
+class function TRdxPackageVersion.Year(N: Integer): Integer;
+begin
+  case N of
+    2005: Result := 17;
+    2006, 2007: Result := 18;
+    2009: Result := 20;
+    2010: Result := 21;
+  else
+    Result := -1;
+  end;
+end;
+
+// Die Buchstaben (a..z) direkt vor S[AAt], '' ohne.
+function LettersBefore(const S: string; AAt: Integer): string;
 var
-  S, Pre         : string;
-  i, j, Digits   : Integer;
-  N1, N2, V, k   : Integer;
-  HasMinor       : Boolean;
+  j : Integer;
+begin
+  j := AAt - 1;
+  while (j >= 1) and CharInSet(S[j], ['a'..'z']) do
+    Dec(j);
+  Result := Copy(S, j + 1, AAt - j - 1);
+end;
+
+class function TRdxPackageVersion.Folder(const AName: string): Integer;
+var
+  S, Adj, Sep         : string;
+  i, j, k, Start      : Integer;
+  Digits, N1, N2, V   : Integer;
+  HasMinor, IsDelphi  : Boolean;
 begin
   Result := -1;
   S := LowerCase(AName);
@@ -1138,12 +1217,13 @@ begin
       j := i;
       while (j <= Length(S)) and CharInSet(S[j], ['a'..'z']) do
         Inc(j);
-      Pre := Copy(S, i, j - i);
+      Adj := Copy(S, i, j - i);
       for k := 0 to High(CODE_NAMES) do
-        if Pre = CODE_NAMES[k] then
+        if Adj = CODE_NAMES[k] then
           Result := MaxOf(Result, 30 + k);
-      // 'XE' ohne Ziffer dahinter: Delphi XE (22).
-      if (Copy(Pre, Length(Pre) - 1, 2) = 'xe')
+      // 'XE' als ganzes Wort ohne Ziffer dahinter: Delphi XE (22) - nicht
+      // das Ende von 'Deluxe'.
+      if InList(Adj, XE_WORDS)
          and not ((j <= Length(S)) and CharInSet(S[j], ['0'..'9'])) then
         Result := MaxOf(Result, 22);
       i := j;
@@ -1154,11 +1234,13 @@ begin
       Inc(i);
       Continue;
     end;
-    // Die Buchstaben direkt davor.
-    j := i - 1;
-    while (j >= 1) and CharInSet(S[j], ['a'..'z']) do
-      Dec(j);
-    Pre := Copy(S, j + 1, i - j - 1);
+    // Das Wort davor: direkt anliegend (Adj) oder durch ' ', '_', '-'
+    // getrennt (Sep: 'Delphi 11', 'Delphi_12', 'RAD Studio 10.4').
+    Start := i;
+    Adj := LettersBefore(S, i);
+    Sep := '';
+    if (Adj = '') and (i > 2) and CharInSet(S[i - 1], [' ', '_', '-']) then
+      Sep := LettersBefore(S, i - 1);
     N1 := 0;
     Digits := 0;
     while (i <= Length(S)) and CharInSet(S[i], ['0'..'9']) do
@@ -1178,27 +1260,35 @@ begin
       while (i <= Length(S)) and CharInSet(S[i], ['0'..'9']) do
         Inc(i);
     end;
+    IsDelphi := InList(Adj, DELPHI_WORDS) or (Sep = DELPHI_WORDS[1]);
     V := -1;
-    if (Copy(Pre, Length(Pre) - 1, 2) = 'xe') and not HasMinor
-       and (N1 >= 2) and (N1 <= 8) then
-      V := 21 + N1                       // XE2 = 23 ... XE8 = 29
-    else if HasMinor then
-      V := ProductCompilerVersion(N1, N2)
-    else if (Pre = 'd') or (Pre = 'delphi') then
+    if InList(Adj, XE_WORDS) then
     begin
-      if Digits = 3 then
-        V := NumberCompilerVersion(N1)
-      else if Digits <= 2 then
-        V := MaxOf(JediCompilerVersion(N1), ProductCompilerVersion(N1, 0));
-    end;
+      if not HasMinor and (Digits = 1) and (N1 >= 2) and (N1 <= 8) then
+        V := 21 + N1;                    // XE2 = 23 ... XE8 = 29
+    end
+    else if InList(Adj, CBUILDER_WORDS) then
+    begin
+      if not HasMinor and (Digits = 1) and (N1 >= 5) and (N1 <= 6) then
+        V := N1 + 8;                     // C++Builder 5/6 = Delphi 5/6
+    end
+    else if HasMinor then
+    begin
+      if IsDelphi or (Sep = STUDIO_WORD)
+         or ((Adj = '') and (Sep = '') and (Start = 1)) then
+        V := Product(N1, N2);
+    end
+    else if IsDelphi then
+      case Digits of
+        1, 2: V := MaxOf(Jedi(N1), Product(N1, 0));
+        3:    V := Number(N1);
+        4:    V := Year(N1);
+      end;
     Result := MaxOf(Result, V);
   end;
 end;
 
-// {$LIBSUFFIX 'nnn'} im Kopf einer .dpk (klein geschrieben) als
-// CompilerVersion (NumberCompilerVersion); -1 ohne oder bei anderem Wert
-// ('AUTO', '$(Auto)'). AValue: der Wert.
-function LibSuffixCompilerVersion(const ALowText: string;
+class function TRdxPackageVersion.LibSuffix(const ALowText: string;
   out AValue: string): Integer;
 var
   P, i : Integer;
@@ -1214,7 +1304,7 @@ begin
     i - P - Length(LIBSUFFIX_TAG));
   if (Length(AValue) >= 2) and (Length(AValue) <= 3)
      and (i <= Length(ALowText)) and (ALowText[i] = '''') then
-    Result := NumberCompilerVersion(StrToInt(AValue));
+    Result := Number(StrToInt(AValue));
 end;
 
 // Nennt die .dpk (Kopf klein geschrieben) die Unit-Datei ALowFile
@@ -1222,32 +1312,36 @@ end;
 // ('..\..\sources\X.pas'' bzw. ''X.pas'''): davor '\', '/' oder ''''.
 function DpkContains(const ALowText, ALowFile: string): Boolean;
 var
-  S, Key : string;
-  P      : Integer;
+  Key  : string;
+  P, i : Integer;
 begin
   Result := False;
   Key := ALowFile + '''';
-  S := ALowText;
-  P := Pos(Key, S);
-  while P > 0 do
+  i := 1;
+  while i + Length(Key) - 1 <= Length(ALowText) do
   begin
-    if (P = 1) or CharInSet(S[P - 1], ['\', '/', '''']) then
+    P := Pos(Key, Copy(ALowText, i, MaxInt));
+    if P = 0 then Exit;
+    P := P + i - 1;
+    if (P = 1) or CharInSet(ALowText[P - 1], ['\', '/', '''']) then
       Exit(True);
-    Delete(S, 1, P);
-    P := Pos(Key, S);
+    i := P + 1;
   end;
 end;
 
-// Die .dpk in ADir, die die Unit ALowFile enthalten: ist eine fuer einen
-// aelteren Delphi als die Schwelle (Ordnername, LIBSUFFIX; ohne beides die
-// Projektdateien des Ordners wie DelphiProjectReason), der Grund; ''
-// sonst. AReads zaehlt die gelesenen Koepfe (MAX_PACKAGE_READS).
-function DpkDirReason(const ADir, ALowFile: string;
-  AFeature: TRdxLateFeature; var AReads: Integer): string;
+// Die .dpk im Paketordner ADir (AFolderVersion: die Version aus seinem
+// Namen, -1 ohne), die die Unit ALowFile enthalten: ist eine fuer ein
+// aelteres Delphi als die Schwelle (Ordnername, LIBSUFFIX - der hebt nur
+// an; ohne beides die Projektdateien des Ordners wie DelphiProjectReason),
+// der Grund. Ist der Deckel erschoepft und steht hier noch eine .dpk, auch
+// - sie bleibt ungelesen (R_PACKAGES_UNREAD). '' sonst.
+function DpkDirReason(const ADir: string; AFolderVersion: Integer;
+  const ALowFile: string; AFeature: TRdxLateFeature;
+  var AReads: Integer): string;
 var
-  SR              : TSearchRec;
+  SR               : TSearchRec;
   Text, Lib, Proof : string;
-  V, LibV         : Integer;
+  V, LibV          : Integer;
 begin
   Result := '';
   if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
@@ -1258,16 +1352,17 @@ begin
       if ((SR.Attr and faDirectory) <> 0)
          or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
         Continue;
-      if AReads >= MAX_PACKAGE_READS then Exit;
+      if AReads >= MAX_PACKAGE_READS then
+        Exit(_(R_PACKAGES_UNREAD[AFeature], [ADir, MAX_PACKAGE_READS,
+          MsgByHand]));
       Inc(AReads);
       if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
         Continue;
       Text := LowerCase(Text);
       if not DpkContains(Text, ALowFile) then Continue;
-      V := FolderCompilerVersion(ExtractFileName(ExcludeTrailingPathDelimiter(
-        ADir)));
+      V := AFolderVersion;
       Proof := ExtractFileName(ExcludeTrailingPathDelimiter(ADir));
-      LibV := LibSuffixCompilerVersion(Text, Lib);
+      LibV := TRdxPackageVersion.LibSuffix(Text, Lib);
       if LibV > V then
       begin
         V := LibV;
@@ -1286,15 +1381,66 @@ begin
   end;
 end;
 
+// Die Paketordner unter APkg (APkg selbst und seine Unterordner), die
+// gelesen werden: ohne die, deren Name schon eine Version ab AFloor belegt
+// (Review e/HilfeFixB - sie koennen nur neu sein, LIBSUFFIX hebt nur an);
+// alte (AOld, Version im Namen) und unbekannte (AUnknown) getrennt, je in
+// der Reihenfolge der Platte.
+procedure CollectPackageDirs(const APkg: string; AFloor: Integer;
+  var AOld, AUnknown: TArray<string>; var AOldVer: TArray<Integer>);
+var
+  SR   : TSearchRec;
+  Path : string;
+  V    : Integer;
+
+  procedure Note(const ADir: string; AVersion: Integer);
+  begin
+    if AVersion >= AFloor then Exit;
+    if AVersion >= 0 then
+    begin
+      SetLength(AOld, Length(AOld) + 1);
+      AOld[High(AOld)] := ADir;
+      SetLength(AOldVer, Length(AOldVer) + 1);
+      AOldVer[High(AOldVer)] := AVersion;
+    end
+    else
+    begin
+      SetLength(AUnknown, Length(AUnknown) + 1);
+      AUnknown[High(AUnknown)] := ADir;
+    end;
+  end;
+
+begin
+  Note(APkg, TRdxPackageVersion.Folder(ExtractFileName(
+    ExcludeTrailingPathDelimiter(APkg))));
+  if FindFirst(IncludeTrailingPathDelimiter(APkg) + '*', faDirectory,
+       SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) = 0) or (SR.Name = '.')
+         or (SR.Name = '..') then
+        Continue;
+      Path := IncludeTrailingPathDelimiter(APkg) + SR.Name;
+      V := TRdxPackageVersion.Folder(SR.Name);
+      Note(Path, V);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
 // Pakete unter ADir (Unterordner PACKAGE_DIRS und eine Ebene darin), die
-// die Unit AFileName enthalten und fuer einen aelteren Delphi sind - '' oder
-// der Grund.
+// die Unit AFileName enthalten und fuer ein aelteres Delphi sind - bzw. ein
+// alter oder unbekannter Paketordner, den der Deckel nicht mehr liest. ''
+// oder der Grund. Erst die alten Ordner, dann die unbekannten.
 function PackagesReason(const ADir, AFileName: string;
   AFeature: TRdxLateFeature; var AReads: Integer): string;
 var
-  SR           : TSearchRec;
-  Pkg, LowFile : string;
-  i            : Integer;
+  Pkg, LowFile      : string;
+  Old, Unknown      : TArray<string>;
+  OldVer            : TArray<Integer>;
+  i, k              : Integer;
 begin
   Result := '';
   LowFile := LowerCase(ExtractFileName(AFileName));
@@ -1302,22 +1448,19 @@ begin
   begin
     Pkg := IncludeTrailingPathDelimiter(ADir) + PACKAGE_DIRS[i];
     if not DirectoryExists(Pkg) then Continue;
-    Result := DpkDirReason(Pkg, LowFile, AFeature, AReads);
-    if Result <> '' then Exit;
-    if FindFirst(IncludeTrailingPathDelimiter(Pkg) + '*', faDirectory,
-         SR) <> 0 then
-      Continue;
-    try
-      repeat
-        if ((SR.Attr and faDirectory) = 0) or (SR.Name = '.')
-           or (SR.Name = '..') then
-          Continue;
-        Result := DpkDirReason(IncludeTrailingPathDelimiter(Pkg) + SR.Name,
-          LowFile, AFeature, AReads);
-        if Result <> '' then Exit;
-      until FindNext(SR) <> 0;
-    finally
-      FindClose(SR);
+    Old := nil;
+    Unknown := nil;
+    OldVer := nil;
+    CollectPackageDirs(Pkg, FloorOf(AFeature).Version, Old, Unknown, OldVer);
+    for k := 0 to High(Old) do
+    begin
+      Result := DpkDirReason(Old[k], OldVer[k], LowFile, AFeature, AReads);
+      if Result <> '' then Exit;
+    end;
+    for k := 0 to High(Unknown) do
+    begin
+      Result := DpkDirReason(Unknown[k], -1, LowFile, AFeature, AReads);
+      if Result <> '' then Exit;
     end;
   end;
 end;
