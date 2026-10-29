@@ -348,7 +348,10 @@ type
     // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
     // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
     // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
-    // Dateinamen geprueft) - FileReason und, mit AIncludes, IncludeReason.
+    // Dateinamen geprueft) - FileReason und, mit AIncludes, IncludeReason
+    // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
+    // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
+    // Pakete nur ab 10.3 - PackageFloorProof).
     // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks), sonst
     // wie FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
@@ -2239,6 +2242,153 @@ begin
   Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
 
+
+// Der Ausgang von DirFloorVerdict: keine .dpk mit der Unit, nur solche ab
+// der Schwelle, mindestens eine alte bzw. unbekannte (oder der Deckel ist
+// erschoepft - keine Aussage).
+type
+  TRdxFloorVerdict = (fvNone, fvNew, fvOld);
+
+// Nennt der Ordnername eine Obergrenze ('Delphi 10.3-': 10.3 und davor)?
+// Dann belegt seine Zahl keine Mindestversion.
+function NamesUpperBound(const AName: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(AName);
+  Result := (S <> '') and (S[Length(S)] = '-');
+end;
+
+// Die .dpk in ADir, die die Unit ALowFile enthalten, gegen die Version
+// AFloor: ihre Version aus dem Ordnernamen bzw. {$LIBSUFFIX} (wie
+// DpkDirReason; ohne Beleg oder mit Obergrenze unbekannt).
+function DirFloorVerdict(const ADir, ALowFile: string; AFloor: Integer;
+  var ABudget: TRdxWalkBudget): TRdxFloorVerdict;
+var
+  SR        : TSearchRec;
+  Text, Lib : string;
+  V, LibV   : Integer;
+begin
+  Result := fvNone;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0)
+         or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
+        Continue;
+      if ABudget.Packages >= MAX_PACKAGE_READS then
+        Exit(fvOld);
+      Inc(ABudget.Packages);
+      if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
+        Exit(fvOld);
+      Text := LowerCase(Text);
+      if not DpkContains(Text, ALowFile) then Continue;
+      V := -1;
+      if not NamesUpperBound(ExtractFileName(
+           ExcludeTrailingPathDelimiter(ADir))) then
+        V := TRdxPackageVersion.Folder(ExtractFileName(
+          ExcludeTrailingPathDelimiter(ADir)));
+      LibV := TRdxPackageVersion.LibSuffix(Text, Lib);
+      if LibV > V then
+        V := LibV;
+      if V < AFloor then
+        Exit(fvOld);
+      Result := fvNew;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Die Unterordner von ADir (eine Ebene).
+function SubDirsOf(const ADir: string): TArray<string>;
+var
+  SR : TSearchRec;
+begin
+  Result := nil;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory,
+       SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0) and (SR.Name <> '.')
+         and (SR.Name <> '..') then
+        AddText(Result, IncludeTrailingPathDelimiter(ADir) + SR.Name);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Invariant-Weg (rwE31 Stufe 3): bauen NUR Pakete ab der Schwelle von
+// AFeature die Unit? Gesucht wird wie PackagesReason im Fenster (Verzeichnis
+// der Unit und bis PROJECT_LEVELS darueber, je Unterordner packages bzw.
+// package), aber zwei Ebenen tief (python4delphi Packages\Delphi\Delphi
+// 10.4+\PythonFmx.dpk - PackagesReason sieht nur eine). Ja, wenn
+// mindestens eine .dpk die Unit enthaelt und jede davon ab der Schwelle ist
+// (Ordnername, LIBSUFFIX; ohne Beleg, mit Obergrenze 'Delphi 10.3-' oder
+// mit erschoepftem Deckel: nein). Mit Cache (GDiskCache, Art 'L').
+function PackageFloorProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, Pkg, LowFile, Key, Cached, D1, D2 : string;
+  Level, i                                   : Integer;
+  Budget                                     : TRdxWalkBudget;
+  Floor                                      : Integer;
+  Found, Old                                 : Boolean;
+
+  procedure Judge(const ADir: string);
+  begin
+    if Old then Exit;
+    case DirFloorVerdict(ADir, LowFile, Floor, Budget) of
+      fvNew: Found := True;
+      fvOld: Old := True;
+    end;
+  end;
+
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('L', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Budget := Default(TRdxWalkBudget);
+  Floor := FloorOf(AFeature).Version;
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Found := False;
+  Old := False;
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Old then Break;
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if Old or not DirectoryExists(Pkg) then Continue;
+      Judge(Pkg);
+      for D1 in SubDirsOf(Pkg) do
+      begin
+        Judge(D1);
+        for D2 in SubDirsOf(D1) do
+          Judge(D2);
+      end;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  Result := Found and not Old;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'L';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
 class function TRdxMagicFixes.ProjectReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
 var
@@ -2278,6 +2428,13 @@ begin
     // eine .dof baut die Unit ohne das Paket).
     if (Result <> '') and (AFeature = lfFormatInvariant)
        and PackageInvariantProof(AFileName) then
+      Result := '';
+    // Eine FMX-Unit (kein FPC, ModernProof.NoFpc), die nur Pakete ab der
+    // Schwelle bauen: weder die FPC-Weiche noch die alten Versionen des
+    // Includes treffen sie (rwE31 Stufe 3, python4delphi WrapFmxTypes.pas -
+    // Definition.Inc, nur in Packages\Delphi\Delphi 10.4+\PythonFmx.dpk).
+    if (Result <> '') and (AFeature = lfFormatInvariant) and Proof.NoFpc
+       and PackageFloorProof(AFileName, AFeature) then
       Result := '';
   end;
 end;

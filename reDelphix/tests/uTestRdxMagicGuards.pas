@@ -49,6 +49,7 @@ type
     [Test] procedure Disk_ProgramSetsSettings_Refused;
     // ---- Realworld-Test rwE31 Stufe 3 ----
     [Test] procedure Disk_KitIncludeModernProject_Refutes;
+    [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
   end;
 
 implementation
@@ -732,6 +733,64 @@ begin
     // Der Invariant-Weg fragt das Kit-Include weiter im Planer (hier nicht).
     Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant,
       False), 'Invariant ohne Includes');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_FmxPackageFloor_RefutesInclude;
+const
+  FMX_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses System.Types, FMX.Types;' + #13#10 + 'implementation'
+    + #13#10 + 'end.';
+  RTL_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses System.Types;' + #13#10 + 'implementation' + #13#10
+    + 'end.';
+  DPK_SRC = 'package PythonFmx;' + #13#10 + 'contains' + #13#10
+    + '  WrapFmxTypes in ''..\..\..\b\c\u.pas'';' + #13#10 + 'end.';
+var
+  T          : TTree;
+  New4, Old3 : string;
+begin
+  // python4delphi Source\fmx\WrapFmxTypes.pas:391/785/1038/1167 (SCA059.2):
+  // das Include ..\Definition.Inc traegt eine FPC-Weiche und Versionen ab
+  // XE2 - die FMX-Unit uebersetzt FPC nie, und sie steht nur in
+  // Packages\Delphi\Delphi 10.4+\PythonFmx.dpk (zwei Ebenen unter
+  // Packages). Bis rwE31 Stufe 3 sperrte die FPC-Weiche des Includes.
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IFDEF FPC}' + #13#10 + '  {$MODE DELPHI}'
+      + #13#10 + '{$ENDIF}' + #13#10 + '{$IFDEF VER230}' + #13#10
+      + '  {$DEFINE DELPHIXE2}' + #13#10 + '{$ENDIF}');
+    New4 := T.A + 'Packages' + PathDelim + 'Delphi' + PathDelim
+      + 'Delphi 10.4+' + PathDelim;
+    Old3 := T.A + 'Packages' + PathDelim + 'Delphi' + PathDelim
+      + 'Delphi 10.3-' + PathDelim;
+    ForceDirectories(New4);
+    ForceDirectories(Old3);
+    // Ohne Paket: das Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    WriteText(New4 + 'PythonFmx.dpk', DPK_SRC);
+    WriteText(Old3 + 'Python_D.dpk', 'package Python_D;' + #13#10
+      + 'contains' + #13#10 + '  Other in ''..\..\..\b\c\other.pas'';'
+      + #13#10 + 'end.');
+    Assert.AreEqual('', ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant,
+      True), 'FMX, nur Paket ab 10.4');
+    // Gegenproben: ohne FMX-Unit-Name (FPC nicht ausgeschlossen) ...
+    AssertNames(ProjectReasonOf(T.U, RTL_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    // ... ein Paket bis 10.3 ('Delphi 10.3-' ist eine Obergrenze), das die
+    // Unit auch enthaelt ...
+    WriteText(Old3 + 'Python_D.dpk', DPK_SRC);
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
+    // ... und ein Paket ab 10.4, das die Unit nicht enthaelt.
+    DeleteFile(Old3 + 'Python_D.dpk');
+    WriteText(New4 + 'PythonFmx.dpk', 'package PythonFmx;' + #13#10
+      + 'contains' + #13#10 + '  Other in ''other.pas'';' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, FMX_SRC, lfFormatInvariant, True),
+      ['defs.inc']);
   finally
     RemoveTree(T.Root);
   end;

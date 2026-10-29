@@ -67,6 +67,10 @@ unit uRdxCompilerTraces;
 // die Datei uebersetzt mit keinem aelteren Compiler. Die Aufrufer fragen
 // ihn selbst (uRdxFormatSettingsFix, uRdxRawExceptionFix, uRdxMagicFixes.
 // ProjectReason); OldCompilerTrace bleibt, wie er war.
+// Seit rwE31 Stufe 3 schliesst ein FMX-Unit-Name im uses ('FMX.Types')
+// FPC aus (NoFpc): FireMonkey gibt es nur in Delphi (python4delphi
+// Source\fmx\WrapFmxTypes.pas - die FPC-Weiche im gemeinsamen
+// Definition.Inc betrifft die Unit nicht).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
 // (UnconditionalAt, FpcExcludedAt).
 
@@ -170,9 +174,9 @@ type
 
   // Der Gegenbeweis einer Datei (ModernProof, s. Kopf): die bewiesene
   // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name; 0 ohne), ob FPC
-  // 3.2 die Datei uebersetzt (NoFpc: nein - nur die Inline-Variable), die
-  // Form wie im Text ('for var', 'var X :=', 'System.SysUtils') und ihre
-  // Zeile.
+  // 3.2 die Datei uebersetzt (NoFpc: nein - die Inline-Variable und seit
+  // rwE31 Stufe 3 ein FMX-Unit-Name), die Form wie im Text ('for var',
+  // 'var X :=', 'System.SysUtils', 'FMX.Types') und ihre Zeile.
   TRdxModernProof = record
     Version : Integer;
     NoFpc   : Boolean;
@@ -297,6 +301,8 @@ const
   // ModernProof: Unit-Namensraeume der RTL ab Delphi XE2 (klein, mit
   // Punkt) und so weit liest die Probe 'var X: T := ..' bis zum ':='.
   RTL_SCOPES: array[0..3] of string = ('system.', 'winapi.', 'vcl.', 'fmx.');
+  // ... davon nur in Delphi (NoFpc; FireMonkey hat FPC nie).
+  FMX_SCOPE = 'fmx.';
   MAX_INLINE_DECL_TOKENS = 40;
   // Die globale Variable (GlobalSettingsWriteLine) und ihre Felder fuer
   // Datum und Uhrzeit - nur sie zaehlen: ein Programm, das
@@ -720,7 +726,9 @@ begin
 end;
 
 // Ein RTL-Namensraum im uses ausserhalb jedes Bedingungsblocks: der Name
-// wie geschrieben und seine Zeile in AProof (Version PROOF_RTL_SCOPE).
+// wie geschrieben und seine Zeile in AProof (Version PROOF_RTL_SCOPE). Seit
+// rwE31 Stufe 3 liest die Probe weiter bis zu einem FMX-Namen: er setzt
+// NoFpc und steht dann in What und Line.
 procedure ScopeProof(AMap: TRdxCodeMap; const ADirs: TRdxCondDirectives;
   var AProof: TRdxModernProof);
 var
@@ -738,12 +746,17 @@ begin
         Name := UsesEntry(AMap, E, Stop);
         for S in RTL_SCOPES do
           if (Copy(Name, 1, Length(S)) = S)
+             and ((AProof.Version = 0) or (S = FMX_SCOPE))
              and UnconditionalAt(ADirs, E.Line, E.Col) then
           begin
             AProof.Version := PROOF_RTL_SCOPE;
             AProof.What := Copy(AMap.Raw(E.Line), E.Col, Length(Name));
             AProof.Line := E.Line;
-            Exit;
+            if S = FMX_SCOPE then
+            begin
+              AProof.NoFpc := True;
+              Exit;
+            end;
           end;
         // Hinter 'in' der Pfad, dann ',' oder ';'.
         while (Stop.Low <> '') and (Stop.Low <> ',') and (Stop.Low <> ';') do
