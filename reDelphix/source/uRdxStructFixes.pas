@@ -97,6 +97,36 @@ type
     // ein Eintrag weniger nimmt die Unit aus dem Bau.
     class function UsesOnlyUnit(AMap: TRdxCodeMap): Boolean; static;
 
+    // SCA007 (rwE31 Stufe 3, CEF4Delphi uChildForm.pas:10,
+    // uCEFWindowDelegate.pas:16 ...): der Eintrag AUnit auf ALine aus dem
+    // TEXT der uses-Klauseln - fuer einen Eintrag, den
+    // TSourcePlaces.UsesEntries nicht liefert. Der Dienst parst mit der
+    // Ein-Zweig-Sicht der IDE-Funde (MSWINDOWS, WIN64 ...) ohne die Defines
+    // aus Include-Dateien: '{$I cef.inc}' definiert DELPHI16_UP, der Dienst
+    // nimmt den {$ELSE}-Zweig, der Fund steht im {$IFDEF}-Zweig - bis dahin
+    // "steht nicht mehr auf Zeile 10" (falsch). Der Token-Leser sieht keine
+    // Direktiven: eine Klausel ist hier die Folge ALLER Zweige (wie die
+    // Doppelzweig-Sicht). RemoveUsesEntry braucht davon nur die Nachbarn des
+    // Eintrags; ein Bereich ueber eine Direktive sperrt RangeReason weiter.
+    // Eine Klausel, deren Folge nicht 'Name [in], Name [in] .. ;' ist (Zweige
+    // mit eigener Kommafolge: '{$IFDEF X} A, B {$ELSE} C {$ENDIF};'), zaehlt
+    // nicht. Ergebnis: die Zahl der Treffer (Name gleich, erstes Zeichen auf
+    // ALine); bei genau einem die Klausel und der Index.
+    class function TextUsesEntry(AMap: TRdxCodeMap; ALine: Integer;
+      const AUnit: string; out AClause: TRdxUsesClause;
+      out AIndex: Integer): Integer; static;
+
+    // SCA007, Bezeichner-Beweis (rwE31 Stufe 3, Todo_SCA007 "nur-menue-
+    // unnoetig": gexperts mPasLex.pas:80 UpperCase, vcl-styles-utils
+    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte
+    // der Units, die der Detektor nie meldet (IsAlwaysNeeded) und fuer die er
+    // darum keine Liste fuehrt - SysUtils und Types (auch System.-Namen),
+    // klein; sonst leer. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC
+    // 3.2.2 im interface-Teil fuehren (gegen beide Quellen geprueft): steht
+    // die Unit in den uses, kommt der Name aus ihr, nicht aus der entfernten.
+    class function AlwaysNeededIdents(const AUnitLow: string): TArray<string>;
+      static;
+
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
@@ -258,6 +288,58 @@ const
     'ansistring', 'widestring', 'unicodestring', 'shortstring', 'pointer',
     'pchar', 'pansichar', 'pwidechar', 'single', 'double', 'extended',
     'currency', 'variant', 'olevariant');
+  // Exporte von SysUtils bzw. Types (AlwaysNeededIdents): Routinen, Typen,
+  // Exceptions und Aufzaehlungswerte im Stil, den ForeignIdent prueft - je in
+  // System.SysUtils.pas/System.Types.pas von Delphi 13 und in sysutils
+  // (objpas/sysutils/*h.inc, win/sysutils.pp)/types.pp von FPC 3.2.2.
+  SYSUTILS_NAMES: array[0..190] of string = ('inttostr', 'strtoint',
+    'strtointdef', 'trystrtoint', 'strtoint64', 'strtoint64def', 'inttohex',
+    'format', 'formatfloat', 'floattostr', 'strtofloat', 'strtofloatdef',
+    'trystrtofloat', 'floattostrf', 'currtostr', 'strtocurr', 'booltostr',
+    'strtobool', 'trim', 'trimleft', 'trimright', 'uppercase', 'lowercase',
+    'comparetext', 'comparestr', 'sametext', 'samestr', 'quotedstr',
+    'ansiquotedstr', 'ansiuppercase', 'ansilowercase', 'ansicomparetext',
+    'ansicomparestr', 'ansisametext', 'ansisamestr', 'ansipos',
+    'stringreplace', 'wraptext', 'adjustlinebreaks', 'lastdelimiter',
+    'isdelimiter', 'ispathdelimiter', 'extractfilepath', 'extractfilename',
+    'extractfileext', 'extractfiledir', 'extractfiledrive', 'changefileext',
+    'expandfilename', 'extractrelativepath', 'includetrailingpathdelimiter',
+    'excludetrailingpathdelimiter', 'includetrailingbackslash',
+    'excludetrailingbackslash', 'fileexists', 'directoryexists',
+    'forcedirectories', 'createdir', 'removedir', 'deletefile', 'renamefile',
+    'fileage', 'filegetattr', 'filesetattr', 'getcurrentdir', 'setcurrentdir',
+    'fileopen', 'filecreate', 'fileread', 'filewrite', 'fileclose', 'fileseek',
+    'findfirst', 'findnext', 'findclose', 'filesearch', 'diskfree', 'disksize',
+    'now', 'date', 'time', 'datetostr', 'timetostr', 'datetimetostr',
+    'strtodate', 'strtotime', 'strtodatetime', 'formatdatetime', 'encodedate',
+    'decodedate', 'encodetime', 'decodetime', 'dayofweek', 'isleapyear',
+    'incmonth', 'tryencodedate', 'tryencodetime', 'datetimetofiledate',
+    'filedatetodatetime', 'abort', 'freeandnil', 'supports', 'strpas',
+    'strpcopy', 'strlen', 'strcopy', 'strcomp', 'strlcomp', 'stricomp',
+    'strend', 'strscan', 'strpos', 'stralloc', 'strdispose', 'strlcopy',
+    'strcat', 'strnew', 'comparemem', 'syserrormessage', 'raiselastoserror',
+    'beep', 'sleep', 'showexception', 'outofmemoryerror', 'charinset',
+    'exceptionerrormessage', 'tformatsettings', 'tsearchrec', 'tsyscharset',
+    'tfilename', 'treplaceflags', 'tfloatformat', 'ttimestamp', 'eabort',
+    'eaccessviolation', 'econverterror', 'eoutofmemory', 'einouterror',
+    'einterror', 'edivbyzero', 'erangeerror', 'eintoverflow', 'ematherror',
+    'einvalidop', 'ezerodivide', 'eoverflow', 'eunderflow', 'einvalidpointer',
+    'einvalidcast', 'evarianterror', 'eexternal', 'eexternalexception',
+    'eoserror', 'estackoverflow', 'eprivilege', 'eintfcasterror',
+    'eheapexception', 'eassertionfailed', 'epropreadonly', 'epropwriteonly',
+    'eabstracterror', 'esafecallexception', 'eargumentexception',
+    'eargumentoutofrangeexception', 'enotimplemented',
+    'enotsupportedexception', 'einvalidopexception', 'efilenotfoundexception',
+    'edirectorynotfoundexception', 'epathtoolongexception',
+    'eargumentnilexception', 'fmopenread', 'fmopenwrite', 'fmopenreadwrite',
+    'fmsharedenynone', 'fmsharedenywrite', 'fmshareexclusive',
+    'fmsharedenyread', 'faanyfile', 'fadirectory', 'fareadonly', 'fahidden',
+    'fasysfile', 'faarchive', 'rfreplaceall', 'rfignorecase', 'ffgeneral',
+    'fffixed', 'ffnumber', 'ffexponent', 'ffcurrency');
+  TYPES_NAMES: array[0..19] of string = ('trect', 'tpoint', 'tsize',
+    'tsmallpoint', 'tpointf', 'trectf', 'rect', 'point', 'bounds', 'ptinrect',
+    'intersectrect', 'unionrect', 'offsetrect', 'isrectempty', 'equalrect',
+    'centerpoint', 'tduplicates', 'dupignore', 'dupaccept', 'duperror');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -842,6 +924,95 @@ begin
     else if not InList(Toks[k].Low, ['interface', 'implementation', 'end',
        '.']) then
       Exit(False);
+  end;
+end;
+
+class function TRdxStructFixes.AlwaysNeededIdents(
+  const AUnitLow: string): TArray<string>;
+var
+  i : Integer;
+begin
+  Result := nil;
+  if (AUnitLow = 'sysutils') or (AUnitLow = 'system.sysutils') then
+  begin
+    SetLength(Result, Length(SYSUTILS_NAMES));
+    for i := 0 to High(SYSUTILS_NAMES) do
+      Result[i] := SYSUTILS_NAMES[i];
+  end
+  else if (AUnitLow = 'types') or (AUnitLow = 'system.types') then
+  begin
+    SetLength(Result, Length(TYPES_NAMES));
+    for i := 0 to High(TYPES_NAMES) do
+      Result[i] := TYPES_NAMES[i];
+  end;
+end;
+
+// Die Eintraege einer uses-Klausel aus dem Text, ab dem ersten Token hinter
+// 'uses' (T): je Eintrag die Namensteile ohne Luecke auf einer Zeile (wie
+// TSourcePlaces.UsesEntries), ein 'in'-Pfad (der String ist kein Code-
+// Token), dann ',' oder ';'. False bei jeder anderen Folge.
+function ReadTextClause(AMap: TRdxCodeMap; T: TRdxToken;
+  out AEntries: TArray<TRefactorSpan>): Boolean;
+var
+  Last, N : TRdxToken;
+  E       : TRefactorSpan;
+begin
+  Result := False;
+  AEntries := nil;
+  while T.IsWord do
+  begin
+    E := TRefactorSpan.Make(ROLE_UNIT, T.Line, T.Col, T.Line, T.EndCol);
+    E.Resolved := TokText(AMap, T);
+    Last := T;
+    T := After(AMap, T);
+    while (T.Low = '.') and (T.Line = Last.Line) and (T.Col = Last.EndCol) do
+    begin
+      N := After(AMap, T);
+      if not N.IsWord or (N.Line <> T.Line) or (N.Col <> T.EndCol) then
+        Exit;
+      E.Resolved := E.Resolved + '.' + TokText(AMap, N);
+      E.EndCol := N.EndCol;
+      Last := N;
+      T := After(AMap, N);
+    end;
+    SetLength(AEntries, Length(AEntries) + 1);
+    AEntries[High(AEntries)] := E;
+    if T.Low = 'in' then
+      T := After(AMap, T);
+    if T.Low = ';' then
+      Exit(True);
+    if T.Low <> ',' then
+      Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxStructFixes.TextUsesEntry(AMap: TRdxCodeMap;
+  ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
+  out AIndex: Integer): Integer;
+var
+  T       : TRdxToken;
+  Entries : TArray<TRefactorSpan>;
+  k       : Integer;
+begin
+  Result := 0;
+  AClause := Default(TRdxUsesClause);
+  AIndex := -1;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T))
+       and ReadTextClause(AMap, After(AMap, T), Entries) then
+      for k := 0 to High(Entries) do
+        if (Entries[k].StartLine = ALine)
+           and SameText(Entries[k].Resolved, AUnit) then
+        begin
+          Inc(Result);
+          AClause.Entries := Entries;
+          AClause.UsesLine := T.Line;
+          AIndex := k;
+        end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
 end;
 

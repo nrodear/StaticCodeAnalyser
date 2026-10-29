@@ -54,6 +54,17 @@ type
     // rwE30 Stufe 2 (mormot.lib.win7zip.pas:1070, ColorPreview.Parser.pas:
     // 341): verwalteter Typ, nicht als erste Anweisung gesetzt.
     [Test] procedure ManagedNotSetFirst_MenuOnly;
+    // rwE31 Stufe 3: ein Record der Datei mit einfachen Feldern (mORMot
+    // test.core.data.pas:1332), if/else setzt in beiden Zweigen
+    // (delphimvcframework MVCFramework.Utils.pas:62), {$IFDEF} um das
+    // Setzen (jcl JclStringConversions.pas:407), Methoden eines records
+    // (Kastri DW.Exif.Win.pas:102), lokale Overloads mit anderer Zahl von
+    // Parametern und Aufruf ohne Klammern (JclStringConversions.pas:407).
+    [Test] procedure LocalPlainRecord_SameMeaning;
+    [Test] procedure IfElseSetsBoth_InBulb;
+    [Test] procedure DirectiveAroundSet_MenuOnly;
+    [Test] procedure RecordMethod_Helps;
+    [Test] procedure LocalOverloads_OtherCount_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -596,6 +607,163 @@ begin
   Assert.IsFalse(PlanAt(Src, 5, Pos('out ', LineText(Src, 5)), P, R),
     'Zeiger in A');
   Assert.AreEqual(_(R_OUT_REFERENCE, ['TryGetVMT', 11]), R);
+end;
+
+// ---- rwE31 Stufe 3 ----
+
+// RangeFromJson wie in test.core.data.pas: TRange im interface-Teil (ATypes
+// - die Zeilen dort), die Routine nur im implementation-Teil.
+function RangeUnit(const ATypes: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type']) + #13#10 + Join(ATypes)
+    + #13#10 + Join(['implementation',
+    'procedure RangeFromJson(out Range: TRange; Json: PChar);', 'begin',
+    '  Decode(Json);', '  Range.Min := 1;', '  Range.Max := 2;', 'end;',
+    'end.']);
+end;
+
+procedure TTestRdxAvoidOutFix.LocalPlainRecord_SameMeaning;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // test.core.data.pas:1332 (minimiert): 'TRange = record Min, Max:
+  // Integer; end;' - out und var sind gleich. Bis dahin "range hat einen
+  // verwalteten Typ" und nur im Menue (Range.Min ist keine Zuweisung an
+  // Range).
+  Src := RangeUnit(['  TRange = record', '    Min, Max: Integer;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, 'out Range', 'var Range', []),
+    Fix(Src, 'procedure RangeFromJson(', P));
+  Assert.IsFalse(P.Changes, 'einfacher Record: bedeutungsgleich');
+  Assert.IsFalse(P.MenuOnly, 'Gluehbirne');
+  // Verschachtelt: ein Record aus einfachen Records, statisches Array,
+  // Aufzaehlung.
+  Src := RangeUnit(['  TKind = (kA, kB);', '  TPair = packed record',
+    '    A: array[0..1] of Byte;', '    K: TKind', '  end;',
+    '  TRange = record', '    P: TPair;', '    N: Integer;', '  end;']);
+  Assert.IsTrue(PlanOn(Src, 'procedure RangeFromJson(', P, R), R);
+  Assert.IsFalse(P.Changes, 'verschachtelt einfach');
+  // Gegenproben: ein string-Feld, ein Variantenteil, zwei Deklarationen
+  // ($IFDEF-Zwilling) - verwaltet bzw. unbekannt.
+  Src := RangeUnit(['  TRange = record', '    Min: Integer;',
+    '    Name: string;', '  end;']);
+  Assert.IsTrue(PlanOn(Src, 'procedure RangeFromJson(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'string-Feld');
+  Src := RangeUnit(['  TRange = record', '    case Integer of',
+    '      0: (Min: Integer);', '  end;']);
+  Assert.IsTrue(PlanOn(Src, 'procedure RangeFromJson(', P, R), R);
+  Assert.IsTrue(P.Changes, 'Variantenteil');
+  Src := RangeUnit(['{$IFDEF X}', '  TRange = record Min: Integer; end;',
+    '{$ELSE}', '  TRange = record Min: string; end;', '{$ENDIF}']);
+  Assert.IsTrue(PlanOn(Src, 'procedure RangeFromJson(', P, R), R);
+  Assert.IsTrue(P.Changes, 'Zwilling');
+end;
+
+procedure TTestRdxAvoidOutFix.IfElseSetsBoth_InBulb;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // MVCFramework.Utils.pas:62 (minimiert): eine Anweisung ohne S, dann
+  // setzen beide Zweige des if S. Bis dahin nur im Menue (R_OUT_NOT_FIRST).
+  Src := GetUnitBody(['  Parts := Split(Token);',
+    '  if Length(Parts) = 2 then', '  begin', '    S := Parts[0];',
+    '    Ok := True;', '  end', '  else', '  begin', '    S := '''';',
+    '    Ok := False;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, 'out S', 'var S', [rfReplaceAll]),
+    Fix(Src, 'procedure Get(', P));
+  Assert.IsTrue(P.Changes, 'verwaltet: gekennzeichnet wie bisher');
+  Assert.IsFalse(P.MenuOnly, 'Gluehbirne');
+  // Zweige als einzelne Anweisung, das else ohne ';' davor.
+  Src := GetUnitBody(['  if Ready then S := ''x'' else S := ''y'';']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Get(', P, R), R);
+  Assert.IsFalse(P.MenuOnly, 'einzelne Zuweisungen');
+  // Gegenproben: ein Zweig liest S zuerst (der Hinweis nennt dann wie bei
+  // einem if ohne else die erste Nennung), die Bedingung liest S.
+  AssertMenuOnly(GetUnitBody(['  if Ready then', '    S := ''x''', '  else',
+    '  begin', '    Log(S);', '    S := '''';', '  end;']), '    S := ''x''');
+  AssertMenuOnly(GetUnitBody(['  if S = '''' then', '    S := ''x''',
+    '  else', '    S := ''y'';']), '  if S = ');
+  // Review Gruppe M: ein bedingter Ausdruck (Delphi 13) auf der rechten
+  // Seite - sein else beendet die Zuweisung nicht; dahinter liest er S
+  // (bis zum Review hielt RhsClean am else an: Gluehbirne).
+  AssertMenuOnly(GetUnitBody(['  S := if Ready then ''x'' else S;']),
+    '  S := if Ready');
+  // ... im then-Zweig eines if: das zweite else gehoert dem if.
+  Src := GetUnitBody(['  if A then S := if B then ''x'' else ''y'' '
+    + 'else S := ''z'';']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Get(', P, R), R);
+  Assert.IsFalse(P.MenuOnly, 'bedingter Ausdruck im then-Zweig');
+end;
+
+procedure TTestRdxAvoidOutFix.DirectiveAroundSet_MenuOnly;
+begin
+  // JclStringConversions.pas:407 (minimiert): im {$ELSE}-Zweig nur raise -
+  // dort setzt der Rumpf S nie. Der Token-Leser sieht beide Zweige als
+  // Folge; bis dahin stand die Hilfe gekennzeichnet in der Gluehbirne.
+  AssertMenuOnly(GetUnitBody(['  {$IFDEF SILENT}', '  S := ''x'';',
+    '  {$ELSE}', '  raise EInvalidOp.Create('''');', '  {$ENDIF}']),
+    '  S := ''x'';');
+end;
+
+procedure TTestRdxAvoidOutFix.RecordMethod_Helps;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+begin
+  // Kastri DW.Exif.Win.pas:102 (minimiert): 'TGdip = record' im
+  // implementation-Teil mit einer class function. Bis dahin
+  // R_OUT_NOT_IN_CLASS ("nicht direkt in der Klasse TGdip deklariert").
+  Src := Join(['unit t;', 'interface', 'implementation', 'type',
+    '  TGdip = record',
+    '    class function GetItem(const AId: Integer; out AItem: Integer): '
+    + 'Boolean; static;', '  end;',
+    'class function TGdip.GetItem(const AId: Integer; out AItem: Integer): '
+    + 'Boolean;', 'begin', '  AItem := AId;', '  Result := True;', 'end;',
+    'end.']);
+  Assert.AreEqual(StringReplace(Src, 'out AItem', 'var AItem',
+    [rfReplaceAll]), Fix(Src, 'class function GetItem(', P));
+  Assert.IsFalse(P.Changes, 'Integer');
+  // mORMot mormot.core.datetime.pas:517 (minimiert): der Typkopf steht
+  // doppelt im {$ifdef}, record oder object; der Typ im interface-Teil, die
+  // Methode public - eine andere Unit sieht sie. Der Grund war "nicht
+  // direkt in der Klasse", jetzt der richtige.
+  Src := Join(['unit t;', 'interface', 'type', '{$ifdef USERECORD}',
+    '  TSynTime = record', '{$else}', '  TSynTime = object', '{$endif}',
+    '  public', '    procedure ToIso(out Text: string);', '  end;',
+    'implementation', 'procedure TSynTime.ToIso(out Text: string);', 'begin',
+    '  Text := '''';', 'end;', 'end.']);
+  AssertRefused(Src, 'procedure ToIso(', _(R_OUT_VISIBLE));
+  // ... unter private sieht sie nur diese Unit (mormot.crypt.secure.pas:597).
+  Src := StringReplace(Src, '  public', '  private', []);
+  Assert.AreEqual(StringReplace(Src, 'out Text', 'var Text', [rfReplaceAll]),
+    Fix(Src, 'procedure ToIso(', P));
+end;
+
+procedure TTestRdxAvoidOutFix.LocalOverloads_OtherCount_Helps;
+var
+  Src : string;
+  P   : TRdxOutPlan;
+begin
+  // JclStringConversions.pas:388-416 (minimiert): drei lokale Overloads mit
+  // je anderer Zahl von Parametern; die ohne Parameter wird ohne Klammern
+  // gerufen ('then Flag;', 'X..Y: Flag;'). Bis dahin R_OUT_REFERENCE
+  // ("ohne Aufruf - Methodenzeiger?") bzw. R_OUT_HEADS.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'procedure Flag(var P: Integer; out Ch: Cardinal); overload;', 'begin',
+    '  Ch := 0;', 'end;', 'procedure Flag(out Ch: Cardinal); overload;',
+    'begin', '  Ch := 1;', 'end;', 'procedure Flag; overload;', 'begin',
+    'end;', 'procedure Use(B: Byte);', 'var', '  C: Cardinal;', 'begin',
+    '  if B = 0 then Flag;', '  case B of', '    1..2: Flag;', '  end;',
+    '  Flag(C);', 'end;', 'end.']);
+  Assert.AreEqual(StringReplace(Src, 'procedure Flag(out Ch',
+    'procedure Flag(var Ch', []), Fix(Src, 'procedure Flag(out Ch', P));
+  // Gegenproben: ein Overload mit derselben Zahl, ein Zeiger auf Flag.
+  AssertRefused(StringReplace(Src, 'procedure Flag; overload;',
+    'procedure Flag(out S: string); overload;', []),
+    'procedure Flag(out Ch', _(R_OUT_HEADS, [2, 'Flag']));
+  AssertRefused(StringReplace(Src, '  Flag(C);', '  Run(@Flag);', []),
+    'procedure Flag(out Ch', _(R_OUT_REFERENCE, ['Flag', 23]));
 end;
 
 {$IFNDEF FPC}

@@ -28,9 +28,10 @@ unit uRdxMethodNameFix;
 // jedes Typs bekommt die Hilfe in allen ihren Koepfen (Deklaration im
 // interface-Teil bzw. forward und Rumpf) - Aufrufe auch anderer Units binden
 // ohne Gross/klein. Gesperrt, sobald ein Linker, eine Bibliothek oder C-Code
-// den genauen Namen braucht (external, export, public, alias, cdecl/stdcall
-// ..., {$L}, exports, eine Direktive mit dem Namen), bei einem String-
-// Literal mit dem Namen und bei mehr als einem Paar Koepfe.
+// den genauen Namen braucht (external, export, public, alias, {$L}, exports,
+// eine Direktive mit dem Namen, cdecl/stdcall ... an einem Kopf im
+// interface-Teil), bei einem String-Literal mit dem Namen und bei mehr als
+// einem Paar Koepfe - ausser bei Overloads: dann alle Koepfe (rwE31 Stufe 3).
 //
 // BEDEUTUNGSGLEICH: Delphi vergleicht Bezeichner ohne Gross/klein. Aufrufe,
 // Property-Accessoren ('read doWork'), Methodenzuweisungen und
@@ -59,15 +60,18 @@ unit uRdxMethodNameFix;
 //   - sie steht unter 'published' (Methodentabelle, s. oben; der Abschnitt
 //     ohne Wort - published in TPersistent-Erben, dort stehen die
 //     Ereignis-Methoden der Formulare - bleibt eine Hilfe),
-//   - 'overload' oder mehr als eine Deklaration in Klassen dieses Namens
-//     ($IFDEF-Zwillinge, gleichnamige Klassen),
 //   - keine oder mehr als eine Implementierung in der Datei (abstract,
-//     external, Include, $IFDEF-Zwillinge),
+//     external, Include, $IFDEF-Zwillinge) - bei 'overload' oder mehr als
+//     einer Deklaration in Klassen dieses Namens ($IFDEF-Zwillinge) gilt
+//     die Hilfe seit rwE31 Stufe 3 fuer ALLE Deklarationen und
+//     Implementierungen (AllHeadsPlan), gesperrt nur ohne Implementierung,
+//     unter published oder mit Include,
 //   - ein {$I}-Include im Klassenrumpf,
 //   - ein String-Literal der Datei nennt den Namen (Aufruf per Name ueber
 //     RTTI, MethodAddress, Skript - ein Vergleich dort kann Gross/klein
 //     beachten); nicht als letztes Glied eines reinen Punktpfads
-//     ('Unit.TKlasse.name' - eine Log-Kennung, LiteralNames, rwE30).
+//     ('Unit.TKlasse.name' - eine Log-Kennung, LiteralNames, rwE30) und
+//     nicht als Wort eines Satzes (IsProseFor, rwE31 Stufe 3).
 //
 // FPC-TAUGLICH: nur Textlogik auf der Code-Sicht (uRdxCodeMap, uRdxBlocks,
 // uRdxBufferMath, uRdxText, uRefactorInfo - alle im FPC-Pruefstand). Den
@@ -179,13 +183,22 @@ const
     'noreturn', 'local', 'nostackframe', 'iocheck', 'vectorcall', 'unsafe',
     'static', 'mwpascal');
   // ... und die, mit denen ein Linker, eine Bibliothek oder C-Code die
-  // Routine beim genauen Namen bindet (Import/Export, C-Aufrufkonvention,
-  // FPC-Symbolnamen) - oder die Overloads ('[' = FPC-Modifikatoren in
-  // eckigen Klammern).
-  FREE_BOUND: array[0..15] of string = ('external', 'export', 'public',
-    'alias', 'cdecl', 'stdcall', 'safecall', 'winapi', 'varargs',
-    'interrupt', 'compilerproc', 'rtlproc', 'internproc', 'weakexternal',
-    'overload', '[');
+  // Routine beim genauen Namen bindet (Import/Export, FPC-Symbolnamen; '['
+  // = FPC-Modifikatoren in eckigen Klammern). Bis rwE31 Stufe 3 standen
+  // hier auch 'overload' (s. FreeHeadsReason) und die C-Aufrufkonventionen
+  // (FREE_CALLCONV).
+  FREE_BOUND: array[0..10] of string = ('external', 'export', 'public',
+    'alias', 'varargs', 'interrupt', 'compilerproc', 'rtlproc', 'internproc',
+    'weakexternal', '[');
+  // Eine C-Aufrufkonvention bindet keinen Namen - die Routine geht als
+  // Adresse an C-Code ('luaP_register(L, ''X'', @luaX)', rwE31 Stufe 3:
+  // doublecmd uluapas.pas:233/389). Den Namen braucht C-Code nur, wenn er
+  // sie ueber den Linker findet: eine {$L}-Objektdatei dieser Unit
+  // (FreeFileReason) oder einer anderen, die den interface-Teil sieht
+  // (Abbrevia AbCrtl.pas 'isdigit ... cdecl' fuer bzlib.obj) - darum sperrt
+  // sie nur bei einem Kopf im interface-Teil.
+  FREE_CALLCONV: array[0..3] of string = ('cdecl', 'stdcall', 'safecall',
+    'winapi');
   // Hier beginnt hinter einem Routinenkopf ohne ';' schon der Rumpf.
   FREE_HEAD_BREAKS: array[0..5] of string = ('begin', 'asm', 'var', 'const',
     'type', 'label');
@@ -339,20 +352,35 @@ begin
   Result := False;
 end;
 
+// Ein {$I}-Include im Rumpf der Klasse AClass: '' oder der Grund.
+function ClassIncludeReason(AMap: TRdxCodeMap;
+  const AClass: TRdxClassHead): string;
+var
+  Stop          : TRdxToken;
+  IncLine, Last : Integer;
+begin
+  Result := '';
+  Stop := ClassEnd(AMap, AClass.ClassTok);
+  Last := AMap.LineCount;
+  if Stop.Low <> '' then
+    Last := Stop.Line;
+  IncLine := IncludeInLines(AMap, AClass.ClassTok.Line, Last);
+  if IncLine > 0 then
+    Result := _(R_MN_INCLUDE, [IncLine]);
+end;
+
 // Die Deklaration an AHead: im Rumpf einer Klasse dieser Datei (AClass),
-// lesbar (ADecl), geschrieben wie in der Meldung, ohne 'overload', die
-// einzige in Klassen dieses Namens, kein Include im Klassenrumpf. '' oder
-// der Grund.
+// lesbar (ADecl), geschrieben wie in der Meldung, kein Include im
+// Klassenrumpf. AMany: sie traegt 'overload' oder ist nicht die einzige in
+// Klassen dieses Namens - dann gilt AllHeadsPlan. '' oder der Grund.
 function DeclReason(AMap: TRdxCodeMap; const AHead: TRdxToken;
   const AName: string; out AClass: TRdxClassHead;
-  out ADecl: TRdxRoutine): string;
+  out ADecl: TRdxRoutine; out AMany: Boolean): string;
 var
   Spelled, ClsName, W : string;
-  Decls               : TArray<TRdxToken>;
-  Stop                : TRdxToken;
-  IncLine, Last       : Integer;
 begin
   ADecl := Default(TRdxRoutine);
+  AMany := False;
   if not ClassAround(AMap, AHead, AClass) then
     Exit(_(R_MN_NO_CLASS, [AName]));
   if AClass.Vis = VIS_PUBLISHED then
@@ -362,20 +390,62 @@ begin
   Spelled := TokText(AMap, ADecl.NameTok);
   if Spelled <> AName then
     Exit(MsgStaleSuffix(_(R_MN_SPELLING, [Spelled, AName])));
-  if HasDirective(ADecl, [DIR_OVERLOAD], W) then
-    Exit(_(R_MN_OVERLOAD, [AName]));
   ClsName := TokText(AMap, AClass.NameTok);
-  Decls := TRdxBlocks.FindMethodDecls(AMap, ClsName, AName);
-  if Length(Decls) <> 1 then
-    Exit(_(R_MN_DECLS, [Length(Decls), AName, ClsName]));
-  Stop := ClassEnd(AMap, AClass.ClassTok);
-  Last := AMap.LineCount;
-  if Stop.Low <> '' then
-    Last := Stop.Line;
-  IncLine := IncludeInLines(AMap, AClass.ClassTok.Line, Last);
-  if IncLine > 0 then
-    Exit(_(R_MN_INCLUDE, [IncLine]));
+  AMany := HasDirective(ADecl, [DIR_OVERLOAD], W)
+    or (Length(TRdxBlocks.FindMethodDecls(AMap, ClsName, AName)) <> 1);
+  Result := ClassIncludeReason(AMap, AClass);
+end;
+
+// Overload oder bedingte Zwillinge (rwE31 Stufe 3: jvcl JvGnugettext.pas:413
+// 'dgettext' zweimal overload, einmal in {$ifndef UNICODE}; CEF4Delphi
+// uCEFOLEDragAndDrop.pas:106 'dUnadvise' im {$IFNDEF FPC}-Zweig, der FPC-
+// Zwilling schreibt schon 'DUnadvise'): eine reine Gross/klein-Aenderung
+// muss keine Deklaration auswaehlen - sie trifft ALLE Deklarationen in
+// Klassen namens AClass und ALLE Implementierungen 'AClass.Name' der Datei,
+// Aufrufe binden weiter. Jede Deklaration steht in einer Klasse dieser
+// Datei, nicht unter published, ohne Include im Klassenrumpf; mindestens
+// eine Implementierung. Die Ersetzungen nur fuer Koepfe, die klein beginnen.
+// '' oder der Grund.
+function AllHeadsPlan(AMap: TRdxCodeMap; const AClass: TRdxClassHead;
+  const AName: string; var APlan: TRdxMethodNamePlan): string;
+var
+  ClsName : string;
+  Heads   : TArray<TRdxToken>;
+  H, K, N : TRdxToken;
+  C       : TRdxClassHead;
+  D       : TRdxRoutine;
+begin
   Result := '';
+  ClsName := TokText(AMap, AClass.NameTok);
+  Heads := TRdxBlocks.FindMethodDecls(AMap, ClsName, AName);
+  for H in Heads do
+  begin
+    if not ClassAround(AMap, H, C) then
+      Exit(_(R_MN_NO_CLASS, [AName]));
+    if C.Vis = VIS_PUBLISHED then
+      Exit(_(R_MN_PUBLISHED, [AName]));
+    if TRdxBlocks.MethodDecl(AMap, H, D) <> '' then
+      Exit(_(R_MN_DECL, [AName]));
+    Result := ClassIncludeReason(AMap, C);
+    if Result <> '' then
+      Exit;
+    if StartsLower(TokText(AMap, D.NameTok)) then
+      AddEdit(APlan.Edits, CapEdit(AMap, D.NameTok));
+  end;
+  Heads := TRdxBlocks.FindMethodImpls(AMap, ClsName, AName);
+  if Length(Heads) = 0 then
+    Exit(_(R_MN_NO_IMPL, [ClsName, AName]));
+  for K in Heads do
+  begin
+    N := K;
+    if N.Low = KW_CLASS then
+      N := After(AMap, N);
+    N := NameAfter(AMap, N);
+    if not SameIdent(N.Low, LowerCase(AName)) then
+      Exit(_(R_MN_NO_IMPL, [ClsName, AName]));
+    if StartsLower(TokText(AMap, N)) then
+      AddEdit(APlan.Edits, CapEdit(AMap, N));
+  end;
 end;
 
 // Die eine Implementierung 'AClassName.AName' hinter implementation (auch
@@ -402,6 +472,84 @@ begin
   Result := '';
 end;
 
+// Ist das Zeichen an AIndex von S ein Rand eines Worts im Fliesstext -
+// Anfang/Ende, Leerraum, Anfuehrungszeichen bzw. (ABehind) ein Satzzeichen,
+// ein Punkt nur am Ende oder vor Leerraum ('name.x' ist ein Pfad)?
+function ProseEdge(const S: string; AIndex: Integer; ABehind: Boolean): Boolean;
+begin
+  if (AIndex < 1) or (AIndex > Length(S)) then
+    Exit(True);
+  if CharInSet(S[AIndex], [' ', #9, '"', '`']) then
+    Exit(True);
+  Result := ABehind and (CharInSet(S[AIndex], [',', ':', '!', '?'])
+    or ((S[AIndex] = '.') and ((AIndex = Length(S))
+        or CharInSet(S[AIndex + 1], [' ', #9]))));
+end;
+
+// Ein Wort der Sprache: nur a..z, mindestens zwei Zeichen ('is', 'and').
+function IsLanguageWord(const AWord: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := Length(AWord) >= 2;
+  for i := 1 to Length(AWord) do
+    if not CharInSet(AWord[i], ['a'..'z']) then
+      Exit(False);
+end;
+
+// Ist AInner (Inhalt eines Literals) Fliesstext, der ALowName nur als Wort
+// eines Satzes nennt (rwE31 Stufe 3: gexperts GX_ProofReaderDM.pas:312
+// 'PrivateProofReader is nil in dmProofReader', doublecmd uoauth2auth.pas:
+// 125 '.. in Safari and authorize Double Commander to access. ')? Mindestens
+// drei Woerter, eines davon ein Wort der Sprache (IsLanguageWord, nicht der
+// Name), und jedes Vorkommen des Namens als Wort steht zwischen Leerraum
+// bzw. Satzzeichen (ProseEdge). Ein Skript ('begin doWork; end',
+// 'obj.doWork()') oder eine Liste von Namen ('doA doB doC') ist kein
+// Fliesstext - eine Suche per Name bleibt moeglich.
+function IsProseFor(const AInner, ALowName: string): Boolean;
+var
+  Text, Low, W : string;
+  i, P, E      : Integer;
+  Words        : Integer;
+  Language     : Boolean;
+begin
+  Result := False;
+  // Die Woerter in der Schreibweise des Literals: 'Double' ist kein Wort
+  // der Sprache, 'is' schon.
+  Text := AInner + ' ';
+  Words := 0;
+  Language := False;
+  W := '';
+  for i := 1 to Length(Text) do
+    if CharInSet(Text[i], [' ', #9]) then
+    begin
+      while (W <> '')
+         and CharInSet(W[Length(W)], ['.', ',', ':', '!', '?']) do
+        SetLength(W, Length(W) - 1);
+      if W <> '' then
+        Inc(Words);
+      if (LowerCase(W) <> ALowName) and IsLanguageWord(W) then
+        Language := True;
+      W := '';
+    end
+    else
+      W := W + Text[i];
+  if (Words < 3) or not Language then Exit;
+  Low := LowerCase(AInner);
+  P := Pos(ALowName, Low);
+  while P > 0 do
+  begin
+    E := P + Length(ALowName);
+    // Teil eines laengeren Worts ('dmProofReaderX') zaehlt nicht.
+    if not (((P > 1) and IsIdentChar(Low[P - 1]))
+       or ((E <= Length(Low)) and IsIdentChar(Low[E]))) then
+      if not (ProseEdge(Low, P - 1, False) and ProseEdge(Low, E, True)) then
+        Exit;
+    P := Pos(ALowName, Low, E);
+  end;
+  Result := True;
+end;
+
 // Nennt das String-Literal ALit (samt Quotes) ALowName als Wort - ausser
 // als letztes Glied eines reinen Punktpfads ('Unit.TKlasse.name', nur
 // Bezeichner und Punkte, mindestens zwei Glieder, der Name nur dort)?
@@ -411,6 +559,7 @@ end;
 // uCEFCookieVisitor.pas:189 CustomExceptionHandler('TCefCustomCookieVisitor.
 // visit', e)), keine Suche per Name: RTTI, MethodAddress und Skripte fragen
 // den blossen Namen; ein Ausdruck ('obj.name()') ist kein reiner Pfad.
+// Ebenso nicht: der Name als Wort eines Satzes (IsProseFor, rwE31 Stufe 3).
 function LiteralNames(const ALit, ALowName: string): Boolean;
 var
   Inner : string;
@@ -423,6 +572,8 @@ begin
   if (Length(Inner) >= 2) and (Inner[1] = '''')
      and (Inner[Length(Inner)] = '''') then
     Inner := Copy(Inner, 2, Length(Inner) - 2);
+  if IsProseFor(Inner, ALowName) then
+    Exit(False);
   if (Inner = '') or (Pos('.', Inner) = 0) or not IsIdentStart(Inner[1]) then
     Exit;
   Pure := True;
@@ -622,31 +773,52 @@ end;
 
 // Die Form der Koepfe AHeads: einer (der Rumpf hinter implementation bzw.
 // im Programm) oder zwei - Deklaration im interface-Teil bzw. forward, dann
-// der Rumpf; keiner traegt eine bindende Direktive (FREE_BOUND). '' oder der
-// Grund.
+// der Rumpf; keiner traegt eine bindende Direktive (FREE_BOUND, eine
+// Aufrufkonvention im interface-Teil: FREE_CALLCONV). Mit 'overload' (rwE31
+// Stufe 3: TES5Edit wbDataFormatNif.pas:3552, wbDataFormatNifTypes.pas:65,
+// wbInterface.pas:9354): beliebig viele Koepfe - eine Gross/klein-Aenderung
+// trifft alle gleich, Aufrufe binden weiter; jede Deklaration (interface-
+// Teil, forward) braucht dann einen Rumpf in der Datei. '' oder der Grund.
 function FreeHeadsReason(AMap: TRdxCodeMap; const AHeads: TArray<TRdxToken>;
   const AName: string): string;
 var
-  Words    : TArray<string>;
-  W        : string;
-  i, Impl  : Integer;
-  Forwards : array[0..1] of Boolean;
+  Words              : TArray<string>;
+  W                  : string;
+  i, Impl            : Integer;
+  Decls, Bodies      : Integer;
+  InIntf, Overloaded : Boolean;
+  Forwards           : TArray<Boolean>;
 begin
   Result := '';
-  Forwards[0] := False;
-  Forwards[1] := False;
-  if (Length(AHeads) = 0) or (Length(AHeads) > 2) then
+  if Length(AHeads) = 0 then
     Exit(_(R_MN_FREE_HEADS, [Length(AHeads), AName]));
+  Impl := ImplementationLine(AMap);
+  SetLength(Forwards, Length(AHeads));
+  Overloaded := False;
+  Decls := 0;
   for i := 0 to High(AHeads) do
   begin
     if not FreeHeadDirectives(AMap, AHeads[i], Words) then
       Exit(_(R_MN_FREE_HEAD, [AName, AHeads[i].Line]));
+    InIntf := (Impl > 0) and (AHeads[i].Line < Impl);
     for W in Words do
-      if InList(W, FREE_BOUND) then
+      if InList(W, FREE_BOUND) or (InIntf and InList(W, FREE_CALLCONV)) then
         Exit(_(R_MN_FREE_BOUND, [AName, W]));
     Forwards[i] := InList(WORD_FORWARD, Words);
+    if InList(DIR_OVERLOAD, Words) then
+      Overloaded := True;
+    if Forwards[i] or InIntf then
+      Inc(Decls);
   end;
-  Impl := ImplementationLine(AMap);
+  if Overloaded then
+  begin
+    Bodies := Length(AHeads) - Decls;
+    if (Bodies = 0) or (Decls > Bodies) then
+      Result := _(R_MN_FREE_PAIR, [AName]);
+    Exit;
+  end;
+  if Length(AHeads) > 2 then
+    Exit(_(R_MN_FREE_HEADS, [Length(AHeads), AName]));
   if Length(AHeads) = 1 then
   begin
     // Ein Kopf im interface-Teil ohne Rumpf hier (Include, external ...).
@@ -739,11 +911,12 @@ var
   D    : TRdxRoutine;
   Impl : TRdxToken;
   Li   : Integer;
+  Many : Boolean;
 begin
   if not ClassAround(AMap, AHead, C) then
     Exit(FreeRoutinePlan(AMap, AHead, AName, APlan));
-  Result := DeclReason(AMap, AHead, AName, C, D);
-  if Result = '' then
+  Result := DeclReason(AMap, AHead, AName, C, D, Many);
+  if (Result = '') and not Many then
     Result := ImplReason(AMap, TokText(AMap, C.NameTok), AName, Impl);
   if Result = '' then
   begin
@@ -752,6 +925,8 @@ begin
       Result := _(R_MN_LITERAL, [AName, Li]);
   end;
   if Result <> '' then Exit;
+  if Many then
+    Exit(AllHeadsPlan(AMap, C, AName, APlan));
   AddEdit(APlan.Edits, CapEdit(AMap, D.NameTok));
   if StartsLower(TokText(AMap, Impl)) then
     AddEdit(APlan.Edits, CapEdit(AMap, Impl));

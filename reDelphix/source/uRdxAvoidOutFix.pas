@@ -21,7 +21,8 @@ unit uRdxAvoidOutFix;
 // Aufrufers beim Aufruf frei, 'var' nicht - liest die Routine den
 // Parameter, bevor sie ihn setzt, sieht sie danach den alten Wert. Der Plan
 // sagt es (Changes); jeder Typ, den die Hilfe nicht als einfach kennt
-// (PLAIN_TYPES), zaehlt als verwaltet.
+// (PLAIN_TYPES, seit rwE31 Stufe 3 auch einfache Typen der Datei:
+// LocalPlainType), zaehlt als verwaltet.
 //
 // GESPERRT (lieber keine Hilfe als eine falsche):
 //   * kein 'out' an der Spalte (verschoben), untypisiert, kein Routinenkopf
@@ -34,9 +35,12 @@ unit uRdxAvoidOutFix;
 //     koennte; eines im Kopf der Unit traegt nur Direktiven) - Overload,
 //     gleichnamige Methoden anderer Klassen, Deklaration oder
 //     Implementierung fehlt; bei einer lokalen Routine zaehlt nur ihre
-//     umschliessende Routine (rwE30 Stufe 2),
-//   * der Name steht im Code ohne Aufruf ('@Bar', 'OnX := Bar') - als
-//     Methodenzeiger aendert sich sein Typ,
+//     umschliessende Routine (rwE30 Stufe 2); bei den Overloads einer
+//     freien Routine nur die mit derselben Zahl von Parametern (rwE31
+//     Stufe 3, SameCountHeads),
+//   * der Name steht im Code ohne Aufruf ('@Bar', 'OnX := Bar'; nicht als
+//     eigene Anweisung 'then Bar;') - als Methodenzeiger aendert sich sein
+//     Typ,
 //   * die Methode ist virtual/dynamic/abstract/override/final, message,
 //     dispid oder overload bzw. hat eine Aufrufkonvention oder external,
 //   * sie steht unter published oder ohne Sichtbarkeit (eine Formdatei kann
@@ -44,7 +48,8 @@ unit uRdxAvoidOutFix;
 //     aus einer anderen Unit oder eine Wurzel mit diesem Member (sie
 //     koennte eine Interface-Methode sein; Interfaces dieser Datei ohne den
 //     Namen sperren seit rwE30 Stufe 2 nicht), oder ihre Deklaration steht
-//     nicht direkt in der Klasse,
+//     nicht direkt in der Klasse bzw. (seit rwE31 Stufe 3) im record- oder
+//     object-Typ,
 //   * die Deklaration einer Routine steht in einem Typ (Methode eines
 //     interface-Typs u. a.),
 //   * der andere Kopf traegt das 'out' nicht genau so ('out A, B: T'),
@@ -164,6 +169,13 @@ const
     'abstract', 'override', 'final', 'message', 'dispid', 'overload',
     'stdcall', 'safecall', 'cdecl', 'pascal', 'winapi', 'varargs',
     'external', 'export', 'vectorcall');
+  // Dieselben ohne 'overload' - fuer eine freie Routine, deren Overloads in
+  // dieser Datei eine andere Zahl von Parametern haben (DirectiveReason).
+  DIR_OVERLOAD = 'overload';
+  ROUTINE_BOUND: array[0..15] of string = ('virtual', 'dynamic',
+    'abstract', 'override', 'final', 'message', 'dispid', 'stdcall',
+    'safecall', 'cdecl', 'pascal', 'winapi', 'varargs', 'external', 'export',
+    'vectorcall');
   FORWARD_WORD: array[0..0] of string = ('forward');
   // Sichtbarkeiten, unter denen eine Formdatei die Methode binden kann - ''
   // ist der Abschnitt ohne Wort (published in TPersistent-Erben).
@@ -188,6 +200,22 @@ const
   // ... und Spruenge aus dem Rumpf.
   JUMP_WORDS: array[0..5] of string = ('exit', 'raise', 'goto', 'break',
     'continue', 'halt');
+  // StatementCall: davor beginnt eine Anweisung (bzw. ';'), dahinter endet
+  // sie.
+  CALL_PREV: array[0..7] of string = ('begin', 'then', 'else', 'do', 'try',
+    'finally', 'except', 'repeat');
+  CALL_NEXT: array[0..5] of string = (';', 'end', 'else', 'until', 'except',
+    'finally');
+  // LocalPlainType: so tief folgt die Hilfe Typen der Datei; davor steht
+  // die Deklaration 'Name = ..'.
+  MAX_TYPE_DEPTH = 3;
+  TYPE_DECL_PREV: array[0..1] of string = ('type', ';');
+  // SetsFirst: hier endet eine Zuweisung ohne ';' (RhsClean) ...
+  BRANCH_STOPS: array[0..1] of string = ('else', 'end');
+  // ... und das darf die Bedingung eines if nicht tragen (IfSets): eine
+  // Struktur, eine anonyme Methode, einen bedingten Ausdruck.
+  NOT_IN_CONDITION: array[0..7] of string = ('begin', 'case', 'try', 'asm',
+    'repeat', 'procedure', 'function', 'if');
 
 type
   // Ein Routinenkopf mit dem gesuchten Namen.
@@ -358,8 +386,25 @@ begin
     and HeadAt(AMap, B, AHead);
 end;
 
+// Steht der Name T allein als Anweisung ('then Bar;', 'begin Bar end',
+// die Marke eines case-Zweigs '1: Bar;') - der Aufruf einer Ueberladung ohne
+// Parameter, kein Methodenzeiger (rwE31 Stufe 3: jcl
+// JclStringConversions.pas:1290 'then FlagInvalidSequence;', :2299
+// 'SurrogateLowStart..SurrogateLowEnd: FlagInvalidSequence;')? Hinter ':'
+// stuende sonst nur ein Typ - auch kein Methodenzeiger.
+function StatementCall(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
+var
+  P : TRdxToken;
+begin
+  P := Before(AMap, T);
+  Result := InList(After(AMap, T).Low, CALL_NEXT)
+    and ((P.Low = ';') or (P.Low = ':') or (InList(P.Low, CALL_PREV)
+         and IsKeywordAfter(P, Before(AMap, P))));
+end;
+
 // Alle Koepfe mit dem Namen ALow; AUseLine: die erste Zeile, auf der der
-// Name im Code ohne Aufruf steht ('@Bar', 'OnX := Bar'), 0 ohne. Nur
+// Name im Code ohne Aufruf steht ('@Bar', 'OnX := Bar'; nicht als eigene
+// Anweisung, StatementCall), 0 ohne. Nur
 // zwischen AFrom und ATo (beide eingeschlossen), wenn AFrom.Low <> '' - der
 // Bereich einer Routine, die die gesuchte lokal deklariert.
 function HeadsNamed(AMap: TRdxCodeMap; const ALow: string;
@@ -383,7 +428,8 @@ begin
         SetLength(Result, n + 1);
         Result[n] := H;
       end
-      else if (AUseLine = 0) and (After(AMap, T).Low <> '(') then
+      else if (AUseLine = 0) and (After(AMap, T).Low <> '(')
+         and not StatementCall(AMap, T) then
         AUseLine := T.Line;
     end;
     T := NextTokenOnLineWith(AMap, T, ALow);
@@ -443,13 +489,22 @@ begin
 end;
 
 // Eine Direktive, die die Signatur bindet (BOUND_DIRECTIVES): '' oder der
-// Grund.
-function DirectiveReason(const R: TRdxRoutine; const AName: string): string;
+// Grund. AOverloadOk (nur freie Routinen, rwE31 Stufe 3): 'overload' bindet
+// nicht - die anderen Overloads dieser Datei haben eine andere Zahl von
+// Parametern (OutToVar, SameCountHeads); die Umstellung macht keine zwei
+// Koepfe gleich.
+function DirectiveReason(const R: TRdxRoutine; const AName: string;
+  AOverloadOk: Boolean = False): string;
 var
   W : string;
 begin
   Result := '';
-  if HasDirective(R, BOUND_DIRECTIVES, W) then
+  if AOverloadOk then
+  begin
+    if HasDirective(R, ROUTINE_BOUND, W) then
+      Result := _(R_OUT_DIRECTIVE, [AName, W]);
+  end
+  else if HasDirective(R, BOUND_DIRECTIVES, W) then
     Result := _(R_OUT_DIRECTIVE, [AName, W]);
 end;
 
@@ -473,6 +528,7 @@ var
   ClassLow, Disp : string;
   CH             : TRdxClassHead;
   Impl           : TRdxToken;
+  IsRecord       : Boolean;
 begin
   Result := ImplReason(AMap, AImpl, AName, IR);
   if Result <> '' then
@@ -482,9 +538,20 @@ begin
   ClassLow := IR.Parts[High(IR.Parts) - 1];
   Disp := Copy(IR.Name, 1, LastDelimiter('.', IR.Name) - 1);
   Disp := LastPart(Disp);
+  // Auch Methoden eines record- oder object-Typs (rwE31 Stufe 3: Kastri
+  // DW.Exif.Win.pas:102 'TGdip = record' mit 'class function .. static',
+  // mORMot 'TSynSystemTime' mit {$ifdef}-Kopf record/object). Sie haben
+  // keine published-Methodentabelle und implementieren kein Interface;
+  // ausserhalb der Unit sichtbar sperrt wie bei Klassen.
+  IsRecord := False;
   if not EnclosingClass(AMap, HeadStart(AMap, ADecl.Kw), ClassLow, CH) then
-    Exit(_(R_OUT_NOT_IN_CLASS, [AName, Disp]));
-  if InList(CH.Vis, STREAMED_VIS) then
+  begin
+    IsRecord := EnclosingRecord(AMap, HeadStart(AMap, ADecl.Kw), ClassLow,
+      CH);
+    if not IsRecord then
+      Exit(_(R_OUT_NOT_IN_CLASS, [AName, Disp]));
+  end;
+  if not IsRecord and InList(CH.Vis, STREAMED_VIS) then
     Exit(_(R_OUT_PUBLISHED, [AName, Disp]));
   Impl := ImplementationTok(AMap);
   if (Impl.Low <> '') and TokBefore(CH.ClassTok, Impl)
@@ -498,8 +565,8 @@ begin
   // delphimvcframework MVCFramework.DotEnv.pas:96, MVCFramework.Utils.pas:62,
   // TemplatePro.pas:757 - alle Interfaces in derselben Unit, ohne die
   // Methode).
-  if TRdxRoutineFixes.InterfaceMemberReason(AMap, CH.ClassTok,
-       LowerCase(AName)) <> '' then
+  if not IsRecord and (TRdxRoutineFixes.InterfaceMemberReason(AMap,
+       CH.ClassTok, LowerCase(AName)) <> '') then
     Exit(_(R_OUT_INTERFACES, [Disp, AName]));
   if TRdxBlocks.MethodDecl(AMap, HeadStart(AMap, ADecl.Kw), DR) <> '' then
     Exit(_(R_OUT_HEAD_UNSAFE, [AName]));
@@ -518,7 +585,8 @@ end;
 // lokale Routine (AOuter.Head.Low <> '': ihre umschliessende Routine)
 // deklariert nur ein Include in AOuter. '' oder der Grund.
 function SingleReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
-  const AName: string; const AOuter: TRdxRoutine): string;
+  const AName: string; const AOuter: TRdxRoutine;
+  AOverloadOk: Boolean): string;
 var
   IR      : TRdxRoutine;
   Include : Boolean;
@@ -534,14 +602,14 @@ begin
     Include := Length(IncludesUpTo(AMap, AMap.LineCount)) > 0;
   if Include then
     Exit(_(R_OUT_INCLUDE, [AName]));
-  Result := DirectiveReason(IR, AName);
+  Result := DirectiveReason(IR, AName, AOverloadOk);
 end;
 
 // Routine: ADecl forward, AImpl mit Rumpf. Im interface-Teil (nicht in
 // einem Typ) ist sie exportiert und gesperrt (R_OUT_INTERFACE, rwE29). ''
 // oder der Grund.
 function RoutineReason(AMap: TRdxCodeMap; const ADecl, AImpl: TRdxOutHead;
-  const AName: string): string;
+  const AName: string; AOverloadOk: Boolean): string;
 var
   IR, DR : TRdxRoutine;
   Impl   : TRdxToken;
@@ -565,16 +633,17 @@ begin
     if (DR.Body.Low <> '') or not HasDirective(DR, FORWARD_WORD, W) then
       Exit(_(R_OUT_HEADS, [2, AName]));
   end;
-  Result := DirectiveReason(DR, AName);
+  Result := DirectiveReason(DR, AName, AOverloadOk);
   if Result = '' then
-    Result := DirectiveReason(IR, AName);
+    Result := DirectiveReason(IR, AName, AOverloadOk);
 end;
 
 // Deklaration und Implementierung aus den Koepfen AHeads: '' mit dem Paar
 // (AHasDecl = False: nur die Implementierung), sonst der Grund.
+// AOverloadOk: s. DirectiveReason (nur Routinen).
 function PairOf(AMap: TRdxCodeMap; const AHeads: TRdxOutHeads;
-  const AName: string; const AOuter: TRdxRoutine; out ADecl,
-  AImpl: TRdxOutHead; out AHasDecl: Boolean): string;
+  const AName: string; const AOuter: TRdxRoutine; AOverloadOk: Boolean;
+  out ADecl, AImpl: TRdxOutHead; out AHasDecl: Boolean): string;
 var
   Q, U : TRdxOutHeads;
   H    : TRdxOutHead;
@@ -605,14 +674,14 @@ begin
   else if (Length(Q) = 0) and (Length(U) = 1) then
   begin
     AImpl := U[0];
-    Result := SingleReason(AMap, AImpl, AName, AOuter);
+    Result := SingleReason(AMap, AImpl, AName, AOuter, AOverloadOk);
   end
   else if (Length(Q) = 0) and (Length(U) = 2) then
   begin
     ADecl := U[0];
     AImpl := U[1];
     AHasDecl := True;
-    Result := RoutineReason(AMap, ADecl, AImpl, AName);
+    Result := RoutineReason(AMap, ADecl, AImpl, AName, AOverloadOk);
   end
   else if (Length(Q) = 1) and (Length(U) = 0) then
     Result := _(R_OUT_NO_DECL, [AName])
@@ -658,14 +727,184 @@ begin
   Result := IsKeywordAfter(T, APrev) and InList(T.Low, JUMP_WORDS);
 end;
 
-// Wo im Rumpf von R wird der Parameter ALow zuerst genannt - als
-// Zuweisung 'ALow := ..' auf oberster Ebene, ohne Sprung davor? '' oder der
-// Grund mit der Zeile der Stelle, an der es scheitert.
+// Die rechte Seite der Zuweisung an AName ('ALow := ..') bis zum ';', else
+// oder end auf Klammertiefe 0 bzw. bis AStop: liest sie ALow nicht ('S := S
+// + ..')? Dann True und ANext ist das Token dahinter; sonst False und ALine
+// die Zeile des Lesens. Das else eines bedingten Ausdrucks (Delphi 13:
+// 'S := if C then A else B', Review Gruppe M) gehoert zur rechten Seite.
+function RhsClean(AMap: TRdxCodeMap; const AName, AStop: TRdxToken;
+  const ALow: string; out ANext: TRdxToken; out ALine: Integer): Boolean;
+var
+  X, P         : TRdxToken;
+  Paren, Conds : Integer;
+begin
+  Result := False;
+  ALine := AName.Line;
+  Paren := 0;
+  Conds := 0;
+  P := After(AMap, AName);
+  X := After(AMap, P);
+  while (X.Low <> '') and TokBefore(X, AStop) do
+  begin
+    if (X.Low = '(') or (X.Low = '[') then
+      Inc(Paren)
+    else if ((X.Low = ')') or (X.Low = ']')) and (Paren > 0) then
+      Dec(Paren)
+    else if (Paren = 0) and (X.Low = 'if') and IsKeywordAfter(X, P) then
+      Inc(Conds)
+    else if (Paren = 0) and (Conds > 0) and (X.Low = 'else')
+       and IsKeywordAfter(X, P) then
+      Dec(Conds)
+    else if (Paren = 0) and ((X.Low = ';') or (IsKeywordAfter(X, P)
+       and InList(X.Low, BRANCH_STOPS))) then
+      Break;
+    if SameIdent(X.Low, ALow) and (P.Low <> '.') then
+    begin
+      ALine := X.Line;
+      Exit;
+    end;
+    P := X;
+    X := After(AMap, X);
+  end;
+  ANext := X;
+  Result := True;
+end;
+
+function IfSets(AMap: TRdxCodeMap; const AIf, AStop: TRdxToken;
+  const ALow: string; out ANext: TRdxToken; out ALine: Integer): Boolean;
+  forward;
+
+// Die Anweisungsliste ab AFrom bis vor AStop (AFrom folgt auf ihr begin):
+// setzt sie den Parameter ALow, bevor sie ihn liest oder springt? rwE30
+// Stufe 2: eine Zuweisung 'ALow := ..' am Anfang einer Anweisung auf
+// oberster Ebene, davor kein Sprung (exit, raise ..) und keine Nennung;
+// seit rwE31 Stufe 3 auch ein if, dessen then- UND else-Zweig ihn so setzt
+// (IfSets; delphimvcframework MVCFramework.Utils.pas:62). True mit ADone
+// (das Token hinter dem, was ihn setzt); sonst False mit ALine (die Zeile,
+// an der es scheitert).
+function SetsFirst(AMap: TRdxCodeMap; const AFrom, AStop: TRdxToken;
+  const ALow: string; out ADone: TRdxToken; out ALine: Integer): Boolean;
+var
+  T, P, Opener : TRdxToken;
+  Depth        : Integer;
+  Start        : Boolean;
+begin
+  Result := False;
+  ADone := Default(TRdxToken);
+  ALine := AStop.Line;
+  Depth := 1;
+  Opener := Before(AMap, AFrom);
+  P := Opener;
+  T := AFrom;
+  while (T.Low <> '') and TokBefore(T, AStop) do
+  begin
+    Start := (Depth = 1) and ((P.Low = ';') or SameTok(P, Opener));
+    if IsKeywordAfter(T, P) then
+    begin
+      if InList(T.Low, BLOCK_OPENERS) then
+        Inc(Depth)
+      else if (T.Low = 'end') or (T.Low = 'until') then
+        Dec(Depth);
+    end;
+    if JumpAt(T, P) then
+    begin
+      ALine := T.Line;
+      Exit;
+    end;
+    if Start and (T.Low = 'if') and IsKeywordAfter(T, P)
+       and IfSets(AMap, T, AStop, ALow, ADone, ALine) then
+      Exit(True);
+    if SameIdent(T.Low, ALow) and (P.Low <> '.') then
+    begin
+      if Start and (After(AMap, T).Low = ':=') then
+        Exit(RhsClean(AMap, T, AStop, ALow, ADone, ALine));
+      ALine := T.Line;
+      Exit;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ein Zweig hinter then bzw. else ab AFirst: ein Block 'begin .. end', der
+// ALow zuerst setzt (SetsFirst), oder die eine Zuweisung 'ALow := ..'
+// (RhsClean). True mit ANext (das Token hinter dem Zweig).
+function BranchSets(AMap: TRdxCodeMap; const AFirst, AStop: TRdxToken;
+  const ALow: string; out ANext: TRdxToken; out ALine: Integer): Boolean;
+var
+  E, L, Done : TRdxToken;
+begin
+  Result := False;
+  ANext := Default(TRdxToken);
+  ALine := AFirst.Line;
+  if (AFirst.Low = 'begin')
+     and IsKeywordAfter(AFirst, Before(AMap, AFirst)) then
+  begin
+    if (BlockEnd(AMap, AFirst, nil, E, L) <> '') or (E.Low = '')
+       or not TokBefore(E, AStop)
+       or not SetsFirst(AMap, After(AMap, AFirst), E, ALow, Done, ALine) then
+      Exit;
+    ANext := After(AMap, E);
+    Exit(True);
+  end;
+  if SameIdent(AFirst.Low, ALow) and (After(AMap, AFirst).Low = ':=') then
+    Result := RhsClean(AMap, AFirst, AStop, ALow, ANext, ALine);
+end;
+
+// 'if <Bedingung> then <Zweig> else <Zweig>' ab AIf: die Bedingung nennt
+// ALow nicht (und traegt keine Struktur - anonyme Methode, bedingter
+// Ausdruck), beide Zweige setzen ihn (BranchSets). True mit ANext (das
+// Token hinter dem else-Zweig).
+function IfSets(AMap: TRdxCodeMap; const AIf, AStop: TRdxToken;
+  const ALow: string; out ANext: TRdxToken; out ALine: Integer): Boolean;
+var
+  T, P  : TRdxToken;
+  Paren : Integer;
+begin
+  Result := False;
+  ANext := Default(TRdxToken);
+  ALine := AIf.Line;
+  Paren := 0;
+  P := AIf;
+  T := After(AMap, AIf);
+  while (T.Low <> '') and TokBefore(T, AStop) do
+  begin
+    if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if ((T.Low = ')') or (T.Low = ']')) and (Paren > 0) then
+      Dec(Paren)
+    else if IsKeywordAfter(T, P) and (Paren = 0) and (T.Low = 'then') then
+      Break;
+    if (SameIdent(T.Low, ALow) and (P.Low <> '.'))
+       or (IsKeywordAfter(T, P) and InList(T.Low, NOT_IN_CONDITION)) then
+    begin
+      ALine := T.Line;
+      Exit;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+  if T.Low <> 'then' then Exit;
+  if not BranchSets(AMap, After(AMap, T), AStop, ALow, T, ALine) then Exit;
+  if (T.Low <> 'else') or not IsKeywordAfter(T, Before(AMap, T)) then
+  begin
+    ALine := AIf.Line;
+    Exit;
+  end;
+  Result := BranchSets(AMap, After(AMap, T), AStop, ALow, ANext, ALine);
+end;
+
+// Wo im Rumpf von R wird der Parameter ALow zuerst genannt - setzt der
+// Rumpf ihn, bevor er ihn liest oder springt (SetsFirst)? Eine Direktive
+// davor ({$IFDEF} um die Zuweisung, rwE31 Stufe 3: jcl
+// JclStringConversions.pas:407 - im anderen Zweig nur raise) laesst einen
+// Weg offen. '' oder der Grund mit der Zeile der Stelle, an der es
+// scheitert.
 function FirstAssignReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
   const ALow, AName, ARoutine: string): string;
 var
-  T, P  : TRdxToken;
-  Depth : Integer;
+  T, Done : TRdxToken;
+  Li      : Integer;
 begin
   // Vor dem Rumpf (lokale Routinen, Deklarationsteil) sperrt jede Nennung.
   T := After(AMap, R.HeaderEnd);
@@ -675,43 +914,13 @@ begin
       Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
     T := After(AMap, T);
   end;
-  Depth := 1;
-  P := R.Body;
-  T := After(AMap, R.Body);
-  while (T.Low <> '') and TokBefore(T, R.EndTok) do
-  begin
-    if IsKeywordAfter(T, P) then
-    begin
-      if InList(T.Low, BLOCK_OPENERS) then
-        Inc(Depth)
-      else if (T.Low = 'end') or (T.Low = 'until') then
-        Dec(Depth);
-    end;
-    if JumpAt(T, P) then
-      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
-    if SameIdent(T.Low, ALow) and (P.Low <> '.') then
-    begin
-      if (Depth = 1) and ((P.Low = ';') or SameTok(P, R.Body))
-         and (After(AMap, T).Low = ':=') then
-      begin
-        // Die rechte Seite darf ihn nicht lesen ('S := S + ..').
-        P := T;
-        T := After(AMap, After(AMap, T));
-        while (T.Low <> '') and (T.Low <> ';') and TokBefore(T, R.EndTok) do
-        begin
-          if SameIdent(T.Low, ALow) and (P.Low <> '.') then
-            Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
-          P := T;
-          T := After(AMap, T);
-        end;
-        Exit('');
-      end;
-      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
-    end;
-    P := T;
-    T := After(AMap, T);
-  end;
-  Result := _(R_OUT_NOT_FIRST, [AName, ARoutine, R.EndTok.Line]);
+  if not SetsFirst(AMap, After(AMap, R.Body), R.EndTok, ALow, Done, Li) then
+    Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, Li]));
+  if Done.Low = '' then
+    Done := R.EndTok;
+  if DirectiveBetween(AMap, R.Body, Done.Line, Done.Col) then
+    Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, Done.Line]));
+  Result := '';
 end;
 
 // Verwaltete Typen (Changes): out gibt den Wert des Aufrufers beim Aufruf
@@ -799,6 +1008,188 @@ begin
   end;
 end;
 
+{ ---- rwE31 Stufe 3: Typen der Datei, Overloads freier Routinen ---- }
+
+function LocalPlainType(AMap: TRdxCodeMap; const ATypeLow: string;
+  ADepth: Integer): Boolean; forward;
+
+// Ist der Typ ATypeLow (ein Wort, klein) einfach - kein verwalteter Typ
+// (PLAIN_TYPES) oder ein einfacher Typ der Datei (LocalPlainType)?
+function PlainTypeName(AMap: TRdxCodeMap; const ATypeLow: string;
+  ADepth: Integer): Boolean;
+begin
+  Result := not TRdxAvoidOutFix.IsManagedType(ATypeLow)
+    or LocalPlainType(AMap, ATypeLow, ADepth + 1);
+end;
+
+// Der Rumpf 'record .. end' ab ARecord: nur Felder 'A, B: T;' einfacher
+// Typen (PlainTypeName), auch statische Arrays 'array[..] of T' - kein
+// Variantenteil, keine Methode, kein Abschnitt (dann False: unbekannt).
+function PlainRecordBody(AMap: TRdxCodeMap; const ARecord: TRdxToken;
+  ADepth: Integer): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := After(AMap, ARecord);
+  while T.Low <> '' do
+  begin
+    if T.Low = 'end' then
+      Exit(True);
+    while T.IsWord do
+    begin
+      T := After(AMap, T);
+      if T.Low <> ',' then
+        Break;
+      T := After(AMap, T);
+    end;
+    if T.Low <> ':' then Exit;
+    T := After(AMap, T);
+    if T.Low = 'array' then
+    begin
+      T := After(AMap, T);
+      if T.Low <> '[' then Exit;
+      T := AfterClose(AMap, T);
+      if T.Low <> 'of' then Exit;
+      T := After(AMap, T);
+    end;
+    if not T.IsWord or not PlainTypeName(AMap, T.Low, ADepth) then Exit;
+    T := After(AMap, T);
+    if T.Low = 'end' then
+      Exit(True);
+    if T.Low <> ';' then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+// rwE31 Stufe 3 (mORMot test.core.data.pas:1332 'out Range: TRange' mit
+// 'TRange = record Min, Max: Integer; end;' in derselben Unit): ist
+// ATypeLow ein Typ, den die Datei genau einmal als 'Name = ..' hinter type
+// bzw. ';' deklariert, und einfach - Aufzaehlung '(..)', Menge, Zeiger '^',
+// ein Record nur aus einfachen Feldern (PlainRecordBody) oder ein anderer
+// Name fuer einen einfachen Typ? Dann sind out und var gleich. Sonst (auch
+// bei mehr als einer Deklaration, $IFDEF-Zwilling) False - unbekannt.
+function LocalPlainType(AMap: TRdxCodeMap; const ATypeLow: string;
+  ADepth: Integer): Boolean;
+var
+  T, N, Decl : TRdxToken;
+  Count      : Integer;
+begin
+  Result := False;
+  if (ADepth > MAX_TYPE_DEPTH) or (ATypeLow = '')
+     or not IsIdentStart(ATypeLow[1]) or (Pos('.', ATypeLow) > 0)
+     or (Pos('<', ATypeLow) > 0) then
+    Exit;
+  Count := 0;
+  Decl := Default(TRdxToken);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), ATypeLow);
+  while T.Low <> '' do
+  begin
+    if (T.Low = ATypeLow) and (After(AMap, T).Low = '=')
+       and InList(Before(AMap, T).Low, TYPE_DECL_PREV) then
+    begin
+      Inc(Count);
+      Decl := After(AMap, After(AMap, T));
+    end;
+    T := NextTokenOnLineWith(AMap, T, ATypeLow);
+  end;
+  if Count <> 1 then Exit;
+  if Decl.Low = 'type' then
+    Decl := After(AMap, Decl);
+  if Decl.Low = 'packed' then
+    Decl := After(AMap, Decl);
+  if (Decl.Low = '(') or (Decl.Low = '^') or (Decl.Low = 'set') then
+    Exit(True);
+  if Decl.Low = 'record' then
+    Exit(PlainRecordBody(AMap, Decl, ADepth));
+  N := After(AMap, Decl);
+  Result := Decl.IsWord and (N.Low = ';')
+    and PlainTypeName(AMap, Decl.Low, ADepth);
+end;
+
+// Die Zahl der Parameter im Kopf AHead ('(var A, B: T; C: U)' -> 3); 0
+// ohne Liste, -1, wenn die Liste nicht zu lesen ist.
+function ParamCount(AMap: TRdxCodeMap; const AHead: TRdxOutHead): Integer;
+var
+  T, Close : TRdxToken;
+  Depth    : Integer;
+  Typed    : Boolean;
+begin
+  T := After(AMap, AHead.Name);
+  if T.Low = '<' then
+    T := AfterClose(AMap, T);
+  if T.Low <> '(' then
+    Exit(0);
+  Close := MatchClose(AMap, T);
+  if Close.Low = '' then
+    Exit(-1);
+  T := After(AMap, T);
+  if SameTok(T, Close) then
+    Exit(0);
+  Result := 1;
+  Depth := 0;
+  Typed := False;
+  while (T.Low <> '') and TokBefore(T, Close) do
+  begin
+    if (T.Low = '(') or (T.Low = '[') or (Typed and (T.Low = '<')) then
+      Inc(Depth)
+    else if ((T.Low = ')') or (T.Low = ']') or (Typed and (T.Low = '>')))
+       and (Depth > 0) then
+      Dec(Depth)
+    else if Depth = 0 then
+    begin
+      if T.Low = ':' then
+        Typed := True
+      else if T.Low = ';' then
+      begin
+        Inc(Result);
+        Typed := False;
+      end
+      else if (T.Low = ',') and not Typed then
+        Inc(Result);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// rwE31 Stufe 3 (jcl JclStringConversions.pas:407, vier lokale Overloads
+// 'FlagInvalidSequence'): traegt die freie Routine AOwn 'overload', bleiben
+// von AHeads die Koepfe mit ihrer Zahl von Parametern (ParamCount) - dann
+// True, wenn andere wegfielen. Ein Overload mit derselben Zahl laesst
+// AHeads ganz (PairOf sperrt: mehrdeutig); nur andere Zahlen machen die
+// Umstellung sicher - kein Kopf wird einem anderen gleich.
+function SameCountHeads(AMap: TRdxCodeMap; const AOwn: TRdxOutHead;
+  var AHeads: TRdxOutHeads): Boolean;
+var
+  R     : TRdxRoutine;
+  W     : string;
+  n, k  : Integer;
+  Group : TRdxOutHeads;
+begin
+  Result := False;
+  if AOwn.Qual or (Length(AHeads) < 2)
+     or (TRdxBlocks.ReadRoutine(AMap, AOwn.Kw, R) <> '')
+     or not HasDirective(R, [DIR_OVERLOAD], W) then
+    Exit;
+  n := ParamCount(AMap, AOwn);
+  if n < 0 then Exit;
+  Group := nil;
+  for k := 0 to High(AHeads) do
+  begin
+    if AHeads[k].Qual then Exit;
+    if ParamCount(AMap, AHeads[k]) = n then
+    begin
+      SetLength(Group, Length(Group) + 1);
+      Group[High(Group)] := AHeads[k];
+    end;
+  end;
+  if Length(Group) < Length(AHeads) then
+  begin
+    AHeads := Group;
+    Result := True;
+  end;
+end;
+
 class function TRdxAvoidOutFix.OutToVar(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxOutPlan;
   out AReason: string): Boolean;
@@ -812,6 +1203,7 @@ var
   Heads          : TRdxOutHeads;
   HasDecl        : Boolean;
   Outer          : TRdxRoutine;
+  OverloadOk     : Boolean;
 begin
   Result := False;
   APlan := Default(TRdxOutPlan);
@@ -830,7 +1222,9 @@ begin
     Exit;
   end;
   APlan.Name := ParamNames(AMap, OutTok);
-  APlan.Changes := IsManagedType(Typ);
+  // Ein Record, eine Aufzaehlung ... der Datei kann einfach sein (rwE31
+  // Stufe 3, LocalPlainType).
+  APlan.Changes := IsManagedType(Typ) and not LocalPlainType(AMap, Typ, 0);
   Open := ListOpen(AMap, OutTok);
   if Open.Low = '' then
   begin
@@ -862,10 +1256,14 @@ begin
      or (Length(IncludesUpTo(AMap, AMap.LineCount)) > 0))
      and OuterOf(AMap, Own.Kw, Outer) then
     Heads := HeadsNamed(AMap, Own.Name.Low, Outer.Head, Outer.Last, UseLine);
+  // Overloads einer freien Routine: nur die mit ihrer Zahl von Parametern
+  // (SameCountHeads, rwE31 Stufe 3).
+  OverloadOk := SameCountHeads(AMap, Own, Heads);
   if UseLine > 0 then
     AReason := _(R_OUT_REFERENCE, [Name, UseLine])
   else
-    AReason := PairOf(AMap, Heads, Name, Outer, Decl, Impl, HasDecl);
+    AReason := PairOf(AMap, Heads, Name, Outer, OverloadOk, Decl, Impl,
+      HasDecl);
   if AReason <> '' then
     Exit;
   DeclOut := Default(TRdxToken);

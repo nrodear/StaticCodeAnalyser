@@ -76,6 +76,15 @@ type
     // rwE30 Stufe 2 (Indy indyprotocolsfpc.pas:189): die Sammel-Unit eines
     // Pakets besteht nur aus uses-Klauseln.
     [Test] procedure Sca007_UsesOnlyUnit;
+    // rwE31 Stufe 3 (CEF4Delphi uChildForm.pas:10, uSimpleServer.pas:9 ...):
+    // den Eintrag im Zweig eines Defines aus einer Include-Datei liefert der
+    // Quellstellen-Dienst nicht - die Klausel kommt aus dem Text, alle
+    // Zweige in Folge.
+    [Test] procedure Sca007_TextUsesEntry_AllBranches;
+    // rwE31 Stufe 3 (gexperts mPasLex.pas:80 UpperCase, issrc BidiUtils.pas:15
+    // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
+    // Exporte schliessen den Beweis (AlwaysNeededIdents).
+    [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
   end;
 
 implementation
@@ -83,6 +92,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxStructFixes,
+  uRdxText,          // _() (Gruende in der Sprache des Laufs)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -960,6 +970,97 @@ begin
     'implementation', 'procedure P; begin end;', 'end.'])), 'Routine');
   Assert.IsFalse(UsesOnly(Join(['program p;', 'uses A;', 'begin', 'end.'])),
     'Programm');
+end;
+
+// SCA007: TRdxStructFixes.TextUsesEntry auf ASource - die Zahl der Treffer.
+function TextEntry(const ASource: string; ALine: Integer; const AUnit: string;
+  out AClause: TRdxUsesClause; out AIndex: Integer): Integer;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.TextUsesEntry(Map, ALine, AUnit, AClause,
+      AIndex);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_TextUsesEntry_AllBranches;
+var
+  Src, R, L : string;
+  C         : TRdxUsesClause;
+  Ix        : Integer;
+begin
+  // uChildForm.pas:10 (minimiert): DELPHI16_UP kommt aus cef.inc, der Dienst
+  // liefert nur den {$ELSE}-Zweig - Vcl.ClipBrd fehlte, der Grund war
+  // "steht nicht mehr auf Zeile 5".
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Vcl.Forms, Vcl.ClipBrd, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']);
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 5, 'Vcl.ClipBrd', C, Ix));
+  Assert.AreEqual<Integer>(3, C.UsesLine, 'Zeile von uses');
+  Assert.AreEqual<Integer>(7, Length(C.Entries), 'beide Zweige und uCEF');
+  Assert.AreEqual<Integer>(1, Ix, 'Index');
+  Assert.AreEqual('ClipBrd', C.Entries[4].Resolved, 'Zwilling im ELSE');
+  Assert.AreEqual<Integer>(14, C.Entries[1].StartCol, 'Spalte');
+  Assert.AreEqual<Integer>(25, C.Entries[1].EndCol, 'hinter dem Namen');
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses',
+    '  {$IFDEF DELPHI16_UP}', '  Vcl.Forms, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']), FixUses(Src, C, Ix, R), 'mitten im Zweig: ' + R);
+  // Der Zwilling im {$ELSE}-Zweig ist ein eigener Eintrag; ein anderer
+  // Name oder eine andere Zeile trifft nichts.
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 7, 'ClipBrd', C, Ix), 'ELSE');
+  Assert.AreEqual<Integer>(0, TextEntry(Src, 7, 'Vcl.ClipBrd', C, Ix),
+    'andere Zeile');
+  // Gegenprobe: am Zweigrand reicht der Bereich ueber {$ELSE} - gesperrt.
+  L := '  {$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF} uCEF;';
+  Src := Join(['unit u;', 'interface', 'uses', L, 'implementation', 'end.']);
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 4, 'Vcl.Forms', C, Ix));
+  Assert.AreEqual('', FixUses(Src, C, Ix, R), 'Bereich ueber die Direktive');
+  Assert.IsTrue(Pos(_('comment or directive in the range to be deleted'),
+    R) > 0, R);
+  // Zweige mit eigener Kommafolge ergeben keine Folge 'Name, Name ;' - der
+  // Text liefert nichts.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  {$IFDEF X} A, B {$ELSE} C {$ENDIF};', 'implementation', 'end.']);
+  Assert.AreEqual<Integer>(0, TextEntry(Src, 4, 'B', C, Ix), 'Kommafolge');
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_SysUtilsAndTypes;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // mPasLex.pas (minimiert): UpperCase kommt aus SysUtils, Controls ist
+  // ungenutzt. Vorher nannte der Hinweis UpperCase - nur im Menue.
+  Src := Join(['unit mPasLex;', 'interface', 'uses',
+    '  SysUtils, Windows, Classes, Controls;', 'function Up(const S: string): '
+    + 'string;', 'implementation', 'function Up(const S: string): string;',
+    'begin', '  Result := UpperCase(S);', 'end;', 'end.']);
+  Assert.AreEqual('UpperCase', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('sysutils'), Li), 'SysUtils');
+  // BidiUtils.pas:15 (minimiert): TRect aus Types.
+  Src := Join(['unit BidiUtils;', 'interface', 'uses Classes, Types;',
+    'procedure FlipRect(var Rect: TRect);', 'implementation',
+    'procedure FlipRect(var Rect: TRect);', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('TRect', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('system.types'), Li), 'Types');
+  // Nur die beiden Units: andere bleiben leer (die Listen des Detektors).
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.AlwaysNeededIdents('classes')), 'Classes');
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.AlwaysNeededIdents('windows')), 'Windows');
 end;
 
 initialization

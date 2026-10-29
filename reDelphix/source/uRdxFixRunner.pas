@@ -1050,9 +1050,12 @@ begin
 end;
 
 // SCA007: die Klausel und der Eintrag zum Unit-Namen AUnit auf ALine.
-// '' oder der Grund.
-function FindUsesEntry(APlaces: TSourcePlaces; ALine: Integer;
-  const AUnit: string; out AClause: TRdxUsesClause; out AIndex: Integer): string;
+// Liefert der Dienst ihn nicht, liest ihn der Text (rwE31 Stufe 3: ein
+// Eintrag im Zweig eines Defines aus einer Include-Datei,
+// TRdxStructFixes.TextUsesEntry). '' oder der Grund.
+function FindUsesEntry(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
+  out AIndex: Integer): string;
 var
   Clauses : TArray<TArray<TRefactorSpan>>;
   c, k, n : Integer;
@@ -1073,6 +1076,8 @@ begin
         AIndex := k;
       end;
   if n = 0 then
+    n := TRdxStructFixes.TextUsesEntry(AMap, ALine, AUnit, AClause, AIndex);
+  if n = 0 then
     Result := MsgMovedSuffix(_('%s is no longer on line %d of a uses clause',
       [AUnit, ALine]))
   else if n > 1 then
@@ -1083,6 +1088,9 @@ end;
 // ausser AUnit - wem der Planer einen Bezeichner der Datei zuordnen kann
 // (TRdxStructFixes.ForeignIdent). Dieselbe Kette wie der Detektor
 // (TUnusedUsesDetector.IdentsFor: Liste, Kurzname fuer RTL-Namespaces).
+// Ein Eintrag mit demselben letzten Glied zaehlt nicht mit: im anderen
+// Zweig steht oft der Zwilling ('{$IFDEF D16} Vcl.ClipBrd {$ELSE} ClipBrd
+// {$ENDIF}', rwE31 Stufe 3) - seine Bezeichner sind die der entfernten Unit.
 function OtherUnitsIdents(APlaces: TSourcePlaces;
   const AUnit: string): TArray<string>;
 var
@@ -1094,10 +1102,16 @@ begin
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
     for k := 0 to High(Clauses[c]) do
-      if not SameText(Clauses[c][k].Resolved, AUnit) then
+      if not SameText(LastPart(Clauses[c][k].Resolved), LastPart(AUnit)) then
+      begin
         for Id in TUnusedUsesDetector.IdentsFor(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
+        // SysUtils, Types: der Detektor fuehrt keine Liste (rwE31 Stufe 3).
+        for Id in TRdxStructFixes.AlwaysNeededIdents(
+            LowerCase(Clauses[c][k].Resolved)) do
+          AddText(Result, Id);
+      end;
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
@@ -1122,23 +1136,28 @@ begin
   // Zweig, der andere Zweig bleibt Zeichen fuer Zeichen, und in diesem
   // bleibt die Kommafolge gueltig.
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
-    Result.Reason := MsgNoFileOpen
-  else
-    Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
-  if Result.Reason <> '' then Exit;
+  begin
+    Result.Reason := MsgNoFileOpen;
+    Exit;
+  end;
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Acquire(ALines);
   try
-    if UnitStillUsed(Map, Result.Name) then
-      Result.Reason := MsgStaleSuffix(_('%s is used in the text',
-        [Result.Name]))
-    else if TRdxStructFixes.UsesOnlyUnit(Map) then
-      Result.Reason := _('the unit consists of uses clauses only - they are '
-        + 'its purpose (a package unit compiles the listed units); without %s '
-        + 'the build drops it', [Result.Name])
-    else
-      Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
-        Result.Edits[0], Result.Reason);
+    Result.Reason := FindUsesEntry(APlaces, Map, ALine, Result.Name, Clause,
+      Index);
+    if Result.Reason = '' then
+    begin
+      if UnitStillUsed(Map, Result.Name) then
+        Result.Reason := MsgStaleSuffix(_('%s is used in the text',
+          [Result.Name]))
+      else if TRdxStructFixes.UsesOnlyUnit(Map) then
+        Result.Reason := _('the unit consists of uses clauses only - they '
+          + 'are its purpose (a package unit compiles the listed units); '
+          + 'without %s the build drops it', [Result.Name])
+      else
+        Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
+          Result.Edits[0], Result.Reason);
+    end;
     if Result.Enabled then
       Foreign := TRdxStructFixes.ForeignIdent(Map,
         OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
