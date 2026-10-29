@@ -72,6 +72,31 @@ Regelprofils des Laufs. Ein leerer Wert heißt *kein Profilfilter* —
 alle Detektoren liefen — und ist nicht dasselbe wie das kuratierte
 Profil `default`.
 
+**Editorhilfen in beiden HTML-Berichten.** Für eine Regel mit **Editorhilfe**
+(einer Code-Aktion des IDE-Moduls reDelphix: Glühbirne, Strg+Alt+F)
+nennt die Seite von `--report-html` die Hilfen — Voreinstellung an;
+`--html-no-editor-help` lässt sie weg, die Seite ist dann genau die
+ohne sie. Der Regel-Report bekommt eine Spalte *Editorhilfen* mit der
+Liste jeder Regel, je Menüeintrag ein Eintrag: die Id (`SCA017`,
+`SCA017.2` für einen zweiten Eintrag), der aus dem Slug gelesene
+Menütext (`put-debug-output-in-ifdef-debug` wird zu „Put debug output
+in ifdef debug“: Bindestriche werden Leerzeichen, der erste Buchstabe
+groß — die CLI linkt reDelphix nicht und kennt den Menütext selbst
+nicht) und die Wirkung, übersetzt vom Sprachumschalter der Seite
+(Verhalten bleibt / ändert Verhalten / je nach Fund / Vorlage, schreibt
+nichts). Die Details eines Funds zeigen dieselbe Liste in einer Zeile,
+„Editorhilfen: …“. Die Liste steht **einmal je Regel**; ein Fund trägt
+nur einen Verweis von rund 40 Byte, der Bericht wächst also nicht mit
+der Fundzahl um die Liste. Die Liste kommt aus dem Regelkatalog
+(`editorHelps`), wie das SARIF-Feld weiter unten. Die
+**Workbench-Seite** der Oberfläche und der IDE zeigt dieselbe Liste in
+der Sprache der Seite als erste Zeile der Regel-Doku im Drawer —
+einmal je Regel, je Fund kein zusätzliches Byte (das Exportmenü nimmt
+sie immer mit; im Code `AEditorHelp` von
+`TFindingsWorkbenchExport.BuildHtml`/`Run`, Voreinstellung an). Die
+übrigen Exporte (CSV, JSON, Sonar) tragen keine Editorhilfen; SARIF
+nennt sie nur mit `--sarif-editor-help`.
+
 Die Workbench-Seite hält die Regel-Doku **einmal je Regel**, den
 Quellausschnitt als reinen Text und keine Kopie des Suchtexts je Fund —
 deshalb bleibt sie rund halb so groß wie derselbe Bericht vorher. Beide

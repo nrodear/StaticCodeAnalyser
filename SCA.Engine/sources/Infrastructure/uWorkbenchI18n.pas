@@ -3,7 +3,10 @@ unit uWorkbenchI18n;
 // Die Oberflaechentexte BEIDER Workbench-HTML-Seiten in de/en/fr
 // (Nutzerauftrag 07.09.: "die neuen html Seiten in alle Sprachen en
 // und fr uebersetzen"). Schwester von uWorkbenchStyle: dort das
-// geteilte CSS, hier der geteilte Text.
+// geteilte CSS, hier der geteilte Text. Seit 2026-10-29 liest auch
+// der CLI-Bericht (uExportHtml) die Editorhilfen-Texte von hier
+// (wtEditorhilfen, wtWirkung*) - als Vorgabe 'de' und fuer sein
+// I18N-Woerterbuch ueber TJs; die Seite selbst bleibt umschaltbar.
 //
 // WARUM SERVERSEITIG GEBACKEN statt Laufzeit-Umschalter wie im
 // V1-Report: eine Workbench-Seite traegt ihre Sprache in MEHR als den
@@ -66,7 +69,13 @@ type
     wtRolleOwner, wtRolleOwnerText,
     // -- Seitenkopf ------------------------------------------------------
     wtTitelKatalog, wtUntertitelKatalog, wtTitelFunde,
-    wtUntertitelFunde, wtKuerzungsbanner, wtKeineFundeImLauf
+    wtUntertitelFunde, wtKuerzungsbanner, wtKeineFundeImLauf,
+    // -- Editorhilfen (beide Fundberichte: CLI-Bericht uExportHtml und
+    //    Workbench-Seite, Nico 2026-10-29) - Zeilenkopf und die vier
+    //    Wirkungen von editorHelps[].effect; EINE Quelle fuer beide
+    //    Seiten und alle drei Sprachen.
+    wtEditorhilfen, wtWirkungSame, wtWirkungChanges, wtWirkungDepends,
+    wtWirkungTemplate
   );
 
   TWorkbenchI18n = class
@@ -334,7 +343,17 @@ const
      + 'ci-dessus comptent TOUS les r&eacute;sultats ; augmentez le '
      + 'budget de lignes pour le texte int&eacute;gral.'),
     ('Keine Funde in diesem Lauf.', 'No findings in this run.',
-     'Aucun r&eacute;sultat dans cette analyse.')
+     'Aucun r&eacute;sultat dans cette analyse.'),
+    // ---- Editorhilfen ---------------------------------------------------
+    ('Editorhilfen', 'Editor helps', 'Aides d''&eacute;dition'),  // wtEditorhilfen
+    ('Verhalten bleibt', 'keeps behaviour',
+     'comportement inchang&eacute;'),                            // wtWirkungSame
+    ('&auml;ndert Verhalten', 'changes behaviour',
+     'modifie le comportement'),                                 // wtWirkungChanges
+    ('je nach Fund', 'depends on the finding',
+     'selon l''occurrence'),                                     // wtWirkungDepends
+    ('Vorlage, schreibt nichts', 'template, writes nothing',
+     'mod&egrave;le, n''&eacute;crit rien')                      // wtWirkungTemplate
   );
 
 function SprachIndex(const ALang: string): Integer;
