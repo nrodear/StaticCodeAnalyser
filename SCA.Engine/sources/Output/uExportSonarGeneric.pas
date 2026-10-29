@@ -504,31 +504,31 @@ function TrueCaseRelPath(const ABaseFull, ARelPath: string;
 // viele Abfragen wie es verschiedene Ordner und Dateien mit Funden gibt.
 // Was FindFirst nicht findet, bleibt wie es war.
 var
-  Parts : TArray<string>;
-  Dir   : string;
-  Key   : string;
-  Real  : string;
-  SR    : TSearchRec;
-  I     : Integer;
+  Parts  : TArray<string>;
+  Dir    : string;
+  Key    : string;
+  Actual : string;
+  SR     : TSearchRec;
+  I      : Integer;
 begin
   Parts := ARelPath.Split(['/']);
   Dir   := ABaseFull;
   for I := 0 to High(Parts) do
   begin
     Key := AnsiUpperCase(Dir + Parts[I]);
-    if not ACache.TryGetValue(Key, Real) then
+    if not ACache.TryGetValue(Key, Actual) then
     begin
-      Real := Parts[I];
-      if (Real <> '') and (Real <> '.') and (Real <> '..') and
-         (FindFirst(Dir + Real, faAnyFile, SR) = 0) then
+      Actual := Parts[I];
+      if (Actual <> '') and (Actual <> '.') and (Actual <> '..') and
+         (FindFirst(Dir + Actual, faAnyFile, SR) = 0) then
       begin
-        Real := SR.Name;
+        Actual := SR.Name;
         FindClose(SR);
       end;
-      ACache.Add(Key, Real);
+      ACache.Add(Key, Actual);
     end;
-    Parts[I] := Real;
-    Dir := Dir + Real + PathDelim;
+    Parts[I] := Actual;
+    Dir := Dir + Actual + PathDelim;
   end;
   Result := string.Join('/', Parts);
 end;
