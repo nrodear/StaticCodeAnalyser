@@ -45,6 +45,11 @@ type
     // ---- Realworld-Test rwE29 ----
     [Test] procedure OldCompilerSwitch_NoHelp;
     [Test] procedure NewCompilerSwitch_Helps;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure OwnException_OtherRoutine_Helps;
+    [Test] procedure OwnException_SameRoutine_NoHelp;
+    [Test] procedure MormotSymbols_NoHelp;
+    [Test] procedure ModernProof_RefutesTrace;
   end;
 
 {$IFNDEF FPC}
@@ -68,6 +73,8 @@ type
     [Test] procedure Table_SysUtilsBehindKeywordSegment_NoSecondUses;
     [Test] procedure Table_SysUtilsOnlyUnderCondition_NoHelp;
     [Test] procedure Table_SysUtilsOnlyInComment_AddsUses;
+    // ---- Realworld-Test rwE30 Stufe 2 (Plattenblick, Sperre bei Beleg) ----
+    [Test] procedure Table_OldProjectNearby_NoHelp;
   end;
 {$ENDIF}
 
@@ -363,6 +370,115 @@ begin
     True);
 end;
 
+// Eine Unit mit zwei Methoden: Other (AOther: Kopf-Rest und Rumpf) und
+// Check (raise in Zeile LineOf 'raise ').
+function TwoRoutines(const AIface: string; const AOther: array of string;
+  const ACheckHead: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses SysUtils;', AIface,
+    'implementation']) + #13#10 + Join(AOther) + #13#10
+    + Join([ACheckHead, 'begin', '  if X < 0 then',
+    '    raise Exception.Create(''bad index'');', 'end;', 'end.']);
+end;
+
+procedure TTestRdxRawExceptionFix.OwnException_OtherRoutine_Helps;
+var
+  Src : string;
+begin
+  // Alcinoe Archive\Source\Alcinoe.FBX.Lib.pas:3040 - 'Exception:
+  // EALFBXError' ist eine lokale Variable der verschachtelten Prozedur
+  // RaiseException einer ANDEREN Methode; bis dahin sperrte die Datei
+  // ('die Datei deklariert ein eigenes "Exception"').
+  Src := TwoRoutines('', ['procedure Other(const S: Integer);',
+    '  procedure RaiseException(const Excep: TClass);', '  var',
+    '    Exception: TObject;', '  begin', '    Exception := nil;', '  end;',
+    'begin', '  RaiseException(nil);', 'end;'],
+    'procedure CheckRange(X: Integer);');
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // issrc Setup.MainFunc.pas:523 - Parameter 'const Exception: AnsiString'
+  // einer anderen Routine, im interface deklariert und implementiert.
+  Src := TwoRoutines('procedure OnException(const Exception: AnsiString; '
+    + 'const Position: Cardinal);',
+    ['procedure OnException(const Exception: AnsiString; '
+    + 'const Position: Cardinal);', 'begin', '  Log(String(Exception));',
+    'end;'], 'procedure CheckRange(X: Integer);');
+  Assert.AreEqual(Retyped(Src, RAWEXC_INVALID_OP), Fixed(Src,
+    LineOf(Src, 'raise '), True));
+end;
+
+procedure TTestRdxRawExceptionFix.OwnException_SameRoutine_NoHelp;
+var
+  Src : string;
+begin
+  // Gegenproben: dieselbe Routine (Parameter bzw. lokale Variable), eine
+  // lokale Prozedur, deren Variable das raise sieht, eine globale Variable
+  // und ein Feld - dort gilt der Name am raise.
+  Src := TwoRoutines('', [], 'procedure CheckRange(X: Integer; Exception: '
+    + 'TObject);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('', [], 'procedure CheckRange(X: Integer);' + #13#10
+    + 'var' + #13#10 + '  Exception: TObject;');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := Join(['unit t;', 'interface', 'implementation', 'uses SysUtils;',
+    'procedure Outer(X: Integer);', 'var', '  Exception: TObject;',
+    '  procedure Inner;', '  begin',
+    '    raise Exception.Create(''x'');', '  end;', 'begin', 'end;',
+    'end.']);
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('var' + #13#10 + '  Exception: TObject;', [],
+    'procedure CheckRange(X: Integer);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('type' + #13#10 + '  TFoo = class' + #13#10
+    + '    procedure Bar;' + #13#10 + '    Exception: TObject;' + #13#10
+    + '  end;', [], 'procedure TFoo.CheckRange(X: Integer);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+end;
+
+procedure TTestRdxRawExceptionFix.MormotSymbols_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework lib\dmustache\mormot.core.base.pas:7259 - mORMot 2
+  // baut ab Delphi 7: '{$ifndef ISDELPHI2007ANDUP}' (Z. 361), dazu
+  // '{$I mormot.defines.inc}'; mORMot2 mormot.core.base.pas:8475 -
+  // '{$ifndef FPC_OR_UNICODE}' (Delphi vor 2009).
+  Src := WrapWith(['{$ifndef ISDELPHI2007ANDUP}', 'type PtrInt = Integer;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['ISDELPHI2007ANDUP', 3, RAWEXC_ARGUMENT]));
+  Src := WrapWith(['{$ifndef FPC_OR_UNICODE}', 'type RawUtf8 = AnsiString;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['FPC_OR_UNICODE', 3, RAWEXC_INVALID_OP]), True);
+  Src := WrapWith(['{$I mormot.defines.inc}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['mormot.defines.inc', 3, RAWEXC_ARGUMENT]));
+  // Gegenprobe: ISDELPHIXE2 ist nach Delphi 2009.
+  Src := WrapWith(['{$ifdef ISDELPHIXE2}', 'type PtrInt = NativeInt;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+end;
+
+procedure TTestRdxRawExceptionFix.ModernProof_RefutesTrace;
+var
+  Src : string;
+begin
+  // Eine Inline-Variable ausserhalb jeder Weiche beweist Delphi 10.3: die
+  // Weiche fuer Delphi 7 ist dort toter Code.
+  Src := WrapWith(['{$IFDEF VER150}', 'type PtrInt = Integer;', '{$ENDIF}'],
+    ['  for var i := 1 to X do', '    raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // Gegenprobe: unter einer Weiche beweist sie nichts.
+  Src := WrapWith(['{$IFDEF VER150}', 'type PtrInt = Integer;', '{$ENDIF}'],
+    ['  {$IFNDEF VER150} for var i := 1 to X do Foo; {$ENDIF}',
+    '  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['VER150', 3, RAWEXC_ARGUMENT]));
+end;
+
 procedure TTestRdxRawExceptionFix.OwnTargetClass_NoHelp;
 var
   Src : string;
@@ -627,6 +743,48 @@ begin
   Assert.IsTrue(O.ChangesBehavior, 'gekennzeichnet');
   Assert.IsTrue(Pos('EInvalidOpException', O.Hint) > 0, O.Hint);
   Assert.AreEqual(Retyped(Src, 'EInvalidOpException'), Apply(Src, O.Edits));
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_OldProjectNearby_NoHelp;
+var
+  Root, U, Dof, Src : string;
+  S                 : TSeen;
+  Seen              : TArray<TSeen>;
+  O                 : TRdxFixOutcome;
+begin
+  // gexperts Extras\NewEditor\GX_eAlign.pas:302: GExperts baut mit Delphi
+  // 3-6 (GExpert4.dof zwei Ebenen hoeher, keine .dproj) - dort gibt es
+  // weder EArgumentException noch EInvalidOpException. Die Unit selbst
+  // fragt nach keinem Compiler; ohne den Plattenblick des Adapters
+  // (TRdxMagicFixes.ProjectReason, lfExceptionClasses) boeten beide
+  // Eintraege an. Gegenprobe: ohne die .dof.
+  Src := Wrap(['  raise Exception.Create(''No Editor Interface'');']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  S := Seen[0];
+  Root := NewTempDir('rdx_s127_');
+  try
+    U := Root + 'gx' + PathDelim + 'Extras' + PathDelim + 'NewEditor'
+      + PathDelim;
+    ForceDirectories(U);
+    U := U + 'GX_eAlign.pas';
+    Dof := Root + 'gx' + PathDelim + 'GExpert4.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsFalse(O.Enabled, 'erster Eintrag gesperrt');
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+    O := PlanAltFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsFalse(O.Enabled, 'zweiter Eintrag gesperrt');
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    DeleteFile(Dof);
+    O := PlanFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    O := PlanAltFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 procedure TTestRdxRawExceptionDetector.Table_MissingSysUtils_AddsUses;

@@ -1534,21 +1534,26 @@ end;
 // sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
 // liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
 // die Projekt-Sperre nicht pruefbar).
+// Seit rwE30 Stufe 2 ueber TRdxMagicFixes.ProjectReason: beweist die
+// Datei selbst einen neueren Compiler (Inline-Variable, RTL-Namensraum)
+// bzw. nutzt sie Invariant ohne Weiche, fragt er die Platte nicht. Auch
+// fuer SCA127 (lfExceptionClasses, mit Includes; dort sperrt der Netzpfad
+// nicht - kein Beleg).
 procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
   AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
 var
   Map : TRdxCodeMap;
 begin
   if not AOutcome.Enabled then Exit;
-  AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
+  AOutcome.Reason := '';
+  if TRdxMagicFixes.MissingBlocks(AFeature) then
+    AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
   if AOutcome.Reason = '' then
-    AOutcome.Reason := TRdxMagicFixes.FileReason(AFinding.FileName, AFeature);
-  if (AOutcome.Reason = '') and (AFeature = lfFormatInvariant) then
   begin
     Map := TRdxCodeMap.Acquire(ALines);
     try
-      AOutcome.Reason := TRdxMagicFixes.IncludeReason(AFinding.FileName, Map,
-        AFeature);
+      AOutcome.Reason := TRdxMagicFixes.ProjectReason(AFinding.FileName, Map,
+        AFeature, AFeature in [lfFormatInvariant, lfExceptionClasses]);
     finally
       TRdxCodeMap.Release(Map);
     end;
@@ -1986,6 +1991,8 @@ function PlanRaisingRawException(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxRawExceptionFix.ToArgumentException);
+  // Alte Compiler in der Nachbarschaft (rwE30 Stufe 2, Sperre bei Beleg).
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
   if not Result.Enabled then Exit;
   Result.Hint := _(R_RAWEXC_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
@@ -2001,6 +2008,7 @@ begin
     TRdxRawExceptionFix.ToInvalidOpException);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
   if not Result.Enabled then Exit;
   Result.Hint := _(R_RAWEXC_ALT_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
