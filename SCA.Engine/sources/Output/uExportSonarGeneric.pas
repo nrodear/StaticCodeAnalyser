@@ -583,8 +583,9 @@ function IsDowngraded(const F: TLeakFinding; const M: TRuleMeta): Boolean;
 // blosser Ungleichheitsvergleich haette ihn mitverschluckt - genau der
 // Fehler, den diese Funktion verhindert.
 //
-// CUSTOM-REGELN SIND NIE HERABGESTUFT (2026-10-29): ihre Severity steht in
-// der YAML-Regel und wird vom Detektor 1:1 in F.Severity geschrieben, M ist
+// CUSTOM-REGELN: MASSSTAB IST DIE YAML, NICHT DER KATALOG (2026-10-29):
+// ihre Severity steht in der YAML-Regel und wird vom Detektor 1:1 in
+// F.Severity geschrieben, M ist
 // dagegen nur der Katalog-Platzhalter SCA023 (Warning). Der Vergleich warf
 // deshalb jede als 'hint' deklarierte Custom-Regel still aus dem Export -
 // am Mini-Roundtrip belegt (MINI001: 6 Funde in Konsole/JSON, 0 im
