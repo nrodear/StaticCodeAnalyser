@@ -125,6 +125,18 @@ in der Konsolenausgabe bleiben sie vollständig erhalten.
 **Hoch**gestufte Funde sind nie betroffen — sie gehen immer in den Report
 (mit der Katalog-Schwere, mehr gibt das Format nicht her).
 
+**Custom-Regeln** (`--custom-rules`) gelten nie als herabgestuft: ihre
+Severity steht in der YAML-Regel selbst. Jede Custom-Regel erscheint in Sonar
+unter eigenem Namen („User-defined custom rule PROJ001“) mit einem Impact nach
+ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
+
+**Achtung, Konfidenz:** die Evidenz-Politik deckelt Funde mit Konfidenz
+*medium* auf Warning. Für Regeln mit Katalog-Severity Error heißt das: der
+Großteil ihrer Funde gilt als herabgestuft und fehlt ohne
+`--sonar-keep-downgraded` in Sonar — gemessen 2026-10-29 am JVCL-Korpus:
+SCA001 51 von 53 Funden, SCA003 10 von 10; im gesamten Realwelt-Korpus
+fehlen so 726 Funde.
+
 Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
 einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
 umgekehrt zählt Neuauftauchendes als *neuer* Fund mit heutigem Datum — das
@@ -230,6 +242,13 @@ Jede SCA-Rule trägt im Catalog [`rules/sca-rules.json`](../rules/sca-rules.json
 - **`impacts[]`** — `{ softwareQuality, severity }` mit
   `softwareQuality ∈ {SECURITY, RELIABILITY, MAINTAINABILITY}` und
   `severity ∈ {BLOCKER, HIGH, MEDIUM, LOW, INFO}`
+
+**Mindestversion:** `BLOCKER` und `INFO` als Impact-Severity kennt SonarQube
+erst ab **10.8** (Server 2025.x, Community Build 24.12+). 10.3 bis 10.7
+erlauben laut Spezifikation nur `HIGH`/`MEDIUM`/`LOW`; ein Report mit
+`BLOCKER`/`INFO` ist dort ungültig (zu erwarten: der Scanner verwirft ihn
+ganz, am Server noch nicht beobachtet). Vor 10.3 versteht Sonar das Format mit
+`rules[]` gar nicht.
 
 Diese Felder landen automatisch in der Generic-Issue-Output. Sonar nutzt sie
 für das MQR-Dashboard. Beispiele:
