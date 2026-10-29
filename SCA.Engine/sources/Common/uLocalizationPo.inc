@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6751 Zeilen, 304262 Bytes
-  CPoLines_de: array[0..6750] of string = (
+  // i18n\de.po - 6784 Zeilen, 307508 Bytes
+  CPoLines_de: array[0..6783] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6765,7 +6765,40 @@ const
     'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"',
     '',
     'msgid "it stands there only under a compiler condition (line %d); %s"',
-    'msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"'
+    'msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"',
+    '',
+    'msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "Lazarus-/FPC-Datei (%s) - FPC 3.2 kennt kein TFormatSettings.Invariant"',
+    '',
+    'msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut wohl auch mit FPC, und FPC 3.2 kennt kein TFormatSettings.Invariant"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort gepr'#$00FC'ft; %s"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"',
+    'msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - TFormatSettings.Invariant ist erst ab dort gepr'#$00FC'ft; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi XE = %s) - there is no global variable FormatSettings there; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi XE = %s) - dort gibt es keine globale Variable FormatSettings; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort gepr'#$00FC'ft; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"',
+    'msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"',
+    '',
+    'msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "das Include %s tr'#$00E4'gt eine FPC-Weiche (Zeile %d) - FPC 3.2 kennt kein TFormatSettings.Invariant"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s"',
+    'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 gepr'#$00FC'ft; %s"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"',
+    'msgstr "das Include %s tr'#$00E4'gt Spuren '#$00E4'lterer Compiler (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE; %s"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7040,8 +7073,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6747 Zeilen, 316493 Bytes
-  CPoLines_fr: array[0..6746] of string = (
+  // i18n\fr.po - 6780 Zeilen, 319992 Bytes
+  CPoLines_fr: array[0..6779] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13788,7 +13821,40 @@ const
     'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans SysUtils que depuis Delphi 2009"',
     '',
     'msgid "it stands there only under a compiler condition (line %d); %s"',
-    'msgstr "elle n''y figure que sous une condition de compilation (ligne %d) ; %s"'
+    'msgstr "elle n''y figure que sous une condition de compilation (ligne %d) ; %s"',
+    '',
+    'msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne conna'#$00EE't pas TFormatSettings.Invariant"',
+    '',
+    'msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "projet/paquet Lazarus %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec FPC, et FPC 3.2 ne conna'#$00EE't pas TFormatSettings.Invariant"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "ancien fichier de projet %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 10.3, et TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de l'#$00E0'; %s"',
+    '',
+    'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"',
+    'msgstr "ancien fichier de projet %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' XE, qui n''a pas de variable globale FormatSettings; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s avec ProjectVersion %s (avant Delphi 10.3 = %s) - TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de l'#$00E0'; %s"',
+    '',
+    'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi XE = %s) - there is no global variable FormatSettings there; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s avec ProjectVersion %s (avant Delphi XE = %s) - la variable globale FormatSettings n''y existe pas; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s sans ProjectVersion lisible (Delphi 2007 n''en '#$00E9'crivait pas) - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 10.3, et TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de l'#$00E0'; %s"',
+    '',
+    'msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"',
+    'msgstr "projet %s dans le r'#$00E9'pertoire %s sans ProjectVersion lisible (Delphi 2007 n''en '#$00E9'crivait pas) - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' XE, qui n''a pas de variable globale FormatSettings; %s"',
+    '',
+    'msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no TFormatSettings.Invariant"',
+    'msgstr "le fichier include %s porte un aiguillage FPC (ligne %d) - FPC 3.2 ne conna'#$00EE't pas TFormatSettings.Invariant"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s"',
+    'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de Delphi 10.3; %s"',
+    '',
+    'msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"',
+    'msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - la variable globale FormatSettings n''existe qu'''#$00E0' partir de Delphi XE; %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

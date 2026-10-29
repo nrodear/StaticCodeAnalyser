@@ -114,6 +114,15 @@ const
   FLOOR_DIGIT_SEP: TRdxCompilerFloor = (Ver: 350; Version: 35; Compiler: 28;
     DelphiNumber: 28; DelphiYear: 2010; Rtl: 350; FpcFull: MaxInt;
     XeNames: True; ProjectVersion: 193);
+  // SCA128/SCA059, Hauptweg: die globale Variable FormatSettings gibt es ab
+  // Delphi XE (VER220, CompilerVersion 22, COMPILER15/DELPHI15 der JEDI-
+  // Zaehlung, RTL220; .dproj ProjectVersion 12.2 - Delphi 2009/2010
+  // schrieben 12.0), in FPC ab 2.6. Bis zum Realworld-Test rwE29 in
+  // uRdxFormatSettingsFix (dort ohne ProjectVersion); seitdem liest auch
+  // der Plattenblick (uRdxMagicFixes, lfFormatSettingsVar) die Schwelle.
+  FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
+    Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
+    FpcFull: 20600; XeNames: False; ProjectVersion: 122);
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der

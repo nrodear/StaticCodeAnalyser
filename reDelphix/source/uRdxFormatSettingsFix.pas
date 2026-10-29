@@ -159,7 +159,7 @@ uses
   uRefactorInfo,        // TRefactorSpan.Make
   uRdxText,             // _(), MsgMovedSuffix (E29, nie uLocalization)
   uRdxRecipes,          // TRdxRecipes.LineLooksFpcAware (FpcTellLine)
-  uRdxCompilerTraces;   // OldCompilerTrace, TRdxCompilerFloor, FLOOR_INLINE_DECL
+  uRdxCompilerTraces;   // OldCompilerTrace, FLOOR_SETTINGS_VAR, FLOOR_INLINE_DECL
 
 const
   SPAN_128 = 'sca128';
@@ -196,13 +196,9 @@ const
   SCOPE_STOPS: array[0..3] of string = ('implementation', 'initialization',
     'finalization', 'interface');
   MAX_FOLLOW_LINES = 30;
-  // Die globale Variable FormatSettings: Delphi XE (VER220, CompilerVersion
-  // 22, COMPILER15/DELPHI15 der JEDI-Zaehlung, RTL220); FPC ab 2.6. Wer nach
-  // XE fragt, baut auch davor (s. uRdxCompilerTraces). ProjectVersion liest
-  // nur SCA014 - hier ohne Wirkung.
-  FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
-    Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
-    FpcFull: 20600; XeNames: False; ProjectVersion: 0);
+  // Die globale Variable FormatSettings: FLOOR_SETTINGS_VAR (Delphi XE, FPC
+  // ab 2.6; seit rwE29 in uRdxCompilerTraces). Wer nach XE fragt, baut auch
+  // davor.
 
 type
   // Ein Aufruf auf der Zeile: Name, Klammern und die Spalte, vor der das

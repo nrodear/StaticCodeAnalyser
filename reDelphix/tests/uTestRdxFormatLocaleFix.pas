@@ -53,6 +53,8 @@ type
     [Test] procedure Sca059_Detector_CatalogExample;
     [Test] procedure Sca059_Detector_RoundTrip;
     [Test] procedure Sca059_Detector_TwoFormatsOnLine_NoHelp;
+    // ---- Realworld-Test rwE29: FPC-Weiche im Include ----
+    [Test] procedure Sca059_Detector_IncludeWithFpcSwitch_OnlyMainWay;
   end;
 {$ENDIF}
 
@@ -476,6 +478,42 @@ begin
   O := TablePlan(Src, Seen[0], False);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(_(R_FL_MANY, [BODY_LINE, 2]), O.Reason);
+end;
+
+procedure TTestRdxFormatLocaleFixDetector.Sca059_Detector_IncludeWithFpcSwitch_OnlyMainWay;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // rwE29, doublecmd components\Image32\source\Img32.SVG.Path.pas:320: die
+  // Unit bindet '{$I Img32.inc}' ein, das '{$IFDEF FPC} {$MODE DELPHI}'
+  // setzt (Double Commander baut mit FPC 3.2 - kein
+  // TFormatSettings.Invariant). Die Unit selbst traegt keine FPC-Weiche:
+  // ohne den Plattenblick des Adapters boete der Alt-Weg an. Der Hauptweg
+  // bleibt (FPC kennt FormatSettings); Gegenprobe: ein Include ohne
+  // FPC-Weiche sperrt den Alt-Weg nicht.
+  Src := UnitText(RTL_USES, ['{$I Img32.inc}'],
+    ['  r := Format(''%.2f'', [x]);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'Img32.SVG.Path.pas';
+    WriteText(Root + 'Img32.inc', '{$IFDEF FPC}' + CRLF + '  {$MODE DELPHI}'
+      + CRLF + '{$ENDIF}');
+    O := PlanAltFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.IsTrue(Pos('Img32.inc', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('TFormatSettings.Invariant', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    WriteText(Root + 'Img32.inc', '{$DEFINE IMG32}');
+    O := PlanAltFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}

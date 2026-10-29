@@ -58,6 +58,9 @@ type
     [Test] procedure Sca128_Detector_RoundTrip;
     [Test] procedure Sca128_Detector_RoundTripAlt;
     [Test] procedure Sca128_Detector_ContinuedStatement_NoHelp;
+    // ---- Realworld-Test rwE29: was nur die Platte weiss ----
+    [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
+    [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
   end;
 {$ENDIF}
 
@@ -69,6 +72,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDateFormatSettings,
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxMagicFixes,        // FileReason, lfFormatSettingsVar/lfFormatInvariant
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // PlanAltFixIn, FixAllWith
   {$ENDIF}
@@ -579,6 +583,84 @@ begin
   O := TablePlan(Src, Seen[0], False);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(_(R_FS_CONTINUES, [BODY_LINE + 1]), O.Reason);
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldDelphiProject_NoHelp;
+var
+  Root, Dir, U, Dof, Src : string;
+  Seen                   : TArray<TSeen>;
+  O                      : TRdxFixOutcome;
+begin
+  // rwE29, gexperts\Src\GX_DbugIntf.pas:149: GExperts baut mit Delphi 1-6
+  // (GExpert4.dof eine Ebene ueber Src, keine .dproj); die Unit selbst
+  // fragt nach keinem Compiler. Dort gibt es weder die globale
+  // FormatSettings noch TFormatSettings.Invariant (E2003). Der Adapter
+  // fragt jetzt den Plattenblick (FormatSettingsDiskCheck) - ohne ihn
+  // boeten beide Eintraege an (Gegenprobe unten: ohne .dof).
+  Src := InUnit(['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    Dir := Root + 'gx' + PathDelim + 'Src' + PathDelim;
+    ForceDirectories(Dir);
+    U := Dir + 'GX_DbugIntf.pas';
+    Dof := Root + 'gx' + PathDelim + 'GExpert4.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('FormatSettings', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('TFormatSettings.Invariant', O.Reason) > 0, O.Reason);
+    // Gegenprobe: ohne die alte Projektdatei bieten beide an.
+    DeleteFile(Dof);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_LazarusProject_OnlyMainWay;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // rwE29, martin-doyle\10-InvoiceExample\src\rgReportPayments.pas:210 (und
+  // rgInvoiceItemEdit.pas:217): die Unit steht in Rechnung.lpi im selben
+  // Verzeichnis und baut mit FPC 3.2 - dort gibt es kein
+  // TFormatSettings.Invariant. Der Alt-Weg sperrt (ohne den Plattenblick
+  // boete er an: die Unit traegt keine FPC-Weiche); der Hauptweg bleibt -
+  // FPC kennt die globale FormatSettings (FpcKnows).
+  Src := InUnit(['  r := FloatToStr(x);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'rgReportPayments.pas';
+    WriteText(Root + 'Rechnung.lpi', '<CONFIG/>');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('Rechnung.lpi', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.AreEqual(InUnit(['  r := FloatToStr(x, FormatSettings);']),
+      Apply(Src, O.Edits));
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}
