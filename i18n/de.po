@@ -6748,3 +6748,9 @@ msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von
 
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr "das Abschnitts-Schlüsselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"
+
+msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
+msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise bräche sie"
+
+msgid "the routine is passed as a callback (@%s) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (@%s) - raise bräche ihren Aufrufer"

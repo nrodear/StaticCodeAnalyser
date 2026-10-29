@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6750 Zeilen, 304299 Bytes
-  CPoLines_de: array[0..6749] of string = (
+  // i18n\de.po - 6756 Zeilen, 304769 Bytes
+  CPoLines_de: array[0..6755] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6764,7 +6764,13 @@ const
     'msgstr "%s steht in einer uses-Klausel in einem bedingten Zweig (Zeile %d) - von Hand erg'#$00E4'nzen"',
     '',
     'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
-    'msgstr "das Abschnitts-Schl'#$00FC'sselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"'
+    'msgstr "das Abschnitts-Schl'#$00FC'sselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"',
+    '',
+    'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
+    'msgstr "die Deklaration tr'#$00E4'gt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise br'#$00E4'che sie"',
+    '',
+    'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
+    'msgstr "die Routine wird als Callback '#$00FC'bergeben (@%s) - raise br'#$00E4'che ihren Aufrufer"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7039,8 +7045,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6746 Zeilen, 316549 Bytes
-  CPoLines_fr: array[0..6745] of string = (
+  // i18n\fr.po - 6752 Zeilen, 317032 Bytes
+  CPoLines_fr: array[0..6751] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13786,7 +13792,13 @@ const
     'msgstr "%s figure dans une clause uses '#$00E0' l''int'#$00E9'rieur d''une branche conditionnelle (ligne %d) - l''ajouter '#$00E0' la main"',
     '',
     'msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"',
-    'msgstr "le mot-cl'#$00E9' de section '#$00E0' la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses '#$00E0' la main"'
+    'msgstr "le mot-cl'#$00E9' de section '#$00E0' la ligne %d se trouve dans une branche conditionnelle (ligne %d) - ajouter la clause uses '#$00E0' la main"',
+    '',
+    'msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"',
+    'msgstr "la d'#$00E9'claration porte %s - un corps vide y est un crochet dont les appelants (inherited, le framework) attendent qu''il ne fasse rien ; raise les casserait"',
+    '',
+    'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
+    'msgstr "la routine est pass'#$00E9'e comme callback (@%s) - raise casserait son appelant"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

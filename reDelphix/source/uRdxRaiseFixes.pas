@@ -76,6 +76,7 @@ uses
   // die Unit dafuer uRdxStructFixes ein.
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
+  uRdxBlocks,        // ReadRoutine, FindMethodDecls, MethodDecl (HookReason)
   uRdxText;          // _() - Gruende in der Sprache der SCA (E29)
 
 const
@@ -91,6 +92,10 @@ const
   // Detektor ('CreateAndRaise' nicht).
   CREATE_SUFFIXES: array[0..7] of string = ('', 'fmt', 'res', 'help',
     'resfmt', 'reshelp', 'fmthelp', 'resfmthelp');
+  // SCA020 (b): Direktiven der Deklaration, unter denen ein leerer Rumpf
+  // ein Haken ist, den Aufrufer still erwarten (HookReason).
+  HOOK_DIRECTIVES: array[0..3] of string = ('virtual', 'dynamic', 'override',
+    'message');
 
 { ---- SCA020 ---- }
 
@@ -258,6 +263,75 @@ begin
     + AText;
 end;
 
+// Steht im Code '@<Name>' bzw. '@X.<Name>' (ANameLow: das letzte Glied
+// der Routine, klein)? Dann wird die Routine als Callback uebergeben.
+function AddressTaken(AMap: TRdxCodeMap; const ANameLow: string): Boolean;
+var
+  T, N : TRdxToken;
+begin
+  Result := False;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if T.Low = '@' then
+    begin
+      N := After(AMap, T);
+      while N.IsWord and (After(AMap, N).Low = '.') do
+        N := After(AMap, After(AMap, N));
+      if N.IsWord and (N.Low = ANameLow) then
+        Exit(True);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// SCA020 (b): ein leerer Rumpf, den Aufrufer still erwarten - ein raise
+// braeche sie (rwE29). '' oder der Grund.
+// - Die Deklaration in der Klasse traegt virtual/dynamic/override/message
+//   (HOOK_DIRECTIVES): ein leerer virtueller Rumpf ist ein Haken -
+//   Nachfahren rufen ihn per inherited (doublecmd kascrypt dcpcrypt2.pas:
+//   307 TDCP_hash.Init, 'inherited Init;' in dcpsha256/dcpsha512), das
+//   Framework ruft ihn je Vorgang (Indy IdThread.BeforeExecute); ein
+//   leerer override schaltet den Vorfahren bewusst ab (LoadSettings,
+//   Finalize).
+// - Die Routine wird per '@Name' uebergeben (doublecmd
+//   multithreadprocslaz.pas:15: RegisterPackage(.., @Register) - das raise
+//   braeche die Paketinstallation in der IDE).
+// Steht die Deklaration nicht in der Datei, bleibt nur die zweite Frage.
+function HookReason(AMap: TRdxCodeMap; const ABody: TRdxMethodBody): string;
+var
+  R         : TRdxRoutine;
+  D         : TRdxRoutine;
+  Heads     : TArray<TRdxToken>;
+  ClassPath : string;
+  NameLow   : string;
+  NameText  : string;   // das letzte Glied wie im Kopf (fuer den Grund)
+  W         : string;
+  i         : Integer;
+begin
+  Result := '';
+  NameText := Copy(ABody.Name, LastDelimiter('.', ABody.Name) + 1, MaxInt);
+  NameLow := LowerCase(NameText);
+  if (TRdxBlocks.ReadRoutine(AMap, HeadStart(AMap, ABody.Keyword), R) = '')
+     and (Length(R.Parts) >= 2) then
+  begin
+    NameLow := R.Parts[High(R.Parts)];
+    ClassPath := R.Parts[0];
+    for i := 1 to High(R.Parts) - 1 do
+      ClassPath := ClassPath + '.' + R.Parts[i];
+    Heads := TRdxBlocks.FindMethodDecls(AMap, ClassPath, NameLow);
+    for i := 0 to High(Heads) do
+      if (TRdxBlocks.MethodDecl(AMap, Heads[i], D) = '')
+         and HasDirective(D, HOOK_DIRECTIVES, W) then
+        Exit(_('the declaration carries %s - an empty body there is a hook '
+          + 'that callers (inherited, the framework) expect to do nothing; '
+          + 'raise would break them', [W]));
+  end;
+  if (NameLow <> '') and AddressTaken(AMap, NameLow) then
+    Result := _('the routine is passed as a callback (@%s) - raise would '
+      + 'break its caller', [NameText]);
+end;
+
 class function TRdxRaiseFixes.EmptyBody(AMap: TRdxCodeMap; ALine: Integer;
   const AStatementFmt: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -274,6 +348,8 @@ begin
       + 'or no destructor', [Body.Keyword.Low]);
   if (AReason = '') and (AStatementFmt <> '') and (Body.Name = '') then
     AReason := _('name of the method not on the header line');
+  if (AReason = '') and (AStatementFmt <> '') then
+    AReason := HookReason(AMap, Body);
   if AReason <> '' then Exit;
   if AStatementFmt = '' then
     AReason := BodyEdit(AMap, Body, INTENT_LINE, INTENT_INLINE, AEdit)
