@@ -19,7 +19,11 @@ unit uRdxRawExceptionFix;
 // Meldung des Detektors nennt selbst EArgumentException. Beide Klassen
 // stehen in SysUtils von Delphi (System.SysUtils) und FPC 3.2.2
 // (sysutilh.inc) - keine FPC-Weiche noetig. EProgrammerError gibt es in
-// keiner der beiden RTLs.
+// keiner der beiden RTLs. In Delphi gibt es beide erst seit Delphi 2009
+// (mit den Generics; Delphi 7/2007 kennen sie nicht): eine Datei, die
+// nach aelteren Compilern fragt, bekommt keine Hilfe (Realworld-Test
+// rwE29: cnwizards ThirdParty\PascalScript, gebaut nur mit Delphi 5-2007,
+// '{$IFDEF DELPHI3UP}' in der Unit - E2003 nach der Hilfe).
 //
 // AENDERT DAS VERHALTEN (Changes=True): Handler 'on E: EArgumentException'
 // bzw. 'on E: EInvalidOpException' - auch in Aufrufern anderer Units -
@@ -41,7 +45,10 @@ unit uRdxRawExceptionFix;
 //   - eine Compiler-Direktive zwischen 'raise' und dem Konstruktor,
 //   - die Datei deklariert selbst 'Exception' (dann ist es nicht die Klasse
 //     aus SysUtils, und die neue haette eine andere Hierarchie) oder die
-//     Zielklasse (dann bande der neue Name an die eigene).
+//     Zielklasse (dann bande der neue Name an die eigene),
+//   - die Datei fragt nach Compilern vor Delphi 2009 (uRdxCompilerTraces,
+//     FLOOR_DEFAULT_FN - dieselbe Schwelle wie Default(T) bei SCA121; die
+//     Schwelle selbst zaehlt mit: wer nach 2009 fragt, baut auch davor).
 // Grenze: eine Unit im uses, die selbst EArgumentException bzw.
 // EInvalidOpException deklariert, sieht der Planer nicht (nur die Datei);
 // ebensowenig ein with-Ausdruck mit einem Member 'Exception'.
@@ -71,6 +78,8 @@ const
     + 'constructor';
   R_RAWEXC_OWN = 'the file declares its own "%s" - it is not the class from '
     + 'SysUtils';
+  R_RAWEXC_OLD = 'the file asks for old compilers (%s, line %d) - %s exists '
+    + 'in SysUtils only from Delphi 2009 on';
 
 type
   // Die Planer an einer Zeile (TRdxMapPlanner-Form, MapFix oeffnet die
@@ -102,6 +111,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
+  uRdxCompilerTraces, // OldCompilerTrace, FLOOR_DEFAULT_FN (Delphi 2009)
   uRdxText;          // _(), MsgMovedSuffix (E29, nie uLocalization)
 
 const
@@ -200,8 +210,9 @@ end;
 class function TRdxRawExceptionFix.Retype(AMap: TRdxCodeMap; ALine: Integer;
   const AClass: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
-  Site : TRaiseSite;
-  n    : Integer;
+  Site  : TRaiseSite;
+  n, Li : Integer;
+  Trace : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -219,7 +230,13 @@ begin
   else if DeclaresOwn(AMap, EXC_LOW) then
     AReason := _(R_RAWEXC_OWN, ['Exception'])
   else if DeclaresOwn(AMap, LowerCase(AClass)) then
-    AReason := _(R_RAWEXC_OWN, [AClass]);
+    AReason := _(R_RAWEXC_OWN, [AClass])
+  else
+  begin
+    Trace := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
+    if Trace <> '' then
+      AReason := _(R_RAWEXC_OLD, [Trace, Li, AClass]);
+  end;
   if AReason <> '' then Exit;
   AEdit.Span := TRefactorSpan.Make(SPAN_127, Site.ExcTok.Line, Site.ExcTok.Col,
     Site.ExcTok.Line, Site.ExcTok.EndCol);

@@ -6741,3 +6741,8 @@ msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine
 
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"
+
+# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"

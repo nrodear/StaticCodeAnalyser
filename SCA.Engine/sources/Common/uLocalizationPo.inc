@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6743 Zeilen, 303797 Bytes
-  CPoLines_de: array[0..6742] of string = (
+  // i18n\de.po - 6748 Zeilen, 304117 Bytes
+  CPoLines_de: array[0..6747] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6757,7 +6757,12 @@ const
     'msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"'
+    'msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"',
+    '',
+    '# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"',
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7032,8 +7037,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6739 Zeilen, 316014 Bytes
-  CPoLines_fr: array[0..6738] of string = (
+  // i18n\fr.po - 6744 Zeilen, 316343 Bytes
+  CPoLines_fr: array[0..6743] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13772,7 +13777,12 @@ const
     'msgstr "m'#$00EA'me sens - la comparaison est invers'#$00E9'e en miroir ; aucun c'#$00F4't'#$00E9' n''appelle de routine"',
     '',
     'msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"',
-    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"'
+    'msgstr "m'#$00EA'me sens avec l'''#$00E9'valuation en court-circuit ({$B-}) : la deuxi'#$00E8'me condition n''est '#$00E9'valu'#$00E9'e que si la premi'#$00E8're est vraie, comme avant"',
+    '',
+    '# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"',
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans SysUtils que depuis Delphi 2009"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

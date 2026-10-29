@@ -42,6 +42,9 @@ type
     [Test] procedure OwnException_NoHelp;
     [Test] procedure OwnTargetClass_NoHelp;
     [Test] procedure OwnTargetVariable_NoHelp;
+    // ---- Realworld-Test rwE29 ----
+    [Test] procedure OldCompilerSwitch_NoHelp;
+    [Test] procedure NewCompilerSwitch_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -386,6 +389,45 @@ begin
     ['  raise Exception.Create(''x'');']);
   AssertRefused(Src, LineOf(Src, 'raise '),
     _(R_RAWEXC_OWN, [RAWEXC_ARGUMENT]));
+end;
+
+procedure TTestRdxRawExceptionFix.OldCompilerSwitch_NoHelp;
+var
+  Src : string;
+begin
+  // rwE29, cnwizards ThirdParty\PascalScript\uPSRuntime.pas:5927 (gebaut
+  // nur mit Delphi 5-2007): die Unit fragt '{$IFDEF DELPHI3UP }' - dort
+  // gibt es EArgumentException und EInvalidOpException nicht (erst ab
+  // Delphi 2009), die Hilfe brach den Bau (E2003). Ohne die Sperre bekaeme
+  // diese Quelle beide Eintraege (die Datei deklariert nichts, SysUtils
+  // steht in uses).
+  Src := WrapWith(['{$IFDEF DELPHI3UP }', 'uses ActiveX;', '{$ENDIF}'],
+    ['  if X < 0 then raise Exception.Create(''bad index'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['DELPHI3UP', 3, RAWEXC_ARGUMENT]));
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['DELPHI3UP', 3, RAWEXC_INVALID_OP]), True);
+  // Die Schwelle selbst zaehlt mit: wer nach Delphi 2009 fragt, baut auch
+  // davor.
+  Src := WrapWith(['{$IF CompilerVersion >= 20}', '{$DEFINE NEWRTL}',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILERVERSION >= 20', 3, RAWEXC_ARGUMENT]));
+end;
+
+procedure TTestRdxRawExceptionFix.NewCompilerSwitch_Helps;
+var
+  Src : string;
+begin
+  // Gegenprobe: eine Weiche, die nur neuere Compiler nennt (VER330 = 10.3,
+  // FPC-Weiche - FPC 3.2.2 kennt beide Klassen), sperrt nicht.
+  Src := WrapWith(['{$IFDEF VER330}', '{$DEFINE RIO}', '{$ENDIF}',
+    '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}'],
+    ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, 'EArgumentException'),
+    Fixed(Src, LineOf(Src, 'raise ')));
+  Assert.AreEqual(Retyped(Src, 'EInvalidOpException'),
+    Fixed(Src, LineOf(Src, 'raise '), True));
 end;
 
 {$IFNDEF FPC}

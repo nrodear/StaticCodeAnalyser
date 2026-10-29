@@ -128,11 +128,11 @@ msgstr ""
 msgid "\"%s\" in the type - declaration not readable"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1833
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2010
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1873
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2050
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -261,7 +261,7 @@ msgstr ""
 msgid "\"inherited\" already appears in line %d (inactive branch, comment, string literal or local routine) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRawExceptionFix.pas:215
+#: reDelphix/source/uRdxRawExceptionFix.pas:226
 msgid "\"raise Exception\" without a constructor call (Create, CreateFmt ...) - there is no object whose class could change"
 msgstr ""
 
@@ -730,7 +730,7 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1625
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1802
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -1002,7 +1002,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1824
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1119,7 +1119,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1819
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1996
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1427,7 +1427,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1617
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1794
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -2092,7 +2092,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1600
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1777
 msgid "File not found: %s"
 msgstr ""
 
@@ -3770,11 +3770,11 @@ msgstr ""
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1987
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1878
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -4728,7 +4728,7 @@ msgstr ""
 msgid "compiler directive before X.Free; - the statement before it does not always apply"
 msgstr ""
 
-#: reDelphix/source/uRdxRawExceptionFix.pas:218
+#: reDelphix/source/uRdxRawExceptionFix.pas:229
 msgid "compiler directive between \"raise\" and the constructor"
 msgstr ""
 
@@ -5248,7 +5248,7 @@ msgstr ""
 msgid "line %d assigns to a property of \"%s\" - an owning list frees the items it drops"
 msgstr ""
 
-#: reDelphix/source/uRdxRawExceptionFix.pas:213
+#: reDelphix/source/uRdxRawExceptionFix.pas:224
 msgid "line %d carries %d \"raise Exception\" statements - ambiguous"
 msgstr ""
 
@@ -5562,7 +5562,7 @@ msgstr ""
 msgid "no \"raise %s\""
 msgstr ""
 
-#: reDelphix/source/uRdxRawExceptionFix.pas:211
+#: reDelphix/source/uRdxRawExceptionFix.pas:222
 msgid "no \"raise Exception\" in the code of the reported line"
 msgstr ""
 
@@ -7353,6 +7353,10 @@ msgstr ""
 msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
 msgstr ""
 
+#: reDelphix/source/uRdxRawExceptionFix.pas:238
+msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
+msgstr ""
+
 #: reDelphix/source/uRdxFormatSettingsFix.pas:589
 msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
 msgstr ""
@@ -7373,8 +7377,8 @@ msgstr ""
 msgid "the file declares an identifier FormatSettings (line %d) - the name would bind there, not to SysUtils.FormatSettings"
 msgstr ""
 
-#: reDelphix/source/uRdxRawExceptionFix.pas:220
-#: reDelphix/source/uRdxRawExceptionFix.pas:222
+#: reDelphix/source/uRdxRawExceptionFix.pas:231
+#: reDelphix/source/uRdxRawExceptionFix.pas:233
 msgid "the file declares its own \"%s\" - it is not the class from SysUtils"
 msgstr ""
 

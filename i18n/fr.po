@@ -6737,3 +6737,8 @@ msgstr "même sens - la comparaison est inversée en miroir ; aucun côté n'app
 
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr "même sens avec l'évaluation en court-circuit ({$B-}) : la deuxième condition n'est évaluée que si la première est vraie, comme avant"
+
+# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
+msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - %s n'existe dans SysUtils que depuis Delphi 2009"
