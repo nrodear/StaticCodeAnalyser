@@ -342,7 +342,10 @@ type
     // (uRdxCompilerTraces.ModernProof - fuer ein Sprachmittel, das FPC nicht
     // kennt, nur die Inline-Variable, die auch FPC ausschliesst) bzw. nutzt
     // sie fuer lfFormatInvariant TFormatSettings.Invariant selbst ohne
-    // Weiche, fragt er die Platte nicht. Sonst FileReason und - mit
+    // Weiche, fragt er die Platte nicht nach Compilern - fuer
+    // lfFormatInvariant aber weiter nach Programmen, die die globale
+    // FormatSettings selbst einstellen (SettingsWalkReason, Review
+    // e/HilfeFixG). Sonst FileReason und - mit
     // AIncludes - IncludeReason. Netzpfad: fuer lfExceptionClasses kein
     // Grund (MissingBlocks), sonst wie FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
@@ -2105,6 +2108,57 @@ begin
   end;
 end;
 
+// Nur die Programme im Fenster von ProjectWalkReason (Verzeichnis der Unit
+// und bis PROJECT_LEVELS darueber, je dazu ihre Paketordner), die die Unit
+// enthalten und die globale FormatSettings selbst einstellen
+// (SettingsProgramReason) - '' oder der Grund. Fuer den Invariant-Weg auch
+// dann, wenn die Datei einen neueren Compiler beweist (ProjectReason; Review
+// e/HilfeFixG): der Gegenbeweis widerlegt Compiler, nicht die
+// Einstellungen eines Programms. Netzpfad: R_NETWORK wie FileReason. Mit
+// Cache (GDiskCache, Art 'P').
+function SettingsWalkReason(const AFileName: string): string;
+var
+  Dir, Up, Pkg, Key : string;
+  Level, i, k       : Integer;
+  Old, Unknown, All : TArray<string>;
+  OldVer            : TArray<Integer>;
+  Budget            : TRdxWalkBudget;
+begin
+  Result := '';
+  if IsNetworkPath(AFileName) then
+    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
+  Key := DiskKey('P', lfFormatInvariant, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Result) then
+    Exit;
+  Budget := Default(TRdxWalkBudget);
+  Dir := ExtractFileDir(AFileName);
+  Level := 0;
+  while (Result = '') and (Dir <> '') and (Level <= PROJECT_LEVELS) do
+  begin
+    Result := SettingsProgramReason(Dir, ProgramsIn(Dir), AFileName, Budget);
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if (Result <> '') or not DirectoryExists(Pkg) then Continue;
+      Old := nil;
+      Unknown := nil;
+      OldVer := nil;
+      All := nil;
+      CollectPackageDirs(Pkg, MaxInt, Old, Unknown, OldVer, All);
+      for k := 0 to High(All) do
+        if Result = '' then
+          Result := SettingsProgramReason(All[k], ProgramsIn(All[k]),
+            AFileName, Budget);
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+    Inc(Level);
+  end;
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
 class function TRdxMagicFixes.ProjectReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
 var
@@ -2116,12 +2170,18 @@ begin
   // nicht (die anderen Sprachmittel sperren dort, FileReason).
   if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
   Proof := ModernProof(AMap);
-  if ProofCovers(Proof, FloorOf(AFeature))
-     and (FpcKnows(AFeature) or Proof.NoFpc) then
+  // Der Gegenbeweis (bzw. Invariant ohne Weiche) widerlegt nur die
+  // Compiler-Spuren; ein Programm, das die globale FormatSettings selbst
+  // einstellt, sperrt den Invariant-Weg weiter (Review e/HilfeFixG).
+  if (ProofCovers(Proof, FloorOf(AFeature))
+      and (FpcKnows(AFeature) or Proof.NoFpc))
+     or ((AFeature = lfFormatInvariant)
+         and (UnconditionalInvariantLine(AMap) > 0)) then
+  begin
+    if AFeature = lfFormatInvariant then
+      Result := SettingsWalkReason(AFileName);
     Exit;
-  if (AFeature = lfFormatInvariant)
-     and (UnconditionalInvariantLine(AMap) > 0) then
-    Exit;
+  end;
   Result := FileReason(AFileName, AFeature);
   if (Result = '') and AIncludes then
   begin

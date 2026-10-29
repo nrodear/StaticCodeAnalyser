@@ -760,6 +760,13 @@ begin
 end;
 
 procedure TTestRdxMagicGuards.Disk_ProgramSetsSettings_Refused;
+const
+  PROOF_SRC = 'unit u;' + #13#10 + 'interface' + #13#10 + 'implementation'
+    + #13#10 + 'procedure P;' + #13#10 + 'begin' + #13#10
+    + '  for var i := 1 to 3 do ;' + #13#10 + 'end;' + #13#10 + 'end.';
+  INVARIANT_SRC = 'unit u;' + #13#10 + 'interface' + #13#10
+    + 'implementation' + #13#10 + 'procedure P;' + #13#10 + 'begin' + #13#10
+    + '  F := TFormatSettings.Invariant;' + #13#10 + 'end;' + #13#10 + 'end.';
 var
   T, Prg : string;
   Tr     : TTree;
@@ -785,12 +792,23 @@ begin
       ['heidisql.dpr', 'ShortDateFormat']);
     Assert.AreEqual('', TRdxMagicFixes.FileReason(Tr.U, lfFormatSettingsVar),
       'Hauptweg (gleiche Bedeutung)');
+    // Review e/HilfeFixG: der Gegenbeweis der Unit (Inline-Variable bzw.
+    // Invariant ohne Weiche) widerlegt nur Compiler - das Programm sperrt
+    // weiter (bis dahin liess ProjectReason es ungelesen).
+    AssertNames(ProjectReasonOf(Tr.U, PROOF_SRC, lfFormatInvariant, True),
+      ['heidisql.dpr', 'ShortDateFormat']);
+    AssertNames(ProjectReasonOf(Tr.U, INVARIANT_SRC, lfFormatInvariant, True),
+      ['heidisql.dpr', 'ShortDateFormat']);
+    Assert.AreEqual('', ProjectReasonOf(Tr.U, PROOF_SRC, lfFormatSettingsVar,
+      False), 'Hauptweg mit Gegenbeweis');
     // Gegenprobe: ein Programm, das die Unit nicht enthaelt.
     WriteText(Prg + 'heidisql.dpr', StringReplace(T, 'u.pas', 'v.pas', [])
       + '  FormatSettings.ShortDateFormat := ''yyyy/mm/dd'';' + #13#10
       + 'end.');
     Assert.AreEqual('', TRdxMagicFixes.FileReason(Tr.U, lfFormatInvariant),
       'anderes Programm');
+    Assert.AreEqual('', ProjectReasonOf(Tr.U, PROOF_SRC, lfFormatInvariant,
+      True), 'anderes Programm, Gegenbeweis');
   finally
     RemoveTree(Tr.Root);
   end;
