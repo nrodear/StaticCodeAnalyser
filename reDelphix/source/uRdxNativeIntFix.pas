@@ -39,6 +39,7 @@ implementation
 uses
   System.SysUtils,
   uRdxText,        // _(), MsgMovedSuffix (E29, nie uLocalization)
+  uRdxBlocks,      // BeginBodyAround, TRdxRoutine (TruncatedReason)
   uRefactorInfo;   // TRefactorSpan.Make
 
 const
@@ -61,6 +62,25 @@ const
     + '("- Integer(c)") - the chain would stay half converted';
   R_PS_NONCODE = 'a comment, string or directive stands between the two '
     + 'casts (Cast { } -)';
+  // rwE29: Faelle, in denen der Wert bitgleich bliebe bzw. der Code die
+  // Bitbreite schon selbst unterscheidet.
+  R_PS_OUTER = 'the difference goes into a 32-bit cast again (%s(...)) - '
+    + 'NativeInt would change nothing';
+  R_PS_RESULT = 'the difference goes into Result: %s - cut back to 32 bit, '
+    + 'NativeInt would change nothing (a compare function should compare, '
+    + 'not subtract)';
+  R_PS_BITNESS = 'the line is inside {$%s %s} (line %d) - the code already '
+    + 'separates 32 and 64 bit';
+  // 32-Bit-Ziele, in denen die NativeInt-Differenz wieder gekappt wird.
+  CAST_32: array[0..6] of string = ('integer', 'longint', 'cardinal',
+    'longword', 'dword', 'int32', 'uint32');
+  // Symbole einer Bitbreiten-Weiche ({$IFDEF WIN64} ... {$ELSE} ...).
+  BITNESS_SYMBOLS: array[0..11] of string = ('win64', 'win32', 'cpux64',
+    'cpux86', 'cpu64', 'cpu32', 'cpu64bits', 'cpu32bits', 'cpu386',
+    'cpui386', 'cpuamd64', 'cpux86_64');
+  // Die bedingten Direktiven, die eine Weiche oeffnen bzw. schliessen.
+  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
 
 type
   // Ein Treffer des Detektor-Musters: Spalten der beiden Cast-Woerter (Start,
@@ -192,6 +212,146 @@ begin
   Result := (P <= Length(S)) and (S[P] = '(');
 end;
 
+// Steht ein Wort aus BITNESS_SYMBOLS (oder 'SizeOf(Pointer)') in den
+// Argumenten AArgs einer bedingten Direktive?
+function NamesBitness(const AArgs: string): Boolean;
+var
+  Low  : string;
+  i, j : Integer;
+begin
+  Result := False;
+  Low := LowerCase(AArgs);
+  if Pos('sizeof(pointer)', StringReplace(Low, ' ', '', [rfReplaceAll])) > 0 then
+    Exit(True);
+  i := 1;
+  while i <= Length(Low) do
+  begin
+    if not IsIdentStart(Low[i]) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    j := i;
+    while (j <= Length(Low)) and IsIdentChar(Low[j]) do
+      Inc(j);
+    if InList(Copy(Low, i, j - i), BITNESS_SYMBOLS) then
+      Exit(True);
+    i := j;
+  end;
+end;
+
+// Liegt ALine in einem Zweig einer Bitbreiten-Weiche ({$IFDEF WIN64},
+// {$IF Defined(CPUX64)}, {$IFNDEF CPU64BITS}, {$IF SizeOf(Pointer) = 8} -
+// auch im {$ELSE})? Dann unterscheidet der Code 32 und 64 Bit schon selbst:
+// im 32-Bit-Zweig ist der Cast richtig, und NativeInt brach dort einen
+// Altcompiler (rwE29, cnwizards CnScanners.pas:334: '{$IFDEF WIN64}
+// NativeInt(..) {$ELSE} Longint(..) {$ENDIF}' - die Hilfe machte beide
+// Zweige gleich, CnWizards baut auch unter Delphi 5-7 ohne NativeInt).
+// Gelaufen wird ueber alle Direktiven vor ALine mit einem Stapel der
+// offenen Weichen. '' oder der Grund.
+function BitnessBranchReason(AMap: TRdxCodeMap; ALine: Integer): string;
+var
+  Words, Args : TArray<string>;
+  Lines       : TArray<Integer>;
+  Li, Co, n   : Integer;
+  W           : string;
+  HasArg      : Boolean;
+begin
+  Result := '';
+  Words := nil;
+  Args := nil;
+  Lines := nil;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) and (Li < ALine) do
+  begin
+    W := DirectiveWord(AMap, Li, Co, HasArg);
+    n := Length(Words);
+    if InList(W, COND_OPEN) then
+    begin
+      SetLength(Words, n + 1);
+      SetLength(Args, n + 1);
+      SetLength(Lines, n + 1);
+      Words[n] := W;
+      Args[n] := Trim(DirectiveArgs(AMap, Li, Co));
+      Lines[n] := Li;
+    end
+    else if (W = 'elseif') and (n > 0) then
+      Args[n - 1] := Args[n - 1] + ' ' + Trim(DirectiveArgs(AMap, Li, Co))
+    else if InList(W, COND_CLOSE) and (n > 0) then
+    begin
+      SetLength(Words, n - 1);
+      SetLength(Args, n - 1);
+      SetLength(Lines, n - 1);
+    end;
+    Inc(Co);
+  end;
+  for n := High(Words) downto 0 do
+    if NamesBitness(Args[n]) then
+      Exit(_(R_PS_BITNESS, [UpperCase(Words[n]), Args[n], Lines[n]]));
+end;
+
+// Wird die Differenz wieder auf 32 Bit gekappt, bliebe der Wert mit
+// NativeInt bitgleich - die Hilfe aenderte nichts, trug aber "aendert
+// Verhalten" (rwE29, Fragwuerdig fix-wirkungslos):
+// - der Treffer steht direkt in einem 32-Bit-Cast ('LongWord(Integer(a) -
+//   Integer(b))', FastcodeStrCopyUnit.pas:255; 'Cardinal(Longint(a) -
+//   Longint(I) - 1)', uPSDebugger.pas:238);
+// - er ist die ganze rechte Seite von 'Result :=' in einer Funktion mit
+//   32-Bit-Ergebnis ('Result := Integer(Item1) - Integer(Item2)' in
+//   Vergleichsfunktionen: SynEditPrintHeaderFooter.pas:661,
+//   CnProjectListUsedFrm.pas:413, JclAlgorithms.pas:151).
+// S ist die maskierte Zeile. '' oder der Grund.
+function TruncatedReason(AMap: TRdxCodeMap; ALine: Integer; const S: string;
+  const M: TCastMatch): string;
+var
+  P, Q : Integer;
+  W    : string;
+  R    : TRdxRoutine;
+  T, V : TRdxToken;
+begin
+  Result := '';
+  // Direkt in einem 32-Bit-Cast?
+  P := M.Start1 - 1;
+  while (P >= 1) and CharInSet(S[P], [' ', #9]) do
+    Dec(P);
+  if (P >= 1) and (S[P] = '(') then
+  begin
+    Q := P - 1;
+    while (Q >= 1) and CharInSet(S[Q], [' ', #9]) do
+      Dec(Q);
+    P := Q;
+    while (P >= 1) and IsIdentChar(S[P]) do
+      Dec(P);
+    W := LowerCase(Copy(S, P + 1, Q - P));
+    if InList(W, CAST_32)
+       and ((P < 1) or not CharInSet(S[P], ['.', '&', '@'])) then
+      Exit(_(R_PS_OUTER, [Copy(AMap.Raw(ALine), P + 1, Q - P)]));
+  end;
+  // 'Result := <Treffer>' allein auf der Zeile?
+  T := NextToken(AMap, ALine, 1);
+  if (T.Line <> ALine) or (T.Low <> 'result') then Exit;
+  V := After(AMap, T);
+  if V.Low <> ':=' then Exit;
+  V := After(AMap, V);
+  if (V.Line <> ALine) or (V.Col <> M.Start1) then Exit;
+  P := SkipBlanks(S, M.EndCol);
+  if (P <= Length(S)) and (S[P] = ';') then
+    P := SkipBlanks(S, P + 1);
+  if P <= Length(S) then Exit;
+  if BeginBodyAround(AMap, T, R) <> rbfFound then Exit;
+  if R.Keyword.Low <> 'function' then Exit;
+  V := After(AMap, R.NameTok);
+  if V.Low = '<' then
+    V := AfterClose(AMap, V);
+  if V.Low = '(' then
+    V := AfterClose(AMap, V);
+  if V.Low <> ':' then Exit;
+  V := After(AMap, V);
+  if InList(V.Low, CAST_32) and (After(AMap, V).Low = ';') then
+    Result := _(R_PS_RESULT, [Copy(AMap.Raw(V.Line), V.Col, V.Len)]);
+end;
+
 class function TRdxNativeIntFix.PointerSubtraction(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -239,6 +399,10 @@ begin
     AReason := _(R_PS_NONCODE);
     Exit;
   end;
+  AReason := TruncatedReason(AMap, ALine, S, M);
+  if AReason = '' then
+    AReason := BitnessBranchReason(AMap, ALine);
+  if AReason <> '' then Exit;
   if IsSignedCast(M.Word1) then
     NewWord := NEW_SIGNED
   else

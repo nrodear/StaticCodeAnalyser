@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6756 Zeilen, 304769 Bytes
-  CPoLines_de: array[0..6755] of string = (
+  // i18n\de.po - 6765 Zeilen, 305453 Bytes
+  CPoLines_de: array[0..6764] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6770,7 +6770,16 @@ const
     'msgstr "die Deklaration tr'#$00E4'gt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise br'#$00E4'che sie"',
     '',
     'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
-    'msgstr "die Routine wird als Callback '#$00FC'bergeben (@%s) - raise br'#$00E4'che ihren Aufrufer"'
+    'msgstr "die Routine wird als Callback '#$00FC'bergeben (@%s) - raise br'#$00E4'che ihren Aufrufer"',
+    '',
+    'msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"',
+    'msgstr "die Differenz geht wieder in einen 32-Bit-Cast (%s(...)) - NativeInt '#$00E4'nderte nichts"',
+    '',
+    'msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"',
+    'msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt '#$00E4'nderte nichts (eine Vergleichsfunktion sollte vergleichen, nicht subtrahieren)"',
+    '',
+    'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
+    'msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7045,8 +7054,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6752 Zeilen, 317032 Bytes
-  CPoLines_fr: array[0..6751] of string = (
+  // i18n\fr.po - 6761 Zeilen, 317718 Bytes
+  CPoLines_fr: array[0..6760] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13798,7 +13807,16 @@ const
     'msgstr "la d'#$00E9'claration porte %s - un corps vide y est un crochet dont les appelants (inherited, le framework) attendent qu''il ne fasse rien ; raise les casserait"',
     '',
     'msgid "the routine is passed as a callback (@%s) - raise would break its caller"',
-    'msgstr "la routine est pass'#$00E9'e comme callback (@%s) - raise casserait son appelant"'
+    'msgstr "la routine est pass'#$00E9'e comme callback (@%s) - raise casserait son appelant"',
+    '',
+    'msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"',
+    'msgstr "la diff'#$00E9'rence repasse dans un transtypage 32 bits (%s(...)) - NativeInt ne changerait rien"',
+    '',
+    'msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"',
+    'msgstr "la diff'#$00E9'rence va dans Result: %s - ramen'#$00E9'e '#$00E0' 32 bits, NativeInt ne changerait rien (une fonction de comparaison devrait comparer, pas soustraire)"',
+    '',
+    'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
+    'msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code s'#$00E9'pare d'#$00E9'j'#$00E0' 32 et 64 bits"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

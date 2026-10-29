@@ -6750,3 +6750,12 @@ msgstr "la déclaration porte %s - un corps vide y est un crochet dont les appel
 
 msgid "the routine is passed as a callback (@%s) - raise would break its caller"
 msgstr "la routine est passée comme callback (@%s) - raise casserait son appelant"
+
+msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"
+msgstr "la différence repasse dans un transtypage 32 bits (%s(...)) - NativeInt ne changerait rien"
+
+msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"
+msgstr "la différence va dans Result: %s - ramenée à 32 bits, NativeInt ne changerait rien (une fonction de comparaison devrait comparer, pas soustraire)"
+
+msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
+msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code sépare déjà 32 et 64 bits"

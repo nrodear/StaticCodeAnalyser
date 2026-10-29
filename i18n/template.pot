@@ -4138,7 +4138,7 @@ msgstr ""
 msgid "a comment spanning several lines starts after the begin"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:239
+#: reDelphix/source/uRdxNativeIntFix.pas:399
 msgid "a comment, string or directive stands between the two casts (Cast { } -)"
 msgstr ""
 
@@ -4300,7 +4300,7 @@ msgstr ""
 msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:224
+#: reDelphix/source/uRdxNativeIntFix.pas:384
 msgid "an operand is a number or no plain identifier (Cast(5))"
 msgstr ""
 
@@ -5264,7 +5264,7 @@ msgstr ""
 msgid "line %d carries %d calls of Format - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:218
+#: reDelphix/source/uRdxNativeIntFix.pas:378
 msgid "line %d carries %d pointer subtractions (SCA161) - ambiguous"
 msgstr ""
 
@@ -5501,7 +5501,7 @@ msgstr ""
 msgid "no \"Assigned(X) and (X <> nil)\" on one line here (no quick fix without parentheses around the comparison)"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:213
+#: reDelphix/source/uRdxNativeIntFix.pas:373
 msgid "no \"Cast(x) - Cast(y)\" pair of 32-bit casts on the code columns of the reported line"
 msgstr ""
 
@@ -7292,6 +7292,14 @@ msgstr ""
 msgid "the detector rates the comparison as intended (guard or sentinel value) - the exact comparison is right there"
 msgstr ""
 
+#: reDelphix/source/uRdxNativeIntFix.pas:352
+msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"
+msgstr ""
+
+#: reDelphix/source/uRdxNativeIntFix.pas:329
+msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"
+msgstr ""
+
 #: reDelphix/source/uRdxAttrDuplicateFix.pas:298
 msgid "the duplicate is on the last line of the file"
 msgstr ""
@@ -7823,6 +7831,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxIntroEdits.pas:445
 msgid "the line is inside an asm block - there is no Pascal code there"
+msgstr ""
+
+#: reDelphix/source/uRdxNativeIntFix.pas:291
+msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
 msgstr ""
 
 #: reDelphix/source/uRdxText.pas:771
@@ -8502,7 +8514,7 @@ msgstr ""
 msgid "the statement starts with a string"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:234
+#: reDelphix/source/uRdxNativeIntFix.pas:394
 msgid "the subtraction continues with another 32-bit cast (\"- Integer(c)\") - the chain would stay half converted"
 msgstr ""
 
@@ -8551,7 +8563,7 @@ msgstr ""
 msgid "the two calls are not textually identical"
 msgstr ""
 
-#: reDelphix/source/uRdxNativeIntFix.pas:229
+#: reDelphix/source/uRdxNativeIntFix.pas:389
 msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
 msgstr ""
 
