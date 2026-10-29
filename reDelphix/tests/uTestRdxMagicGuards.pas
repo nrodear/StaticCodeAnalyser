@@ -40,6 +40,13 @@ type
     [Test] procedure MainBlock_NamedEndArg_Refused;
     [Test] procedure Disk_IncludeOnNetworkPath_NoDiskAccess;
     [Test] procedure Reasons_FollowRdxLanguage;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure Disk_OldProjectPair_Refused;
+    [Test] procedure Disk_DualCompilerProject_Refused;
+    [Test] procedure Disk_ExceptionClasses_OnlyEvidence;
+    [Test] procedure Disk_ModernProof_SkipsDisk;
+    [Test] procedure Disk_PackageUsesInvariant_Refutes;
+    [Test] procedure Disk_ProgramSetsSettings_Refused;
   end;
 
 implementation
@@ -456,17 +463,18 @@ const
   // Lazarus-/FPC-Datei je Sprachmittel (TRdxLateFeature): je Sprache und
   // Sprachmittel ein eigener ganzer Satz - Geschlecht und Zahl ('eine
   // Inline-Konstante', 'Zifferntrenner') stellt die Sprache selbst. Die
-  // globale FormatSettings kennt FPC (FpcKnows): dort kein Grund ('').
+  // globale FormatSettings und die Ausnahmeklassen von SCA127 kennt FPC
+  // (FpcKnows): dort kein Grund ('').
   FPC_TAIL: array[0..2, TRdxLateFeature] of string = (
     ('FPC 3.2 has no inline constants', 'FPC 3.2 has no digit separators',
      'FPC 3.2 has no inline variables',
-     'FPC 3.2 has no TFormatSettings.Invariant', ''),
+     'FPC 3.2 has no TFormatSettings.Invariant', '', ''),
     ('eine Inline-Konstante gibt es in FPC 3.2 nicht',
      'Zifferntrenner gibt es in FPC 3.2 nicht',
      'eine Inline-Variable gibt es in FPC 3.2 nicht',
-     'FPC 3.2 kennt kein TFormatSettings.Invariant', ''),
+     'FPC 3.2 kennt kein TFormatSettings.Invariant', '', ''),
     (' constantes inline', ' de chiffres', ' variables inline',
-     ' TFormatSettings.Invariant', ''));
+     ' TFormatSettings.Invariant', '', ''));
 var
   T        : TTree;
   SL       : TStringList;
@@ -523,6 +531,268 @@ begin
     Map.Free;
     SL.Free;
     RemoveTree(T.Root);
+  end;
+end;
+
+{ ---- Realworld-Test rwE30 Stufe 2 ---- }
+
+// ProjectReason fuer die Unit AFile mit dem Text ASource.
+function ProjectReasonOf(const AFile, ASource: string; AFeature: TRdxLateFeature;
+  AIncludes: Boolean): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxMagicFixes.ProjectReason(AFile, Map, AFeature, AIncludes);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure AssertNames(const AReason: string; const AParts: array of string);
+var
+  i : Integer;
+begin
+  Assert.IsTrue(AReason <> '', 'Grund erwartet');
+  for i := Low(AParts) to High(AParts) do
+    Assert.IsTrue(Pos(AParts[i], AReason) > 0, AParts[i] + ' <> ' + AReason);
+end;
+
+procedure TTestRdxMagicGuards.Disk_OldProjectPair_Refused;
+var
+  T : TTree;
+  F : TRdxLateFeature;
+begin
+  // cnwizards Tool\CnDebugViewer: CnDebugViewer.dpr mit .dof/.cfg (Delphi
+  // 5-7) neben CnDebugViewer64.dpr/.dproj. Bis dahin machte die neue .dproj
+  // jede alte Projektdatei im Verzeichnis stumm - CnMdiView.pas:751 bekam
+  // ', FormatSettings' (E2003 in Delphi 5-7).
+  T := NewTree;
+  try
+    WriteText(T.C + 'CnDebugViewer.dpr', 'program CnDebugViewer;');
+    WriteText(T.C + 'CnDebugViewer.dof', '[Compiler]');
+    WriteText(T.C + 'CnDebugViewer.cfg', '-$A8');
+    WriteText(T.C + 'CnDebugViewer64.dpr', 'program CnDebugViewer64;');
+    WriteDproj(T.C + 'CnDebugViewer64.dproj', '19.5');
+    for F := Low(TRdxLateFeature) to High(TRdxLateFeature) do
+      AssertNames(TRdxMagicFixes.FileReason(T.U, F), ['CnDebugViewer.']);
+    // Gegenproben: das Projekt hat seine eigene .dproj (die IDE schreibt
+    // die .cfg weiter daneben) ...
+    WriteDproj(T.C + 'CnDebugViewer.dproj', '19.5');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'Projekt mit eigener .dproj');
+    // ... bzw. eine .cfg ohne Programm gleichen Namens.
+    DeleteFile(T.C + 'CnDebugViewer.dproj');
+    DeleteFile(T.C + 'CnDebugViewer.dpr');
+    DeleteFile(T.C + 'CnDebugViewer.dof');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      '.cfg ohne Programm');
+    // Ohne jede .dproj: Programm mit .cfg (Delphi bis 2007) ist alt.
+    DeleteFile(T.C + 'CnDebugViewer64.dproj');
+    WriteText(T.C + 'Tool.dpr', 'program Tool;');
+    WriteText(T.C + 'Tool.cfg', '-$A8');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses), ['.cfg']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_DualCompilerProject_Refused;
+var
+  T : TTree;
+begin
+  // mORMot2 ...\10-InvoiceExample\src: RechnungDelphi.dpr ohne .dproj neben
+  // Rechnung.lpi - fuer Delphi 7 und FPC geschrieben; rgInvoiceItemEdit.pas
+  // :217 bekam ', FormatSettings' (Delphi 7 kennt die Variable nicht). FPC
+  // allein sperrt den Hauptweg nicht (FpcKnows).
+  T := NewTree;
+  try
+    WriteText(T.C + 'Rechnung.lpi', '<CONFIG/>');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'nur Lazarus');
+    WriteText(T.C + 'RechnungDelphi.dpr', 'program RechnungDelphi;');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      ['RechnungDelphi.dpr', 'Rechnung.lpi']);
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      ['RechnungDelphi.dpr', 'Rechnung.lpi']);
+    // Gegenprobe: mit eigener .dproj ist das Programm neu.
+    WriteDproj(T.C + 'RechnungDelphi.dproj', '19.5');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'Programm mit .dproj');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_OnlyEvidence;
+const
+  SRC_INC = 'unit u;' + #13#10 + 'interface' + #13#10 + '{$I %s}' + #13#10
+    + 'implementation' + #13#10 + 'end.';
+var
+  T   : TTree;
+  Net : string;
+begin
+  // SCA127: nur ein Beleg sperrt (Nico-Entscheid rwE30 Stufe 2). Ein nicht
+  // gefundenes Include und ein Netzpfad sind keiner - fuer die Sprachmittel
+  // ab 10.3 bleiben sie Gruende.
+  T := NewTree;
+  try
+    Assert.AreEqual('', ProjectReasonOf(T.U, Format(SRC_INC, ['fehlt.inc']),
+      lfExceptionClasses, True), 'Include fehlt');
+    Assert.IsTrue(ProjectReasonOf(T.U, Format(SRC_INC, ['fehlt.inc']),
+      lfFormatInvariant, True) <> '', 'Include fehlt, Invariant');
+    // GExperts Extras\NewEditor\GX_eAlign.pas: '{$I GX_CondDefine.inc}'
+    // fragt nur nach VER100..VER140 (Delphi 3-6).
+    WriteText(T.C + 'GX_CondDefine.inc', '{$IFDEF VER140}' + #13#10
+      + '  {$DEFINE GX_VER140}' + #13#10 + '{$ENDIF}');
+    AssertNames(ProjectReasonOf(T.U, Format(SRC_INC, ['GX_CondDefine.inc']),
+      lfExceptionClasses, True), ['GX_CondDefine.inc', 'VER140']);
+    // Gegenprobe: ein Include nur mit neuen Versionen.
+    WriteText(T.C + 'GX_CondDefine.inc', '{$IFDEF VER350}' + #13#10
+      + '  {$DEFINE D11}' + #13#10 + '{$ENDIF}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, Format(SRC_INC,
+      ['GX_CondDefine.inc']), lfExceptionClasses, True), 'neues Include');
+    // GExperts: die alte Projektdatei zwei Ebenen hoeher.
+    WriteText(T.A + 'GExpert4.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, 'unit u; implementation end.',
+      lfExceptionClasses, True), ['GExpert4.dof']);
+    // Netzpfad: kein Beleg (SCA127), Grund fuer die anderen.
+    Net := PathDelim + PathDelim + 'rdx-e30-gibt-es-nicht' + PathDelim
+      + 'share' + PathDelim + 'u.pas';
+    Assert.AreEqual('', ProjectReasonOf(Net, 'unit u; implementation end.',
+      lfExceptionClasses, True), 'Netzpfad');
+    Assert.IsTrue(ProjectReasonOf(Net, 'unit u; implementation end.',
+      lfFormatSettingsVar, False) <> '', 'Netzpfad, FormatSettings');
+    Assert.IsFalse(TRdxMagicFixes.MissingBlocks(lfExceptionClasses));
+    Assert.IsTrue(TRdxMagicFixes.MissingBlocks(lfFormatSettingsVar));
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ModernProof_SkipsDisk;
+const
+  INLINE_SRC = 'unit u;' + #13#10 + 'interface' + #13#10 + 'implementation'
+    + #13#10 + 'procedure P;' + #13#10 + 'begin' + #13#10
+    + '  for var i := 1 to 3 do ;' + #13#10 + 'end;' + #13#10 + 'end.';
+  SCOPE_SRC = 'unit u;' + #13#10 + 'interface' + #13#10
+    + 'uses System.SysUtils;' + #13#10 + 'implementation' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // Die Datei beweist selbst einen neueren Compiler: die alte Projektdatei
+  // daneben ist nicht ihr Bau (rwE30 Stufe 2, ModernProof).
+  T := NewTree;
+  try
+    WriteText(T.C + 'Old.dof', '[Compiler]');
+    Assert.IsTrue(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar) <> '',
+      'ohne Beweis');
+    Assert.AreEqual('', ProjectReasonOf(T.U, INLINE_SRC, lfFormatSettingsVar,
+      False), 'Inline-Variable, FormatSettings');
+    Assert.AreEqual('', ProjectReasonOf(T.U, INLINE_SRC, lfFormatInvariant,
+      True), 'Inline-Variable, Invariant');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SCOPE_SRC, lfExceptionClasses,
+      True), 'Namensraum, SCA127');
+    // Gegenprobe: XE2 (Namensraum) beweist Invariant (10.3) nicht.
+    AssertNames(ProjectReasonOf(T.U, SCOPE_SRC, lfFormatInvariant, True),
+      ['Old.dof']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_PackageUsesInvariant_Refutes;
+var
+  T        : TTree;
+  Pkg, Dpk : string;
+begin
+  // delphimvcframework\lib\loggerpro\LoggerPro.HTMLFileAppender.pas:354:
+  // loggerproRT.dpk in packages\d100 (Delphi 10.0) enthaelt die Unit - und
+  // LoggerPro.Renderers.pas, die 'fFormatSettings :=
+  // TFormatSettings.Invariant' ohne Weiche setzt: das Paket baut auf 10.0
+  // mit Invariant, die Versionssperre ist widerlegt.
+  T := NewTree;
+  try
+    Pkg := T.B + 'packages' + PathDelim + 'd100' + PathDelim;
+    ForceDirectories(Pkg);
+    Dpk := 'package pkg;' + #13#10 + 'contains' + #13#10
+      + '  u in ''..\..\c\u.pas'',' + #13#10
+      + '  w in ''..\..\c\w.pas'';' + #13#10 + 'end.';
+    WriteText(Pkg + 'pkg.dpk', Dpk);
+    WriteText(T.C + 'w.pas', 'unit w;' + #13#10 + 'implementation' + #13#10
+      + 'procedure P;' + #13#10 + 'begin' + #13#10
+      + '  {$IFDEF X} F := TFormatSettings.Invariant; {$ENDIF}' + #13#10
+      + 'end;' + #13#10 + 'end.');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatInvariant),
+      ['pkg.dpk', 'd100']);
+    WriteText(T.C + 'w.pas', 'unit w;' + #13#10 + 'implementation' + #13#10
+      + 'procedure P;' + #13#10 + 'begin' + #13#10
+      + '  F := TFormatSettings.Invariant;' + #13#10 + 'end;' + #13#10
+      + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatInvariant),
+      'Paket nutzt Invariant');
+    // Die globale FormatSettings beweist es nicht.
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfInlineConst), ['pkg.dpk']);
+    // MVCFramework.HttpSys.Response.pas:335: dasselbe Paket widerlegt die
+    // Spur im Include (dmvcframework.inc 'CompilerVersion <= 29') - ein
+    // Paket in einem neuen Ordner (d110) reicht.
+    RemoveTree(Pkg);
+    Pkg := T.B + 'packages' + PathDelim + 'd110' + PathDelim;
+    ForceDirectories(Pkg);
+    WriteText(T.C + 'defs.inc', '{$IF CompilerVersion <= 29}' + #13#10
+      + '  {$DEFINE OLD}' + #13#10 + '{$IFEND}');
+    AssertNames(ProjectReasonOf(T.U, 'unit u;' + #13#10 + '{$I defs.inc}'
+      + #13#10 + 'implementation' + #13#10 + 'end.', lfFormatInvariant,
+      True), ['defs.inc']);
+    WriteText(Pkg + 'pkg.dpk', Dpk);
+    Assert.AreEqual('', ProjectReasonOf(T.U, 'unit u;' + #13#10
+      + '{$I defs.inc}' + #13#10 + 'implementation' + #13#10 + 'end.',
+      lfFormatInvariant, True), 'Paket widerlegt das Include');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ProgramSetsSettings_Refused;
+var
+  T, Prg : string;
+  Tr     : TTree;
+begin
+  // HeidiSQL: packages\Delphi12.3\heidisql.dpr enthaelt source\main.pas und
+  // setzt 'FormatSettings.ShortDateFormat := ''yyyy/mm/dd'''. Mit Invariant
+  // schriebe DateToStr MM/dd/yyyy, der Editor (EditMask 0000-00-00) und
+  // StrToDate des Programms lesen ISO (main.pas:11246/11252).
+  Tr := NewTree;
+  try
+    Prg := Tr.B + 'packages' + PathDelim + 'Delphi12.3' + PathDelim;
+    ForceDirectories(Prg);
+    T := 'program heidisql;' + #13#10 + 'uses' + #13#10
+      + '  main in ''..\..\c\u.pas'';' + #13#10 + 'begin' + #13#10
+      + '  // ShortDateFormat := nur ein Kommentar' + #13#10;
+    WriteText(Prg + 'heidisql.dpr', T + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(Tr.U, lfFormatInvariant),
+      'nur Kommentar');
+    WriteText(Prg + 'heidisql.dpr', T
+      + '  FormatSettings.ShortDateFormat := ''yyyy/mm/dd'';' + #13#10
+      + 'end.');
+    AssertNames(TRdxMagicFixes.FileReason(Tr.U, lfFormatInvariant),
+      ['heidisql.dpr', 'ShortDateFormat']);
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(Tr.U, lfFormatSettingsVar),
+      'Hauptweg (gleiche Bedeutung)');
+    // Gegenprobe: ein Programm, das die Unit nicht enthaelt.
+    WriteText(Prg + 'heidisql.dpr', StringReplace(T, 'u.pas', 'v.pas', [])
+      + '  FormatSettings.ShortDateFormat := ''yyyy/mm/dd'';' + #13#10
+      + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(Tr.U, lfFormatInvariant),
+      'anderes Programm');
+  finally
+    RemoveTree(Tr.Root);
   end;
 end;
 
