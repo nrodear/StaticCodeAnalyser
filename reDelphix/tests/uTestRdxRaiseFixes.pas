@@ -49,6 +49,9 @@ type
     // rwE30: kein raise in einem Callback fremden Codes (cdecl), in einer
     // als Wert uebergebenen Prozedur und in einem Setter.
     [Test] procedure Sca020_RaiseInValueCallbackOrSetter_Refused;
+    // rwE31 Stufe 3 (cnwizards CnWizIdeUtils.pas:1226): die Unit baut auch
+    // mit Delphi 5 - dort gibt es kein ENotImplemented.
+    [Test] procedure Sca020_RaiseOldCompiler_Refused;
   end;
 
 implementation
@@ -617,6 +620,39 @@ begin
   Assert.IsTrue(Pos('7', R) > 0, R);
   // Gegenprobe: ein leerer Lesezugriff liefert nichts - raise bleibt.
   Assert.IsTrue(Fix(rkEmpty, Src, 14, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseOldCompiler_Refused;
+var
+  R, Body : string;
+begin
+  // cnwizards Bin\PSDeclEx\CnWizIdeUtils.pas:1226 (minimiert): die uses
+  // fragt '{$IFNDEF VER130}' (Delphi 5), ENotImplemented steht in SysUtils
+  // erst ab Delphi 2009 - der Klick braeche dort den Bau. Bis rwE31
+  // angeboten (rot ohne Fix). Der Kopf steht auf Zeile 10.
+  Body := Join(['implementation',
+    'procedure TCnEditControlWrapper.AddEditorMouseLeaveNotifier(',
+    '  Notifier: TEditorMouseLeaveNotifier);', 'begin', '', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '{$IFNDEF VER130}', '  DesignIntf,',
+    '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10, RAISE_NOT_IMPLEMENTED, R),
+    'Delphi 5');
+  Assert.IsTrue(Pos('VER130', R) > 0, R);
+  Assert.IsTrue(Pos('ENotImplemented', R) > 0, R);
+  // Der Absichtskommentar bleibt (bedeutungsgleich).
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '{$IFNDEF VER130}', '  DesignIntf,',
+    '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10, '', R), R);
+  // Gegenprobe: ohne die Weiche - raise angeboten (Kopf auf Zeile 8).
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '  DesignIntf,', '  ToolsAPI;']) + #13#10
+    + Body, 8, RAISE_NOT_IMPLEMENTED, R), R);
+  // Gegenprobe: ein RTL-Namensraum ausserhalb der Weiche beweist Delphi ab
+  // XE2 - die Spur zaehlt nicht.
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Winapi.Windows, System.SysUtils,', '{$IFNDEF VER130}',
+    '  DesignIntf,', '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10,
+    RAISE_NOT_IMPLEMENTED, R), R);
 end;
 
 initialization

@@ -53,6 +53,8 @@ type
     // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
     // Blockwort im case sperren nicht mehr.
     [Test] procedure Sca168_HarmlessDirective_Helps;
+    // rwE31 Stufe 3: EInvalidOpException gibt es vor Delphi 2009 nicht.
+    [Test] procedure Sca168_RaiseOldCompiler_Refused;
     // rwE30 Stufe 2 (21 Fehler): der Bezeichner-Beweis (ForeignIdent) -
     // Aufzaehlungswert, Typ, Konstante, Aufruf ohne Quelle ...
     [Test] procedure Sca007_ForeignIdent_Found;
@@ -772,6 +774,29 @@ begin
     Entry(4, Pos('uCEF', L), 'uCEF')]);
   Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseOldCompiler_Refused;
+var
+  R, Src : string;
+begin
+  // Eine Unit, die nach Delphi 7 fragt (VER150): EInvalidOpException steht
+  // in SysUtils erst ab Delphi 2009 - der Klick braeche dort den Bau. Bis
+  // rwE31 angeboten (rot ohne Fix).
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'procedure P;', 'begin', '  case X of', '    1: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', FixCase(Src, 8, RAISE_UNHANDLED, R), 'Delphi 7');
+  Assert.IsTrue(Pos('VER150', R) > 0, R);
+  Assert.IsTrue(Pos('EInvalidOpException', R) > 0, R);
+  // Das leere else bleibt.
+  Assert.AreNotEqual('', FixCase(Src, 8, '', R), R);
+  // Gegenprobe: ein RTL-Namensraum ausserhalb der Weiche beweist Delphi
+  // ab XE2.
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'uses System.SysUtils;', 'procedure P;', 'begin',
+    '  case X of', '    1: A;', '  end;', 'end;', 'end.']);
+  Assert.AreNotEqual('', FixCase(Src, 9, RAISE_UNHANDLED, R), R);
 end;
 
 function UsesOnly(const ASource: string): Boolean;

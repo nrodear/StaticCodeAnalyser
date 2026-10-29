@@ -146,12 +146,15 @@ uses
   System.SysUtils,
   System.Generics.Collections,   // TDictionary (ForeignIdent)
   uRdxBlocks, // TypeHasBody (ForeignIdent: Typ mit Rumpf)
+  uRdxRaiseFixes, // OldExceptionClassReason (SCA168 raise, rwE31 Stufe 3)
   uRdxText;   // _() und die gemeinsamen Texte der Gruende (Entscheid E29)
 
 const
   SPAN_007 = 'sca007';
   SPAN_168 = 'sca168';
   SPAN_101 = 'sca101';
+  // Die Klasse in RAISE_UNHANDLED (OldExceptionClassReason).
+  CLASS_UNHANDLED = 'EInvalidOpException';
   // Die Zweigwoerter (BRANCH_WORDS) und die Token, vor denen eine
   // Anweisung ohne ';' endet (STATEMENT_STOPS), stehen in uRdxCodeMap - bis
   // zur Folgewelle des Wochen-Reviews hier als BRANCH_KEYWORDS und
@@ -1186,6 +1189,10 @@ begin
       + 'end count');
   if (AReason = '') and (AStatement <> '') then
     AReason := CharSelectorReason(AMap, CaseTok);
+  // Alte Compiler kennen EInvalidOpException nicht (rwE31 Stufe 3, wie
+  // SCA020 mit ENotImplemented).
+  if (AReason = '') and (AStatement <> '') then
+    AReason := OldExceptionClassReason(AMap, CLASS_UNHANDLED);
   if AReason <> '' then Exit;
   L := AMap.Raw(EndTok.Line);
   SetLength(AEdits, 1);

@@ -124,7 +124,7 @@ msgstr ""
 msgid "\"%s\" in the declaration section - end of the routine not certain"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1317
+#: reDelphix/source/uRdxStructFixes.pas:1324
 msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
 msgstr ""
 
@@ -302,7 +302,7 @@ msgstr ""
 msgid "%d calls %s("
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:855
+#: reDelphix/source/uRdxStructFixes.pas:858
 msgid "%d case statements"
 msgstr ""
 
@@ -418,7 +418,7 @@ msgstr ""
 msgid "%d reversed for headers"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:154
+#: reDelphix/source/uRdxRaiseFixes.pas:189
 msgid "%d routine headers"
 msgstr ""
 
@@ -456,15 +456,15 @@ msgstr ""
 msgid "%d times \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1250
+#: reDelphix/source/uRdxStructFixes.pas:1257
 msgid "%d times \"end else\""
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:1005
+#: reDelphix/source/uRdxRaiseFixes.pas:1043
 msgid "%d times \"raise %s\""
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:827
+#: reDelphix/source/uRdxRaiseFixes.pas:865
 msgid "%d times %s.Create"
 msgstr ""
 
@@ -484,7 +484,7 @@ msgstr ""
 msgid "%s (no findings)"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:690
+#: reDelphix/source/uRdxRaiseFixes.pas:725
 msgid "%s - an exception there would leave a half-built object or no destructor"
 msgstr ""
 
@@ -810,7 +810,7 @@ msgstr ""
 msgid "%s is overloaded - declaration and implementation cannot be paired safely"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:948
+#: reDelphix/source/uRdxRaiseFixes.pas:986
 msgid "%s is passed as an argument between handler and raise - a var parameter can replace it, \"raise %s;\" would then raise a different object than \"raise;\""
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "%s is qualified or a member - not the routine of the RTL"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:936
+#: reDelphix/source/uRdxRaiseFixes.pas:974
 msgid "%s is reassigned between handler and raise - \"raise %s;\" then raises a different object than \"raise;\""
 msgstr ""
 
@@ -927,7 +927,7 @@ msgstr ""
 msgid "%s.%s is abstract (line %d) - inherited calls nothing there or does not compile under FPC objfpc; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:832
+#: reDelphix/source/uRdxRaiseFixes.pas:870
 msgid "%s.Create(..) is not a whole statement - part of an expression?"
 msgstr ""
 
@@ -4151,7 +4151,7 @@ msgstr ""
 msgid "a call shares its line with other code or a comment - the help deletes whole lines"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:835
+#: reDelphix/source/uRdxRaiseFixes.pas:873
 msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
 msgstr ""
 
@@ -4183,7 +4183,7 @@ msgstr ""
 msgid "a comment spanning several lines ends on the header line"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:320
+#: reDelphix/source/uRdxRaiseFixes.pas:355
 msgid "a comment spanning several lines starts after the begin"
 msgstr ""
 
@@ -4252,7 +4252,7 @@ msgstr ""
 msgid "a macro inserts \"%s\" ({$DEFINE ... := ...} in line %d) - the quick fix does not see its use"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:479
+#: reDelphix/source/uRdxRaiseFixes.pas:514
 msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
 msgstr ""
 
@@ -4389,7 +4389,7 @@ msgstr ""
 msgid "anonymous method in the arguments"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:897
+#: reDelphix/source/uRdxRaiseFixes.pas:935
 msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
 msgstr ""
 
@@ -4405,7 +4405,7 @@ msgstr ""
 msgid "asm block in the unreachable code"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:214
+#: reDelphix/source/uRdxRaiseFixes.pas:249
 msgid "asm body"
 msgstr ""
 
@@ -4599,7 +4599,7 @@ msgstr ""
 msgid "column %d points into the middle of a comment"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:371
+#: reDelphix/source/uRdxStructFixes.pas:374
 msgid "comma before or semicolon after the last entry not found"
 msgstr ""
 
@@ -4734,7 +4734,7 @@ msgstr ""
 msgid "comment or directive in the finally block - intent, no help"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:460
+#: reDelphix/source/uRdxStructFixes.pas:463
 msgid "comment or directive in the range to be deleted"
 msgstr ""
 
@@ -4750,7 +4750,7 @@ msgstr ""
 msgid "comment or directive in the statement - it would be lost"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:1012
+#: reDelphix/source/uRdxRaiseFixes.pas:1050
 msgid "comment or line break between raise and name"
 msgstr ""
 
@@ -4833,7 +4833,7 @@ msgstr ""
 msgid "compiler directive in the ancestor list (line %d) - the ancestor depends on a branch; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1185
+#: reDelphix/source/uRdxStructFixes.pas:1188
 msgid "compiler directive in the case - a branch could shift the end count"
 msgstr ""
 
@@ -4860,7 +4860,7 @@ msgstr ""
 msgid "compiler directive in the line of the for header"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1557
+#: reDelphix/source/uRdxStructFixes.pas:1564
 msgid "compiler directive in the range - begin or end would be on the other side"
 msgstr ""
 
@@ -5038,7 +5038,7 @@ msgstr ""
 msgid "editor buffer empty or not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:884
+#: reDelphix/source/uRdxStructFixes.pas:887
 msgid "else in the case, owner unclear: %s"
 msgstr ""
 
@@ -5051,7 +5051,7 @@ msgstr ""
 msgid "empty range"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1394
+#: reDelphix/source/uRdxStructFixes.pas:1401
 msgid "empty statement after the %s"
 msgstr ""
 
@@ -5065,7 +5065,7 @@ msgstr ""
 msgid "end is followed neither by \";\" nor by the end of the enclosing block"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1390
+#: reDelphix/source/uRdxStructFixes.pas:1397
 msgid "end of file after the %s"
 msgstr ""
 
@@ -5268,7 +5268,7 @@ msgstr ""
 msgid "inline declaration (%s) in line %d - its scope would shrink to the try block"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1360
+#: reDelphix/source/uRdxStructFixes.pas:1367
 msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
 msgstr ""
 
@@ -5436,7 +5436,7 @@ msgstr ""
 msgid "local routine %s: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:211
+#: reDelphix/source/uRdxRaiseFixes.pas:246
 msgid "local routine between header and body - which begin is meant is not certain"
 msgstr ""
 
@@ -5481,7 +5481,7 @@ msgstr ""
 msgid "name list not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:693
+#: reDelphix/source/uRdxRaiseFixes.pas:728
 msgid "name of the method not on the header line"
 msgstr ""
 
@@ -5552,7 +5552,7 @@ msgstr ""
 msgid "no \"((X))\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:363
+#: reDelphix/source/uRdxStructFixes.pas:366
 msgid "no \",\" after the entry"
 msgstr ""
 
@@ -5560,7 +5560,7 @@ msgstr ""
 msgid "no \":\" after the name list (\"%s\")"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:357
+#: reDelphix/source/uRdxStructFixes.pas:360
 msgid "no \";\" after the only entry"
 msgstr ""
 
@@ -5611,7 +5611,7 @@ msgstr ""
 msgid "no \"begin\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1249
+#: reDelphix/source/uRdxStructFixes.pas:1256
 msgid "no \"end else\""
 msgstr ""
 
@@ -5641,7 +5641,7 @@ msgstr ""
 msgid "no \"out\" parameter at the reported column"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:1004
+#: reDelphix/source/uRdxRaiseFixes.pas:1042
 msgid "no \"raise %s\""
 msgstr ""
 
@@ -5657,7 +5657,7 @@ msgstr ""
 msgid "no %s(...).Free"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:824
+#: reDelphix/source/uRdxRaiseFixes.pas:862
 msgid "no %s.Create"
 msgstr ""
 
@@ -5718,7 +5718,7 @@ msgstr ""
 msgid "no blank line after the attribute"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1161
+#: reDelphix/source/uRdxStructFixes.pas:1164
 msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
 msgstr ""
 
@@ -5726,7 +5726,7 @@ msgstr ""
 msgid "no body (forward/external)"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:218
+#: reDelphix/source/uRdxRaiseFixes.pas:253
 msgid "no body found for the method"
 msgstr ""
 
@@ -5760,7 +5760,7 @@ msgstr ""
 msgid "no call to %s on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:854
+#: reDelphix/source/uRdxStructFixes.pas:857
 msgid "no case"
 msgstr ""
 
@@ -5841,11 +5841,11 @@ msgstr ""
 msgid "no end found for the body"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:908
+#: reDelphix/source/uRdxStructFixes.pas:911
 msgid "no end found for the case"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1374
+#: reDelphix/source/uRdxStructFixes.pas:1381
 msgid "no end found for the else branch"
 msgstr ""
 
@@ -5895,11 +5895,11 @@ msgstr ""
 msgid "no grouped declaration at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:891
+#: reDelphix/source/uRdxRaiseFixes.pas:929
 msgid "no handler \"on %s: ... do\" before the raise in this routine"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:978
+#: reDelphix/source/uRdxRaiseFixes.pas:1016
 msgid "no handler \"on %s: ... do\" found before the raise"
 msgstr ""
 
@@ -5975,7 +5975,7 @@ msgstr ""
 msgid "no matching declaration on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:153
+#: reDelphix/source/uRdxRaiseFixes.pas:188
 msgid "no method header"
 msgstr ""
 
@@ -6119,7 +6119,7 @@ msgstr ""
 msgid "no statement with a nil comparison starts on line %d"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:486
+#: reDelphix/source/uRdxStructFixes.pas:489
 msgid "no such uses entry"
 msgstr ""
 
@@ -6135,9 +6135,9 @@ msgstr ""
 msgid "no then branch before the else"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1215
-#: reDelphix/source/uRdxStructFixes.pas:1221
-#: reDelphix/source/uRdxStructFixes.pas:1551
+#: reDelphix/source/uRdxStructFixes.pas:1222
+#: reDelphix/source/uRdxStructFixes.pas:1228
+#: reDelphix/source/uRdxStructFixes.pas:1558
 msgid "no then/else/do at the reported place"
 msgstr ""
 
@@ -6671,11 +6671,11 @@ msgstr ""
 msgid "raise %s in line %d - %s is (part of) the exception; finally would free it before the handler"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:882
+#: reDelphix/source/uRdxRaiseFixes.pas:920
 msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:912
+#: reDelphix/source/uRdxRaiseFixes.pas:950
 msgid "raise is in the handler of \"%s\", not of \"%s\""
 msgstr ""
 
@@ -6922,7 +6922,7 @@ msgstr ""
 msgid "something else follows X.Free;"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:317
+#: reDelphix/source/uRdxRaiseFixes.pas:352
 msgid "something else follows the begin - a line of its own would not fit"
 msgstr ""
 
@@ -7035,7 +7035,7 @@ msgstr ""
 msgid "the \"with\" header spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1263
+#: reDelphix/source/uRdxStructFixes.pas:1270
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
@@ -7144,7 +7144,7 @@ msgstr ""
 msgid "the block is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:288
+#: reDelphix/source/uRdxRaiseFixes.pas:323
 msgid "the body already holds a comment without intent - commented-out code (SCA070)? Decide by hand"
 msgstr ""
 
@@ -7157,11 +7157,11 @@ msgstr ""
 msgid "the body does more than call the inherited method with the same arguments"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:705
+#: reDelphix/source/uRdxRaiseFixes.pas:740
 msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:273
+#: reDelphix/source/uRdxRaiseFixes.pas:308
 msgid "the body is not empty - code under a directive or an asm block (the detector sees only the active branch) or finding outdated"
 msgstr ""
 
@@ -7269,23 +7269,23 @@ msgstr ""
 msgid "the caret line %d is not in the buffer"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:882
+#: reDelphix/source/uRdxStructFixes.pas:885
 msgid "the case already has an else branch"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:887
+#: reDelphix/source/uRdxStructFixes.pas:890
 msgid "the case has an otherwise branch (FPC) - or an arm calls an identifier Otherwise; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1180
+#: reDelphix/source/uRdxStructFixes.pas:1183
 msgid "the case has no branches"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1158
+#: reDelphix/source/uRdxStructFixes.pas:1161
 msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:988
+#: reDelphix/source/uRdxStructFixes.pas:991
 msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
 msgstr ""
 
@@ -7322,7 +7322,7 @@ msgstr ""
 msgid "the class implements %s - the method can be one of its members"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:498
+#: reDelphix/source/uRdxRaiseFixes.pas:533
 msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"
 msgstr ""
 
@@ -7419,7 +7419,7 @@ msgstr ""
 msgid "the declaration already carries %s"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:660
+#: reDelphix/source/uRdxRaiseFixes.pas:695
 msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
 msgstr ""
 
@@ -7576,6 +7576,7 @@ msgstr ""
 msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
 msgstr ""
 
+#: reDelphix/source/uRdxRaiseFixes.pas:148
 #: reDelphix/source/uRdxRawExceptionFix.pas:395
 msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
 msgstr ""
@@ -7936,7 +7937,7 @@ msgstr ""
 msgid "the keyword stands in a statement block - an inline declaration, not a section"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:318
+#: reDelphix/source/uRdxStructFixes.pas:321
 msgid "the keyword uses is not on the expected line"
 msgstr ""
 
@@ -8276,7 +8277,7 @@ msgstr ""
 msgid "the message has no column or line count"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:816
+#: reDelphix/source/uRdxRaiseFixes.pas:854
 msgid "the message has no exception class"
 msgstr ""
 
@@ -8301,7 +8302,7 @@ msgstr ""
 msgid "the message has no lock"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:1030
+#: reDelphix/source/uRdxRaiseFixes.pas:1068
 msgid "the message has no name of the variable"
 msgstr ""
 
@@ -8409,7 +8410,7 @@ msgstr ""
 msgid "the method declares local variables, constants or routines"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:494
+#: reDelphix/source/uRdxRaiseFixes.pas:529
 msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"
 msgstr ""
 
@@ -8426,7 +8427,7 @@ msgstr ""
 msgid "the method is published - the form designer can bind it to an event"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:606
+#: reDelphix/source/uRdxRaiseFixes.pas:641
 msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
 msgstr ""
 
@@ -8624,7 +8625,7 @@ msgstr ""
 msgid "the random sequence then differs on every run (seed from the clock) - a sequence that was repeatable so far, e.g. for tests, is lost; the call when the unit is loaded affects the whole program; Random stays unsuitable for passwords, tokens and keys"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:468
+#: reDelphix/source/uRdxStructFixes.pas:471
 msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
 msgstr ""
 
@@ -8701,7 +8702,7 @@ msgstr ""
 msgid "the routine ends on the last line of the file"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:594
+#: reDelphix/source/uRdxRaiseFixes.pas:629
 msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
 msgstr ""
 
@@ -8714,11 +8715,11 @@ msgstr ""
 msgid "the routine is declared in the interface section (line %d) - other units can use it as a procedure value"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:601
+#: reDelphix/source/uRdxRaiseFixes.pas:636
 msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:673
+#: reDelphix/source/uRdxRaiseFixes.pas:708
 msgid "the routine is passed as a callback (@%s) - raise would break its caller"
 msgstr ""
 
@@ -8778,7 +8779,7 @@ msgstr ""
 msgid "the statement is a case branch or follows a label"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1392
+#: reDelphix/source/uRdxStructFixes.pas:1399
 msgid "the statement is already in begin..end"
 msgstr ""
 
@@ -8806,7 +8807,7 @@ msgstr ""
 msgid "the statement stands alone after %s without begin - it belongs to no statement list"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1399
+#: reDelphix/source/uRdxStructFixes.pas:1406
 msgid "the statement starts with a string"
 msgstr ""
 
@@ -8949,7 +8950,7 @@ msgstr ""
 msgid "there are only literals behind %s"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:1156
+#: reDelphix/source/uRdxStructFixes.pas:1159
 msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
 msgstr ""
 
@@ -9098,7 +9099,7 @@ msgstr ""
 msgid "with statement before the use on line %d - \"%s\" could be a member of the with expression"
 msgstr ""
 
-#: reDelphix/source/uRdxRaiseFixes.pas:905
+#: reDelphix/source/uRdxRaiseFixes.pas:943
 msgid "with statement between handler and raise - the name could be a member"
 msgstr ""
 
