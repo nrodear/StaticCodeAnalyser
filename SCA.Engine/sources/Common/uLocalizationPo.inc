@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6743 Zeilen, 303797 Bytes
-  CPoLines_de: array[0..6742] of string = (
+  // i18n\de.po - 6749 Zeilen, 304395 Bytes
+  CPoLines_de: array[0..6748] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6250,8 +6250,11 @@ const
     'msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"',
     'msgstr "die Schleife lief bisher nie und z'#$00E4'hlt danach aufw'#$00E4'rts; war sie absichtlich abgeschaltet, ist das ein Eingriff"',
     '',
-    'msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"',
-    'msgstr "Tabs im Code werden zu Leerzeichen - Tabweite 2 (Annahme); Tabs in Strings und Kommentaren bleiben"',
+    'msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"',
+    'msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings und Kommentaren bleiben"',
+    '',
+    'msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"',
+    'msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d (Annahme, die Nachbarzeilen zeigen keine); Tabs in Strings und Kommentaren bleiben"',
     '',
     'msgid "whitespace at the end of the line only"',
     'msgstr "nur Leerraum am Zeilenende"',
@@ -6549,6 +6552,9 @@ const
     '',
     'msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"',
     'msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe lie'#$00DF'e den Fund stehen"',
+    '',
+    'msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"',
+    'msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d - welcher die Ausrichtung der Datei folgt, ist offen; %s"',
     '',
     'msgid "the message does not name the loop head - analyse the file again"',
     'msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu pr'#$00FC'fen"',
@@ -7032,8 +7038,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6739 Zeilen, 316014 Bytes
-  CPoLines_fr: array[0..6738] of string = (
+  // i18n\fr.po - 6745 Zeilen, 316700 Bytes
+  CPoLines_fr: array[0..6744] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13265,8 +13271,11 @@ const
     'msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"',
     'msgstr "la boucle ne s''ex'#$00E9'cutait jamais jusqu''ici et compte ensuite en montant ; si elle '#$00E9'tait d'#$00E9'sactiv'#$00E9'e expr'#$00E8's, c''est une intervention"',
     '',
-    'msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"',
-    'msgstr "les tabulations du code deviennent des espaces - largeur de tabulation 2 (hypoth'#$00E8'se) ; les tabulations dans les cha'#$00EE'nes et commentaires restent"',
+    'msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"',
+    'msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d, comme le montre l''alignement des lignes voisines ; les tabulations dans les cha'#$00EE'nes et commentaires restent"',
+    '',
+    'msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"',
+    'msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d (hypoth'#$00E8'se, les lignes voisines n''en montrent aucune) ; les tabulations dans les cha'#$00EE'nes et commentaires restent"',
     '',
     'msgid "whitespace at the end of the line only"',
     'msgstr "uniquement des espaces en fin de ligne"',
@@ -13564,6 +13573,9 @@ const
     '',
     'msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"',
     'msgstr "la premi'#$00E8're tabulation de la ligne se trouve dans une cha'#$00EE'ne ou un commentaire - elle reste intacte, l''aide laisserait le r'#$00E9'sultat en place"',
+    '',
+    'msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"',
+    'msgstr "les lignes voisines conviennent aussi bien '#$00E0' la largeur de tabulation %d qu'''#$00E0' %d - on ne sait pas laquelle suit l''alignement du fichier ; %s"',
     '',
     'msgid "the message does not name the loop head - analyse the file again"',
     'msgstr "le message ne nomme pas l''en-t'#$00EA'te de la boucle - analysez '#$00E0' nouveau le fichier"',

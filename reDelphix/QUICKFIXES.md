@@ -923,11 +923,12 @@ end;
 |---|---|---|
 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
 
-**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen). Die Tabweite (2, 4 oder 8) leitet die Hilfe aus den acht Zeilen darüber und darunter ab: die Weite, bei der die Textspalten hinter den Tabs der Zeile am häufigsten mit denen der Nachbarn zusammenfallen (Einrückung, `=`, `:`, Kommentarspalte) – etwa Tab plus Leerzeichen gegen Nachbarn nur aus Leerzeichen oder Tabellen mit verschieden vielen Tabs vor derselben Spalte. Zeigen die Nachbarn keine, gilt die Annahme 2; der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
 
 **Nicht angeboten**
 
 - der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Nachbarzeilen passen zu zwei Tabweiten (4 und 8) gleich gut – welcher die Ausrichtung folgt, ist offen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).

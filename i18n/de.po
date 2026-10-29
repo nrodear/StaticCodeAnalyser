@@ -6233,8 +6233,11 @@ msgstr "die Schleife lief bisher nie und zählt danach abwärts; war sie absicht
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
 
-msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
-msgstr "Tabs im Code werden zu Leerzeichen - Tabweite 2 (Annahme); Tabs in Strings und Kommentaren bleiben"
+msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"
+msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings und Kommentaren bleiben"
+
+msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"
+msgstr "Tabs im Code werden zu Leerzeichen - Tabweite %d (Annahme, die Nachbarzeilen zeigen keine); Tabs in Strings und Kommentaren bleiben"
 
 msgid "whitespace at the end of the line only"
 msgstr "nur Leerraum am Zeilenende"
@@ -6532,6 +6535,9 @@ msgstr "kein Tab an der gemeldeten Stelle"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+
+msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
+msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d - welcher die Ausrichtung der Datei folgt, ist offen; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"

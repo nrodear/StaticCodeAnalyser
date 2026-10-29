@@ -313,6 +313,15 @@ const
   // 'Strg+Umschalt+E').
   R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename '
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
+  // SCA061 (rwE29): die Tabweite leitet uRdxTabsFix.TabWidth aus den
+  // Nachbarzeilen ab - der Hinweis nennt sie und woher sie kommt (bis dahin
+  // fest 'tab width 2 (assumption)' in FIX_HINTS). %d die Weite.
+  R_TABS_DERIVED_HINT = 'tabs in code become spaces - tab width %d, as the '
+    + 'alignment of the neighbouring lines shows; tabs in strings and '
+    + 'comments stay';
+  R_TABS_DEFAULT_HINT = 'tabs in code become spaces - tab width %d '
+    + '(assumption, the neighbouring lines do not show one); tabs in strings '
+    + 'and comments stay';
 
   // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -1375,11 +1384,28 @@ begin
     Result.Hint := _(R_FORRANGE_SWAP_HINT);
 end;
 
+// SCA061: der Hinweis nennt die Tabweite des Plans (TabWidth rechnet sie
+// fuer dieselbe Zeile noch einmal; HintByPlanner).
 function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map    : TRdxCodeMap;
+  W, Alt : Integer;
+  Source : TRdxTabWidthSource;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxTabsFix.Tabs);
+  if not Result.Enabled then Exit;
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    W := TRdxTabsFix.TabWidth(Map, AFinding.LineInt, Source, Alt);
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
+  if Source = twDerived then
+    Result.Hint := _(R_TABS_DERIVED_HINT, [W])
+  else
+    Result.Hint := _(R_TABS_DEFAULT_HINT, [W]);
 end;
 
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
@@ -2194,7 +2220,7 @@ const
      HintByPlanner: False; Changes: True;
      Alt: PlanReversedForRangeAlt),
     (Kind: fkTabulationCharacter; Plan: PlanTabs;
-     HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
      HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
@@ -2482,12 +2508,12 @@ const
     // ReversedForRange
     'the loop never ran so far and then counts down; if it was switched off '
       + 'on purpose, this is an intervention',
-    // SCA061: die Tabweite ist eine feste Annahme (uRdxTabsFix.TAB_WIDTH),
-    // nicht die Einstellung der IDE - der Hinweis sagt es (Wochen-Review
-    // 2026-10-21, P17: bis dahin klang sie wie ein Standard).
+    // SCA061: den Hinweis setzt PlanTabs - er nennt die Tabweite, die
+    // uRdxTabsFix.TabWidth aus den Nachbarzeilen ableitet, bzw. die Annahme 2
+    // (rwE29; bis dahin hier fest 'tab width 2 (assumption)', Wochen-Review
+    // 2026-10-21, P17).
     // TabulationCharacter
-    'tabs in code become spaces - tab width 2 (assumption); tabs in strings '
-      + 'and comments stay',
+    '',
     // TrailingWhitespace
     'whitespace at the end of the line only',
     // LowercaseKeyword

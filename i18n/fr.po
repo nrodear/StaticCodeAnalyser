@@ -6229,8 +6229,11 @@ msgstr "la boucle ne s'exécutait jamais jusqu'ici et compte ensuite à rebours 
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "la boucle ne s'exécutait jamais jusqu'ici et compte ensuite en montant ; si elle était désactivée exprès, c'est une intervention"
 
-msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
-msgstr "les tabulations du code deviennent des espaces - largeur de tabulation 2 (hypothèse) ; les tabulations dans les chaînes et commentaires restent"
+msgid "tabs in code become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings and comments stay"
+msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d, comme le montre l'alignement des lignes voisines ; les tabulations dans les chaînes et commentaires restent"
+
+msgid "tabs in code become spaces - tab width %d (assumption, the neighbouring lines do not show one); tabs in strings and comments stay"
+msgstr "les tabulations du code deviennent des espaces - largeur de tabulation %d (hypothèse, les lignes voisines n'en montrent aucune) ; les tabulations dans les chaînes et commentaires restent"
 
 msgid "whitespace at the end of the line only"
 msgstr "uniquement des espaces en fin de ligne"
@@ -6528,6 +6531,9 @@ msgstr "aucune tabulation à l'endroit signalé"
 
 msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
 msgstr "la première tabulation de la ligne se trouve dans une chaîne ou un commentaire - elle reste intacte, l'aide laisserait le résultat en place"
+
+msgid "the neighbouring lines fit tab width %d as well as %d - which one the alignment of the file follows is open; %s"
+msgstr "les lignes voisines conviennent aussi bien à la largeur de tabulation %d qu'à %d - on ne sait pas laquelle suit l'alignement du fichier ; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "le message ne nomme pas l'en-tête de la boucle - analysez à nouveau le fichier"
