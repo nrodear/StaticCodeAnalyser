@@ -72,6 +72,10 @@ type
     // Quellstellen-Dienst nicht - die Klausel kommt aus dem Text, alle
     // Zweige in Folge.
     [Test] procedure Sca007_TextUsesEntry_AllBranches;
+    // rwE31 Stufe 3 (gexperts mPasLex.pas:80 UpperCase, issrc BidiUtils.pas:15
+    // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
+    // Exporte schliessen den Beweis (AlwaysNeededIdents).
+    [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
   end;
 
 implementation
@@ -874,6 +878,34 @@ begin
   Src := Join(['unit u;', 'interface', 'uses',
     '  {$IFDEF X} A, B {$ELSE} C {$ENDIF};', 'implementation', 'end.']);
   Assert.AreEqual<Integer>(0, TextEntry(Src, 4, 'B', C, Ix), 'Kommafolge');
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_SysUtilsAndTypes;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // mPasLex.pas (minimiert): UpperCase kommt aus SysUtils, Controls ist
+  // ungenutzt. Vorher nannte der Hinweis UpperCase - nur im Menue.
+  Src := Join(['unit mPasLex;', 'interface', 'uses',
+    '  SysUtils, Windows, Classes, Controls;', 'function Up(const S: string): '
+    + 'string;', 'implementation', 'function Up(const S: string): string;',
+    'begin', '  Result := UpperCase(S);', 'end;', 'end.']);
+  Assert.AreEqual('UpperCase', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('sysutils'), Li), 'SysUtils');
+  // BidiUtils.pas:15 (minimiert): TRect aus Types.
+  Src := Join(['unit BidiUtils;', 'interface', 'uses Classes, Types;',
+    'procedure FlipRect(var Rect: TRect);', 'implementation',
+    'procedure FlipRect(var Rect: TRect);', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('TRect', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('system.types'), Li), 'Types');
+  // Nur die beiden Units: andere bleiben leer (die Listen des Detektors).
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.AlwaysNeededIdents('classes')), 'Classes');
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.AlwaysNeededIdents('windows')), 'Windows');
 end;
 
 initialization

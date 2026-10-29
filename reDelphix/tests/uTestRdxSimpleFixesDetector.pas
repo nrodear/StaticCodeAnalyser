@@ -157,6 +157,10 @@ type
     [Test] procedure Sca007_RangeTouchesDirective_NoHelp;
     // rwE30 Stufe 2 (Fragwuerdig Indy indyprotocolsfpc.pas:189).
     [Test] procedure Sca007_PackageUnit_NoHelp;
+    // rwE31 Stufe 3 (gexperts mPasLex.pas:80, vcl-styles-utils Main.pas:6):
+    // ein Aufruf aus SysUtils (keine Liste im Detektor) haelt die Hilfe
+    // nicht mehr aus der Gluehbirne.
+    [Test] procedure Sca007_SysUtilsCall_InBulb;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1629,6 +1633,37 @@ begin
   Seen.Msg := 'System.Math';
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
   Assert.IsTrue(Pos('System.Math', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_SysUtilsCall_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Wie ModalUnit, der Rumpf ruft IntToStr (System.SysUtils). Vorher nur im
+  // Menue: der Hinweis nannte IntToStr ("kann aus Vcl.Controls kommen").
+  Src := Join(['unit t;', 'interface',
+    'uses System.SysUtils, System.Classes, Vcl.Controls;', 'type',
+    '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin',
+    '  Result := IntToStr(AResult) = ''1'';', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne System.SysUtils in den uses beweist nichts IntToStr -
+  // nur im Menue.
+  Src := StringReplace(Src, 'System.SysUtils, ', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('IntToStr', O.Hint) > 0, O.Hint);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.

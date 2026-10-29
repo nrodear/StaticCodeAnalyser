@@ -1101,9 +1101,15 @@ begin
   for c := 0 to High(Clauses) do
     for k := 0 to High(Clauses[c]) do
       if not SameText(LastPart(Clauses[c][k].Resolved), LastPart(AUnit)) then
+      begin
         for Id in TUnusedUsesDetector.IdentsFor(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
+        // SysUtils, Types: der Detektor fuehrt keine Liste (rwE31 Stufe 3).
+        for Id in TRdxStructFixes.AlwaysNeededIdents(
+            LowerCase(Clauses[c][k].Resolved)) do
+          AddText(Result, Id);
+      end;
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
