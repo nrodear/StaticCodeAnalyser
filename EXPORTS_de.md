@@ -247,6 +247,51 @@ HTML-Report und in SARIF, das sie sowohl als `result` als auch unter
 `{"rules":[],"issues":[]}` — gültig, und Sonar nimmt es an. Ob ein Scan
 vollständig war, steht in der Konsolenzeile, nicht im Dashboard.
 
+### Was sich für bestehende Nutzer ändert (Export-Korrektur Oktober 2026)
+
+Wer SCA-Funde schon nach SonarQube importiert, sieht in der ersten
+Analyse nach dem Update einmalig Bewegung. Sonar ordnet Issues je Regel,
+Datei und Zeile zu; jede Änderung unten erscheint deshalb in der
+New-Code-Periode als *geschlossen* plus *neu*.
+
+- **Neue Issues erscheinen.**
+  - Formdateien, deren Endung auf der Platte anders geschrieben ist
+    (`ABOUT.DFM` statt `ABOUT.dfm`), verwarf Sonar still als unbekannte
+    Dateien. Der Export nimmt jetzt die Schreibweise der Platte
+    (Referenzkorpus: 960 Issues).
+  - Custom-Regeln mit `severity: hint` fehlten ganz; sie werden jetzt
+    exportiert.
+  - Funde, die die Evidenz-Politik deckelt (Konfidenz *medium* →
+    höchstens Warning), gelten nicht mehr als herabgestuft. SCA001,
+    SCA003, SCA004 u. a. kommen jetzt in Sonar an (Referenzkorpus: +726
+    Issues). Draußen bleibt nur, was per eigener
+    Konfiguration herabgestuft ist (`[PathOverrides]`); `--sonar-keep-downgraded` holt auch das zurück.
+- **Gedeckelte Regeln tragen die gedeckelte Schwere.** Eine Regel, deren
+  Funde die Politik deckelt, bekommt die gedeckelte Schwere als Impact —
+  SCA004 kommt als SECURITY/MEDIUM statt BLOCKER an, SCA001 als
+  RELIABILITY/MEDIUM. Mit `[Rules] EvidenceTiering=0` bleiben die
+  Katalog-Impacts.
+- **Binäre Formulare auf Dateiebene.** Issues in binären `.dfm`-Dateien
+  und Issues auf einer Zeile hinter dem Dateiende tragen jetzt keine Zeile
+  mehr. Vorher konnte so eine Zeile den Scanner abbrechen lassen (*„N is
+  not a valid line for pointer"*). Sonar schließt die alten,
+  zeilengebundenen Issues und öffnet neue auf Dateiebene.
+- **Name und Impact von Custom-Regeln.** Jede Custom-Regel hat jetzt einen
+  eigenen Namen (`User-defined custom rule PROJ001`) und einen Impact nach
+  ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW) statt
+  des gemeinsamen Platzhalters MAINTAINABILITY/MEDIUM.
+- **`engineId` nur noch an der Regel.** Das `engineId` am Issue — ein Feld
+  des Altformats — entfällt. Skripte, die das JSON direkt lesen, nehmen
+  die Engine aus `rules[].engineId`.
+- **Mindestversion des Servers.** Die Impact-Schweren BLOCKER und INFO
+  brauchen SonarQube 10.8 oder neuer (Server 2025.x, Community Build). Auf
+  10.3–10.7 ist ein Report damit ungültig; SCA026 trägt weiterhin
+  BLOCKER.
+
+`filePath` löst Sonar relativ zu `sonar.projectBaseDir` auf (dem Ordner
+der `sonar-project.properties`), nicht relativ zu `sonar.sources` —
+`--base-dir` also auf diesen Ordner setzen.
+
 ## Workflow 4 — GitHub-/Azure-Code-Scanning
 
 ```bash

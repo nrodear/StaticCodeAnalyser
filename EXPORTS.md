@@ -236,6 +236,49 @@ report, and SARIF, which lists it both as a result and under
 and Sonar accepts it. Check the console line, not the dashboard, to see
 whether a scan was complete.
 
+### What changes for existing users (export fix, October 2026)
+
+If you already import SCA findings into SonarQube, the first analysis after
+the update moves issues — once. Sonar matches issues per rule, file and
+line, so every change below shows up as *closed* plus *new* in the
+new-code period.
+
+- **New issues appear.**
+  - Form files whose extension is spelled differently on disk
+    (`ABOUT.DFM` vs. `ABOUT.dfm`) were silently discarded by Sonar as
+    unknown files. The export now uses the spelling on disk (reference
+    corpus: 960 issues).
+  - Custom rules with `severity: hint` were missing entirely; they are
+    exported now.
+  - Findings capped by the evidence policy (confidence *medium* → at most
+    Warning) no longer count as downgraded. SCA001, SCA003, SCA004 and
+    others now reach Sonar (reference corpus: +726 issues). Only a
+    downgrade you configured yourself (`[PathOverrides]`) keeps a finding
+    out; `--sonar-keep-downgraded` still brings those back.
+- **Capped rules carry the capped severity.** A rule whose findings the
+  policy caps gets the capped severity as its impact — SCA004 arrives as
+  SECURITY/MEDIUM instead of BLOCKER, SCA001 as RELIABILITY/MEDIUM. With
+  `[Rules] EvidenceTiering=0` the catalog impacts stay.
+- **Binary forms on file level.** Issues in binary `.dfm` files, and
+  issues on a line beyond the end of the file, now have no line. Before,
+  such a line could make the scanner abort (*"N is not a valid line for
+  pointer"*). Sonar closes the old line-bound issues and opens file-level
+  ones.
+- **Custom rule names and impacts.** Each custom rule now has its own name
+  (`User-defined custom rule PROJ001`) and an impact that follows its YAML
+  severity (error → HIGH, warning → MEDIUM, hint → LOW) instead of the
+  shared placeholder MAINTAINABILITY/MEDIUM.
+- **`engineId` only on the rule.** The issue-level `engineId` — a field of
+  the deprecated format — is gone. Scripts that read the JSON directly take
+  the engine from `rules[].engineId`.
+- **Minimum server version.** The impact severities BLOCKER and INFO need
+  SonarQube 10.8 or later (Server 2025.x, Community Build). On 10.3–10.7 a
+  report containing them is invalid; SCA026 still carries BLOCKER.
+
+`filePath` is resolved by Sonar relative to `sonar.projectBaseDir` (the
+folder of `sonar-project.properties`), not relative to `sonar.sources` —
+give `--base-dir` that folder.
+
 ## Workflow 4 — GitHub / Azure code scanning
 
 ```bash

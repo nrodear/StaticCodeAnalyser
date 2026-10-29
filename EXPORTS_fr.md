@@ -259,6 +259,52 @@ exécution qui n'a produit *que* des erreurs de lecture exporte donc
 ligne console, pas le tableau de bord, pour savoir si un scan était
 complet.
 
+### Ce qui change pour les utilisateurs existants (correctif d'export, octobre 2026)
+
+Si vous importez déjà les constats SCA dans SonarQube, la première analyse
+après la mise à jour déplace des issues — une seule fois. Sonar associe
+les issues par règle, fichier et ligne ; chaque changement ci-dessous
+apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
+
+- **De nouvelles issues apparaissent.**
+  - Les fichiers de fiche dont l'extension s'écrit autrement sur le
+    disque (`ABOUT.DFM` au lieu de `ABOUT.dfm`) étaient écartés
+    silencieusement par Sonar comme fichiers inconnus. L'export reprend
+    désormais l'orthographe du disque (corpus de référence : 960 issues).
+  - Les règles personnalisées avec `severity: hint` manquaient
+    entièrement ; elles sont désormais exportées.
+  - Les constats plafonnés par la politique de preuve (confiance *medium*
+    → au plus Warning) ne comptent plus comme rétrogradés. SCA001, SCA003,
+    SCA004 et d'autres arrivent maintenant dans Sonar (corpus de
+    référence : +726 issues). Seule une rétrogradation que vous avez
+    configurée vous-même (`[PathOverrides]`) reste dehors ;
+    `--sonar-keep-downgraded` la ramène toujours.
+- **Les règles plafonnées portent la sévérité plafonnée.** Une règle dont
+  la politique plafonne les constats reçoit la sévérité plafonnée comme
+  impact — SCA004 arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA001 en
+  RELIABILITY/MEDIUM. Avec `[Rules] EvidenceTiering=0`, les impacts du
+  catalogue restent.
+- **Fiches binaires au niveau fichier.** Les issues dans des fichiers
+  `.dfm` binaires, et celles sur une ligne au-delà de la fin du fichier,
+  n'ont plus de ligne. Auparavant, une telle ligne pouvait faire échouer
+  le scanner (*« N is not a valid line for pointer »*). Sonar ferme les
+  anciennes issues liées à une ligne et en ouvre au niveau fichier.
+- **Nom et impact des règles personnalisées.** Chaque règle personnalisée
+  a désormais son propre nom (`User-defined custom rule PROJ001`) et un
+  impact qui suit sa sévérité YAML (error → HIGH, warning → MEDIUM,
+  hint → LOW) au lieu de l'espace réservé commun MAINTAINABILITY/MEDIUM.
+- **`engineId` uniquement sur la règle.** L'`engineId` au niveau de
+  l'issue — un champ de l'ancien format — disparaît. Les scripts qui lisent
+  le JSON directement prennent le moteur dans `rules[].engineId`.
+- **Version minimale du serveur.** Les sévérités d'impact BLOCKER et INFO
+  exigent SonarQube 10.8 ou plus récent (Server 2025.x, Community Build).
+  Sur 10.3–10.7, un rapport qui les contient est invalide ; SCA026 porte
+  toujours BLOCKER.
+
+Sonar résout `filePath` par rapport à `sonar.projectBaseDir` (le dossier
+du `sonar-project.properties`), et non par rapport à `sonar.sources` —
+donnez ce dossier à `--base-dir`.
+
 ## Workflow 4 — Code scanning GitHub / Azure
 
 ```bash

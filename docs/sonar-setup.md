@@ -105,7 +105,7 @@ sonar.externalIssuesReportPaths=sca-findings.json
 | `--sonar-project <key>` | Project-Key überschreiben |
 | `--sonar-branch <name>` | Branch-Name für das `--sonar-init`-Template (`sonar.branch.name`). Der Findings-Export hat kein Branch-Feld — den Branch liest der `sonar-scanner` |
 | `--sonar-insecure` | Self-signed TLS-Cert akzeptieren |
-| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity zur Laufzeit **herabgestuft** wurde (Pfad-Überschreibung, Konfidenz). Standard: aus — siehe Kasten unten |
+| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity per Pfad-Überschreibung **herabgestuft** wurde (der Konfidenz-Deckel zählt nicht dazu). Standard: aus — siehe Kasten unten |
 | `--sonar-config <ini>` | Alternativer `analyser.ini`-Pfad |
 
 `--sonar-test` und `--sonar-init` sind **Standalone-Aktionen** und brauchen
@@ -133,12 +133,15 @@ jeder andere draußen. Jede Custom-Regel erscheint in Sonar
 unter eigenem Namen („User-defined custom rule PROJ001“) mit einem Impact nach
 ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
 
-**Achtung, Konfidenz:** die Evidenz-Politik deckelt Funde mit Konfidenz
-*medium* auf Warning. Für Regeln mit Katalog-Severity Error heißt das: der
-Großteil ihrer Funde gilt als herabgestuft und fehlt ohne
-`--sonar-keep-downgraded` in Sonar — gemessen 2026-10-29 am JVCL-Korpus:
-SCA001 51 von 53 Funden, SCA003 10 von 10; im gesamten Realwelt-Korpus
-fehlen so 726 Funde.
+**Konfidenz-Deckel ist keine Herabstufung:** die Evidenz-Politik deckelt
+Funde mit Konfidenz *medium* auf Warning (*low* auf Hint). Das zählt nicht
+als Herabstufung — solche Funde gehen in den Report. Bis Oktober 2026 galten
+sie als herabgestuft und fehlten: im Realwelt-Korpus 726 Funde, u. a. fast
+alle von SCA001, SCA003 und SCA004. Eine Regel, deren Funde die Politik
+schon mit der Standard-Konfidenz des Kinds deckelt, trägt in Sonar die
+gedeckelte Schwere als Impact (Warning → höchstens MEDIUM): SCA004 kommt als
+SECURITY/MEDIUM statt BLOCKER an. Mit `[Rules] EvidenceTiering=0` bleiben die
+Katalog-Impacts.
 
 Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
 einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
