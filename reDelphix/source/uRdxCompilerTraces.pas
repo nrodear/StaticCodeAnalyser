@@ -44,6 +44,31 @@ unit uRdxCompilerTraces;
 // 29' - DMVC baut ab Delphi 10.0).
 //
 // Dazu ScriptReason: eine Datei, die kein Compiler uebersetzt.
+//
+// mORMot (Realworld-Test rwE30 Stufe 2): mORMot 2 baut ab Delphi 7 und
+// fragt mit eigenen Symbolen aus mormot.defines.inc nach der Version -
+// ISDELPHI7, ISDELPHI2005ANDUP .. ISDELPHI2010, ISDELPHI20062007,
+// ISDELPHIXE .. ISDELPHIXE8, ISDELPHI10/101..104, ISDELPHI11..14,
+// ISDELPHIUNICODE und FPC_OR_UNICODE (beides: Delphi ab 2009). Sie zaehlen
+// mit ihrer CompilerVersion bis AFloor.Version wie 'CompilerVersion <op> n'
+// (OldMormotWord) - fuer jede Schwelle, auch die von Default(T): eine
+// Datei, die so fragt, baut mit dem aelteren Delphi. mormot.defines.inc
+// selbst steht bei den Kit-Includes (Fundstellen: mormot.core.base.pas
+// '{$ifndef ISDELPHI2007ANDUP}', 'FPC_OR_UNICODE'; mormot.core.i18n.pas
+// '{$ifdef ISDELPHIXE} .. {$else} // old Delphi 7-2010').
+//
+// GEGENBEWEIS (ModernProof, rwE30 Stufe 2): eine Sprachform AUSSERHALB
+// jedes Bedingungsblocks, die nur ein neuer Delphi uebersetzt, beweist den
+// Compiler - eine Inline-Variable ('for var I', 'var X := ..', ab Delphi
+// 10.3, FPC 3.2 kennt sie nicht) bzw. ein Unit-Name mit RTL-Praefix im
+// uses ('System.SysUtils', 'Winapi.Windows', 'Vcl.Forms', 'FMX.Types' -
+// ab Delphi XE2). Was die Spuren alter Compiler (hier, im Include, in der
+// Projekt-Nachbarschaft) behaupten, widerlegt er bis zu seiner Version:
+// die Datei uebersetzt mit keinem aelteren Compiler. Die Aufrufer fragen
+// ihn selbst (uRdxFormatSettingsFix, uRdxRawExceptionFix, uRdxMagicFixes.
+// ProjectReason); OldCompilerTrace bleibt, wie er war.
+// Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
+// (UnconditionalAt, FpcExcludedAt).
 
 interface
 
@@ -78,10 +103,11 @@ type
   //                (uRdxMagicFixes.FileReason, Gegen-Review Q14, Major 3):
   //                SCA014, SCA069, SCA111/SCA112 und seit dem Realworld-
   //                Test rwE29 SCA128/SCA059 (FLOOR_INLINE_DECL fuer den
-  //                Invariant-Weg, FLOOR_SETTINGS_VAR fuer den Hauptweg).
-  //                SCA121 und SCA127 (FLOOR_DEFAULT_FN, nur die Spuren in
-  //                der Datei) haben keinen - die braeuchten eine eigene
-  //                Messung.
+  //                Invariant-Weg, FLOOR_SETTINGS_VAR fuer den Hauptweg),
+  //                seit rwE30 Stufe 2 auch SCA127 (FLOOR_DEFAULT_FN, 12.0 =
+  //                Delphi 2009; lfExceptionClasses - nur ein Beleg sperrt).
+  //                SCA121 (dieselbe Schwelle, nur die Spuren in der Datei)
+  //                hat keinen - der braeuchte eine eigene Messung.
   TRdxCompilerFloor = record
     Ver            : Integer;
     Version        : Integer;
@@ -129,11 +155,76 @@ const
     Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
     FpcFull: 20600; XeNames: False; ProjectVersion: 122);
 
+type
+  // Eine Bedingungs-Direktive der Datei (ConditionalDirectives): das Wort
+  // klein ('ifdef', 'ifndef', 'if', 'ifopt', 'elseif', 'else', 'endif',
+  // 'ifend'), die Argumente gross und ohne Leerraum ('NOTDEFINED(FPC)'),
+  // die Stelle ihres '{' bzw. '('.
+  TRdxCondDirective = record
+    Word : string;
+    Args : string;
+    Line : Integer;
+    Col  : Integer;
+  end;
+  TRdxCondDirectives = TArray<TRdxCondDirective>;
+
+  // Der Gegenbeweis einer Datei (ModernProof, s. Kopf): die bewiesene
+  // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name; 0 ohne), ob FPC
+  // 3.2 die Datei uebersetzt (NoFpc: nein - nur die Inline-Variable), die
+  // Form wie im Text ('for var', 'var X :=', 'System.SysUtils') und ihre
+  // Zeile.
+  TRdxModernProof = record
+    Version : Integer;
+    NoFpc   : Boolean;
+    What    : string;
+    Line    : Integer;
+  end;
+
+const
+  // Die CompilerVersion, die ModernProof je Form beweist.
+  PROOF_INLINE_VAR = 33;   // Delphi 10.3 Rio
+  PROOF_RTL_SCOPE  = 23;   // Delphi XE2 (Unit-Namensraeume der RTL)
+
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der
 // Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
+
+// Die Bedingungs-Direktiven der Datei in ihrer Reihenfolge (s.
+// TRdxCondDirective) - ein Lauf ueber alle Direktiven (NextDirective).
+function ConditionalDirectives(AMap: TRdxCodeMap): TRdxCondDirectives;
+// Steht (ALine, ACol) in keinem Bedingungsblock ({$IF..} bis {$ENDIF}/
+// {$IFEND}, auch nicht im {$ELSE}-Teil)? ADirs aus ConditionalDirectives.
+function UnconditionalAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): Boolean;
+// Liegt (ALine, ACol) in einem Zweig, den FPC nie uebersetzt - '{$IFNDEF
+// FPC}', '{$IF NOT DEFINED(FPC)}' bzw. der {$ELSE}-Teil von '{$IFDEF FPC}',
+// '{$IF DEFINED(FPC)}'? Nur diese Formen; ein {$ELSEIF} macht den Block
+// unbekannt (nein).
+function FpcExcludedAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): Boolean;
+// Der Gegenbeweis der Datei (s. Kopf und TRdxModernProof): die staerkste
+// Form ausserhalb jedes Bedingungsblocks; Version = 0 ohne.
+function ModernProof(AMap: TRdxCodeMap): TRdxModernProof;
+// Widerlegt der Gegenbeweis AProof die Schwelle AFloor - beweist er
+// mindestens ihre Version (AFloor.Version)?
+function ProofCovers(const AProof: TRdxModernProof;
+  const AFloor: TRdxCompilerFloor): Boolean;
+// Die erste Zeile mit 'TFormatSettings.Invariant' ausserhalb jedes
+// Bedingungsblocks (auch 'SysUtils.TFormatSettings.Invariant'); 0 ohne.
+// Wer es so schreibt, baut nur mit Compilern, die es kennen (rwE30 Stufe
+// 2: TemplatePro.pas, LoggerPro.Renderers.pas).
+function UnconditionalInvariantLine(AMap: TRdxCodeMap): Integer;
+// Die erste Zeile, in der die Datei die globale FormatSettings fuer Datum
+// und Uhrzeit selbst einstellt: 'FormatSettings.ShortDateFormat := ..',
+// 'FormatSettings.LongMonthNames[1] := ..' (DATE_FIELDS; Zahlenfelder wie
+// DecimalSeparator nicht) oder ganz 'FormatSettings := ..', auch mit
+// 'SysUtils.' davor - nicht 'X.FormatSettings' (ein Member); 0 ohne.
+// AField: das Feld wie geschrieben bzw. 'FormatSettings'. Wer sie so einstellt, will dieses
+// Format (rwE30 Stufe 2: HeidiSQL heidisql.dpr setzt ShortDateFormat
+// 'yyyy/mm/dd'); TFormatSettings.Invariant liefe daran vorbei.
+function GlobalSettingsWriteLine(AMap: TRdxCodeMap; out AField: string): Integer;
 
 // Uebersetzt ein Compiler die Datei? Skript-Units ('unit X;' ohne
 // implementation-Teil: xEdit-Skripte, JvInterpreter-Beispiele) und
@@ -154,9 +245,10 @@ uses
 
 const
   // Die Includes der Kits, die vor beiden Schwellen bauen (JEDI/JCL/JVCL,
-  // CnPack/CnWizards, Indy) ...
-  KIT_INCLUDES: array[0..5] of string = ('jedi.inc', 'jvcl.inc', 'jcl.inc',
-    'cnpack.inc', 'cnwizards.inc', 'idcompilerdefines.inc');
+  // CnPack/CnWizards, Indy, seit rwE30 Stufe 2 mORMot 2 - ab Delphi 7) ...
+  KIT_INCLUDES: array[0..6] of string = ('jedi.inc', 'jvcl.inc', 'jcl.inc',
+    'cnpack.inc', 'cnwizards.inc', 'idcompilerdefines.inc',
+    'mormot.defines.inc');
   // ... und die Bedingungen, in denen ein Versionssymbol steht.
   CONDITION_WORDS: array[0..3] of string = ('ifdef', 'ifndef', 'if',
     'elseif');
@@ -178,6 +270,35 @@ const
   COMPARE_CHARS: TSysCharSet = ['<', '>', '='];
   // Damit beginnt eine Datei, die der Compiler uebersetzt (ScriptReason).
   PROGRAM_WORDS: array[0..2] of string = ('program', 'library', 'package');
+  // mORMot-Symbole (OldMormotWord, s. Kopf): ISDELPHI.. und die beiden
+  // Fragen nach Delphi 2009 (Unicode), deren CompilerVersion 20 ist.
+  MORMOT_PREFIX = 'ISDELPHI';
+  MORMOT_XE = 'XE';
+  MORMOT_UNICODE: array[0..1] of string = ('ISDELPHIUNICODE',
+    'FPC_OR_UNICODE');
+  UNICODE_VERSION = 20;
+  // Die Bedingungs-Direktiven (ConditionalDirectives) - oeffnend, Zweig,
+  // schliessend.
+  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_BRANCH: array[0..1] of string = ('else', 'elseif');
+  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
+  FPC_SYMBOL = 'FPC';
+  FPC_DEFINED = 'DEFINED(FPC)';
+  FPC_NOT_DEFINED = 'NOTDEFINED(FPC)';
+  // ModernProof: Unit-Namensraeume der RTL ab Delphi XE2 (klein, mit
+  // Punkt) und so weit liest die Probe 'var X: T := ..' bis zum ':='.
+  RTL_SCOPES: array[0..3] of string = ('system.', 'winapi.', 'vcl.', 'fmx.');
+  MAX_INLINE_DECL_TOKENS = 40;
+  // Die globale Variable (GlobalSettingsWriteLine) und ihre Felder fuer
+  // Datum und Uhrzeit - nur sie zaehlen: ein Programm, das
+  // DecimalSeparator auf '.' setzt, will meist, was Invariant schreibt
+  // (xEdit.dpr; rwE30 Stufe 2), ShortDateFormat 'yyyy/mm/dd' dagegen nicht
+  // (HeidiSQL).
+  SETTINGS_LOW = 'formatsettings';
+  DATE_FIELDS: array[0..12] of string = ('dateseparator', 'timeseparator',
+    'shortdateformat', 'longdateformat', 'shorttimeformat', 'longtimeformat',
+    'timeamstring', 'timepmstring', 'shortmonthnames', 'longmonthnames',
+    'shortdaynames', 'longdaynames', 'twodigityearcenturywindow');
 
 // Die Zahl direkt hinter APrefix am Anfang von AUpper ('DELPHI2007_UP',
 // 'DELPHI' -> 2007); -1 ohne Ziffer dahinter.
@@ -210,14 +331,65 @@ begin
       and (Copy(AUpper, 1, Length(NAMED_PREFIXES[i])) = NAMED_PREFIXES[i]));
 end;
 
+// Die CompilerVersion eines mORMot-Symbols (s. Kopf); -1 ohne. Hinter der
+// Zahl darf ein Zusatz stehen ('ISDELPHI2007ANDUP',
+// 'ISDELPHI2010_OR_FPC_NEWRTTI'); acht Ziffern sind ein Paar von Jahren
+// ('ISDELPHI20062007' - das spaetere zaehlt).
+function MormotVersion(const AUpper: string): Integer;
+var
+  N, Rest : Integer;
+begin
+  Result := -1;
+  if InList(AUpper, MORMOT_UNICODE) then
+    Exit(UNICODE_VERSION);
+  if Copy(AUpper, 1, Length(MORMOT_PREFIX)) <> MORMOT_PREFIX then Exit;
+  Rest := Length(MORMOT_PREFIX) + 1;
+  if Copy(AUpper, Rest, Length(MORMOT_XE)) = MORMOT_XE then
+  begin
+    N := NumberAfter(Copy(AUpper, Rest, MaxInt), MORMOT_XE);
+    if N < 0 then
+      Exit(22)                       // ISDELPHIXE = Delphi XE
+    else if (N >= 2) and (N <= 8) then
+      Exit(21 + N);                  // XE2 = 23 .. XE8 = 29
+    Exit;
+  end;
+  N := NumberAfter(AUpper, MORMOT_PREFIX);
+  if N > 9999 then
+    N := N mod 10000;                // 20062007 -> 2007
+  case N of
+    7:          Result := 15;        // Delphi 7
+    10:         Result := 30;        // 10 Seattle
+    11..14:     Result := 24 + N;    // 11 = 35 .. 14 = 38
+    101..104:   Result := N - 70;    // 10.1 = 31 .. 10.4 = 34
+    2005:       Result := 17;
+    2006, 2007: Result := 18;
+    2009:       Result := 20;
+    2010:       Result := 21;
+  end;
+end;
+
+// Ein mORMot-Symbol bis zur Schwelle (AFloor.Version, die Schwelle selbst
+// zaehlt mit wie bei 'CompilerVersion <op> n').
+function OldMormotWord(const AUpper: string;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  V : Integer;
+begin
+  V := MormotVersion(AUpper);
+  Result := (V >= 0) and (V <= AFloor.Version);
+end;
+
 // Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor):
 // VERnnn, DELPHIn, DELPHI2005.., COMPILERn, BCBn, RTLnnn, mit XeNames
-// dazu die Namen - wer danach fragt, baut auch mit dem aelteren Compiler.
+// dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole - wer danach
+// fragt, baut auch mit dem aelteren Compiler.
 function OldVersionWord(const AUpper: string;
   const AFloor: TRdxCompilerFloor): Boolean;
 var
   N : Integer;
 begin
+  if OldMormotWord(AUpper, AFloor) then
+    Exit(True);
   N := NumberAfter(AUpper, 'DELPHI');
   Result := ((N >= 1) and (N <= AFloor.DelphiNumber))
     or ((N >= FIRST_DELPHI_YEAR) and (N <= AFloor.DelphiYear));
@@ -376,6 +548,297 @@ begin
   end;
   Result := _('unit without an implementation part (script?) - only the '
     + 'compiler knows %s', [AFeature]);
+end;
+
+{ ---- Bedingungsbloecke und Gegenbeweis (rwE30 Stufe 2) ---- }
+
+function ConditionalDirectives(AMap: TRdxCodeMap): TRdxCondDirectives;
+var
+  Li, Co, N : Integer;
+  W         : string;
+  Arg       : Boolean;
+begin
+  Result := nil;
+  N := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
+  begin
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, COND_OPEN) or InList(W, COND_BRANCH)
+       or InList(W, COND_CLOSE) then
+    begin
+      if N = Length(Result) then
+        SetLength(Result, 2 * N + 8);
+      Result[N].Word := W;
+      Result[N].Args := UpperCase(Squeezed(DirectiveArgs(AMap, Li, Co)));
+      Result[N].Line := Li;
+      Result[N].Col := Co;
+      Inc(N);
+    end;
+    Inc(Co);
+  end;
+  SetLength(Result, N);
+end;
+
+// Steht die Direktive ADir vor (ALine, ACol)?
+function DirBefore(const ADir: TRdxCondDirective; ALine, ACol: Integer): Boolean;
+begin
+  Result := (ADir.Line < ALine) or ((ADir.Line = ALine) and (ADir.Col < ACol));
+end;
+
+function UnconditionalAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): Boolean;
+var
+  i, Depth : Integer;
+begin
+  Depth := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    if not DirBefore(ADirs[i], ALine, ACol) then Break;
+    if InList(ADirs[i].Word, COND_OPEN) then
+      Inc(Depth)
+    else if InList(ADirs[i].Word, COND_CLOSE) and (Depth > 0) then
+      Dec(Depth);
+  end;
+  Result := Depth = 0;
+end;
+
+type
+  // Ein offener Bedingungsblock fuer FpcExcludedAt: fragt er nach FPC
+  // (Fpc), mit welcher Polaritaet (Neg: '{$IFNDEF FPC}', 'NOT DEFINED'),
+  // im {$ELSE}-Teil, unbekannt ({$ELSEIF}, andere Bedingung).
+  TFpcFrame = record
+    Fpc, Neg, InElse : Boolean;
+  end;
+
+function FpcExcludedAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): Boolean;
+var
+  Stack : array of TFpcFrame;
+  i, N  : Integer;
+  D     : TRdxCondDirective;
+begin
+  Result := False;
+  SetLength(Stack, Length(ADirs) + 1);
+  N := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    D := ADirs[i];
+    if not DirBefore(D, ALine, ACol) then Break;
+    if InList(D.Word, COND_OPEN) then
+    begin
+      Stack[N] := Default(TFpcFrame);
+      if (D.Word = 'ifdef') or (D.Word = 'ifndef') then
+      begin
+        Stack[N].Fpc := D.Args = FPC_SYMBOL;
+        Stack[N].Neg := D.Word = 'ifndef';
+      end
+      else if D.Word = 'if' then
+      begin
+        Stack[N].Fpc := (D.Args = FPC_DEFINED) or (D.Args = FPC_NOT_DEFINED);
+        Stack[N].Neg := D.Args = FPC_NOT_DEFINED;
+      end;
+      Inc(N);
+    end
+    else if N = 0 then
+      Continue
+    else if D.Word = 'else' then
+      Stack[N - 1].InElse := True
+    else if D.Word = 'elseif' then
+      Stack[N - 1].Fpc := False
+    else
+      Dec(N);
+  end;
+  for i := 0 to N - 1 do
+    if Stack[i].Fpc and (Stack[i].Neg <> Stack[i].InElse) then
+      Exit(True);
+end;
+
+// Eine Inline-Variable an T ('var' als Schluesselwort): 'for var',
+// 'var X :=' bzw. 'var X: T :=' (bis ';' oder ')' auf Klammertiefe 0 ein
+// ':='); die Form als Text, '' ohne.
+function InlineVarAt(AMap: TRdxCodeMap; const T: TRdxToken): string;
+var
+  N     : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := '';
+  if Before(AMap, T).Low = 'for' then
+    Exit('for var');
+  N := After(AMap, T);
+  if not N.IsWord then Exit;
+  N := After(AMap, N);
+  if N.Low = ':=' then
+    Exit('var ' + TokText(AMap, Before(AMap, N)) + ' :=');
+  if N.Low <> ':' then Exit;
+  Depth := 0;
+  Count := 0;
+  while (N.Low <> '') and (Count < MAX_INLINE_DECL_TOKENS) do
+  begin
+    Depth := Depth + ParenDelta(N);
+    if (Depth < 0) or ((Depth = 0) and ((N.Low = ';') or (N.Low = '=')))
+    then
+      Exit;
+    if (Depth = 0) and (N.Low = ':=') then
+      Exit('var ' + TokText(AMap, After(AMap, T)) + ': .. :=');
+    N := After(AMap, N);
+    Inc(Count);
+  end;
+end;
+
+// Der Name eines uses-Eintrags ab AFirst bis vor ',', ';' oder 'in' -
+// klein, Glieder mit '.'; AStop: das Token dahinter.
+function UsesEntry(AMap: TRdxCodeMap; const AFirst: TRdxToken;
+  out AStop: TRdxToken): string;
+begin
+  Result := '';
+  AStop := AFirst;
+  while (AStop.Low <> '') and (AStop.Low <> ',') and (AStop.Low <> ';')
+        and (AStop.Low <> 'in') do
+  begin
+    Result := Result + AStop.Low;
+    AStop := After(AMap, AStop);
+  end;
+end;
+
+// Ein RTL-Namensraum im uses ausserhalb jedes Bedingungsblocks: der Name
+// wie geschrieben und seine Zeile in AProof (Version PROOF_RTL_SCOPE).
+procedure ScopeProof(AMap: TRdxCodeMap; const ADirs: TRdxCondDirectives;
+  var AProof: TRdxModernProof);
+var
+  T, E, Stop : TRdxToken;
+  Name, S    : string;
+begin
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      E := After(AMap, T);
+      while (E.Low <> '') and (E.Low <> ';') do
+      begin
+        Name := UsesEntry(AMap, E, Stop);
+        for S in RTL_SCOPES do
+          if (Copy(Name, 1, Length(S)) = S)
+             and UnconditionalAt(ADirs, E.Line, E.Col) then
+          begin
+            AProof.Version := PROOF_RTL_SCOPE;
+            AProof.What := Copy(AMap.Raw(E.Line), E.Col, Length(Name));
+            AProof.Line := E.Line;
+            Exit;
+          end;
+        // Hinter 'in' der Pfad, dann ',' oder ';'.
+        while (Stop.Low <> '') and (Stop.Low <> ',') and (Stop.Low <> ';') do
+          Stop := After(AMap, Stop);
+        if Stop.Low = ',' then
+          E := After(AMap, Stop)
+        else
+          E := Stop;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+end;
+
+function ModernProof(AMap: TRdxCodeMap): TRdxModernProof;
+var
+  Dirs : TRdxCondDirectives;
+  T    : TRdxToken;
+  Form : string;
+begin
+  Result := Default(TRdxModernProof);
+  Dirs := ConditionalDirectives(AMap);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'var');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'var') and IsKeywordAfter(T, Before(AMap, T))
+       and UnconditionalAt(Dirs, T.Line, T.Col) then
+    begin
+      Form := InlineVarAt(AMap, T);
+      if Form <> '' then
+      begin
+        Result.Version := PROOF_INLINE_VAR;
+        Result.NoFpc := True;
+        Result.What := Form;
+        Result.Line := T.Line;
+        Exit;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'var');
+  end;
+  ScopeProof(AMap, Dirs, Result);
+end;
+
+function ProofCovers(const AProof: TRdxModernProof;
+  const AFloor: TRdxCompilerFloor): Boolean;
+begin
+  Result := (AProof.Version > 0) and (AProof.Version >= AFloor.Version);
+end;
+
+function UnconditionalInvariantLine(AMap: TRdxCodeMap): Integer;
+var
+  Dirs    : TRdxCondDirectives;
+  T, D, P : TRdxToken;
+  Read    : Boolean;
+begin
+  Result := 0;
+  Read := False;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'invariant');
+  while T.Low <> '' do
+  begin
+    D := Before(AMap, T);
+    P := Before(AMap, D);
+    if (T.Low = 'invariant') and (D.Low = '.')
+       and (P.Low = 'tformatsettings') then
+    begin
+      if not Read then
+      begin
+        Dirs := ConditionalDirectives(AMap);
+        Read := True;
+      end;
+      if UnconditionalAt(Dirs, T.Line, T.Col) then
+        Exit(T.Line);
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'invariant');
+  end;
+end;
+
+function GlobalSettingsWriteLine(AMap: TRdxCodeMap; out AField: string): Integer;
+var
+  T, P, N, F : TRdxToken;
+begin
+  Result := 0;
+  AField := '';
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), SETTINGS_LOW);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if (T.Low = SETTINGS_LOW)
+       and ((P.Low <> '.') or (Before(AMap, P).Low = 'sysutils')) then
+    begin
+      N := After(AMap, T);
+      if N.Low = ':=' then
+      begin
+        AField := TokText(AMap, T);
+        Exit(T.Line);
+      end;
+      if N.Low = '.' then
+      begin
+        F := After(AMap, N);
+        N := After(AMap, F);
+        if N.Low = '[' then
+          N := AfterClose(AMap, N);
+        if F.IsWord and (N.Low = ':=') and InList(F.Low, DATE_FIELDS) then
+        begin
+          AField := TokText(AMap, F);
+          Exit(T.Line);
+        end;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, SETTINGS_LOW);
+  end;
 end;
 
 end.
