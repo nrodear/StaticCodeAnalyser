@@ -6759,3 +6759,6 @@ msgstr "la différence va dans Result: %s - ramenée à 32 bits, NativeInt ne ch
 
 msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
 msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code sépare déjà 32 et 64 bits"
+
+msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
+msgstr "après le try..except, %s (ligne %d) annule %s d'avant le try - \"raise;\" le sauterait (pas de finally)"

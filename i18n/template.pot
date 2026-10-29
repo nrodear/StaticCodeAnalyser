@@ -1904,7 +1904,7 @@ msgstr ""
 msgid "Duplicates"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:217
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:230
 msgid "EAbort is swallowed on purpose - \"raise;\" would show the abort"
 msgstr ""
 
@@ -4254,6 +4254,10 @@ msgstr ""
 msgid "after \".\", \"&\" or \"@\" and before \":=\" the word is an identifier, not a keyword"
 msgstr ""
 
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:371
+msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:2996
 msgid "all other values: do nothing (as before)"
 msgstr ""
@@ -4653,7 +4657,7 @@ msgstr ""
 msgid "comment or directive between \"with\" and \"end\""
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:242
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:255
 msgid "comment or directive in or beside the handler - intent, no help"
 msgstr ""
 
@@ -5745,9 +5749,9 @@ msgstr ""
 msgid "no duplicate attribute at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:172
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:203
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:215
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:185
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:216
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:228
 msgid "no empty \"on ... do\" handler at the reported place"
 msgstr ""
 
@@ -6729,7 +6733,7 @@ msgstr ""
 msgid "several \"begin\" on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:174
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:187
 msgid "several \"on ... do\" handlers on this line - the finding could mean any of them"
 msgstr ""
 
@@ -6827,7 +6831,7 @@ msgstr ""
 msgid "the \"if\" is not a statement (conditional expression?)"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:219
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:232
 msgid "the \"on\" does not start a handler of an except block"
 msgstr ""
 
@@ -7544,8 +7548,8 @@ msgstr ""
 msgid "the function does not set Result by a plain statement before the if; by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:189
-#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:277
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:202
+#: reDelphix/source/uRdxEmptyOnHandlerFix.pas:409
 msgid "the handler head is not on one line, or the \";\" is not on the line of \"do\""
 msgstr ""
 

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6765 Zeilen, 305453 Bytes
-  CPoLines_de: array[0..6764] of string = (
+  // i18n\de.po - 6768 Zeilen, 305687 Bytes
+  CPoLines_de: array[0..6767] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6779,7 +6779,10 @@ const
     'msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt '#$00E4'nderte nichts (eine Vergleichsfunktion sollte vergleichen, nicht subtrahieren)"',
     '',
     'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
-    'msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"'
+    'msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"',
+    '',
+    'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
+    'msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" '#$00FC'berspr'#$00E4'nge es (kein finally)"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7054,8 +7057,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6761 Zeilen, 317718 Bytes
-  CPoLines_fr: array[0..6760] of string = (
+  // i18n\fr.po - 6764 Zeilen, 317947 Bytes
+  CPoLines_fr: array[0..6763] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13816,7 +13819,10 @@ const
     'msgstr "la diff'#$00E9'rence va dans Result: %s - ramen'#$00E9'e '#$00E0' 32 bits, NativeInt ne changerait rien (une fonction de comparaison devrait comparer, pas soustraire)"',
     '',
     'msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"',
-    'msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code s'#$00E9'pare d'#$00E9'j'#$00E0' 32 et 64 bits"'
+    'msgstr "la ligne se trouve dans {$%s %s} (ligne %d) - le code s'#$00E9'pare d'#$00E9'j'#$00E0' 32 et 64 bits"',
+    '',
+    'msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"',
+    'msgstr "apr'#$00E8's le try..except, %s (ligne %d) annule %s d''avant le try - \"raise;\" le sauterait (pas de finally)"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

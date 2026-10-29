@@ -30,7 +30,12 @@ unit uRdxEmptyOnHandlerFix;
 //     Kommentar ist Absicht ('// Abbruch ist hier gewollt');
 //   * der Kopf 'on E: T do' steht nicht auf einer Zeile, das ';' nicht auf
 //     der Zeile des 'do';
-//   * der Typ ist EAbort (stilles Abbruchsignal der VCL).
+//   * der Typ ist EAbort (stilles Abbruchsignal der VCL);
+//   * hinter dem try..except folgt im selben Block die Freigabe zu einer
+//     Sperre vor dem try (BeginUpdate/EndUpdate, Lock/Unlock ... -
+//     CleanupReason): 'raise;' ueberspraenge sie, es gibt kein finally
+//     (rwE29, HeidiSQL table_editor.pas:3209 - die ListView bliebe in
+//     BeginUpdate).
 // Der Rumpf 'begin end' darf ueber Zeilen gehen, wenn dazwischen nur
 // Leerraum steht.
 
@@ -52,6 +57,8 @@ const
     + 'on the line of "do"';
   R_EOH_ABORT     = 'EAbort is swallowed on purpose - "raise;" would show '
     + 'the abort';
+  R_EOH_CLEANUP   = 'after the try..except, %s (line %d) undoes %s from '
+    + 'before the try - "raise;" would skip it (no finally)';
 
 type
   // Der Planer von SCA159 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -82,6 +89,12 @@ const
   RAISE_INLINE = ' raise;';
   RAISE_BLOCK  = ' raise; ';
   RAISE_STMT   = 'raise;';
+  // Sperre vor dem try und ihre Freigabe hinter dem except (CleanupReason),
+  // je Index ein Paar.
+  PAIR_OPEN: array[0..6] of string = ('beginupdate', 'lock', 'enter',
+    'acquire', 'beginwrite', 'beginread', 'disablecontrols');
+  PAIR_CLOSE: array[0..6] of string = ('endupdate', 'unlock', 'leave',
+    'release', 'endwrite', 'endread', 'enablecontrols');
 
 type
   // Ein Handler-Kopf 'on [E:] T do' auf einer Zeile.
@@ -242,6 +255,125 @@ begin
     Result := _(R_EOH_COMMENT);
 end;
 
+// Ist T ein Aufruf des Namens ALow - ein Wort hinter '.' oder mit ';' bzw.
+// '(' dahinter (nicht 'X := Lock')?
+function IsCallOf(AMap: TRdxCodeMap; const T: TRdxToken;
+  const AList: array of string; out AIndex: Integer): Boolean;
+var
+  i : Integer;
+  N : string;
+begin
+  Result := False;
+  AIndex := -1;
+  if not T.IsWord then Exit;
+  for i := 0 to High(AList) do
+    if T.Low = AList[i] then
+      AIndex := i;
+  if AIndex < 0 then Exit;
+  N := After(AMap, T).Low;
+  Result := (Before(AMap, T).Low = '.') or (N = ';') or (N = '(');
+end;
+
+// Hinter dem try..except des Handlers folgt im selben Block die Freigabe
+// (PAIR_CLOSE) zu einer Sperre (PAIR_OPEN) vor dem try - 'raise;'
+// ueberspraenge sie. Rueckwaerts vom 'on' zum except und zu seinem try
+// (ganze Bloecke uebersprungen), weiter rueckwaerts bis zum Anfang des
+// umgebenden Blocks nach Sperren; vorwaerts vom 'on' zum end des except
+// und weiter bis zum Ende des umgebenden Blocks nach der Freigabe.
+// '' oder der Grund.
+function CleanupReason(AMap: TRdxCodeMap; const AHead: TOnHead): string;
+var
+  T, P      : TRdxToken;
+  Depth, i  : Integer;
+  Opened    : array[0..6] of Boolean;     // je Index von PAIR_OPEN
+  OpenTok   : array[0..6] of TRdxToken;
+  Seen      : Boolean;
+begin
+  Result := '';
+  // Rueckwaerts: das except und das try dieses Handlers.
+  T := Before(AMap, AHead.OnTok);
+  Depth := 0;
+  Seen := False;
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsKeywordAfter(T, P) then
+    begin
+      if T.Low = 'end' then
+        Inc(Depth)
+      else if IsEndOpener(T.Low) then
+      begin
+        if (Depth = 0) and (T.Low = 'try') then
+          Break;
+        if Depth = 0 then
+          Exit;   // ein Block oeffnet vor dem try - Lage unklar
+        Dec(Depth);
+      end
+      else if (Depth = 0) and (T.Low = 'except') then
+        Seen := True;
+    end;
+    T := P;
+  end;
+  if (T.Low <> 'try') or not Seen then Exit;
+  // Weiter rueckwaerts bis zum Anfang des umgebenden Blocks: Sperren.
+  for i := 0 to High(Opened) do
+    Opened[i] := False;
+  T := Before(AMap, T);
+  Depth := 0;
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsKeywordAfter(T, P) and (T.Low = 'end') then
+      Inc(Depth)
+    else if IsKeywordAfter(T, P) and IsEndOpener(T.Low) then
+    begin
+      if Depth = 0 then
+        Break;
+      Dec(Depth);
+    end
+    else if (Depth = 0) and IsCallOf(AMap, T, PAIR_OPEN, i) then
+    begin
+      Opened[i] := True;
+      OpenTok[i] := T;
+    end;
+    T := P;
+  end;
+  // Vorwaerts: das end des except, dann bis zum Ende des Blocks.
+  T := After(AMap, AHead.OnTok);
+  Depth := 0;
+  while T.Low <> '' do
+  begin
+    if IsKeywordAfter(T, Before(AMap, T)) and IsEndOpener(T.Low) then
+      Inc(Depth)
+    else if IsKeywordAfter(T, Before(AMap, T)) and (T.Low = 'end') then
+    begin
+      if Depth = 0 then
+        Break;
+      Dec(Depth);
+    end;
+    T := After(AMap, T);
+  end;
+  if T.Low <> 'end' then Exit;
+  T := After(AMap, T);
+  Depth := 0;
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsKeywordAfter(T, P) and IsEndOpener(T.Low) then
+      Inc(Depth)
+    else if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
+    begin
+      if Depth = 0 then
+        Exit;
+      Dec(Depth);
+    end
+    else if (Depth = 0) and IsCallOf(AMap, T, PAIR_CLOSE, i) and Opened[i] then
+      Exit(_(R_EOH_CLEANUP, [TokText(AMap, T), T.Line,
+        TokText(AMap, OpenTok[i])]));
+    T := After(AMap, T);
+  end;
+end;
+
 // Die Ersetzung: Form A hinter dem 'do', Form B in 'begin end'.
 function BuildEdit(AMap: TRdxCodeMap; const AHead: TOnHead;
   const ABody: TEmptyBody; out AEdit: TRdxEdit): string;
@@ -302,6 +434,8 @@ begin
     AReason := ContextReason(AMap, Head, AMessage);
   if AReason = '' then
     AReason := CommentReason(AMap, Head, Body);
+  if AReason = '' then
+    AReason := CleanupReason(AMap, Head);
   if AReason = '' then
     AReason := BuildEdit(AMap, Head, Body, AEdit);
   Result := AReason = '';

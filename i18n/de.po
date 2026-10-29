@@ -6763,3 +6763,6 @@ msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt 
 
 msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
 msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"
+
+msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
+msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" überspränge es (kein finally)"
