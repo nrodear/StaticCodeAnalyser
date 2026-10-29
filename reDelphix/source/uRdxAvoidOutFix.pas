@@ -730,16 +730,18 @@ end;
 // Die rechte Seite der Zuweisung an AName ('ALow := ..') bis zum ';', else
 // oder end auf Klammertiefe 0 bzw. bis AStop: liest sie ALow nicht ('S := S
 // + ..')? Dann True und ANext ist das Token dahinter; sonst False und ALine
-// die Zeile des Lesens.
+// die Zeile des Lesens. Das else eines bedingten Ausdrucks (Delphi 13:
+// 'S := if C then A else B', Review Gruppe M) gehoert zur rechten Seite.
 function RhsClean(AMap: TRdxCodeMap; const AName, AStop: TRdxToken;
   const ALow: string; out ANext: TRdxToken; out ALine: Integer): Boolean;
 var
-  X, P  : TRdxToken;
-  Paren : Integer;
+  X, P         : TRdxToken;
+  Paren, Conds : Integer;
 begin
   Result := False;
   ALine := AName.Line;
   Paren := 0;
+  Conds := 0;
   P := After(AMap, AName);
   X := After(AMap, P);
   while (X.Low <> '') and TokBefore(X, AStop) do
@@ -748,6 +750,11 @@ begin
       Inc(Paren)
     else if ((X.Low = ')') or (X.Low = ']')) and (Paren > 0) then
       Dec(Paren)
+    else if (Paren = 0) and (X.Low = 'if') and IsKeywordAfter(X, P) then
+      Inc(Conds)
+    else if (Paren = 0) and (Conds > 0) and (X.Low = 'else')
+       and IsKeywordAfter(X, P) then
+      Dec(Conds)
     else if (Paren = 0) and ((X.Low = ';') or (IsKeywordAfter(X, P)
        and InList(X.Low, BRANCH_STOPS))) then
       Break;

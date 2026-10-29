@@ -684,6 +684,16 @@ begin
     '  begin', '    Log(S);', '    S := '''';', '  end;']), '    S := ''x''');
   AssertMenuOnly(GetUnitBody(['  if S = '''' then', '    S := ''x''',
     '  else', '    S := ''y'';']), '  if S = ');
+  // Review Gruppe M: ein bedingter Ausdruck (Delphi 13) auf der rechten
+  // Seite - sein else beendet die Zuweisung nicht; dahinter liest er S
+  // (bis zum Review hielt RhsClean am else an: Gluehbirne).
+  AssertMenuOnly(GetUnitBody(['  S := if Ready then ''x'' else S;']),
+    '  S := if Ready');
+  // ... im then-Zweig eines if: das zweite else gehoert dem if.
+  Src := GetUnitBody(['  if A then S := if B then ''x'' else ''y'' '
+    + 'else S := ''z'';']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Get(', P, R), R);
+  Assert.IsFalse(P.MenuOnly, 'bedingter Ausdruck im then-Zweig');
 end;
 
 procedure TTestRdxAvoidOutFix.DirectiveAroundSet_MenuOnly;
