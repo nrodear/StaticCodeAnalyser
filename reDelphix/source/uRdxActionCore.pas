@@ -694,6 +694,11 @@ procedure TRdxActionCore.AddSimpleFix(var AList: TArray<TRdxActionEntry>;
     // E2: Ctrl+Alt+F fuehrt eine solche Hilfe nicht ungesehen aus.
     AList[High(AList)].ChangesBehavior := AOutcome.ChangesBehavior;
     AList[High(AList)].Variant := AOutcome.Variant;
+    // Nur im Menue (TRdxFixOutcome.MenuOnly, rwE30): fakRefactor steht nie
+    // in der Gluehbirne und laeuft nie per Taste (uFindingActions, VERTRAG);
+    // Kontextmenue und Dock-Grid zeigen den Eintrag wie jede Hilfe.
+    if AOutcome.MenuOnly then
+      AList[High(AList)].Kind := fakRefactor;
   end;
 
 var

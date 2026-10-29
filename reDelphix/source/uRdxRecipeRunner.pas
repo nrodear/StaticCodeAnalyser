@@ -129,6 +129,14 @@ type
     // von SCA168 und SCA020 mit raise). Massgeblich ist FIX_ROWS - diese
     // Aufzaehlung ist nur die Uebersicht (Stand Charge FB).
     ChangesBehavior : Boolean;
+    // Die Hilfe steht nur im Menue, nicht in der Gluehbirne (Nico
+    // 2026-10-29, Realworld-Test rwE30 Stufe 2): ihr Beweis ist nicht
+    // vollstaendig - SCA007, wenn die Datei Bezeichner nutzt, die der Planer
+    // keiner anderen Unit zuordnen kann (TRdxStructFixes.ForeignIdent). Der
+    // Anbieter gibt dem Eintrag dafuer die Art fakRefactor
+    // (uRdxActionCore.AddSimpleFix): Kontextmenue und Dock-Grid zeigen ihn,
+    // die Gluehbirne und Ctrl+Alt+F nicht.
+    MenuOnly : Boolean;
   end;
 
   // uses-Eintraege qualifizieren ('uses: X -> Scope.X', QualifyUses):
