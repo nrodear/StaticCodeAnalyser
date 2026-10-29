@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6752 Zeilen, 304759 Bytes
-  CPoLines_de: array[0..6751] of string = (
+  // i18n\de.po - 6761 Zeilen, 305571 Bytes
+  CPoLines_de: array[0..6760] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -5710,6 +5710,15 @@ const
     'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"',
     'msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"',
     '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"',
+    'msgstr "Paket %s im Verzeichnis %s enth'#$00E4'lt die Unit und ist f'#$00FC'r ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Konstante; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"',
+    'msgstr "Paket %s im Verzeichnis %s enth'#$00E4'lt die Unit und ist f'#$00FC'r ein Delphi vor 11 (%s), und dort gibt es keine Zifferntrenner; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"',
+    'msgstr "Paket %s im Verzeichnis %s enth'#$00E4'lt die Unit und ist f'#$00FC'r ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Variable; %s"',
+    '',
     'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"',
     'msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - dort gibt es keine Inline-Konstante; %s"',
     '',
@@ -7041,8 +7050,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6748 Zeilen, 317088 Bytes
-  CPoLines_fr: array[0..6747] of string = (
+  // i18n\fr.po - 6757 Zeilen, 317954 Bytes
+  CPoLines_fr: array[0..6756] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -12733,6 +12742,15 @@ const
     '',
     'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"',
     'msgstr "ancien fichier de projet %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 10.3, qui ne conna'#$00EE't pas les variables inline; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"',
+    'msgstr "le paquet %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et vise un Delphi ant'#$00E9'rieur '#$00E0' 10.3 (%s), qui ne conna'#$00EE't pas les constantes inline; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"',
+    'msgstr "le paquet %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et vise un Delphi ant'#$00E9'rieur '#$00E0' 11 (%s), qui ne conna'#$00EE't pas les s'#$00E9'parateurs de chiffres; %s"',
+    '',
+    'msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"',
+    'msgstr "le paquet %s dans le r'#$00E9'pertoire %s contient l''unit'#$00E9' et vise un Delphi ant'#$00E9'rieur '#$00E0' 10.3 (%s), qui ne conna'#$00EE't pas les variables inline; %s"',
     '',
     'msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"',
     'msgstr "projet %s dans le r'#$00E9'pertoire %s avec ProjectVersion %s (avant Delphi 10.3 = %s) - les constantes inline n''y existent pas; %s"',

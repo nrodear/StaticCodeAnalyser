@@ -5689,6 +5689,15 @@ msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 10.3, qui ne connaît pas les variables inline; %s"
 
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 10.3 (%s), qui ne connaît pas les constantes inline; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 11 (%s), qui ne connaît pas les séparateurs de chiffres; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 10.3 (%s), qui ne connaît pas les variables inline; %s"
+
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 10.3 = %s) - les constantes inline n'y existent pas; %s"
 
