@@ -66,7 +66,13 @@ type
     wtRolleOwner, wtRolleOwnerText,
     // -- Seitenkopf ------------------------------------------------------
     wtTitelKatalog, wtUntertitelKatalog, wtTitelFunde,
-    wtUntertitelFunde, wtKuerzungsbanner, wtKeineFundeImLauf
+    wtUntertitelFunde, wtKuerzungsbanner, wtKeineFundeImLauf,
+    // -- Editorhilfen (beide Fundberichte: CLI-Bericht uExportHtml und
+    //    Workbench-Seite, Nico 2026-10-29) - Zeilenkopf und die vier
+    //    Wirkungen von editorHelps[].effect; EINE Quelle fuer beide
+    //    Seiten und alle drei Sprachen.
+    wtEditorhilfen, wtWirkungSame, wtWirkungChanges, wtWirkungDepends,
+    wtWirkungTemplate
   );
 
   TWorkbenchI18n = class
@@ -334,7 +340,17 @@ const
      + 'ci-dessus comptent TOUS les r&eacute;sultats ; augmentez le '
      + 'budget de lignes pour le texte int&eacute;gral.'),
     ('Keine Funde in diesem Lauf.', 'No findings in this run.',
-     'Aucun r&eacute;sultat dans cette analyse.')
+     'Aucun r&eacute;sultat dans cette analyse.'),
+    // ---- Editorhilfen ---------------------------------------------------
+    ('Editorhilfen', 'Editor helps', 'Aides d''&eacute;dition'),  // wtEditorhilfen
+    ('Verhalten bleibt', 'keeps behaviour',
+     'comportement inchang&eacute;'),                            // wtWirkungSame
+    ('&auml;ndert Verhalten', 'changes behaviour',
+     'modifie le comportement'),                                 // wtWirkungChanges
+    ('je nach Fund', 'depends on the finding',
+     'selon l''occurrence'),                                     // wtWirkungDepends
+    ('Vorlage, schreibt nichts', 'template, writes nothing',
+     'mod&egrave;le, n''&eacute;crit rien')                      // wtWirkungTemplate
   );
 
 function SprachIndex(const ALang: string): Integer;

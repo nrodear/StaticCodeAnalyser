@@ -33,6 +33,22 @@ uses
   uRuleCatalog;
 
 type
+  // Editorhilfen einer Regel im Bericht (Nico 2026-10-29), je Art EINMAL
+  // gebaut (TExporterHtml.EditorHelpHtmlJeArt) - wie HelpTokensJeArt im
+  // SARIF-Export, nicht je Fund. Geteilt von beiden Fundberichten: dem
+  // CLI-Bericht (diese Unit) und der Workbench-Seite
+  // (uFindingsWorkbenchExport, nimmt nur Liste - ihr Verweis je Fund ist
+  // das data-rid, das jede Fundzeile ohnehin traegt).
+  TEditorHelpHtml = record
+    // <ul class="eh-list" data-eh="..."> - '' fuer eine Regel ohne Hilfe.
+    Liste   : string;
+    // <div class="eh-ref" data-eh="..."></div> - der Verweis, den jede
+    // Fundzeile des CLI-Berichts im Detail traegt; dessen openDrawer
+    // haengt die Liste aus dem Regel-Report dort ein. '' ohne Liste.
+    Verweis : string;
+  end;
+  THelpHtmlJeArt = array[TFindingKind] of TEditorHelpHtml;
+
   // AE (29.09.): der Zuschnitt EINES HTML-Berichts. Ersetzt die fuenf
   // Einzelparameter, zu denen TExporterHtml.Run ueber drei Chargen
   // gewachsen war (SCA013, zuletzt per noinspection begruendet).
@@ -193,14 +209,24 @@ type
     // Die Liste der Editorhilfen EINER Regel als Element-Fragment
     //   <ul class="eh-list" data-eh="SCA017"><li>...</li></ul>
     // je Eintrag Id, lesbarer Slug und die Wirkung als
-    // <span class="eh-eff" data-i18n="eh-eff-<effect>"> (uebersetzt der
-    // Sprachumschalter des Berichts). Eine Wirkung ausserhalb von
-    // KNOWN_HELP_EFFECTS (nur ueber eine verdriftete einkompilierte
-    // Tabelle denkbar) steht roh und escapet da, ohne i18n-Schluessel.
-    // '' bei leerer Liste. AKey ist der Verweisschluessel (Regel-Id),
-    // den die Fundzeilen in data-eh tragen.
+    // <span class="eh-eff" data-i18n="eh-eff-<effect>">Text</span>. Der
+    // Text kommt in der Sprache ALang aus TWorkbenchI18n (wtWirkung*,
+    // EINE Quelle fuer beide Berichte): der CLI-Bericht baut 'de' (wie
+    // all seine Vorgabetexte, sein Sprachumschalter ersetzt sie ueber
+    // data-i18n), die Workbench-Seite ihre gebackene Sprache (dort ist
+    // data-i18n ohne Wirkung). Eine Wirkung ausserhalb der vier Werte
+    // (nur ueber eine verdriftete einkompilierte Tabelle denkbar) steht
+    // roh und escapet da, ohne i18n-Schluessel. '' bei leerer Liste.
+    // AKey ist der Verweisschluessel (Regel-Id), den die Fundzeilen des
+    // CLI-Berichts in data-eh tragen.
     class function EditorHelpListHtml(const AKey: string;
-      const AHelps: TArray<TRuleEditorHelp>): string; static;
+      const AHelps: TArray<TRuleEditorHelp>;
+      const ALang: string): string; static;
+    // Liste und Verweis je Art (s. TEditorHelpHtml) aus
+    // TRuleCatalog.GetRuleCanonical. Ohne AAn alles leer - dann schreibt
+    // kein Bericht etwas, und er ist der von vor dem Feld.
+    class function EditorHelpHtmlJeArt(AAn: Boolean;
+      const ALang: string): THelpHtmlJeArt; static;
   private
     // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
     // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
@@ -226,7 +252,18 @@ uses
   System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
   uExport, uReportFileWriter, uFixHint, uBaseline,
   uLocalization,           // CurrentLanguage - Regeltexte folgen der App-Sprache
-  uWorkbenchStyle;         // geteilter CSS-Kern beider HTML-Exporte (07.09.)
+  uWorkbenchStyle,         // geteilter CSS-Kern beider HTML-Exporte (07.09.)
+  uWorkbenchI18n;          // Texte der Editorhilfen (wtEditorhilfen, wtWirkung*)
+
+const
+  // Die vier Werte von editorHelps[].effect (Schema-enum; in uRuleCatalog
+  // KNOWN_HELP_EFFECTS, dort implementation-privat) und ihr Text in
+  // TWorkbenchI18n - EINE Zuordnung fuer die Liste (EditorHelpListHtml)
+  // und das I18N-Woerterbuch des CLI-Berichts (EditorHelpI18nZeilen).
+  HILFE_WIRKUNG : array[0..3] of string = ('same', 'changes', 'depends',
+    'template');
+  HILFE_WIRKUNG_TEXT : array[0..3] of TWbText = (wtWirkungSame,
+    wtWirkungChanges, wtWirkungDepends, wtWirkungTemplate);
 
 type
   // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
@@ -536,17 +573,19 @@ begin
 end;
 
 class function TExporterHtml.EditorHelpListHtml(const AKey: string;
-  const AHelps: TArray<TRuleEditorHelp>): string;
+  const AHelps: TArray<TRuleEditorHelp>; const ALang: string): string;
 // Vertrag an der Deklaration. Escaping: Id, Slug und Wirkung kommen aus
 // rules/sca-rules.json (eine Datei, die der Nutzer tauschen kann) -
 // Elementinhalt also ueber HtmlEscape, der Attributwert data-eh ueber
 // HtmlAttrEscapeMultiline (Element-Vertrag reicht im Attribut nicht,
 // s. HtmlEscape). Die Fundzeilen escapen ihren Verweis genauso, damit
-// der Abgleich im Skript Zeichen fuer Zeichen derselbe Wert ist.
+// der Abgleich im Skript Zeichen fuer Zeichen derselbe Wert ist. Der
+// Wirkungstext aus TWorkbenchI18n.T traegt HTML-Entities und geht wie
+// alle Texte der Tabelle direkt ins Markup.
 var
-  SB      : TStringBuilder;
-  i       : Integer;
-  Wirkung : string;
+  SB   : TStringBuilder;
+  i, w : Integer;
+  Idx  : Integer;
 begin
   Result := '';
   if Length(AHelps) = 0 then Exit;
@@ -562,26 +601,20 @@ begin
       SB.Append('</span> ');
       SB.Append(HtmlEscape(EditorHelpSlugText(AHelps[i].Slug)));
       SB.Append(' (');
-      // Die vier Werte von editorHelps[].effect (Schema-enum, in
-      // uRuleCatalog KNOWN_HELP_EFFECTS - dort implementation-privat).
-      // Vorgabetext deutsch wie alle data-i18n-Texte dieses Berichts,
-      // applyLanguage ersetzt ihn; der Schluessel ist ein fester Wert,
-      // braucht also kein Escaping.
-      Wirkung := '';
-      if AHelps[i].Effect = 'same' then
-        Wirkung := 'Verhalten bleibt'
-      else if AHelps[i].Effect = 'changes' then
-        Wirkung := 'aendert Verhalten'
-      else if AHelps[i].Effect = 'depends' then
-        Wirkung := 'je nach Fund'
-      else if AHelps[i].Effect = 'template' then
-        Wirkung := 'Vorlage, schreibt nichts';
-      if Wirkung <> '' then
+      Idx := -1;
+      for w := Low(HILFE_WIRKUNG) to High(HILFE_WIRKUNG) do
+        if AHelps[i].Effect = HILFE_WIRKUNG[w] then
+        begin
+          Idx := w;
+          Break;
+        end;
+      if Idx >= 0 then
       begin
+        // Der Schluessel ist ein Wert der festen Liste - kein Escaping.
         SB.Append('<span class="eh-eff" data-i18n="eh-eff-');
-        SB.Append(AHelps[i].Effect);
+        SB.Append(HILFE_WIRKUNG[Idx]);
         SB.Append('">');
-        SB.Append(Wirkung);
+        SB.Append(TWorkbenchI18n.T(HILFE_WIRKUNG_TEXT[Idx], ALang));
         SB.Append('</span>');
       end
       else
@@ -599,6 +632,50 @@ begin
   end;
 end;
 
+class function TExporterHtml.EditorHelpHtmlJeArt(AAn: Boolean;
+  const ALang: string): THelpHtmlJeArt;
+// Vertrag an der Deklaration.
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+begin
+  Result := Default(THelpHtmlJeArt);
+  if not AAn then Exit;
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRuleCanonical(K);
+    Result[K].Liste := EditorHelpListHtml(Meta.ID, Meta.EditorHelps, ALang);
+    if Result[K].Liste <> '' then
+      Result[K].Verweis := '<div class="eh-ref" data-eh="' +
+        HtmlAttrEscapeMultiline(Meta.ID) + '"></div>';
+  end;
+end;
+
+function EditorHelpI18nZeilen(const ALang: string): string;
+// Die sechs Schluessel der Editorhilfen im I18N-Woerterbuch des
+// CLI-Berichts, je eine Zeile mit Komma (es folgen weitere Eintraege).
+// Werte aus TWorkbenchI18n.TJs: Entities werden \uXXXX - der Wert wird
+// sowohl per innerHTML (applyLanguage) als auch per textContent
+// (fillEditorHelps) gesetzt, und textContent kennt keine Entities.
+var
+  SB : TStringBuilder;
+  w  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('        "rr-eh": "'
+      + TWorkbenchI18n.TJs(wtEditorhilfen, ALang) + '",');
+    SB.AppendLine('        "hint-eh": "'
+      + TWorkbenchI18n.TJs(wtEditorhilfen, ALang) + '",');
+    for w := Low(HILFE_WIRKUNG) to High(HILFE_WIRKUNG) do
+      SB.AppendLine('        "eh-eff-' + HILFE_WIRKUNG[w] + '": "'
+        + TWorkbenchI18n.TJs(HILFE_WIRKUNG_TEXT[w], ALang) + '",');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 // Die Regeln, fuer die ein IDE-Modul eine Editorhilfe hat (Katalogfeld
 // editorHelp, Beschluss 2026-10-10) - einmal je Bericht, nicht je Fundzeile.
 // Bis 2026-10-10 fragte der Bericht uQuickFix (vier Regeln, nur Ctrl+Alt+F).
@@ -610,41 +687,6 @@ begin
   for K := Low(TFindingKind) to High(TFindingKind) do
     if TRuleCatalog.GetRuleCanonical(K).EditorHelp then
       Include(Result, K);
-end;
-
-type
-  // Editorhilfen einer Regel im Bericht (Nico 2026-10-29), je Art EINMAL
-  // gebaut - wie HelpTokensJeArt im SARIF-Export, nicht je Fund.
-  TEditorHelpHtml = record
-    // <ul class="eh-list" data-eh="..."> - steht einmal je Regel im
-    // Regel-Report; '' fuer eine Regel ohne Hilfe.
-    Liste   : string;
-    // <div class="eh-ref" data-eh="..."></div> - der Verweis, den jede
-    // Fundzeile der Regel im Detail traegt; openDrawer haengt die Liste
-    // aus dem Regel-Report dort ein. '' ohne Liste.
-    Verweis : string;
-  end;
-  THelpHtmlJeArt = array[TFindingKind] of TEditorHelpHtml;
-
-function EditorHelpHtmlJeArt(AAn: Boolean): THelpHtmlJeArt;
-// Ohne AAn (THtmlReportOptions.EditorHelp = False) alles leer - dann
-// schreibt weder eine Fundzeile noch der Regel-Report etwas, und der
-// Bericht ist der von vor dem Feld.
-var
-  K    : TFindingKind;
-  Meta : TRuleMeta;
-begin
-  Result := Default(THelpHtmlJeArt);
-  if not AAn then Exit;
-  for K := Low(TFindingKind) to High(TFindingKind) do
-  begin
-    Meta := TRuleCatalog.GetRuleCanonical(K);
-    Result[K].Liste := TExporterHtml.EditorHelpListHtml(Meta.ID,
-      Meta.EditorHelps);
-    if Result[K].Liste <> '' then
-      Result[K].Verweis := '<div class="eh-ref" data-eh="' +
-        TExporterHtml.HtmlAttrEscapeMultiline(Meta.ID) + '"></div>';
-  end;
 end;
 
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
@@ -748,7 +790,9 @@ begin
   ABaseDir   := AOptions.BaseDir;
   AProfile   := AOptions.Profile;
   HelpKinds  := EditorHelpKinds;
-  HelpHtml   := EditorHelpHtmlJeArt(AOptions.EditorHelp);
+  // 'de': die Vorgabetexte des Berichts sind deutsch, sein
+  // Sprachumschalter ersetzt sie (data-i18n).
+  HelpHtml   := EditorHelpHtmlJeArt(AOptions.EditorHelp, 'de');
 
   if SourceFile = '' then
     Title := 'Code Review'
@@ -962,21 +1006,16 @@ begin
     SB.AppendLine('    .rule-table .rr-h { color: var(--dezent); }');
     SB.AppendLine('    .rule-table .rr-share { color: var(--dezent); }');
     // Editorhilfen (Nico 2026-10-29): Liste je Regel im Regel-Report,
-    // Verweis je Fund im Drawer. Eigene Zeilen DIESER Seite, nicht im
-    // geteilten uWorkbenchStyle (Konsumenten-Matrix: Workbench-Bericht
-    // und Detektor-Katalog zeigen keine Editorhilfen). Nur Token-Farben,
-    // dark/sepia brauchen also keine eigenen Zeilen. Nur mit
-    // AOptions.EditorHelp - ohne bleibt das Stylesheet das alte.
+    // Verweis je Fund im Drawer. Die Listen-Optik teilt diese Seite mit
+    // der Workbench-Seite (TWorkbenchStyle.EditorHilfenCss, opt-in -
+    // der Detektor-Katalog bindet es nicht ein); hier nur der Verweis.
+    // Nur Token-Farben, dark/sepia brauchen also keine eigenen Zeilen.
+    // Nur mit AOptions.EditorHelp - ohne bleibt das Stylesheet das alte.
     if AOptions.EditorHelp then
     begin
-      SB.AppendLine('    .eh-list { margin: 0; padding: 0; list-style: none; }');
-      SB.AppendLine('    .eh-id { font-family: Consolas, monospace; }');
-      SB.AppendLine('    .eh-eff { color: var(--dezent); }');
+      SB.Append(TWorkbenchStyle.EditorHilfenCss);
       SB.AppendLine('    .eh-ref { margin: 0 0 6px 0; }');
       SB.AppendLine('    .eh-ref:empty { display: none; }');
-      SB.AppendLine('    .eh-lbl { font-weight: 600; }');
-      SB.AppendLine('    .eh-ref .eh-list, .eh-ref .eh-list li { display: inline; }');
-      SB.AppendLine('    .eh-ref .eh-list li + li::before { content: " \00B7  "; }');
     end;
     // Summenkarten in Kachel-Optik: Karte statt Vollfarbflaeche, die
     // Severity sitzt in der Farbe der grossen Zahl (Workbench-Palette).
@@ -1865,7 +1904,8 @@ begin
       // AOptions.EditorHelp - ohne bleibt die Tabelle Zeichen fuer
       // Zeichen die alte.
       if AOptions.EditorHelp then
-        SB.AppendLine('        <th data-i18n="rr-eh">Editorhilfen</th>');
+        SB.AppendLine('        <th data-i18n="rr-eh">'
+          + TWorkbenchI18n.T(wtEditorhilfen, 'de') + '</th>');
       SB.AppendLine('      </tr></thead>');
       SB.AppendLine('      <tbody>');
       for i := 0 to KindPairs.Count - 1 do
@@ -2544,17 +2584,10 @@ begin
     SB.AppendLine('        "rr-share": "Share",');
     // Editorhilfen (Nico 2026-10-29): Schluessel nur mit
     // AOptions.EditorHelp - ohne bleibt das Woerterbuch das alte. Dieselben
-    // sechs Schluessel in allen drei Bloecken (Test
-    // EditorHelp_An_RegelReportUndVerweisJeFund).
+    // sechs Schluessel in allen drei Bloecken, Werte aus TWorkbenchI18n
+    // (EditorHelpI18nZeilen).
     if AOptions.EditorHelp then
-    begin
-      SB.AppendLine('        "rr-eh": "Editor helps",');
-      SB.AppendLine('        "hint-eh": "Editor helps",');
-      SB.AppendLine('        "eh-eff-same": "keeps behaviour",');
-      SB.AppendLine('        "eh-eff-changes": "changes behaviour",');
-      SB.AppendLine('        "eh-eff-depends": "depends on the finding",');
-      SB.AppendLine('        "eh-eff-template": "template, writes nothing",');
-    end;
+      SB.Append(EditorHelpI18nZeilen('en'));
     SB.AppendLine('        "kbd-help-title": "Keyboard shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Close",');
     SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:",');
@@ -2625,14 +2658,7 @@ begin
     SB.AppendLine('        "rr-conf-med": "mittel",');
     SB.AppendLine('        "rr-share": "Anteil",');
     if AOptions.EditorHelp then
-    begin
-      SB.AppendLine('        "rr-eh": "Editorhilfen",');
-      SB.AppendLine('        "hint-eh": "Editorhilfen",');
-      SB.AppendLine('        "eh-eff-same": "Verhalten bleibt",');
-      SB.AppendLine('        "eh-eff-changes": "aendert Verhalten",');
-      SB.AppendLine('        "eh-eff-depends": "je nach Fund",');
-      SB.AppendLine('        "eh-eff-template": "Vorlage, schreibt nichts",');
-    end;
+      SB.Append(EditorHelpI18nZeilen('de'));
     SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Schliessen",');
     SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
@@ -2711,14 +2737,7 @@ begin
     SB.AppendLine('        "rr-conf-med": "moyenne",');
     SB.AppendLine('        "rr-share": "Part",');
     if AOptions.EditorHelp then
-    begin
-      SB.AppendLine('        "rr-eh": "Aides d''\u00e9dition",');
-      SB.AppendLine('        "hint-eh": "Aides d''\u00e9dition",');
-      SB.AppendLine('        "eh-eff-same": "comportement inchang\u00e9",');
-      SB.AppendLine('        "eh-eff-changes": "modifie le comportement",');
-      SB.AppendLine('        "eh-eff-depends": "selon l''occurrence",');
-      SB.AppendLine('        "eh-eff-template": "mod\u00e8le, n''\u00e9crit rien",');
-    end;
+      SB.Append(EditorHelpI18nZeilen('fr'));
     SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
     SB.AppendLine('        "kbd-help-close": "Fermer",');
     SB.AppendLine('        "sprint-header": "Visibles au total\u00a0: {0} d\u00e9tections. Top {1} priorit\u00e9s\u00a0:",');
@@ -2916,6 +2935,7 @@ begin
       SB.AppendLine('      root.querySelectorAll("div.eh-ref").forEach(function(ref) {');
       SB.AppendLine('        var ul = EH_LISTS[ref.getAttribute("data-eh") || ""];');
       SB.AppendLine('        if (!ul) return;');
+      SB.AppendLine('        ref.classList.add("eh-zeile");');
       SB.AppendLine('        var lbl = document.createElement("span");');
       SB.AppendLine('        lbl.className = "eh-lbl";');
       SB.AppendLine('        lbl.setAttribute("data-i18n", "hint-eh");');

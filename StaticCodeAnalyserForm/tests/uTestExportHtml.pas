@@ -1215,9 +1215,9 @@ const
   EH_LISTE_017 =
     '<ul class="eh-list" data-eh="SCA017">' +
     '<li><span class="eh-id">SCA017</span> Put debug output in ifdef debug ' +
-    '(<span class="eh-eff" data-i18n="eh-eff-changes">aendert Verhalten</span>)</li>' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">&auml;ndert Verhalten</span>)</li>' +
     '<li><span class="eh-id">SCA017.2</span> Delete debug output ' +
-    '(<span class="eh-eff" data-i18n="eh-eff-changes">aendert Verhalten</span>)</li>' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">&auml;ndert Verhalten</span>)</li>' +
     '</ul>';
   EH_VERWEIS_017 = '<div class="eh-ref" data-eh="SCA017"></div>';
 
@@ -1304,7 +1304,9 @@ begin
   // Wirkung und Zeilenkopf uebersetzbar, in allen drei Sprachbloecken.
   Assert.IsTrue(H.Contains('"eh-eff-changes": "changes behaviour"'),
     'en-Schluessel eh-eff-changes fehlt');
-  Assert.IsTrue(H.Contains('"eh-eff-changes": "aendert Verhalten"'),
+  // de-Wert aus TWorkbenchI18n (EINE Quelle mit der Liste, Review-Minor
+  // 2026-10-29): Entity als \u-Escape im JS-Literal.
+  Assert.IsTrue(H.Contains('"eh-eff-changes": "\u00e4ndert Verhalten"'),
     'de-Schluessel eh-eff-changes fehlt');
   Assert.IsTrue(H.Contains('"eh-eff-same": "comportement inchang\u00e9"'),
     'fr-Schluessel eh-eff-same fehlt (ein Backslash, s. FR-Test)');
@@ -1376,7 +1378,7 @@ begin
   Hilfen[0].Id     := 'SCA0"17<x>';
   Hilfen[0].Effect := 'bad"<eff>';
   Hilfen[0].Slug   := 'a-<b>-&c';
-  H := TExporterHtml.EditorHelpListHtml('K"<' + #10 + '>', Hilfen);
+  H := TExporterHtml.EditorHelpListHtml('K"<' + #10 + '>', Hilfen, 'de');
   Assert.IsTrue(
     H.StartsWith('<ul class="eh-list" data-eh="K&quot;&lt;&#10;&gt;">'),
     'data-eh muss attributsicher escapet sein: ' + H);
@@ -1389,18 +1391,22 @@ begin
   Assert.IsFalse(H.Contains('data-i18n="eh-eff-bad'),
     'unbekannte Wirkung bekommt keinen i18n-Schluessel');
   Assert.IsFalse(H.Contains('<x>'), 'kein rohes Markup aus dem Katalog');
-  Assert.AreEqual('', TExporterHtml.EditorHelpListHtml('SCA001', nil),
+  Assert.AreEqual('', TExporterHtml.EditorHelpListHtml('SCA001', nil, 'de'),
     'leere Liste = kein Fragment');
 end;
 
 procedure TTestExportHtml.EditorHelpListHtml_JedeWirkungHatEinenSchluessel;
 // Die vier Werte des Schema-enums bekommen je ihren i18n-Schluessel und
-// den deutschen Vorgabetext.
+// den Text der verlangten Sprache aus TWorkbenchI18n - 'de' fuer den
+// CLI-Bericht, die gebackene Sprache fuer die Workbench-Seite.
 const
   WIRKUNGEN : array[0..3] of string = ('same', 'changes', 'depends',
     'template');
   TEXTE     : array[0..3] of string = ('Verhalten bleibt',
-    'aendert Verhalten', 'je nach Fund', 'Vorlage, schreibt nichts');
+    '&auml;ndert Verhalten', 'je nach Fund', 'Vorlage, schreibt nichts');
+  TEXTE_EN  : array[0..3] of string = ('keeps behaviour',
+    'changes behaviour', 'depends on the finding',
+    'template, writes nothing');
 var
   Hilfen : TArray<TRuleEditorHelp>;
   H      : string;
@@ -1413,11 +1419,16 @@ begin
     Hilfen[i].Effect := WIRKUNGEN[i];
     Hilfen[i].Slug   := 'x';
   end;
-  H := TExporterHtml.EditorHelpListHtml('SCA999', Hilfen);
+  H := TExporterHtml.EditorHelpListHtml('SCA999', Hilfen, 'de');
   for i := 0 to High(WIRKUNGEN) do
     Assert.IsTrue(H.Contains('<span class="eh-eff" data-i18n="eh-eff-' +
       WIRKUNGEN[i] + '">' + TEXTE[i] + '</span>'),
       'Wirkung ' + WIRKUNGEN[i] + ' ohne Schluessel/Text: ' + H);
+  H := TExporterHtml.EditorHelpListHtml('SCA999', Hilfen, 'en');
+  for i := 0 to High(WIRKUNGEN) do
+    Assert.IsTrue(H.Contains('<span class="eh-eff" data-i18n="eh-eff-' +
+      WIRKUNGEN[i] + '">' + TEXTE_EN[i] + '</span>'),
+      'Wirkung ' + WIRKUNGEN[i] + ' (en) ohne Schluessel/Text: ' + H);
 end;
 
 procedure TTestExportHtml.EditorHelpSlugText_MachtDenSlugLesbar;
