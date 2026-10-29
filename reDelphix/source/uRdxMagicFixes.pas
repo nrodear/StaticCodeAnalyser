@@ -62,7 +62,10 @@ unit uRdxMagicFixes;
 //     eine alte Delphi-Projektdatei (.dof, .bdsproj, .bpr, .bpg) oder eine
 //     .dproj vor 10.3 (ProjectVersion < 18.5) - Major 3: CnWizards, JVCL
 //     und GExperts tragen keine Versionsweiche in der Unit, die Version
-//     steht im Projekt (FileReason) - und FPC-Weichen oder alte Spuren in
+//     steht im Projekt (FileReason), seit rwE29 auch ein Paket (.dpk) im
+//     Unterordner packages, das die Unit enthaelt und nach Ordnername bzw.
+//     LIBSUFFIX fuer ein aelteres Delphi ist (PackagesReason) - und
+//     FPC-Weichen oder alte Spuren in
 //     den Includes, auch ein Include, das nicht neben der Unit liegt
 //     (IncludeReason). Auf einem Netzpfad (UNC) bzw. Netzlaufwerk liest die
 //     Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
@@ -252,8 +255,12 @@ type
     // von AFeature (FLOOR_INLINE_DECL.ProjectVersion 18.5 = Delphi 10.3,
     // FLOOR_DIGIT_SEP 19.3 = Delphi 11; ohne lesbare Version zaehlt sie
     // als alt) bzw. - ohne .dproj dort - eine alte Projektdatei (.dof,
-    // .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC oder Netzlaufwerk,
-    // IsNetworkPath) wird nicht gelesen. '' oder der Grund - er nennt
+    // .bdsproj, .bpr, .bpg). Auf jeder dieser Ebenen dazu die .dpk im
+    // Unterordner packages (bzw. package) und eine Ebene darin, die die
+    // Unit enthalten: ist eine nach Ordnername ('d104', 'Sydney') bzw.
+    // {$LIBSUFFIX} fuer ein Delphi unter der Schwelle, sperrt sie (rwE29,
+    // PackagesReason; hoechstens MAX_PACKAGE_READS Koepfe je Aufruf). Ein
+    // Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) wird nicht gelesen. '' oder der Grund - er nennt
     // AFeature. Die FPC-Weiche IN der Datei prueft schon TargetAt.
     class function FileReason(const AFileName: string;
       AFeature: TRdxLateFeature): string; static;

@@ -2,9 +2,9 @@ unit uTestRdxTabsFix;
 
 // Editorhilfe SCA061 TabulationCharacter (uRdxTabsFix): Tabs der gemeldeten
 // Zeile -> Leerzeichen bis zum naechsten Tabstopp, nur im Code. Tabweite aus
-// den Nachbarzeilen (rwE29), ohne Beweis 2. Auf Text (Gegenproben: String, Kommentar, verschobene Zeile) und
-// mit dem ECHTEN Detektor (Rundlauf, Katalog-Beispiel) - nur Delphi,
-// reDelphix.Test. Tabs im Quelltext dieser Unit stehen als TAB = #9.
+// den Nachbarzeilen (rwE29), ohne Beweis 2. Auf Text (Gegenproben: String,
+// Kommentar, verschobene Zeile) und mit dem ECHTEN Detektor (Rundlauf,
+// Katalog-Beispiel) - nur Delphi, reDelphix.Test. Tabs im Quelltext dieser Unit stehen als TAB = #9.
 
 interface
 
