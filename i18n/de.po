@@ -6769,3 +6769,6 @@ msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"rai
 
 msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
 msgstr "ein Kommentar auf oder über der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"
+
+msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"

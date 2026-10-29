@@ -43,6 +43,17 @@ type
     // Der Grund, warum die URL (ohne Anfuehrungszeichen) keine Hilfe
     // bekommt, oder '' - reine Textfrage ueber Schema und Host.
     class function UrlReason(const AUrl: string): string; static;
+
+    // Liegt die Datei AFileName in einem Testordner (ein Verzeichnis
+    // 'test', 'tests', 'unittest', 'unittests' oder auf '...tests'
+    // endend)? Dann der Grund, sonst ''. Eine URL in Testcode ist meist
+    // eine Vorgabe, die ein Test woertlich vergleicht - oft in einer
+    // ANDEREN Datei, die der Planer nicht sieht (rwE29, delphimvcframework
+    // unittests\general\TestServer\TestServerControllerU.pas:1334/1522:
+    // 'Assert.areEqual(''http://pippo.it/1234'', ..)' in LiveServerTestU.pas
+    // schlug nach der Ersetzung fehl). Der Adapter (uRdxFixTable.PlanHttps)
+    // fragt das mit dem Dateinamen des Funds.
+    class function TestPathReason(const AFileName: string): string; static;
   end;
 
 implementation
@@ -70,6 +81,12 @@ const
   NAMESPACE_MARKERS: array[0..3] of string = ('xmlns', 'namespace',
     'schema', '/ns/');
   NOT_PLAIN_MARKERS: array[0..2] of string = ('@', ':', '[');
+  // Testordner (TestPathReason), klein.
+  TEST_DIRS: array[0..3] of string = ('test', 'tests', 'unittest',
+    'unittests');
+  R_HTTPS_TEST_DIR = 'the file is in the test folder "%s" - a test may '
+    + 'compare this address literally (also from another file); decide by '
+    + 'hand';
   // Die Gruende als englische msgids (E29), uebersetzt mit _() aus uRdxText;
   // Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das Ende
   // ' - Zeile verschoben? ...' haengt MsgMovedSuffix an, 'die Zeile beginnt
@@ -223,6 +240,24 @@ begin
 end;
 
 { TRdxHttpsFix }
+
+class function TRdxHttpsFix.TestPathReason(const AFileName: string): string;
+var
+  Parts : TArray<string>;
+  i     : Integer;
+  Low   : string;
+begin
+  Result := '';
+  Parts := StringReplace(AFileName, '/', '\', [rfReplaceAll]).Split(['\']);
+  // Das letzte Glied ist die Datei selbst - nur Verzeichnisse zaehlen.
+  for i := 0 to High(Parts) - 1 do
+  begin
+    Low := LowerCase(Parts[i]);
+    if InList(Low, TEST_DIRS)
+       or ((Length(Low) > 5) and (Copy(Low, Length(Low) - 4, 5) = 'tests')) then
+      Exit(_(R_HTTPS_TEST_DIR, [Parts[i]]));
+  end;
+end;
 
 class function TRdxHttpsFix.UrlReason(const AUrl: string): string;
 begin

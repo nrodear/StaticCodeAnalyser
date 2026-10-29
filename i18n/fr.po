@@ -6765,3 +6765,6 @@ msgstr "après le try..except, %s (ligne %d) annule %s d'avant le try - \"raise;
 
 msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
 msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l'auteur connaît le raise manquant et l'a laissé ; décider à la main (un raise ici peut casser les appelants)"
+
+msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "le fichier se trouve dans le dossier de test \"%s\" - un test peut comparer cette adresse littéralement (aussi depuis un autre fichier) ; décider à la main"

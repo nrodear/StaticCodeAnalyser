@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6771 Zeilen, 306018 Bytes
-  CPoLines_de: array[0..6770] of string = (
+  // i18n\de.po - 6774 Zeilen, 306301 Bytes
+  CPoLines_de: array[0..6773] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6785,7 +6785,10 @@ const
     'msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" '#$00FC'berspr'#$00E4'nge es (kein finally)"',
     '',
     'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
-    'msgstr "ein Kommentar auf oder '#$00FC'ber der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"'
+    'msgstr "ein Kommentar auf oder '#$00FC'ber der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"',
+    '',
+    'msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"',
+    'msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse w'#$00F6'rtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7060,8 +7063,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6767 Zeilen, 318282 Bytes
-  CPoLines_fr: array[0..6766] of string = (
+  // i18n\fr.po - 6770 Zeilen, 318582 Bytes
+  CPoLines_fr: array[0..6769] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -13828,7 +13831,10 @@ const
     'msgstr "apr'#$00E8's le try..except, %s (ligne %d) annule %s d''avant le try - \"raise;\" le sauterait (pas de finally)"',
     '',
     'msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"',
-    'msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l''auteur conna'#$00EE't le raise manquant et l''a laiss'#$00E9' ; d'#$00E9'cider '#$00E0' la main (un raise ici peut casser les appelants)"'
+    'msgstr "un commentaire sur la ligne ou au-dessus mentionne raise - l''auteur conna'#$00EE't le raise manquant et l''a laiss'#$00E9' ; d'#$00E9'cider '#$00E0' la main (un raise ici peut casser les appelants)"',
+    '',
+    'msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"',
+    'msgstr "le fichier se trouve dans le dossier de test \"%s\" - un test peut comparer cette adresse litt'#$00E9'ralement (aussi depuis un autre fichier) ; d'#$00E9'cider '#$00E0' la main"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
