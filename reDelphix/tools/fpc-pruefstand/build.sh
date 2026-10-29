@@ -198,7 +198,11 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # und die uses-Fragen von SCA044, aus uRdxRecipeRunner umgezogen); seit
 # Charge C78 (C7/C8) auch ueber uRdxIfFixes/uRdxCondFixes (Ausdrucks-Leser
 # uRdxCondExpr) und uRdxDeepNestingFix (Waechter-Klausel, Kette von SCA018).
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxContextRunner uRdxFloatEqualityFix; do
+# Seit HilfeFix I (rwE30) uRdxHttpsFix (SCA115, Textfaelle und die
+# Testcode-Frage TestPathReason).
+# Seit HilfeFix I (rwE30) auch uRdxFloatEqualityFix (SCA144, Planer und
+# Bindungsfragen aus uRdxTypeProof).
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

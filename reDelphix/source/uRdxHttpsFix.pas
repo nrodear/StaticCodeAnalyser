@@ -60,6 +60,8 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,   // StartsStr, EndsStr (FPC-Pruefstand: keine
+                     // String-Helfer)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxText;          // _(), MsgMovedSuffix, MsgLineStartsInCommentOrString (E29)
 
@@ -131,7 +133,7 @@ var
 begin
   Result := False;
   for S in ANames do
-    if (AHost = S) or AHost.EndsWith('.' + S) then
+    if (AHost = S) or EndsStr('.' + S, AHost) then
       Exit(True);
 end;
 
@@ -141,7 +143,7 @@ var
 begin
   Result := False;
   for S in ASuffixes do
-    if AHost.EndsWith(S) then
+    if EndsStr(S, AHost) then
       Exit(True);
 end;
 
@@ -183,7 +185,7 @@ var
 begin
   Low := LowerCase(AUrl);
   Host := HostOf(AUrl);
-  while Host.EndsWith('.') do
+  while EndsStr('.', Host) do
     Host := Copy(Host, 1, Length(Host) - 1);
   if Host = '' then
     Result := hkNoHost
@@ -239,6 +241,23 @@ begin
     end;
 end;
 
+// Die Glieder des Pfads AFileName, getrennt an '\' und '/' ('D:\a/b.pas'
+// -> 'D:', 'a', 'b.pas'; leere Glieder bleiben).
+function PathParts(const AFileName: string): TArray<string>;
+var
+  i, From : Integer;
+begin
+  Result := nil;
+  From := 1;
+  for i := 1 to Length(AFileName) + 1 do
+    if (i > Length(AFileName)) or CharInSet(AFileName[i], ['\', '/']) then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := Copy(AFileName, From, i - From);
+      From := i + 1;
+    end;
+end;
+
 { TRdxHttpsFix }
 
 class function TRdxHttpsFix.TestPathReason(const AFileName: string): string;
@@ -248,7 +267,7 @@ var
   Low   : string;
 begin
   Result := '';
-  Parts := StringReplace(AFileName, '/', '\', [rfReplaceAll]).Split(['\']);
+  Parts := PathParts(AFileName);
   // Das letzte Glied ist die Datei selbst - nur Verzeichnisse zaehlen.
   for i := 0 to High(Parts) - 1 do
   begin
@@ -262,7 +281,7 @@ end;
 class function TRdxHttpsFix.UrlReason(const AUrl: string): string;
 begin
   Result := '';
-  if not AUrl.StartsWith(SCHEME_HTTP) then
+  if not StartsStr(SCHEME_HTTP, AUrl) then
     Exit(_(R_HTTPS_NO_URL));
   case ClassifyUrl(AUrl) of
     hkNoHost:    Result := _(R_HTTPS_NO_HOST);

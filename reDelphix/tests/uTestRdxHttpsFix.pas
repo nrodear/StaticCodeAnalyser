@@ -1,11 +1,12 @@
 unit uTestRdxHttpsFix;
 
-// Editorhilfe SCA115 HttpInsteadOfHttps (uRdxHttpsFix; nur Delphi,
-// reDelphix.Test): 'http://' -> 'https://' im Literal, das der Detektor
-// meldet. Textfaelle (Zeile, Meldung wie der Detektor sie schreibt) und
-// Rundlaeufe mit dem ECHTEN Detektor (TRestHttpSecurityDetector) samt
-// Katalog-Beispiel. Die Hilfe aendert das Verhalten (E2) - die Gegenproben
-// belegen, dass sie nur ein eindeutiges Netzziel anfasst.
+// Editorhilfe SCA115 HttpInsteadOfHttps (uRdxHttpsFix): 'http://' ->
+// 'https://' im Literal, das der Detektor meldet. Erste Fixture (FPC-
+// tauglich): Textfaelle (Zeile, Meldung wie der Detektor sie schreibt). Zweite
+// Fixture (nur Delphi, reDelphix.Test): Rundlaeufe mit dem ECHTEN Detektor
+// (TRestHttpSecurityDetector) samt Katalog-Beispiel und der Einstieg der
+// Tabelle (Adapter PlanHttps). Die Hilfe aendert das Verhalten (E2) - die
+// Gegenproben belegen, dass sie nur ein eindeutiges Netzziel anfasst.
 
 interface
 
@@ -32,6 +33,12 @@ type
     [Test] procedure PortUserinfoIpv6Ip_NoHelp;
     [Test] procedure OddHosts_NoHelp;
     [Test] procedure NoUrlInMessage_NoHelp;
+  end;
+
+{$IFNDEF FPC}
+  [TestFixture]
+  TTestRdxHttpsDetector = class
+  public
     // ---- echter Detektor ----
     [Test] procedure Detector_CatalogExample;
     [Test] procedure Detector_RoundTrip_SilencesFinding;
@@ -40,14 +47,19 @@ type
     // rwE29: in einem Testordner vergleicht ein Test die Adresse woertlich.
     [Test] procedure Adapter_TestFolder_NoHelp;
   end;
+{$ENDIF}
 
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Classes,
+  {$IFNDEF FPC}
+  System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRestHttpSecurity,
-  uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxHttpsFix,
+  uRdxRecipeRunner, uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, DetectSource
+  {$ENDIF}
+  uRdxBufferMath, uRdxCodeMap, uRdxHttpsFix,
   uTestRdxTextKit;       // Join, Apply
 
 const
@@ -117,42 +129,6 @@ begin
   Assert.IsTrue(Pos(AWhy, R) > 0, R);
 end;
 
-procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
-  const Path: string; Results: TObjectList<TLeakFinding>);
-begin
-  TRestHttpSecurityDetector.AnalyzeUnit(Root, Path, Results);
-end;
-
-function Detect(const ASource: string): TArray<TSeen>;
-begin
-  Result := DetectSource('rdx_https_', ASource, fkHttpInsteadOfHttps,
-    RunDetector);
-end;
-
-// Die Hilfe fuer den Fund ASeen ueber den Einstieg des Anbieters
-// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
-// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
-// APlaces = nil - der Adapter braucht ihn nicht).
-function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
-begin
-  Result := PlanFixIn(ASource, 't.pas', fkHttpInsteadOfHttps, ASeen);
-end;
-
-// Dasselbe in der Form von TDetectFunc (FixAllWith).
-function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
-begin
-  Result := Detect(ASource);
-end;
-
-// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
-// schweigt - ueber den Einstieg des Anbieters
-// (uTestRdxDetectorKit.FixAllWith, TRdxFixTable.FixFor; bis zur Review
-// Woche G06 eine eigene Schleife).
-function FixAll(const ASource: string): string;
-begin
-  Result := FixAllWith(ASource, fkHttpInsteadOfHttps, DetectKind);
-end;
-
 // ---- Text ----
 
 procedure TTestRdxHttpsFix.Replaces_SchemeOnly;
@@ -203,7 +179,7 @@ begin
     Assert.IsTrue(TRdxHttpsFix.Https(Map, FIRST_LINE, Msg(EXAMPLE_URL), E, R), R);
     Assert.AreEqual('http://', E.Expected);
     Assert.AreEqual('https://', E.NewText);
-    Assert.AreEqual(FIRST_LINE, E.Span.StartLine);
+    Assert.AreEqual<Integer>(FIRST_LINE, E.Span.StartLine);
     Assert.AreEqual<Integer>(11, E.Span.StartCol);   // hinter dem Quote bei Spalte 10
   finally
     Map.Free;
@@ -327,9 +303,49 @@ begin
   end;
 end;
 
+{$IFNDEF FPC}
+
+{ ---- echter Detektor und Einstieg der Tabelle ---- }
+
+procedure RunDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  TRestHttpSecurityDetector.AnalyzeUnit(Root, Path, Results);
+end;
+
+function Detect(const ASource: string): TArray<TSeen>;
+begin
+  Result := DetectSource('rdx_https_', ASource, fkHttpInsteadOfHttps,
+    RunDetector);
+end;
+
+// Die Hilfe fuer den Fund ASeen ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.PlanFixIn: TRdxFixTable.FixFor mit dem
+// Quellstellen-Dienst; bis zur Review Woche G06 eine eigene Kopie mit
+// APlaces = nil - der Adapter braucht ihn nicht).
+function PlanSeen(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Result := PlanFixIn(ASource, 't.pas', fkHttpInsteadOfHttps, ASeen);
+end;
+
+// Dasselbe in der Form von TDetectFunc (FixAllWith).
+function DetectKind(const ASource: string; AKind: TFindingKind): TArray<TSeen>;
+begin
+  Result := Detect(ASource);
+end;
+
+// Fund fuer Fund, nach jeder Ersetzung neu gemeldet, bis der Detektor
+// schweigt - ueber den Einstieg des Anbieters
+// (uTestRdxDetectorKit.FixAllWith, TRdxFixTable.FixFor; bis zur Review
+// Woche G06 eine eigene Schleife).
+function FixAll(const ASource: string): string;
+begin
+  Result := FixAllWith(ASource, fkHttpInsteadOfHttps, DetectKind);
+end;
+
 // ---- echter Detektor ----
 
-procedure TTestRdxHttpsFix.Detector_CatalogExample;
+procedure TTestRdxHttpsDetector.Detector_CatalogExample;
 var
   Meta : TRuleMeta;
   Good : string;
@@ -341,7 +357,7 @@ begin
   Assert.AreEqual(Wrap(['  ' + Meta.GoodExample]), Good);
 end;
 
-procedure TTestRdxHttpsFix.Detector_RoundTrip_SilencesFinding;
+procedure TTestRdxHttpsDetector.Detector_RoundTrip_SilencesFinding;
 var
   Src, Done : string;
 begin
@@ -354,7 +370,7 @@ begin
   Assert.AreEqual<Integer>(0, Length(Detect(Done)), 'der Detektor schweigt');
 end;
 
-procedure TTestRdxHttpsFix.Detector_SilentWhereHelpRefuses;
+procedure TTestRdxHttpsDetector.Detector_SilentWhereHelpRefuses;
 var
   Src, U : string;
 begin
@@ -371,7 +387,7 @@ begin
   Assert.IsTrue(TRdxHttpsFix.UrlReason(U) <> '', 'Grund');
 end;
 
-procedure TTestRdxHttpsFix.Adapter_PlansLikeTheMap;
+procedure TTestRdxHttpsDetector.Adapter_PlansLikeTheMap;
 var
   Finding : TLeakFinding;
   O       : TRdxFixOutcome;
@@ -393,7 +409,7 @@ begin
   Assert.AreEqual<Integer>(1, Length(O.Edits));
 end;
 
-procedure TTestRdxHttpsFix.Adapter_TestFolder_NoHelp;
+procedure TTestRdxHttpsDetector.Adapter_TestFolder_NoHelp;
 var
   Finding : TLeakFinding;
   O       : TRdxFixOutcome;
@@ -436,7 +452,12 @@ begin
   Assert.AreEqual('', TRdxHttpsFix.TestPathReason('C:\x\src\tests.pas'));
 end;
 
+{$ENDIF}
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxHttpsFix);
+  {$IFNDEF FPC}
+  TDUnitX.RegisterTestFixture(TTestRdxHttpsDetector);
+  {$ENDIF}
 
 end.
