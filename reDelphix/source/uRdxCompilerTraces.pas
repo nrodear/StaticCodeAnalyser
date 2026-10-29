@@ -190,6 +190,15 @@ const
 // Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
+// Wie OldCompilerTrace, aber nur die Spuren einer Art: AConditions die
+// Versionssymbole und Vergleiche in Bedingungen, AKits die Kit-Includes
+// (KIT_INCLUDES). Seit rwE31 Stufe 3 trennt der Hauptweg von SCA128/SCA059
+// beide: die Bedingungen der Datei sperren im Planer, ein Kit-Include
+// widerlegt der Plattenblick mit dem Projekt der Unit
+// (uRdxMagicFixes.ProjectReason).
+function OldCompilerTraceOf(AMap: TRdxCodeMap;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
+  out ALine: Integer): string;
 
 // Die Bedingungs-Direktiven der Datei in ihrer Reihenfolge (s.
 // TRdxCondDirective) - ein Lauf ueber alle Direktiven (NextDirective).
@@ -486,27 +495,34 @@ end;
 // Kit-Include (KIT_INCLUDES, klein ohne Pfad) oder ein Versionssymbol in
 // einer Bedingung; '' ohne.
 function OldTraceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
-  const AFloor: TRdxCompilerFloor): string;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean): string;
 var
   W   : string;
   Arg : Boolean;
 begin
   Result := '';
   W := DirectiveWord(AMap, ALine, ACol, Arg);
-  if InList(W, INCLUDE_WORDS) then
+  if AKits and InList(W, INCLUDE_WORDS) then
   begin
     Result := LowerCase(IncludeFileAt(AMap, ALine, ACol));
     Result := Copy(Result, LastDelimiter('\/', Result) + 1, MaxInt);
     if not InList(Result, KIT_INCLUDES) then
       Result := '';
   end
-  else if InList(W, CONDITION_WORDS) then
+  else if AConditions and InList(W, CONDITION_WORDS) then
     Result := OldSymbolIn(DirectiveArgs(AMap, ALine, ACol), AFloor);
 end;
 
 // Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
 // Folgewelle des Wochen-Reviews, G08-01, hier ausgeschrieben).
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  out ALine: Integer): string;
+begin
+  Result := OldCompilerTraceOf(AMap, AFloor, True, True, ALine);
+end;
+
+function OldCompilerTraceOf(AMap: TRdxCodeMap;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
   out ALine: Integer): string;
 var
   Li, Co : Integer;
@@ -517,7 +533,7 @@ begin
   Co := 1;
   while NextDirective(AMap, Li, Co) do
   begin
-    Result := OldTraceAt(AMap, Li, Co, AFloor);
+    Result := OldTraceAt(AMap, Li, Co, AFloor, AConditions, AKits);
     if Result <> '' then
     begin
       ALine := Li;

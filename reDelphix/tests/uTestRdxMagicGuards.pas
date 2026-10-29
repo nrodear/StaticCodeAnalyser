@@ -47,6 +47,8 @@ type
     [Test] procedure Disk_ModernProof_SkipsDisk;
     [Test] procedure Disk_PackageUsesInvariant_Refutes;
     [Test] procedure Disk_ProgramSetsSettings_Refused;
+    // ---- Realworld-Test rwE31 Stufe 3 ----
+    [Test] procedure Disk_KitIncludeModernProject_Refutes;
   end;
 
 implementation
@@ -671,6 +673,65 @@ begin
       lfFormatSettingsVar, False) <> '', 'Netzpfad, FormatSettings');
     Assert.IsFalse(TRdxMagicFixes.MissingBlocks(lfExceptionClasses));
     Assert.IsTrue(TRdxMagicFixes.MissingBlocks(lfFormatSettingsVar));
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_KitIncludeModernProject_Refutes;
+const
+  KIT_SRC = 'unit u;' + #13#10 + '{$I mormot.defines.inc}' + #13#10
+    + 'interface' + #13#10 + 'uses SysUtils;' + #13#10 + 'implementation'
+    + #13#10 + 'end.';
+  DPR_SRC = 'program demo;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // mORMot2 ex\ThirdPartyDemos\dmvc-ai\01-basicdemo_server\src\api.impl.pas
+  // :50 (ebenso 56-articles_crud_vcl_client\MainFormU.pas:206): die Unit
+  // bindet mormot.defines.inc ein (mORMot baut ab Delphi 7) - bis rwE31
+  // Stufe 3 sperrte das den Hauptweg im Planer. Gebaut wird sie aber nur von
+  // 01-basicdemo_server.dpr mit .dproj ProjectVersion 20.3 (Delphi 12).
+  T := NewTree;
+  try
+    // Ohne Projekt (der mORMot-Kern unter src\): das Kit-Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    AssertNames(ProjectReasonOf('', KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // Das Programm eine Ebene hoeher enthaelt die Unit, seine .dproj ist ab
+    // XE: widerlegt.
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar,
+      False), 'Projekt ab XE');
+    // Gegenproben: die .dproj vor XE (Delphi 2009/2010 schrieben 12.0) ...
+    WriteDproj(T.B + 'demo.dproj', '12.0');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    // ... ein altes Projekt daneben (.dof-Paar) ...
+    WriteText(T.B + 'old.dpr', 'program old;');
+    WriteText(T.B + 'old.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    DeleteFile(T.B + 'old.dpr');
+    DeleteFile(T.B + 'old.dof');
+    // ... ein Programm, das die Unit nicht enthaelt ...
+    WriteText(T.B + 'demo.dpr', 'program demo;' + #13#10 + 'begin' + #13#10
+      + 'end.');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // ... und ein Programm ohne .dproj gleichen Namens.
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    DeleteFile(T.B + 'demo.dproj');
+    WriteDproj(T.B + 'other.dproj', '20.3');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['mormot.defines.inc']);
+    // Der Invariant-Weg fragt das Kit-Include weiter im Planer (hier nicht).
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant,
+      False), 'Invariant ohne Includes');
   finally
     RemoveTree(T.Root);
   end;

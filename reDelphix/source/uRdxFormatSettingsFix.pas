@@ -74,7 +74,10 @@ unit uRdxFormatSettingsFix;
 //     nicht - ein lauter Fehler, nie eine stille Aenderung;
 //   * Hauptweg: die Datei nach Compilern vor Delphi XE fragt (die globale
 //     Variable gibt es erst seit XE; FPC vor 2.6) - ausser sie beweist
-//     selbst einen neueren (uRdxCompilerTraces.ModernProof). Deklariert die
+//     selbst einen neueren (uRdxCompilerTraces.ModernProof). Seit rwE31
+//     Stufe 3 fragt der Planer dabei nur die Bedingungen der Datei; ein
+//     Kit-Include sperrt im Plattenblick, wenn kein Projekt der Unit ab XE
+//     es widerlegt (uRdxMagicFixes.ProjectReason). Deklariert die
 //     Datei einen Bezeichner FormatSettings (Feld, Variable, Parameter,
 //     Property) oder nutzt sie ihn als Member, bande der blosse Name dort:
 //     seit rwE30 Stufe 2 steht dann die globale Variable qualifiziert da
@@ -1583,7 +1586,11 @@ begin
   begin
     if ProofCovers(Proof, FLOOR_SETTINGS_VAR) then
       Exit('');
-    Trace := OldCompilerTrace(AMap, FLOOR_SETTINGS_VAR, Li);
+    // Nur die Bedingungen der Datei; ein Kit-Include (mormot.defines.inc,
+    // jvcl.inc ..) prueft seit rwE31 Stufe 3 der Plattenblick: ein Projekt
+    // der Unit ab Delphi XE widerlegt es (uRdxMagicFixes.ProjectReason;
+    // mORMot2 dmvc-ai api.impl.pas:50, MainFormU.pas:206).
+    Trace := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, True, False, Li);
     if Trace <> '' then
       Exit(_(R_FS_OLD_VAR, [Trace, Li]));
     Exit('');

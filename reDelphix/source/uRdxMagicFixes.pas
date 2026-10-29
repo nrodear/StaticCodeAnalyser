@@ -345,9 +345,12 @@ type
     // Weiche, fragt er die Platte nicht nach Compilern - fuer
     // lfFormatInvariant aber weiter nach Programmen, die die globale
     // FormatSettings selbst einstellen (SettingsWalkReason, Review
-    // e/HilfeFixG). Sonst FileReason und - mit
-    // AIncludes - IncludeReason. Netzpfad: fuer lfExceptionClasses kein
-    // Grund (MissingBlocks), sonst wie FileReason. '' oder der Grund.
+    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
+    // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
+    // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
+    // Dateinamen geprueft) - FileReason und, mit AIncludes, IncludeReason.
+    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks), sonst
+    // wie FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature; AIncludes: Boolean): string; static;
   end;
@@ -669,6 +672,11 @@ const
     + 'and sets the global FormatSettings itself (%s, line %d) - '
     + 'TFormatSettings.Invariant would bypass these settings; %s';
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
+  // Hauptweg SCA128/SCA059 (KitIncludeReason, rwE31 Stufe 3): derselbe Satz
+  // wie R_FS_OLD_VAR in uRdxFormatSettingsFix (eine msgid) - %s das
+  // Kit-Include, %d seine Zeile.
+  R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
+    + 'variable FormatSettings exists from Delphi XE on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -2159,13 +2167,84 @@ begin
     GDiskCache.FItems.AddOrSetValue(Key, Result);
 end;
 
+
+// Hauptweg SCA128/SCA059 (lfFormatSettingsVar, rwE31 Stufe 3): ist die
+// Unit Teil eines Delphi-Projekts ab der Schwelle? Das NAECHSTE Verzeichnis
+// im Fenster mit Delphi-Projektdateien (wie ProjectWalkReason) traegt keine
+// alte (DelphiProjectReason leer: jede .dproj ab der Schwelle, kein .dof-
+// Paar, kein Doppel-Compiler-Projekt), und ein Programm dort mit .dproj
+// gleichen Namens enthaelt die Unit (in-Klausel, DpkContains). Das
+// widerlegt ein Kit-Include der Unit: mORMot2 ex\ThirdPartyDemos\dmvc-ai\
+// 01-basicdemo_server\src\api.impl.pas:50 bindet mormot.defines.inc ein
+// (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
+// 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
+// der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
+// Netzpfad: nein (die Hilfe liest dort nichts). Mit Cache (GDiskCache, Art
+// 'K').
+function ModernProjectProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, LowFile, Prg, Text, Key, Cached : string;
+  Level                                     : Integer;
+  Files                                     : TRdxProjectFiles;
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('K', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if Dir = '' then Break;
+    Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
+    if HasDelphiProject(Files) then
+    begin
+      if DelphiProjectReason(Files, Dir, AFeature) = '' then
+        for Prg in Files.Programs do
+          if not Result
+             and InList(LowerCase(ChangeFileExt(Prg, '')), Files.DprojBases)
+             and HeadText(IncludeTrailingPathDelimiter(Dir) + Prg, Text) then
+            Result := DpkContains(LowerCase(Text), LowFile);
+      Break;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'K';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+// Hauptweg SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc,
+// jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
+// seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
+// Projekt der Unit ab Delphi XE widerlegt es (ModernProjectProof). '' oder
+// der Grund.
+function KitIncludeReason(const AFileName: string; AMap: TRdxCodeMap): string;
+var
+  Kit : string;
+  Li  : Integer;
+begin
+  Result := '';
+  Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
+  if (Kit = '') or ModernProjectProof(AFileName, lfFormatSettingsVar) then
+    Exit;
+  Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+end;
+
 class function TRdxMagicFixes.ProjectReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
 var
   Proof : TRdxModernProof;
 begin
   Result := '';
-  if AFileName = '' then Exit;
   // Kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und sperrt
   // nicht (die anderen Sprachmittel sperren dort, FileReason).
   if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
@@ -2178,10 +2257,18 @@ begin
      or ((AFeature = lfFormatInvariant)
          and (UnconditionalInvariantLine(AMap) > 0)) then
   begin
-    if AFeature = lfFormatInvariant then
+    if (AFeature = lfFormatInvariant) and (AFileName <> '') then
       Result := SettingsWalkReason(AFileName);
     Exit;
   end;
+  // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
+  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
+  if AFeature = lfFormatSettingsVar then
+  begin
+    Result := KitIncludeReason(AFileName, AMap);
+    if Result <> '' then Exit;
+  end;
+  if AFileName = '' then Exit;
   Result := FileReason(AFileName, AFeature);
   if (Result = '') and AIncludes then
   begin

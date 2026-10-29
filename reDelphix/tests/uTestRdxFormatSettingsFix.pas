@@ -828,13 +828,18 @@ begin
   AssertRefused(InOldUnit(['  r := DateTimeToStr(d);',
     '  {$ifdef ISDELPHIXE} Foo; {$else} Bar; {$endif}']), BODY_LINE,
     Msg('datetimetostr'), _(R_FS_OLD_VAR, ['ISDELPHIXE', BODY_LINE + 1]));
-  // mormot.core.log.pas:8204 - ISDELPHI2005ANDUP; das Include selbst.
+  // mormot.core.log.pas:8204 - ISDELPHI2005ANDUP.
   AssertRefused(InOldUnit(['  r := DateToStr(d);',
     '  {$ifdef ISDELPHI2005ANDUP} Foo; {$endif}']), BODY_LINE,
     Msg('datetostr'), _(R_FS_OLD_VAR, ['ISDELPHI2005ANDUP', BODY_LINE + 1]));
-  AssertRefused(UnitText('SysUtils', ['{$I ..\mormot.defines.inc}'],
-    ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'),
-    _(R_FS_OLD_VAR, ['mormot.defines.inc', 6]));
+  // Das Kit-Include allein sperrt seit rwE31 Stufe 3 nicht mehr im Planer,
+  // sondern im Plattenblick - dort widerlegt es ein Projekt der Unit ab XE
+  // (uRdxMagicFixes.ProjectReason, uTestRdxMagicGuards.
+  // Disk_KitIncludeModernProject_Refutes; mORMot2 dmvc-ai api.impl.pas:50).
+  AssertFixed(UnitText('SysUtils', ['{$I ..\mormot.defines.inc}'],
+    ['  r := DateToStr(d, FormatSettings);']),
+    UnitText('SysUtils', ['{$I ..\mormot.defines.inc}'],
+    ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
   // Gegenprobe: ISDELPHIXE2 (CompilerVersion 23) ist nach XE.
   AssertFixed(InOldUnit(['  r := DateToStr(d, FormatSettings);',
     '  {$ifdef ISDELPHIXE2} Foo; {$endif}']),
