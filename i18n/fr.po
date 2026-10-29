@@ -6875,3 +6875,21 @@ msgstr "%s ; la ligne %d appelle %s de la même famille sans TFormatSettings.Inv
 
 msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
 msgstr "le corps contient un commentaire vide - une marque pour \"rien à faire ici\" ; raise la contredirait"
+
+msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "une clause de résolution de méthode de la classe redirige une méthode d'interface vers %s - les appelants de l'interface attendent que le corps vide ne fasse rien ; raise les casserait"
+
+msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "la méthode implémente %s.%s - les appelants de l'interface attendent que le corps vide ne fasse rien ; raise les casserait"
+
+msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "la classe implémente %s, déclarée hors de ce fichier - la méthode peut en faire partie, et les appelants de l'interface attendent que le corps vide ne fasse rien ; raise les casserait"
+
+msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
+msgstr "la routine est %s - un callback pour du code étranger ; une exception ne doit pas en sortir"
+
+msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
+msgstr "la routine est passée comme callback (%s à la ligne %d) - raise casserait son appelant"
+
+msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
+msgstr "la méthode est l'accesseur en écriture d'une propriété (ligne %d) - un setter vide ignore les affectations exprès ; avec raise, chaque affectation échouerait"

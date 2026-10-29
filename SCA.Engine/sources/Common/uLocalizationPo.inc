@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 6881 Zeilen, 316790 Bytes
-  CPoLines_de: array[0..6880] of string = (
+  // i18n\de.po - 6899 Zeilen, 318455 Bytes
+  CPoLines_de: array[0..6898] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6895,7 +6895,25 @@ const
     'msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant auf - mit umstellen, sonst passen dort geschriebene und hier gelesene oder verglichene Werte (oder umgekehrt) nicht mehr zusammen"',
     '',
     'msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"',
-    'msgstr "der Rumpf enth'#$00E4'lt einen leeren Kommentar - eine Marke f'#$00FC'r \"hier ist nichts zu tun\"; raise widerspr'#$00E4'che ihr"'
+    'msgstr "der Rumpf enth'#$00E4'lt einen leeren Kommentar - eine Marke f'#$00FC'r \"hier ist nichts zu tun\"; raise widerspr'#$00E4'che ihr"',
+    '',
+    'msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "eine Methodenzuordnung der Klasse leitet eine Interface-Methode auf %s um - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise br'#$00E4'che sie"',
+    '',
+    'msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "die Methode implementiert %s.%s - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise br'#$00E4'che sie"',
+    '',
+    'msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "die Klasse implementiert %s, deklariert au'#$00DF'erhalb dieser Datei - die Methode kann dazugeh'#$00F6'ren, und Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise br'#$00E4'che sie"',
+    '',
+    'msgid "the routine is %s - a callback for foreign code; an exception must not leave it"',
+    'msgstr "die Routine ist %s - ein Callback f'#$00FC'r fremden Code; eine Exception darf sie nicht verlassen"',
+    '',
+    'msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"',
+    'msgstr "die Routine wird als Callback '#$00FC'bergeben (%s in Zeile %d) - raise br'#$00E4'che ihren Aufrufer"',
+    '',
+    'msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"',
+    'msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7170,8 +7188,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 6877 Zeilen, 329706 Bytes
-  CPoLines_fr: array[0..6876] of string = (
+  // i18n\fr.po - 6895 Zeilen, 331415 Bytes
+  CPoLines_fr: array[0..6894] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14048,7 +14066,25 @@ const
     'msgstr "%s ; la ligne %d appelle %s de la m'#$00EA'me famille sans TFormatSettings.Invariant - '#$00E0' modifier aussi, sinon les valeurs '#$00E9'crites l'#$00E0'-bas et lues ou compar'#$00E9'es ici (ou l''inverse) ne correspondent plus"',
     '',
     'msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"',
-    'msgstr "le corps contient un commentaire vide - une marque pour \"rien '#$00E0' faire ici\" ; raise la contredirait"'
+    'msgstr "le corps contient un commentaire vide - une marque pour \"rien '#$00E0' faire ici\" ; raise la contredirait"',
+    '',
+    'msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "une clause de r'#$00E9'solution de m'#$00E9'thode de la classe redirige une m'#$00E9'thode d''interface vers %s - les appelants de l''interface attendent que le corps vide ne fasse rien ; raise les casserait"',
+    '',
+    'msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "la m'#$00E9'thode impl'#$00E9'mente %s.%s - les appelants de l''interface attendent que le corps vide ne fasse rien ; raise les casserait"',
+    '',
+    'msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"',
+    'msgstr "la classe impl'#$00E9'mente %s, d'#$00E9'clar'#$00E9'e hors de ce fichier - la m'#$00E9'thode peut en faire partie, et les appelants de l''interface attendent que le corps vide ne fasse rien ; raise les casserait"',
+    '',
+    'msgid "the routine is %s - a callback for foreign code; an exception must not leave it"',
+    'msgstr "la routine est %s - un callback pour du code '#$00E9'tranger ; une exception ne doit pas en sortir"',
+    '',
+    'msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"',
+    'msgstr "la routine est pass'#$00E9'e comme callback (%s '#$00E0' la ligne %d) - raise casserait son appelant"',
+    '',
+    'msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"',
+    'msgstr "la m'#$00E9'thode est l''accesseur en '#$00E9'criture d''une propri'#$00E9't'#$00E9' (ligne %d) - un setter vide ignore les affectations expr'#$00E8's ; avec raise, chaque affectation '#$00E9'chouerait"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

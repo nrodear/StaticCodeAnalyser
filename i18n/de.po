@@ -6879,3 +6879,21 @@ msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant au
 
 msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
 msgstr "der Rumpf enthält einen leeren Kommentar - eine Marke für \"hier ist nichts zu tun\"; raise widerspräche ihr"
+
+msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "eine Methodenzuordnung der Klasse leitet eine Interface-Methode auf %s um - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Methode implementiert %s.%s - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Klasse implementiert %s, deklariert außerhalb dieser Datei - die Methode kann dazugehören, und Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
+msgstr "die Routine ist %s - ein Callback für fremden Code; eine Exception darf sie nicht verlassen"
+
+msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (%s in Zeile %d) - raise bräche ihren Aufrufer"
+
+msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
+msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"

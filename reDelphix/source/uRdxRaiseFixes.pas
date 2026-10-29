@@ -42,9 +42,10 @@ type
     // Routinen zwischen Kopf und Rumpf, bei asm, wenn der Rumpf nicht leer
     // ist, und - nur mit Anweisung - bei constructor/destructor (eine
     // Exception dort hinterliesse ein halbes Objekt), bei einem Rumpf, den
-    // Aufrufer still erwarten (HookReason) und bei einem Kommentar ohne
-    // Inhalt im Rumpf. Leere Zeilen und Kommentare ohne Inhalt zwischen
-    // begin und end ersetzt die neue Zeile (QuietBody, rwE30).
+    // Aufrufer still erwarten (HookReason: Haken, Interface-Methode,
+    // Callback, Setter) und bei einem Kommentar ohne Inhalt im Rumpf. Leere
+    // Zeilen und Kommentare ohne Inhalt zwischen begin und end ersetzt die
+    // neue Zeile (QuietBody, rwE30).
     class function EmptyBody(AMap: TRdxCodeMap; ALine: Integer;
       const AStatementFmt: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -99,6 +100,19 @@ const
   // ein Haken ist, den Aufrufer still erwarten (HookReason).
   HOOK_DIRECTIVES: array[0..3] of string = ('virtual', 'dynamic', 'override',
     'message');
+  // SCA020 (b): Aufrufkonventionen fremden Codes (C, Windows) - eine
+  // Exception darf eine solche Routine nicht verlassen (CallbackReason).
+  FOREIGN_CONVENTIONS: array[0..3] of string = ('cdecl', 'stdcall',
+    'safecall', 'winapi');
+  // SCA020 (b): die Wurzel jeder Interface-Kette und ihre Methoden
+  // (IntfDeclares) - ohne Vorfahrenliste erbt ein Interface von ihr.
+  ROOT_INTERFACES: array[0..1] of string = ('iunknown', 'iinterface');
+  ROOT_METHODS: array[0..2] of string = ('queryinterface', '_addref',
+    '_release');
+  // So tief folgt IntfDeclares einer Vorfahrenkette in der Datei.
+  MAX_INTF_DEPTH = 8;
+  // Davor steht eine Routine als WERT, nicht als Aufruf (ValueUse).
+  VALUE_PREV: array[0..3] of string = (':=', '(', ',', '=');
 
 { ---- SCA020 ---- }
 
@@ -344,6 +358,246 @@ begin
   end;
 end;
 
+type
+  // Antwort von IntfDeclares: deklariert das Interface die Methode?
+  TRdxIntfAnswer = (iaNo, iaYes, iaUnknown);
+
+// Die Koepfe 'ALowName [<..>] = interface|dispinterface' mit Rumpf - je
+// Treffer das Token interface bzw. dispinterface (wie ClassHeadAt fuer
+// Klassen; 'IFoo = interface;' ist eine Vorwaertsdeklaration).
+function InterfaceHeads(AMap: TRdxCodeMap;
+  const ALowName: string): TArray<TRdxToken>;
+var
+  T, N : TRdxToken;
+begin
+  Result := nil;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if T.IsWord and SameIdent(T.Low, ALowName)
+       and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      N := After(AMap, T);
+      if N.Low = '<' then
+        N := AfterClose(AMap, N);
+      if N.Low = '=' then
+      begin
+        N := After(AMap, N);
+        if InList(N.Low, ['interface', 'dispinterface'])
+           and TypeHasBody(AMap, N) then
+          AddToken(Result, N);
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// Deklariert das Interface ALowIntf (klein, wie in der Vorfahrenliste) die
+// Methode ALowMethod - selbst oder ueber seine Vorfahren? iaUnknown, wenn
+// ein Glied der Kette nicht in der Datei steht (die RTL, ein anderes
+// Modul): dann ist nicht zu beweisen, dass die Methode keines erfuellt.
+function IntfDeclares(AMap: TRdxCodeMap; const ALowIntf, ALowMethod: string;
+  ADepth: Integer): TRdxIntfAnswer;
+var
+  Heads, Parents : TArray<TRdxToken>;
+  Up             : TArray<string>;
+  Sub            : TRdxIntfAnswer;
+  i              : Integer;
+begin
+  if InList(ALowIntf, ROOT_INTERFACES) then
+  begin
+    if InList(ALowMethod, ROOT_METHODS) then
+      Exit(iaYes);
+    Exit(iaNo);
+  end;
+  if ADepth > MAX_INTF_DEPTH then
+    Exit(iaUnknown);
+  Heads := InterfaceHeads(AMap, ALowIntf);
+  if Length(Heads) = 0 then
+    Exit(iaUnknown);
+  Result := iaNo;
+  for i := 0 to High(Heads) do
+  begin
+    Parents := TRdxBlocks.MemberHeads(AMap, Heads[i], ALowMethod);
+    if Length(Parents) > 0 then
+      Exit(iaYes);
+    // Ohne Vorfahrenliste erbt ein Interface von IInterface.
+    Up := TRdxBlocks.HeritageOf(AMap, Heads[i]);
+    if Length(Up) = 0 then
+      Sub := IntfDeclares(AMap, ROOT_INTERFACES[1], ALowMethod, ADepth + 1)
+    else
+      Sub := IntfDeclares(AMap, LowerCase(Up[0]), ALowMethod, ADepth + 1);
+    if Sub = iaYes then
+      Exit(iaYes);
+    if Sub = iaUnknown then
+      Result := iaUnknown;
+  end;
+end;
+
+// Leitet eine Methodenzuordnung im Rumpf der Klasse ab AClass auf die
+// Methode ALowName um ('procedure IFoo.Bar = ALowName;')? Dann
+// implementiert sie ein Interface unter anderem Namen.
+function ResolvesTo(AMap: TRdxCodeMap; const AClass: TRdxToken;
+  const ALowName: string): Boolean;
+var
+  T, Stop, N : TRdxToken;
+begin
+  Result := False;
+  Stop := ClassEnd(AMap, AClass);
+  T := After(AMap, AClass);
+  while (T.Low <> '') and ((Stop.Low = '') or TokBefore(T, Stop)) do
+  begin
+    if T.Low = '=' then
+    begin
+      N := After(AMap, T);
+      if N.IsWord and SameIdent(N.Low, ALowName)
+         and (After(AMap, N).Low = ';') then
+        Exit(True);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// SCA020 (b): implementiert die Methode ALowName der Klasse ab AClass
+// (das Token 'class') womoeglich ein Interface? Die Klasse nennt hinter
+// dem Vorfahren Interfaces ('class(TNotifierObject, IOTADebuggerNotifier,
+// ..)'); gesperrt wird, wenn eines die Methode deklariert, eine
+// Methodenzuordnung auf sie zeigt oder ein Interface nicht in der Datei
+// steht - die Sichtbarkeit hilft nicht, eine Interface-Methode darf auch
+// protected oder private sein (skia4delphi Skia.Tests.Foundation.Runner.pas:
+// 370, '{ ITestLogger }' unter protected). '' oder der Grund.
+function InterfaceReason(AMap: TRdxCodeMap; const AClass: TRdxToken;
+  const ALowName, ANameText: string): string;
+var
+  Names : TArray<string>;
+  i     : Integer;
+begin
+  Result := '';
+  Names := TRdxBlocks.HeritageOf(AMap, AClass);
+  if Length(Names) < 2 then Exit;
+  if ResolvesTo(AMap, AClass, ALowName) then
+    Exit(_('a method resolution clause of the class maps an interface method '
+      + 'to %s - callers of the interface expect the empty body to do '
+      + 'nothing; raise would break them', [ANameText]));
+  for i := 1 to High(Names) do
+    case IntfDeclares(AMap, LowerCase(Names[i]), ALowName, 0) of
+      iaYes:
+        Exit(_('the method implements %s.%s - callers of the interface '
+          + 'expect the empty body to do nothing; raise would break them',
+          [Names[i], ANameText]));
+      iaUnknown:
+        Exit(_('the class implements %s, declared outside this file - the '
+          + 'method may implement it, and callers of the interface expect '
+          + 'the empty body to do nothing; raise would break them',
+          [Names[i]]));
+    else
+      ;   // iaNo: das naechste Interface
+    end;
+end;
+
+// Der Anfang der Kette 'A.B.T' bis T (rueckwaerts ueber '.').
+function ChainStart(AMap: TRdxCodeMap; const T: TRdxToken): TRdxToken;
+var
+  P, Q : TRdxToken;
+begin
+  Result := T;
+  P := Before(AMap, Result);
+  while P.Low = '.' do
+  begin
+    Q := Before(AMap, P);
+    if not Q.IsWord then Break;
+    Result := Q;
+    P := Before(AMap, Result);
+  end;
+end;
+
+// Die erste Stelle, an der die PROZEDUR ALowName (letztes Glied, klein) als
+// Wert steht - als Argument, in einer Zuweisung oder einem Vergleich
+// ('Search(.., DoNothingEvent, ..)', 'UpdateHashInst := DefUpdateHashInst',
+// 'Obj.OnClick := Self.DoIt'): davor (vor der Kette 'X.Name') ':=', '(',
+// ',' oder '=', dahinter weder '(' noch '.' noch ':='. Eine Prozedur ohne
+// Klammern ist sonst nur als Anweisung ein Aufruf - dort steht ';', begin
+// o. ae. davor. Low = '' ohne. GRENZE: fuer eine Funktion waere dieselbe
+// Stelle auch ein Aufruf ('X := GetFoo;'), sie fragt der Aufrufer nicht.
+function ValueUse(AMap: TRdxCodeMap; const ALowName: string): TRdxToken;
+var
+  T, N : TRdxToken;
+begin
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if T.IsWord and SameIdent(T.Low, ALowName) then
+    begin
+      N := After(AMap, T);
+      if InList(Before(AMap, ChainStart(AMap, T)).Low, VALUE_PREV)
+         and not InList(N.Low, ['(', '.', ':=']) then
+        Exit(T);
+    end;
+    T := After(AMap, T);
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// Die erste Eigenschaft, die ALowName als Schreibzugriff nennt ('property
+// SubStorages: .. write SetSubStorages;'); Low = '' ohne.
+function WriteAccessorUse(AMap: TRdxCodeMap; const ALowName: string): TRdxToken;
+var
+  T, N : TRdxToken;
+begin
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'write') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      N := After(AMap, T);
+      if N.IsWord and SameIdent(N.Low, ALowName) then
+        Exit(N);
+    end;
+    T := After(AMap, T);
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// SCA020 (b): wird die Routine von fremdem Code oder als Wert gerufen
+// (rwE30)? '' oder der Grund.
+// - Sie traegt cdecl/stdcall/safecall/winapi (ADirs: die Direktiven von
+//   Kopf und Deklaration): ein Callback fuer C- oder Windows-Code (mORMot2
+//   mormot.db.sql.postgres.pas:494 DummyNoticeProcessor geht an libpq) -
+//   eine Exception liefe durch fremde Rahmen.
+// - Eine Prozedur steht als Wert im Code (ValueUse; mORMot2
+//   mormot.orm.storage.pas:4483 DoNothingEvent als Argument an
+//   SearchEvent, Indy IdFIPS.pas:169 'UpdateHashInst := DefUpdateHashInst').
+// - Sie ist der Schreibzugriff einer Eigenschaft (jvcl JvAppStorage.pas:
+//   1504 SetSubStorages): ein leerer Setter ignoriert Zuweisungen mit
+//   Absicht, mit raise scheiterte jede - auch das Laden eines Formulars.
+function CallbackReason(AMap: TRdxCodeMap; const ABody: TRdxMethodBody;
+  const ADirs: TArray<string>; const ALowName, ANameText: string): string;
+var
+  W   : string;
+  Hit : TRdxToken;
+  R   : TRdxRoutine;
+begin
+  Result := '';
+  R := Default(TRdxRoutine);
+  R.Directives := ADirs;
+  if HasDirective(R, FOREIGN_CONVENTIONS, W) then
+    Exit(_('the routine is %s - a callback for foreign code; an exception '
+      + 'must not leave it', [W]));
+  if ALowName = '' then Exit;
+  if ABody.Keyword.Low = 'procedure' then
+  begin
+    Hit := ValueUse(AMap, ALowName);
+    if Hit.Low <> '' then
+      Exit(_('the routine is passed as a callback (%s in line %d) - raise '
+        + 'would break its caller', [ANameText, Hit.Line]));
+  end;
+  Hit := WriteAccessorUse(AMap, ALowName);
+  if Hit.Low <> '' then
+    Result := _('the method is the write accessor of a property (line %d) - '
+      + 'an empty setter ignores assignments on purpose; raise would make '
+      + 'every assignment fail', [Hit.Line]);
+end;
+
 // SCA020 (b): ein leerer Rumpf, den Aufrufer still erwarten - ein raise
 // braeche sie (rwE29). '' oder der Grund.
 // - Die Deklaration in der Klasse traegt virtual/dynamic/override/message
@@ -353,26 +607,36 @@ end;
 //   Framework ruft ihn je Vorgang (Indy IdThread.BeforeExecute); ein
 //   leerer override schaltet den Vorfahren bewusst ab (LoadSettings,
 //   Finalize).
+// - Die Klasse implementiert Interfaces, und die Methode kann eines
+//   erfuellen (InterfaceReason, rwE30: jvcl JvDynControlEngine*.pas
+//   IJvDynControl, JvSIMDView.pas IOTADebuggerNotifier).
 // - Die Routine wird per '@Name' uebergeben (doublecmd
 //   multithreadprocslaz.pas:15: RegisterPackage(.., @Register) - das raise
-//   braeche die Paketinstallation in der IDE).
-// Steht die Deklaration nicht in der Datei, bleibt nur die zweite Frage.
+//   braeche die Paketinstallation in der IDE), als Wert, ist ein Callback
+//   fremden Codes oder ein Setter (CallbackReason, rwE30).
+// Steht die Deklaration nicht in der Datei, bleiben die Fragen ohne sie.
 function HookReason(AMap: TRdxCodeMap; const ABody: TRdxMethodBody): string;
 var
   R         : TRdxRoutine;
   D         : TRdxRoutine;
   Heads     : TArray<TRdxToken>;
+  Dirs      : TArray<string>;
   ClassPath : string;
   NameLow   : string;
   NameText  : string;   // das letzte Glied wie im Kopf (fuer den Grund)
   W         : string;
+  C         : TRdxToken;
   i         : Integer;
 begin
   Result := '';
+  Dirs := nil;
   NameText := Copy(ABody.Name, LastDelimiter('.', ABody.Name) + 1, MaxInt);
   NameLow := LowerCase(NameText);
-  if (TRdxBlocks.ReadRoutine(AMap, HeadStart(AMap, ABody.Keyword), R) = '')
-     and (Length(R.Parts) >= 2) then
+  if TRdxBlocks.ReadRoutine(AMap, HeadStart(AMap, ABody.Keyword), R) = '' then
+    Dirs := R.Directives
+  else
+    R := Default(TRdxRoutine);
+  if Length(R.Parts) >= 2 then
   begin
     NameLow := R.Parts[High(R.Parts)];
     ClassPath := R.Parts[0];
@@ -380,15 +644,25 @@ begin
       ClassPath := ClassPath + '.' + R.Parts[i];
     Heads := TRdxBlocks.FindMethodDecls(AMap, ClassPath, NameLow);
     for i := 0 to High(Heads) do
-      if (TRdxBlocks.MethodDecl(AMap, Heads[i], D) = '')
-         and HasDirective(D, HOOK_DIRECTIVES, W) then
-        Exit(_('the declaration carries %s - an empty body there is a hook '
-          + 'that callers (inherited, the framework) expect to do nothing; '
-          + 'raise would break them', [W]));
+      if TRdxBlocks.MethodDecl(AMap, Heads[i], D) = '' then
+      begin
+        if HasDirective(D, HOOK_DIRECTIVES, W) then
+          Exit(_('the declaration carries %s - an empty body there is a hook '
+            + 'that callers (inherited, the framework) expect to do nothing; '
+            + 'raise would break them', [W]));
+        for W in D.Directives do
+          AddText(Dirs, W);
+      end;
+    for C in TRdxBlocks.FindClassHeads(AMap, ClassPath) do
+    begin
+      Result := InterfaceReason(AMap, C, NameLow, NameText);
+      if Result <> '' then Exit;
+    end;
   end;
   if (NameLow <> '') and AddressTaken(AMap, NameLow) then
-    Result := _('the routine is passed as a callback (@%s) - raise would '
-      + 'break its caller', [NameText]);
+    Exit(_('the routine is passed as a callback (@%s) - raise would '
+      + 'break its caller', [NameText]));
+  Result := CallbackReason(AMap, ABody, Dirs, NameLow, NameText);
 end;
 
 class function TRdxRaiseFixes.EmptyBody(AMap: TRdxCodeMap; ALine: Integer;
