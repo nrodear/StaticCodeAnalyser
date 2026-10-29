@@ -117,9 +117,13 @@ type
       const AMessage: string): TRdxFixOutcome; static;
 
     // SCA007: den uses-Eintrag AUnit (die Meldung) auf ALine loeschen
-    // (TRdxStructFixes.RemoveUsesEntry). Gesperrt bei Direktiven in einer
-    // uses-Klausel. Aendert evtl. das Verhalten: der initialization-
-    // Abschnitt der Unit laeuft nicht mehr (Kennzeichnung in uRdxFixTable).
+    // (TRdxStructFixes.RemoveUsesEntry). Gesperrt, wenn der Bereich eine
+    // Direktive beruehrt (seit rwE30 nicht mehr bei jeder Direktive in einer
+    // uses-Klausel). Nur im Menue (MenuOnly), wenn die Datei einen
+    // Bezeichner nutzt, den der Planer keiner anderen Unit zuordnen kann
+    // (TRdxStructFixes.ForeignIdent). Aendert evtl. das Verhalten: der
+    // initialization-Abschnitt der Unit laeuft nicht mehr (Kennzeichnung in
+    // uRdxFixTable).
     class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
 
@@ -1030,21 +1034,50 @@ begin
     Result := _('%s appears more than once on line %d', [AUnit, ALine]);
 end;
 
+// SCA007: die bekannten Bezeichner (klein) aller uses-Eintraege der Datei
+// ausser AUnit - wem der Planer einen Bezeichner der Datei zuordnen kann
+// (TRdxStructFixes.ForeignIdent). Dieselbe Kette wie der Detektor
+// (TUnusedUsesDetector.IdentsFor: Liste, Kurzname fuer RTL-Namespaces).
+function OtherUnitsIdents(APlaces: TSourcePlaces;
+  const AUnit: string): TArray<string>;
+var
+  Clauses : TArray<TArray<TRefactorSpan>>;
+  c, k    : Integer;
+  Id      : string;
+begin
+  Result := nil;
+  Clauses := ClausesOf(APlaces);
+  for c := 0 to High(Clauses) do
+    for k := 0 to High(Clauses[c]) do
+      if not SameText(Clauses[c][k].Resolved, AUnit) then
+        for Id in TUnusedUsesDetector.IdentsFor(
+            LowerCase(Clauses[c][k].Resolved)) do
+          AddText(Result, Id);
+end;
+
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AUnit: string): TRdxFixOutcome;
 var
-  Map    : TRdxCodeMap;
-  Clause : TRdxUsesClause;
-  Index  : Integer;
+  Map         : TRdxCodeMap;
+  Clause      : TRdxUsesClause;
+  Index       : Integer;
+  Foreign     : string;
+  ForeignLine : Integer;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
   Index := -1;
+  Foreign := '';
+  ForeignLine := 0;
+  // Direktiven in den uses-Klauseln sperren nicht mehr die ganze Datei
+  // (rwE30 Stufe 2: 19 unnoetige Sperren - Direktive in der anderen Klausel,
+  // vor 'uses', um andere Eintraege, Eintrag mitten in einem Zweig). Was
+  // geloescht wird, darf keine Direktive beruehren (RemoveUsesEntry,
+  // RangeReason): der Eintrag samt EINEM Trenner liegt dann ganz in einem
+  // Zweig, der andere Zweig bleibt Zeichen fuer Zeichen, und in diesem
+  // bleibt die Kommafolge gueltig.
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
     Result.Reason := MsgNoFileOpen
-  else if TRdxRecipeRunner.UsesDirectiveLine(APlaces) > 0 then
-    Result.Reason := _('directive in a uses clause - an entry may apply only '
-      + 'in one branch')
   else
     Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
   if Result.Reason <> '' then Exit;
@@ -1054,9 +1087,16 @@ begin
     if UnitStillUsed(Map, Result.Name) then
       Result.Reason := MsgStaleSuffix(_('%s is used in the text',
         [Result.Name]))
+    else if TRdxStructFixes.UsesOnlyUnit(Map) then
+      Result.Reason := _('the unit consists of uses clauses only - they are '
+        + 'its purpose (a package unit compiles the listed units); without %s '
+        + 'the build drops it', [Result.Name])
     else
       Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
         Result.Edits[0], Result.Reason);
+    if Result.Enabled then
+      Foreign := TRdxStructFixes.ForeignIdent(Map,
+        OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -1067,9 +1107,20 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
-    + 'initialization section (registration), it no longer runs',
-    [Result.Name]);
+  if Foreign = '' then
+    Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Result.Name])
+  else
+  begin
+    // Bezeichner-Beweis unvollstaendig (Nico 2026-10-29): nur im Menue.
+    Result.MenuOnly := True;
+    Result.Hint := _('not in the light bulb: the file uses %s (line %d), '
+      + 'which the quick fix cannot assign to any other unit of the uses '
+      + 'clauses - it may come from %s; compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Foreign, ForeignLine, Result.Name, Result.Name]);
+  end;
 end;
 
 // Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil

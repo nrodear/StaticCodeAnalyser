@@ -667,6 +667,21 @@ begin
   end;
 end;
 
+// Die Art eines Eintrags der einfachen Hilfe: fakFix, bei MenuOnly (rwE30
+// Stufe 2: Beweis nicht vollstaendig) fakRefactor - das steht nie in der
+// Gluehbirne und laeuft nie per Taste (uFindingActions, VERTRAG);
+// Kontextmenue und Dock-Grid zeigen den Eintrag wie jede Hilfe. Eine eigene
+// Funktion, kein 'Kind := fak..' im Rezept: tools/gen-quickfix-doc.py liest
+// die Art eines Rezepts aus dessen Rumpf - die Hilfen der Tabelle bleiben
+// dort Quick-Fixes.
+function OutcomeKind(const AOutcome: TRdxFixOutcome): TFindingActionKind;
+begin
+  if AOutcome.MenuOnly then
+    Result := fakRefactor
+  else
+    Result := fakFix;
+end;
+
 procedure TRdxActionCore.AddSimpleFix(var AList: TArray<TRdxActionEntry>;
   const ACtx: TRdxRecipeContext);
 
@@ -694,6 +709,8 @@ procedure TRdxActionCore.AddSimpleFix(var AList: TArray<TRdxActionEntry>;
     // E2: Ctrl+Alt+F fuehrt eine solche Hilfe nicht ungesehen aus.
     AList[High(AList)].ChangesBehavior := AOutcome.ChangesBehavior;
     AList[High(AList)].Variant := AOutcome.Variant;
+    // Nur im Menue (TRdxFixOutcome.MenuOnly, rwE30): OutcomeKind.
+    AList[High(AList)].Kind := OutcomeKind(AOutcome);
   end;
 
 var

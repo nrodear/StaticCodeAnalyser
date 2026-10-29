@@ -53,6 +53,20 @@ type
     // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
     // Blockwort im case sperren nicht mehr.
     [Test] procedure Sca168_HarmlessDirective_Helps;
+    // rwE30 Stufe 2 (21 Fehler): der Bezeichner-Beweis (ForeignIdent) -
+    // Aufzaehlungswert, Typ, Konstante, Aufruf ohne Quelle ...
+    [Test] procedure Sca007_ForeignIdent_Found;
+    // ... und was die Datei selbst deklariert oder eine andere Unit kennt.
+    [Test] procedure Sca007_ForeignIdent_DeclaredOrKnown;
+    // ... eine case-Marke im Anweisungsteil ist keine Deklaration.
+    [Test] procedure Sca007_ForeignIdent_CaseLabelNotADecl;
+    // rwE30 Stufe 2: Eintrag mitten in einem $IFDEF-Zweig (CEF4Delphi
+    // uChildForm.pas:10) - der Zweig behaelt seine Kommafolge, der andere
+    // bleibt unberuehrt; am Zweigrand lehnt RangeReason ab.
+    [Test] procedure Sca007_EntryInBranch_CommaLogic;
+    // rwE30 Stufe 2 (Indy indyprotocolsfpc.pas:189): die Sammel-Unit eines
+    // Pakets besteht nur aus uses-Klauseln.
+    [Test] procedure Sca007_UsesOnlyUnit;
   end;
 
 implementation
@@ -602,6 +616,195 @@ begin
   Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: if A then B',
     '    {$IFDEF Y};{$ENDIF}', '  end;']), 5, '', R), 'Semikolon im Zweig');
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+// SCA007, Bezeichner-Beweis: der erste Bezeichner ohne Quelle und seine
+// Zeile; '' = vollstaendig.
+function Foreign(const ASource: string; const AKnown: array of string;
+  out ALine: Integer): string;
+var
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Known : TArray<string>;
+  i     : Integer;
+begin
+  SetLength(Known, Length(AKnown));
+  for i := 0 to High(AKnown) do
+    Known[i] := AKnown[i];
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.ForeignIdent(Map, Known, ALine);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Eine Formular-Unit wie CnSelectMaskFrm.pas (rwE30, minimiert): AUses als
+// uses-Klausel, AField als Feld, ABody im Rumpf von TForm1.Check.
+function FormUnit(const AUses, AField, ABody: string): string;
+begin
+  Result := Join(['unit Form1U;', 'interface', 'uses ' + AUses + ';', 'type',
+    '  TForm1 = class(TForm)', '    ' + AField, '  public',
+    '    function Check: Boolean;', '  end;', 'implementation',
+    'function TForm1.Check: Boolean;', 'begin', '  ' + ABody, 'end;',
+    'end.']);
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_Found;
+var
+  Li : Integer;
+begin
+  // CnSelectMaskFrm.pas:106 - mrOk kam aus Controls, der Fund nannte
+  // Controls ungenutzt; ohne Beweis nur im Menue.
+  Assert.AreEqual('mrOk', Foreign(FormUnit('Classes, Forms, Controls',
+    'Edit1: TEdit;', 'Result := ModalResult = mrOk;'), ['tform', 'tedit'],
+    Li));
+  Assert.AreEqual<Integer>(13, Li, 'Zeile');
+  // CnTestNtaCurrLineWizard.pas:66 - TShortCut (Classes) als Ergebnistyp.
+  Assert.AreEqual('TShortCut', Foreign(Join(['unit W;', 'interface',
+    'uses Classes, Menus;', 'type', '  TWiz = class(TComponent)',
+    '    function GetDefShortCut: TShortCut;', '  end;', 'implementation',
+    'end.']), ['tcomponent', 'tmenu'], Li));
+  // dlgAboutPyScripter.pas:31 - Konstante einer message-Direktive.
+  Assert.AreEqual('CN_NOTIFY', Foreign(FormUnit('Vcl.Forms, Vcl.Controls',
+    'procedure CNNotify(var Message: TWMNotify); message CN_NOTIFY;',
+    'Result := True;'), ['tform', 'twmnotify'], Li));
+  // Vcl.Styles.DbGrid.pas:239 - eine freie Funktion (Vcl.Forms).
+  Assert.AreEqual('ValidParentForm', Foreign(FormUnit('Vcl.Forms',
+    'Edit1: TEdit;', 'Result := ValidParentForm(Self) <> nil;'),
+    ['tform', 'tedit'], Li));
+  // JvToolBar.pas:70 - Mengenwert im Ausdruck.
+  Assert.AreEqual('csAcceptsControls', Foreign(FormUnit('Forms, Controls',
+    'Edit1: TEdit;', 'Result := csAcceptsControls in ControlStyle;'),
+    ['tform', 'tedit'], Li));
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_DeclaredOrKnown;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // Gegenprobe zu Found: was die Datei deklariert oder eine andere Unit
+  // kennt, beweist nichts gegen die entfernte Unit - '' (Gluehbirne).
+  Assert.AreEqual('', Foreign(FormUnit('Classes, Forms, Variants',
+    'btnOK: TButton;', 'Result := btnOK.Caption = '''';'),
+    ['tform', 'tbutton'], Li), 'Feld im Ungarn-Stil, Typ bekannt');
+  Src := Join(['unit U;', 'interface', 'uses Classes, Math;', 'type',
+    '  TMode = (mdFast, mdSlow);', '  EMyError = class(Exception);',
+    'const', '  MAX_ITEMS = 10;', '  cDefault: TMode = mdFast;',
+    'function Twice(A: Integer): Integer;', 'implementation',
+    'function Twice(A: Integer): Integer;', 'var', '  lCount: Integer;',
+    'begin', '  lCount := MAX_ITEMS;', '  if cDefault = mdSlow then',
+    '    Result := Integer(A) * 2', '  else', '    Result := Length(''x'');',
+    '  try', '    Exit;', '  except', '    on E: EMyError do', '      Exit;',
+    '  end;', '  var lValue := Round(1.5);', 'end;', 'end.']);
+  Assert.AreEqual('', Foreign(Src, ['tcomponent'], Li),
+    'Aufzaehlung, Klasse, Konstanten, Inline-Variable, System');
+  // Member hinter '.' und die uses-Klausel zaehlen nicht.
+  Assert.AreEqual('', Foreign(FormUnit('Vcl.Forms, System.UITypes',
+    'Edit1: TEdit;', 'Result := Self.ModalResult = Self.ModalResult;'),
+    ['tform', 'tedit'], Li), 'Member und uses');
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_CaseLabelNotADecl;
+var
+  Li : Integer;
+begin
+  // 'mrOk:' als Marke eines case-Zweigs deklariert nichts - im
+  // Deklarationsteil hiesse 'X: T' ein Feld bzw. eine Variable.
+  Assert.AreEqual('mrOk', Foreign(FormUnit('Forms, Controls',
+    'Edit1: TEdit;', 'case ModalResult of mrOk: Result := True; else '
+    + 'Result := False; end;'), ['tform', 'tedit'], Li));
+  // Review e/HilfeFixH: dieselbe Marke in einer anonymen Methode als
+  // Argument (FMX-Muster TDialogService.MessageDialog) - die Klammer des
+  // Aufrufs macht sie nicht zur Parameterliste; der Parameter der anonymen
+  // Methode (im Stil eines Typs: EResult) ist dagegen deklariert. Vorher ''
+  // (mrYes galt als deklariert, die Hilfe stand in der Gluehbirne).
+  Assert.AreEqual('mrYes', Foreign(FormUnit('FMX.Forms, FMX.DialogService',
+    'Edit1: TEdit;', 'TDialogService.MessageDialog(''?'', '
+    + 'TMsgDlgType.mtConfirmation, [TMsgDlgBtn.mbYes], TMsgDlgBtn.mbNo, 0, '
+    + 'procedure(const EResult: TModalResult) begin case EResult of mrYes: '
+    + 'Close; end; end); Result := True;'), ['tform', 'tedit',
+    'tdialogservice', 'tmsgdlgtype', 'tmsgdlgbtn', 'tmodalresult'], Li),
+    'anonyme Methode als Argument');
+  Assert.AreEqual<Integer>(13, Li, 'Zeile');
+  // Der Variantenteil eines records ist kein Anweisungsteil: 'fkA:' ist dort
+  // ein Feld.
+  Assert.AreEqual('', Foreign(Join(['unit U;', 'interface', 'type',
+    '  TRec = record', '    case Integer of', '      0: (vxAlpha: Integer);',
+    '      1: (vxBeta: Byte);', '  end;', 'implementation',
+    'procedure P(var R: TRec);', 'begin', '  R.vxAlpha := vxBeta;', 'end;',
+    'end.']), [], Li), 'Variantenteil');
+end;
+
+procedure TTestRdxStructFixes.Sca007_EntryInBranch_CommaLogic;
+var
+  R, Src, L : string;
+  C         : TRdxUsesClause;
+begin
+  // uChildForm.pas:10 (minimiert): Vcl.ClipBrd mitten im Zweig - nur er
+  // und sein Komma gehen, der {$ELSE}-Zweig bleibt Zeichen fuer Zeichen.
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.ClipBrd, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']);
+  C := Clause(3, [Entry(5, 3, 'Vcl.Forms'), Entry(5, 14, 'Vcl.ClipBrd'),
+    Entry(5, 27, 'Vcl.Menus'), Entry(9, 3, 'uCEF')]);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.Menus,', '  {$ELSE}', '  Forms, ClipBrd, Menus,',
+    '  {$ENDIF}', '  uCEF;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'mitten im Zweig: ' + R);
+  // Der letzte des Zweigs am Zeilenende: ab dem Komma davor - das Komma
+  // vor {$ELSE} bleibt, der Zweig endet weiter mit einem.
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.ClipBrd,', '  {$ELSE}', '  Forms, ClipBrd, Menus,',
+    '  {$ENDIF}', '  uCEF;', 'implementation', 'end.']),
+    FixUses(Src, C, 2, R), 'Zeilenende im Zweig: ' + R);
+  // Gegenprobe: der Bereich bis zum naechsten Eintrag reichte ueber
+  // {$ELSE}..{$ENDIF} - gesperrt.
+  L := '  {$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF} uCEF;';
+  Src := Join(['unit u;', 'interface', 'uses', L, 'implementation', 'end.']);
+  C := Clause(3, [Entry(4, Pos('Vcl.Forms', L), 'Vcl.Forms'),
+    Entry(4, Pos('uCEF', L), 'uCEF')]);
+  Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+function UsesOnly(const ASource: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.UsesOnlyUnit(Map);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_UsesOnlyUnit;
+begin
+  // indyprotocolsfpc.pas (minimiert): uses, leeres implementation mit
+  // Kommentar und {$hints off}.
+  Assert.IsTrue(UsesOnly(Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  IdSMTP,', '  IdPOP3;', 'implementation', '{ compile the units }',
+    '{$hints off}', 'end.'])), 'Paket-Unit');
+  // Gegenproben: ein Typ, eine Routine, ein Programm.
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;', 'type',
+    '  TFoo = class end;', 'implementation', 'end.'])), 'Typ');
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;',
+    'implementation', 'procedure P; begin end;', 'end.'])), 'Routine');
+  Assert.IsFalse(UsesOnly(Join(['program p;', 'uses A;', 'begin', 'end.'])),
+    'Programm');
 end;
 
 initialization

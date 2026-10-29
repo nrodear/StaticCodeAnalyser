@@ -147,6 +147,16 @@ type
     [Test] procedure Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
     [Test] procedure PlanUses_UnitOnlyInConditionalBranch_Refused;
     [Test] procedure PlanUses_SectionInConditionalBranch_Refused;
+    // rwE30 Stufe 2 (21 Fehler, Nico 2026-10-29): Bezeichner ohne Quelle -
+    // die Hilfe nur im Menue; Gegenprobe ohne solchen Bezeichner.
+    [Test] procedure Sca007_UnknownIdent_MenuOnly;
+    [Test] procedure Sca007_CleanFile_InBulb;
+    // rwE30 Stufe 2 (19 unnoetige Sperren): eine Direktive in der anderen
+    // Klausel sperrt nicht mehr; Gegenprobe: der Bereich beruehrt eine.
+    [Test] procedure Sca007_DirectiveInOtherClause_Helps;
+    [Test] procedure Sca007_RangeTouchesDirective_NoHelp;
+    // rwE30 Stufe 2 (Fragwuerdig Indy indyprotocolsfpc.pas:189).
+    [Test] procedure Sca007_PackageUnit_NoHelp;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1499,6 +1509,126 @@ begin
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
     'nur SCA168 und SCA020 haben einen zweiten Eintrag');
+end;
+
+// rwE30 Stufe 2, Muster CnSelectMaskFrm.pas:39/106 (minimiert): die Unit
+// nutzt einen Bezeichner, der nur aus (Vcl.)Controls kommt; die Liste des
+// Detektors kennt ihn nicht und meldet Vcl.Controls ungenutzt. ABody ist der
+// Rumpf von TFoo.IsOk (Zeile 12). Im Korpus war es mrOk - das nimmt der
+// Zweig d/SCA007Export (3f162348) in die Liste von Controls auf, danach
+// meldete der Detektor nichts mehr; die Tests nehmen darum FindVCLWindow
+// (Vcl.Controls, in keiner Liste - Review e/HilfeFixH).
+function ModalUnit(const ABody: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin', '  ' + ABody,
+    'end;', 'end.']);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_UnknownIdent_MenuOnly;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  Src := ModalUnit('Result := FindVCLWindow(Point(AResult, 0)) <> nil;');
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  // Die Hilfe bleibt (Menue), aber nicht in der Gluehbirne; der Hinweis
+  // nennt den Bezeichner. Vorher: MenuOnly gab es nicht - inBirne=ja, der
+  // Klick brach den Bau (E2003 mrOk im Korpus).
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('FindVCLWindow', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('12', O.Hint) > 0, 'Zeile: ' + O.Hint);
+  Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung bleibt');
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_CleanFile_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Gegenprobe: dieselbe Unit ohne FindVCLWindow - jeder Bezeichner hat
+  // eine Quelle (TComponent aus der Liste von System.Classes), die Hilfe
+  // bleibt in der Gluehbirne.
+  Src := ModalUnit('Result := AResult = 1;');
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin',
+    '  Result := AResult = 1;', 'end;', 'end.']), Apply(Src, O.Edits));
+end;
+
+// rwE30 Stufe 2, Muster PackageGenerator.pas:8 / Kastri Unit1.pas:6
+// (minimiert): die Direktive steht nur in der uses-Klausel des
+// implementation-Teils. Bis dahin sperrte jede Direktive in irgendeiner
+// uses-Klausel die ganze Datei ("Direktive in einer uses-Klausel").
+procedure TTestRdxSimpleFixesDetector4.Sca007_DirectiveInOtherClause_Helps;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Src := Join(['unit t;', 'interface', 'uses System.Classes, System.Math;',
+    'type', '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF}', '  System.SysUtils;',
+    'end.']);
+  Seen.Line := 3;
+  Seen.Msg := 'System.Math';
+  Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason), Reason);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'type', '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF}', '  System.SysUtils;',
+    'end.']), Apply(Src, Edits));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_RangeTouchesDirective_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Gegenprobe: System.Math ist der letzte Eintrag hinter einem bedingten -
+  // geloescht wuerde ab dem Komma vor {$ENDIF}; das bleibt gesperrt.
+  Src := Join(['unit t;', 'interface', 'uses System.Classes;', 'type',
+    '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF} System.Math;', 'end.']);
+  Seen.Line := 9;
+  Seen.Msg := 'System.Math';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('Direktive', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_PackageUnit_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Die Sammel-Unit eines Lazarus-Pakets: die uses-Liste ist ihr Zweck -
+  // ohne den Eintrag faellt die Unit aus dem Paketbau (vorher angeboten, in
+  // der Gluehbirne).
+  Src := Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  System.Classes,', '  System.Math;', 'implementation', '{$hints off}',
+    'end.']);
+  Seen.Line := 5;
+  Seen.Msg := 'System.Math';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('System.Math', Reason) > 0, Reason);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.

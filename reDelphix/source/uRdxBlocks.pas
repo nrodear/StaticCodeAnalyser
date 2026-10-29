@@ -246,6 +246,12 @@ function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
 // Das end des Klassenrumpfs ab AClass (dem Token 'class'); Low = ''
 // ohne. Seit Charge B2S-b oeffentlich (SCA147: Include im Klassenrumpf).
 function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
+// Steht der Kopf ab AHead im Rumpf eines Typs (class, record, object,
+// interface ...)? Rueckwaerts bis zum Abschnitt interface bzw.
+// implementation der Unit; ohne ihn: ja (unsicher). Bis rwE30 Stufe 2 als
+// InsideType nur in uRdxAvoidOutFix (SCA086); seitdem fragt es auch SCA106
+// (freie Routinen, uRdxMethodNameFix).
+function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
 
 type
   // Ergebnis von BeginBodyAround: gefunden, ein Kopf mit unsicheren
@@ -379,6 +385,8 @@ const
   // die ein Klassenrumpf schachtelt.
   CLASS_LIKE: array[0..3] of string = (KW_CLASS, 'object', 'interface',
     'dispinterface');
+  // ... wenn davor '=' bzw. 'packed' steht (InsideTypeBody).
+  TYPE_HEAD_PREV: array[0..1] of string = ('=', 'packed');
   // Damit beginnt der Rumpf einer Routine.
   BODY_WORDS: array[0..1] of string = ('begin', 'asm');
   // Was hinter einer Routine folgen darf - sonst sind ihre Grenzen falsch
@@ -1061,6 +1069,37 @@ begin
     Scan.Advance(AMap, T, P);
   if Scan.Depth = 0 then
     Result := P;
+end;
+
+function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+begin
+  Depth := 0;
+  T := Before(AMap, AHead);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsKeywordAfter(T, P) then
+    begin
+      if T.Low = KW_END then
+        Inc(Depth)
+      else if (T.Low = 'record')
+         or (InList(T.Low, CLASS_LIKE) and InList(P.Low, TYPE_HEAD_PREV)
+             and TypeHasBody(AMap, T)) then
+      begin
+        if Depth = 0 then
+          Exit(True);
+        Dec(Depth);
+      end
+      else if ((T.Low = 'interface') or (T.Low = 'implementation'))
+         and not InList(P.Low, TYPE_HEAD_PREV) then
+        Exit(False);
+    end;
+    T := P;
+  end;
+  Result := True;
 end;
 
 // Die Sichtbarkeit, unter der AHead im Rumpf ab AClass auf Tiefe 1 steht;

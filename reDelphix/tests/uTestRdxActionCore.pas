@@ -56,6 +56,10 @@ type
     [Test] procedure SqlTemplate_LikeRunner;
     [Test] procedure FormatCall_NeedsUses_TwoEdits;
     [Test] procedure RecipeException_RaisesAndForgetsSource;
+    // rwE30 Stufe 2 (Nico 2026-10-29): eine Hilfe ohne vollstaendigen
+    // Beweis (TRdxFixOutcome.MenuOnly, SCA007) steht im Menue, nicht in der
+    // Gluehbirne - Art fakRefactor; Gegenprobe fakFix.
+    [Test] procedure SimpleFix_MenuOnly_NotInBulb;
   end;
 
 implementation
@@ -874,6 +878,59 @@ begin
     F.Free;
     Core.Free;
   end;
+end;
+
+// Der Eintrag der einfachen Hilfe zum SCA007-Fund 'Vcl.Controls' auf Zeile 3
+// einer Unit, deren TFoo.IsOk ABody ausfuehrt.
+function Sca007Entry(const ABody: string): TRdxActionEntry;
+var
+  Src     : string;
+  F       : TLeakFinding;
+  Entries : TArray<TRdxActionEntry>;
+  E       : TRdxActionEntry;
+  n       : Integer;
+begin
+  Result := Default(TRdxActionEntry);
+  Src := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin', '  ' + ABody,
+    'end;', 'end.']);
+  F := TLeakFinding.New('t.pas', '', 3, 'Vcl.Controls', fkUnusedUses);
+  try
+    Entries := DescribeIn(Src, F);
+  finally
+    F.Free;
+  end;
+  n := 0;
+  for E in Entries do
+    if E.Recipe = RECIPE_SIMPLE_FIX then
+    begin
+      Result := E;
+      Inc(n);
+    end;
+  Assert.AreEqual<Integer>(1, n, 'ein Eintrag der einfachen Hilfe');
+end;
+
+procedure TTestRdxActionCore.SimpleFix_MenuOnly_NotInBulb;
+var
+  E : TRdxActionEntry;
+  A : TFindingAction;
+begin
+  // CnSelectMaskFrm.pas (rwE30, minimiert): FindVCLWindow kommt aus
+  // Vcl.Controls und steht in keiner Liste des Detektors (im Korpus mrOk -
+  // das nimmt d/SCA007Export in die Liste auf, UnitStillUsed sperrte dann;
+  // Review e/HilfeFixH).
+  E := Sca007Entry('Result := FindVCLWindow(Point(AResult, 0)) <> nil;');
+  Assert.IsTrue(E.Enabled and E.HasAction, 'im Menue ausfuehrbar');
+  Assert.IsTrue(E.Kind = fakRefactor, 'nicht in der Gluehbirne');
+  A := TRdxActionCore.FindingActionOf(E);
+  Assert.IsTrue(A.Kind = fakRefactor, 'TFindingAction: fakRefactor');
+  Assert.IsTrue(A.ChangesBehavior, 'Kennzeichnung bleibt');
+  // Gegenprobe: ohne Bezeichner ohne Quelle eine Hilfe der Gluehbirne.
+  E := Sca007Entry('Result := AResult = 1;');
+  Assert.IsTrue(E.Enabled and E.HasAction, 'verfuegbar');
+  Assert.IsTrue(E.Kind = fakFix, 'Gluehbirne');
 end;
 
 initialization

@@ -2860,6 +2860,30 @@ msgstr "\"%s\" fait partie d'une expression plus large (\"%s\" avant) - seule un
 msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"
 msgstr "« %s » est published - son nom figure dans la table des méthodes, le code qui le cherche par son nom (RTTI, MethodName, une liste de commandes) peut respecter la casse"
 
+msgid "%d headers of a free routine \"%s\" - overload or conditional twin?"
+msgstr "%d en-têtes d'une routine libre « %s » - surcharge ou jumeau conditionnel ?"
+
+msgid "the headers of \"%s\" are not one declaration (interface or forward) and one implementation"
+msgstr "les en-têtes de « %s » ne sont pas une déclaration (interface ou forward) et une implémentation"
+
+msgid "the header of \"%s\" in line %d cannot be read safely"
+msgstr "l'en-tête de « %s » à la ligne %d ne se lit pas de façon sûre"
+
+msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
+msgstr "« %s » est « %s » - un éditeur de liens, une bibliothèque ou du code C lie la routine par son nom exact"
+
+msgid "the unit links an object file ({$L} in line %d) - C code may call \"%s\" by its exact name"
+msgstr "l'unité lie un fichier objet ({$L} à la ligne %d) - du code C peut appeler « %s » par son nom exact"
+
+msgid "the exports clause names \"%s\" (line %d) - the exported name keeps the spelling"
+msgstr "la clause exports nomme « %s » (ligne %d) - le nom exporté garde son écriture"
+
+msgid "a compiler directive names \"%s\" (line %d)"
+msgstr "une directive de compilation nomme « %s » (ligne %d)"
+
+msgid "\"%s\" is written like a C or platform API name (underscore, no capital letter or a k constant) - a capital first letter does not make it PascalCase; rename it by hand or suppress the finding"
+msgstr "« %s » s'écrit comme un nom d'API C ou de plateforme (tiret bas, pas de majuscule ou constante k) - une initiale majuscule n'en fait pas du PascalCase ; renommez-le à la main ou supprimez le constat"
+
 msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"
 msgstr "« %s » suit « %s » - il est conditionnel, le code qui suit s'exécute"
 
@@ -3672,6 +3696,9 @@ msgstr "le message ne nomme aucune section"
 
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
 msgstr "la méthode est visible hors de l'unité (pas private, classe dans la section interface) - d'autres unités peuvent l'utiliser comme pointeur de méthode"
+
+msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
+msgstr "pas dans l'ampoule - %s a un type géré et n'est pas affecté comme première instruction de %s (ligne %d) : avec « var », l'ancienne valeur de l'appelant peut rester là où « out » la vidait"
 
 msgid "the name \"%s\" already occurs in the code of the file"
 msgstr "le nom « %s » apparaît déjà dans le code du fichier"
@@ -4966,8 +4993,8 @@ msgstr "la routine se termine sur la dernière ligne du fichier"
 msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
 msgstr "directive jpp à la ligne %d - le fichier est un prototype du préprocesseur JEDI ; l'unité générée à partir de lui déclare et appelle des routines via des macros que le Quick-Fix ne voit pas"
 
-msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
-msgstr "include %s avant implementation %s - il peut déclarer le nom, l'appeler ou le citer comme accesseur de propriété, et le Quick-Fix ne le voit pas"
+msgid "include %s %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
+msgstr "include %s %s - il peut déclarer le nom, l'appeler ou le citer comme accesseur de propriété, et le Quick-Fix ne le voit pas"
 
 msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
 msgstr "« // noinspection-file » à la ligne %d - le marqueur s'applique à tout le fichier et serait perdu lui aussi ; %s"
@@ -5031,6 +5058,9 @@ msgstr "directive %s - la routine est accessible de l'extérieur ou n'a pas de c
 
 msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr "l'unité lie un fichier objet ({$L} à la ligne %d) - le code C appelle des routines par leur nom"
+
+msgid "the unit is named %s, its file %s - the compiler does not take the file as this unit (script or template?)"
+msgstr "l'unité s'appelle %s, son fichier %s - le compilateur ne prend pas le fichier pour cette unité (script ou modèle ?)"
 
 msgid "forward declaration: %s"
 msgstr "déclaration forward : %s"
@@ -5311,14 +5341,17 @@ msgstr "%s n'est plus à la ligne %d d'une clause uses"
 msgid "%s appears more than once on line %d"
 msgstr "%s figure plusieurs fois à la ligne %d"
 
-msgid "directive in a uses clause - an entry may apply only in one branch"
-msgstr "directive dans une clause uses - une entrée ne s'applique peut-être que dans une branche"
-
 msgid "%s is used in the text"
 msgstr "%s est utilisé dans le texte"
 
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr "résultat heuristique - compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
+
+msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"
+msgstr "l'unité ne contient que des clauses uses - elles sont sa raison d'être (une unité de paquet compile les unités listées) ; sans %s, la compilation l'omet"
+
+msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "pas dans l'ampoule : le fichier utilise %s (ligne %d), que le Quick-Fix ne peut attribuer à aucune autre unité des clauses uses - il peut venir de %s ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
 
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr "la cible est un Variant - après 'X +' Delphi calcule une arithmétique Variant au lieu de concaténer, le compilateur ne garantit aucun opérande"

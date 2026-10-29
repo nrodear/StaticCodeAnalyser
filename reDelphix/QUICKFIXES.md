@@ -247,14 +247,15 @@ Nachher:
 
 **Platzhalter:** `%s` = die Unit aus der Meldung.
 
-**Wirkung:** Löscht den Eintrag der Meldung aus seiner uses-Klausel: mit dem Komma bis zum nächsten Eintrag bzw. – beim letzten – ab dem Komma davor; steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar; der einzige Eintrag geht mit der ganzen Klausel. Ein `in`-Pfad geht mit. Vorher prüft die Hilfe den Fund am aktuellen Puffer nach (dieselben Spuren wie der Detektor).
+**Wirkung:** Löscht den Eintrag der Meldung aus seiner uses-Klausel: mit dem Komma bis zum nächsten Eintrag bzw. – beim letzten – ab dem Komma davor; steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar; der einzige Eintrag geht mit der ganzen Klausel. Ein `in`-Pfad geht mit. Vorher prüft die Hilfe den Fund am aktuellen Puffer nach (dieselben Spuren wie der Detektor). Nur im Menü, nicht in der Glühbirne, wenn die Datei einen Bezeichner im Stil einer Bibliothek nutzt (Typ `TFoo`/`IFoo`/`EFoo`, Aufzählungswert wie `mrOk`, Konstante wie `CM_ENTER`, Aufruf eines groß beginnenden Namens), den die Hilfe weder in der Datei noch in der Bezeichnerliste einer anderen uses-Unit noch in System findet – er kann aus der entfernten Unit kommen; der Hinweis nennt ihn.
 
 **Nicht angeboten**
 
 - der Puffer trägt den Fund nicht mehr (ein Fund aus einem älteren Scan)
 - ein Kommentar im gelöschten Bereich, auch `{Form1}` hinter einer Formular-Unit
-- Compiler-Direktiven in einer uses-Klausel
+- eine Compiler-Direktive im gelöschten Bereich (der Eintrag grenzt an einen `{$IFDEF}`-Zweig); eine Direktive anderswo in der Klausel oder der Datei sperrt nicht
 - im gelöschten Bereich steht mehr als dieser Eintrag
+- die Unit besteht nur aus uses-Klauseln – die Sammel-Unit eines Pakets übersetzt so die gelisteten Units
 
 **Beispiel**
 
@@ -1708,23 +1709,23 @@ Nachher:
 
 - **Regel:** SCA086 `AvoidOut` – Avoid out parameter modifier
 - **Art:** Quick-Fix
-- **Ändert Verhalten:** **je nach Fund** – gekennzeichnet nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert. Dann nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+- **Ändert Verhalten:** **je nach Fund** – gekennzeichnet nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert; setzt der Rumpf einen solchen Parameter nicht als erste Anweisung (bedingt, nach `Exit`, gelesen), steht die Hilfe nur im Menü, nicht in der Glühbirne. Dann nur über Menü oder Glühbirne, nie über Strg+Alt+F.
 
 | en | de | fr |
 |---|---|---|
 | `Replace "out" with "var" for %s` | `"out" für %s durch "var" ersetzen` | `Remplacer « out » par « var » pour %s` |
 
-**Platzhalter:** `%s` = der Parameter (der erste Name hinter `out`).
+**Platzhalter:** `%s` = die Parameter hinter `out` (`Header, Payload`).
 
 **Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.
 
 **Nicht angeboten**
 
 - untypisiertes `out` (`out Obj`), ein Prozedur- oder Methodentyp, eine anonyme Methode, `reference to`, ein Operator
-- die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include)
+- die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include außerhalb des Kopfs der Unit); bei einer lokalen Routine zählt nur ihre umschließende Routine
 - der Name steht im Code ohne Aufruf (`@Load`, `OnX := Load`) – als Methodenzeiger änderte sich sein Typ
 - `virtual`, `dynamic`, `abstract`, `override`, `final`, `message`, `dispid`, `overload`, eine Aufrufkonvention oder `external`
-- die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert Interfaces, oder sie ist die Methode eines interface-Typs
+- die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert ein Interface aus einer anderen Unit (oder eine Wurzel mit diesem Member), oder sie ist die Methode eines interface-Typs
 - der andere Kopf trägt das `out` nicht genauso (`out A, B: T` gegen `out A: T; out B: T`), die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel**
@@ -2232,13 +2233,14 @@ Nachher:
 
 **Platzhalter:** `%s` = der neue Name (etwa `DoWork`).
 
-**Wirkung:** Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt. Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).
+**Wirkung:** Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt; bei einer freien Routine in allen ihren Köpfen (Deklaration im interface-Teil bzw. `forward` und Rumpf). Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).
 
 **Nicht angeboten**
 
-- die Methode steht nicht im Rumpf einer Klasse dieser Datei: freie Routine (auch das Katalogbeispiel `procedure doStuff;`), record, Interface, Klasse in einem Include oder eine gemeldete Implementierung ohne Deklaration davor
+- die Methode steht im Rumpf eines anderen Typs (record, Interface), die Klasse in einem Include, oder eine gemeldete Implementierung hat keine Deklaration davor
+- eine freie Routine, die ein Linker, eine Bibliothek oder C-Code beim genauen Namen bindet (`external`, `export`, `public`, `alias`, `cdecl`/`stdcall` …, `{$L}`, `exports`, eine Direktive mit dem Namen), mehr als ein Paar Köpfe oder ein Name im Stil einer C- oder Plattform-API (`_`, ohne Großbuchstaben, `kFoo`)
 - `overload`, mehr als eine Deklaration in Klassen dieses Namens (`{$IFDEF}`-Zwillinge), keine oder mehr als eine Implementierung in der Datei (abstract, external, Include)
-- ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`)
+- ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`) – nicht als letztes Glied eines reinen Punktpfads (`'Unit.TFoo.doWork'`, eine Log-Kennung)
 - kein oder mehr als ein Kopf der Methode auf der Zeile, die Zeile ist verschoben oder die Deklaration schon anders geschrieben
 
 **Beispiel**
@@ -3716,13 +3718,14 @@ Nachher:
 
 **Platzhalter:** `%s` = die Routine.
 
-**Wirkung:** Löscht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` – samt lokaler Abschnitte und Routinen, der `///`-Doku- und Attributzeilen darüber, der Kommentarzeilen darüber, die die Routine beim Namen nennen, einer Leerzeile und einer `forward`-Deklaration. Bedeutungsgleich: die Hilfe prüft am Puffer neu, dass der Name sonst nirgends steht – nicht als Code (auch nicht in inaktiven Zweigen), in keinem String-Literal und in keiner Direktive.
+**Wirkung:** Löscht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` – samt lokaler Abschnitte und Routinen, der `///`-Doku- und Attributzeilen darüber, der Kommentarzeilen darüber, die die Routine beim Namen nennen, einer Leerzeile und einer `forward`-Deklaration. Bedeutungsgleich: die Hilfe prüft am Puffer neu, dass der Name sonst nirgends steht – nicht als Code (auch nicht in inaktiven Zweigen), in keinem String-Literal mit genau dieser Schreibweise und in keiner Direktive.
 
 **Nicht angeboten**
 
 - Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren
 - `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei, eine Direktive des JEDI-Präprozessors (`{$JPPEXPANDMACRO …}`, `(*$JPPLOOP …*)`) – die Datei ist ein Prototyp, Deklaration und Aufrufer erzeugen erst die Makros
-- `{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)
+- ein Include (außer im Kopf der Unit), das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau); mehr als 16 verschiedene Includes, wenn eines im implementation-Teil steht
+- die Unit heißt anders als ihre Datei (ein Skript oder eine Vorlage, etwa für den JvInterpreter)
 - eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`
 - ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt
 - zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)
