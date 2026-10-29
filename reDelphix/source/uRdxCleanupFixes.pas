@@ -42,7 +42,13 @@ unit uRdxCleanupFixes;
 // reicht der Kommentar ueber die Region hinaus, muss jede Zeile ausserhalb
 // leer oder eindeutig Code sein (CodePiece, strenger als der Detektor) -
 // dann geht der ganze Kommentar, sonst gibt es keine Hilfe (der Rest
-// bliebe als Torso stehen oder Prosa ginge mit).
+// bliebe als Torso stehen oder Prosa ginge mit). Seit der Fix-Runde 2 nach
+// dem Realworld-Test rwE30 (28 unnoetige Sperren) zaehlen dort auch ein
+// innerer Kommentar ('// IdentList', in '(* *)' ein '{ read X }' allein auf
+// der Zeile - ausser er sagt, woher der Code stammt oder warum er bleibt:
+// KEEP_WORDS), ein case-Zweig 'A:' unter 'case ... of' bzw. 'A: begin' und
+// ein Aufruf ohne ';' vor 'else' als Code; eine Prosazeile ohne
+// Kommentarzeichen sperrt weiter.
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach, statt dem Detektor zu
@@ -81,7 +87,9 @@ type
     // Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit
     // Code-Merkmal wie im Detektor. Geloescht werden immer ganze
     // Kommentare; reicht einer ueber die Region hinaus, nur wenn sein Text
-    // dort leer oder Code ist (CodePiece). Keine Hilfe bei einer Direktive
+    // dort leer oder Code ist (CodePiece; dazu innere Kommentare ohne
+    // Herkunfts-/Absichtswort, case-Zweige, ein Aufruf vor 'else' - s. Kopf
+    // der Unit). Keine Hilfe bei einer Direktive
     // im Bereich, einem Doku-Kommentar ('///', '{*', '(**', eine Zeile mit
     // fuehrendem '*' oder '<PRE>'), einem Kommentar vor dem ersten Code der
     // Datei (Lizenz-/Kopfkommentar) oder direkt hinter 'unit X;' (Doku der
@@ -222,6 +230,13 @@ const
   // SCA070: der Kopf einer Unit ('unit X;'), hinter dem ihre Doku steht.
   UNIT_HEADS: array[0..3] of string = ('unit', 'program', 'library',
     'package');
+  // SCA070, InnerComment: Woerter, mit denen ein Kommentar im
+  // auskommentierten Code sagt, woher er stammt oder warum er bleibt
+  // ('// reference implementation', '// Taken from ...', '// In case you
+  // use ...') - dann ist der Block dokumentiert, nicht vergessen.
+  KEEP_WORDS: array[0..15] of string = ('you', 'your', 'because',
+    'reference', 'example', 'sample', 'demo', 'keep', 'kept', 'taken', 'from',
+    'adapted', 'copied', 'see', 'note', 'why');
 
 type
   // SCA070: die Region der Meldung.
@@ -791,30 +806,44 @@ begin
     Result := LowerCase(Copy(S, i, MaxInt));
 end;
 
+// Der Code-Teil eines Kommentarstuecks: ohne Leerraum aussen, ohne einen
+// '//'-Kommentar dahinter und ohne ein '{' am Ende - das '{}'-Ende der
+// JVCL-Quellen ('...;Forward;{}': in einem '{ }' ist das innere '{' nur
+// Text; rwE30 JvThumbImage.pas:600).
+function CodeText(const APiece: string): string;
+var
+  P : Integer;
+begin
+  Result := Trim(APiece);
+  P := Pos('//', Result);
+  if P > 1 then
+    Result := TrimRight(Copy(Result, 1, P - 1));
+  if (Length(Result) > 1) and (Result[Length(Result)] = '{') then
+    Result := TrimRight(Copy(Result, 1, Length(Result) - 1));
+end;
+
 // Ist das Stueck eines Kommentars (ohne Begrenzer) leer oder eindeutig
 // Pascal-Code - so streng, dass Prosa es kaum trifft? Code ist: endet auf
-// ';' (ein '//' dahinter abgeschnitten), traegt ':=', ist eine Direktive
-// '{$...}' (in '(* *)' totgelegt) oder 'end.', ein Schluesselwort allein
-// (CODE_SOLO_WORDS) oder eine Steuerzeile (CODE_LEAD_WORDS ...
-// CODE_TAIL_WORDS: 'if X then', 'with Y do', 'end else begin'). Ein
-// '//'-Kommentar und ein '{ }' darin sind Prosa, ebenso eine Zeile, die auf
-// ',' oder ein anderes Wort endet ('CheckEquals', 'a,'). Anders als der
-// Detektor (zwei Merkmale, eines stark) prueft das nur Zeilen ausserhalb
-// des Funds; was hier nicht besteht, sperrt - der Detektor hat es nicht als
-// Code gemeldet.
+// ';' (ein '//' dahinter und ein '{' am Ende abgeschnitten, CodeText),
+// traegt ':=', ist eine Direktive '{$...}' (in '(* *)' totgelegt) oder
+// 'end.', ein Schluesselwort allein (CODE_SOLO_WORDS) oder eine Steuerzeile
+// (CODE_LEAD_WORDS ... CODE_TAIL_WORDS: 'if X then', 'with Y do', 'end else
+// begin'). Eine Zeile, die auf ',' oder ein anderes Wort endet
+// ('CheckEquals', 'a,'), ist es nicht. Anders als der Detektor (zwei
+// Merkmale, eines stark) prueft das nur Zeilen ausserhalb des Funds; was
+// hier nicht besteht, prueft NonCodeLine weiter (innerer Kommentar,
+// case-Zweig, Aufruf vor 'else') - sonst sperrt es: der Detektor hat es
+// nicht als Code gemeldet.
 function CodePiece(const APiece: string): Boolean;
 var
   S, W1 : string;
-  P     : Integer;
 begin
   S := Trim(APiece);
   if S = '' then
     Exit(True);
   if Copy(S, 1, 2) = '//' then
     Exit(False);
-  P := Pos('//', S);
-  if P > 0 then
-    S := TrimRight(Copy(S, 1, P - 1));
+  S := CodeText(S);
   if (S[Length(S)] = ';') or (Pos(':=', S) > 0) or SameText(S, 'end.') then
     Exit(True);
   if (Copy(S, 1, 2) = '{$') and (Pos('}', S) = Length(S)) then
@@ -828,23 +857,133 @@ begin
     and InList(LastWordOf(S), CODE_TAIL_WORDS);
 end;
 
+// Ein Kommentar im auskommentierten Code (S getrimmt): eine ganze
+// '//'-Zeile in einem '{ }'/'(* *)' bzw. in einem '(* *)' ein geschlossenes
+// '{ ... }' allein auf der Zeile (keine Direktive). Realworld-Test rwE30:
+// 18 von 28 unnoetigen Sperren - '// IdentList' (CnCodeFormatter.pas:3989),
+// '// The Gamebryo way' (ProcCheckForErrors.pas:884), '{ read
+// CurrencyString: string }' vor jeder Routine der JvInterpreter-Quellen.
+// Er gehoert zum toten Code und geht mit ihm; NonCodeLine wertet ihn weder
+// als Code noch als Prosa - ausser er traegt ein KEEP_WORDS-Wort
+// (KeepNote). Eine Prosazeile OHNE Kommentarzeichen sperrt weiter.
+function InnerComment(const AComment: TRdxComment; const S: string): Boolean;
+begin
+  if Copy(S, 1, 2) = '//' then
+    Exit(True);
+  Result := (AComment.CloserText = '*)') and (Copy(S, 1, 1) = '{')
+    and (Copy(S, 1, 2) <> '{$') and (Pos('}', S) = Length(S));
+end;
+
+// Sagt der innere Kommentar S, woher der Code stammt oder warum er bleibt
+// (KEEP_WORDS als Wort, ohne Gross-/Kleinschreibung)? rwE30: Img32.pas:1434
+// '// reference implementation' - der Autor hebt den Block bewusst auf.
+function KeepNote(const S: string): Boolean;
+var
+  LowS : string;
+  i    : Integer;
+begin
+  Result := False;
+  LowS := LowerCase(S);
+  for i := Low(KEEP_WORDS) to High(KEEP_WORDS) do
+    if HasAsciiWord(LowS, KEEP_WORDS[i]) then
+      Exit(True);
+end;
+
+// Ein case-Zweig 'A[, B]:' auf ALine (S = CodeText): mit Rest Code, wenn
+// der Rest CodePiece besteht ('{caImmed: begin', rwE30 DAsmUtil.pas:1062);
+// allein ('FS_NM_ACTION_ADD:', rwE30 ftpfunc.pas:1133) nur unter einem
+// 'case ... of' weiter oben im selben Kommentar - 'Note:' oder 'Usage:'
+// allein ist Prosa.
+function CaseLabel(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  i, Li : Integer;
+  Rest  : string;
+  T     : string;
+begin
+  Result := False;
+  i := 1;
+  repeat
+    if (i > Length(S)) or not IsIdentStart(S[i]) then
+      Exit;
+    while (i <= Length(S)) and IsIdentChar(S[i]) do
+      Inc(i);
+    i := SkipBlanks(S, i);
+    if (i > Length(S)) or (S[i] <> ',') then
+      Break;
+    i := SkipBlanks(S, i + 1);
+  until False;
+  if (i > Length(S)) or (S[i] <> ':') or (Copy(S, i + 1, 1) = '=') then
+    Exit;
+  Rest := Trim(Copy(S, i + 1, MaxInt));
+  if Rest <> '' then
+    Exit(CodePiece(Rest));
+  for Li := AComment.Body.Line to ALine - 1 do
+  begin
+    T := CodeText(PieceOn(AMap, AComment, Li, 1));
+    if (FirstWordOf(T) = 'case') and (LastWordOf(T) = 'of') then
+      Exit(True);
+  end;
+end;
+
+// Ein Aufruf ohne ';' vor einem 'else' auf ALine (S = CodeText): 'Name(...)'
+// bzw. 'A.B(...)', und die naechste nicht leere Zeile des Kommentars beginnt
+// mit 'else' und besteht CodePiece. rwE30: 'Match(Scaner.Token)'
+// (CnCodeFormatter.pas:4005), 'PutSFmt(...)' (DCURecs.pas:1772).
+function CallBeforeElse(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  i, Li : Integer;
+  T     : string;
+begin
+  Result := False;
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i <= Length(S))
+        and (IsIdentChar(S[i]) or CharInSet(S[i], ['.', '^'])) do
+    Inc(i);
+  i := SkipBlanks(S, i);
+  if (i > Length(S)) or (S[i] <> '(') or (S[Length(S)] <> ')') then
+    Exit;
+  for Li := ALine + 1 to AComment.CloseAt.Line do
+  begin
+    T := Trim(PieceOn(AMap, AComment, Li, 1));
+    if T <> '' then
+      Exit((FirstWordOf(T) = 'else') and CodePiece(T));
+  end;
+end;
+
 // Die erste Zeile von ALine1 bis ALine2, deren Text in AComment (ohne
-// Begrenzer) nicht CodePiece besteht; 0, wenn alle bestehen.
+// Begrenzer) weder CodePiece noch ein case-Zweig (CaseLabel) oder ein
+// Aufruf vor 'else' (CallBeforeElse) ist und kein innerer Kommentar
+// (InnerComment) ohne KeepNote; 0, wenn alle bestehen.
 function NonCodeLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
   ALine1, ALine2: Integer): Integer;
 var
   Li : Integer;
+  S  : string;
 begin
   Result := 0;
   for Li := ALine1 to ALine2 do
-    if not CodePiece(PieceOn(AMap, AComment, Li, 1)) then
+  begin
+    S := Trim(PieceOn(AMap, AComment, Li, 1));
+    if InnerComment(AComment, S) then
+    begin
+      if KeepNote(S) then
+        Exit(Li);
+    end
+    else if not CodePiece(S)
+       and not CaseLabel(AMap, AComment, Li, CodeText(S))
+       and not CallBeforeElse(AMap, AComment, Li, CodeText(S)) then
       Exit(Li);
+  end;
 end;
 
 // Was geloescht wird (s. Kopf): immer ganze Kommentare, vom Oeffner des
 // ersten bis hinter den Schliesser des letzten. Beginnt der erste vor R1
 // bzw. endet der letzte hinter R2, muss sein Text dort leer oder Code sein
-// (CodePiece) - sonst bliebe ein Torso stehen ('{ with X do }', '(*' /
+// (NonCodeLine) - sonst bliebe ein Torso stehen ('{ with X do }', '(*' /
 // 'break;*)') oder Prosa ginge mit: keine Hilfe. Bis zur Fix-Charge rwE29
 // blieb der Begrenzer dann stehen und nur die Region ging (KeepFront/
 // KeepBack). '' oder der Grund.

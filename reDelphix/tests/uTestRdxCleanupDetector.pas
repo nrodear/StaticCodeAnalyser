@@ -30,6 +30,7 @@ type
     [Test] procedure Sca070_BlockContent_RoundTrip;
     [Test] procedure Sca070_PartOfComment_NoHelp;
     [Test] procedure Sca070_PartOfComment_CodeWidens_RoundTrip;
+    [Test] procedure Sca070_InnerLineComment_RoundTrip;
     [Test] procedure Sca070_BehindCode_RoundTrip;
     [Test] procedure Sca070_HeaderComment_NoHelp;
     [Test] procedure Sca070_Todo_NoHelp;
@@ -136,6 +137,18 @@ begin
     FixAll(InProc(['  if A then begin', '    Foo;',
       '(*  end else if B then begin', '    Bar := 1;', '    Exit;*)',
       '  end;']), fkCommentedOutCode));
+end;
+
+procedure TTestRdxCleanupDetector.Sca070_InnerLineComment_RoundTrip;
+begin
+  // rwE30 MainFormU.pas:519 (Fix-Runde 2): die '//'-Zeile im '{ }' ohne
+  // starkes Merkmal meldet der Detektor nicht - bis dahin sperrte sie als
+  // "nicht eindeutig Code"; seitdem ist ein innerer Kommentar neutral, der
+  // ganze Kommentar geht.
+  Assert.AreEqual(InProc(['  Foo;']),
+    FixAll(InProc(['  {',
+      '  //if underlying field is not null, it is loaded as usual',
+      '  X := 1;', '  Y := 2;', '  }', '  Foo;']), fkCommentedOutCode));
 end;
 
 procedure TTestRdxCleanupDetector.Sca070_BehindCode_RoundTrip;
