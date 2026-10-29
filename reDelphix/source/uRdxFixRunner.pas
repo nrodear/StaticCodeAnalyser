@@ -133,7 +133,9 @@ type
       ALine: Integer): TRdxFixOutcome; static;
     // SCA168, zweiter Eintrag: else mit RAISE_UNHANDLED - aendert das
     // Verhalten; SysUtils kommt bei Bedarf mit (mit FPC-Weiche als
-    // Kurzname - FPC kennt EInvalidOpException ebenfalls).
+    // Kurzname - FPC kennt EInvalidOpException ebenfalls). Nur im Menue
+    // (MenuOnly), wenn nicht bewiesen ist, dass jeder Wert einen Arm hat
+    // (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3).
     class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -1184,17 +1186,23 @@ begin
 end;
 
 // SCA168: TRdxStructFixes.CaseElse mit AStatement ('' = leeres else).
+// AMenuReason: mit Anweisung der Grund, warum sie nur ins Menue kommt
+// (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); sonst ''.
 function CaseElseOutcome(APlaces: TSourcePlaces; ALines: TStrings;
-  ALine: Integer; const AStatement: string): TRdxFixOutcome;
+  ALine: Integer; const AStatement: string;
+  out AMenuReason: string): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
   Result := Default(TRdxFixOutcome);
+  AMenuReason := '';
   Map := OpenMapFor(APlaces, ALines, Result);
   if Map = nil then Exit;
   try
     Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
       Result.Edits, Result.Reason);
+    if Result.Enabled and (AStatement <> '') then
+      AMenuReason := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -1204,23 +1212,34 @@ end;
 
 class function TRdxFixRunner.CaseElseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer): TRdxFixOutcome;
+var
+  Unused : string;   // ohne Anweisung immer ''
 begin
-  Result := CaseElseOutcome(APlaces, ALines, ALine, '');
+  Result := CaseElseOutcome(APlaces, ALines, ALine, '', Unused);
 end;
 
 class function TRdxFixRunner.CaseRaiseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Menu : string;
 begin
   // Keine FPC-Sperre mehr: EInvalidOpException steht auch in SysUtils von
   // FPC 3.2.2, und AppendUses schreibt dort den Kurznamen (bis
   // 2026-10-22 sperrte die nie existierende Klasse EProgrammerError
   // die Variante in FPC-Dateien).
-  Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
+  Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED, Menu);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if not Result.Enabled then Exit;
-  Result.Hint := _(R_CASE_RAISE_HINT);
+  // Ohne Beweis, dass jeder Wert einen Arm hat, nur im Menue (rwE31
+  // Stufe 3, Todo_SCA168_2: vier Fehler in der Gluehbirne).
+  Result.MenuOnly := Menu <> '';
+  if Result.MenuOnly then
+    Result.Hint := _('not in the light bulb: %s; unhandled values raise '
+      + 'EInvalidOpException', [Menu])
+  else
+    Result.Hint := _(R_CASE_RAISE_HINT);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 

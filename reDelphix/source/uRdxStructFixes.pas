@@ -112,6 +112,21 @@ type
       const AStatement: string; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
 
+    // SCA168, raise-Variante (rwE31 Stufe 3: vier Fehler - das raise traf
+    // Werte ohne Arm, die dort Normalfall sind: aaFailed in abziptyp.pas,
+    // mDELETE in mormot.orm.mongodb.pas, oftID im aeusseren Arm von
+    // mormot.orm.core.pas): in die Gluehbirne nur, wenn die Arme des case
+    // auf ALine JEDEN Wert eines Aufzaehlungstyps nennen, den diese Datei
+    // deklariert ('T = (a, b, c)', ohne eigene Zahlen, genau einmal), oder
+    // False und True. Dann erreicht das else nur ein Wert ausserhalb des
+    // Typs, und raise sichert nur ab. Sonst - eine andere Marke als Namen,
+    // der Typ nicht in der Datei, ein Wert ohne Arm, eine Direktive im case
+    // oder in der Werteliste - der Grund, warum die Variante nur im Menue
+    // steht (TRdxFixOutcome.MenuOnly, uRdxFixRunner.CaseRaiseFix). Ruft der
+    // Aufrufer nach einem erfolgreichen CaseElse.
+    class function CaseRaiseMenuReason(AMap: TRdxCodeMap;
+      ALine: Integer): string; static;
+
     // SCA101: das then, else oder do, das an (ALine, ACol) beginnt - die
     // Spalte aus der Meldung.
     class function BranchKeywordAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
@@ -1227,6 +1242,258 @@ begin
     ArmLineOf(AMap, CaseTok, AMap.Raw(LastTok.Line)));
   AppendSemicolon(AMap, EndTok, AEdits);
   Result := True;
+end;
+
+// CaseRaiseMenuReason: die Marken der Arme des case ACase bis AEnd, wie
+// geschrieben - Namen ('aaNone'), qualifizierte Namen ('TFoo.A') und
+// Bereiche ('a..c'),
+// je Marke ein Eintrag. False, sobald eine Marke etwas anderes ist (Zahl,
+// Ausdruck, Schluesselwort); ein Zeichen oder String hinterlaesst eine
+// leere Marke (die Code-Sicht liest sie nicht als Token) - ebenso False.
+// Eine Marke beginnt hinter dem 'of' und hinter jedem ';' auf oberster Ebene
+// (Bloecke begin/case/try/asm/record..end und repeat..until, Klammern
+// zaehlen) und endet am ':'.
+function CaseLabels(AMap: TRdxCodeMap; const ACase, AEnd: TRdxToken;
+  out ALabels: TArray<string>): Boolean;
+var
+  T, P          : TRdxToken;
+  Depth, Paren  : Integer;
+  AtLabel       : Boolean;
+  Item          : string;
+begin
+  Result := False;
+  ALabels := nil;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and (T.Low <> 'of') do
+    T := After(AMap, T);
+  if T.Low = '' then Exit;
+  T := After(AMap, T);
+  Depth := 0;
+  Paren := 0;
+  AtLabel := True;
+  Item := '';
+  while (T.Low <> '') and not SameTok(T, AEnd) do
+  begin
+    P := Before(AMap, T);
+    if AtLabel then
+    begin
+      if (T.Low = ':') or (T.Low = ',') then
+      begin
+        if (Item = '') or (Item[1] = '.') or (Item[Length(Item)] = '.') then
+          Exit;
+        AddText(ALabels, Item);
+        Item := '';
+        AtLabel := T.Low = ',';
+      end
+      else if (T.Low = '.') or (T.Low = '..') then
+        Item := Item + T.Low
+      // Zwei Woerter ohne Punkt dazwischen sind kein Name.
+      else if T.IsWord and not IsKeyword(T.Low)
+         and ((Item = '') or (Item[Length(Item)] = '.')) then
+        Item := Item + TokText(AMap, T)
+      else
+        Exit;
+    end
+    else if IsKeywordAfter(T, P) and (IsEndOpener(T.Low) or (T.Low = 'repeat'))
+    then
+      Inc(Depth)
+    else if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
+      Dec(Depth)
+    else if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if (T.Low = ')') or (T.Low = ']') then
+      Dec(Paren)
+    else if (T.Low = ';') and (Depth = 0) and (Paren = 0) then
+      AtLabel := True;
+    T := After(AMap, T);
+  end;
+  Result := (T.Low <> '') and (Item = '') and (Length(ALabels) > 0);
+end;
+
+// Die Werteliste ab der '(' AOpen eines Aufzaehlungstyps, wie geschrieben:
+// nur Namen mit Kommas, mindestens zwei, keine eigene Zahl ('a = 1' - die
+// Werte dazwischen gehoerten zum Typ, haetten aber keinen Namen) und keine
+// Direktive in der Liste. False sonst.
+function ReadEnumValues(AMap: TRdxCodeMap; const AOpen: TRdxToken;
+  out AValues: TArray<string>): Boolean;
+var
+  T, N : TRdxToken;
+begin
+  Result := False;
+  AValues := nil;
+  T := After(AMap, AOpen);
+  while T.IsWord do
+  begin
+    AddText(AValues, TokText(AMap, T));
+    N := After(AMap, T);
+    if N.Low = ')' then
+      Exit((Length(AValues) >= 2)
+        and not DirectiveBetween(AMap, AOpen, N.Line, N.Col));
+    if N.Low <> ',' then Exit;
+    T := After(AMap, N);
+  end;
+end;
+
+// Der eine Aufzaehlungstyp der Datei ('Name = (a, b, ..)' hinter ';',
+// 'type' oder ']' - nicht 'X: array[..] of T = (..)', eine Konstante), dessen
+// Werte AValue nennen (Gross/klein egal): sein Name und seine Werte wie
+// geschrieben. False ohne Treffer und bei mehr als einem (zwei
+// Deklarationen in $IFDEF-Zweigen koennen verschiedene Werte haben).
+function EnumOf(AMap: TRdxCodeMap; const AValue: string; out ATypeName: string;
+  out AValues: TArray<string>): Boolean;
+var
+  T, Name : TRdxToken;
+  Vals    : TArray<string>;
+  V       : string;
+  Count   : Integer;
+begin
+  ATypeName := '';
+  AValues := nil;
+  Count := 0;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = '(') and (Before(AMap, T).Low = '=') then
+    begin
+      Name := Before(AMap, Before(AMap, T));
+      if Name.IsWord and InList(Before(AMap, Name).Low, [';', 'type', ']'])
+         and ReadEnumValues(AMap, T, Vals) then
+        for V in Vals do
+          if SameText(V, AValue) then
+          begin
+            Inc(Count);
+            ATypeName := TokText(AMap, Name);
+            AValues := Vals;
+            Break;
+          end;
+    end;
+    T := After(AMap, T);
+  end;
+  Result := Count = 1;
+end;
+
+// Der Wert einer Marke ohne den Typnamen davor ('TFoo.A' -> 'A', wenn
+// der Typ ATypeName heisst, Gross/klein egal); '' bei einem anderen
+// Praefix.
+function LabelValue(const AItem, ATypeName: string): string;
+var
+  p : Integer;
+begin
+  p := Pos('.', AItem);
+  if p = 0 then
+    Result := AItem
+  else if SameText(Copy(AItem, 1, p - 1), ATypeName) then
+    Result := Copy(AItem, p + 1, MaxInt)
+  else
+    Result := '';
+  if Pos('.', Result) > 0 then
+    Result := '';
+end;
+
+// Der Index von AName in AValues (Gross/klein egal); -1 ohne.
+function ValueIndex(const AValues: TArray<string>; const AName: string): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  if AName = '' then Exit;
+  for i := 0 to High(AValues) do
+    if SameText(AValues[i], AName) then
+      Exit(i);
+end;
+
+// Markiert in AHit die Werte der Marke AItem (ein Wert oder ein Bereich
+// 'a..c'). False, wenn ein Glied kein Wert des Typs ist.
+function MarkLabel(const AItem, ATypeName: string;
+  const AValues: TArray<string>; var AHit: TArray<Boolean>): Boolean;
+var
+  p, Lo, Hi, i : Integer;
+begin
+  p := Pos('..', AItem);
+  if p = 0 then
+  begin
+    Lo := ValueIndex(AValues, LabelValue(AItem, ATypeName));
+    Hi := Lo;
+  end
+  else
+  begin
+    Lo := ValueIndex(AValues, LabelValue(Copy(AItem, 1, p - 1), ATypeName));
+    Hi := ValueIndex(AValues, LabelValue(Copy(AItem, p + 2, MaxInt),
+      ATypeName));
+  end;
+  Result := (Lo >= 0) and (Hi >= Lo);
+  if Result then
+    for i := Lo to Hi do
+      AHit[i] := True;
+end;
+
+// Die Werte ohne Arm, hoechstens drei, dahinter ' ...'.
+function MissingValues(const AValues: TArray<string>;
+  const AHit: TArray<Boolean>): string;
+var
+  i, n : Integer;
+begin
+  Result := '';
+  n := 0;
+  for i := 0 to High(AValues) do
+    if not AHit[i] then
+    begin
+      Inc(n);
+      if n > 3 then
+        Exit(Result + ' ...');
+      if Result <> '' then
+        Result := Result + ', ';
+      Result := Result + AValues[i];
+    end;
+end;
+
+class function TRdxStructFixes.CaseRaiseMenuReason(AMap: TRdxCodeMap;
+  ALine: Integer): string;
+var
+  CaseTok, EndTok, LastTok : TRdxToken;
+  Labels, Values           : TArray<string>;
+  Hit                      : TArray<Boolean>;
+  TypeName, First, Item    : string;
+  Missing                  : string;
+begin
+  Result := CaseTokenOn(AMap, ALine, CaseTok);
+  if Result = '' then
+    Result := MatchingEnd(AMap, CaseTok, EndTok, LastTok);
+  if Result <> '' then Exit;
+  // Ein bedingter Arm oder eine bedingte Marke: welche Werte einen Arm
+  // haben, haengt vom Zweig ab.
+  if DirectiveBefore(AMap, CaseTok.Line, EndTok) then
+    Exit(_('compiler directive in the case - which values have an arm is not '
+      + 'provable'));
+  if not CaseLabels(AMap, CaseTok, EndTok, Labels) then
+    Exit(_('the arm labels are not all names of one enumeration - whether the '
+      + 'values without an arm occur normally is not provable'));
+  // Der Typ nach der ersten Marke: ihr erstes Glied ohne Typnamen
+  // ('TFoo.A' -> 'A', 'a..c' -> 'a').
+  First := Labels[0];
+  if Pos('..', First) > 0 then
+    First := Copy(First, 1, Pos('..', First) - 1);
+  if Pos('.', First) > 0 then
+    First := Copy(First, Pos('.', First) + 1, MaxInt);
+  if SameText(First, 'False') or SameText(First, 'True') then
+  begin
+    TypeName := 'Boolean';
+    Values := nil;
+    AddText(Values, 'False');
+    AddText(Values, 'True');
+  end
+  else if not EnumOf(AMap, First, TypeName, Values) then
+    Exit(_('the enumeration of %s is not declared in this file - whether its '
+      + 'values without an arm occur normally is not provable', [First]));
+  SetLength(Hit, Length(Values));
+  for Item in Labels do
+    if not MarkLabel(Item, TypeName, Values, Hit) then
+      Exit(_('the arm labels are not all names of one enumeration - whether '
+        + 'the values without an arm occur normally is not provable'));
+  Missing := MissingValues(Values, Hit);
+  if Missing <> '' then
+    Result := _('values of %s without an arm: %s - they may be normal here, '
+      + 'and raise would break that path', [TypeName, Missing]);
 end;
 
 { ---- SCA101 / SCA099 ---- }

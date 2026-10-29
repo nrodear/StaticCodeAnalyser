@@ -145,6 +145,9 @@ type
     // rwE29: die uses-Ergaenzung der raise-Variante liest auch den Text
     // (der Baum verlor Eintraege hinter 'X.Abstract', ein Zweig fehlte).
     [Test] procedure Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
+    // rwE31 Stufe 3 (Todo_SCA168_2, vier Fehler): raise in der Gluehbirne
+    // nur, wenn jeder Wert des Typs einen Arm hat - sonst nur im Menue.
+    [Test] procedure Sca168_Raise_MenuOnlyWithoutProof;
     [Test] procedure PlanUses_UnitOnlyInConditionalBranch_Refused;
     [Test] procedure PlanUses_SectionInConditionalBranch_Refused;
     // rwE30 Stufe 2 (21 Fehler, Nico 2026-10-29): Bezeichner ohne Quelle -
@@ -1442,6 +1445,37 @@ begin
   After := Apply(Src, O.Edits);
   Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
   Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+end;
+
+// rwE31 Stufe 3 (doublecmd abziptyp.pas:2343, minimiert): aaFailed hat
+// keinen Arm und ist ein erwarteter Wert - raise braeche das Speichern des
+// Archivs. Bis dahin stand die Variante in der Gluehbirne (MenuOnly False,
+// rot ohne Fix). Gegenprobe: jeder Wert hat einen Arm.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_MenuOnlyWithoutProof;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;', 'type',
+    '  TAbArchiveAction = (aaFailed, aaNone, aaDelete);', 'implementation',
+    'procedure P(A: TAbArchiveAction);', 'begin', '  case A of',
+    '    aaNone: Exit;', '    aaDelete: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('aaFailed', O.Hint) > 0, O.Hint);
+  // Gegenprobe: jeder Wert hat einen Arm - Gluehbirne.
+  Src := StringReplace(Src, '    aaDelete: Exit;', '    aaDelete, aaFailed: Exit;',
+    []);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
 end;
 
 // PlanUses auf einer Quelle in der Ein-Zweig-Sicht mit MSWINDOWS (RDX_X
