@@ -189,7 +189,7 @@ implementation
 
 uses
   System.SysUtils,
-  System.StrUtils,   // IndexText (UnitStillUsed)
+  System.Generics.Collections,   // TDictionary (UnitStillUsed)
   uRefactorInfo,     // TRefactorSpan (FindUsesEntry)
   uRdxRecipes,       // TRdxRecipes (IsPlainIdent, HasUnit)
   uRdxBlocks,        // TRdxBlocks.FindClassHeads/HeritageOf (OtaFreeAncestor)
@@ -1004,10 +1004,15 @@ end;
 // selbst zaehlen nicht: 'uses mormot.core.os, mormot.core.os.security;'
 // las das 'os' '.' des Geschwister-Eintrags als Bezug und sperrte die
 // Hilfe mit "wird im Text benutzt" (Wochen-Review 2026-10-21).
+// Die Bezeichner stehen einmal in einem TDictionary (Schluessel klein wie
+// T.Low): bis 2026-10-29 suchte IndexText je Token linear in der Liste -
+// seit d/SCA007Export hat eine Unit bis ueber 500 Eintraege.
 function UnitStillUsed(AMap: TRdxCodeMap; const AUnit: string): Boolean;
 var
   Low, Short : string;
   Idents     : TArray<string>;
+  Known      : TDictionary<string, Boolean>;
+  Id         : string;
   T, N, P    : TRdxToken;
   InUses     : Boolean;
 begin
@@ -1017,21 +1022,28 @@ begin
   Idents := TUnusedUsesDetector.KnownIdents(Low);
   if (Length(Idents) = 0) and TUnusedUsesDetector.IstRtlNamespace(Low) then
     Idents := TUnusedUsesDetector.KnownIdents(Short);
-  P := Default(TRdxToken);
-  InUses := False;
-  T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
-  begin
-    N := After(AMap, T);
-    if InUses then
-      InUses := T.Low <> ';'
-    else if (T.Low = 'uses') and IsKeywordAfter(T, P) then
-      InUses := True
-    else if ((T.Low = Short) and (N.Low = '.'))
-       or (IndexText(T.Low, Idents) >= 0) then
-      Exit(True);
-    P := T;
-    T := N;
+  Known := TDictionary<string, Boolean>.Create(Length(Idents));
+  try
+    for Id in Idents do
+      Known.AddOrSetValue(LowerCase(Id), True);
+    P := Default(TRdxToken);
+    InUses := False;
+    T := NextToken(AMap, 1, 1);
+    while T.Low <> '' do
+    begin
+      N := After(AMap, T);
+      if InUses then
+        InUses := T.Low <> ';'
+      else if (T.Low = 'uses') and IsKeywordAfter(T, P) then
+        InUses := True
+      else if ((T.Low = Short) and (N.Low = '.'))
+         or Known.ContainsKey(T.Low) then
+        Exit(True);
+      P := T;
+      T := N;
+    end;
+  finally
+    Known.Free;
   end;
 end;
 
