@@ -2091,6 +2091,9 @@ const
   USES_IN_WORD = 'in';
   PAREN_OPEN   = '(*';
   PAREN_CLOSE  = '*)';
+  // Abgeschaltete Direktiven (WithoutDisabledDirectives, rwE32 Stufe 4).
+  DISABLED_BRACE = '{.$';
+  DISABLED_PAREN = '(*.$';
 
 class function TRdxRecipes.UsesNameFor(const AUnitNames: TArray<string>;
   const AShortName, AQualifiedName: string): string;
@@ -2113,6 +2116,36 @@ begin
     and InList(LowerCase(Copy(AName, 1, P - 1)), RTL_SCOPE_PREFIXES);
 end;
 
+// ASqueezed (Squeezed) ohne abgeschaltete Direktiven: '{.$' bis zum
+// naechsten '}', '(*.$' bis zum naechsten '*)' (ohne Schliesser bis zum
+// Zeilenende) - fuer LineLooksFpcAware.
+function WithoutDisabledDirectives(const ASqueezed: string): string;
+var
+  P, Q : Integer;
+begin
+  Result := ASqueezed;
+  P := Pos(DISABLED_BRACE, Result);
+  while P > 0 do
+  begin
+    Q := Pos('}', Result, P);
+    if Q = 0 then
+      Q := Length(Result);
+    Delete(Result, P, Q - P + 1);
+    P := Pos(DISABLED_BRACE, Result);
+  end;
+  P := Pos(DISABLED_PAREN, Result);
+  while P > 0 do
+  begin
+    Q := Pos(PAREN_CLOSE, Result, P);
+    if Q = 0 then
+      Q := Length(Result)
+    else
+      Q := Q + Length(PAREN_CLOSE) - 1;
+    Delete(Result, P, Q - P + 1);
+    P := Pos(DISABLED_PAREN, Result);
+  end;
+end;
+
 // Bis zur Folgewelle des Wochen-Reviews (G01-08) verlangte diese Fassung
 // ein '$' auf der Zeile, die Kopie in uRdxIntroPlan nicht; seitdem gilt
 // die vorsichtigere: auch eine Zeile ohne '$' zaehlt - die Folgezeile einer
@@ -2120,6 +2153,11 @@ end;
 // eine Weiche, ein Kommentar '// defined(FPC)' macht nur vorsichtig
 // (Kurzname bzw. keine Hilfe), nie falsch. Schnelltest: jede Spur traegt
 // ein '$' oder ein 'f' (defined(fpc, fpc_fullversion).
+// Seit rwE32 Stufe 4 zaehlt eine abgeschaltete Direktive nicht: '{.$IFNDEF
+// FPC}' (der Punkt macht sie zum Kommentar - die uebliche Art, eine
+// Direktive stillzulegen) ist keine Weiche (jcl JclSysInfo.pas:240 - bis
+// dahin nannte SCA128.2 diese Zeile als FPC-Beleg statt Zeile 1457).
+// Ohne '{$' davor ein Kommentar wie '// defined(FPC)' bleibt vorsichtig.
 class function TRdxRecipes.LineLooksFpcAware(const ALine: string): Boolean;
 var
   S : string;
@@ -2130,6 +2168,7 @@ begin
      and (Pos('F', ALine) = 0) then
     Exit;
   S := Squeezed(ALine);   // uRdxCodeMap: ohne Leerzeichen und Tabs, klein
+  S := WithoutDisabledDirectives(S);
   for i := Low(FPC_TELLS) to High(FPC_TELLS) do
     if Pos(FPC_TELLS[i], S) > 0 then
       Exit(True);
