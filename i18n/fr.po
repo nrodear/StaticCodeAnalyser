@@ -7036,3 +7036,11 @@ msgstr "la ligne %d évalue %s avec %s, que la ligne %d écrit avec %s sans TFor
 
 msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
 msgstr "la ligne %d évalue %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"
+
+# reDelphix HilfeFix P (rwE32 Stufe 4: uRdxFloatEqualityFix SCA144 Delphi 6, uRdxMagicFixes Kit-Include der Ausnahmeklassen)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"
+msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - %s n'existe dans Math que depuis Delphi 6"
+
+msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
+msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented n'existent qu'à partir de Delphi 2009"

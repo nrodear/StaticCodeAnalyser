@@ -7040,3 +7040,11 @@ msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormat
 
 msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
 msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
+
+# reDelphix HilfeFix P (rwE32 Stufe 4: uRdxFloatEqualityFix SCA144 Delphi 6, uRdxMagicFixes Kit-Include der Ausnahmeklassen)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in Math erst ab Delphi 6"
+
+msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"

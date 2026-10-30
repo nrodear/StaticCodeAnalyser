@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7042 Zeilen, 332571 Bytes
-  CPoLines_de: array[0..7041] of string = (
+  // i18n\de.po - 7050 Zeilen, 333234 Bytes
+  CPoLines_de: array[0..7049] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7056,7 +7056,15 @@ const
     'msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormatSettings.Invariant schreibt - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"',
     '',
     'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
-    'msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"'
+    'msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"',
+    '',
+    '# reDelphix HilfeFix P (rwE32 Stufe 4: uRdxFloatEqualityFix SCA144 Delphi 6, uRdxMagicFixes Kit-Include der Ausnahmeklassen)',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"',
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in Math erst ab Delphi 6"',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"',
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7331,8 +7339,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
-  CPoLines_fr: array[0..7037] of string = (
+  // i18n\fr.po - 7046 Zeilen, 346644 Bytes
+  CPoLines_fr: array[0..7045] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14370,7 +14378,15 @@ const
     'msgstr "la ligne %d '#$00E9'value %s avec %s, que la ligne %d '#$00E9'crit avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"',
     '',
     'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
-    'msgstr "la ligne %d '#$00E9'value %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"'
+    'msgstr "la ligne %d '#$00E9'value %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"',
+    '',
+    '# reDelphix HilfeFix P (rwE32 Stufe 4: uRdxFloatEqualityFix SCA144 Delphi 6, uRdxMagicFixes Kit-Include der Ausnahmeklassen)',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"',
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans Math que depuis Delphi 6"',
+    '',
+    'msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"',
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - les classes d''exception EArgumentException, EInvalidOpException et ENotImplemented n''existent qu'''#$00E0' partir de Delphi 2009"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
