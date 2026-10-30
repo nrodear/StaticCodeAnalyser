@@ -529,7 +529,7 @@ msgstr ""
 msgid "%s appears in line %d other than as \"%s.Member\" - assigned, passed on, declared or reached through another object"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1090
+#: reDelphix/source/uRdxFixRunner.pas:1096
 msgid "%s appears more than once on line %d"
 msgstr ""
 
@@ -607,7 +607,7 @@ msgstr ""
 msgid "%s in line %d writes Result (inactive branch?) - the detector did not see it, the finding is doubtful; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1423
+#: reDelphix/source/uRdxFixRunner.pas:1444
 msgid "%s in the condition is not proven as Boolean here - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -653,7 +653,7 @@ msgstr ""
 msgid "%s is a variable (procedural type) - only () calls it safely"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1360
+#: reDelphix/source/uRdxFixRunner.pas:1381
 msgid "%s is already declared as %s - the cast changes nothing"
 msgstr ""
 
@@ -682,7 +682,7 @@ msgstr ""
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1329
+#: reDelphix/source/uRdxFixRunner.pas:1350
 msgid "%s is declared as %s, not as %s - another type can hide Free, or the cast is needed to compile"
 msgstr ""
 
@@ -698,7 +698,7 @@ msgstr ""
 msgid "%s is declared as a property in this unit - if the call means it, it is not proven whether Delphi calls a property of procedural type without ()"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1447
+#: reDelphix/source/uRdxFixRunner.pas:1468
 msgid "%s is declared as a property in this unit - the assignment may call a setter"
 msgstr ""
 
@@ -757,7 +757,7 @@ msgstr ""
 msgid "%s is no longer at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1087
+#: reDelphix/source/uRdxFixRunner.pas:1093
 msgid "%s is no longer on line %d of a uses clause"
 msgstr ""
 
@@ -765,7 +765,7 @@ msgstr ""
 msgid "%s is not a local variable of the routine (field, global variable, parameter) - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1320
+#: reDelphix/source/uRdxFixRunner.pas:1341
 msgid "%s is not a plain identifier - its type cannot be checked"
 msgstr ""
 
@@ -790,7 +790,7 @@ msgid "%s is not declared directly in class %s"
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:370
-#: reDelphix/source/uRdxFixRunner.pas:1454
+#: reDelphix/source/uRdxFixRunner.pas:1475
 msgid "%s is not known as a variable here (property or field from another unit?)"
 msgstr ""
 
@@ -807,7 +807,7 @@ msgstr ""
 msgid "%s is not proven Integer or Cardinal here (type: %s) - the cast could change the computation or not compile"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1413
+#: reDelphix/source/uRdxFixRunner.pas:1434
 msgid "%s is not proven as Boolean here (type: %s) - with Variant %s would get the value of the condition instead of True/False"
 msgstr ""
 
@@ -861,7 +861,7 @@ msgstr ""
 msgid "%s is used in line %d not as a call - possibly as a method pointer (\"of object\")"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1157
+#: reDelphix/source/uRdxFixRunner.pas:1165
 msgid "%s is used in the text"
 msgstr ""
 
@@ -4157,7 +4157,7 @@ msgstr ""
 msgid "a block comment starts after the unit line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1389
+#: reDelphix/source/uRdxFixRunner.pas:1410
 msgid "a call raises ENotImplemented instead of doing nothing"
 msgstr ""
 
@@ -5218,7 +5218,7 @@ msgstr ""
 msgid "header without return type, not a method - the quick fix does not read the declaration; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1181
+#: reDelphix/source/uRdxFixRunner.pas:1202
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr ""
 
@@ -5419,7 +5419,7 @@ msgstr ""
 msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1504
+#: reDelphix/source/uRdxFixRunner.pas:1525
 msgid "line %d is ambiguous (%d statements with a nil comparison)"
 msgstr ""
 
@@ -6150,7 +6150,7 @@ msgstr ""
 msgid "no statement starts the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1501
+#: reDelphix/source/uRdxFixRunner.pas:1522
 msgid "no statement with a nil comparison starts on line %d"
 msgstr ""
 
@@ -6245,11 +6245,15 @@ msgstr ""
 msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1264
+#: reDelphix/source/uRdxFixRunner.pas:1195
+msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the other units of that branch are unknown, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr ""
+
+#: reDelphix/source/uRdxFixRunner.pas:1285
 msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1188
+#: reDelphix/source/uRdxFixRunner.pas:1209
 msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr ""
 
@@ -7428,7 +7432,7 @@ msgstr ""
 msgid "the condition is always False - the branch never ran; whether \"= 0\" was meant is for a human to decide"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1419
+#: reDelphix/source/uRdxFixRunner.pas:1440
 msgid "the condition is not proven as Boolean (a call, a path or arithmetic as operand) - with a Variant \"not\" would be bitwise"
 msgstr ""
 
@@ -8880,7 +8884,7 @@ msgstr ""
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1444
+#: reDelphix/source/uRdxFixRunner.pas:1465
 msgid "the target is missing"
 msgstr ""
 
@@ -8935,7 +8939,7 @@ msgstr ""
 msgid "the type is not proven - an array needs High(), a string has to run from 1"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1160
+#: reDelphix/source/uRdxFixRunner.pas:1168
 msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"
 msgstr ""
 
@@ -9032,7 +9036,7 @@ msgstr ""
 msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1531
+#: reDelphix/source/uRdxFixRunner.pas:1552
 msgid "type of %s unknown - for a function or method pointer '= nil' calls it, Assigned() does not"
 msgstr ""
 
@@ -9044,7 +9048,7 @@ msgstr ""
 msgid "type of %s unknown - if it is procedural, Delphi reads the name without () as a pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1326
+#: reDelphix/source/uRdxFixRunner.pas:1347
 msgid "type of %s unknown - only a cast to its own type is provably without effect"
 msgstr ""
 
@@ -9077,7 +9081,7 @@ msgstr ""
 msgid "unexpected code after the empty block"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1267
+#: reDelphix/source/uRdxFixRunner.pas:1288
 msgid "unhandled values raise EInvalidOpException"
 msgstr ""
 
@@ -9086,7 +9090,7 @@ msgid "unit without an implementation part (script?) - only the compiler knows %
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:963
-#: reDelphix/source/uRdxFixRunner.pas:1412
+#: reDelphix/source/uRdxFixRunner.pas:1433
 #: reDelphix/source/uRdxIntegerOverflowFix.pas:231
 msgid "unknown"
 msgstr ""
@@ -9149,7 +9153,7 @@ msgstr ""
 msgid "whitespace only"
 msgstr ""
 
-#: reDelphix/source/uRdxFixRunner.pas:1581
+#: reDelphix/source/uRdxFixRunner.pas:1602
 msgid "with statement - an operand could be a member of the with expression"
 msgstr ""
 
@@ -9169,9 +9173,9 @@ msgstr ""
 #: reDelphix/source/uRdxFixRunner.pas:666
 #: reDelphix/source/uRdxFixRunner.pas:877
 #: reDelphix/source/uRdxFixRunner.pas:956
-#: reDelphix/source/uRdxFixRunner.pas:1323
-#: reDelphix/source/uRdxFixRunner.pas:1407
-#: reDelphix/source/uRdxFixRunner.pas:1441
+#: reDelphix/source/uRdxFixRunner.pas:1344
+#: reDelphix/source/uRdxFixRunner.pas:1428
+#: reDelphix/source/uRdxFixRunner.pas:1462
 msgid "with statement in the routine - %s could be a member"
 msgstr ""
 

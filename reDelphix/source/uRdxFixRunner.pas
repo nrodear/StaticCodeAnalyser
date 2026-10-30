@@ -1058,10 +1058,12 @@ end;
 // SCA007: die Klausel und der Eintrag zum Unit-Namen AUnit auf ALine.
 // Liefert der Dienst ihn nicht, liest ihn der Text (rwE31 Stufe 3: ein
 // Eintrag im Zweig eines Defines aus einer Include-Datei,
-// TRdxStructFixes.TextUsesEntry). '' oder der Grund.
+// TRdxStructFixes.TextUsesEntry). '' oder der Grund. AFromText: der Eintrag
+// kam aus dem Text - der Dienst hat seinen Zweig nicht geparst
+// (UnusedUsesFix: Beweis unvollstaendig, nur im Menue).
 function FindUsesEntry(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
   ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
-  out AIndex: Integer): string;
+  out AIndex: Integer; out AFromText: Boolean): string;
 var
   Clauses : TArray<TArray<TRefactorSpan>>;
   c, k, n : Integer;
@@ -1069,6 +1071,7 @@ begin
   Result := '';
   AClause := Default(TRdxUsesClause);
   AIndex := -1;
+  AFromText := False;
   n := 0;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
@@ -1082,7 +1085,10 @@ begin
         AIndex := k;
       end;
   if n = 0 then
+  begin
     n := TRdxStructFixes.TextUsesEntry(AMap, ALine, AUnit, AClause, AIndex);
+    AFromText := n > 0;
+  end;
   if n = 0 then
     Result := MsgMovedSuffix(_('%s is no longer on line %d of a uses clause',
       [AUnit, ALine]))
@@ -1128,12 +1134,14 @@ var
   Index       : Integer;
   Foreign     : string;
   ForeignLine : Integer;
+  FromText    : Boolean;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
   Index := -1;
   Foreign := '';
   ForeignLine := 0;
+  FromText := False;
   // Direktiven in den uses-Klauseln sperren nicht mehr die ganze Datei
   // (rwE30 Stufe 2: 19 unnoetige Sperren - Direktive in der anderen Klausel,
   // vor 'uses', um andere Eintraege, Eintrag mitten in einem Zweig). Was
@@ -1150,7 +1158,7 @@ begin
   Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Reason := FindUsesEntry(APlaces, Map, ALine, Result.Name, Clause,
-      Index);
+      Index, FromText);
     if Result.Reason = '' then
     begin
       if UnitStillUsed(Map, Result.Name) then
@@ -1177,7 +1185,20 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  if Foreign = '' then
+  if (Foreign = '') and FromText then
+  begin
+    // Der Eintrag kam aus dem Text (Zweig, den der Dienst nicht geparst
+    // hat): die anderen Units fuer den Bezeichner-Beweis (OtherUnitsIdents)
+    // stammen aus dem ANDEREN Zweig - der Beweis ist nicht vollstaendig,
+    // nur im Menue (Nico-Entscheid SCA007, Nachzug Review e/HilfeFixM).
+    Result.MenuOnly := True;
+    Result.Hint := _('not in the light bulb: %s stands in a branch of the '
+      + 'uses clause that the IDE did not parse - the other units of that '
+      + 'branch are unknown, the identifier proof is incomplete; compile '
+      + 'afterwards; if %s has an initialization section (registration), it '
+      + 'no longer runs', [Result.Name, Result.Name]);
+  end
+  else if Foreign = '' then
     Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
       + 'initialization section (registration), it no longer runs',
       [Result.Name])

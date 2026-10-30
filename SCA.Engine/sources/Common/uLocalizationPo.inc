@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7039 Zeilen, 332004 Bytes
-  CPoLines_de: array[0..7038] of string = (
+  // i18n\de.po - 7042 Zeilen, 332571 Bytes
+  CPoLines_de: array[0..7041] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -5384,6 +5384,9 @@ const
     'msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "nicht in der Gl'#$00FC'hbirne: die Datei nutzt %s (Zeile %d), das die Hilfe keiner anderen Unit der uses-Klauseln zuordnen kann - es kann aus %s kommen; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), l'#$00E4'uft er nicht mehr"',
     '',
+    'msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the other units of that branch are unknown, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
+    'msgstr "nicht in der Gl'#$00FC'hbirne: %s steht in einem Zweig der uses-Klausel, den die IDE nicht geparst hat - die '#$00FC'brigen Units dieses Zweigs sind unbekannt, der Bezeichner-Beweis ist unvollst'#$00E4'ndig; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), l'#$00E4'uft er nicht mehr"',
+    '',
     'msgid "the target is a Variant - behind ''X +'' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"',
     'msgstr "Ziel ist ein Variant - hinter ''X +'' rechnet Delphi Variant-Arithmetik statt zu verketten, das Kompilat b'#$00FC'rgt f'#$00FC'r keinen Operanden"',
     '',
@@ -7328,8 +7331,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7035 Zeilen, 345379 Bytes
-  CPoLines_fr: array[0..7034] of string = (
+  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
+  CPoLines_fr: array[0..7037] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -12694,6 +12697,9 @@ const
     '',
     'msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
     'msgstr "pas dans l''ampoule : le fichier utilise %s (ligne %d), que le Quick-Fix ne peut attribuer '#$00E0' aucune autre unit'#$00E9' des clauses uses - il peut venir de %s ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s''ex'#$00E9'cute plus"',
+    '',
+    'msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the other units of that branch are unknown, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"',
+    'msgstr "pas dans l''ampoule : %s se trouve dans une branche de la clause uses que l''IDE n''a pas analys'#$00E9'e - les autres unit'#$00E9's de cette branche sont inconnues, la preuve des identificateurs est incompl'#$00E8'te ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s''ex'#$00E9'cute plus"',
     '',
     'msgid "the target is a Variant - behind ''X +'' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"',
     'msgstr "la cible est un Variant - apr'#$00E8's ''X +'' Delphi calcule une arithm'#$00E9'tique Variant au lieu de concat'#$00E9'ner, le compilateur ne garantit aucun op'#$00E9'rande"',

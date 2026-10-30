@@ -963,6 +963,28 @@ begin
     '  {$ELSE}', '  SysUtils, Variants, Classes,', '  {$ENDIF}',
     '  System.Math;', 'type', '  TFoo = class(TComponent)', '  end;',
     'implementation', 'end.']), Apply(Src, E.Action.Edits));
+  // Nachzug Review e/HilfeFixM (Nico-Entscheid SCA007 "nur Menue bei
+  // unvollstaendigem Beweis"): der Eintrag kam aus dem Text, die anderen
+  // Units des Beweises (TComponent -> Classes) aus dem {$ELSE}-Zweig - nur
+  // im Menue. Ohne den Nachzug stand die Hilfe in der Gluehbirne (fakFix).
+  Assert.IsTrue(E.Kind = fakRefactor, 'nur im Menue: ' + E.Hint);
+  Assert.IsTrue(Pos(_('not in the light bulb: %s stands in a branch of the '
+    + 'uses clause that the IDE did not parse - the other units of that '
+    + 'branch are unknown, the identifier proof is incomplete; compile '
+    + 'afterwards; if %s has an initialization section (registration), it '
+    + 'no longer runs', ['System.Variants', 'System.Variants']), E.Hint) > 0,
+    E.Hint);
+  // Gegenprobe: 'Variants' im geparsten {$ELSE}-Zweig liefert der Dienst -
+  // der Beweis ist vollstaendig, Gluehbirne.
+  E := SimpleEntryOf(Src, 'Variants', 7);
+  Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
+  Assert.IsTrue(E.Kind = fakFix, 'Gluehbirne: ' + E.Hint);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF DELPHI16_UP}',
+    '  System.SysUtils, System.Variants, System.Classes,', '  {$ELSE}',
+    '  SysUtils, Classes,', '  {$ENDIF}', '  System.Math;', 'type',
+    '  TFoo = class(TComponent)', '  end;', 'implementation', 'end.']),
+    Apply(Src, E.Action.Edits));
   // Gegenprobe: der letzte Eintrag des Zweigs vor {$ELSE} - geloescht
   // wuerde bis zum naechsten Eintrag im {$ELSE}-Zweig, ueber die Direktive.
   Src := Join(['unit t;', 'interface', 'uses',

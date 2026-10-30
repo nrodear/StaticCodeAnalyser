@@ -5363,6 +5363,9 @@ msgstr "l'unité ne contient que des clauses uses - elles sont sa raison d'être
 msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr "pas dans l'ampoule : le fichier utilise %s (ligne %d), que le Quick-Fix ne peut attribuer à aucune autre unité des clauses uses - il peut venir de %s ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
 
+msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the other units of that branch are unknown, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "pas dans l'ampoule : %s se trouve dans une branche de la clause uses que l'IDE n'a pas analysée - les autres unités de cette branche sont inconnues, la preuve des identificateurs est incomplète ; compilez ensuite ; si %s a une section initialization (enregistrement), elle ne s'exécute plus"
+
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr "la cible est un Variant - après 'X +' Delphi calcule une arithmétique Variant au lieu de concaténer, le compilateur ne garantit aucun opérande"
 
