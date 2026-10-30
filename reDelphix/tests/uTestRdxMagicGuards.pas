@@ -51,6 +51,12 @@ type
     [Test] procedure Disk_KitIncludeModernProject_Refutes;
     [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
     [Test] procedure Disk_MainWayIncludeSwitch_M1b;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Disk_FpcOnlyProgram_NoDelphiEvidence;
+    [Test] procedure Disk_ExceptionClasses_FpcVersionNoEvidence;
+    [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
+    [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
+    [Test] procedure Traces_FpcVerSymbols;
   end;
 
 implementation
@@ -58,6 +64,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
+  uRdxCompilerTraces, // FLOOR_*, ModernProof, OldCompilerTrace (rwE32 Stufe 4)
   uRdxText,          // SetRdxLanguageOverride, MsgByHand
   uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
@@ -987,6 +994,265 @@ begin
   finally
     RemoveTree(Tr.Root);
   end;
+end;
+
+{ ---- Realworld-Test rwE32 Stufe 4 ---- }
+
+procedure TTestRdxMagicGuards.Disk_FpcOnlyProgram_NoDelphiEvidence;
+const
+  LPI_FMT = '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 + '<CONFIG>'
+    + #13#10 + '  <ProjectOptions>' + #13#10 + '    <Units>' + #13#10
+    + '      <Unit>' + #13#10 + '        <Filename Value="%s"/>' + #13#10
+    + '        <IsPartOfProject Value="True"/>' + #13#10 + '      </Unit>'
+    + #13#10 + '    </Units>' + #13#10 + '  </ProjectOptions>' + #13#10
+    + '</CONFIG>';
+var
+  T : TTree;
+begin
+  // doublecmd plugins\wdx\deb_wdx\src: deb_wdx.dpr ist die Hauptdatei von
+  // deb_wdx.lpi (dpkg_deb.pas:110/192/251, SCA127) - bis dahin "Delphi-
+  // Programm ohne .dproj neben dem Lazarus-Projekt" (R_DUAL_PROJECT), obwohl
+  // kein Delphi das Projekt baut (Nico-Entscheid: ein FPC-only-Projekt ist
+  // kein Beleg).
+  T := NewTree;
+  try
+    WriteText(T.C + 'deb_wdx.lpi', Format(LPI_FMT, ['deb_wdx.dpr']));
+    WriteText(T.C + 'deb_wdx.dpr', 'library deb_wdx;' + #13#10 + 'uses'
+      + #13#10 + '  SysUtils, Classes;' + #13#10 + 'begin' + #13#10 + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      'Hauptdatei der .lpi');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'Hauptdatei der .lpi, FormatSettings');
+    // doublecmd plugins\wcx\zip\src: Zip.dpr bindet FPCAdds ein (die .lpi
+    // nennt hier eine andere Datei) - auch ohne .lpi-Eintrag FPC.
+    WriteText(T.C + 'deb_wdx.lpi', Format(LPI_FMT, ['other.lpr']));
+    WriteText(T.C + 'deb_wdx.dpr', 'library Zip;' + #13#10 + 'uses' + #13#10
+      + '{$IFDEF UNIX}' + #13#10 + '  cthreads,' + #13#10 + '{$ENDIF}'
+      + #13#10 + '  FPCAdds,' + #13#10 + '  SysUtils;' + #13#10 + 'begin'
+      + #13#10 + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      'FPCAdds ohne Weiche');
+    // Gegenproben: die FPC-Unit nur unter einer Weiche ...
+    WriteText(T.C + 'deb_wdx.dpr', 'library deb_wdx;' + #13#10 + 'uses'
+      + #13#10 + '{$IFDEF FPC}' + #13#10 + '  cthreads,' + #13#10 + '{$ENDIF}'
+      + #13#10 + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      ['deb_wdx.dpr', 'deb_wdx.lpi', 'ENotImplemented']);
+    // ... und mORMot2 10-InvoiceExample\src: RechnungDaemon.dpr ist die
+    // Hauptdatei von RechnungDaemon.lpi, RechnungDelphi.dpr daneben gehoert
+    // zu keiner .lpi - das Doppel-Compiler-Projekt sperrt weiter.
+    DeleteFile(T.C + 'deb_wdx.dpr');
+    DeleteFile(T.C + 'deb_wdx.lpi');
+    WriteText(T.C + 'Rechnung.lpi', Format(LPI_FMT, ['Rechnung.lpr']));
+    WriteText(T.C + 'RechnungDaemon.lpi', Format(LPI_FMT,
+      ['RechnungDaemon.dpr']));
+    WriteText(T.C + 'RechnungDaemon.dpr', 'program RechnungDaemon;');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'nur das FPC-Programm');
+    WriteText(T.C + 'RechnungDelphi.dpr', 'program RechnungDelphi;');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      ['RechnungDelphi.dpr']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_FpcVersionNoEvidence;
+const
+  SRC = 'unit u;' + #13#10 + 'interface' + #13#10 + '{$I defs.inc}' + #13#10
+    + 'implementation' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // doublecmd src\umaincommands.pas:4399 (SCA168.2): '{$IF FPC_FULLVERSION
+  // >= 020501}' ist eine reine FPC-Abfrage - FPC kennt EInvalidOpException,
+  // ein altes Delphi belegt sie nicht (Nico-Entscheid). Bis dahin teilten die
+  // Ausnahmeklassen FLOOR_DEFAULT_FN (FPC 3.0 fuer Default(T)).
+  Assert.AreEqual<Integer>(0, FLOOR_EXCEPTION_CLASSES.FpcFull);
+  Assert.AreEqual<Integer>(30000, FLOOR_DEFAULT_FN.FpcFull,
+    'SCA121 unveraendert');
+  Assert.IsTrue(TRdxMagicFixes.FpcKnows(lfExceptionClasses));
+  // Im Include (der Plattenblick liest es mit FloorOf).
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IF FPC_FULLVERSION >= 020501}' + #13#10
+      + '  {$DEFINE NEWFPC}' + #13#10 + '{$IFEND}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'FPC_FULLVERSION im Include');
+    // Gegenprobe: eine Delphi-Weiche vor 2009 im Include sperrt weiter.
+    WriteText(T.C + 'defs.inc', '{$IF CompilerVersion < 20}' + #13#10
+      + '  {$DEFINE OLD}' + #13#10 + '{$IFEND}');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['defs.inc', 'COMPILERVERSION < 20']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_KitIncludeModernProject;
+const
+  KIT_SRC = 'unit u;' + #13#10 + '{$I jvcl.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  DPR_SRC = 'program PyScripter;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T   : TTree;
+  Net : string;
+begin
+  // pyscripter Source\JvDockSupportControl.pas:885 (SCA168.2): '{$I
+  // jvcl.inc}' sperrte im Planer, JvDockVIDStyle.pas:1603 daneben (dasselbe
+  // Include, 'for var' beweist 10.3) bekam die Hilfe. Beide stehen in
+  // PyScripter.dpr mit PyScripter.dproj (ProjectVersion 20.3). Seit rwE32
+  // Stufe 4 fragt der Plattenblick das Kit-Include wie beim Hauptweg von
+  // SCA128 (ModernProjectProof).
+  T := NewTree;
+  try
+    // Ohne Projekt (JVCL selbst): das Kit-Include sperrt - auch ohne
+    // Dateinamen und auf einem Netzpfad (der Text ist der Beleg).
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc', 'ENotImplemented']);
+    AssertNames(ProjectReasonOf('', KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    Net := PathDelim + PathDelim + 'rdx-e32-gibt-es-nicht' + PathDelim
+      + 'share' + PathDelim + 'u.pas';
+    AssertNames(ProjectReasonOf(Net, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    // Das Programm eine Ebene hoeher enthaelt die Unit, .dproj ab 2009 -
+    // widerlegt, auch die Weichen eines Includes daneben.
+    WriteText(T.C + 'jvcl.inc', '{$IFDEF VER130}' + #13#10
+      + '  {$DEFINE COMPILER5}' + #13#10 + '{$ENDIF}');
+    WriteText(T.B + 'PyScripter.dpr', DPR_SRC);
+    WriteDproj(T.B + 'PyScripter.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses,
+      True), 'Projekt ab 2009');
+    // Gegenproben: eine .dproj ohne Version (Delphi 2007) ...
+    WriteDproj(T.B + 'PyScripter.dproj', '');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    WriteDproj(T.B + 'PyScripter.dproj', '20.3');
+    // ... eine .dof gleichen Namens neben der .dproj (jvcl install\
+    // JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj - das Programm baut auch
+    // Delphi 6/7; gilt ebenso fuer den Hauptweg von SCA128) ...
+    WriteText(T.B + 'PyScripter.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['jvcl.inc']);
+    DeleteFile(T.B + 'PyScripter.dof');
+    WriteText(T.B + 'PyScripter.cfg', '-$A8');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses,
+      True), '.cfg neben .dproj ist kein altes Projekt');
+    // ... und ein Programm, das die Unit nicht enthaelt.
+    WriteText(T.B + 'PyScripter.dpr', 'program PyScripter;' + #13#10
+      + 'begin' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_GenericsProof_RefutesIncludeTrace;
+const
+  GEN_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses' + #13#10 + '  Classes, Generics.Collections, SysUtils;'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  COND_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses' + #13#10 + '  Classes {$IFDEF X}, Generics.Collections'
+    + '{$ENDIF};' + #13#10 + 'implementation' + #13#10 + 'end.';
+var
+  T     : TTree;
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Proof : TRdxModernProof;
+begin
+  // Dev-Cpp Source\VCL\SynEdit\Source\SynHighlighterSQL.pas:2373 (SCA168.2):
+  // SynEditJedi.inc fragt '{$IFDEF VER140}' (Kylix-Erkennung der generischen
+  // JEDI-Versionsdatei) - die Unit bindet aber Generics.Collections ohne
+  // Weiche ein (TDictionary, ab Delphi 2009). Bis dahin nannte die Sperre
+  // VER140 als Beleg.
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := GEN_SRC;
+    Map := TRdxCodeMap.Create(SL);
+    Proof := ModernProof(Map);
+    Assert.AreEqual<Integer>(PROOF_GENERICS, Proof.Version);
+    Assert.AreEqual('Generics.Collections', Proof.What);
+    Assert.IsFalse(Proof.NoFpc, 'FPC hat Generics');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IFDEF LINUX}' + #13#10 + '{$IFDEF VER140}'
+      + #13#10 + '  {$DEFINE KYLIX}' + #13#10 + '{$ENDIF}' + #13#10
+      + '{$ENDIF}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, GEN_SRC, lfExceptionClasses,
+      True), 'Generics.Collections');
+    // Gegenproben: unter einer Weiche beweist es nichts ...
+    AssertNames(ProjectReasonOf(T.U, COND_SRC, lfExceptionClasses, True),
+      ['defs.inc', 'VER140']);
+    // ... und Delphi 2009 deckt die globale FormatSettings (XE) nicht.
+    WriteText(T.C + 'Old.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, GEN_SRC, lfFormatSettingsVar, False),
+      ['Old.dof']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+// OldCompilerTrace auf einer Datei mit ADirective vor 'implementation'.
+function TraceOf(const ADirective: string;
+  const AFloor: TRdxCompilerFloor): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  Li  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := 'unit u;' + #13#10 + 'interface' + #13#10 + ADirective
+      + '{$ENDIF}' + #13#10 + 'implementation' + #13#10 + 'end.';
+    Map := TRdxCodeMap.Create(SL);
+    Result := OldCompilerTrace(Map, AFloor, Li);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Traces_FpcVerSymbols;
+begin
+  // mORMot2 test\test.core.base.pas:5492 (SCA144-Nachpruefung der Fix-Runde
+  // 4): '{$IFDEF VER3_2_4}' ist das Versionssymbol von FPC 3.2.4, kein
+  // Delphi vor VER80 - bis dahin las OldVersionWord 'VER' + 3 als alte
+  // Delphi-Version (jede Schwelle). FPC-Symbole zaehlen jetzt wie
+  // 'FPC_FULLVERSION < FpcFull'.
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3_2_4}', FLOOR_MATH_TOLERANCE),
+    'FPC 3.2.4, Math');
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3_2_4}', FLOOR_EXCEPTION_CLASSES),
+    'FPC 3.2.4, Ausnahmeklassen');
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3}', FLOOR_DEFAULT_FN),
+    'FPC 3.0 kennt Default()');
+  // Gegenproben: FPC vor 3.0 fuer Default(T), jedes FPC fuer die
+  // Inline-Konstante, und Delphi-Symbole wie bisher.
+  Assert.AreEqual('VER2_6', TraceOf('{$IFDEF VER2_6}', FLOOR_DEFAULT_FN));
+  Assert.AreEqual('VER3_2_4', TraceOf('{$IFDEF VER3_2_4}', FLOOR_INLINE_DECL));
+  Assert.AreEqual('VER130', TraceOf('{$IFDEF VER130}', FLOOR_MATH_TOLERANCE));
+  Assert.AreEqual('VER150', TraceOf('{$IFDEF VER150}', FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('', TraceOf('{$IFDEF VER140}', FLOOR_MATH_TOLERANCE),
+    'Delphi 6 kennt Math.IsZero');
+  // Review e/HilfeFixP: nur die Form von FPC (einstellige Hauptversion,
+  // Ziffern und '_') zaehlt als FPC - eigene Symbole unter VER80 bleiben
+  // alte Delphi-Spuren (doublecmd kascrypt std.inc '{$define VER5X}' unter
+  // VER130, jvcl devtools gifimage.pas 'VER9x' fuer Delphi 2/3, Borland
+  // Pascal VER70). Ohne den Nachzug: '' (rot).
+  Assert.AreEqual('VER5X', TraceOf('{$IFDEF VER5X}', FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('VER9X', TraceOf('{$IFDEF VER9X}', FLOOR_MATH_TOLERANCE));
+  Assert.AreEqual('VER70', TraceOf('{$IFDEF VER70}', FLOOR_EXCEPTION_CLASSES));
 end;
 
 initialization

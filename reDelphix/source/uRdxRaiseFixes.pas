@@ -76,7 +76,7 @@ type
 // rwE31 Stufe 3 (cnwizards Bin\PSDeclEx\CnWizIdeUtils.pas:1226: die Unit
 // fragt '{$IFNDEF VER130}' und baut damit auch mit Delphi 5): AClass
 // (ENotImplemented bzw. EInvalidOpException) steht in SysUtils erst ab
-// Delphi 2009 - dieselbe Schwelle wie SCA127 (FLOOR_DEFAULT_FN,
+// Delphi 2009 - dieselbe Schwelle wie SCA127 (FLOOR_EXCEPTION_CLASSES,
 // uRdxRawExceptionFix, lfExceptionClasses). Fragt die Datei nach einem
 // aelteren Compiler (uRdxCompilerTraces.OldCompilerTrace) und beweist sie
 // keinen neueren (ModernProof), der Grund; sonst ''. Nur die Spuren in der
@@ -97,7 +97,8 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine, FindMethodDecls, MethodDecl (HookReason)
-  uRdxCompilerTraces, // OldCompilerTrace, ModernProof, FLOOR_DEFAULT_FN
+  uRdxCompilerTraces, // OldCompilerTraceOf, ModernProof,
+                      // FLOOR_EXCEPTION_CLASSES
   uRdxText;          // _() - Gruende in der Sprache der SCA (E29)
 
 const
@@ -142,8 +143,11 @@ begin
   Result := '';
   // Eine Inline-Variable bzw. ein RTL-Namensraum ausserhalb jeder Weiche
   // beweist Delphi ab XE2 - die Spur widerlegt (wie SCA127).
-  if ProofCovers(ModernProof(AMap), FLOOR_DEFAULT_FN) then Exit;
-  Trace := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
+  if ProofCovers(ModernProof(AMap), FLOOR_EXCEPTION_CLASSES) then Exit;
+  // Seit rwE32 Stufe 4 nur die Bedingungen der Datei, ohne FPC-Abfragen
+  // (FLOOR_EXCEPTION_CLASSES); ein Kit-Include fragt der Plattenblick
+  // (ProjectReason, widerlegt durch ein Projekt der Unit ab 2009).
+  Trace := OldCompilerTraceOf(AMap, FLOOR_EXCEPTION_CLASSES, True, False, Li);
   // Derselbe Satz wie uRdxRawExceptionFix.R_RAWEXC_OLD (SCA127) - eine
   // msgid; die Unit steht nicht im FPC-Pruefstand, darum hier als Literal.
   if Trace <> '' then

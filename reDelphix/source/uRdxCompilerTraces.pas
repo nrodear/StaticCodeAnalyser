@@ -71,8 +71,13 @@ unit uRdxCompilerTraces;
 // FPC aus (NoFpc): FireMonkey gibt es nur in Delphi (python4delphi
 // Source\fmx\WrapFmxTypes.pas - die FPC-Weiche im gemeinsamen
 // Definition.Inc betrifft die Unit nicht).
+// Seit rwE32 Stufe 4 beweist auch 'Generics.Collections' bzw.
+// 'Generics.Defaults' ohne Namensraum im uses Delphi 2009 (PROOF_GENERICS;
+// FPC 3.2 hat sie auch) - genug fuer die Ausnahmeklassen ab 2009 (Dev-Cpp
+// SynHighlighterSQL.pas:2373: TDictionary, die VER140-Kylix-Frage im
+// generischen SynEditJedi.inc belegt dort kein altes Delphi).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
-// (UnconditionalAt, FpcExcludedAt).
+// (UnconditionalAt, FpcExcludedAt, NewOnlyAt).
 
 interface
 
@@ -158,6 +163,28 @@ const
   FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
     Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
     FpcFull: 20600; XeNames: False; ProjectVersion: 122);
+  // SCA127 EArgumentException/EInvalidOpException, SCA020.2 ENotImplemented,
+  // SCA168.2 EInvalidOpException (lfExceptionClasses): Delphi 2009 wie
+  // FLOOR_DEFAULT_FN, aber FPC kennt alle drei Klassen - eine FPC-Abfrage
+  // ('{$IF FPC_FULLVERSION >= 020501}') ist kein Beleg fuer ein altes Delphi
+  // (Nico-Entscheid "Sperre nur bei Beleg"; rwE32 Stufe 4, doublecmd
+  // src\umaincommands.pas:4399 - bis dahin teilten sie FLOOR_DEFAULT_FN, und
+  // FPC_FULLVERSION unter 30000 sperrte). FpcFull 0: keine FPC-Version ist alt.
+  FLOOR_EXCEPTION_CLASSES: TRdxCompilerFloor = (Ver: 200; Version: 20;
+    Compiler: 12; DelphiNumber: 12; DelphiYear: 2009; Rtl: 200; FpcFull: 0;
+    XeNames: False; ProjectVersion: 120);
+  // SCA144 Math.IsZero/Math.SameValue: ab Delphi 6 (VER140, CompilerVersion
+  // 14, COMPILER6/DELPHI6 der JEDI-Zaehlung, RTL140); FPC kennt beide, eine
+  // .dproj gibt es erst ab Delphi 2007 (ProjectVersion 0: keine ist alt).
+  // Nur die Bedingungen der Datei fragen danach (OldTraceAtSite) - ein
+  // Kit-Include wie jvcl.inc zaehlt hier nicht: die Kits bauen mit vielen
+  // Versionen, ihre Versionsleiter belegt kein Delphi vor 6 (rwE32 Stufe 4,
+  // jvcl tests\archive\jvcl\source\JvSpin.pas:2157 'COMPILER4_UP', tests\
+  // RxLib\Source\JvSpin.pas:1144 'Delphi4_Up', cnwizards CnMsgFiler.pas:505
+  // 'COMPILER6_UP').
+  FLOOR_MATH_TOLERANCE: TRdxCompilerFloor = (Ver: 140; Version: 14;
+    Compiler: 6; DelphiNumber: 6; DelphiYear: 0; Rtl: 140; FpcFull: 0;
+    XeNames: False; ProjectVersion: 0);
 
 type
   // Eine Bedingungs-Direktive der Datei (ConditionalDirectives): das Wort
@@ -173,7 +200,8 @@ type
   TRdxCondDirectives = TArray<TRdxCondDirective>;
 
   // Der Gegenbeweis einer Datei (ModernProof, s. Kopf): die bewiesene
-  // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name; 0 ohne), ob FPC
+  // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name, seit rwE32
+  // Stufe 4 20 Generics.Collections bzw. Generics.Defaults; 0 ohne), ob FPC
   // 3.2 die Datei uebersetzt (NoFpc: nein - die Inline-Variable und seit
   // rwE31 Stufe 3 ein FMX-Unit-Name), die Form wie im Text ('for var',
   // 'var X :=', 'System.SysUtils', 'FMX.Types') und ihre Zeile.
@@ -188,12 +216,22 @@ const
   // Die CompilerVersion, die ModernProof je Form beweist.
   PROOF_INLINE_VAR = 33;   // Delphi 10.3 Rio
   PROOF_RTL_SCOPE  = 23;   // Delphi XE2 (Unit-Namensraeume der RTL)
+  PROOF_GENERICS   = 20;   // Delphi 2009 (Generics.Collections, rwE32)
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der
 // Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
+// Die Spur alter Compiler (bis AFloor) in den BEDINGUNGEN der Datei
+// (OldCompilerTraceOf ohne Kit-Includes), die die Stelle (ALine, ACol)
+// betrifft - '' und ATraceLine 0, wenn der Gegenbeweis die Schwelle deckt
+// (ModernProof/ProofCovers) oder die Stelle in einem Zweig liegt, den nur
+// Compiler ab der Schwelle uebersetzen (NewOnlyAt: '{$IFDEF COMPILER6_UP}'
+// - die Datei baut mit Delphi 5, aber nicht diese Zeile). SCA144 (Math ab
+// Delphi 6, rwE32 Stufe 4).
+function OldTraceAtSite(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  ALine, ACol: Integer; out ATraceLine: Integer): string;
 // Wie OldCompilerTrace, aber nur die Spuren einer Art: AConditions die
 // Versionssymbole und Vergleiche in Bedingungen, AKits die Kit-Includes
 // (KIT_INCLUDES). Seit rwE31 Stufe 3 trennt der Hauptweg von SCA128/SCA059
@@ -217,6 +255,14 @@ function UnconditionalAt(const ADirs: TRdxCondDirectives;
 // unbekannt (nein).
 function FpcExcludedAt(const ADirs: TRdxCondDirectives;
   ALine, ACol: Integer): Boolean;
+// Liegt (ALine, ACol) in einem Zweig, den nur Compiler ab der Schwelle
+// AFloor uebersetzen? '{$IFDEF S}' bzw. der {$ELSE}-Teil von '{$IFNDEF S}'
+// mit einem Versionssymbol S ab der Schwelle (COMPILER6_UP, DELPHI6_UP,
+// VER140, RTL140_UP, CONDITIONALEXPRESSIONS ..., NewVersionWord), '{$IF
+// CompilerVersion >= n}' (auch RTLVersion, '>') bzw. '{$IF DEFINED(S)}'
+// allein. Ein {$ELSEIF} macht den Block unbekannt (nein).
+function NewOnlyAt(const ADirs: TRdxCondDirectives; ALine, ACol: Integer;
+  const AFloor: TRdxCompilerFloor): Boolean;
 // Der Gegenbeweis der Datei (s. Kopf und TRdxModernProof): die staerkste
 // Form ausserhalb jedes Bedingungsblocks; Version = 0 ohne.
 function ModernProof(AMap: TRdxCodeMap): TRdxModernProof;
@@ -238,6 +284,13 @@ function UnconditionalInvariantLine(AMap: TRdxCodeMap): Integer;
 // Format (rwE30 Stufe 2: HeidiSQL heidisql.dpr setzt ShortDateFormat
 // 'yyyy/mm/dd'); TFormatSettings.Invariant liefe daran vorbei.
 function GlobalSettingsWriteLine(AMap: TRdxCodeMap; out AField: string): Integer;
+// Der erste Eintrag einer uses-Klausel AUSSERHALB jedes Bedingungsblocks,
+// dessen Name (klein, Glieder mit '.') in ALowNames steht - wie im Text
+// geschrieben; '' ohne. rwE32 Stufe 4: die FPC-only-Units eines Programms
+// (uRdxMagicFixes.FpcOnlyProgram - doublecmd Zip.dpr 'FPCAdds',
+// SevenZipWcx.dpr 'CMem').
+function UnconditionalUsesOf(AMap: TRdxCodeMap;
+  const ALowNames: array of string): string;
 
 // Uebersetzt ein Compiler die Datei? Skript-Units ('unit X;' ohne
 // implementation-Teil: xEdit-Skripte, JvInterpreter-Beispiele) und
@@ -266,6 +319,16 @@ const
   CONDITION_WORDS: array[0..3] of string = ('ifdef', 'ifndef', 'if',
     'elseif');
   FIRST_DELPHI_YEAR = 2005;   // DELPHI2005: ab hier Jahreszahlen
+  // VERnnn von Delphi beginnt bei VER80 (Delphi 1); darunter sind es die
+  // Versionssymbole von FPC ('VER3_2_4' = FPC 3.2.4, rwE32 Stufe 4 - mORMot2
+  // test\test.core.base.pas zaehlte bis dahin als Delphi vor 2009). Sie
+  // zaehlen wie 'FPC_FULLVERSION < n' (FpcVerVersion, AFloor.FpcFull).
+  // Nur die Form von FPC (einstellige Hauptversion, nur Ziffern und '_'):
+  // 'VER5X' (kascrypt std.inc: Delphi 5), 'VER9X' (gifimage.pas: Delphi
+  // 2/3), 'VER70' (Borland Pascal 7) bleiben alte Spuren wie bis dahin
+  // (Review e/HilfeFixP).
+  FIRST_DELPHI_VER = 80;
+  FPC_MAX_MAJOR = 9;
   // XeNames: Delphi XE bis XE8 (immer, alle vor 10.3) und 10 bis 11 mit
   // Namen (jedi.inc und andere) - diese mit ihrer CompilerVersion, sie
   // zaehlen bis AFloor.Version wie die Zahlen (Integration QFI2: bis dahin
@@ -278,6 +341,14 @@ const
     'DELPHIX_ALEXANDRIA');
   NAMED_VERSIONS: array[0..5] of Integer = (30, 31, 32, 33, 34, 35);
   D6_QUESTION = 'CONDITIONALEXPRESSIONS';
+  // Die CompilerVersion dieser Namen fuer NewVersionWord: Delphi XE und 6.
+  XE_VERSION = 22;
+  D6_VERSION = 14;
+  // Die Zusaetze hinter der Versionszahl, die "ab" heissen (UpSuffix, ohne
+  // '_'): keiner ('VER140', 'COMPILER6'), 'COMPILER6_UP', 'DELPHI6UP',
+  // 'DELPHI2005_PLUS', '_OR_HIGHER' (Korpus rwE32), 'ANDUP'.
+  UP_SUFFIXES: array[0..5] of string = ('', 'UP', 'ANDUP', 'PLUS',
+    'ORHIGHER', 'ORNEWER');
   // ConditionTokens: Zeichen eines Worts bzw. eines Vergleichs.
   WORD_CHARS: TSysCharSet = ['A'..'Z', '0'..'9', '_', '.'];
   COMPARE_CHARS: TSysCharSet = ['<', '>', '='];
@@ -303,6 +374,10 @@ const
   RTL_SCOPES: array[0..3] of string = ('system.', 'winapi.', 'vcl.', 'fmx.');
   // ... davon nur in Delphi (NoFpc; FireMonkey hat FPC nie).
   FMX_SCOPE = 'fmx.';
+  // Die Generics der RTL ohne Namensraum (ScopeProof, PROOF_GENERICS): ab
+  // Delphi 2009; FPC 3.2 hat sie auch (kein NoFpc).
+  GENERICS_UNITS: array[0..1] of string = ('generics.collections',
+    'generics.defaults');
   MAX_INLINE_DECL_TOKENS = 40;
   // Die globale Variable (GlobalSettingsWriteLine) und ihre Felder fuer
   // Datum und Uhrzeit - nur sie zaehlen: ein Programm, das
@@ -394,14 +469,45 @@ begin
   Result := (V >= 0) and (V <= AFloor.Version);
 end;
 
-// Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor):
+// Ein FPC-Versionssymbol ('VER3', 'VER2_6', 'VER3_2_4' - FPC definiert sie
+// mit einstelliger Hauptversion) als FPC_FULLVERSION (30204); -1 sonst.
+function FpcVerVersion(const AUpper: string): Integer;
+var
+  Rest     : string;
+  i, P, V  : Integer;
+begin
+  Result := -1;
+  if Copy(AUpper, 1, Length('VER')) <> 'VER' then Exit;
+  Rest := Copy(AUpper, Length('VER') + 1, MaxInt) + '_';
+  Result := 0;
+  // Haupt-, Unter-, Patchversion, je bis '_' (fehlende zaehlen 0).
+  for i := 1 to 3 do
+  begin
+    V := 0;
+    P := Pos('_', Rest);
+    if P > 0 then
+    begin
+      V := StrToIntDef(Copy(Rest, 1, P - 1), -1);
+      Delete(Rest, 1, P);
+    end;
+    if (V < 0) or (V > 99) or ((i = 1) and (V > FPC_MAX_MAJOR)) then
+      Exit(-1);
+    Result := Result * 100 + V;
+  end;
+  if Rest <> '' then
+    Result := -1;
+end;
+
+// Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor). VERn
+// unter VER80: ein FPC-Symbol (FpcVerVersion) zaehlt mit FpcFull, jedes
+// andere wie VERnnn (Review e/HilfeFixP: 'VER5X', 'VER9X').
 // VERnnn, DELPHIn, DELPHI2005.., COMPILERn, BCBn, RTLnnn, mit XeNames
 // dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole - wer danach
 // fragt, baut auch mit dem aelteren Compiler.
 function OldVersionWord(const AUpper: string;
   const AFloor: TRdxCompilerFloor): Boolean;
 var
-  N : Integer;
+  N, Fpc : Integer;
 begin
   if OldMormotWord(AUpper, AFloor) then
     Exit(True);
@@ -409,7 +515,16 @@ begin
   Result := ((N >= 1) and (N <= AFloor.DelphiNumber))
     or ((N >= FIRST_DELPHI_YEAR) and (N <= AFloor.DelphiYear));
   N := NumberAfter(AUpper, 'VER');
-  Result := Result or ((N >= 0) and (N < AFloor.Ver));
+  if N >= FIRST_DELPHI_VER then
+    Result := Result or (N < AFloor.Ver)
+  else if N >= 0 then
+  begin
+    Fpc := FpcVerVersion(AUpper);
+    if Fpc >= 0 then
+      Result := Result or (Fpc < AFloor.FpcFull)
+    else
+      Result := Result or (N < AFloor.Ver);
+  end;
   N := NumberAfter(AUpper, 'COMPILER');
   Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
   N := NumberAfter(AUpper, 'BCB');
@@ -549,6 +664,21 @@ begin
   end;
 end;
 
+function OldTraceAtSite(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  ALine, ACol: Integer; out ATraceLine: Integer): string;
+begin
+  ATraceLine := 0;
+  if ProofCovers(ModernProof(AMap), AFloor) then
+    Exit('');
+  Result := OldCompilerTraceOf(AMap, AFloor, True, False, ATraceLine);
+  if (Result <> '')
+     and NewOnlyAt(ConditionalDirectives(AMap), ALine, ACol, AFloor) then
+  begin
+    Result := '';
+    ATraceLine := 0;
+  end;
+end;
+
 function ScriptReason(AMap: TRdxCodeMap; const AFeature: string): string;
 var
   T, P : TRdxToken;
@@ -677,6 +807,140 @@ begin
       Exit(True);
 end;
 
+// Ein Versionssymbol AB der Schwelle AFloor (das Gegenstueck zu
+// OldVersionWord fuer NewOnlyAt): VERnnn ab Ver, COMPILERn/BCBn ab
+// Compiler, DELPHIn ab DelphiNumber, RTLnnn ab Rtl, die mORMot-Symbole ab
+// Version, DELPHIXE.. (22) und CONDITIONALEXPRESSIONS (14) ab Version.
+// Jahreszahlen (DELPHI2005..) nur fuer eine Schwelle vor 2005 (DelphiYear
+// darunter) - die Zaehlung der anderen Schwellen ist dort "bis
+// einschliesslich" und belegt kein "ab".
+// Hinter Praefix und Zahl nur ein Zusatz, der "ab" heisst (UpSuffix,
+// Review e/HilfeFixP): 'DELPHI7OROLDER' (JvGnugettext.pas), 'BCB5OR6',
+// 'DELPHI64_TEMPORARY' oder '_DOWN' sind kein Zweig nur fuer neue
+// Compiler - nein.
+function UpSuffix(const AUpper, APrefix: string): Boolean;
+var
+  i : Integer;
+begin
+  i := Length(APrefix) + 1;
+  while (i <= Length(AUpper)) and CharInSet(AUpper[i], ['0'..'9']) do
+    Inc(i);
+  Result := InList(StringReplace(Copy(AUpper, i, MaxInt), '_', '',
+    [rfReplaceAll]), UP_SUFFIXES);
+end;
+
+function NewVersionWord(const AUpper: string;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  N : Integer;
+begin
+  N := MormotVersion(AUpper);
+  if N >= 0 then
+    Exit(N >= AFloor.Version);
+  if Copy(AUpper, 1, Length(XE_PREFIX)) = XE_PREFIX then
+    Exit(UpSuffix(AUpper, XE_PREFIX) and (XE_VERSION >= AFloor.Version));
+  if AUpper = D6_QUESTION then
+    Exit(D6_VERSION >= AFloor.Version);
+  N := NumberAfter(AUpper, 'DELPHI');
+  if (N >= 1) and not UpSuffix(AUpper, 'DELPHI') then
+    Exit(False);
+  if N >= FIRST_DELPHI_YEAR then
+    Exit(AFloor.DelphiYear < FIRST_DELPHI_YEAR);
+  if N >= 1 then
+    Exit(N >= AFloor.DelphiNumber);
+  N := NumberAfter(AUpper, 'VER');
+  if N >= FIRST_DELPHI_VER then
+    Exit(UpSuffix(AUpper, 'VER') and (N >= AFloor.Ver));
+  if N >= 0 then
+    Exit(False);
+  N := NumberAfter(AUpper, 'COMPILER');
+  if N >= 0 then
+    Exit(UpSuffix(AUpper, 'COMPILER') and (N >= AFloor.Compiler));
+  N := NumberAfter(AUpper, 'BCB');
+  if N >= 0 then
+    Exit(UpSuffix(AUpper, 'BCB') and (N >= AFloor.Compiler));
+  N := NumberAfter(AUpper, 'RTL');
+  Result := (N >= 0) and UpSuffix(AUpper, 'RTL') and (N >= AFloor.Rtl);
+end;
+
+// Gilt die Bedingung AArgs ({$IF}, gross ohne Leerraum) nur fuer Compiler
+// ab AFloor? 'COMPILERVERSION>=n', 'RTLVERSION>n' bzw. 'DEFINED(S)' allein.
+function NewOnlyCondition(const AArgs: string;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  Toks : TArray<string>;
+  N    : Integer;
+begin
+  Result := False;
+  Toks := ConditionTokens(AArgs);
+  if (Length(Toks) = 2) and (Toks[0] = 'DEFINED') then
+    Exit(NewVersionWord(Toks[1], AFloor));
+  if (Length(Toks) <> 3)
+     or ((Toks[0] <> 'COMPILERVERSION') and (Toks[0] <> 'RTLVERSION')) then
+    Exit;
+  N := LeadingNumber(Toks[2]);
+  if Toks[1] = '>=' then
+    Result := N >= AFloor.Version
+  else if Toks[1] = '>' then
+    Result := (N >= 0) and (N + 1 >= AFloor.Version);
+end;
+
+type
+  // Ein offener Bedingungsblock fuer NewOnlyAt: sein Teil fuer Compiler ab
+  // der Schwelle - der Then-Teil (nwThen), der {$ELSE}-Teil (nwElse) oder
+  // keiner (nwNone, auch nach {$ELSEIF}).
+  TNewWay = (nwNone, nwThen, nwElse);
+  TNewFrame = record
+    Kind   : TNewWay;
+    InElse : Boolean;
+  end;
+
+function NewOnlyAt(const ADirs: TRdxCondDirectives; ALine, ACol: Integer;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  Stack : array of TNewFrame;
+  i, N  : Integer;
+  D     : TRdxCondDirective;
+  Toks  : TArray<string>;
+begin
+  Result := False;
+  SetLength(Stack, Length(ADirs) + 1);
+  N := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    D := ADirs[i];
+    if not DirBefore(D, ALine, ACol) then Break;
+    if InList(D.Word, COND_OPEN) then
+    begin
+      Stack[N] := Default(TNewFrame);
+      if (D.Word = 'ifdef') or (D.Word = 'ifndef') then
+      begin
+        Toks := ConditionTokens(D.Args);
+        if (Length(Toks) > 0) and NewVersionWord(Toks[0], AFloor) then
+          if D.Word = 'ifdef' then
+            Stack[N].Kind := nwThen
+          else
+            Stack[N].Kind := nwElse;
+      end
+      else if (D.Word = 'if') and NewOnlyCondition(D.Args, AFloor) then
+        Stack[N].Kind := nwThen;
+      Inc(N);
+    end
+    else if N = 0 then
+      Continue
+    else if D.Word = 'else' then
+      Stack[N - 1].InElse := True
+    else if D.Word = 'elseif' then
+      Stack[N - 1].Kind := nwNone
+    else
+      Dec(N);
+  end;
+  for i := 0 to N - 1 do
+    if ((Stack[i].Kind = nwThen) and not Stack[i].InElse)
+       or ((Stack[i].Kind = nwElse) and Stack[i].InElse) then
+      Exit(True);
+end;
+
 // Eine Inline-Variable an T ('var' als Schluesselwort): 'for var',
 // 'var X :=' bzw. 'var X: T :=' (bis ';' oder ')' auf Klammertiefe 0 ein
 // ':='); die Form als Text, '' ohne.
@@ -744,9 +1008,18 @@ begin
       while (E.Low <> '') and (E.Low <> ';') do
       begin
         Name := UsesEntry(AMap, E, Stop);
+        // Generics.Collections ohne Namensraum (Delphi 2009 bis XE, rwE32
+        // Stufe 4: Dev-Cpp SynHighlighterSQL.pas - TDictionary).
+        if InList(Name, GENERICS_UNITS) and (AProof.Version < PROOF_GENERICS)
+           and UnconditionalAt(ADirs, E.Line, E.Col) then
+        begin
+          AProof.Version := PROOF_GENERICS;
+          AProof.What := Copy(AMap.Raw(E.Line), E.Col, Length(Name));
+          AProof.Line := E.Line;
+        end;
         for S in RTL_SCOPES do
           if (Copy(Name, 1, Length(S)) = S)
-             and ((AProof.Version = 0) or (S = FMX_SCOPE))
+             and ((AProof.Version < PROOF_RTL_SCOPE) or (S = FMX_SCOPE))
              and UnconditionalAt(ADirs, E.Line, E.Col) then
           begin
             AProof.Version := PROOF_RTL_SCOPE;
@@ -831,6 +1104,50 @@ begin
         Exit(T.Line);
     end;
     T := NextTokenOnLineWith(AMap, T, 'invariant');
+  end;
+end;
+
+function UnconditionalUsesOf(AMap: TRdxCodeMap;
+  const ALowNames: array of string): string;
+var
+  Dirs       : TRdxCondDirectives;
+  T, E, Stop : TRdxToken;
+  Name       : string;
+  i          : Integer;
+  Read       : Boolean;
+begin
+  Result := '';
+  Read := False;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      E := After(AMap, T);
+      while (E.Low <> '') and (E.Low <> ';') do
+      begin
+        Name := UsesEntry(AMap, E, Stop);
+        for i := Low(ALowNames) to High(ALowNames) do
+          if Name = ALowNames[i] then
+          begin
+            if not Read then
+            begin
+              Dirs := ConditionalDirectives(AMap);
+              Read := True;
+            end;
+            if UnconditionalAt(Dirs, E.Line, E.Col) then
+              Exit(Copy(AMap.Raw(E.Line), E.Col, Length(Name)));
+          end;
+        // Hinter 'in' der Pfad, dann ',' oder ';' (wie ScopeProof).
+        while (Stop.Low <> '') and (Stop.Low <> ',') and (Stop.Low <> ';') do
+          Stop := After(AMap, Stop);
+        if Stop.Low = ',' then
+          E := After(AMap, Stop)
+        else
+          E := Stop;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
 end;
 

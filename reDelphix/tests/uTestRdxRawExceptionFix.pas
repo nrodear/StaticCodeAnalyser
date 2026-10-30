@@ -50,6 +50,7 @@ type
     [Test] procedure OwnException_SameRoutine_NoHelp;
     [Test] procedure MormotSymbols_NoHelp;
     [Test] procedure ModernProof_RefutesTrace;
+    [Test] procedure FpcVersionSwitch_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -453,9 +454,12 @@ begin
     '{$endif}'], ['  raise Exception.Create(''x'');']);
   AssertRefused(Src, LineOf(Src, 'raise '),
     _(R_RAWEXC_OLD, ['FPC_OR_UNICODE', 3, RAWEXC_INVALID_OP]), True);
+  // Das Kit-Include fragt seit rwE32 Stufe 4 der Plattenblick (ProjectReason,
+  // uTestRdxMagicGuards.Disk_ExceptionClasses_KitIncludeModernProject) - ein
+  // Projekt der Unit ab 2009 widerlegt es; der Planer allein hilft.
   Src := WrapWith(['{$I mormot.defines.inc}'], ['  raise Exception.Create(''x'');']);
-  AssertRefused(Src, LineOf(Src, 'raise '),
-    _(R_RAWEXC_OLD, ['mormot.defines.inc', 3, RAWEXC_ARGUMENT]));
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
   // Gegenprobe: ISDELPHIXE2 ist nach Delphi 2009.
   Src := WrapWith(['{$ifdef ISDELPHIXE2}', 'type PtrInt = NativeInt;',
     '{$endif}'], ['  raise Exception.Create(''x'');']);
@@ -479,6 +483,26 @@ begin
     '  raise Exception.Create(''x'');']);
   AssertRefused(Src, LineOf(Src, 'raise '),
     _(R_RAWEXC_OLD, ['VER150', 3, RAWEXC_ARGUMENT]));
+end;
+
+procedure TTestRdxRawExceptionFix.FpcVersionSwitch_Helps;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4 (doublecmd src\umaincommands.pas:4399, dort SCA168.2 -
+  // dieselbe Schwelle FLOOR_EXCEPTION_CLASSES): '{$IF FPC_FULLVERSION >=
+  // 020501}' fragt nur nach FPC, das die Klassen kennt - kein Beleg fuer
+  // ein altes Delphi. Bis dahin 'die Datei fragt nach alten Compilern
+  // (FPC_FULLVERSION >= 020501 ..)'.
+  Src := WrapWith(['{$IF FPC_FULLVERSION >= 020501}', 'type PtrInt = Integer;',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // Gegenprobe: eine Delphi-Weiche vor 2009 sperrt weiter.
+  Src := WrapWith(['{$IF CompilerVersion < 20}', 'type PtrInt = Integer;',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILERVERSION < 20', 3, RAWEXC_ARGUMENT]));
 end;
 
 procedure TTestRdxRawExceptionFix.OwnTargetClass_NoHelp;

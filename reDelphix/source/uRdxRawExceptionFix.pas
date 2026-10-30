@@ -50,11 +50,16 @@ unit uRdxRawExceptionFix;
 //     (DeclReaches; Alcinoe.FBX.Lib.pas, Setup.MainFunc.pas) - oder die
 //     Zielklasse (dann bande der neue Name an die eigene; jede Deklaration),
 //   - die Datei fragt nach Compilern vor Delphi 2009 (uRdxCompilerTraces,
-//     FLOOR_DEFAULT_FN - dieselbe Schwelle wie Default(T) bei SCA121; die
+//     FLOOR_EXCEPTION_CLASSES - die Schwelle von Default(T) bei SCA121; die
 //     Schwelle selbst zaehlt mit: wer nach 2009 fragt, baut auch davor;
-//     seit rwE30 Stufe 2 auch die mORMot-Symbole und mormot.defines.inc) -
-//     ausser die Datei beweist selbst einen neueren Compiler
-//     (ModernProof: Inline-Variable, RTL-Namensraum im uses),
+//     seit rwE30 Stufe 2 auch die mORMot-Symbole) - ausser die Datei
+//     beweist selbst einen neueren Compiler (ModernProof: Inline-Variable,
+//     RTL-Namensraum im uses, seit rwE32 Stufe 4 Generics.Collections).
+//     Seit rwE32 Stufe 4 nur die Bedingungen: eine FPC-Abfrage
+//     ('FPC_FULLVERSION >= ..') ist kein Beleg fuer ein altes Delphi (FPC
+//     kennt die Klassen), ein Kit-Include (jvcl.inc, mormot.defines.inc ..)
+//     fragt der Adapter (ProjectReason: ein Projekt der Unit ab 2009
+//     widerlegt es),
 //   - was nur die Platte weiss, prueft der Adapter (uRdxFixTable,
 //     TRdxMagicFixes.ProjectReason mit lfExceptionClasses, rwE30 Stufe 2):
 //     alte Projektdateien in der Nachbarschaft (.dof, .cfg/.dof eines
@@ -125,7 +130,7 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // TRdxBlocks.HeadBefore/ReadRoutine (DeclReaches)
-  uRdxCompilerTraces, // OldCompilerTrace, FLOOR_DEFAULT_FN (Delphi 2009),
+  uRdxCompilerTraces, // OldCompilerTraceOf, FLOOR_EXCEPTION_CLASSES (2009),
                      // ModernProof
   uRdxText;          // _(), MsgMovedSuffix (E29, nie uLocalization)
 
@@ -386,11 +391,16 @@ begin
     AReason := _(R_RAWEXC_OWN, ['Exception'])
   else if DeclaresOwn(AMap, LowerCase(AClass), Default(TRdxToken)) then
     AReason := _(R_RAWEXC_OWN, [AClass])
-  else if not ProofCovers(ModernProof(AMap), FLOOR_DEFAULT_FN) then
+  else if not ProofCovers(ModernProof(AMap), FLOOR_EXCEPTION_CLASSES) then
   begin
     // Eine Inline-Variable bzw. ein RTL-Namensraum ausserhalb jeder Weiche
-    // beweist Delphi ab XE2 - die Spur widerlegt (rwE30 Stufe 2).
-    Trace := OldCompilerTrace(AMap, FLOOR_DEFAULT_FN, Li);
+    // beweist Delphi ab XE2 - die Spur widerlegt (rwE30 Stufe 2). Nur die
+    // Bedingungen der Datei: ein Kit-Include (jvcl.inc ..) fragt seit rwE32
+    // Stufe 4 der Plattenblick (ProjectReason - ein Projekt der Unit ab
+    // 2009 widerlegt es), eine FPC-Abfrage zaehlt nicht
+    // (FLOOR_EXCEPTION_CLASSES).
+    Trace := OldCompilerTraceOf(AMap, FLOOR_EXCEPTION_CLASSES, True, False,
+      Li);
     if Trace <> '' then
       AReason := _(R_RAWEXC_OLD, [Trace, Li, AClass]);
   end;

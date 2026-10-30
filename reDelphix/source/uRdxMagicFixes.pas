@@ -167,7 +167,7 @@ type
   //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException, seit
   //                     dem Nachzug zu e/HilfeFixJ auch SCA020.2
   //                     (ENotImplemented) und SCA168.2 (EInvalidOpException)
-  //                     - ab Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test
+  //                     - ab Delphi 2009 (FLOOR_EXCEPTION_CLASSES; Realworld-Test
   //                     rwE30 Stufe 2, Nico-Entscheid "Sperre bei Beleg":
   //                     GExperts fuer Delphi 3-6 mit .dof, CnWizards_D5..
   //                     D2007 in Source\, CnDebugViewer.dpr mit .dof). FPC
@@ -357,8 +357,12 @@ type
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
     // Pakete nur ab 10.3 - PackageFloorProof).
-    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks), sonst
-    // wie FileReason. '' oder der Grund.
+    // Seit rwE32 Stufe 4 fragt lfExceptionClasses das Kit-Include wie
+    // lfFormatSettingsVar (vorher im Planer); ein Projekt der Unit ab 2009
+    // widerlegt es und die Weichen der Includes.
+    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks; das
+    // Kit-Include der Datei selbst sperrt dort weiter), sonst wie
+    // FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature; AIncludes: Boolean): string; static;
   end;
@@ -436,8 +440,18 @@ const
   // Optionen, die die IDE bis Delphi 2007 schrieb; neuere legen sie nur
   // neben eine .dproj gleichen Namens), .bdsproj (BDS 2005/2006).
   DPR_EXTENSION = '.dpr';
+  // FPC-Programme (FpcOnlyProgram, rwE32 Stufe 4): ein Lazarus-Projekt
+  // nennt seine Dateien so ('<Filename Value="Zip.dpr"/>', klein) ...
+  LPI_EXTENSION = '.lpi';
+  LPI_FILE_TAG = '<filename value="';
+  // ... und Units, die nur FPC bzw. Lazarus mitbringen (klein).
+  FPC_ONLY_UNITS: array[0..7] of string = ('fpcadds', 'cmem', 'cthreads',
+    'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
   PAIR_OPTION_EXTENSIONS: array[0..2] of string = ('.dof', '.cfg',
     '.bdsproj');
+  // ... davon die, die nur die alten IDEs schreiben (ModernProjectProof:
+  // neben einer .dproj gleichen Namens heisst eine .cfg nichts).
+  LEGACY_OPTION_EXTENSIONS: array[0..1] of string = ('.dof', '.bdsproj');
   // ... im Verzeichnis der Unit und so vielen darueber (Korpus: doublecmd-
   // Plugins eine Ebene, CnWizards_L4.lpk zwei Ebenen ueber den Units).
   PROJECT_LEVELS = 2;
@@ -686,6 +700,12 @@ const
   // Kit-Include, %d seine Zeile.
   R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
     + 'variable FormatSettings exists from Delphi XE on';
+  // Dasselbe fuer die Ausnahmeklassen (lfExceptionClasses, rwE32 Stufe 4 -
+  // bis dahin sperrte das Kit-Include im Planer, R_RAWEXC_OLD): die Saetze
+  // des Plattenblicks nennen alle drei Klassen.
+  R_KIT_OLD_EXC = 'the file asks for old compilers (%s, line %d) - the '
+    + 'exception classes EArgumentException, EInvalidOpException and '
+    + 'ENotImplemented exist only from Delphi 2009 on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -703,7 +723,7 @@ begin
   else if AFeature = lfFormatSettingsVar then
     Result := FLOOR_SETTINGS_VAR
   else if AFeature = lfExceptionClasses then
-    Result := FLOOR_DEFAULT_FN
+    Result := FLOOR_EXCEPTION_CLASSES
   else
     Result := FLOOR_INLINE_DECL;
 end;
@@ -1204,9 +1224,12 @@ type
   //            CnDebugViewer64.dproj: der eine Bau ist Delphi 5-7);
   //   LoneDpr  ein Programm (.dpr) ganz ohne Projektdatei gleichen Namens -
   //            neben einem Lazarus-Projekt ein Doppel-Compiler-Projekt fuer
-  //            altes Delphi (RechnungDelphi.dpr neben Rechnung.lpi);
+  //            altes Delphi (RechnungDelphi.dpr neben Rechnung.lpi); seit
+  //            rwE32 Stufe 4 nicht, wenn es ein FPC-Programm ist
+  //            (FpcOnlyProgram: Hauptdatei einer .lpi, FPC-only-Units);
   //   Programs die .dpr des Verzeichnisses (SettingsProgramReason).
-  // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein).
+  // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein),
+  // LazProjects die .lpi (FpcOnlyProgram).
   TRdxProjectFiles = record
     Lazarus    : string;
     Legacy     : string;
@@ -1218,6 +1241,7 @@ type
     Bases      : TArray<string>;
     Opts       : TArray<string>;
     DprojBases : TArray<string>;
+    LazProjects: TArray<string>;
   end;
 
 // Die ersten DPROJ_HEAD_BYTES der Datei APath als ANSI-Text; False, wenn
@@ -1288,6 +1312,8 @@ begin
     AddText(AFiles.Opts, AName);
   if Ext = DPROJ_EXTENSION then
     AddText(AFiles.DprojBases, LowerCase(ChangeFileExt(AName, '')));
+  if Ext = LPI_EXTENSION then
+    AddText(AFiles.LazProjects, AName);
   if InList(Ext, LAZARUS_EXTENSIONS) then
   begin
     if AFiles.Lazarus = '' then
@@ -1315,9 +1341,45 @@ begin
   end;
 end;
 
+// Ist das Programm APrg in ADir ein FPC-Programm (rwE32 Stufe 4, Nico-
+// Entscheid: ein FPC-only-Projekt ist kein Beleg fuer ein altes Delphi)?
+// Ja, wenn eine .lpi des Verzeichnisses (ALazProjects) es als Datei nennt
+// ('<Filename Value="Zip.dpr"/>' - in einem Lazarus-Projekt die
+// Hauptdatei; doublecmd plugins\wcx\zip\src, wdx\deb_wdx\src,
+// wcx\sevenzip\src) oder es eine Unit nur von FPC/Lazarus ausserhalb jeder
+// Weiche einbindet (FPC_ONLY_UNITS: 'FPCAdds', 'CMem' ...). PairsIn fragt
+// es nur fuer ein Programm ohne eigene Projektdatei.
+function FpcOnlyProgram(const ADir, APrg: string;
+  const ALazProjects: TArray<string>): Boolean;
+var
+  Lpi, Text, Key : string;
+  SL             : TStringList;
+  Map            : TRdxCodeMap;
+begin
+  Result := False;
+  Key := LPI_FILE_TAG + LowerCase(APrg) + '"';
+  for Lpi in ALazProjects do
+    if HeadText(IncludeTrailingPathDelimiter(ADir) + Lpi, Text)
+       and (Pos(Key, LowerCase(Text)) > 0) then
+      Exit(True);
+  if not HeadText(IncludeTrailingPathDelimiter(ADir) + APrg, Text) then
+    Exit;
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Text;
+    Map := TRdxCodeMap.Create(SL);
+    Result := UnconditionalUsesOf(Map, FPC_ONLY_UNITS) <> '';
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
 // OldPair und LoneDpr aus den gesammelten Namen (s. TRdxProjectFiles): je
-// Projekt der erste Treffer in der Reihenfolge der Platte.
-procedure PairsIn(var AFiles: TRdxProjectFiles);
+// Projekt der erste Treffer in der Reihenfolge der Platte. ADir: das
+// Verzeichnis (FpcOnlyProgram liest dort .lpi und .dpr).
+procedure PairsIn(var AFiles: TRdxProjectFiles; const ADir: string);
 var
   Base, Opt, Prg : string;
   Paired         : Boolean;
@@ -1337,7 +1399,8 @@ begin
     Paired := InList(Base, AFiles.DprojBases);
     for Opt in AFiles.Opts do
       Paired := Paired or (LowerCase(ChangeFileExt(Opt, '')) = Base);
-    if not Paired then
+    if not Paired and not ((AFiles.Lazarus <> '')
+       and FpcOnlyProgram(ADir, Prg, AFiles.LazProjects)) then
     begin
       AFiles.LoneDpr := Prg;
       Break;
@@ -1362,7 +1425,7 @@ begin
   finally
     FindClose(SR);
   end;
-  PairsIn(Result);
+  PairsIn(Result, ADir);
 end;
 
 // Die ProjectVersion in Zehnteln als Text ('185' -> '18.5').
@@ -2177,6 +2240,21 @@ begin
 end;
 
 
+// Traegt das Programm APrg unter AFiles eine .dof bzw. .bdsproj gleichen
+// Namens (LEGACY_OPTION_EXTENSIONS; ModernProjectProof, rwE32 Stufe 4)?
+function OldOptionsOf(const AFiles: TRdxProjectFiles;
+  const APrg: string): Boolean;
+var
+  Opt : string;
+begin
+  Result := False;
+  for Opt in AFiles.Opts do
+    if SameText(ChangeFileExt(Opt, ''), ChangeFileExt(APrg, ''))
+       and InList(LowerCase(ExtractFileExt(Opt)), LEGACY_OPTION_EXTENSIONS)
+    then
+      Exit(True);
+end;
+
 // Hauptweg SCA128/SCA059 (lfFormatSettingsVar, rwE31 Stufe 3): ist die
 // Unit Teil eines Delphi-Projekts ab der Schwelle? Das NAECHSTE Verzeichnis
 // im Fenster mit Delphi-Projektdateien (wie ProjectWalkReason) traegt keine
@@ -2188,6 +2266,11 @@ end;
 // (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
 // 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
 // der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
+// Seit rwE32 Stufe 4 (die Ausnahmeklassen fragen hier auch) zaehlt ein
+// Programm nicht, das neben seiner .dproj eine .dof oder .bdsproj GLEICHEN
+// Namens traegt (OldOptionsOf) - es wird auch mit Delphi bis 2006 gebaut
+// (jvcl install\JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj, das
+// Installationsprogramm uebersetzt jedes Delphi ab 6 selbst).
 // Netzpfad: nein (die Hilfe liest dort nichts). Mit Cache (GDiskCache, Art
 // 'K').
 function ModernProjectProof(const AFileName: string;
@@ -2214,6 +2297,7 @@ begin
         for Prg in Files.Programs do
           if not Result
              and InList(LowerCase(ChangeFileExt(Prg, '')), Files.DprojBases)
+             and not OldOptionsOf(Files, Prg)
              and HeadText(IncludeTrailingPathDelimiter(Dir) + Prg, Text) then
             Result := DpkContains(LowerCase(Text), LowFile);
       Break;
@@ -2235,17 +2319,25 @@ end;
 // jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
 // seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
 // Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
-// '' oder der Grund.
-function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean): string;
+// Seit rwE32 Stufe 4 ebenso fuer die Ausnahmeklassen (lfExceptionClasses,
+// Projekt ab Delphi 2009): pyscripter Source\JvDockSupportControl.pas:885
+// war wegen '{$I jvcl.inc}' gesperrt, JvDockVIDStyle.pas:1603 daneben
+// (dasselbe Include, 'for var' beweist 10.3) angeboten - beide stehen in
+// PyScripter.dpr mit .dproj 20.3. '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean;
+  AFeature: TRdxLateFeature): string;
 var
   Kit : string;
   Li  : Integer;
 begin
   Result := '';
-  Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
+  Kit := OldCompilerTraceOf(AMap, FloorOf(AFeature), False, True, Li);
   if (Kit = '') or AModern then
     Exit;
-  Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+  if AFeature = lfExceptionClasses then
+    Result := _(R_KIT_OLD_EXC, [Kit, Li])
+  else
+    Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
 
 
@@ -2403,9 +2495,6 @@ var
 begin
   Result := '';
   Modern := False;
-  // Kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und sperrt
-  // nicht (die anderen Sprachmittel sperren dort, FileReason).
-  if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
   Proof := ModernProof(AMap);
   // Der Gegenbeweis (bzw. Invariant ohne Weiche) widerlegt nur die
   // Compiler-Spuren; ein Programm, das die globale FormatSettings selbst
@@ -2420,13 +2509,18 @@ begin
     Exit;
   end;
   // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
-  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
-  if AFeature = lfFormatSettingsVar then
+  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung). Seit rwE32
+  // Stufe 4 auch fuer die Ausnahmeklassen (Projekt der Unit ab 2009), dort
+  // auch auf einem Netzpfad (der Text der Datei ist der Beleg).
+  if AFeature in [lfFormatSettingsVar, lfExceptionClasses] then
   begin
     Modern := ModernProjectProof(AFileName, AFeature);
-    Result := KitIncludeReason(AMap, Modern);
+    Result := KitIncludeReason(AMap, Modern, AFeature);
     if Result <> '' then Exit;
   end;
+  // Sonst kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und
+  // sperrt nicht (die anderen Sprachmittel sperren dort, FileReason).
+  if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
   if AFileName = '' then Exit;
   Result := FileReason(AFileName, AFeature);
   // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): auch der
@@ -2437,8 +2531,11 @@ begin
   // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
   // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
   // erst ab XE.
-  if (Result = '') and (AIncludes
-     or ((AFeature = lfFormatSettingsVar) and not Modern)) then
+  // Ebenso fuer die Ausnahmeklassen (rwE32 Stufe 4): ein Projekt der Unit
+  // ab 2009 widerlegt auch die Weichen der Includes.
+  if (Result = '')
+     and ((AIncludes and not ((AFeature = lfExceptionClasses) and Modern))
+       or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant
