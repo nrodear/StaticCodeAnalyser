@@ -133,6 +133,22 @@ type
     class function ExtraIdents(const AUnitLow: string): TArray<string>;
       static;
 
+    // SCA007 (Fix-Runde 5 nach rwE33, CEF4Delphi MDIBrowser uChildForm.pas:10,
+    // SimpleServer uSimpleServer.pas:9, source\uCEFWindowDelegate.pas:16 ..):
+    // der Eintrag AIndex einer Klausel aus dem Text (TextUsesEntry) steht in
+    // einem Zweig von '{$IFDEF X} A, B, {$ELSE} A', B', {$ENDIF} C;' - genau
+    // diese drei Direktiven (auch IFNDEF/IF und IFEND) in der Klausel -, und
+    // jeder Eintrag des ANDEREN Zweigs hat in seinem einen Zwilling: gleicher
+    // Name oder bis auf ein Unit-Scope-Praefix ('Winapi.Windows' und
+    // 'Windows', UNIT_SCOPES). Dann ist jede Unit, der der Planer einen
+    // Bezeichner ueber den geparsten anderen Zweig zuordnet
+    // (uRdxFixRunner.OtherUnitsIdents), auch in diesem Zweig da - der Beweis
+    // gilt fuer ihn; Units nur dieses Zweigs fehlen ihm, das macht ihn nur
+    // strenger. Der Edit (RemoveUsesEntry) loescht nur in diesem Zweig, der
+    // andere bleibt Zeichen fuer Zeichen (sein Zwilling auch).
+    class function TwinBranches(AMap: TRdxCodeMap;
+      const AClause: TRdxUsesClause; AIndex: Integer): Boolean; static;
+
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
     // vor 'end', bedeutungsgleich); sonst diese Anweisung im else-Zweig
@@ -535,6 +551,14 @@ const
   // classes (FPC 3.2.2, classesh.inc).
   CLASSES_EXTRA: array[0..3] of string = ('point', 'smallpoint', 'rect',
     'bounds');
+  // Die Unit-Scope-Praefixe, unter denen Delphi einen Kurznamen in einer
+  // VCL-Anwendung aufloest ('ClipBrd' -> 'Vcl.ClipBrd'; die Vorgabe der
+  // Projektoptionen) - TwinBranches haelt so 'Vcl.ClipBrd' und 'ClipBrd'
+  // fuer dieselbe Unit. NICHT FMX: 'FMX.Forms' und 'Forms' sind zwei Units.
+  UNIT_SCOPES: array[0..18] of string = ('winapi', 'system.win', 'data.win',
+    'datasnap.win', 'web.win', 'soap.win', 'xml.win', 'bde', 'system', 'xml',
+    'data', 'datasnap', 'web', 'soap', 'vcl', 'vcl.imaging', 'vcl.touch',
+    'vcl.samples', 'vcl.shell');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -1219,6 +1243,188 @@ begin
         end;
     T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
+end;
+
+{ ---- SCA007: Zwillingszweige (TwinBranches) ---- }
+
+// Nennen A und B (klein) dieselbe Unit - gleich oder bis auf ein Unit-Scope-
+// Praefix (UNIT_SCOPES) vor dem Namen des anderen ('vcl.clipbrd' und
+// 'clipbrd', 'vcl.samples.spin' und 'spin')?
+function SameUnitInScope(const A, B: string): Boolean;
+var
+  Long, Short : string;
+begin
+  if A = B then
+    Exit(True);
+  if Length(A) > Length(B) then
+  begin
+    Long := A;
+    Short := B;
+  end
+  else
+  begin
+    Long := B;
+    Short := A;
+  end;
+  Result := (Length(Long) > Length(Short) + 1)
+    and (Copy(Long, Length(Long) - Length(Short), MaxInt) = '.' + Short)
+    and InList(Copy(Long, 1, Length(Long) - Length(Short) - 1), UNIT_SCOPES);
+end;
+
+// Liegt (ALine, ACol) vor (BLine, BCol)?
+function PosBefore(ALine, ACol, BLine, BCol: Integer): Boolean;
+begin
+  Result := (ALine < BLine) or ((ALine = BLine) and (ACol < BCol));
+end;
+
+// Die Tiefe der bedingten Bereiche ({$IFDEF}/{$IF}/{$IFOPT} .. {$ENDIF}/
+// {$IFEND}) vor dem Token T, ab Dateianfang gezaehlt.
+function DepthBefore(AMap: TRdxCodeMap; const T: TRdxToken): Integer;
+var
+  Li, Co : Integer;
+  W      : string;
+  Arg    : Boolean;
+begin
+  Result := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) and PosBefore(Li, Co, T.Line, T.Col) do
+  begin
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, ['if', 'ifdef', 'ifndef', 'ifopt']) then
+      Inc(Result)
+    else if InList(W, ['endif', 'ifend']) then
+      Dec(Result);
+    Inc(Co);
+  end;
+end;
+
+// Die Weiche einer uses-Klausel aus dem Text (AEntries ab dem Schluesselwort
+// AUses, ReadTextClause): 0 ohne Direktive bis zum ';', 1 bei genau
+// '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (auch IFNDEF/IF und IFEND) - ASide je
+// Eintrag 1 im ersten, 2 im zweiten Zweig, sonst 0 -, -1 bei jeder anderen
+// Folge von Direktiven.
+function ClauseSides(AMap: TRdxCodeMap; const AUses: TRdxToken;
+  const AEntries: TArray<TRefactorSpan>; out ASide: TArray<Integer>): Integer;
+var
+  Semi      : TRdxToken;
+  DLine     : array[0..2] of Integer;
+  DCol      : array[0..2] of Integer;
+  Words     : array[0..2] of string;
+  Li, Co, n : Integer;
+  k, j      : Integer;
+  Arg       : Boolean;
+begin
+  Result := -1;
+  SetLength(ASide, Length(AEntries));
+  for k := 0 to High(ASide) do
+    ASide[k] := 0;
+  if Length(AEntries) = 0 then
+    Exit;
+  Semi := SeparatorAfter(AMap, AEntries[High(AEntries)]);
+  if Semi.Low <> ';' then
+    Exit;
+  n := 0;
+  Li := AUses.Line;
+  Co := AUses.EndCol;
+  while NextDirective(AMap, Li, Co)
+     and PosBefore(Li, Co, Semi.Line, Semi.Col) do
+  begin
+    if n > High(DLine) then
+      Exit;
+    DLine[n] := Li;
+    DCol[n] := Co;
+    Words[n] := DirectiveWord(AMap, Li, Co, Arg);
+    Inc(n);
+    Inc(Co);
+  end;
+  if n = 0 then
+    Exit(0);
+  if (n <> 3) or not InList(Words[0], ['ifdef', 'ifndef', 'if'])
+     or (Words[1] <> 'else') or not InList(Words[2], ['endif', 'ifend']) then
+    Exit;
+  for k := 0 to High(AEntries) do
+    for j := 0 to 1 do
+      if PosBefore(DLine[j], DCol[j], AEntries[k].StartLine,
+           AEntries[k].StartCol)
+         and PosBefore(AEntries[k].StartLine, AEntries[k].StartCol,
+           DLine[j + 1], DCol[j + 1]) then
+        ASide[k] := j + 1;
+  Result := 1;
+end;
+
+// Hat jeder Eintrag des Zweigs AFrom einen Zwilling (SameUnitInScope) im
+// Zweig ATo?
+function Covered(const AEntries: TArray<TRefactorSpan>;
+  const ASide: TArray<Integer>; AFrom, ATo: Integer): Boolean;
+var
+  k, j  : Integer;
+  Found : Boolean;
+begin
+  Result := True;
+  for k := 0 to High(AEntries) do
+    if ASide[k] = AFrom then
+    begin
+      Found := False;
+      for j := 0 to High(AEntries) do
+        if (ASide[j] = ATo) and SameUnitInScope(
+             LowerCase(AEntries[k].Resolved),
+             LowerCase(AEntries[j].Resolved)) then
+          Found := True;
+      if not Found then
+        Exit(False);
+    end;
+end;
+
+class function TRdxStructFixes.TwinBranches(AMap: TRdxCodeMap;
+  const AClause: TRdxUsesClause; AIndex: Integer): Boolean;
+var
+  E, Es   : TArray<TRefactorSpan>;
+  Side, S : TArray<Integer>;
+  U, T    : TRdxToken;
+  Own, k  : Integer;
+begin
+  Result := False;
+  E := AClause.Entries;
+  if (AIndex < 0) or (AIndex > High(E)) then
+    Exit;
+  // 'uses' auf AClause.UsesLine vor dem ersten Eintrag.
+  U := NextToken(AMap, AClause.UsesLine, 1);
+  while (U.Low <> '') and (U.Line = AClause.UsesLine) and (U.Low <> 'uses') do
+    U := After(AMap, U);
+  if (U.Low <> 'uses')
+     or not PosBefore(U.Line, U.Col, E[0].StartLine, E[0].StartCol)
+     or (ClauseSides(AMap, U, E, Side) <> 1) then
+    Exit;
+  Own := Side[AIndex];
+  if (Own = 0) or not Covered(E, Side, 3 - Own, Own) then
+    Exit;
+  // Die uebrigen Klauseln liefert der Dienst mit SEINER Sicht der Defines;
+  // im Zweig des Funds gilt eine andere (die Weiche oben). Ihre Units gelten
+  // nur, wenn sie in jeder Sicht dieselben sind: keine Klausel steht in
+  // einem bedingten Bereich, und eine Weiche in ihr nennt in beiden Zweigen
+  // dieselben Units (bis auf Unit-Scope-Praefixe). Sonst ordnete der Beweis
+  // einen Bezeichner vielleicht einer Unit zu, die im Zweig des Funds fehlt.
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      if DepthBefore(AMap, T) <> 0 then
+        Exit;
+      if not SameTok(T, U) then
+      begin
+        if not ReadTextClause(AMap, After(AMap, T), Es) then
+          Exit;
+        k := ClauseSides(AMap, T, Es, S);
+        if (k < 0) or ((k = 1) and not (Covered(Es, S, 1, 2)
+           and Covered(Es, S, 2, 1))) then
+          Exit;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+  Result := True;
 end;
 
 { ---- SCA168 ---- }

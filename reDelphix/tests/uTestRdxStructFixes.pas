@@ -107,6 +107,10 @@ type
     // DBTables fuehren keine Liste im Detektor, Rect/Point fehlen in der von
     // Classes - ihre Exporte schliessen den Beweis (ExtraIdents).
     [Test] procedure Sca007_ForeignIdent_WindowsComObjDbTables;
+    // Fix-Runde 5 nach rwE33 (CEF4Delphi MDIBrowser uChildForm.pas:10 u. a.):
+    // der nicht geparste Zweig nennt dieselben Units wie der geparste, bis
+    // auf Unit-Scope-Praefixe - der Beweis gilt (TwinBranches).
+    [Test] procedure Sca007_TwinBranches;
   end;
 
 implementation
@@ -1472,6 +1476,92 @@ begin
     TRdxStructFixes.ExtraIdents('windows'),
     TRdxStructFixes.ExtraIdents('classes')), Li), 'ClipBrd-Konstante');
   Assert.AreEqual<Integer>(11, Li);
+end;
+
+// SCA007: der Eintrag AUnit auf ALine aus dem Text (genau einer) - steht er
+// in einem Zwillingszweig (TRdxStructFixes.TwinBranches)?
+function TwinOf(const ASource: string; ALine: Integer;
+  const AUnit: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.TwinBranches(Map, C, Ix);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_TwinBranches;
+var
+  Src, Alt : string;
+begin
+  // MDIBrowser uChildForm.pas:7-17 (minimiert): der Dienst parst den
+  // {$ELSE}-Zweig, der Fund steht im DELPHI16_UP-Zweig (cef.inc). Jede Unit
+  // des {$ELSE}-Zweigs hat ihren Zwilling mit Praefix; System.UITypes steht
+  // nur im Zweig des Funds - das macht den Beweis nur strenger.
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Winapi.Windows, System.Classes, Vcl.Forms, Vcl.ClipBrd, '
+    + 'Vcl.Samples.Spin,', '  System.UITypes,', '  {$ELSE}',
+    '  Windows, Classes, Forms, ClipBrd, Spin,', '  {$ENDIF}',
+    '  uCEFChromium;', 'implementation', 'end.']);
+  Assert.IsTrue(TwinOf(Src, 5, 'Vcl.ClipBrd'), 'Zwillinge');
+  // Umgekehrt nicht: im {$ELSE}-Zweig fehlt der Zwilling von System.UITypes.
+  Assert.IsFalse(TwinOf(Src, 8, 'ClipBrd'), 'UITypes ohne Zwilling');
+  // Ein Eintrag ausserhalb der Weiche steht in keinem Zweig.
+  Assert.IsFalse(TwinOf(Src, 10, 'uCEFChromium'), 'unbedingt');
+  // Gegenprobe: Classes steht nur im geparsten Zweig - ein TComponent hiesse
+  // dort "aus Classes", im Zweig des Funds kaeme er vielleicht aus der
+  // entfernten Unit.
+  Alt := StringReplace(Src, 'System.Classes, ', '', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Classes ohne Zwilling');
+  // Kein Unit-Scope: 'Jv.Spin' und 'Spin' sind zwei Units, 'FMX.Forms' und
+  // 'Forms' auch.
+  Alt := StringReplace(Src, 'Vcl.Samples.Spin', 'Jv.Spin', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'fremdes Praefix');
+  Alt := StringReplace(Src, 'Vcl.Forms', 'FMX.Forms', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'FMX');
+  // Eine weitere Direktive in der Klausel: nicht genau eine Weiche.
+  Alt := StringReplace(Src, '  System.UITypes,',
+    '  {$IFDEF X} System.UITypes, {$ENDIF}', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'verschachtelt');
+  // Ohne {$ELSE} gibt es keinen geparsten Zwilling.
+  Alt := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Vcl.ClipBrd,', '  {$ENDIF}', '  uCEFChromium;', 'implementation',
+    'end.']);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'ohne ELSE');
+  // {$IF ..} mit {$IFEND} gilt wie {$IFDEF} mit {$ENDIF}.
+  Alt := StringReplace(StringReplace(Src, '{$IFDEF DELPHI16_UP}',
+    '{$IF CompilerVersion >= 23}', []), '{$ENDIF}', '{$IFEND}', []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'IF/IFEND');
+  // Die uebrigen Klauseln liefert der Dienst in SEINER Sicht der Defines:
+  // eine Weiche dort zaehlt nur mit denselben Units in beiden Zweigen
+  // (TabbedOSRBrowser uChildForm.pas:105 'System.Math' / 'Math') ...
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, {$ENDIF}', '  uMain;']),
+    []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Zwillinge im implementation');
+  // ... Gegenprobe: im {$ELSE}-Zweig (geparst) steht Spin mehr - seine
+  // Bezeichner fehlen im Zweig des Funds vielleicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, Spin, {$ENDIF}',
+    '  uMain;']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Spin nur im ELSE');
+  // ... und eine Klausel in einem bedingten Bereich gilt nicht in jeder
+  // Sicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation',
+    '{$IFDEF MSWINDOWS}', 'uses Winapi.ShellAPI;', '{$ENDIF}']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Klausel im IFDEF');
 end;
 
 initialization

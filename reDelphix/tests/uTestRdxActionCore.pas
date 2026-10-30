@@ -67,7 +67,9 @@ type
     [Test] procedure Sca007_EntryInIncludeBranch_Helps;
     // Fix-Runde 4 nach rwE32 (CEF4Delphi MDIBrowser uChildForm.pas:10 u. a.):
     // im nicht geparsten Zweig nennt der Hinweis den Zweig, nicht einen
-    // Bezeichner ohne Quelle ("kann aus Vcl.ClipBrd kommen").
+    // Bezeichner ohne Quelle ("kann aus Vcl.ClipBrd kommen"). Seit Fix-Runde
+    // 5 nach rwE33 nur noch ohne Zwillingszweig; mit ihm nennt er den
+    // Bezeichner ohne Herkunft.
     [Test] procedure Sca007_IncludeBranch_BranchHint;
   end;
 
@@ -967,17 +969,26 @@ begin
     '  {$ELSE}', '  SysUtils, Variants, Classes,', '  {$ENDIF}',
     '  System.Math;', 'type', '  TFoo = class(TComponent)', '  end;',
     'implementation', 'end.']), Apply(Src, E.Action.Edits));
-  // Nachzug Review e/HilfeFixM (Nico-Entscheid SCA007 "nur Menue bei
-  // unvollstaendigem Beweis"): der Eintrag kam aus dem Text, die anderen
-  // Units des Beweises (TComponent -> Classes) aus dem {$ELSE}-Zweig - nur
-  // im Menue. Ohne den Nachzug stand die Hilfe in der Gluehbirne (fakFix).
+  // Der Eintrag kam aus dem Text, die anderen Units des Beweises
+  // (TComponent -> Classes) aus dem {$ELSE}-Zweig. Jede hat im Zweig des
+  // Funds ihren Zwilling (System.Classes ..., TRdxStructFixes.TwinBranches,
+  // Fix-Runde 5 nach rwE33) - der Beweis gilt, Gluehbirne. Bis dahin nur im
+  // Menue (Nachzug Review e/HilfeFixM) - rot ohne Fix: fakRefactor.
+  Assert.IsTrue(E.Kind = fakFix, 'Gluehbirne: ' + E.Hint);
+  // Gegenprobe: Classes steht nur im {$ELSE}-Zweig - TComponent hat im Zweig
+  // des Funds vielleicht keine Quelle, nur im Menue mit dem Grund des
+  // Zweigs.
+  E := SimpleEntryOf(StringReplace(Src,
+    'System.SysUtils, System.Variants, System.Classes,',
+    'System.Variants, System.SysUtils,', []), 'System.Variants', 5);
+  Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
   Assert.IsTrue(E.Kind = fakRefactor, 'nur im Menue: ' + E.Hint);
   Assert.IsTrue(Pos(_('not in the light bulb: %s stands in a branch of the '
-    + 'uses clause that the IDE did not parse - the other units of that '
-    + 'branch are unknown, the identifier proof is incomplete; compile '
-    + 'afterwards; if %s has an initialization section (registration), it '
-    + 'no longer runs', ['System.Variants', 'System.Variants']), E.Hint) > 0,
-    E.Hint);
+    + 'uses clause that the IDE did not parse - the quick fix cannot show '
+    + 'that the units of the parsed branch are in this branch too, the '
+    + 'identifier proof is incomplete; compile afterwards; if %s has an '
+    + 'initialization section (registration), it no longer runs',
+    ['System.Variants', 'System.Variants']), E.Hint) > 0, E.Hint);
   // Gegenprobe: 'Variants' im geparsten {$ELSE}-Zweig liefert der Dienst -
   // der Beweis ist vollstaendig, Gluehbirne.
   E := SimpleEntryOf(Src, 'Variants', 7);
@@ -1007,9 +1018,12 @@ var
   E   : TRdxActionEntry;
 begin
   // uChildForm.pas:7-24 (minimiert): TChromium (uCEFChromium, keine Liste,
-  // keine Unit daneben) hat keine Quelle. Bis dahin: "die Datei nutzt
-  // TChromium (Zeile 12) ... es kann aus Vcl.ClipBrd kommen" (rot ohne
-  // Fix). Jetzt der Grund des Zweigs - weiter nur im Menue.
+  // keine Unit daneben) hat keine Quelle. Fix-Runde 4 nach rwE32 nannte
+  // dafuer den nicht geparsten Zweig; seit Fix-Runde 5 nach rwE33 gilt der
+  // Beweis im Zwillingszweig (SysUtils/ClipBrd/Classes mit Praefix), und der
+  // Hinweis nennt TChromium - ohne die Herkunft "kann aus Vcl.ClipBrd
+  // kommen", die der Planer nicht kennt (rot ohne Fix: der Grund des
+  // Zweigs). Weiter nur im Menue.
   Src := Join(['unit t;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
     '  System.SysUtils, Vcl.ClipBrd, System.Classes,', '  {$ELSE}',
     '  SysUtils, ClipBrd, Classes,', '  {$ENDIF}', '  uCEFChromium;', 'type',
@@ -1018,12 +1032,13 @@ begin
   E := SimpleEntryOf(Src, 'Vcl.ClipBrd', 5);
   Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
   Assert.IsTrue(E.Kind = fakRefactor, 'nur im Menue: ' + E.Hint);
-  Assert.IsTrue(Pos(_('not in the light bulb: %s stands in a branch of the '
-    + 'uses clause that the IDE did not parse - the other units of that '
-    + 'branch are unknown, the identifier proof is incomplete; compile '
-    + 'afterwards; if %s has an initialization section (registration), it '
-    + 'no longer runs', ['Vcl.ClipBrd', 'Vcl.ClipBrd']), E.Hint) > 0, E.Hint);
-  Assert.AreEqual<Integer>(0, Pos('TChromium', E.Hint), E.Hint);
+  Assert.IsTrue(Pos(_('not in the light bulb: the file uses %s (line %d), '
+    + 'which the quick fix cannot assign to any other unit of the uses '
+    + 'clauses (it only knows the identifiers of common RTL, VCL and LCL '
+    + 'units, not those of project or library units) - so it cannot rule '
+    + 'out that %s is needed; compile afterwards; if %s has an '
+    + 'initialization section (registration), it no longer runs',
+    ['TChromium', 12, 'Vcl.ClipBrd', 'Vcl.ClipBrd']), E.Hint) > 0, E.Hint);
   // Gegenprobe: 'ClipBrd' im geparsten {$ELSE}-Zweig - der Bezeichner ohne
   // Quelle haelt die Hilfe wie bisher im Menue und wird genannt.
   E := SimpleEntryOf(Src, 'ClipBrd', 7);

@@ -5371,11 +5371,11 @@ msgstr "heuristischer Fund - danach kompilieren; hat %s einen initialization-Abs
 msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"
 msgstr "die Unit besteht nur aus uses-Klauseln - sie sind ihr Zweck (eine Paket-Unit übersetzt die gelisteten Units); ohne %s fällt sie aus dem Bau"
 
-msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses - it may come from %s; compile afterwards; if %s has an initialization section (registration), it no longer runs"
-msgstr "nicht in der Glühbirne: die Datei nutzt %s (Zeile %d), das die Hilfe keiner anderen Unit der uses-Klauseln zuordnen kann - es kann aus %s kommen; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
+msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses (it only knows the identifiers of common RTL, VCL and LCL units, not those of project or library units) - so it cannot rule out that %s is needed; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "nicht in der Glühbirne: die Datei nutzt %s (Zeile %d), das die Hilfe keiner anderen Unit der uses-Klauseln zuordnen kann (sie kennt nur die Bezeichner gängiger RTL-, VCL- und LCL-Units, nicht die von Projekt- oder Bibliotheks-Units) - darum kann sie nicht ausschließen, dass %s gebraucht wird; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
 
-msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the other units of that branch are unknown, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"
-msgstr "nicht in der Glühbirne: %s steht in einem Zweig der uses-Klausel, den die IDE nicht geparst hat - die übrigen Units dieses Zweigs sind unbekannt, der Bezeichner-Beweis ist unvollständig; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
+msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the quick fix cannot show that the units of the parsed branch are in this branch too, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "nicht in der Glühbirne: %s steht in einem Zweig der uses-Klausel, den die IDE nicht geparst hat - die Hilfe kann nicht zeigen, dass die Units des geparsten Zweigs auch in diesem stehen, der Bezeichner-Beweis ist unvollständig; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
 
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr "Ziel ist ein Variant - hinter 'X +' rechnet Delphi Variant-Arithmetik statt zu verketten, das Kompilat bürgt für keinen Operanden"
