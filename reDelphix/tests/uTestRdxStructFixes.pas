@@ -1416,6 +1416,16 @@ begin
     '  X: Integer;', 'begin', '  case E of', '    eA: X := 1;', '  end;',
     'end;', 'end.']);
   Assert.AreEqual('', CaseLock(Src, 16), 'lokale Routine');
+  // Gegenprobe (Review e/HilfeFixW): 'var' als Parametermodus und ein
+  // Vorgabewert in lokalen Prozedurtypen oeffnen keinen var-Abschnitt und
+  // sind kein Anfangswert - nur im Menue (rot ohne Fix: Sperre "X ...").
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'type',
+    '  TCb = procedure(var X: Integer);',
+    '  TCc = procedure(A: Integer = 0);', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    eA: X := 1;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 13), 'Parametermodus');
+  Assert.AreNotEqual('', CaseMenu(Src, 13), 'Menue (Parametermodus)');
   // Gegenprobe: jeder Wert hat einen Arm - der Anfangswert aendert nichts,
   // Gluehbirne (wie bei einer Zuweisung davor).
   Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',

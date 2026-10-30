@@ -2204,7 +2204,12 @@ begin
     if (T.Low = '(') or (T.Low = '[') then
       Inc(Paren)
     else if (T.Low = ')') or (T.Low = ']') then
-      Dec(Paren)
+    begin
+      // Die Klammer schliesst vor dem Namen auf (ein Parameter 'var X: T'
+      // in einem Prozedurtyp): keine Variable.
+      Dec(Paren);
+      if Paren < 0 then Exit;
+    end
     else if Paren = 0 then
     begin
       if T.Low = ';' then Exit;
@@ -2236,6 +2241,16 @@ begin
   T := After(AMap, P);
   while (T.Low <> '') and TokBefore(T, R.Body) do
   begin
+    // Klammern ueberspringen: 'var' als Parametermodus eines Prozedurtyps
+    // ('TCb = procedure(var X: Integer);') oeffnet keinen var-Abschnitt.
+    if (T.Low = '(') or (T.Low = '[') then
+    begin
+      P := MatchClose(AMap, T);
+      if P.Low = '' then
+        Exit;
+      T := After(AMap, P);
+      Continue;
+    end;
     if IsKeywordAfter(T, P) and InList(T.Low, ['var', 'threadvar']) then
       InVar := True
     else if IsKeywordAfter(T, P) and InList(T.Low, ['const', 'type',
