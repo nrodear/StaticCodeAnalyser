@@ -72,7 +72,7 @@ unit uRdxCompilerTraces;
 // Source\fmx\WrapFmxTypes.pas - die FPC-Weiche im gemeinsamen
 // Definition.Inc betrifft die Unit nicht).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
-// (UnconditionalAt, FpcExcludedAt).
+// (UnconditionalAt, FpcExcludedAt, NewOnlyAt).
 
 interface
 
@@ -158,6 +158,28 @@ const
   FLOOR_SETTINGS_VAR: TRdxCompilerFloor = (Ver: 220; Version: 22;
     Compiler: 15; DelphiNumber: 15; DelphiYear: 2010; Rtl: 220;
     FpcFull: 20600; XeNames: False; ProjectVersion: 122);
+  // SCA127 EArgumentException/EInvalidOpException, SCA020.2 ENotImplemented,
+  // SCA168.2 EInvalidOpException (lfExceptionClasses): Delphi 2009 wie
+  // FLOOR_DEFAULT_FN, aber FPC kennt alle drei Klassen - eine FPC-Abfrage
+  // ('{$IF FPC_FULLVERSION >= 020501}') ist kein Beleg fuer ein altes Delphi
+  // (Nico-Entscheid "Sperre nur bei Beleg"; rwE32 Stufe 4, doublecmd
+  // src\umaincommands.pas:4399 - bis dahin teilten sie FLOOR_DEFAULT_FN, und
+  // FPC_FULLVERSION unter 30000 sperrte). FpcFull 0: keine FPC-Version ist alt.
+  FLOOR_EXCEPTION_CLASSES: TRdxCompilerFloor = (Ver: 200; Version: 20;
+    Compiler: 12; DelphiNumber: 12; DelphiYear: 2009; Rtl: 200; FpcFull: 0;
+    XeNames: False; ProjectVersion: 120);
+  // SCA144 Math.IsZero/Math.SameValue: ab Delphi 6 (VER140, CompilerVersion
+  // 14, COMPILER6/DELPHI6 der JEDI-Zaehlung, RTL140); FPC kennt beide, eine
+  // .dproj gibt es erst ab Delphi 2007 (ProjectVersion 0: keine ist alt).
+  // Nur die Bedingungen der Datei fragen danach (OldTraceAtSite) - ein
+  // Kit-Include wie jvcl.inc zaehlt hier nicht: die Kits bauen mit vielen
+  // Versionen, ihre Versionsleiter belegt kein Delphi vor 6 (rwE32 Stufe 4,
+  // jvcl tests\archive\jvcl\source\JvSpin.pas:2157 'COMPILER4_UP', tests\
+  // RxLib\Source\JvSpin.pas:1144 'Delphi4_Up', cnwizards CnMsgFiler.pas:505
+  // 'COMPILER6_UP').
+  FLOOR_MATH_TOLERANCE: TRdxCompilerFloor = (Ver: 140; Version: 14;
+    Compiler: 6; DelphiNumber: 6; DelphiYear: 0; Rtl: 140; FpcFull: 0;
+    XeNames: False; ProjectVersion: 0);
 
 type
   // Eine Bedingungs-Direktive der Datei (ConditionalDirectives): das Wort
@@ -194,6 +216,15 @@ const
 // Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
+// Die Spur alter Compiler (bis AFloor) in den BEDINGUNGEN der Datei
+// (OldCompilerTraceOf ohne Kit-Includes), die die Stelle (ALine, ACol)
+// betrifft - '' und ATraceLine 0, wenn der Gegenbeweis die Schwelle deckt
+// (ModernProof/ProofCovers) oder die Stelle in einem Zweig liegt, den nur
+// Compiler ab der Schwelle uebersetzen (NewOnlyAt: '{$IFDEF COMPILER6_UP}'
+// - die Datei baut mit Delphi 5, aber nicht diese Zeile). SCA144 (Math ab
+// Delphi 6, rwE32 Stufe 4).
+function OldTraceAtSite(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  ALine, ACol: Integer; out ATraceLine: Integer): string;
 // Wie OldCompilerTrace, aber nur die Spuren einer Art: AConditions die
 // Versionssymbole und Vergleiche in Bedingungen, AKits die Kit-Includes
 // (KIT_INCLUDES). Seit rwE31 Stufe 3 trennt der Hauptweg von SCA128/SCA059
@@ -217,6 +248,14 @@ function UnconditionalAt(const ADirs: TRdxCondDirectives;
 // unbekannt (nein).
 function FpcExcludedAt(const ADirs: TRdxCondDirectives;
   ALine, ACol: Integer): Boolean;
+// Liegt (ALine, ACol) in einem Zweig, den nur Compiler ab der Schwelle
+// AFloor uebersetzen? '{$IFDEF S}' bzw. der {$ELSE}-Teil von '{$IFNDEF S}'
+// mit einem Versionssymbol S ab der Schwelle (COMPILER6_UP, DELPHI6_UP,
+// VER140, RTL140_UP, CONDITIONALEXPRESSIONS ..., NewVersionWord), '{$IF
+// CompilerVersion >= n}' (auch RTLVersion, '>') bzw. '{$IF DEFINED(S)}'
+// allein. Ein {$ELSEIF} macht den Block unbekannt (nein).
+function NewOnlyAt(const ADirs: TRdxCondDirectives; ALine, ACol: Integer;
+  const AFloor: TRdxCompilerFloor): Boolean;
 // Der Gegenbeweis der Datei (s. Kopf und TRdxModernProof): die staerkste
 // Form ausserhalb jedes Bedingungsblocks; Version = 0 ohne.
 function ModernProof(AMap: TRdxCodeMap): TRdxModernProof;
@@ -278,6 +317,9 @@ const
     'DELPHIX_ALEXANDRIA');
   NAMED_VERSIONS: array[0..5] of Integer = (30, 31, 32, 33, 34, 35);
   D6_QUESTION = 'CONDITIONALEXPRESSIONS';
+  // Die CompilerVersion dieser Namen fuer NewVersionWord: Delphi XE und 6.
+  XE_VERSION = 22;
+  D6_VERSION = 14;
   // ConditionTokens: Zeichen eines Worts bzw. eines Vergleichs.
   WORD_CHARS: TSysCharSet = ['A'..'Z', '0'..'9', '_', '.'];
   COMPARE_CHARS: TSysCharSet = ['<', '>', '='];
@@ -549,6 +591,21 @@ begin
   end;
 end;
 
+function OldTraceAtSite(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
+  ALine, ACol: Integer; out ATraceLine: Integer): string;
+begin
+  ATraceLine := 0;
+  if ProofCovers(ModernProof(AMap), AFloor) then
+    Exit('');
+  Result := OldCompilerTraceOf(AMap, AFloor, True, False, ATraceLine);
+  if (Result <> '')
+     and NewOnlyAt(ConditionalDirectives(AMap), ALine, ACol, AFloor) then
+  begin
+    Result := '';
+    ATraceLine := 0;
+  end;
+end;
+
 function ScriptReason(AMap: TRdxCodeMap; const AFeature: string): string;
 var
   T, P : TRdxToken;
@@ -674,6 +731,120 @@ begin
   end;
   for i := 0 to N - 1 do
     if Stack[i].Fpc and (Stack[i].Neg <> Stack[i].InElse) then
+      Exit(True);
+end;
+
+// Ein Versionssymbol AB der Schwelle AFloor (das Gegenstueck zu
+// OldVersionWord fuer NewOnlyAt): VERnnn ab Ver, COMPILERn/BCBn ab
+// Compiler, DELPHIn ab DelphiNumber, RTLnnn ab Rtl, die mORMot-Symbole ab
+// Version, DELPHIXE.. (22) und CONDITIONALEXPRESSIONS (14) ab Version.
+// Jahreszahlen (DELPHI2005..) nur fuer eine Schwelle vor 2005 (DelphiYear
+// darunter) - die Zaehlung der anderen Schwellen ist dort "bis
+// einschliesslich" und belegt kein "ab".
+function NewVersionWord(const AUpper: string;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  N : Integer;
+begin
+  N := MormotVersion(AUpper);
+  if N >= 0 then
+    Exit(N >= AFloor.Version);
+  if Copy(AUpper, 1, Length(XE_PREFIX)) = XE_PREFIX then
+    Exit(XE_VERSION >= AFloor.Version);
+  if Copy(AUpper, 1, Length(D6_QUESTION)) = D6_QUESTION then
+    Exit(D6_VERSION >= AFloor.Version);
+  N := NumberAfter(AUpper, 'DELPHI');
+  if N >= FIRST_DELPHI_YEAR then
+    Exit(AFloor.DelphiYear < FIRST_DELPHI_YEAR);
+  if N >= 1 then
+    Exit(N >= AFloor.DelphiNumber);
+  N := NumberAfter(AUpper, 'VER');
+  if N >= 0 then
+    Exit(N >= AFloor.Ver);
+  N := NumberAfter(AUpper, 'COMPILER');
+  if N < 0 then
+    N := NumberAfter(AUpper, 'BCB');
+  if N >= 0 then
+    Exit(N >= AFloor.Compiler);
+  N := NumberAfter(AUpper, 'RTL');
+  Result := (N >= 0) and (N >= AFloor.Rtl);
+end;
+
+// Gilt die Bedingung AArgs ({$IF}, gross ohne Leerraum) nur fuer Compiler
+// ab AFloor? 'COMPILERVERSION>=n', 'RTLVERSION>n' bzw. 'DEFINED(S)' allein.
+function NewOnlyCondition(const AArgs: string;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  Toks : TArray<string>;
+  N    : Integer;
+begin
+  Result := False;
+  Toks := ConditionTokens(AArgs);
+  if (Length(Toks) = 2) and (Toks[0] = 'DEFINED') then
+    Exit(NewVersionWord(Toks[1], AFloor));
+  if (Length(Toks) <> 3)
+     or ((Toks[0] <> 'COMPILERVERSION') and (Toks[0] <> 'RTLVERSION')) then
+    Exit;
+  N := LeadingNumber(Toks[2]);
+  if Toks[1] = '>=' then
+    Result := N >= AFloor.Version
+  else if Toks[1] = '>' then
+    Result := (N >= 0) and (N + 1 >= AFloor.Version);
+end;
+
+type
+  // Ein offener Bedingungsblock fuer NewOnlyAt: sein Teil fuer Compiler ab
+  // der Schwelle - der Then-Teil (nwThen), der {$ELSE}-Teil (nwElse) oder
+  // keiner (nwNone, auch nach {$ELSEIF}).
+  TNewWay = (nwNone, nwThen, nwElse);
+  TNewFrame = record
+    Kind   : TNewWay;
+    InElse : Boolean;
+  end;
+
+function NewOnlyAt(const ADirs: TRdxCondDirectives; ALine, ACol: Integer;
+  const AFloor: TRdxCompilerFloor): Boolean;
+var
+  Stack : array of TNewFrame;
+  i, N  : Integer;
+  D     : TRdxCondDirective;
+  Toks  : TArray<string>;
+begin
+  Result := False;
+  SetLength(Stack, Length(ADirs) + 1);
+  N := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    D := ADirs[i];
+    if not DirBefore(D, ALine, ACol) then Break;
+    if InList(D.Word, COND_OPEN) then
+    begin
+      Stack[N] := Default(TNewFrame);
+      if (D.Word = 'ifdef') or (D.Word = 'ifndef') then
+      begin
+        Toks := ConditionTokens(D.Args);
+        if (Length(Toks) > 0) and NewVersionWord(Toks[0], AFloor) then
+          if D.Word = 'ifdef' then
+            Stack[N].Kind := nwThen
+          else
+            Stack[N].Kind := nwElse;
+      end
+      else if (D.Word = 'if') and NewOnlyCondition(D.Args, AFloor) then
+        Stack[N].Kind := nwThen;
+      Inc(N);
+    end
+    else if N = 0 then
+      Continue
+    else if D.Word = 'else' then
+      Stack[N - 1].InElse := True
+    else if D.Word = 'elseif' then
+      Stack[N - 1].Kind := nwNone
+    else
+      Dec(N);
+  end;
+  for i := 0 to N - 1 do
+    if ((Stack[i].Kind = nwThen) and not Stack[i].InElse)
+       or ((Stack[i].Kind = nwElse) and Stack[i].InElse) then
       Exit(True);
 end;
 

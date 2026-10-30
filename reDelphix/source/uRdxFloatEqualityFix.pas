@@ -50,6 +50,18 @@ unit uRdxFloatEqualityFix;
 //   - die Stelle liegt in einem Zweig, den nur alte Compiler uebersetzen
 //     ('{$IFNDEF COMPILER6_UP}': Math.IsZero/SameValue gibt es ab Delphi 6,
 //     JvSimpleXml.pas:252, rwE30; TRdxTypeProof.OldCompilerBranchReason);
+//     seit rwE32 Stufe 4 auch jede andere Stelle einer Datei, deren
+//     Bedingungen nach einem Compiler vor Delphi 6 fragen ('{$IFDEF
+//     COMPILER4_UP}', '{$IFNDEF VER90}', 'Delphi4_Up', auch 'COMPILER6_UP':
+//     wer danach fragt, baut mit Delphi 5) - ausser die Stelle steht in
+//     einem Zweig nur fuer Delphi 6 und neuer, oder die Datei beweist einen
+//     neueren Compiler (uRdxCompilerTraces.OldTraceAtSite mit
+//     FLOOR_MATH_TOLERANCE; jvcl tests\archive\jvcl\source\JvSpin.pas:2157,
+//     tests\RxLib\Source\JvSpin.pas:1144, cnwizards CnMsgFiler.pas:505). Bis
+//     zu cc2cb0eb (Fix-Runde 3) sperrte dort nur zufaellig PlanUses ('uses-
+//     Klausel traegt Compiler-Direktiven'). Kit-Includes (jvcl.inc ..)
+//     zaehlen nicht - ihre Versionsleiter belegt kein Delphi vor 6;
+//     Projektdateien (.dof: Delphi 1-7) auch nicht;
 //   - seit rwE31 drei exakte Sonderfaelle, die eine Toleranz bricht:
 //     ein DIVISIONSSCHUTZ - der Vergleich mit 0 schuetzt eine Division
 //     durch den Operanden ('if D <> 0 then R := R / D else raise ..',
@@ -126,6 +138,9 @@ const
     + 'tolerance small values would silently become that text';
   R_FLOAT_STORED = '"%s" decides whether a property is stored (stored %s) '
     + '- with a tolerance values close to the default would not be saved';
+  // rwE32 Stufe 4: Spur eines Compilers vor Delphi 6 in der Datei (s. Kopf).
+  R_FLOAT_OLD = 'the file asks for old compilers (%s, line %d) - %s exists in '
+    + 'Math only from Delphi 6 on';
 
   // Die Funktionen der Ersetzung (Name im Menuetext).
   CALL_SAME_VALUE = 'SameValue';
@@ -205,6 +220,7 @@ uses
   System.SysUtils,
   uRefactorInfo,   // TRefactorSpan.Make
   uRdxTypeProof,   // EnclosingWiths, RecordFields, LocalBinding, Zweige (rwE30)
+  uRdxCompilerTraces, // OldTraceAtSite, FLOOR_MATH_TOLERANCE (rwE32)
   uRdxText;        // _(): in die reDelphix-Sprache, nie uLocalization
 
 const
@@ -873,6 +889,7 @@ var
   WithL, WithR : string;
   ThenTok      : TRdxToken;
   Stored       : string;
+  Trace        : string;   // OldTraceAtSite (rwE32 Stufe 4)
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -1032,6 +1049,13 @@ begin
     MATH_SINCE_DELPHI);
   if AReason <> '' then
     Exit;
+  Trace := OldTraceAtSite(AMap, FLOOR_MATH_TOLERANCE, LTok.Line, LTok.Col,
+    Li);
+  if Trace <> '' then
+  begin
+    AReason := _(R_FLOAT_OLD, [Trace, Li, Call]);
+    Exit;
+  end;
 
   if ZeroLeft or ZeroRight then
     Args := VarText

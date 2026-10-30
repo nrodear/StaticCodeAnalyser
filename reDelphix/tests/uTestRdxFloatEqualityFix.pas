@@ -58,6 +58,8 @@ type
     [Test] procedure TextFastPath_NoHelp;
     [Test] procedure StoredFunction_NoHelp;
     [Test] procedure BaseFloatType_Aliases;
+    // ---- rwE32 Stufe 4 (Fix-Runde 4) ----
+    [Test] procedure OldCompilerFile_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -94,7 +96,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, NewMap
+  uTestRdxTextKit;       // Join, Apply, NewMap, LineOf
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -744,6 +746,69 @@ begin
   finally
     RemoveTree(Dir);
   end;
+end;
+
+{ ---- rwE32 Stufe 4 (Fix-Runde 4) ---- }
+
+// Eine Unit mit AHead zwischen interface und implementation, die
+// Fixture-Routine dahinter (der Rumpf ab der Zeile von ABody[0]).
+function HeadUnit(const AHead, ABody: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface']) + #13#10;
+  if Length(AHead) > 0 then
+    Result := Result + Join(AHead) + #13#10;
+  Result := Result + Join(['implementation',
+    'procedure Foo(Ratio: Double; Other: Double);', 'begin']) + #13#10
+    + Join(ABody) + #13#10 + Join(['end;', 'end.']);
+end;
+
+procedure TTestRdxFloatEqualityFix.OldCompilerFile_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl tests\archive\jvcl\source\JvSpin.pas:2157/2168/2188: die Unit fragt
+  // '{$IFDEF COMPILER4_UP}' (baut also mit Delphi 3), Math.IsZero gibt es
+  // erst ab Delphi 6. Bis Fix-Runde 3 (cc2cb0eb) sperrte hier nur zufaellig
+  // PlanUses (uses-Klausel mit Direktiven).
+  Src := HeadUnit(['uses', '  {$IFDEF COMPILER4_UP} ImgList, {$ENDIF}',
+    '  Classes;'], ['  if Ratio <> 0 then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> 0'), 'Ratio', '<>', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 4, 'IsZero']));
+  // jvcl tests\RxLib\Source\JvSpin.pas:1144: '{$IFNDEF VER90}' (Delphi 2).
+  Src := HeadUnit(['{$IFNDEF VER90}', 'uses Classes;', '{$ENDIF}'],
+    ['  if Ratio <> Other then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> Other'), 'Ratio', '<>', 'Other',
+    _(R_FLOAT_OLD, ['VER90', 3, 'SameValue']));
+  // cnwizards Tool\CnDebugViewer\CnMsgFiler.pas:505: '{$IFDEF COMPILER6_UP}'
+  // im uses - wer nach Delphi 6 fragt, baut mit Delphi 5.
+  Src := HeadUnit(['uses', '  Classes, SysUtils,', '{$IFDEF COMPILER6_UP}',
+    '  Variants,', '{$ENDIF}', '  TypInfo;'], ['  if Ratio <> 0 then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> 0'), 'Ratio', '<>', '0',
+    _(R_FLOAT_OLD, ['COMPILER6_UP', 5, 'IsZero']));
+  // Gegenproben: die Stelle im Zweig fuer Delphi 6 und neuer ...
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IF CompilerVersion >= 14}', '  if Ratio = 0 then Work;', '{$IFEND}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFNDEF COMPILER6_UP}', '  Work;', '{$ELSE}', '  if Ratio = 0 then Work;',
+    '{$ENDIF}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // ... eine Frage erst nach Delphi 7 ...
+  Src := HeadUnit(['{$IFDEF COMPILER7_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // ... ein Kit-Include allein (seine Versionsleiter belegt kein Delphi 5) ...
+  Src := HeadUnit(['{$I jvcl.inc}'], ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // ... und der Gegenbeweis (RTL-Namensraum ohne Weiche: Delphi XE2).
+  Src := HeadUnit(['uses System.Classes;', '{$IFDEF COMPILER4_UP}',
+    '{$DEFINE X}', '{$ENDIF}'], ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
 end;
 
 {$IFNDEF FPC}
