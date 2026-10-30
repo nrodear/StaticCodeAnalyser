@@ -41,6 +41,10 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections;
 
+const
+  // Groesster Wert von TAstNode.EndLine (24 Bit, s. dort).
+  MAX_AST_END_LINE = $FFFFFF;
+
 type
   TNodeKind = (
     // --- Kompilationseinheit ---
@@ -101,16 +105,26 @@ type
   TAstNode = class
   public
     Kind     : TNodeKind;
-    // Nur nkMethod MIT Rumpf: Zeile des Tokens, das den Rumpf abschliesst
-    // (das 'end' bzw. das ';' dahinter), gesetzt von
-    // TParser2.ParseMethodImpl. 0 = keine Rumpf-Spanne bekannt -
-    // Interface-/Klassen-Deklarationen, forward/external, kopflose
-    // Routinen und alle anderen Knotenarten. Einziger Leser:
-    // FillMissingMethodNames (uStaticAnalyzer2) - eine Fundzeile gehoert
-    // nur dann zu einer Routine, wenn sie in [Line, EndLine] liegt.
-    // Das Feld steht bewusst direkt hinter Kind: auf Win64 faellt es in
-    // die Fuellbytes vor Name, die Instanz waechst nicht.
-    EndLine  : Integer;
+  private
+    // Speicher der Eigenschaft EndLine (s. dort): 24 Bit, aufgeteilt in
+    // Byte + Word, damit sie GENAU die drei Fuellbytes hinter Kind fuellen.
+    // Rechnung (Felder liegen in Deklarationsreihenfolge, {$A8}, Kind ist
+    // ein 1-Byte-Enum):
+    //   Win32: VMT 0..3, Kind 4, FEndLineHi 5, FEndLineLo 6..7, Name ab 8 -
+    //          dieselben Offsets wie ohne die beiden Felder, InstanceSize
+    //          36 (32 Felder + 4 Monitor). Ein Integer-Feld an dieser
+    //          Stelle haette Name auf 12 geschoben: 40 Byte, FastMM-Block
+    //          40 -> 48, +20 % je Knoten - und das D12-IDE-Plugin laeuft
+    //          32-bit und haelt ASTs im TAstFileCache.
+    //   Win64: VMT 0..7, Kind 8, FEndLineHi 9, FEndLineLo 10..11, Name ab
+    //          16 - InstanceSize 64 wie ohne die Felder (dort haette auch
+    //          ein Integer noch in die sieben Fuellbytes gepasst).
+    // uTestTAstNode.InstanceSize_EndLineKostetKeinByte haelt das fest.
+    FEndLineHi : Byte;
+    FEndLineLo : Word;
+    function GetEndLine: Integer;
+    procedure SetEndLine(AValue: Integer);
+  public
     Name     : string;     // Bezeichner, Operator oder Literal-Text
     TypeRef  : string;     // Typname bei Var, Param, Field, Method
     Line     : Integer;
@@ -175,6 +189,20 @@ type
     function FindFirstChild(AKind: TNodeKind): TAstNode;
     function HasDirectChild(AKind: TNodeKind): Boolean;
     function DirectChildCount(AKind: TNodeKind): Integer;
+
+    // Nur nkMethod MIT Rumpf: Zeile des Tokens, das den Rumpf abschliesst
+    // (das 'end' bzw. das ';' dahinter), gesetzt von
+    // TParser2.ParseMethodImpl. 0 = keine Rumpf-Spanne bekannt -
+    // Interface-/Klassen-Deklarationen, forward/external, kopflose
+    // Routinen und alle anderen Knotenarten. Einziger Leser:
+    // FillMissingMethodNames (uStaticAnalyzer2) - eine Fundzeile gehoert
+    // nur dann zu einer Routine, wenn sie in [Line, EndLine] liegt.
+    // Wertebereich 0..MAX_AST_END_LINE (24 Bit, s. Speicherfelder): ein
+    // negativer Wert wird 0, ein groesserer wird auf MAX_AST_END_LINE
+    // gekappt - die Spanne reicht dann bis zur letzten darstellbaren Zeile
+    // statt still auf eine falsche Zeile zu springen. Dateien mit mehr als
+    // 16,7 Mio. Zeilen gibt es im Referenzkorpus nicht.
+    property EndLine: Integer read GetEndLine write SetEndLine;
 
   private
     // Lazy-Cache fuer FindAll-Resultate: pro Knoten + pro TNodeKind eine
@@ -248,6 +276,31 @@ begin
 end;
 
 { TAstNode }
+
+function TAstNode.GetEndLine: Integer;
+// Die zwei Speicherfelder wieder zur Zeilennummer zusammensetzen.
+begin
+  Result := (Integer(FEndLineHi) shl 16) or Integer(FEndLineLo);
+end;
+
+procedure TAstNode.SetEndLine(AValue: Integer);
+// Kappen statt abschneiden: ein Abschneiden der oberen Bits machte aus
+// Zeile 16.777.217 die Zeile 1. Vertrag an der Eigenschaft.
+var
+  V : Integer;
+begin
+  V := AValue;
+  if V < 0 then
+  begin
+    V := 0;
+  end
+  else if V > MAX_AST_END_LINE then
+  begin
+    V := MAX_AST_END_LINE;
+  end;
+  FEndLineHi := Byte(V shr 16);
+  FEndLineLo := Word(V and $FFFF);
+end;
 
 constructor TAstNode.Create(AKind: TNodeKind; const AName: string;
   ALine, ACol: Integer);
