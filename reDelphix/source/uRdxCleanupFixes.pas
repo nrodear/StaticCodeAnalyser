@@ -1388,6 +1388,36 @@ begin
       MsgDeleteByHand]);
 end;
 
+// SCA070 (rwE32 Stufe 4, Fragwuerdig "leerzeilen-doppelt": cnwizards
+// x86Defs.pas:46, jcl JclStreams.pas:108, TestJclStrings.pas:2239/2249):
+// geht der Schnitt AFrom..ATo ueber ganze Zeilen (davor und dahinter auf
+// seinen Zeilen nur Leerraum, wie CutFrom) und steht davor UND dahinter
+// eine Leerzeile (IsBlankLine), blieben zwei Leerzeilen uebereinander - die
+// dahinter geht mit: das neue Ende ist der Anfang der Zeile hinter ihr.
+// Ist die Leerzeile dahinter die letzte der Datei, bleibt der Schnitt
+// (WholeLinesEdit rechnet am Dateiende anders, das Zeilenende davor geht
+// dort ohnehin mit); ebenso ohne Leerzeile davor oder dahinter.
+function WithBlankBelow(AMap: TRdxCodeMap;
+  const AFrom, ATo: TRdxTextPos): TRdxTextPos;
+var
+  Last : Integer;
+  L    : string;
+begin
+  Result := ATo;
+  if SkipBlanks(AMap.Raw(AFrom.Line), 1) < AFrom.Col then
+    Exit;   // Text vor dem Schnitt
+  L := AMap.Raw(ATo.Line);
+  if ATo.Col = 1 then
+    Last := ATo.Line - 1
+  else if SkipBlanks(L, ATo.Col) > Length(L) then
+    Last := ATo.Line
+  else
+    Exit;   // Text hinter dem Schnitt
+  if (AFrom.Line > 1) and IsBlankLine(AMap.Raw(AFrom.Line - 1))
+     and (Last + 1 < AMap.LineCount) and IsBlankLine(AMap.Raw(Last + 1)) then
+    Result := TextPos(Last + 2, 1);
+end;
+
 class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
   ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
@@ -1416,7 +1446,8 @@ begin
     AReason := MarkerReason(RangeText(AMap, SpanOf(CutStart, CutStop,
       SPAN_070)));
   if AReason = '' then
-    AReason := CutEdit(AMap, CutStart, CutStop, SPAN_070, AEdit);
+    AReason := CutEdit(AMap, CutStart, WithBlankBelow(AMap, CutStart, CutStop),
+      SPAN_070, AEdit);
   Result := AReason = '';
 end;
 
