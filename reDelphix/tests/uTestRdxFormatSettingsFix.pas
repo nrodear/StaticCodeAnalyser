@@ -84,6 +84,7 @@ type
     [Test] procedure Sca128_Alt_ClassSettingsField_NoHelp;
     // ---- Realworld-Test rwE33 Stufe 5 ----
     [Test] procedure Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+    [Test] procedure Sca128_Alt_ClassSettingsOtherFamily_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -1427,8 +1428,10 @@ end;
 
 // Eine Unit mit Klasse TTpl (Felder AFields im Rumpf) und der Methode
 // TTpl.Fmt, deren Rumpfzeile 'Result := FormatDateTime(S, Now);' in Zeile
-// 12 + Length(AFields) steht.
-function ClassUnit(const AFields: array of string): string;
+// 12 + Length(AFields) steht; mit AUse dahinter die Methode
+// <AOwner>.Other(d: TDateTime) mit dem Rumpf AUse.
+function ClassUnit(const AFields: array of string; const AUse: string = '';
+  const AOwner: string = 'TTpl'): string;
 var
   S : string;
 begin
@@ -1443,7 +1446,11 @@ begin
     + CRLF + 'implementation' + CRLF
     + 'function TTpl.Fmt(const S: string; const AFS: TFormatSettings): string;'
     + CRLF + 'begin' + CRLF + '  Result := FormatDateTime(S, Now);' + CRLF
-    + 'end;' + CRLF + 'end.';
+    + 'end;' + CRLF;
+  if AUse <> '' then
+    Result := Result + 'function ' + AOwner + '.Other(d: TDateTime): string;'
+      + CRLF + 'begin' + CRLF + AUse + CRLF + 'end;' + CRLF;
+  Result := Result + 'end.';
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsField_NoHelp;
@@ -1455,8 +1462,11 @@ begin
   // 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
   // einstellbar); Invariant verwuerfe die eingestellte Template-Locale. Der
   // Alt-Weg sperrt mit Hinweis auf das Feld - Parameter, Rueckgabetyp und
-  // Property zaehlen nicht als Feld.
-  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;']);
+  // Property zaehlen nicht als Feld. Seit rwE33 Stufe 5 nur, wenn eine
+  // Methode der Klasse das Feld fuer dieselbe Familie uebergibt (TemplatePro
+  // .pas:889 'DateToStr(.., fLocaleFormatSettings)').
+  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;'],
+    '  Result := DateToStr(d, fLocaleFormatSettings);');
   AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
     ['TTpl', 'fLocaleFormatSettings', 8]), True);
   // Der Hauptweg bleibt (gleiche Bedeutung).
@@ -1517,6 +1527,47 @@ begin
     []);
   AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
     Src, 8, Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsOtherFamily_Helps;
+const
+  FIELD = '    FFormatSettings: TFormatSettings;';
+  INV = 'FormatDateTime(S, Now, TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // HeidiSQL main.pas:4415 (ebenso 5674, 11246, 11252, 14718): TMainForm
+  // traegt FFormatSettings = TFormatSettings.Create('en-US') und uebergibt es
+  // nur an StrToFloat (Zeile 10680) - der Grund riet, das Feld an
+  // DateTimeToStr zu geben; das braeche das Datum wie Invariant. Kein Grund
+  // der Klasse mehr (der Planer allein bietet an; in HeidiSQL sperrt danach
+  // der Plattenblick: heidisql.dpr stellt die globale FormatSettings ein).
+  Src := ClassUnit([FIELD],
+    '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Nur als Member gelesen bzw. gar nicht uebergeben.
+  Src := ClassUnit([FIELD], '  Result := StringReplace(S, '
+    + 'FFormatSettings.DecimalSeparator, ''.'', []);');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  Src := ClassUnit([FIELD]);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Dieselbe Familie in einer Methode einer anderen Klasse.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, FFormatSettings);',
+    'TOther');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Gegenproben: dieselbe Familie in der Klasse (auch 'Self.' und ueber
+  // mehrere Argumente) - der Grund bleibt.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, Self.FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := FormatDateTime(''hh:nn'', d,'
+    + ' FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
 end;
 
 {$IFNDEF FPC}

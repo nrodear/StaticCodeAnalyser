@@ -220,8 +220,9 @@ const
     + 'locale is the right one; TFormatSettings.Invariant would show decimal '
     + 'point and MM/dd/yyyy';
   // Alt-Weg (rwE32 Stufe 4, ClassSettingsReason): die Klasse der Methode
-  // traegt ein eigenes TFormatSettings-Feld - %s die Klasse, %s das Feld,
-  // %d seine Zeile.
+  // traegt ein eigenes TFormatSettings-Feld, das sie fuer Aufrufe derselben
+  // Familie uebergibt (seit rwE33 Stufe 5) - %s die Klasse, %s das Feld, %d
+  // seine Zeile.
   R_FS_CLASS_SETTINGS = 'the class %s carries its own format settings %s '
     + '(line %d) - pass those by hand instead of TFormatSettings.Invariant, '
     + 'which would drop what is set there';
@@ -1446,6 +1447,8 @@ const
   // ('Application.MessageBox(PChar(..), ..)').
   TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
   MAX_DISPLAY_TOKENS = 2000;
+  // 'Self.FFS' als Argument (FieldUsedForFamily).
+  NAME_SELF = 'self';
   // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
   PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
     'formatcurr', 'format');
@@ -1723,8 +1726,11 @@ end;
 // schreibt es nicht selbst ein - das waere eine andere Bedeutung). Ein Feld
 // heisst: 'Name: TFormatSettings;' auf Klammertiefe 0 im Klassenrumpf
 // (auch 'A, B: ..' und 'class var'), nicht Parameter, Rueckgabetyp oder
-// Property. Mehrere Felder, mehrere Klassenkoepfe gleichen Namens oder
-// eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
+// Property. Seit rwE33 Stufe 5 nur, wenn eine Methode der Klasse das Feld
+// an einen Aufruf derselben Familie uebergibt (FieldUsedForFamily; HeidiSQL
+// main.pas:4415 - ein Feld nur fuer Zahlen ist kein Rat fuer DateTimeToStr,
+// dort greift der naechste Grund). Mehrere Felder, mehrere Klassenkoepfe
+// gleichen Namens oder eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
 // Literal festlegt ('FormatDateTime(''yyyy-mm-dd hh:nn:ss'', ..)',
 // TemplatePro.pas:3170 - dort schreibt Invariant das gewollte ISO-Format,
 // das Feld setzte dagegen einen eingestellten Zeittrenner ein; Stufe 4: ok).
@@ -1786,6 +1792,100 @@ begin
   Result := LiteralFirstArg(AMap, Li, Co, Upto, Lit);
 end;
 
+// Die Routine eines Aufrufs der Familie: Datum/Uhrzeit (PAIR_DATE) bzw. Zahl
+// (PAIR_NUMBER und Format - SCA059 meldet es nur mit Float-Spec).
+function FamilyCall(const ALow: string; AWantDate, AWantNum: Boolean): Boolean;
+begin
+  Result := (AWantDate and InList(ALow, PAIR_DATE))
+    or (AWantNum and (InList(ALow, PAIR_NUMBER) or InList(ALow, FORMAT_FUNCS)));
+end;
+
+// Der Aufruf, in dessen Klammern AFirst..ALast als ganzes Argument steht
+// ('DateToStr(d, FFS)', 'DateToStr(d, Self.FFS)'): der Name vor der
+// oeffnenden Klammer; leer, wenn das Argument anders steht oder vorher ';'
+// bzw. ein Schluesselwort auf Tiefe 0 kommt.
+function CallAroundArg(AMap: TRdxCodeMap; const AFirst,
+  ALast: TRdxToken): TRdxToken;
+var
+  P, Q  : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Q := After(AMap, ALast);
+  if (Q.Low <> ',') and (Q.Low <> ')') then Exit;
+  Depth := 0;
+  Count := 0;
+  P := Before(AMap, AFirst);
+  while (P.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Inc(Count);
+    if (P.Low = ')') or (P.Low = ']') then
+      Inc(Depth)
+    else if (P.Low = '(') or (P.Low = '[') then
+    begin
+      if Depth = 0 then
+      begin
+        if P.Low = '(' then
+          Result := Before(AMap, P);
+        Exit;
+      end;
+      Dec(Depth);
+    end
+    else if (Depth = 0) and ((P.Low = ';')
+            or (P.IsWord and IsKeyword(P.Low)
+                and IsKeywordAfter(P, Before(AMap, P)))) then
+      Exit;
+    P := Before(AMap, P);
+  end;
+end;
+
+// Uebergibt eine Methode der Klasse APath das Feld AField als ganzes
+// Argument an einen Aufruf derselben Familie wie die Aufrufe ASites
+// ('DateToStr(d, fLocaleFormatSettings)', auch 'Self.FFS')? Seit rwE33
+// Stufe 5 Bedingung des Grundes (HeidiSQL main.pas:4415/5674/11246/11252/
+// 14718: TMainForm.FFormatSettings = TFormatSettings.Create('en-US') liest
+// nur Zahlen - 'StrToFloat(.., FFormatSettings)' -, die Aufrufe dort
+// schreiben Datum/Uhrzeit; der Rat, das Feld zu uebergeben, braeche sie wie
+// Invariant).
+function FieldUsedForFamily(AMap: TRdxCodeMap; const AField: TRdxToken;
+  const APath: string; const ASites: TCallSites): Boolean;
+var
+  WantDate, WantNum : Boolean;
+  Li, i             : Integer;
+  T, P, Call        : TRdxToken;
+  R                 : TRdxRoutine;
+begin
+  Result := False;
+  FamiliesOf(ASites, WantDate, WantNum);
+  for i := 0 to High(ASites) do
+    WantNum := WantNum or InList(ASites[i].Name.Low, FORMAT_FUNCS);
+  for Li := 1 to AMap.LineCount do
+  begin
+    if Pos(AField.Low, LowerCase(AMap.Raw(Li))) = 0 then
+      Continue;
+    T := NextToken(AMap, Li, 1);
+    while (T.Low <> '') and (T.Line = Li) do
+    begin
+      P := Before(AMap, T);
+      if T.IsWord and (T.Low = AField.Low)
+         and ((P.Low <> '.') or (Before(AMap, P).Low = NAME_SELF)) then
+      begin
+        if P.Low = '.' then
+          Call := CallAroundArg(AMap, Before(AMap, P), T)
+        else
+          Call := CallAroundArg(AMap, T, T);
+        if Call.IsWord and FamilyCall(Call.Low, WantDate, WantNum)
+           and (BeginBodyAround(AMap, Call, R) = rbfFound)
+           and SameText(Copy(R.Name, 1, LastDelimiter('.', R.Name) - 1),
+             APath) then
+          Exit(True);
+      end;
+      T := After(AMap, T);
+    end;
+  end;
+end;
+
 // Der Grund, wenn der erste Aufruf in einer Methode steht, deren Klasse
 // eigene Einstellungen traegt (s. Kopf des Abschnitts); '' sonst.
 function ClassSettingsReason(AMap: TRdxCodeMap;
@@ -1812,7 +1912,7 @@ begin
   Heads := TRdxBlocks.FindClassHeads(AMap, Path);
   if Length(Heads) <> 1 then Exit;
   Field := SettingsFieldIn(AMap, Heads[0]);
-  if Field.Low <> '' then
+  if (Field.Low <> '') and FieldUsedForFamily(AMap, Field, Path, ASites) then
     Result := _(R_FS_CLASS_SETTINGS, [Path, TokText(AMap, Field),
       Field.Line]);
 end;
