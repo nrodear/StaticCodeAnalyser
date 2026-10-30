@@ -172,6 +172,11 @@ type
     [Test] procedure PlanUses_DirectiveInClause_UnconditionalEntry;
     // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
     [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
+    // Fix-Runde 4: mehrzeilige Stelle (erste bis letzte Zeile) und das
+    // Zeilenende hinter einer Direktive; die raise-Variante von SCA168 gibt
+    // die Zeilen ihrer Ersetzungen mit.
+    [Test] procedure PlanUses_RangeMustStayInBranch;
+    [Test] procedure Sca168_Raise_SysUtilsInSiteBranch_NoUses;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -217,6 +222,8 @@ type
     // Nachzug Review e/HilfeFixJ: alte Projektdatei neben der Datei sperrt
     // die raise-Varianten von SCA020 und SCA168 wie SCA127.
     [Test] procedure Raise_OldProjectOnDisk_NoHelp;
+    // Fix-Runde 4: SysUtils nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Sca020_Raise_SysUtilsInSiteBranch_NoUses;
   end;
 
   // Deklarationen (uRdxDeclFixes): SCA117, SCA197, SCA149.
@@ -1531,9 +1538,9 @@ begin
 end;
 
 // PlanUses wie PlanUsesIn fuer die Unit AShort/AQual, gefragt fuer die
-// Stelle in Zeile AAtLine (0 = ohne).
+// Stelle in Zeile AAtLine (0 = ohne) bis AAtEndLine (0 = nur AAtLine).
 function PlanUsesAt(const ASource, AShort, AQual: string;
-  AAtLine: Integer): TRdxUsesPlan;
+  AAtLine: Integer; AAtEndLine: Integer = 0): TRdxUsesPlan;
 var
   P : TSourcePlaces;
 begin
@@ -1541,7 +1548,8 @@ begin
   try
     P.SetIfdefDefines(['MSWINDOWS']);
     Assert.IsTrue(P.OpenSource('t.pas', ASource));
-    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine);
+    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine,
+      AAtEndLine);
   finally
     P.Free;
   end;
@@ -1656,6 +1664,55 @@ end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
 // in einem bedingten Zweig: die neue Klausel galte nur dort.
+// Fix-Runde 4: eine Hilfe kann ueber mehrere Zeilen schreiben (SCA168.2:
+// das ';' des letzten Arms und das 'end'), und eine Direktive darf mitten
+// in einer Anweisung stehen - die Startzeile allein beweist nichts. Die
+// Quelle wie PlanUses_EntryBranchCoversLine_Present (SysUtils in Zeile 5
+// unter '{$IFDEF RDX_X}', der Zweig bis Zeile 11 bzw. 10). Ohne Fix
+// (nur die Startzeile) waeren 9..12 und Zeile 10 der zweiten Quelle
+// eingebunden - rot. Gegenproben: 8..10 ganz im Zweig, Zeile 9 der
+// zweiten Quelle ohne Direktive.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_RangeMustStayInBranch;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end;', '{$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 8, 10);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  // Die letzte Zeile im {$ELSE}-Zweig.
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9, 12);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  // '{$ELSE}' hinter dem Code der letzten Zeile: was hinter ihr Ende
+  // kommt, laege im anderen Zweig.
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end; {$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 10);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+end;
+
+// Fix-Runde 4 (Folge rwE31): die raise-Variante von SCA168 gab PlanUses
+// keine Zeile (AppendSysUtils ohne AAtLine) - ein nur bedingt eingebundenes
+// SysUtils sperrte auch dann, wenn derselbe Zweig die ganze Unit samt case
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Seitdem die Zeilen der
+// Ersetzungen (das 'end' des case, nicht die gemeldete case-Zeile).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils', Join(['procedure P(X: Integer);',
+    'begin', '  case X of', '    1: Exit;', '  end;', 'end;']),
+    fkDefaultCaseInCaseStatement, True, 1, Detect);
+end;
+
 procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;
@@ -2152,6 +2209,16 @@ begin
   O := PlanAltFix(Bad, fkEmptyMethod, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual(Want, Apply(Bad, O.Edits));
+end;
+
+// Fix-Runde 4 (Folge rwE31): raise ENotImplemented gab PlanUses keine
+// Zeile - ein nur bedingt eingebundenes SysUtils sperrte auch dann, wenn
+// derselbe Zweig die ganze Unit samt Rumpf umschliesst (rot ohne Fix).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils',
+    Join(['procedure P;', 'begin', 'end;']), fkEmptyMethod, True, 1, Detect);
 end;
 
 procedure TTestRdxSimpleFixesDetector7.Sca120_RoundTrip_CatalogExample;

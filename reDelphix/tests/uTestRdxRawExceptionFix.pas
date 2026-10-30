@@ -73,6 +73,8 @@ type
     [Test] procedure Table_SysUtilsBehindKeywordSegment_NoSecondUses;
     [Test] procedure Table_SysUtilsOnlyUnderCondition_NoHelp;
     [Test] procedure Table_SysUtilsOnlyInComment_AddsUses;
+    // Fix-Runde 4: SysUtils nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Table_SysUtilsInSiteBranch_NoUses;
     // ---- Realworld-Test rwE30 Stufe 2 (Plattenblick, Sperre bei Beleg) ----
     [Test] procedure Table_OldProjectNearby_NoHelp;
   end;
@@ -854,6 +856,22 @@ begin
   Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils',
     _(R_USES_CONDITIONAL, [5, MsgByHand])]), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+// Fix-Runde 4 (Folge rwE31): beide Eintraege gaben PlanUses keine Zeile
+// (AppendUses ohne AAtLine) - ein nur bedingt eingebundenes SysUtils
+// sperrte auch dann, wenn derselbe Zweig die ganze Unit samt raise
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Gegenprobe je Eintrag:
+// der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsInSiteBranch_NoUses;
+const
+  IMPL = 'procedure Foo(X: Integer);'#13#10'begin'#13#10
+    + '  raise Exception.Create(''x'');'#13#10'end;';
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils', IMPL,
+    fkRaisingRawException, False, 1, DetectKind);
+  AssertBranchUses('SysUtils', 'System.SysUtils', IMPL,
+    fkRaisingRawException, True, 1, DetectKind);
 end;
 
 procedure TTestRdxRawExceptionDetector.Table_SysUtilsOnlyInComment_AddsUses;

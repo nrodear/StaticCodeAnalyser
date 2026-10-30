@@ -204,7 +204,7 @@ type
       const AUsesNames: TArray<string>): TRdxFormatOutcome; static;
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string;
-      AAtLine: Integer = 0): TRdxUsesPlan; static;
+      AAtLine: Integer = 0; AAtEndLine: Integer = 0): TRdxUsesPlan; static;
     class function DirectiveLineIn(APlaces: TSourcePlaces;
       const AEntries: TArray<TRefactorSpan>): Integer; static;
     class function UsesDirectiveLine(APlaces: TSourcePlaces): Integer; static;
@@ -444,10 +444,10 @@ end;
 
 class function TRdxRecipeRunner.PlanUses(APlaces: TSourcePlaces;
   const AShortName, AQualifiedName: string;
-  AAtLine: Integer): TRdxUsesPlan;
+  AAtLine, AAtEndLine: Integer): TRdxUsesPlan;
 begin
   Result := TRdxPlacesRunner.PlanUses(APlaces, AShortName, AQualifiedName,
-    AAtLine);
+    AAtLine, AAtEndLine);
 end;
 
 // Die Anfrage an BuildSqlTemplate: Ziel, Teile mit ihren Zeilen, with-

@@ -205,10 +205,15 @@ type
     // (die Zeile der Stelle, die die Unit braucht; 0 = unbekannt) liegt in
     // JEDEM bedingten Zweig, in dem der Eintrag steht (rwE31: gexperts
     // '{$IFDEF GX_EII}' um die ganze Unit, GX_Toolbar.pas:167): wo die
-    // Stelle uebersetzt wird, ist die Unit eingebunden.
+    // Stelle uebersetzt wird, ist die Unit eingebunden. Geht der Code, der
+    // die Unit braucht, ueber mehrere Zeilen, ist AAtEndLine die letzte
+    // (0 = wie AAtLine): JEDE Zeile von AAtLine bis AAtEndLine muss in den
+    // Zweigen liegen, dazu das Ende von AAtEndLine hinter ihren
+    // Direktiven (TextCovers; Fix-Runde 4: die Ersetzungen von SCA168.2
+    // stehen auf der Zeile des letzten Arms und des 'end').
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string;
-      AAtLine: Integer = 0): TRdxUsesPlan; static;
+      AAtLine: Integer = 0; AAtEndLine: Integer = 0): TRdxUsesPlan; static;
 
     // Erste Zeile mit einer Compiler-Direktive ('{$' oder '(*$') in der
     // Klausel von AEntries - von der Zeile des Schluesselworts 'uses' bis
@@ -640,7 +645,11 @@ end;
 
 // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit - nicht
 // ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06). ''
-// oder der Grund, wenn die Einfuegung nicht planbar ist.
+// oder der Grund, wenn die Einfuegung nicht planbar ist. Die Stelle, die
+// SysUtils braucht, ist der ersetzte Bereich AOutcome.Span (der Format-
+// Aufruf ersetzt ihn): steht SysUtils nur bedingt in uses, genuegt es,
+// wenn jeder Zweig um den Eintrag seine Zeilen umfasst (PlanUses, Fix-
+// Runde 4 - bis dahin ohne Zeile, gesperrt).
 function FormatUsesReason(APlaces: TSourcePlaces;
   const AUsesNames: TArray<string>; var AOutcome: TRdxFormatOutcome): string;
 var
@@ -648,11 +657,15 @@ var
 begin
   Result := '';
   if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
-  Plan := TRdxPlacesRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  Plan := TRdxPlacesRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils',
+    AOutcome.Span.StartLine, AOutcome.Span.EndLine);
   if not Plan.Needed then Exit;
   if Plan.Reason <> '' then
   begin
-    // Gilt jeder Kette der Datei (C16: kein Eintrag am Caret).
+    // Gilt jeder Kette der Datei (C16: kein Eintrag am Caret) - auch
+    // R_USES_CONDITIONAL, das seit Fix-Runde 4 von der Stelle abhaengt:
+    // eine Kette in einem anderen Zweig gibt den Eintrag dann frei, ein
+    // gesperrter Eintrag auf jeder Kette ausserhalb waere Rauschen.
     AOutcome.FileWide := True;
     Exit(_('%s is missing in uses: %s', ['System.SysUtils', Plan.Reason]));
   end;
@@ -1211,21 +1224,33 @@ begin
 end;
 
 // Steht ein Eintrag AShortName der uses-Klauseln im Text so, dass jeder
-// bedingte Zweig um ihn auch die Zeile AAtLine umfasst (CoversBranches)?
-// Dann ist die Unit dort eingebunden, wo AAtLine uebersetzt wird (rwE31:
-// gexperts GX_Toolbar.pas - '{$IFDEF GX_EII}' ab Zeile 5 um die ganze
-// Unit, SysUtils in Zeile 14, die Stelle in Zeile 167).
+// bedingte Zweig um ihn auch die Zeilen AAtLine bis AAtEndLine umfasst
+// (CoversBranches)? Dann ist die Unit dort eingebunden, wo diese Zeilen
+// uebersetzt werden (rwE31: gexperts GX_Toolbar.pas - '{$IFDEF GX_EII}'
+// ab Zeile 5 um die ganze Unit, SysUtils in Zeile 14, die Stelle in Zeile
+// 167). Geprueft werden die beiden Enden: der Code am Anfang von AAtLine
+// (LineStartKeys) und das Ende von AAtEndLine HINTER jeder Direktive der
+// Zeile ('X.Free; {$ENDIF}' liegt dort schon ausserhalb - eine Einfuegung
+// hinter dem Zeilenende auch). Liegen beide Enden in denselben Zweigen
+// des Eintrags, dann auch alles dazwischen: ein Zweig, der dazwischen
+// endet ({$ENDIF}) oder wechselt ({$ELSE}), traegt danach eine andere
+// Direktive als Schluessel (BranchKeysAt). Die Startzeile allein genuegte
+// nicht: Direktiven duerfen mitten in einer Anweisung stehen, die
+// Ersetzungen einer Hilfe koennen ueber mehrere Zeilen gehen
+// (uRdxFixRunner.EditLines).
 function TextCovers(APlaces: TSourcePlaces; const AShortName: string;
-  AAtLine: Integer): Boolean;
+  AAtLine, AAtEndLine: Integer): Boolean;
 var
-  Lines : TStringList;
-  Map   : TRdxCodeMap;
-  Hits  : TArray<TRdxToken>;
-  At    : TArray<Int64>;
-  i     : Integer;
+  Lines   : TStringList;
+  Map     : TRdxCodeMap;
+  Hits    : TArray<TRdxToken>;
+  At, Fin : TArray<Int64>;
+  Entry   : TArray<Int64>;
+  i       : Integer;
 begin
   Result := False;
-  if (AAtLine < 1) or (AAtLine > APlaces.LineCount) then
+  if (AAtLine < 1) or (AAtEndLine < AAtLine)
+     or (AAtEndLine > APlaces.LineCount) then
     Exit;
   Lines := PlacesLines(APlaces);
   try
@@ -1233,10 +1258,13 @@ begin
     try
       Hits := UsesHitsInMap(Map, AShortName);
       At := LineStartKeys(Map, AAtLine);
+      Fin := BranchKeysAt(Map, AAtEndLine, MaxInt);
       for i := 0 to High(Hits) do
-        if CoversBranches(BranchKeysAt(Map, Hits[i].Line, Hits[i].Col),
-             At) then
+      begin
+        Entry := BranchKeysAt(Map, Hits[i].Line, Hits[i].Col);
+        if CoversBranches(Entry, At) and CoversBranches(Entry, Fin) then
           Exit(True);
+      end;
     finally
       Map.Free;
     end;
@@ -1441,11 +1469,11 @@ end;
 
 class function TRdxPlacesRunner.PlanUses(APlaces: TSourcePlaces;
   const AShortName, AQualifiedName: string;
-  AAtLine: Integer): TRdxUsesPlan;
+  AAtLine, AAtEndLine: Integer): TRdxUsesPlan;
 var
   AllNames : TArray<string>;
   Entries  : TArray<TRefactorSpan>;
-  Li       : Integer;
+  Li, Last : Integer;
   Cond     : Boolean;
 begin
   Result := Default(TRdxUsesPlan);
@@ -1462,8 +1490,12 @@ begin
   Li := TextUsesLine(APlaces, AShortName, Cond);
   if (Li > 0) and not Cond then Exit;
   // Nur bedingt eingebunden, aber in jedem Zweig, der die Stelle AAtLine
-  // umfasst (rwE31): dort ist sie da.
-  if (Li > 0) and (AAtLine > 0) and TextCovers(APlaces, AShortName, AAtLine) then
+  // (bis AAtEndLine) umfasst (rwE31): dort ist sie da.
+  Last := AAtEndLine;
+  if Last < AAtLine then
+    Last := AAtLine;
+  if (Li > 0) and (AAtLine > 0)
+     and TextCovers(APlaces, AShortName, AAtLine, Last) then
     Exit;
   Result.Needed := True;
   if Li > 0 then

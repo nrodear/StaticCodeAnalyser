@@ -48,6 +48,8 @@ type
     [Test] procedure CaretOutsideChain_NoEntry;
     [Test] procedure MultiArgCall_NoEntry;
     [Test] procedure FileWide_NoEntry_Sca044KeepsReason;
+    // Fix-Runde 4: SysUtils nur bedingt, die Kette im selben Zweig.
+    [Test] procedure SysUtilsInChainBranch_Offered;
     [Test] procedure NoPlaces_NoEntry;
     [Test] procedure WantsPlaces_PlusNearCaret;
     [Test] procedure Caption_IsSca044RecipeCaption;
@@ -399,13 +401,36 @@ begin
     ['  Log(''a'' + IntToStr({^}N) + ''b'', 3);']), 'zwei Argumente');
 end;
 
+// Die Fund-Hilfe (SCA044) fuer die Kette der Zeile mit '  S := ' in
+// AMarked (die Caret-Marke faellt weg): DescribeAnchor + FormatRewrite.
+function FindingFormat(const AMarked: string): TRdxFormatOutcome;
+var
+  Src    : string;
+  Places : TSourcePlaces;
+  Info   : TRefactorInfo;
+  IsCall : Boolean;
+  Why    : string;
+begin
+  Places := TSourcePlaces.Create;
+  try
+    Src := StringReplace(AMarked, CARET_MARK, '', []);
+    Assert.IsTrue(Places.OpenSource('u.pas', Src), 'OpenSource');
+    Info := TRdxPlacesRunner.DescribeAnchor(Places,
+      LineOf(Src, '  S := '), 'assign', IsCall, Why);
+    try
+      Result := TRdxPlacesRunner.FormatRewrite(Places, Info, Why,
+        TRdxPlacesRunner.UsesNamesOf(Places));
+    finally
+      Info.Free;
+    end;
+  finally
+    Places.Free;
+  end;
+end;
+
 procedure TTestRdxContextFormat.FileWide_NoEntry_Sca044KeepsReason;
 var
   Src     : string;
-  Places  : TSourcePlaces;
-  Info    : TRefactorInfo;
-  IsCall  : Boolean;
-  Why     : string;
   Outcome : TRdxFormatOutcome;
 begin
   // SysUtils fehlt, und jeder Eintrag der Klausel steht in einem
@@ -417,24 +442,51 @@ begin
     ['  S := ''a'' + Name + ''{^}b'';']);
   AssertNoFormat(Src, 'uses mit Direktive');
   // Die Fund-Hilfe (dieselbe Kette) nennt den Grund weiter.
-  Places := TSourcePlaces.Create;
-  try
-    Src := StringReplace(Src, CARET_MARK, '', []);
-    Assert.IsTrue(Places.OpenSource('u.pas', Src), 'OpenSource');
-    Info := TRdxPlacesRunner.DescribeAnchor(Places,
-      LineOf(Src, '  S := '), 'assign', IsCall, Why);
-    try
-      Outcome := TRdxPlacesRunner.FormatRewrite(Places, Info, Why,
-        TRdxPlacesRunner.UsesNamesOf(Places));
-    finally
-      Info.Free;
-    end;
-  finally
-    Places.Free;
-  end;
+  Outcome := FindingFormat(Src);
   Assert.IsFalse(Outcome.Enabled, 'gesperrt');
   Assert.IsTrue(Outcome.FileWide, 'ganze Datei');
   Assert.IsTrue(Pos('System.SysUtils', Outcome.Reason) > 0, Outcome.Reason);
+end;
+
+// Fix-Runde 4 (Folge rwE31): SysUtils steht nur unter '{$IFDEF RDX_X}' in
+// uses, und derselbe Zweig umschliesst die Kette - dort ist es
+// eingebunden: Eintrag frei, nur die Kette, keine uses-Ersetzung. Bis
+// dahin fragte FormatUsesReason PlanUses ohne Zeile: R_USES_CONDITIONAL,
+// FileWide, kein Eintrag (rot ohne Fix). Den Eintrag verlieren beide
+// Baeume: der Delphi-Parser bricht die Klausel am Glied 'Foo.Abstract' ab
+// (rwE29), der Stub des FPC-Pruefstands sieht eine Klausel nur, wenn die
+// Zeile mit 'uses' beginnt. Gegenprobe: der Zweig endet hinter der
+// Klausel - kein Eintrag, die Fund-Hilfe nennt R_USES_CONDITIONAL mit der
+// Zeile des Eintrags (5).
+procedure TTestRdxContextFormat.SysUtilsInChainBranch_Offered;
+const
+  BODY = 'procedure P(const Name: string);'#13#10'var'#13#10'  S: string;'
+    + #13#10'begin'#13#10'  S := ''a'' + Name + ''{^}b'';'#13#10'end;';
+var
+  Src, Marked : string;
+  O           : TRdxContextOutcome;
+  Outcome     : TRdxFormatOutcome;
+begin
+  Marked := Join(['unit u;', '{$IFDEF RDX_X}', 'interface uses',
+    '  Foo.Abstract,', '  SysUtils;', 'implementation', BODY,
+    '{$ENDIF RDX_X}', 'end.']);
+  O := FormatAt(Marked, Src);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur die Kette');
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  Outcome := FindingFormat(Marked);
+  Assert.IsTrue(Outcome.Enabled, Outcome.Reason);
+  Assert.IsFalse(Outcome.NeedsUses, 'SysUtils ist im Zweig da');
+  // Gegenprobe: die Kette ausserhalb des Zweigs.
+  Marked := Join(['unit u;', 'interface', '{$IFDEF RDX_X} uses',
+    '  Foo.Abstract,', '  SysUtils;', '{$ENDIF RDX_X}', 'implementation',
+    BODY, 'end.']);
+  AssertNoFormat(Marked, 'Kette ausserhalb des Zweigs');
+  Outcome := FindingFormat(Marked);
+  Assert.IsFalse(Outcome.Enabled, 'gesperrt');
+  Assert.IsTrue(Outcome.FileWide, 'ganze Datei');
+  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils',
+    _(R_USES_CONDITIONAL, [5, MsgByHand])]), Outcome.Reason);
 end;
 
 procedure TTestRdxContextFormat.NoPlaces_NoEntry;

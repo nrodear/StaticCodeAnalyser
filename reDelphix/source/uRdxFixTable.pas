@@ -1791,7 +1791,7 @@ begin
   end;
   Result.Hint := _(R_FLOATEQ_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'Math', 'System.Math',
-    Result, AFinding.LineInt);
+    Result);
 end;
 
 // SCA154 (Charge QF5): 'SizeOf(PTyp)' -> 'SizeOf(Zieltyp)' fuer einen
