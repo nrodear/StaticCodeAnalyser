@@ -101,6 +101,16 @@ type
   TAstNode = class
   public
     Kind     : TNodeKind;
+    // Nur nkMethod MIT Rumpf: Zeile des Tokens, das den Rumpf abschliesst
+    // (das 'end' bzw. das ';' dahinter), gesetzt von
+    // TParser2.ParseMethodImpl. 0 = keine Rumpf-Spanne bekannt -
+    // Interface-/Klassen-Deklarationen, forward/external, kopflose
+    // Routinen und alle anderen Knotenarten. Einziger Leser:
+    // FillMissingMethodNames (uStaticAnalyzer2) - eine Fundzeile gehoert
+    // nur dann zu einer Routine, wenn sie in [Line, EndLine] liegt.
+    // Das Feld steht bewusst direkt hinter Kind: auf Win64 faellt es in
+    // die Fuellbytes vor Name, die Instanz waechst nicht.
+    EndLine  : Integer;
     Name     : string;     // Bezeichner, Operator oder Literal-Text
     TypeRef  : string;     // Typname bei Var, Param, Field, Method
     Line     : Integer;

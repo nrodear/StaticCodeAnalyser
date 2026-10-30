@@ -1025,13 +1025,38 @@ begin
       AUnits.Add(F);
 end;
 
-procedure FillMissingMethodNames(Root: TAstNode;
+procedure FillMissingMethodNames(Root: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; FromIdx: Integer);
 // Line-basierte Detektoren (AttributeDuplicate, TooLongLine, ...) setzen
 // MethodName = '' weil sie keinen AST-Methodenknoten kennen. Damit das Grid
 // (Haupt-Frame + File-Panel) trotzdem die einschliessende Methode zeigt,
 // loesen wir hier zentral Zeile -> Methode auf: fuer jeden Befund ohne
-// MethodName die Methode mit der GROESSTEN Decl-Zeile <= Befund-Zeile.
+// MethodName die Routine, deren Spanne [Line, EndLine] die Befund-Zeile
+// enthaelt - also die mit der GROESSTEN Kopfzeile <= Befund-Zeile, sofern
+// die Zeile nicht hinter ihrem Rumpf-Ende liegt.
+//
+// NUR ROUTINEN MIT RUMPF (EndLine > 0, gesetzt in uParser2.ParseMethodImpl).
+// Bis 2026-10-30 zaehlte jeder nkMethod-Knoten mit, ohne Ende: eine Zeile
+// ausserhalb jeder Routine bekam den Namen des letzten Kopfes davor.
+// Beobachtet an examples\ShowcaseDemo\uLegacyImport.pas:40 (SCA188 in
+// einem Kommentar zwischen const-Block und dem ersten Konstruktor) -
+// 'ImportFile', weil die INTERFACE-Deklaration in Zeile 27 der letzte
+// Kopf davor war. Ebenso falsch: Kommentare zwischen zwei Routinen (bei
+// der vorigen), Klassen-Deklarationen, initialization/finalization und
+// der Programm-Hauptblock (bei der letzten Routine). Ausserhalb jeder
+// Routine bleibt MethodName jetzt leer.
+//
+// Geschachtelte Routinen stehen nicht im AST (uParser2 verwirft sie nach
+// dem Parsen), ihre Zeilen liegen in der Spanne der aeusseren - Zuordnung
+// zur aeusseren wie bisher. Kopfzeile, Deklarationsteil (var/const/label)
+// und die Zeile des schliessenden 'end' gehoeren zur Routine.
+//
+// NUR FUNDE DIESER DATEI (FileName = die Datei, deren AST Root ist). Der
+// DFM-Durchlauf (uDfmAnalysisRunner, ein Detektor dieses Laufs) meldet
+// seine Funde auf der .dfm/.lfm, SCA194/195 auf fremden Units - deren
+// Zeilennummern gehoeren nicht zu diesem AST. Bis 2026-10-30 bekamen sie
+// trotzdem einen Namen aus der .pas (z.B. SCA025 auf Unit1.dfm:85 ->
+// 'TForm1.btnNavHomePaint'); jetzt bleiben sie leer.
 //
 // FindAll(nkMethod) liefert eine eigene Kopie (Caller-owned) - Sortieren +
 // Freigeben sind sicher. Greift nur wenn ueberhaupt ein leerer MethodName im
@@ -1040,6 +1065,12 @@ var
   Methods : TList<TAstNode>;
   i, Ln   : Integer;
   NeedFill: Boolean;
+
+  function IsOwnEmpty(F: TLeakFinding): Boolean;
+  begin
+    Result := (F.MethodName = '') and (F.Kind <> fkFileReadError)
+              and SameText(F.FileName, FileName);
+  end;
 
   function MethodNameForLine(L: Integer): string;
   var lo, hi, mid, found: Integer;
@@ -1052,21 +1083,29 @@ var
       if Methods[mid].Line <= L then begin found := mid; lo := mid + 1; end
       else hi := mid - 1;
     end;
-    if found >= 0 then Result := Methods[found].Name;
+    // Nur der Kandidat mit der groessten Kopfzeile wird geprueft, kein
+    // Rueckwaertslauf: Spannen ueberlappen nur nach der IFDEF-Body-
+    // Recovery des Parsers, und dort ist das Ende der aeusseren Routine
+    // ohnehin unzuverlaessig - leer ist dann die ehrlichere Antwort.
+    if (found >= 0) and (L <= Methods[found].EndLine) then
+      Result := Methods[found].Name;
   end;
 
 begin
   if (Root = nil) or (Results = nil) then Exit;
   NeedFill := False;
   for i := FromIdx to Results.Count - 1 do
-    if (Results[i].MethodName = '') and (Results[i].Kind <> fkFileReadError) then
+    if IsOwnEmpty(Results[i]) then
     begin NeedFill := True; Break; end;
   if not NeedFill then Exit;
 
   Methods := Root.FindAll(nkMethod);
   try
+    // namenlose raus, und alle ohne Rumpf-Spanne (Deklarationen,
+    // forward/external, kopflose Routinen - s. Kopfkommentar)
     for i := Methods.Count - 1 downto 0 do
-      if Methods[i].Name = '' then Methods.Delete(i);   // namenlose raus
+      if (Methods[i].Name = '') or (Methods[i].EndLine <= 0) then
+        Methods.Delete(i);
     if Methods.Count = 0 then Exit;
     Methods.Sort(TComparer<TAstNode>.Construct(
       function(const A, B: TAstNode): Integer
@@ -1075,8 +1114,7 @@ begin
       end));
     for i := FromIdx to Results.Count - 1 do
     begin
-      if Results[i].MethodName <> '' then Continue;
-      if Results[i].Kind = fkFileReadError then Continue;
+      if not IsOwnEmpty(Results[i]) then Continue;
       Ln := StrToIntDef(Results[i].LineNumber, 0);
       if Ln > 0 then
         Results[i].MethodName := MethodNameForLine(Ln);
@@ -1314,7 +1352,7 @@ begin
 
   // Einschliessende Methode fuer line-basierte Befunde (MethodName='')
   // nachtragen - zentral, damit Haupt-Grid UND File-Panel sie anzeigen.
-  FillMissingMethodNames(Root, Results, PrevCount);
+  FillMissingMethodNames(Root, FileName, Results, PrevCount);
 
   finally
     TokenPresent.Free;
