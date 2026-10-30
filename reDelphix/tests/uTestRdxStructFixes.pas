@@ -96,6 +96,9 @@ type
     // Marke nicht mehr "Aufzaehlung".
     [Test] procedure Sca168_RaiseMenu_NeighbourUnits;
     [Test] procedure Sca168_RaiseMenu_NeutralHint;
+    // Review e/HilfeFixR: der Selektor wandelt eine Zahl in die Aufzaehlung
+    // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
+    [Test] procedure Sca168_RaiseMenu_CastSelector;
   end;
 
 implementation
@@ -1320,6 +1323,34 @@ begin
   Assert.AreEqual(_('%s is declared neither in this file nor in a unit next to '
     + 'it - whether the values without an arm occur normally is not provable',
     ['MBI_NORMAL']), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_CastSelector;
+var
+  R, Src : string;
+begin
+  // doublecmd foptionshotkeys.pas:759 (minimiert): 'case THotKeySortOrder(
+  // cbCommandSortOrder.ItemIndex) of' nennt jeden Wert - ItemIndex ist ohne
+  // Auswahl aber -1, das else ist dort ein gewoehnlicher Weg. Bis zum
+  // Review in der Gluehbirne (rot ohne Fix: '').
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TKind(Combo.ItemIndex) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  R := CaseMenu(Src, 8);
+  Assert.IsTrue(Pos('TKind(Combo.ItemIndex)', R) > 0, R);
+  Assert.AreEqual('', CaseLock(Src, 8), 'nur Menue, keine Sperre');
+  // Ein Alias der Datei vor der Klammer ist ebenso eine Umwandlung.
+  Src := WithTypes(['  TKind = (kA, kB);', '  TKindAlias = TKind;'],
+    ['  case TKindAlias(Tag) of', '    kA: A;', '    kB: B;', '  end;']);
+  Assert.IsTrue(Pos('TKindAlias(Tag)', CaseMenu(Src, 9)) > 0, 'Alias');
+  // Gegenprobe: ein Funktionsaufruf liefert einen Wert des Typs -
+  // Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case KindOf(Obj) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Funktion');
+  // Gegenprobe: die Umwandlung eines Objekts, danach ein Feld - Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TItem(P).Kind of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Feld nach Umwandlung');
 end;
 
 initialization

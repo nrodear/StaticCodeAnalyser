@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7060 Zeilen, 334430 Bytes
-  CPoLines_de: array[0..7059] of string = (
+  // i18n\de.po - 7063 Zeilen, 334715 Bytes
+  CPoLines_de: array[0..7062] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7010,6 +7010,9 @@ const
     'msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"',
     'msgstr "der Selektor %s des case hat den Typ %s, keine Aufz'#$00E4'hlung - Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
     '',
+    'msgid "the case selector %s converts a value to %s - a value outside the enumeration reaches the else, and raise would break that path"',
+    'msgstr "der Selektor %s des case wandelt einen Wert in %s um - ein Wert au'#$00DF'erhalb der Aufz'#$00E4'hlung erreicht das else, und raise br'#$00E4'che diesen Weg"',
+    '',
     'msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"',
     'msgstr "die Marken der Zweige sind Zahlen - das case w'#$00E4'hlt nach einer ganzen Zahl, Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
     '',
@@ -7349,8 +7352,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7056 Zeilen, 347881 Bytes
-  CPoLines_fr: array[0..7055] of string = (
+  // i18n\fr.po - 7059 Zeilen, 348162 Bytes
+  CPoLines_fr: array[0..7058] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14341,6 +14344,9 @@ const
     '',
     'msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"',
     'msgstr "le s'#$00E9'lecteur %s du case est de type %s, pas une '#$00E9'num'#$00E9'ration - les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "the case selector %s converts a value to %s - a value outside the enumeration reaches the else, and raise would break that path"',
+    'msgstr "le s'#$00E9'lecteur %s du case convertit une valeur en %s - une valeur hors de l'''#$00E9'num'#$00E9'ration atteint le else, et raise casserait ce chemin"',
     '',
     'msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"',
     'msgstr "les '#$00E9'tiquettes des branches sont des nombres - le case porte sur un entier, les valeurs sans branche y sont normales, et raise casserait ce chemin"',

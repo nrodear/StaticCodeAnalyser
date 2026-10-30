@@ -6993,6 +6993,9 @@ msgstr "%s ist weder in dieser Datei noch in einer Unit daneben deklariert - ob 
 msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"
 msgstr "der Selektor %s des case hat den Typ %s, keine Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
 
+msgid "the case selector %s converts a value to %s - a value outside the enumeration reaches the else, and raise would break that path"
+msgstr "der Selektor %s des case wandelt einen Wert in %s um - ein Wert außerhalb der Aufzählung erreicht das else, und raise bräche diesen Weg"
+
 msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"
 msgstr "die Marken der Zweige sind Zahlen - das case wählt nach einer ganzen Zahl, Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
 

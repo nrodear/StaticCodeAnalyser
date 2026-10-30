@@ -152,8 +152,9 @@ type
     // c)', ohne eigene Zahlen, genau einmal), oder False und True. Dann
     // erreicht das else nur ein Wert ausserhalb des Typs, und raise sichert
     // nur ab. Sonst - eine andere Marke als Namen, der Typ nicht gefunden,
-    // ein Wert ohne Arm, eine Direktive im case oder in der Werteliste - der
-    // Grund, warum die Variante nur im Menue steht (TRdxFixOutcome.MenuOnly,
+    // ein Wert ohne Arm, eine Direktive im case oder in der Werteliste, ein
+    // Selektor, der eine Zahl in den Typ umwandelt ('TKind(Combo.ItemIndex)',
+    // Review e/HilfeFixR) - der Grund, warum die Variante nur im Menue steht (TRdxFixOutcome.MenuOnly,
     // uRdxFixRunner.CaseRaiseFix). Nico-Entscheid E5 (rwE32 Stufe 4):
     // ALockReason <> '' sperrt die Variante ganz (das Ergebnis traegt dann
     // denselben Grund) - der Selektor ist keine Aufzaehlung (sein Typ eine
@@ -1864,20 +1865,16 @@ begin
     Result := Base;
 end;
 
-// E5 a, nach dem Selektor: der Typ des Ausdrucks zwischen case und of, wenn
-// er beweisbar keine Aufzaehlung ist - ein Name mit solchem Typ ('iStateId:
-// Integer', 'var Key: Word'), eine Umwandlung ('NativeUInt(lpIconName)',
-// 'Ord(..)') oder das Feld Msg eines Nachrichten-Records ('Msg.Msg' mit
-// 'var Msg: TMessage'). '' oder der Grund.
-function SelectorLockReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+// Die Token des Selektors zwischen case und of (hoechstens 64); False ohne
+// 'of' oder ohne Selektor.
+function SelectorTokens(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  out AToks: TArray<TRdxToken>): Boolean;
 var
-  Toks        : TArray<TRdxToken>;
-  T           : TRdxToken;
-  Paren, n, i : Integer;
-  Ty, Sel     : string;
+  T     : TRdxToken;
+  Paren : Integer;
 begin
-  Result := '';
-  Toks := nil;
+  Result := False;
+  AToks := nil;
   Paren := 0;
   T := After(AMap, ACase);
   while (T.Low <> '') and not ((T.Low = 'of') and (Paren = 0)) do
@@ -1886,50 +1883,107 @@ begin
       Inc(Paren)
     else if T.Low = ')' then
       Dec(Paren);
-    AddToken(Toks, T);
-    if Length(Toks) > 64 then Exit;
+    AddToken(AToks, T);
+    if Length(AToks) > 64 then Exit;
     T := After(AMap, T);
   end;
+  Result := (T.Low <> '') and (Length(AToks) > 0);
+end;
+
+// Ist der Selektor ein Name mit einer Klammer, die bis zum Ende reicht
+// ('NativeUInt(lpIconName)', 'TKind(Combo.ItemIndex)')? Die ')' am Ende
+// schliesst die '(' hinter dem Namen: dazwischen kehrt die Klammertiefe
+// nicht auf 0 zurueck.
+function IsWholeCall(const AToks: TArray<TRdxToken>): Boolean;
+var
+  Paren, n, i : Integer;
+begin
+  Result := False;
+  n := Length(AToks);
+  if (n < 3) or not AToks[0].IsWord or (AToks[1].Low <> '(')
+     or (AToks[n - 1].Low <> ')') then
+    Exit;
+  Paren := 0;
+  for i := 1 to n - 2 do
+  begin
+    if AToks[i].Low = '(' then
+      Inc(Paren)
+    else if AToks[i].Low = ')' then
+      Dec(Paren);
+    if Paren = 0 then Exit;
+  end;
+  Result := True;
+end;
+
+// Der Selektor wie geschrieben (mit Strings: 'Integer(X.V[''Type''])'),
+// ueber Zeilen die Token.
+function SelectorText(AMap: TRdxCodeMap;
+  const AToks: TArray<TRdxToken>): string;
+var
+  T : TRdxToken;
+  n : Integer;
+begin
+  n := Length(AToks);
+  if AToks[0].Line = AToks[n - 1].Line then
+    Exit(Copy(AMap.Raw(AToks[0].Line), AToks[0].Col,
+      AToks[n - 1].EndCol - AToks[0].Col));
+  Result := '';
+  for T in AToks do
+    Result := Result + TokText(AMap, T);
+end;
+
+// E5 a, nach dem Selektor: der Typ des Ausdrucks zwischen case und of, wenn
+// er beweisbar keine Aufzaehlung ist - ein Name mit solchem Typ ('iStateId:
+// Integer', 'var Key: Word'), eine Umwandlung ('NativeUInt(lpIconName)',
+// 'Ord(..)') oder das Feld Msg eines Nachrichten-Records ('Msg.Msg' mit
+// 'var Msg: TMessage'). '' oder der Grund.
+function SelectorLockReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+var
+  Toks : TArray<TRdxToken>;
+  n    : Integer;
+  Ty   : string;
+begin
+  Result := '';
+  if not SelectorTokens(AMap, ACase, Toks) or not Toks[0].IsWord then Exit;
   n := Length(Toks);
-  if (T.Low = '') or (n = 0) or not Toks[0].IsWord then Exit;
   Ty := '';
   if n = 1 then
     Ty := NameTypeAt(AMap, ACase, Toks[0])
-  else if (n >= 3) and (Toks[1].Low = '(') and (Toks[n - 1].Low = ')')
-     and InList(Toks[0].Low, NON_ENUM_TYPES) then
-  begin
-    // Die ')' am Ende schliesst die '(' hinter dem Namen: dazwischen
-    // kehrt die Klammertiefe nicht auf 0 zurueck.
-    Paren := 0;
-    for i := 1 to High(Toks) - 1 do
-    begin
-      if Toks[i].Low = '(' then
-        Inc(Paren)
-      else if Toks[i].Low = ')' then
-        Dec(Paren);
-      if Paren = 0 then Exit;
-    end;
-    Ty := Toks[0].Low;
-  end
+  else if IsWholeCall(Toks) and InList(Toks[0].Low, NON_ENUM_TYPES) then
+    Ty := Toks[0].Low
   else if (n = 3) and (Toks[1].Low = '.') and (Toks[2].Low = 'msg')
      and IsMessageRecord(NameTypeAt(AMap, ACase, Toks[0])) then
     Ty := 'cardinal';
   if (Ty = '') or not InList(Ty, NON_ENUM_TYPES) then Exit;
-  // Der Selektor wie geschrieben (mit Strings: 'Integer(X.V[''Type''])'),
-  // ueber Zeilen die Token.
-  n := Length(Toks);
-  if Toks[0].Line = Toks[n - 1].Line then
-    Sel := Copy(AMap.Raw(Toks[0].Line), Toks[0].Col,
-      Toks[n - 1].EndCol - Toks[0].Col)
-  else
-  begin
-    Sel := '';
-    for T in Toks do
-      Sel := Sel + TokText(AMap, T);
-  end;
   Result := _('the case selector %s is of type %s, not an enumeration - '
     + 'values without an arm are normal there, and raise would break that '
-    + 'path', [Sel, Ty]);
+    + 'path', [SelectorText(AMap, Toks), Ty]);
+end;
+
+// Review e/HilfeFixR: wandelt der Selektor einen Wert in den Aufzaehlungstyp
+// ATypeName um ('THotKeySortOrder(cbCommandSortOrder.ItemIndex)' - doublecmd
+// foptionshotkeys.pas:759, ItemIndex -1 ohne Auswahl; 'TViewerPaintTool(
+// btnPenMode.Tag)' - fviewer.pas:1399), erreicht ein Wert ausserhalb der
+// Aufzaehlung das else auf gewoehnlichem Weg - auch wenn jeder Wert des
+// Typs einen Arm hat. Der Name vor der Klammer ist der Typ selbst oder ein
+// Typ, den die Datei deklariert (ein Alias: dann ist es eine Umwandlung,
+// kein Funktionsaufruf). '' oder der Grund (nur im Menue).
+function CastSelectorReason(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const ATypeName: string): string;
+var
+  Toks : TArray<TRdxToken>;
+begin
+  Result := '';
+  if (ATypeName = '') or not SelectorTokens(AMap, ACase, Toks)
+     or not IsWholeCall(Toks) then
+    Exit;
+  if not SameText(Toks[0].Low, ATypeName)
+     and (TRdxTypeProof.UniqueAliasBase(AMap, TokText(AMap, Toks[0])) = '')
+  then
+    Exit;
+  Result := _('the case selector %s converts a value to %s - a value outside '
+    + 'the enumeration reaches the else, and raise would break that path',
+    [SelectorText(AMap, Toks), ATypeName]);
 end;
 
 // E5 a, nach den Marken: AName ist in der Datei (AUnit = '') bzw. in der
@@ -2160,6 +2214,10 @@ begin
     if (Result = '') and (Missing <> '') then
       Result := _('values of %s without an arm: %s - they may be normal here, '
         + 'and raise would break that path', [TypeName, Missing]);
+    // Jeder Wert hat einen Arm, aber der Selektor wandelt eine Zahl um
+    // (Review e/HilfeFixR): Werte ausserhalb des Typs sind dort gewoehnlich.
+    if Result = '' then
+      Result := CastSelectorReason(AMap, CaseTok, TypeName);
   end;
   // E5 b: nicht jeder Wert hat einen Arm, und das Ergebnis ist vorbelegt.
   if Result <> '' then
