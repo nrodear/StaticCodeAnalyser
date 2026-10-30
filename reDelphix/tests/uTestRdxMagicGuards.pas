@@ -59,6 +59,7 @@ type
     [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
     [Test] procedure Traces_FpcVerSymbols;
     // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Disk_ExceptionClasses_FpcOnlyProjectRefutes;
     [Test] procedure Traces_NameOldBranchFirst;
     [Test] procedure Traces_PrefixedCompilerSymbols;
   end;
@@ -1318,6 +1319,71 @@ begin
 end;
 
 { ---- Realworld-Test rwE33 Stufe 5 ---- }
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_FpcOnlyProjectRefutes;
+const
+  SRC = 'unit u;' + #13#10 + '{$I AbDefine.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  INC = '{$IFNDEF FPC}' + #13#10
+    + '  {$IF DEFINED(LINUX) AND (CompilerVersion < 15)}' + #13#10
+    + '    {$DEFINE KYLIX}' + #13#10 + '  {$IFEND}' + #13#10 + '{$ENDIF}';
+  LPI_FMT = '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 + '<CONFIG>'
+    + #13#10 + '  <CompilerOptions>' + #13#10 + '    <SearchPaths>' + #13#10
+    + '      <OtherUnitFiles Value="%s"/>' + #13#10 + '    </SearchPaths>'
+    + #13#10 + '  </CompilerOptions>' + #13#10 + '  <Units>' + #13#10
+    + '    <Unit>' + #13#10 + '      <Filename Value="Zip.dpr"/>' + #13#10
+    + '    </Unit>' + #13#10 + '  </Units>' + #13#10 + '</CONFIG>';
+  DPR_SRC = 'library Zip;' + #13#10 + 'uses' + #13#10 + '  FPCAdds,' + #13#10
+    + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // doublecmd plugins\wcx\zip\src\fparchive\abzipprc.pas:212 (SCA127/
+  // SCA127.2): AbDefine.inc fragt im Zweig '{$IFNDEF FPC}' nach
+  // 'CompilerVersion < 15' (Abbrevia-Erbe); gebaut wird die Unit nur von
+  // Zip.lpi eine Ebene hoeher (OtherUnitFiles 'fparchive', Hauptdatei
+  // Zip.dpr). FPC 3.2.2 kennt beide Klassen - die Delphi-Weiche belegt
+  // keinen Compiler, der die Unit baut (Nico-Entscheid). Bis dahin sperrte
+  // IncludeReason mit 'AbDefine.inc .. COMPILERVERSION < 15'.
+  T := NewTree;
+  try
+    WriteText(T.C + 'AbDefine.inc', INC);
+    // Ohne Projekt (eine Bibliothek): das Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc', 'COMPILERVERSION < 15']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['c;../../sdk']));
+    WriteText(T.B + 'Zip.dpr', DPR_SRC);
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'nur FPC baut die Unit');
+    // Gegenproben: die .lpi sucht die Unit nicht ...
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['cc;../../sdk']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../../sdk;c/']));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Eintrag mit / am Ende');
+    // ... ein Delphi-Programm daneben (kein FPC-Programm) ...
+    WriteText(T.B + 'ZipDelphi.dpr', 'library ZipDelphi;' + #13#10 + 'uses'
+      + #13#10 + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['ZipDelphi.dpr']);
+    DeleteFile(T.B + 'ZipDelphi.dpr');
+    // ... eine alte Projekt- bzw. Optionsdatei ...
+    WriteText(T.A + 'Zip.cfg', '-$A8');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.A + 'Zip.cfg');
+    // ... ein Paketordner im Fenster.
+    ForceDirectories(T.A + 'packages');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    RemoveDir(T.A + 'packages');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'wieder nur FPC');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
 
 // OldCompilerTraceOf (nur die Bedingungen) auf ASource; ALine die Zeile.
 function TraceIn(const ASource: string; const AFloor: TRdxCompilerFloor;
