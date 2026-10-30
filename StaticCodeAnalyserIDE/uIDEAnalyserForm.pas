@@ -2293,7 +2293,8 @@ procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
 // Scans zu verlieren. Findings.OwnsObjects := False damit die TLeakFinding-
 // Instanzen an FAllFindings (hat eigene Ownership=True) wandern.
 var
-  i: Integer;
+  i        : Integer;
+  UnitBase : string;
 begin
   if GLiveAnalyserFrame <> Pointer(Self) then
   begin
@@ -2312,9 +2313,22 @@ begin
     // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
     FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
-    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
+    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
+    // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
+    // .pas liefert die DFM-Funde mit dem Pfad der Formdatei neu mit
+    // (TDfmAnalysisRunner); geloescht wurde bis 2026-10-30 nur nach der
+    // .pas, jeder Watch-Lauf haengte also eine weitere Kopie der DFM-Funde
+    // an. Unter dem zaehlenden Baseline-Abgleich (uBaseline.
+    // TBaselineMatcher) deckt ein Eintrag nur EINE Kopie - die zweite
+    // erschien als neu (Review d/MethodAttr). Die Generation oben reicht
+    // auch fuer die Formdatei: der Index-Stempel ist das Maximum aller
+    // Generationen (FindingsStampOf), FFileIndex baut also neu.
+    UnitBase := ChangeFileExt(FileName, '');
     for i := FAllFindings.Count - 1 downto 0 do
-      if SameText(FAllFindings[i].FileName, FileName) then
+      if SameText(FAllFindings[i].FileName, FileName)
+         or (TStaticFiles.IsFormFileNameAnyDialect(FAllFindings[i].FileName)
+             and SameText(ChangeFileExt(FAllFindings[i].FileName, ''),
+                          UnitBase)) then
         FAllFindings.Delete(i);
 
     // 2) Neue Findings einhaengen (Ownership-Transfer).

@@ -39,6 +39,14 @@ unit uTestBaselineCounting;
 //       Plugin (TBaselineSet.CoveredFlags/NewOnly); Contains bleibt die
 //       Einzelfrage und sagt fuer beide Funde True.
 //       OHNE DEN UMBAU ROT (NewOnly lief ueber Contains je Fund).
+//   (f) Reihenfolge_AendertErgebnisNicht - dieselben Funde in zwei
+//       Reihenfolgen ergeben dieselben "neu"-Funde (Review d/MethodAttr
+//       2026-10-30: das IDE-Dock haengt nach einem Watch-Lauf Funde hinten
+//       an, die CLI sieht die Engine-Reihenfolge). Der Fall ist zugleich
+//       der, in dem Stufe 2 einem Fund mit Fingerprint-Rueckweg den
+//       Eintrag wegnahm: richtig ist "keiner neu".
+//       OHNE DIE KANONISCHE REIHENFOLGE UND DEN ZWEI-DURCHGANG IN STUFE 2
+//       ROT (die Reihenfolge A, B ergab einen neuen Fund).
 //
 // Kein Test hier fasst ein Prozess-Global an - alle Baseline-Operationen
 // bekommen ihren Zuschnitt als Parameter.
@@ -64,6 +72,7 @@ type
     [Test] procedure ContextTreffer_VerbrauchtEintrag_ZweiterFundNeu;
     [Test] procedure AlteBaseline_OhneContextHash_ZaehltUeberFingerprint;
     [Test] procedure AnzeigeFilter_NewOnly_Zaehlt;
+    [Test] procedure Reihenfolge_AendertErgebnisNicht;
   end;
 
 implementation
@@ -91,6 +100,10 @@ const
   NO_METHOD   = '';
   DETAIL_SAME = 'Empty block';
   DETAIL_NEW  = 'Empty block - kein Kommentar, keine Anweisung';
+  // Fuer (f): drei verschiedene Fingerprints derselben Regel.
+  DETAIL_W = 'Empty block W';
+  DETAIL_Y = 'Empty block Y';
+  DETAIL_Z = 'Empty block Z';
 
 { Freie Helfer }
 
@@ -352,7 +365,7 @@ begin
     Assert.AreEqual<Integer>(2, List.Count,
       'neu: der dritte gleiche Fund und der mit anderem Fingerprint');
     Assert.AreEqual<Integer>(LINE_C, LineOf(List[0]),
-      'ohne contextHash in Listen-Reihenfolge: der dritte ist der neue');
+      'ohne contextHash nach Zeile: der dritte ist der neue');
     Assert.AreEqual(DETAIL_NEW, List[1].MissingVar,
       'der Fund mit anderem Fingerprint bleibt neu wie eh und je');
   finally
@@ -407,6 +420,60 @@ begin
   finally
     BSet.Free;
     List.Free;
+  end;
+end;
+
+procedure TTestBaselineCounting.Reihenfolge_AendertErgebnisNicht;
+// (f) OHNE DIE KANONISCHE REIHENFOLGE UND DEN ZWEI-DURCHGANG IN STUFE 2
+// ROT: in Runde 0 nahm A den Eintrag E1 ueber den contextHash, B war neu
+// (Dropped 1); in Runde 1 nahm B ihn und A fand E2 (Dropped 2).
+// Baseline: E1 = Fingerprint W, Fenster an LINE_A; E2 = Fingerprint Y,
+// Fenster an LINE_B. Funde, beide an LINE_A (also Fenster von E1):
+// A mit Fingerprint Y, B mit Fingerprint Z (kommt in der Baseline nicht
+// vor). Richtig ist: B bekommt E1 ueber den contextHash, A E2 ueber den
+// Fingerprint - kein Fund neu, in beiden Reihenfolgen.
+var
+  Src     : TObjectList<TLeakFinding>;
+  List    : TObjectList<TLeakFinding>;
+  Dropped : Integer;
+  Runde   : Integer;
+begin
+  WritePas('A');
+  Src := TObjectList<TLeakFinding>.Create(True);
+  try
+    Src.Add(NewFinding(FPasFile, LINE_A, DETAIL_W));
+    Src.Add(NewFinding(FPasFile, LINE_B, DETAIL_Y));
+    Assert.AreEqual<Integer>(2,
+      TBaseline.Write(Src, FBaselineFile, TBaselineScope.ByFileName),
+      'Vorbedingung: zwei Eintraege geschrieben');
+  finally
+    Src.Free;
+  end;
+
+  for Runde := 0 to 1 do
+  begin
+    List := TObjectList<TLeakFinding>.Create(True);
+    try
+      if Runde = 0 then
+      begin
+        List.Add(NewFinding(FPasFile, LINE_A, DETAIL_Y));   // A
+        List.Add(NewFinding(FPasFile, LINE_A, DETAIL_Z));   // B
+      end
+      else
+      begin
+        List.Add(NewFinding(FPasFile, LINE_A, DETAIL_Z));   // B
+        List.Add(NewFinding(FPasFile, LINE_A, DETAIL_Y));   // A
+      end;
+      Dropped := TBaseline.Apply(List, FBaselineFile,
+        TBaselineScope.ByFileName);
+      Assert.AreEqual<Integer>(2, Dropped, Format(
+        'Runde %d: B ueber den contextHash, A ueber den Fingerprint',
+        [Runde]));
+      Assert.AreEqual<Integer>(0, List.Count,
+        Format('Runde %d: kein Fund neu', [Runde]));
+    finally
+      List.Free;
+    end;
   end;
 end;
 

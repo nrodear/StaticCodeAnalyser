@@ -272,8 +272,9 @@ type
   // Jetzt gilt: drei aktuelle Funde gegen zwei gleiche Eintraege - genau
   // einer ist neu.
   //
-  // ZUORDNUNG IN DREI STUFEN, jede ueber die Fundliste in ihrer
-  // Reihenfolge, jeder Eintrag wird hoechstens einmal verbraucht:
+  // ZUORDNUNG IN DREI STUFEN, jede ueber die Fundliste in der
+  // KANONISCHEN Reihenfolge (FindingOrder, s. unten), jeder Eintrag wird
+  // hoechstens einmal verbraucht:
   //   1. EXAKT - Fingerprint UND contextHash-Schluessel gleich. Zuerst,
   //      damit ein unveraenderter Fund "seinen" Eintrag bekommt und ihn
   //      nicht an einen Nachbarn gleichen Fingerprints verliert.
@@ -289,6 +290,25 @@ type
   // erscheint dieser als neu. Die ANZAHL der neuen Funde stimmt dann nur
   // noch als Obergrenze; welcher von mehreren gleichartigen Funden als
   // neu gilt, legt die Reihenfolge fest.
+  //
+  // WARUM EINE KANONISCHE REIHENFOLGE (Review d/MethodAttr 2026-10-30):
+  // die Listen-Reihenfolge haengt am Aufrufer - die CLI sieht die
+  // Engine-Reihenfolge, das IDE-Dock haengt nach einem Watch-Lauf die
+  // Funde der Datei hinten an. Weil Stufe 2 bestimmt, wer in Stufe 3
+  // noch einen Eintrag findet, haengt sonst nicht nur WELCHER Fund neu
+  // ist, sondern sogar WIE VIELE an der Reihenfolge. Gegenbeispiel, eine
+  // Datei, eine Regel: Eintraege E1 (Fingerprint W, Fenster K) und E2
+  // (Y, M); Funde A (Y, K) und B (Z, K). A vor B: A nimmt E1 ueber den
+  // contextHash, B ist neu. B vor A: B nimmt E1, A findet E2 ueber den
+  // Fingerprint - keiner neu. Zwei Abhilfen: FindingOrder sortiert vor
+  // der Zuordnung nach Inhalt (Datei, Zeile, Regel, Meldung, Methode) -
+  // CLI, EXE, Plugin und Silent-Lauf zeigen so fuer dieselben Funde
+  // dieselben "neu"-Funde -, und Stufe 2 bedient zuerst die Funde OHNE
+  // Fingerprint-Rueckweg (im Beispiel B), sodass A danach E2 findet.
+  // Optimal ist die Zuordnung auch damit nicht: WELCHER freie Eintrag
+  // einer contextHash-Kette verbraucht wird, fragt nicht, ob ein anderer
+  // Fund seinen Fingerprint noch braucht, und Stufe 1 gibt einen exakten
+  // Eintrag nie her (Absicht, s. oben).
   //
   // DATEIFORMAT UNVERAENDERT: BuildBaselineArray schreibt seit jeher einen
   // Eintrag JE FUND, auch bei gleichem Fingerprint. Die Vielfachheit
@@ -331,9 +351,16 @@ type
     // Fundliste und gleich lang ('' = Quelle fuer diesen Fund nicht
     // verfuegbar); das Ergebnis ebenso: True = von einem Eintrag gedeckt.
     // Veraendert den Matcher nicht - jeder Aufruf beginnt mit allen
-    // Eintraegen frei.
-    function Match(const AFingerprints,
-      AContextKeys: TArray<string>): TArray<Boolean>;
+    // Eintraegen frei. AOrder ist die Bearbeitungsreihenfolge (eine
+    // Permutation der Fund-Indizes, s. FindingOrder) und genauso lang.
+    function Match(const AFingerprints, AContextKeys: TArray<string>;
+      const AOrder: TArray<Integer>): TArray<Boolean>;
+    // Die kanonische Bearbeitungsreihenfolge fuer Match: die Fund-Indizes
+    // von AFindings, sortiert nach Datei (ohne Gross/klein), Zeile, Regel,
+    // RuleID, Meldung, Methode und zuletzt dem Index. Haengt damit nur am
+    // Inhalt der Funde, nicht an ihrer Reihenfolge in der Liste.
+    class function FindingOrder(
+      AFindings: TList<TLeakFinding>): TArray<Integer>; static;
   end;
 
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor, EXE):
@@ -516,10 +543,13 @@ type
     //
     // NICHT GEDECKT (Gegenpruefung 2026-08-28): liefert eine geaenderte
     // Datei GAR KEINE Funde mehr, steht ihr Pfad in keinem Fund und ihre
-    // Eintraege bleiben im Speicher stehen. Das bleibt heute folgenlos,
-    // weil OnWatchFindings Schritt 1 die alten Funde derselben Datei
-    // ebenfalls stehenlaesst (uIDEAnalyserForm - eigener Fehler, eigener
-    // Fix); wer den behebt, muss diese Loesch-Menge mitziehen.
+    // Eintraege bleiben im Speicher stehen. Seit 2026-10-30 loescht
+    // OnWatchFindings Schritt 1 (uIDEAnalyserForm) die alten Funde der
+    // Formdatei mit; die stehengebliebenen Eintraege gehoeren dann zu
+    // keinem Fund mehr und werden nie gefragt - ein spaeterer Fund mit
+    // demselben Schluessel kommt nur ueber einen Watch-Lauf dieser Datei
+    // (rechnet sie neu) oder einen Voll-Scan (PrepareContextHashes
+    // verwirft alles).
     function RefreshContextHashesForFile(const AFileName: string;
       AFindings: TObjectList<TLeakFinding>): Integer;
 
@@ -558,6 +588,7 @@ implementation
 
 uses
   System.JSON, System.IOUtils,
+  System.Generics.Defaults,  // TComparer - TBaselineMatcher.FindingOrder
   uJsonFormat,             // JsonFormatEscaped - Format(2) escaped keine
                            // Steuerzeichen (s. TBaseline.Write)
   uFindingFingerprint;
@@ -1463,22 +1494,28 @@ begin
 end;
 
 function TBaselineMatcher.Match(const AFingerprints,
-  AContextKeys: TArray<string>): TArray<Boolean>;
+  AContextKeys: TArray<string>;
+  const AOrder: TArray<Integer>): TArray<Boolean>;
 // Drei Stufen, Begruendung an der Klasse. Die Ketten-Cursor (FpCur,
 // CtxCur) ruecken nur ueber verbrauchte Eintraege am Kettenkopf vor - weil
 // ein Eintrag nie wieder frei wird, bleibt jede Kette insgesamt linear.
+// Jede Stufe laeuft in der Reihenfolge AOrder (k = Rang, i = Fund-Index).
 var
   Covered : TArray<Boolean>;
   Used    : TArray<Boolean>;
   FpCur   : TArray<Integer>;
   CtxCur  : TArray<Integer>;
-  i, C, E : Integer;
+  k, i     : Integer;
+  C, E     : Integer;
+  Pass     : Integer;
+  HasFpWay : Boolean;
 begin
-  if Length(AContextKeys) <> Length(AFingerprints) then
+  if (Length(AContextKeys) <> Length(AFingerprints))
+     or (Length(AOrder) <> Length(AFingerprints)) then
   begin
     raise EArgumentException.Create(
-      'TBaselineMatcher.Match: fingerprint and context key lists differ ' +
-      'in length');
+      'TBaselineMatcher.Match: fingerprint, context key and order lists ' +
+      'differ in length');
   end;
   SetLength(Covered, Length(AFingerprints));
   SetLength(Used, FFp.Count);
@@ -1487,8 +1524,9 @@ begin
 
   // 1. EXAKT: Fingerprint UND contextHash-Schluessel. Gesucht wird in der
   //    contextHash-Kette - sie ist dateiweit qualifiziert und deshalb kurz.
-  for i := 0 to High(Covered) do
+  for k := 0 to High(AOrder) do
   begin
+    i := AOrder[k];
     if (AFingerprints[i] = '') or (AContextKeys[i] = '') then Continue;
     if not FCtxChain.TryGetValue(AContextKeys[i], C) then Continue;
     E := NextFree(FCtxNext, Used, CtxCur[C]);
@@ -1506,22 +1544,36 @@ begin
   end;
 
   // 2. NUR contextHash: der erste freie Eintrag mit diesem Schluessel.
-  for i := 0 to High(Covered) do
+  //    In ZWEI Durchgaengen: zuerst die Funde, deren Fingerprint in der
+  //    Baseline gar nicht vorkommt - ohne den contextHash haben sie keine
+  //    Chance mehr -, danach die mit einem Rueckweg ueber Stufe 3. Je
+  //    Kette werden dieselben Eintraege verbraucht (die ersten freien),
+  //    nur WER sie bekommt, aendert sich; die Zahl der gedeckten Funde
+  //    kann dadurch nur steigen (Gegenbeispiel am Klassenkommentar).
+  for Pass := 0 to 1 do
   begin
-    if Covered[i] or (AContextKeys[i] = '') then Continue;
-    if not FCtxChain.TryGetValue(AContextKeys[i], C) then Continue;
-    E := NextFree(FCtxNext, Used, CtxCur[C]);
-    CtxCur[C] := E;
-    if E >= 0 then
+    for k := 0 to High(AOrder) do
     begin
-      Used[E] := True;
-      Covered[i] := True;
+      i := AOrder[k];
+      if Covered[i] or (AContextKeys[i] = '') then Continue;
+      HasFpWay := (AFingerprints[i] <> '')
+                  and FFpChain.ContainsKey(AFingerprints[i]);
+      if HasFpWay <> (Pass = 1) then Continue;
+      if not FCtxChain.TryGetValue(AContextKeys[i], C) then Continue;
+      E := NextFree(FCtxNext, Used, CtxCur[C]);
+      CtxCur[C] := E;
+      if E >= 0 then
+      begin
+        Used[E] := True;
+        Covered[i] := True;
+      end;
     end;
   end;
 
   // 3. NUR Fingerprint: der erste freie Eintrag mit diesem Fingerprint.
-  for i := 0 to High(Covered) do
+  for k := 0 to High(AOrder) do
   begin
+    i := AOrder[k];
     if Covered[i] or (AFingerprints[i] = '') then Continue;
     if not FFpChain.TryGetValue(AFingerprints[i], C) then Continue;
     E := NextFree(FFpNext, Used, FpCur[C]);
@@ -1533,6 +1585,104 @@ begin
     end;
   end;
   Result := Covered;
+end;
+
+class function TBaselineMatcher.FindingOrder(
+  AFindings: TList<TLeakFinding>): TArray<Integer>;
+// Vertrag an der Deklaration, Begruendung an der Klasse. Datei und Zeile
+// werden vorab zu Zahlen (Rang der Datei unter den verschiedenen Namen,
+// Zeile als Integer) - der Vergleicher laeuft O(n log n) mal und soll
+// keine Pfade vergleichen und keine Zeilentexte parsen.
+var
+  Order    : TArray<Integer>;
+  FileRank : TArray<Integer>;
+  LineNo   : TArray<Integer>;
+  Names    : TList<string>;
+  NameIdx  : TDictionary<string, Integer>;
+  Sorted   : TArray<Integer>;
+  RankOf   : TArray<Integer>;
+  List     : TList<TLeakFinding>;
+  i, Id    : Integer;
+  Key      : string;
+  PrevName : string;
+  PrevId   : Integer;
+begin
+  if AFindings = nil then Exit(nil);
+  SetLength(Order, AFindings.Count);
+  SetLength(FileRank, AFindings.Count);
+  SetLength(LineNo, AFindings.Count);
+  Names   := TList<string>.Create;
+  NameIdx := TDictionary<string, Integer>.Create;
+  try
+    // 1. Datei-Nummer je Fund (ohne Gross/klein). Funde kommen je Datei
+    //    am Stueck - der Vergleich mit dem Vorgaenger spart fast jedes
+    //    UpperCase und jeden Dictionary-Zugriff.
+    PrevName := '';
+    PrevId   := -1;
+    for i := 0 to AFindings.Count - 1 do
+    begin
+      Order[i]  := i;
+      LineNo[i] := StrToIntDef(AFindings[i].LineNumber, 0);
+      if (PrevId >= 0) and (AFindings[i].FileName = PrevName) then
+      begin
+        FileRank[i] := PrevId;
+        Continue;
+      end;
+      Key := UpperCase(AFindings[i].FileName);
+      if not NameIdx.TryGetValue(Key, Id) then
+      begin
+        Id := Names.Add(Key);
+        NameIdx.Add(Key, Id);
+      end;
+      FileRank[i] := Id;
+      PrevName    := AFindings[i].FileName;
+      PrevId      := Id;
+    end;
+    // 2. Nummer -> Rang in der Sortierung der Namen.
+    SetLength(Sorted, Names.Count);
+    for i := 0 to Names.Count - 1 do
+    begin
+      Sorted[i] := i;
+    end;
+    TArray.Sort<Integer>(Sorted, TComparer<Integer>.Construct(
+      function(const A, B: Integer): Integer
+      begin
+        Result := CompareStr(Names[A], Names[B]);
+      end));
+    SetLength(RankOf, Names.Count);
+    for i := 0 to High(Sorted) do
+    begin
+      RankOf[Sorted[i]] := i;
+    end;
+    for i := 0 to High(FileRank) do
+    begin
+      FileRank[i] := RankOf[FileRank[i]];
+    end;
+  finally
+    NameIdx.Free;
+    Names.Free;
+  end;
+  // 3. Die Fund-Indizes sortieren. Der Index als letzter Schluessel macht
+  //    die Ordnung streng - TArray.Sort ist nicht stabil.
+  List := AFindings;
+  TArray.Sort<Integer>(Order, TComparer<Integer>.Construct(
+    function(const A, B: Integer): Integer
+    begin
+      Result := FileRank[A] - FileRank[B];
+      if Result <> 0 then Exit;
+      Result := LineNo[A] - LineNo[B];
+      if Result <> 0 then Exit;
+      Result := Ord(List[A].Kind) - Ord(List[B].Kind);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].RuleID, List[B].RuleID);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].MissingVar, List[B].MissingVar);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].MethodName, List[B].MethodName);
+      if Result <> 0 then Exit;
+      Result := A - B;
+    end));
+  Result := Order;
 end;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
@@ -1701,7 +1851,8 @@ begin
             AScope.FileToken(F.FileName), KindName(F.Kind), FCtx);
       end;
     end;
-    Covered := Matcher.Match(Fps, CtxKeys);
+    Covered := Matcher.Match(Fps, CtxKeys,
+      TBaselineMatcher.FindingOrder(Findings));
     // Rueckwaerts wegen Delete.
     for i := Findings.Count - 1 downto 0 do
     begin
@@ -1805,7 +1956,8 @@ begin
       CtxKeys[i] := BaselineContextKey(FScope.FileToken(F.FileName),
         KindName(F.Kind), Ctx);
   end;
-  Result := FMatcher.Match(Fps, CtxKeys);
+  Result := FMatcher.Match(Fps, CtxKeys,
+    TBaselineMatcher.FindingOrder(ASource));
 end;
 
 function TBaselineSet.NewOnly(ASource: TList<TLeakFinding>;
