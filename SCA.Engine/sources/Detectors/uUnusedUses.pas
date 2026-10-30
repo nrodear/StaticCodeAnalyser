@@ -1240,7 +1240,13 @@ begin
                'thintwindowclass','tidesigner','tmodalresult',
                'tprocedureofobject','tscrollbarinc','tscrollbarkind',
                'tscrollbox','tscrollingstylehook','tscrollingwincontrol',
-               'validparentform','wsmaximized']
+               'validparentform','wsmaximized',
+               // D007b (2026-10-30, rwE31 Stufe 3: caFree fehlte): die
+               // uebrigen TCloseAction-Werte. Vcl.Forms deklariert sie im
+               // interface als Konstanten (caNone = System.UITypes.
+               // TCloseAction.caNone usw., Delphi 12 und 13), LCL forms.pp
+               // als Aufzaehlung bzw. Konstanten.
+               'cafree','cahide','caminimize']
 
   else if (UnitLow = 'vcl.stdctrls') or (UnitLow = 'stdctrls') then
     Result := ['tlabel','tbutton','tedit','tmemo','tcombobox','tlistbox',
@@ -1684,7 +1690,18 @@ begin
   else if (UnitLow = 'winapi.activex') or (UnitLow = 'activex') then
     Result := ['iunknown','idispatch','tguid','ioleinplaceobject',
                'ioleobject','ioleclientsite','olecheck',
-               'createcomobject','cogettypes']
+               'createcomobject','cogettypes',
+               // D007b (2026-10-30, rwE31 Stufe 3: TOleEnum fehlte): die
+               // OLE-Typen aus dem interface von Winapi.ActiveX (Delphi 12
+               // und 13). Den Fund aendert das nicht - ActiveX steht in
+               // IsAlwaysNeeded -, aber die SCA007-Editorhilfe ordnet die
+               // Namen damit dieser Unit zu (reDelphix OtherUnitsIdents).
+               'polebool','polecmd','polecmdtext','poledate',
+               'poleinplaceframeinfo','polemenugroupwidths','polestr',
+               'polestrlist','poleverb','ppolestr','toldoleenum','tolebool',
+               'tolechar','tolecmd','tolecmdtext','tolecolor','toledate',
+               'toleenum','toleinplaceframeinfo','tolemenugroupwidths',
+               'tolestrlist','toleverb']
 
   else if (UnitLow = 'winapi.taskschd') or (UnitLow = 'taskschd') then
     Result := ['itaskscheduler','itaskservice','itask',

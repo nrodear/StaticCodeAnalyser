@@ -25,6 +25,8 @@ type
     [Test] procedure KnownIdents_D007_ReExporte_SindSichtbareBezeichner;
     [Test] procedure KnownIdents_D007_AuswahlRegel_HaeltGenerischeDraussen;
     [Test] procedure KnownIdents_Eintraege_KleinOhneLeerzeichenOhneDoppel;
+    // D007b (2026-10-30): TCloseAction-Werte (Forms), OLE-Typen (ActiveX)
+    [Test] procedure KnownIdents_D007b_CloseActionUndOleTypen;
   end;
 
 implementation
@@ -138,10 +140,11 @@ procedure TTestUnusedUsesIdents.KnownIdents_Eintraege_KleinOhneLeerzeichenOhneDo
 // buchstaben oder Leerzeichen matcht nie und ist ein FP-Erzeuger.
 // Doppelte Eintraege sind harmlos, deuten aber auf Copy-Fehler.
 const
-  UNITS: array[0..16] of string = (
+  UNITS: array[0..17] of string = (
     'classes', 'controls', 'graphics', 'forms', 'stdctrls', 'extctrls',
     'comctrls', 'math', 'shlobj', 'shellapi', 'commctrl', 'actnlist',
-    'syncobjs', 'contnrs', 'fmx.controls', 'fmx.listbox', 'fmx.platform');
+    'syncobjs', 'contnrs', 'fmx.controls', 'fmx.listbox', 'fmx.platform',
+    'activex');
 var
   U, Id : string;
   Seen  : TArray<string>;
@@ -159,6 +162,32 @@ begin
       Seen := Seen + [Id];
     end;
   end;
+end;
+
+procedure TTestUnusedUsesIdents.KnownIdents_D007b_CloseActionUndOleTypen;
+// Vor D007b rot: die KI-Pruefung rwE31 Stufe 3 fand caFree (jvcl
+// childwin.pas, Dev-Cpp NewVarFrm.pas) und TOleEnum (Abbrevia_TLB.pas)
+// in keiner Liste - die SCA007-Editorhilfe konnte sie keiner Unit
+// zuordnen und stand nur im Menue. Quelle: interface von Vcl.Forms
+// (caNone..caMinimize als Konstanten) und Winapi.ActiveX (TOle*/POle*),
+// Delphi 12 und 13. ActiveX steht in IsAlwaysNeeded - den Fund aendert
+// die Liste dort nicht, nur die Zuordnung der Hilfe (IdentsFor).
+const
+  FAELLE: array[0..9] of array[0..1] of string = (
+    ('forms', 'cafree'), ('vcl.forms', 'cahide'), ('forms', 'caminimize'),
+    ('vcl.forms', 'canone'), ('activex', 'toleenum'),
+    ('winapi.activex', 'tolebool'), ('activex', 'toledate'),
+    ('winapi.activex', 'tolecolor'), ('activex', 'polestr'),
+    ('winapi.activex', 'toleverb'));
+var
+  i : Integer;
+begin
+  for i := Low(FAELLE) to High(FAELLE) do
+    Assert.IsTrue(Hat(FAELLE[i][0], FAELLE[i][1]),
+      FAELLE[i][1] + ' fehlt in der Liste von ' + FAELLE[i][0]);
+  // FMX.Forms deklariert die Werte NICHT (scoped: TCloseAction.caFree) -
+  // die eigene Liste bleibt ohne sie.
+  Assert.IsFalse(Hat('fmx.forms', 'cafree'), 'fmx.forms kennt kein caFree');
 end;
 
 initialization
