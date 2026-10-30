@@ -435,8 +435,8 @@ msgstr ""
 msgid "%d routine headers"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:673
-#: reDelphix/source/uRdxAvoidOutFix.pas:728
+#: reDelphix/source/uRdxAvoidOutFix.pas:677
+#: reDelphix/source/uRdxAvoidOutFix.pas:732
 msgid "%d routine headers named %s in this file - overload or ambiguous"
 msgstr ""
 
@@ -620,8 +620,8 @@ msgstr ""
 msgid "%s in the range - an intent comment stays"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:544
-#: reDelphix/source/uRdxAvoidOutFix.pas:547
+#: reDelphix/source/uRdxAvoidOutFix.pas:548
+#: reDelphix/source/uRdxAvoidOutFix.pas:551
 msgid "%s is \"%s\" - other code depends on its exact signature"
 msgstr ""
 
@@ -706,8 +706,8 @@ msgstr ""
 msgid "%s is declared as a property or routine in this file - it could return another object on each call"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:634
-#: reDelphix/source/uRdxAvoidOutFix.pas:664
+#: reDelphix/source/uRdxAvoidOutFix.pas:638
+#: reDelphix/source/uRdxAvoidOutFix.pas:668
 msgid "%s is declared inside a type - its signature is a contract"
 msgstr ""
 
@@ -740,7 +740,7 @@ msgstr ""
 msgid "%s is in the interface section (line %d) - exported, callers in other units possible"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:594
+#: reDelphix/source/uRdxAvoidOutFix.pas:598
 msgid "%s is in the published or default section of %s - a form file may bind it to an event"
 msgstr ""
 
@@ -784,7 +784,7 @@ msgstr ""
 msgid "%s is not certainly a keyword here (also allowed as an identifier)"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:591
+#: reDelphix/source/uRdxAvoidOutFix.pas:595
 msgid "%s is not declared directly in class %s"
 msgstr ""
 
@@ -868,7 +868,7 @@ msgstr ""
 msgid "%s is used without a call in line %d (method pointer, event, callback, property) - its type would no longer match"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1470
+#: reDelphix/source/uRdxAvoidOutFix.pas:1542
 msgid "%s is used without a call in line %d (method pointer?) - its type would change"
 msgstr ""
 
@@ -4550,7 +4550,7 @@ msgstr ""
 msgid "class %s - without an inheritance chain, inherited does not belong there"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:609
+#: reDelphix/source/uRdxAvoidOutFix.pas:613
 msgid "class %s implements interfaces - %s could implement an interface method"
 msgstr ""
 
@@ -5672,8 +5672,8 @@ msgstr ""
 msgid "no \"if .. then %s := .. else %s := ..\" on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:284
-#: reDelphix/source/uRdxAvoidOutFix.pas:1428
+#: reDelphix/source/uRdxAvoidOutFix.pas:288
+#: reDelphix/source/uRdxAvoidOutFix.pas:1500
 msgid "no \"out\" parameter at the reported column"
 msgstr ""
 
@@ -6241,10 +6241,10 @@ msgstr ""
 msgid "not found next to the unit"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:953
 #: reDelphix/source/uRdxAvoidOutFix.pas:957
 #: reDelphix/source/uRdxAvoidOutFix.pas:961
-#: reDelphix/source/uRdxAvoidOutFix.pas:997
+#: reDelphix/source/uRdxAvoidOutFix.pas:965
+#: reDelphix/source/uRdxAvoidOutFix.pas:1001
 msgid "not in the light bulb - %s has a managed type or one the quick fix does not know (%s) and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
 msgstr ""
 
@@ -6528,7 +6528,7 @@ msgstr ""
 msgid "operand spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1438
+#: reDelphix/source/uRdxAvoidOutFix.pas:1510
 msgid "operator - its signature is fixed"
 msgstr ""
 
@@ -7525,7 +7525,7 @@ msgstr ""
 msgid "the declaration of %s in line %d is not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:726
+#: reDelphix/source/uRdxAvoidOutFix.pas:730
 msgid "the declaration of %s is not in this file"
 msgstr ""
 
@@ -7719,7 +7719,7 @@ msgstr ""
 msgid "the file has an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:643
+#: reDelphix/source/uRdxAvoidOutFix.pas:647
 msgid "the file includes other files - they could declare %s"
 msgstr ""
 
@@ -7860,10 +7860,10 @@ msgstr ""
 msgid "the header of \"%s\" in line %d cannot be read safely"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:557
-#: reDelphix/source/uRdxAvoidOutFix.pas:576
-#: reDelphix/source/uRdxAvoidOutFix.pas:611
-#: reDelphix/source/uRdxAvoidOutFix.pas:670
+#: reDelphix/source/uRdxAvoidOutFix.pas:561
+#: reDelphix/source/uRdxAvoidOutFix.pas:580
+#: reDelphix/source/uRdxAvoidOutFix.pas:615
+#: reDelphix/source/uRdxAvoidOutFix.pas:674
 msgid "the header of %s is not safe to read"
 msgstr ""
 
@@ -7923,7 +7923,7 @@ msgstr ""
 msgid "the implementation is not in the implementation section"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:559
+#: reDelphix/source/uRdxAvoidOutFix.pas:563
 msgid "the implementation of %s is not in this file"
 msgstr ""
 
@@ -8491,7 +8491,7 @@ msgstr ""
 msgid "the method is under \"%s\", not under private"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:598
+#: reDelphix/source/uRdxAvoidOutFix.pas:602
 #: reDelphix/source/uRdxConstStringParameterFix.pas:235
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
 msgstr ""
@@ -8587,7 +8587,7 @@ msgstr ""
 msgid "the operand is not a plain identifier - a call or an index, for example; the cast could be needed to compile"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:759
+#: reDelphix/source/uRdxAvoidOutFix.pas:763
 msgid "the other header of %s has no matching \"out %s\""
 msgstr ""
 
@@ -8623,7 +8623,7 @@ msgstr ""
 msgid "the override or the method of the ancestor %s stands before any visibility section - the visibility is not certain; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1433
+#: reDelphix/source/uRdxAvoidOutFix.pas:1505
 msgid "the parameter list belongs to a procedural type or an anonymous method - its signature is a contract"
 msgstr ""
 
@@ -8766,7 +8766,7 @@ msgstr ""
 msgid "the routine is called %s, the message names %s"
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:665
+#: reDelphix/source/uRdxAvoidOutFix.pas:669
 #: reDelphix/source/uRdxConstStringParameterFix.pas:229
 msgid "the routine is declared in the interface section (line %d) - other units can use it as a procedure value"
 msgstr ""
@@ -9106,7 +9106,7 @@ msgstr ""
 msgid "unknown message - no \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxAvoidOutFix.pas:1418
+#: reDelphix/source/uRdxAvoidOutFix.pas:1487
 msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 

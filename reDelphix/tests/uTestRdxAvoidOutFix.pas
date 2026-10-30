@@ -81,6 +81,9 @@ type
     // ... nur-menue-unnoetig JclStringConversions.pas:407 (Alias in der
     // Unit daneben).
     [Test] procedure NeighbourAlias_SameMeaning;
+    // Review Gruppe T: ein Typparameter ('TBox<TKey, TValue>') ist kein
+    // gleichnamiger Typ der Datei oder der Unit daneben.
+    [Test] procedure TypeParam_NotPlain;
   end;
 
 {$IFNDEF FPC}
@@ -967,6 +970,63 @@ begin
     try
       Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 7, MessageAt(16), P, R), R);
       Assert.AreEqual('', P.ForeignType);
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
+end;
+
+// Die Unit mit der generischen Klasse TBox<TKey, TValue> (Methode TryGet
+// mit 'out V: TValue', V nicht zuerst gesetzt); ATypes steht vor ihr im
+// type-Abschnitt, AUses hinter 'implementation'.
+function BoxUnit(const AUses, ATypes: string): string;
+begin
+  Result := Join(['unit main;', 'interface', 'implementation', AUses, 'type',
+    ATypes, '  TBox<TKey, TValue> = class', '  private',
+    '    function TryGet(const K: TKey; out V: TValue): Boolean;', '  end;',
+    'function TBox<TKey, TValue>.TryGet(const K: TKey; out V: TValue): '
+    + 'Boolean;', 'begin', '  Result := False;', '  if Result then',
+    '    V := Default(TValue);', 'end;', 'end.']);
+end;
+
+procedure TTestRdxAvoidOutFix.TypeParam_NotPlain;
+var
+  Dir, Src, R : string;
+  Map         : TRdxCodeMap;
+  P           : TRdxOutPlan;
+  Li          : Integer;
+begin
+  // Review Gruppe T: V hat den Typparameter TValue - 'TBox<string,
+  // string>' macht ihn verwaltet. Ein gleichnamiger einfacher Typ der
+  // Datei (LocalPlainType) bzw. der Unit daneben (NeighbourPlain) gab ihn
+  // als "bedeutungsgleich" in die Gluehbirne (rot ohne TypeParamName:
+  // Changes False bzw. NeighbourPlain True).
+  Src := BoxUnit('', '  TValue = Double;');
+  Assert.IsTrue(PlanOn(Src, 'function TBox<TKey, TValue>.TryGet(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'Typparameter, Datei');
+  // Gegenprobe: TValue nur benutzt ('TArray<TValue>'), kein Typparameter -
+  // der einfache Typ der Datei gilt wie bisher.
+  Src := Join(['unit main;', 'interface', 'implementation', 'type',
+    '  TValue = Double;', '  TList = TArray<TValue>;',
+    'procedure Get(out V: TValue);', 'begin', '  V := 0;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Get(', P, R), R);
+  Assert.IsFalse(P.Changes, 'benutzt, nicht Typparameter');
+  Dir := NewTempDir('rdx_sca086g_');
+  try
+    WriteText(Dir + 'rdxnb.pas', Join(['unit rdxnb;', 'interface', 'type',
+      '  TValue = Double;', 'implementation', 'end.']));
+    Src := BoxUnit('uses rdxnb;', '');
+    Map := NewMap(Src);
+    try
+      Li := LineOf(Src, 'function TBox<TKey, TValue>.TryGet(');
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, Li,
+        MessageAt(Pos('out ', LineText(Src, Li))), P, R), R);
+      Assert.AreEqual('', P.ForeignType, 'Typparameter, kein ForeignType');
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, Dir + 'main.pas', P),
+        'Typparameter, Unit daneben');
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'Typparameter: nur im Menue');
     finally
       Map.Free;
     end;

@@ -249,6 +249,10 @@ const
     'final', 'cdecl', 'stdcall', 'register', 'pascal', 'safecall', 'winapi',
     'message', 'deprecated', 'platform', 'experimental', 'default',
     'assembler');
+  // TypeParamName: Trenner in einer Liste '<..>' (neben Woertern) und so
+  // viele Token liest TypeParamEdge hoechstens je Richtung.
+  TYPE_PARAM_INNER: array[0..2] of string = (',', ':', ';');
+  MAX_TYPE_PARAM_STEPS = 32;
   // SetsFirst: hier endet eine Zuweisung ohne ';' (RhsClean) ...
   BRANCH_STOPS: array[0..1] of string = ('else', 'end');
   // ... und das darf die Bedingung eines if nicht tragen (IfSets): eine
@@ -1353,9 +1357,73 @@ begin
   end;
 end;
 
+// Die Grenze der Liste '<..>' um AFrom (rueckwaerts das '<', vorwaerts das
+// '>'): ueber Woerter, ',', ':' und ';' ('<TKey, TValue>', '<T: class,
+// constructor>', FPC '<A; B>'), hoechstens MAX_TYPE_PARAM_STEPS Token. Low
+// = '' bzw. ein anderes Token, wenn die Liste dort nicht endet.
+function TypeParamEdge(AMap: TRdxCodeMap; const AFrom: TRdxToken;
+  AForward: Boolean): TRdxToken;
+var
+  i : Integer;
+begin
+  Result := AFrom;
+  for i := 1 to MAX_TYPE_PARAM_STEPS do
+  begin
+    if AForward then
+      Result := After(AMap, Result)
+    else
+      Result := Before(AMap, Result);
+    if not Result.IsWord and not InList(Result.Low, TYPE_PARAM_INNER) then
+      Exit;
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// Review Gruppe T (Fix-Runde 4 nach rwE32): ist ATypeLow (klein) ein
+// Typparameter - steht er in der Liste '<..>' hinter dem Namen eines
+// generischen Typs bzw. einer generischen Routine ('TBox<TKey, TValue> =
+// class', 'function TBox<TKey, TValue>.TryGet', 'function TryGet<T>(',
+// 'function Make<T>: T')? Dann ist sein Typ erst beim Einsetzen bekannt
+// ('TBox<string, string>': verwaltet) - weder ein gleichnamiger Typ der
+// Datei (LocalPlainType) noch einer der Units daneben (NeighbourPlain,
+// 'TValue = Double') sagt etwas ueber ihn. Vorsichtig: auch '<..>' vor '.'
+// oder '(' einer Benutzung ('TList<X>.Create') zaehlt - dann bleibt die
+// Hilfe nur im Menue.
+function TypeParamName(AMap: TRdxCodeMap; const ATypeLow: string): Boolean;
+var
+  T, A, B, W : TRdxToken;
+begin
+  Result := False;
+  if ATypeLow = '' then
+    Exit;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), ATypeLow);
+  while T.Low <> '' do
+  begin
+    if (T.Low = ATypeLow) and InList(Before(AMap, T).Low, ['<', ',']) then
+    begin
+      A := TypeParamEdge(AMap, T, False);
+      B := TypeParamEdge(AMap, T, True);
+      // Hinter der Liste '=' (Typ), '.' bzw. '(' (Routinenkopf) - '>='
+      // ohne Leerzeichen ('TBox<T>= class') ist ein Token; vor ihrem
+      // Namen ein Routinenwort oder '.' ('function Make<T>: T').
+      if (A.Low = '<') and (B.Low = '>=') then
+        Exit(True);
+      if (A.Low = '<') and (B.Low = '>') then
+      begin
+        W := Before(AMap, Before(AMap, A));
+        if InList(After(AMap, B).Low, ['=', '.', '('])
+           or InList(W.Low, ROUTINE_WORDS) or (W.Low = '.') then
+          Exit(True);
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, ATypeLow);
+  end;
+end;
+
 // Der Typ der Parameter ab AOut, wenn er EIN Wort ist, das die Datei nicht
-// als Typ deklariert und das nicht sicher verwaltet ist (MANAGED_BUILTINS) -
-// klein; sonst '' (TRdxOutPlan.ForeignType).
+// als Typ deklariert, das kein Typparameter ist (TypeParamName) und das
+// nicht sicher verwaltet ist (MANAGED_BUILTINS) - klein; sonst ''
+// (TRdxOutPlan.ForeignType).
 function ForeignTypeWord(AMap: TRdxCodeMap; const AOut: TRdxToken): string;
 var
   T : string;
@@ -1370,7 +1438,8 @@ begin
       Exit;
   T := LowerCase(T);
   if InList(T, MANAGED_BUILTINS)
-     or (TRdxTypeProof.DeclaredTypeKind(AMap, T) <> '') then
+     or (TRdxTypeProof.DeclaredTypeKind(AMap, T) <> '')
+     or TypeParamName(AMap, T) then
     Exit;
   Result := T;
 end;
@@ -1420,8 +1489,11 @@ begin
   end;
   APlan.Name := ParamNames(AMap, OutTok);
   // Ein Record, eine Aufzaehlung ... der Datei kann einfach sein (rwE31
-  // Stufe 3, LocalPlainType).
-  APlan.Changes := IsManagedType(Typ) and not LocalPlainType(AMap, Typ, 0);
+  // Stufe 3, LocalPlainType) - ein Typparameter gleichen Namens nicht
+  // (TypeParamName, Review Gruppe T: 'out V: TValue' in 'TBox<TKey,
+  // TValue>' neben 'TValue = Double').
+  APlan.Changes := IsManagedType(Typ)
+    and (TypeParamName(AMap, Typ) or not LocalPlainType(AMap, Typ, 0));
   Open := ListOpen(AMap, OutTok);
   if Open.Low = '' then
   begin
