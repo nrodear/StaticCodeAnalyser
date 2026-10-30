@@ -114,6 +114,10 @@ unit uRdxFormatSettingsFix;
 // FormatSettings gekoppelt ausgewertet ('Assert.AreEqual(s1, s2)',
 // 'Pos(FormatSettings.DecimalSeparator, S)'): das bricht Verhalten, die
 // Hilfe sperrt (CoupledReason; auch SCA059).
+// Geht das Ergebnis direkt oder per Verkettung in eine Anzeige ('.Text',
+// '.Caption', '.Hint', Items.Add, Lines.Add, ShowMessage ...), ist dort die
+// Locale des Benutzers richtig: der Alt-Weg sperrt (Nico-Entscheid E6 nach
+// rwE32 Stufe 4, DisplayReason; auch SCA059), der Hauptweg bleibt.
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
@@ -203,6 +207,12 @@ const
   R_FS_COUPLED_CALL = 'line %d evaluates %s together with %s without '
     + 'TFormatSettings.Invariant - with only this call changed, the two no '
     + 'longer match';
+  // Alt-Weg (rwE32 Stufe 4, Nico-Entscheid E6): das Ergebnis geht in eine
+  // Anzeige (DisplayReason) - %d die Zeile des Ziels, %s das Ziel wie
+  // geschrieben ('StatusBar1.Panels[1].Text', 'ListBox1.Items.Add').
+  R_FS_DISPLAY = 'line %d shows the result on screen (%s) - there the user '
+    + 'locale is the right one; TFormatSettings.Invariant would show decimal '
+    + 'point and MM/dd/yyyy';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -1329,6 +1339,250 @@ begin
   end;
 end;
 
+// ---- Anzeige-Ziel (Alt-Weg, rwE32 Stufe 4, Nico-Entscheid E6) ----
+// Geht das Ergebnis eines Aufrufs direkt oder ueber Verkettung ('+') in
+// derselben Anweisung in eine Anzeige, ist dort die Locale des Benutzers
+// richtig - TFormatSettings.Invariant zeigte Punkt und MM/dd/yyyy; die Hilfe
+// sperrt (DisplayReason; Eintrag 1 bleibt). Anzeige heisst:
+//   * Zuweisung an '.Text', '.Caption', '.Hint' (auch 'StatusBar1.Panels[1].
+//     Text') - '.Text' nicht, wenn ein Glied der Kette nach Daten klingt
+//     (DATA_PARTS: 'Query.SQL.Text', 'Node.Text', 'Json.Text') oder der
+//     Besitzer eine Stringliste sein kann (TEXT_OWNERS: 'SL.Text');
+//   * Argument von 'Items.Add', 'Items.Insert', 'Lines.Add', 'Lines.Insert',
+//     'ShowMessage', 'MessageDlg', 'Application.MessageBox'.
+// Gelesen wird rueckwaerts ab dem Namen (samt 'SysUtils.'): Klammergruppen
+// werden uebersprungen, auf Tiefe 0 duerfen nur Woerter, Zahlen, '+', ',',
+// '.' stehen (Strings und Kommentare sind keine Token); die erste offene
+// Klammer entscheidet - eine Gruppierung ('(' hinter '+', ',', '(' oder
+// ':=') und eine Typumwandlung ('PChar(') lesen weiter, eine Routine
+// ausser den genannten ('Copy(', 'Trim(',
+// 'Format(' mit '[..]') beendet die Suche ohne Anzeige, ebenso ';', ein
+// Schluesselwort oder ein anderer Operator. Fundstellen: Alcinoe
+// ALCipher Unit1.pas:831, ALFmxControls Main.pas:1436/1444/1491,
+// ALStringBenchmark Unit1.pas:501 .., ALXmlDoc unit1.pas:307, RSS-1723
+// Unit1.pas:54, delphimvcframework async_client MainClientFormU.pas:329
+// ('lbPerson.Items.Add(''DOB:''.PadRight(15) + DateToStr(..))') und SCA059
+// :484. Was ueber Variablen, Rueckgabewerte oder anonyme Methoden in die
+// Anzeige laeuft (mvcasync MainFormU.pas:37 'Result := DateTimeToStr(Now)',
+// Value -> Edit1.Text), sieht die Hilfe nicht - dort bleibt Eintrag 2 wie
+// bisher angeboten (aendert Verhalten, nie per Taste).
+
+const
+  DISPLAY_PROPS: array[0..2] of string = ('text', 'caption', 'hint');
+  DISPLAY_LISTS: array[0..1] of string = ('items', 'lines');
+  DISPLAY_LIST_CALLS: array[0..1] of string = ('add', 'insert');
+  DISPLAY_DIALOGS: array[0..1] of string = ('showmessage', 'messagedlg');
+  NAME_TEXT = 'text';
+  NAME_APPLICATION = 'application';
+  NAME_MESSAGEBOX = 'messagebox';
+  NAME_DIALOGS = 'dialogs';
+  // Teile von Namen, die bei '.Text' nach Daten statt Anzeige klingen ...
+  DATA_PARTS: array[0..13] of string = ('sql', 'xml', 'json', 'node', 'query',
+    'param', 'field', 'attr', 'stream', 'request', 'response', 'body',
+    'writer', 'builder');
+  // ... und Besitzer von '.Text', die eine Stringliste sein koennen.
+  TEXT_OWNERS: array[0..4] of string = ('sl', 'list', 'strings', 'stringlist',
+    'result');
+  // Was auf Tiefe 0 zwischen Aufruf und Ziel stehen darf (dazu Woerter, die
+  // kein Schluesselwort sind, und Zahlen).
+  DISPLAY_GLUE: array[0..2] of string = ('+', ',', '.');
+  // Davor ist eine offene Klammer eine Gruppierung (kein Aufruf).
+  GROUP_BEFORE: array[0..3] of string = ('+', ',', '(', ':=');
+  // Typumwandlungen, durch die der Text unveraendert geht
+  // ('Application.MessageBox(PChar(..), ..)').
+  TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
+  MAX_DISPLAY_TOKENS = 2000;
+
+// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
+function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  Count := 0;
+  T := AClose;
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Depth := Depth - ParenDelta(T);
+    if Depth = 0 then
+      Exit(T);
+    Inc(Count);
+    T := Before(AMap, T);
+  end;
+end;
+
+// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
+// und Klammergruppen hinter einem Glied).
+function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
+var
+  P, T : TRdxToken;
+begin
+  Result := ALast;
+  P := Before(AMap, Result);
+  while P.Low = '.' do
+  begin
+    T := Before(AMap, P);
+    while (T.Low = ']') or (T.Low = ')') do
+    begin
+      T := OpenerOf(AMap, T);
+      if T.Low = '' then Exit;
+      T := Before(AMap, T);
+    end;
+    if not T.IsWord then Exit;
+    Result := T;
+    P := Before(AMap, Result);
+  end;
+end;
+
+// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
+// nur ALast).
+function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
+var
+  S : TRdxToken;
+begin
+  S := ChainStart(AMap, ALast);
+  if S.Line <> ALast.Line then
+    Exit(TokText(AMap, ALast));
+  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
+end;
+
+// Nennt ein Glied der Kette vor ALast etwas, das nach Daten klingt, oder ist
+// der Besitzer von ALast eine moegliche Stringliste (s. Kopf des Abschnitts)?
+function ChainLooksLikeData(AMap: TRdxCodeMap; const ALast: TRdxToken): Boolean;
+var
+  S, T, Owner : TRdxToken;
+  i           : Integer;
+begin
+  S := ChainStart(AMap, ALast);
+  Owner := Default(TRdxToken);
+  T := S;
+  while (T.Low <> '') and TokBefore(T, ALast) do
+  begin
+    if T.IsWord then
+    begin
+      for i := Low(DATA_PARTS) to High(DATA_PARTS) do
+        if Pos(DATA_PARTS[i], T.Low) > 0 then
+          Exit(True);
+      Owner := T;
+    end;
+    T := After(AMap, T);
+  end;
+  Result := (Owner.Low <> '') and InList(Owner.Low, TEXT_OWNERS);
+end;
+
+// Ist AName (vor einer offenen Klammer) eine Anzeige-Routine (s. Kopf)?
+// True mit dem Ziel wie geschrieben und seiner Zeile.
+function DisplayCall(AMap: TRdxCodeMap; const AName: TRdxToken;
+  out AWhat: string; out ALine: Integer): Boolean;
+var
+  P, Q : TRdxToken;
+begin
+  AWhat := '';
+  ALine := 0;
+  P := Before(AMap, AName);
+  Q := Before(AMap, P);
+  if InList(AName.Low, DISPLAY_DIALOGS) then
+    Result := (P.Low <> '.') or (Q.Low = NAME_DIALOGS)
+  else if AName.Low = NAME_MESSAGEBOX then
+    Result := (P.Low = '.') and (Q.Low = NAME_APPLICATION)
+  else if InList(AName.Low, DISPLAY_LIST_CALLS) then
+    Result := (P.Low = '.') and InList(Q.Low, DISPLAY_LISTS)
+  else
+    Result := False;
+  if Result then
+  begin
+    AWhat := ChainText(AMap, AName);
+    ALine := AName.Line;
+  end;
+end;
+
+// Ist ATarget (das Token vor ':=') ein Anzeige-Ziel (s. Kopf)? True mit
+// dem Ziel wie geschrieben und seiner Zeile.
+function DisplayAssign(AMap: TRdxCodeMap; const ATarget: TRdxToken;
+  out AWhat: string; out ALine: Integer): Boolean;
+begin
+  AWhat := '';
+  ALine := 0;
+  Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PROPS)
+    and (Before(AMap, ATarget).Low = '.')
+    and not ((ATarget.Low = NAME_TEXT) and ChainLooksLikeData(AMap, ATarget));
+  if Result then
+  begin
+    AWhat := ChainText(AMap, ATarget);
+    ALine := ATarget.Line;
+  end;
+end;
+
+// Geht das Ergebnis des Aufrufs ASite in eine Anzeige (s. Kopf)? True mit
+// dem Ziel und seiner Zeile.
+function DisplayTarget(AMap: TRdxCodeMap; const ASite: TCallSite;
+  out AWhat: string; out ALine: Integer): Boolean;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := False;
+  AWhat := '';
+  ALine := 0;
+  Depth := 0;
+  Count := 0;
+  T := Before(AMap, ChainStart(AMap, ASite.Name));
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Inc(Count);
+    P := Before(AMap, T);
+    if (T.Low = ')') or (T.Low = ']') then
+      Inc(Depth)
+    else if (T.Low = '(') or (T.Low = '[') then
+    begin
+      if Depth > 0 then
+        Dec(Depth)
+      else if T.Low = '[' then
+        Exit
+      // Eine Typumwandlung liest weiter (ihr Wort gilt dann als Glied).
+      else if not InList(P.Low, TEXT_CASTS) then
+      begin
+        if P.IsWord and not (IsKeyword(P.Low)
+           and IsKeywordAfter(P, Before(AMap, P))) then
+          Exit(DisplayCall(AMap, P, AWhat, ALine));
+        if not InList(P.Low, GROUP_BEFORE) then
+          Exit;
+      end;
+    end
+    else if Depth = 0 then
+    begin
+      if T.Low = ':=' then
+        Exit(DisplayAssign(AMap, P, AWhat, ALine));
+      if T.IsWord then
+      begin
+        if IsKeyword(T.Low) and IsKeywordAfter(T, P) then
+          Exit;
+      end
+      else if not (InList(T.Low, DISPLAY_GLUE)
+                   or CharInSet(T.Low[1], ['0'..'9', '$', '#'])) then
+        Exit;
+    end;
+    T := P;
+  end;
+end;
+
+// Der Grund, wenn einer der Aufrufe ASites in eine Anzeige schreibt; ''
+// sonst.
+function DisplayReason(AMap: TRdxCodeMap; const ASites: TCallSites): string;
+var
+  i, Li : Integer;
+  What  : string;
+begin
+  Result := '';
+  for i := 0 to High(ASites) do
+    if DisplayTarget(AMap, ASites[i], What, Li) then
+      Exit(_(R_FS_DISPLAY, [Li, What]));
+end;
+
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
 // in einer Liste 'T, U: Typ'?
 function DeclaredHere(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
@@ -1944,6 +2198,10 @@ begin
   // Gekoppelte Auswertung in derselben Routine (rwE31 Stufe 3).
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Anzeige-Ziel (rwE32 Stufe 4, E6): dort ist die Locale richtig - nach
+  // den Gruenden, an denen Verhalten bricht.
+  if (AReason = '') and AInvariant then
+    AReason := DisplayReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_128, AEdit);
@@ -2047,6 +2305,10 @@ begin
   // Argumente lesen selbst FormatSettings.TimeSeparator.
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Anzeige-Ziel (rwE32 Stufe 4, E6): async_client MainClientFormU.pas:484
+  // 'ListBox1.Items.Add(Format(..))'.
+  if (AReason = '') and AInvariant then
+    AReason := DisplayReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_059, AEdit);

@@ -7040,3 +7040,6 @@ msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormat
 
 msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
 msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
+
+msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
+msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"

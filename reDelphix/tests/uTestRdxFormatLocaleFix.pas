@@ -50,6 +50,8 @@ type
     [Test] procedure Sca059_Alt_InlineVarRefutesInclude;
     // ---- Realworld-Test rwE31 Stufe 3 ----
     [Test] procedure Sca059_Alt_ArgsReadFormatSettings_NoHelp;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Sca059_Alt_Display_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -485,6 +487,39 @@ begin
     '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024], '
     + 'FormatSettings);']), Src, BODY_LINE,
     Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'));
+end;
+
+// ---- Realworld-Test rwE32 Stufe 4 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_Display_NoHelp;
+const
+  FMT = '%6s: %-34s %5.2f';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6: delphimvcframework samples\jsonrpc\async_client\
+  // MainClientFormU.pas:484 - die Preisliste geht in eine ListBox; dort ist
+  // die Locale des Benutzers richtig. Bis dahin bot der Alt-Weg Invariant
+  // an (sein eigener Hinweis sagt 'nicht fuer die Anzeige').
+  Src := InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c]));']);
+  AssertRefused(Src, BODY_LINE, Msg(FMT), _(R_FS_DISPLAY, [BODY_LINE,
+    'ListBox1.Items.Add']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c], FormatSettings));']), Src, BODY_LINE, Msg(FMT));
+  AssertRefused(InUnit(['  lblSum.Caption := ''Summe: '' + Format(''%.2f'', '
+    + '[x]);']), BODY_LINE, Msg('%.2f'), _(R_FS_DISPLAY, [BODY_LINE,
+    'lblSum.Caption']), True);
+  // Gegenprobe: Ziel ist eine Datei bzw. SQL - Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Writeln(F, Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant));']),
+    InUnit(['  Writeln(F, Format(''%.2f'', [x]));']), BODY_LINE, Msg('%.2f'),
+    True);
+  AssertFixed(InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x]);']), BODY_LINE,
+    Msg('%.2f'), True);
 end;
 
 {$IFNDEF FPC}

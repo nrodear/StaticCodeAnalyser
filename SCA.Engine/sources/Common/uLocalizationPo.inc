@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7042 Zeilen, 332571 Bytes
-  CPoLines_de: array[0..7041] of string = (
+  // i18n\de.po - 7045 Zeilen, 332879 Bytes
+  CPoLines_de: array[0..7044] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7056,7 +7056,10 @@ const
     'msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormatSettings.Invariant schreibt - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"',
     '',
     'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
-    'msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"'
+    'msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"',
+    '',
+    'msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"',
+    'msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7331,8 +7334,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
-  CPoLines_fr: array[0..7037] of string = (
+  // i18n\fr.po - 7041 Zeilen, 346289 Bytes
+  CPoLines_fr: array[0..7040] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14370,7 +14373,10 @@ const
     'msgstr "la ligne %d '#$00E9'value %s avec %s, que la ligne %d '#$00E9'crit avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"',
     '',
     'msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"',
-    'msgstr "la ligne %d '#$00E9'value %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"'
+    'msgstr "la ligne %d '#$00E9'value %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"',
+    '',
+    'msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"',
+    'msgstr "la ligne %d affiche le r'#$00E9'sultat '#$00E0' l'''#$00E9'cran (%s) - l'#$00E0', la locale de l''utilisateur est la bonne; TFormatSettings.Invariant afficherait le point d'#$00E9'cimal et MM/dd/yyyy"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

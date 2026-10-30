@@ -7036,3 +7036,6 @@ msgstr "la ligne %d évalue %s avec %s, que la ligne %d écrit avec %s sans TFor
 
 msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
 msgstr "la ligne %d évalue %s avec %s sans TFormatSettings.Invariant - si seul cet appel change, les deux ne concordent plus"
+
+msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
+msgstr "la ligne %d affiche le résultat à l'écran (%s) - là, la locale de l'utilisateur est la bonne; TFormatSettings.Invariant afficherait le point décimal et MM/dd/yyyy"

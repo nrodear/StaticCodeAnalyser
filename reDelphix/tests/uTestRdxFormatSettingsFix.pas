@@ -74,6 +74,9 @@ type
     [Test] procedure Sca128_Alt_NotCoupled_Helps;
     [Test] procedure Sca128_Alt_PairHint_NearestWithoutOwnSettings;
     [Test] procedure Sca128_FollowLines_AnonymousMethod;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Sca128_Alt_Display_NoHelp;
+    [Test] procedure Sca128_Alt_NotDisplay_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -1195,6 +1198,120 @@ begin
   Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatFloat']),
     PairHintOf(InUnit(['  r := FormatFloat(''0.00'', x);',
     '  s := FormatFloat(''0'', x, FormatSettings);']), BODY_LINE));
+end;
+
+// ---- Realworld-Test rwE32 Stufe 4 ----
+
+// Der Alt-Weg sperrt mit R_FS_DISPLAY (Zeile ATargetLine, Ziel AWhat); der
+// Hauptweg bleibt angeboten.
+procedure AssertDisplay(const ASource: string; ALine: Integer;
+  const AMessage: string; ATargetLine: Integer; const AWhat: string);
+var
+  Reason : string;
+begin
+  AssertRefused(ASource, ALine, AMessage, _(R_FS_DISPLAY, [ATargetLine,
+    AWhat]), True);
+  Assert.IsTrue(Fix(ASource, ALine, AMessage, False, Reason) <> '',
+    'Hauptweg: ' + Reason);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_Display_NoHelp;
+const
+  HEAD: array[0..5] of string = ('  TTask.Create (procedure ()', '    begin',
+    '      sleep(250);', '      TThread.Synchronize(nil,', '        procedure',
+    '        begin');
+  TAIL: array[0..1] of string = ('        end);', '    end).Start;');
+begin
+  // Nico-Entscheid E6 (rwE32 Stufe 4): geht das Ergebnis in eine Anzeige,
+  // ist dort die Locale des Benutzers richtig - bis dahin bot der Alt-Weg
+  // Invariant an (Punkt, MM/dd/yyyy auf dem Bildschirm), der Hinweis nannte
+  // dazu Anzeigen anderer Routinen als Gegenstueck.
+  // Alcinoe Demos\ALCipher\_Source\Unit1.pas:831 - zwei Aufrufe, verkettet.
+  AssertDisplay(InUnit(['  StatusBar1.Panels[1].Text := FormatFloat(''#,.'', '
+    + '(LCounter)) + '' keys - '' + FormatFloat(''#,.'', (LCounter / (LStopWatch.'
+    + 'Elapsed.TotalMilliseconds / 1000))) + '' keys/s'';']), BODY_LINE,
+    Msg('formatfloat'), BODY_LINE, 'StatusBar1.Panels[1].Text');
+  // ALFmxControls Main.pas:1436 (ebenso 1491) und RSS-1723 Unit1.pas:54.
+  AssertDisplay(InUnit(['  Text10.Text := ''Paint: '' + FormatFloat(''0.#####'','
+    + 'fline.PaintMs) + '' ms'';']), BODY_LINE, Msg('formatfloat'), BODY_LINE,
+    'Text10.Text');
+  AssertDisplay(InUnit(['  Label8.Text := ''Rectangle height = '' + '
+    + 'FloatToStr(rectangle1.Height);']), BODY_LINE, Msg('floattostr'),
+    BODY_LINE, 'Label8.Text');
+  // ALFmxControls Main.pas:1444: gemeldet die Zeile von TTask.Create, die
+  // Zuweisung steht in der anonymen Methode.
+  AssertDisplay(InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b) + '' ms'';',
+    TAIL[0], TAIL[1]]), BODY_LINE, Msg('formatfloat'), BODY_LINE + 6,
+    'Text4.Text');
+  // ALStringBenchmark Unit1.pas:501 (ebenso 980, 1293, 1342, 1426).
+  AssertDisplay(InUnit(['  Showmessage(''40,000 ALPosA in: '' + '
+    + 'FormatDateTime(''nn:ss.zzz'',now-StartDate));']), BODY_LINE,
+    Msg('formatdatetime'), BODY_LINE, 'Showmessage');
+  // ALXmlDoc unit1.pas:307 - Lines.Add (die Namensteile 'Xml'/'Node' zaehlen
+  // nur bei '.Text').
+  AssertDisplay(InUnit(['  MemoGenerate100000NodeWithXmlDocument.Lines.Add('
+    + '''Memory used: '' + FormatFloat(''0,'',(a - b)) + '' bytes'');']),
+    BODY_LINE, Msg('formatfloat'), BODY_LINE,
+    'MemoGenerate100000NodeWithXmlDocument.Lines.Add');
+  // delphimvcframework async_client MainClientFormU.pas:329 - vor dem Aufruf
+  // steht selbst ein Aufruf (PadRight).
+  AssertDisplay(InUnit(['  lbPerson.Items.Add(''DOB:''.PadRight(15) + '
+    + 'DateToStr(lPerson.DOB));']), BODY_LINE, Msg('datetostr'), BODY_LINE,
+    'lbPerson.Items.Add');
+  // Weitere Formen: Insert mit Index, Dialoge, Caption/Hint, Klammer und
+  // Typumwandlung, RTL-qualifiziert.
+  AssertDisplay(InUnit(['  ListBox1.Items.Insert(0, FloatToStr(x));']),
+    BODY_LINE, Msg('floattostr'), BODY_LINE, 'ListBox1.Items.Insert');
+  AssertDisplay(InUnit(['  MessageDlg(''Summe: '' + CurrToStr(x), mtInformation, '
+    + '[mbOK], 0);']), BODY_LINE, Msg('currtostr'), BODY_LINE, 'MessageDlg');
+  AssertDisplay(InUnit(['  Application.MessageBox(PChar(''Datum: '' + '
+    + 'DateToStr(d)), ''Info'', MB_OK);']), BODY_LINE, Msg('datetostr'),
+    BODY_LINE, 'Application.MessageBox');
+  AssertDisplay(InUnit(['  Form1.Caption := (''Zeit '' + TimeToStr(d));']),
+    BODY_LINE, Msg('timetostr'), BODY_LINE, 'Form1.Caption');
+  AssertDisplay(InUnit(['  btnGo.Hint := SysUtils.DateTimeToStr(d);']),
+    BODY_LINE, Msg('datetimetostr'), BODY_LINE, 'btnGo.Hint');
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NotDisplay_Helps;
+const
+  INV = ', TFormatSettings.Invariant)';
+begin
+  // Gegenproben zu E6: Ziel ist SQL, ein XML-Knoten, eine Stringliste, eine
+  // Routine (Protokoll, Datei), ein Ausdruck ueber eine andere Routine
+  // ('Trim(', 'Format(.., [..])'), eine Variable, ein Vergleich, eine
+  // Methode gleichen Namens - der Alt-Weg bleibt angeboten.
+  AssertFixed(InUnit(['  Query.SQL.Text := ''select '' + FloatToStr(x' + INV
+    + ';']), InUnit(['  Query.SQL.Text := ''select '' + FloatToStr(x);']),
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Node.Text := DateToStr(d' + INV + ';']),
+    InUnit(['  Node.Text := DateToStr(d);']), BODY_LINE, Msg('datetostr'),
+    True);
+  AssertFixed(InUnit(['  SL.Text := DateToStr(d' + INV + ';']),
+    InUnit(['  SL.Text := DateToStr(d);']), BODY_LINE, Msg('datetostr'), True);
+  AssertFixed(InUnit(['  Log.Add(''x='' + FloatToStr(x' + INV + ');']),
+    InUnit(['  Log.Add(''x='' + FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Writeln(F, FloatToStr(x' + INV + ');']),
+    InUnit(['  Writeln(F, FloatToStr(x));']), BODY_LINE, Msg('floattostr'),
+    True);
+  AssertFixed(InUnit(['  Edit1.Text := Trim(FloatToStr(x' + INV + ');']),
+    InUnit(['  Edit1.Text := Trim(FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  ShowMessage(Format(''%s'', [FloatToStr(x' + INV
+    + ']));']), InUnit(['  ShowMessage(Format(''%s'', [FloatToStr(x)]));']),
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  r := FloatToStr(x' + INV + ';', '  Label1.Caption := r;']),
+    InUnit(['  r := FloatToStr(x);', '  Label1.Caption := r;']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  if Edit1.Text = FloatToStr(x' + INV + ' then', '    Foo;']),
+    InUnit(['  if Edit1.Text = FloatToStr(x) then', '    Foo;']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Self.ShowMessage(FloatToStr(x' + INV + ');']),
+    InUnit(['  Self.ShowMessage(FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
 end;
 
 {$IFNDEF FPC}
