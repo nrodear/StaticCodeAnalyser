@@ -101,6 +101,9 @@ type
     [Test] procedure Datei_D007_Controls_NurKommentarStringNahtreffer_ReportsWarning;
     [Test] procedure Datei_D007_FmxControls_EnumElementText_ReportsWarning;
     [Test] procedure Datei_D007_Classes_NurTypesBezeichner_ReportsWarning;
+    // ---- D007b (2026-10-30): TCloseAction-Werte in der Forms-Liste ----
+    [Test] procedure Datei_D007b_Forms_NurCaFree_NoFinding;
+    [Test] procedure Datei_D007b_Forms_CaFreeNurKommentarString_ReportsWarning;
   end;
 
 implementation
@@ -1521,6 +1524,61 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
       'TRect/TPoint beweisen Classes nicht');
+  finally F.Free; end;
+end;
+
+{ ---- D007b (2026-10-30): TCloseAction-Werte in der Forms-Liste ---- }
+// KI-Pruefung rwE31 Stufe 3 (jvcl JvInterpreterMDI childwin.pas:31,
+// Dev-Cpp NewVarFrm.pas:25): die Forms-Liste kannte 'canone', nicht
+// caFree/caHide/caMinimize. Vcl.Forms deklariert alle vier im interface
+// als Konstanten (caFree = System.UITypes.TCloseAction.caFree), LCL
+// forms.pp ebenso. Im Korpus faellt dadurch kein Fund weg (Vertrag
+// d007b: jede Datei mit caFree nennt auch TForm/TCloseAction) - der
+// Test haelt den Fall ohne diese Begleiter fest.
+
+procedure TTestUnusedUses.Datei_D007b_Forms_NurCaFree_NoFinding;
+// Vorher (Nachbildung mit der alten Liste) 1 Fund: kein Bezeichner der
+// Liste im Text, caFree fehlte.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Forms;'#13#10+
+    'implementation'#13#10+
+    'procedure Zu(var A: Integer);'#13#10+
+    'begin'#13#10+
+    '  A := Ord(caFree);'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'caFree beweist Forms - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007b_Forms_CaFreeNurKommentarString_ReportsWarning;
+// GEGENPROBE (vorher und nachher 1 Fund): caFree nur im Kommentar,
+// caHide nur im Literal, dazu der Nahtreffer caFreeX - kein ganzes
+// Code-Wort aus der Liste.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Forms;'#13#10+
+    'implementation'#13#10+
+    'procedure Zu(var A: Integer);'#13#10+
+    'var caFreeX: Integer;'#13#10+
+    'begin'#13#10+
+    '  // A := Ord(caFree);'#13#10+
+    '  A := caFreeX;'#13#10+
+    '  Log(''caHide'');'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'Kommentar, Literal und Nahtreffer sind kein Nachweis fuer Forms');
   finally F.Free; end;
 end;
 

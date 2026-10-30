@@ -164,6 +164,10 @@ type
     // ein Aufruf aus SysUtils (keine Liste im Detektor) haelt die Hilfe
     // nicht mehr aus der Gluehbirne.
     [Test] procedure Sca007_SysUtilsCall_InBulb;
+    // d/SCA007Known2 (rwE31 Stufe 3, Abbrevia_TLB.pas:57, jvcl childwin.pas:31):
+    // TOleEnum (Winapi.ActiveX) und caFree (Vcl.Forms) haben eine Quelle.
+    [Test] procedure Sca007_OleEnum_InBulb;
+    [Test] procedure Sca007_CaFree_InBulb;
     // rwE31 Stufe 3 (SCA144 Fehler, SCA085/SCA144 unnoetige Sperren):
     // PlanUses mit der Zeile der Stelle, eine Klausel im Text ohne Baum,
     // Direktiven in der Klausel neben einem unbedingten Eintrag.
@@ -1890,6 +1894,70 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.MenuOnly, 'nur im Menue');
   Assert.IsTrue(Pos('IntToStr', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_OleEnum_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Abbrevia_TLB.pas (minimiert): eine TLB-Unit nutzt TOleEnum aus
+  // Winapi.ActiveX. Vorher nur im Menue - TOleEnum stand in keiner Liste,
+  // der Hinweis nannte es als moegliche Herkunft aus Vcl.Controls.
+  Src := Join(['unit t;', 'interface',
+    'uses Winapi.ActiveX, System.Classes, Vcl.Controls;', 'type',
+    '  TFoo = class(TComponent)', '  public',
+    '    function Kind(AValue: Integer): TOleEnum;', '  end;',
+    'implementation', 'function TFoo.Kind(AValue: Integer): TOleEnum;',
+    'begin', '  Result := AValue;', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne Winapi.ActiveX in den uses hat TOleEnum keine Quelle -
+  // nur im Menue.
+  Src := StringReplace(Src, 'Winapi.ActiveX, ', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('TOleEnum', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_CaFree_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // jvcl JvInterpreterMDI childwin.pas (minimiert): FormClose setzt caFree
+  // aus Vcl.Forms. Vorher nur im Menue - der Hinweis nannte caFree als
+  // moegliche Herkunft aus Vcl.Controls.
+  Src := Join(['unit t;', 'interface', 'uses Vcl.Forms, Vcl.Controls;',
+    'type', '  TKind = class(TForm)', '  public',
+    '    procedure Zu(Sender: TObject; var Action: TCloseAction);', '  end;',
+    'implementation',
+    'procedure TKind.Zu(Sender: TObject; var Action: TCloseAction);',
+    'begin', '  Action := caFree;', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ein Aufzaehlungswert ohne Quelle (coFree) haelt die Hilfe
+  // weiter im Menue.
+  Src := StringReplace(Src, 'caFree', 'coFree', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('coFree', O.Hint) > 0, O.Hint);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.
