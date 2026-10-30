@@ -1476,6 +1476,17 @@ begin
     TRdxStructFixes.ExtraIdents('windows'),
     TRdxStructFixes.ExtraIdents('classes')), Li), 'ClipBrd-Konstante');
   Assert.AreEqual<Integer>(11, Li);
+  // Gegenprobe (Review e/HilfeFixY): tmBoth fuehren ComObj (TThreadingModel)
+  // UND ComCtrls (TTickMark) - ComCtrls kann der Fund sein, ohne ihn waere
+  // es der Wert von TThreadingModel (E2010). ComObj ordnet ihn nicht zu -
+  // rot mit 'tmboth' in COMOBJ_NAMES: ''.
+  Src := Join(['unit u;', 'interface', 'uses ComObj, ComCtrls;',
+    'procedure Ticks(T: TObject);', 'implementation', 'uses Unit1;',
+    'procedure Ticks(T: TObject);', 'begin',
+    '  Form1.TrackBar1.TickMarks := tmBoth;', 'end;', 'end.']);
+  Assert.AreEqual('tmBoth', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('comobj'), Li), 'tmBoth aus ComCtrls');
+  Assert.AreEqual<Integer>(9, Li);
 end;
 
 // SCA007: der Eintrag AUnit auf ALine aus dem Text (genau einer) - steht er

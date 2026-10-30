@@ -523,12 +523,18 @@ const
   // ComObj: das interface von System.Win.ComObj (Delphi 13) UND comobj von
   // FPC 3.2.2 (packages/winunits-base) - Klassen, Exceptions, Routinen,
   // TClassInstancing/TThreadingModel samt Werten. Der Detektor fuehrt
-  // CreateComObject und OleCheck in der Liste von ActiveX.
-  COMOBJ_NAMES: array[0..46] of string = ('eoleerror', 'eolesyserror',
+  // CreateComObject und OleCheck in der Liste von ActiveX. NICHT tmBoth
+  // (Review e/HilfeFixY): TTickMark von ComCtrls (Vcl.ComCtrls Delphi 13,
+  // comctrls der LCL) fuehrt denselben Wert, und ComCtrls hat eine Liste im
+  // Detektor, kann also der Fund sein - 'uses ComObj, ComCtrls' mit
+  // 'TrackBar.TickMarks := tmBoth': ohne ComCtrls waere tmBoth der Wert von
+  // TThreadingModel (E2010). Ein Name hier darf in keiner Unit stehen, die
+  // der Detektor melden kann.
+  COMOBJ_NAMES: array[0..45] of string = ('eoleerror', 'eolesyserror',
     'eoleexception', 'eoleregistrationerror', 'tcomserverobject',
     'tcomobjectfactory', 'tcomclassmanager', 'tcomobject', 'tcomclass',
     'tclassinstancing', 'ciinternal', 'cisingleinstance', 'cimultiinstance',
-    'tthreadingmodel', 'tmsingle', 'tmapartment', 'tmfree', 'tmboth',
+    'tthreadingmodel', 'tmsingle', 'tmapartment', 'tmfree',
     'tmneutral', 'ttypedcomobject', 'ttypedcomclass', 'ttypedcomobjectfactory',
     'tautoobject', 'tautoclass', 'tautoobjectfactory', 'tautointfobject',
     'createclassid', 'createcomobject', 'createremotecomobject',
@@ -540,7 +546,10 @@ const
     'tfactoryproc');
   // (Bde.)DBTables gibt es nur unter Delphi (BDE, FPC hat keine): die
   // Datenmengen und Verbindungen der BDE, die jede Fassung seit Delphi 3
-  // fuehrt.
+  // fuehrt. Delphi 12/13 liefern weder Quelle noch dcu der BDE mit - die
+  // Namen sind nicht gegen eine Quelle geprueft (Review e/HilfeFixY). Sie
+  // stehen in keiner Unit mit Liste im Detektor (Delphi-13-Quellen, LCL;
+  // TDatabase/TDBDataSet von db gibt es nur unter FPC, ohne DBTables).
   DBTABLES_NAMES: array[0..9] of string = ('ttable', 'tquery', 'tdatabase',
     'tsession', 'tstoredproc', 'tbatchmove', 'tbdedataset', 'tdbdataset',
     'tupdatesql', 'edbengineerror');
