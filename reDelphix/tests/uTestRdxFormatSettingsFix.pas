@@ -82,6 +82,8 @@ type
     [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
     [Test] procedure Sca128_Alt_KitInclude_DiskCheckOrWith;
     [Test] procedure Sca128_Alt_ClassSettingsField_NoHelp;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Sca128_Alt_DisplayGridAndTextParam_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -1476,6 +1478,45 @@ begin
   AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
     'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 16,
     Msg('formatdatetime'), True);
+end;
+
+// ---- Realworld-Test rwE33 Stufe 5 ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+const
+  INV = ', TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6, Luecken der Stufe 5. mORMot2 dmvc-ai
+  // 56-articles_crud_vcl_client MainFormU.pas:206: die Zelle eines
+  // TStringGrid zeigt den Preis an.
+  AssertDisplay(InUnit(['  gridArticles.Cells[3, i + 1] := '
+    + 'CurrToStr(fArticles[i].Price);']), BODY_LINE, Msg('currtostr'),
+    BODY_LINE, 'gridArticles.Cells[3, i + 1]');
+  // Der Hint-Text des OnGetHint-Ereignisses (out-Parameter, zwei Namen in
+  // der Gruppe) - SCA059 mit CellText: uTestRdxFormatLocaleFix.
+  Src := UnitText(RTL_USES, ['procedure TF.vstGetHint(Sender: TObject;',
+    '  out LineBreakStyle, HintText: string);', 'begin',
+    '  HintText := ''Stand: '' + DateToStr(d);', 'end;'], []);
+  AssertDisplay(Src, 9, Msg('datetostr'), 9, 'HintText');
+  // Gegenproben: ein anderes indiziertes Ziel, Cells ohne Objekt davor,
+  // eine lokale Variable CellText, ein Wert-Parameter HintText -
+  // Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Data[3] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Data[3] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'), True);
+  AssertFixed(InUnit(['  Cells[3, 1] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Cells[3, 1] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'),
+    True);
+  Src := UnitText(RTL_USES, ['procedure Q;', 'var', '  CellText: string;',
+    'begin', '  CellText := FloatToStr(x);', '  Log(CellText);', 'end;'], []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 10, Msg('floattostr'), True);
+  Src := UnitText(RTL_USES, ['function Q(HintText: string): string;',
+    'begin', '  HintText := FloatToStr(x);', '  Result := HintText;', 'end;'],
+    []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 8, Msg('floattostr'), True);
 end;
 
 {$IFNDEF FPC}

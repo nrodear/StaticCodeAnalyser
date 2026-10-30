@@ -1012,7 +1012,7 @@ msgstr ""
 msgid "%s: type %s is not proven in this unit as a class, interface or pointer and is not a class of the Delphi sources - a function type would call \"%s <> nil\""
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2608
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2712
 msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
 msgstr ""
 
@@ -3800,7 +3800,7 @@ msgstr ""
 msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:1989
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2093
 msgid "SysUtils is in no uses clause of the file - the call need not bind to the RTL"
 msgstr ""
 
@@ -4249,10 +4249,10 @@ msgstr ""
 msgid "a compiler directive names %s (line %d)"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2332
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2359
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2449
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2457
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2436
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2463
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2553
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2561
 msgid "a compiler directive stands on the reported line"
 msgstr ""
 
@@ -4331,7 +4331,7 @@ msgstr ""
 msgid "a string literal names %s (line %d) - a lookup by name (RTTI, scripts) could change"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2067
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2171
 msgid "a with statement stands before the call in its routine (line %d) - the names could bind to a member"
 msgstr ""
 
@@ -5375,7 +5375,7 @@ msgstr ""
 msgid "line %d carries %d calls \"%s.Resume\" - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2430
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2534
 msgid "line %d carries %d calls of Format - ambiguous"
 msgstr ""
 
@@ -5450,7 +5450,7 @@ msgstr ""
 msgid "line %d of the section not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:1726
+#: reDelphix/source/uRdxFormatSettingsFix.pas:1830
 msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
 msgstr ""
 
@@ -5721,7 +5721,7 @@ msgstr ""
 msgid "no %s.ParamByName(\"%s\") with the name as a plain literal on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2444
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2548
 msgid "no Format call on the code columns of the reported line"
 msgstr ""
 
@@ -5803,7 +5803,7 @@ msgstr ""
 msgid "no call %s(...) on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2327
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2431
 msgid "no call of %s on the code columns of the reported line"
 msgstr ""
 
@@ -7120,7 +7120,7 @@ msgstr ""
 msgid "the Assert call follows a case label or a goto label"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2462
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2566
 msgid "the Format call on the line has another format string than the finding"
 msgstr ""
 
@@ -7398,7 +7398,7 @@ msgstr ""
 msgid "the class \"%s\" already carries the \"E\" prefix"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:1712
+#: reDelphix/source/uRdxFormatSettingsFix.pas:1816
 msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
 msgstr ""
 
@@ -7679,8 +7679,8 @@ msgstr ""
 msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2045
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2065
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2149
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2169
 #: reDelphix/source/uRdxMagicFixes.pas:2356
 msgid "the file asks for old compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on"
 msgstr ""
@@ -7689,7 +7689,7 @@ msgstr ""
 msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2023
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2127
 #: reDelphix/source/uRdxMagicFixes.pas:2358
 msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
 msgstr ""
@@ -7732,7 +7732,7 @@ msgstr ""
 msgid "the file declares its own %s - its target type is not that of the RTL"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2049
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2153
 msgid "the file declares its own TFormatSettings (line %d)"
 msgstr ""
 
@@ -7740,7 +7740,7 @@ msgstr ""
 msgid "the file declares its own identifier \"Int64\" - the cast would not mean the 64-bit integer of the RTL"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:1992
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2096
 msgid "the file declares its own routine %s - the call need not bind to the RTL"
 msgstr ""
 
@@ -7777,7 +7777,7 @@ msgstr ""
 msgid "the file includes other files - they could declare %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2036
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2140
 msgid "the file is also written for FPC (line %d) - FPC 3.2 knows no TFormatSettings.Invariant"
 msgstr ""
 
@@ -7803,7 +7803,7 @@ msgstr ""
 msgid "the file sets RandSeed (line %d) - a fixed seed may be intended (reproducible sequence)"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2055
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2159
 msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"
 msgstr ""
 
@@ -7863,7 +7863,7 @@ msgstr ""
 msgid "the form file %s names %s - bound to an event by name"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2467
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2571
 msgid "the format string has a currency spec (m) - TFormatSettings.Invariant writes the generic currency sign instead of the local one"
 msgstr ""
 
@@ -8361,7 +8361,7 @@ msgstr ""
 msgid "the message does not name the exception class"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2418
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2522
 msgid "the message does not name the format string - analyse the file again"
 msgstr ""
 
@@ -8516,7 +8516,7 @@ msgstr ""
 msgid "the message names no section"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2318
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2422
 msgid "the message names none of the locale-dependent RTL functions of SCA128"
 msgstr ""
 
@@ -8865,7 +8865,7 @@ msgstr ""
 msgid "the skeleton is empty - fill in summary, param and returns"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2291
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2395
 msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"
 msgstr ""
 
@@ -8877,7 +8877,7 @@ msgstr ""
 msgid "the statement cannot be described"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatSettingsFix.pas:2437
+#: reDelphix/source/uRdxFormatSettingsFix.pas:2541
 msgid "the statement continues on line %d with another such call - it would stay unchanged and unreported; by hand"
 msgstr ""
 

@@ -1384,6 +1384,12 @@ end;
 //     Text') - '.Text' nicht, wenn ein Glied der Kette nach Daten klingt
 //     (DATA_PARTS: 'Query.SQL.Text', 'Node.Text', 'Json.Text') oder der
 //     Besitzer eine Stringliste sein kann (TEXT_OWNERS: 'SL.Text');
+//   * seit rwE33 Stufe 5 Zuweisung an 'X.Cells[..]' (TStringGrid; mORMot2
+//     dmvc-ai 56-articles_crud_vcl_client MainFormU.pas:206, DATA_PARTS wie
+//     bei '.Text') und an den var- bzw. out-Parameter 'CellText' bzw.
+//     'HintText' der Routine (OnGetText/OnGetHint des VirtualTree; TES5Edit
+//     xeLogAnalyzerForm.pas:326/:329, SCA059) - ein gleichnamiger
+//     Wert-Parameter, eine lokale Variable oder ein Member zaehlen nicht;
 //   * Argument von 'Items.Add', 'Items.Insert', 'Lines.Add', 'Lines.Insert',
 //     'ShowMessage', 'MessageDlg', 'Application.MessageBox'.
 // Gelesen wird rueckwaerts ab dem Namen (samt 'SysUtils.'): Klammergruppen
@@ -1412,6 +1418,18 @@ const
   NAME_APPLICATION = 'application';
   NAME_MESSAGEBOX = 'messagebox';
   NAME_DIALOGS = 'dialogs';
+  // 'Grid.Cells[c, r] :=' (TStringGrid, TDrawGrid; rwE33 Stufe 5).
+  NAME_CELLS = 'cells';
+  // Die Text-Parameter der Anzeige-Ereignisse (OnGetText, OnGetHint des
+  // VirtualTree; rwE33 Stufe 5) - nur als var- bzw. out-Parameter
+  // (VarParamOf) ...
+  DISPLAY_PARAMS: array[0..1] of string = ('celltext', 'hinttext');
+  // ... davor steht der Name im Kopf, dahinter folgt ...
+  PARAM_PREV: array[0..6] of string = ('(', ';', ',', 'const', 'var', 'out',
+    'constref');
+  PARAM_NEXT: array[0..3] of string = (',', ':', ';', ')');
+  // ... und so beginnt eine Gruppe, in die die Routine schreibt.
+  PARAM_WRITABLE: array[0..1] of string = ('var', 'out');
   // Teile von Namen, die bei '.Text' nach Daten statt Anzeige klingen ...
   DATA_PARTS: array[0..13] of string = ('sql', 'xml', 'json', 'node', 'query',
     'param', 'field', 'attr', 'stream', 'request', 'response', 'body',
@@ -1538,13 +1556,99 @@ begin
   end;
 end;
 
+// Ist ANameLow im Kopf von R ein var- oder out-Parameter ('var CellText:
+// string', 'out A, B: Integer')? Gelesen wie uRdxTypeProof.ParamOf (dort
+// ohne die Art des Parameters): Klammern in Typ oder Vorgabewert zaehlen
+// nicht, ein Attribut vor dem Namen ('[Ref]') ebenso wenig - dann nein.
+function VarParamOf(AMap: TRdxCodeMap; const R: TRdxRoutine;
+  const ANameLow: string): Boolean;
+var
+  T, P, Close : TRdxToken;
+begin
+  Result := False;
+  T := After(AMap, R.NameTok);
+  if T.Low = '<' then
+    T := AfterClose(AMap, T);
+  if T.Low <> '(' then
+    Exit;
+  Close := MatchClose(AMap, T);
+  if Close.Low = '' then
+    Exit;
+  P := T;
+  T := After(AMap, T);
+  while (T.Low <> '') and TokBefore(T, Close) do
+  begin
+    if ((T.Low = '(') or (T.Low = '[')) and (P.Low <> ';') then
+    begin
+      P := MatchClose(AMap, T);
+      if P.Low = '' then
+        Exit;
+      T := After(AMap, P);
+      Continue;
+    end;
+    if T.IsWord and (T.Low = ANameLow) and InList(P.Low, PARAM_PREV)
+       and InList(After(AMap, T).Low, PARAM_NEXT) then
+    begin
+      // Zurueck zum Anfang der Gruppe 'var A, B: ..'.
+      while P.Low = ',' do
+        P := Before(AMap, Before(AMap, P));
+      Exit(InList(P.Low, PARAM_WRITABLE));
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist ATarget der Text-Parameter eines Anzeige-Ereignisses (DISPLAY_PARAMS:
+// 'CellText' aus OnGetText, 'HintText' aus OnGetHint des VirtualTree), als
+// var- bzw. out-Parameter der Routine um ihn? Nur der blosse Name ('X.CellText'
+// ist ein Member).
+function DisplayParam(AMap: TRdxCodeMap; const ATarget: TRdxToken): Boolean;
+var
+  R : TRdxRoutine;
+begin
+  Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PARAMS)
+    and (Before(AMap, ATarget).Low <> '.')
+    and (BeginBodyAround(AMap, ATarget, R) = rbfFound)
+    and VarParamOf(AMap, R, ATarget.Low);
+end;
+
 // Ist ATarget (das Token vor ':=') ein Anzeige-Ziel (s. Kopf)? True mit
 // dem Ziel wie geschrieben und seiner Zeile.
 function DisplayAssign(AMap: TRdxCodeMap; const ATarget: TRdxToken;
   out AWhat: string; out ALine: Integer): Boolean;
+var
+  Open, Cells, S : TRdxToken;
 begin
   AWhat := '';
   ALine := 0;
+  // 'Grid.Cells[c, r] :=' (rwE33 Stufe 5, mORMot2 dmvc-ai MainFormU.pas:206).
+  if ATarget.Low = ']' then
+  begin
+    Open := OpenerOf(AMap, ATarget);
+    Cells := Before(AMap, Open);
+    Result := (Open.Low = '[') and Cells.IsWord and (Cells.Low = NAME_CELLS)
+      and (Before(AMap, Cells).Low = '.')
+      and not ChainLooksLikeData(AMap, Cells);
+    if Result then
+    begin
+      S := ChainStart(AMap, Cells);
+      if S.Line = ATarget.Line then
+        AWhat := Copy(AMap.Raw(S.Line), S.Col, ATarget.EndCol - S.Col)
+      else
+        AWhat := ChainText(AMap, Cells);
+      ALine := Cells.Line;
+    end;
+    Exit;
+  end;
+  // 'CellText :=' im OnGetText-Ereignis (rwE33 Stufe 5, TES5Edit
+  // xeLogAnalyzerForm.pas:326/:329).
+  if DisplayParam(AMap, ATarget) then
+  begin
+    AWhat := TokText(AMap, ATarget);
+    ALine := ATarget.Line;
+    Exit(True);
+  end;
   Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PROPS)
     and (Before(AMap, ATarget).Low = '.')
     and not ((ATarget.Low = NAME_TEXT) and ChainLooksLikeData(AMap, ATarget));
