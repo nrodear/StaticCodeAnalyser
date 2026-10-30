@@ -1142,8 +1142,11 @@ end;
 // Ein Eintrag mit demselben letzten Glied zaehlt nicht mit: im anderen
 // Zweig steht oft der Zwilling ('{$IFDEF D16} Vcl.ClipBrd {$ELSE} ClipBrd
 // {$ENDIF}', rwE31 Stufe 3) - seine Bezeichner sind die der entfernten Unit.
-function OtherUnitsIdents(APlaces: TSourcePlaces;
-  const AUnit: string): TArray<string>;
+// Die Ergaenzungen des Planers (ExtraIdentsOf) gelten seit dem Review
+// e/HilfeFixY nur fuer Eintraege, die auch an der Fundstelle (ASiteLine,
+// ASiteCol: der entfernte Eintrag) stehen.
+function OtherUnitsIdents(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AUnit: string; ASiteLine, ASiteCol: Integer): TArray<string>;
 var
   Clauses : TArray<TArray<TRefactorSpan>>;
   c, k    : Integer;
@@ -1152,18 +1155,18 @@ begin
   Result := nil;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
+  begin
     for k := 0 to High(Clauses[c]) do
       if not SameText(LastPart(Clauses[c][k].Resolved), LastPart(AUnit)) then
-      begin
         for Id in TUnusedUsesDetector.IdentsFor(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
-        // SysUtils, Types, Windows ..: der Detektor fuehrt keine Liste
-        // (rwE31 Stufe 3); Point/Rect von Classes nimmt er nicht auf.
-        for Id in TRdxStructFixes.ExtraIdents(
-            LowerCase(Clauses[c][k].Resolved)) do
-          AddText(Result, Id);
-      end;
+    // SysUtils, Types, Windows ..: der Detektor fuehrt keine Liste
+    // (rwE31 Stufe 3); Point/Rect von Classes nimmt er nicht auf.
+    for Id in TRdxStructFixes.ExtraIdentsOf(AMap, Clauses[c], AUnit,
+        ASiteLine, ASiteCol) do
+      AddText(Result, Id);
+  end;
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
@@ -1222,7 +1225,9 @@ begin
       Twin := FromText and TRdxStructFixes.TwinBranches(Map, Clause, Index);
       if Twin or not FromText then
         Foreign := TRdxStructFixes.ForeignIdent(Map,
-          OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
+          OtherUnitsIdents(APlaces, Map, Result.Name,
+            Clause.Entries[Index].StartLine, Clause.Entries[Index].StartCol),
+          ForeignLine);
     end;
   finally
     TRdxCodeMap.Release(Map);

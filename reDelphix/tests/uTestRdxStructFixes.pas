@@ -111,6 +111,10 @@ type
     // der nicht geparste Zweig nennt dieselben Units wie der geparste, bis
     // auf Unit-Scope-Praefixe - der Beweis gilt (TwinBranches).
     [Test] procedure Sca007_TwinBranches;
+    // Review e/HilfeFixY (Lazarus fpguicrosshelpers.pas:8): die Listen seit
+    // Fix-Runde 5 gelten nur fuer Eintraege, die auch an der Fundstelle
+    // stehen - '{$IFDEF WINDOWS}, windows{$ENDIF}' beweist TPoint nicht.
+    [Test] procedure Sca007_ExtraIdents_OnlyWhereSiteCompiles;
   end;
 
 implementation
@@ -1573,6 +1577,69 @@ begin
   Alt := StringReplace(Src, 'implementation', Join(['implementation',
     '{$IFDEF MSWINDOWS}', 'uses Winapi.ShellAPI;', '{$ENDIF}']), []);
   Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Klausel im IFDEF');
+end;
+
+
+// SCA007: ExtraIdentsOf der Klausel mit dem Eintrag AUnit auf ALine (aus dem
+// Text), Fundstelle dieser Eintrag - wie uRdxFixRunner.OtherUnitsIdents.
+function ExtraOf(const ASource: string; ALine: Integer;
+  const AUnit: string): TArray<string>;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.ExtraIdentsOf(Map, C.Entries, AUnit,
+      C.Entries[Ix].StartLine, C.Entries[Ix].StartCol);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_ExtraIdents_OnlyWhereSiteCompiles;
+var
+  Li       : Integer;
+  Src, Alt : string;
+begin
+  // fpguicrosshelpers.pas:7-18 (minimiert): windows steht nur unter
+  // WINDOWS; unter Linux kommt TPoint aus Classes. Classes zu entfernen
+  // braeche dort den Bau - rot ohne Fix: '' (TPoint "aus windows").
+  Src := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  , fpg_main', '  {$IFDEF WINDOWS}', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, ExtraOf(Src, 4, 'Classes'), Li),
+    'windows nur unter WINDOWS');
+  Assert.AreEqual<Integer>(11, Li);
+  // Gegenproben: unbedingt beweist windows TPoint ...
+  Alt := StringReplace(StringReplace(Src, '  {$IFDEF WINDOWS}', '', []),
+    '  {$ENDIF}', '', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'windows unbedingt');
+  // ... ebenso, wenn die Fundstelle im selben Block steht (fpg_main wird
+  // nur unter WINDOWS entfernt).
+  Alt := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  {$IFDEF WINDOWS}', '  , fpg_main', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 7, 'fpg_main'), Li),
+    'derselbe Block');
+  // Die Listen bis Fix-Runde 5 (SysUtils, Types, Messages) bleiben wie sie
+  // waren - auch bedingt.
+  Alt := StringReplace(Src, '  , windows', '  , Types', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'Types bedingt wie bisher');
 end;
 
 initialization

@@ -133,6 +133,20 @@ type
     class function ExtraIdents(const AUnitLow: string): TArray<string>;
       static;
 
+    // SCA007 (Review e/HilfeFixY nach Fix-Runde 5): ExtraIdents der Eintraege
+    // AEntries (eine uses-Klausel) ausser denen mit dem letzten Glied von
+    // AUnit (der Zwilling der entfernten Unit) - fuer den Beweis
+    // (ForeignIdent). Die Listen seit Fix-Runde 5 (Windows, ComObj, DBTables,
+    // Classes) nur fuer einen Eintrag, der unbedingt steht oder dessen
+    // Bedingungsbloecke alle auch die Fundstelle (ASiteLine, ASiteCol)
+    // umfassen (ImpliedBySite); sonst nur die von SysUtils, Types, Messages
+    // (wie bis dahin). Lazarus fpguicrosshelpers.pas:8 'uses Classes,
+    // SysUtils, fpg_main {$IFDEF WINDOWS}, windows{$ENDIF}': TPoint hiesse
+    // sonst "aus windows" - unter Linux kommt es aus Classes.
+    class function ExtraIdentsOf(AMap: TRdxCodeMap;
+      const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+      ASiteLine, ASiteCol: Integer): TArray<string>; static;
+
     // SCA007 (Fix-Runde 5 nach rwE33, CEF4Delphi MDIBrowser uChildForm.pas:10,
     // SimpleServer uSimpleServer.pas:9, source\uCEFWindowDelegate.pas:16 ..):
     // der Eintrag AIndex einer Klausel aus dem Text (TextUsesEntry) steht in
@@ -224,6 +238,7 @@ uses
   uRdxBlocks, // TypeHasBody (ForeignIdent: Typ mit Rumpf)
   uRdxRaiseFixes, // OldExceptionClassReason (SCA168 raise, rwE31 Stufe 3)
   uRdxTypeProof,  // Selektor-Typ, Units neben der Datei (SCA168.2, rwE32 E5)
+  uRdxCompilerTraces, // ConditionalDirectives, UnconditionalAt (SCA007)
   uRdxText;   // _() und die gemeinsamen Texte der Gruende (Entscheid E29)
 
 const
@@ -1185,6 +1200,96 @@ begin
     Result := NamesOf(CLASSES_EXTRA);
 end;
 
+// Die oeffnenden Direktiven (Index in ADirs) der Bedingungsbloecke, in
+// denen (ALine, ACol) steht, aussen zuerst.
+function OpenBlocksAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): TArray<Integer>;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(ADirs));
+  n := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    if (ADirs[i].Line > ALine)
+       or ((ADirs[i].Line = ALine) and (ADirs[i].Col >= ACol)) then
+      Break;
+    if InList(ADirs[i].Word, ['if', 'ifdef', 'ifndef', 'ifopt']) then
+    begin
+      Result[n] := i;
+      Inc(n);
+    end
+    else if InList(ADirs[i].Word, ['endif', 'ifend']) and (n > 0) then
+      Dec(n);
+  end;
+  SetLength(Result, n);
+end;
+
+// Gilt der Eintrag an (AEntryLine, AEntryCol) ueberall, wo die Fundstelle
+// (ASiteLine, ASiteCol) uebersetzt wird? Ja, wenn er unbedingt steht
+// (UnconditionalAt) oder jeder Bedingungsblock um ihn auch die Fundstelle
+// umfasst - derselbe Zweig, oder der andere Zweig einer Weiche, deren
+// Zwillinge TwinBranches bewiesen hat (nur dann fragt der Laeufer einen
+// Eintrag aus dem anderen Zweig).
+function ImpliedBySite(const ADirs: TRdxCondDirectives; AEntryLine,
+  AEntryCol, ASiteLine, ASiteCol: Integer): Boolean;
+var
+  E, S : TArray<Integer>;
+  i, j : Integer;
+  Hit  : Boolean;
+begin
+  if UnconditionalAt(ADirs, AEntryLine, AEntryCol) then
+    Exit(True);
+  E := OpenBlocksAt(ADirs, AEntryLine, AEntryCol);
+  S := OpenBlocksAt(ADirs, ASiteLine, ASiteCol);
+  for i := 0 to High(E) do
+  begin
+    Hit := False;
+    for j := 0 to High(S) do
+      if S[j] = E[i] then
+        Hit := True;
+    if not Hit then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+class function TRdxStructFixes.ExtraIdentsOf(AMap: TRdxCodeMap;
+  const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+  ASiteLine, ASiteCol: Integer): TArray<string>;
+var
+  Dirs      : TRdxCondDirectives;
+  k, n      : Integer;
+  Low, Last : string;
+  Id        : string;
+  Ids       : TArray<string>;
+begin
+  Result := nil;
+  n := 0;
+  Dirs := ConditionalDirectives(AMap);
+  Last := LowerCase(AUnit);
+  Last := Copy(Last, LastDelimiter('.', Last) + 1, MaxInt);
+  for k := 0 to High(AEntries) do
+  begin
+    Low := LowerCase(AEntries[k].Resolved);
+    if Copy(Low, LastDelimiter('.', Low) + 1, MaxInt) = Last then
+      Continue;
+    if ImpliedBySite(Dirs, AEntries[k].StartLine, AEntries[k].StartCol,
+         ASiteLine, ASiteCol)
+       or InList(Low, ['sysutils', 'system.sysutils', 'types', 'system.types',
+         'messages', 'winapi.messages']) then
+      Ids := ExtraIdents(Low)
+    else
+      Ids := nil;
+    SetLength(Result, n + Length(Ids));
+    for Id in Ids do
+    begin
+      Result[n] := Id;
+      Inc(n);
+    end;
+  end;
+end;
+
 // Die Eintraege einer uses-Klausel aus dem Text, ab dem ersten Token hinter
 // 'uses' (T): je Eintrag die Namensteile ohne Luecke auf einer Zeile (wie
 // TSourcePlaces.UsesEntries), ein 'in'-Pfad (der String ist kein Code-
@@ -1286,28 +1391,6 @@ begin
   Result := (ALine < BLine) or ((ALine = BLine) and (ACol < BCol));
 end;
 
-// Die Tiefe der bedingten Bereiche ({$IFDEF}/{$IF}/{$IFOPT} .. {$ENDIF}/
-// {$IFEND}) vor dem Token T, ab Dateianfang gezaehlt.
-function DepthBefore(AMap: TRdxCodeMap; const T: TRdxToken): Integer;
-var
-  Li, Co : Integer;
-  W      : string;
-  Arg    : Boolean;
-begin
-  Result := 0;
-  Li := 1;
-  Co := 1;
-  while NextDirective(AMap, Li, Co) and PosBefore(Li, Co, T.Line, T.Col) do
-  begin
-    W := DirectiveWord(AMap, Li, Co, Arg);
-    if InList(W, ['if', 'ifdef', 'ifndef', 'ifopt']) then
-      Inc(Result)
-    else if InList(W, ['endif', 'ifend']) then
-      Dec(Result);
-    Inc(Co);
-  end;
-end;
-
 // Die Weiche einer uses-Klausel aus dem Text (AEntries ab dem Schluesselwort
 // AUses, ReadTextClause): 0 ohne Direktive bis zum ';', 1 bei genau
 // '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (auch IFNDEF/IF und IFEND) - ASide je
@@ -1392,6 +1475,7 @@ var
   Side, S : TArray<Integer>;
   U, T    : TRdxToken;
   Own, k  : Integer;
+  Dirs    : TRdxCondDirectives;
 begin
   Result := False;
   E := AClause.Entries;
@@ -1411,15 +1495,17 @@ begin
   // Die uebrigen Klauseln liefert der Dienst mit SEINER Sicht der Defines;
   // im Zweig des Funds gilt eine andere (die Weiche oben). Ihre Units gelten
   // nur, wenn sie in jeder Sicht dieselben sind: keine Klausel steht in
-  // einem bedingten Bereich, und eine Weiche in ihr nennt in beiden Zweigen
-  // dieselben Units (bis auf Unit-Scope-Praefixe). Sonst ordnete der Beweis
-  // einen Bezeichner vielleicht einer Unit zu, die im Zweig des Funds fehlt.
+  // einem bedingten Bereich (UnconditionalAt), und eine Weiche in ihr nennt
+  // in beiden Zweigen dieselben Units (bis auf Unit-Scope-Praefixe). Sonst
+  // ordnete der Beweis einen Bezeichner vielleicht einer Unit zu, die im
+  // Zweig des Funds fehlt.
+  Dirs := ConditionalDirectives(AMap);
   T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
   while T.Low <> '' do
   begin
     if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
     begin
-      if DepthBefore(AMap, T) <> 0 then
+      if not UnconditionalAt(Dirs, T.Line, T.Col) then
         Exit;
       if not SameTok(T, U) then
       begin
