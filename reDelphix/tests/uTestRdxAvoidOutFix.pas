@@ -65,6 +65,10 @@ type
     [Test] procedure DirectiveAroundSet_MenuOnly;
     [Test] procedure RecordMethod_Helps;
     [Test] procedure LocalOverloads_OtherCount_Helps;
+    // Fix-Runde 4 nach rwE32 (Fragwuerdig SCA086, Kastri DW.EXIF.Win.pas:102):
+    // der Hinweis nur im Menue nennt "verwaltet oder unbekannt", den Typ
+    // und den Namen wie im Text.
+    [Test] procedure UnknownType_HintNamesType;
   end;
 
 {$IFNDEF FPC}
@@ -511,8 +515,8 @@ var
 begin
   Assert.IsTrue(PlanOn(ASource, 'procedure Get(', P, R), R);
   Assert.IsTrue(P.MenuOnly, 'nur im Menue');
-  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['s', 'Get', LineOf(ASource, AAt)]),
-    P.Caution);
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['S', 'string', 'Get',
+    LineOf(ASource, AAt)]), P.Caution);
   Assert.AreEqual(StringReplace(ASource, 'out S', 'var S', [rfReplaceAll]),
     Apply(ASource, P.Edits));
 end;
@@ -764,6 +768,37 @@ begin
     'procedure Flag(out Ch', _(R_OUT_HEADS, [2, 'Flag']));
   AssertRefused(StringReplace(Src, '  Flag(C);', '  Run(@Flag);', []),
     'procedure Flag(out Ch', _(R_OUT_REFERENCE, ['Flag', 23]));
+end;
+
+procedure TTestRdxAvoidOutFix.UnknownType_HintNamesType;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // Kastri DW.EXIF.Win.pas:43/102 (minimiert): PPropertyItem kommt aus einer
+  // anderen Unit (Winapi.GDIPAPI, ein Zeiger) - die Hilfe kennt den Typ
+  // nicht, sie steht gekennzeichnet nur im Menue. Bis dahin hiess der
+  // Hinweis "apropitem hat einen verwalteten Typ" (klein, und verwaltet
+  // ist er nicht); ohne den Fix rot (alte msgid, Name klein).
+  Src := Join(['unit t;', 'interface', 'implementation', 'type',
+    '  TGdip = record',
+    '    class function GetItem(const AId: Integer; out APropItem: '
+    + 'PPropertyItem): Boolean; static;', '  end;',
+    'class function TGdip.GetItem(const AId: Integer; out APropItem: '
+    + 'PPropertyItem): Boolean;', 'begin', '  Result := AId > 0;',
+    '  if Result then', '    APropItem := nil;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'class function GetItem(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'unbekannter Typ, nur im Menue');
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['APropItem', 'PPropertyItem', 'GetItem',
+    12]), P.Caution);
+  // Mehrere Namen und ein Typ aus mehreren Woertern: je Name wie im Text,
+  // der Typ mit Leerzeichen zwischen den Woertern.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'procedure Load(out Head, Body: array of Byte);', 'begin',
+    '  if Ready then', '    Head[0] := 1;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Load(', P, R), R);
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['Head', 'array of Byte', 'Load', 7]),
+    P.Caution);
 end;
 
 {$IFNDEF FPC}

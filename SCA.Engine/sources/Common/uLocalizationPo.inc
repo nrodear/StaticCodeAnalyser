@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7045 Zeilen, 332795 Bytes
+  // i18n\de.po - 7045 Zeilen, 332867 Bytes
   CPoLines_de: array[0..7044] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -3728,8 +3728,8 @@ const
     'msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"',
     'msgstr "die Methode ist au'#$00DF'erhalb der Unit sichtbar (nicht private, Klasse im interface-Teil) - andere Units k'#$00F6'nnen sie als Methodenzeiger nutzen"',
     '',
-    'msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller''s old value can stay where \"out\" cleared it"',
-    'msgstr "nicht in der Gl'#$00FC'hbirne - %s hat einen verwalteten Typ und wird nicht als erste Anweisung von %s gesetzt (Zeile %d): mit \"var\" kann der alte Wert des Aufrufers stehen bleiben, wo \"out\" ihn leerte"',
+    'msgid "not in the light bulb - %s has a managed type or one the quick fix does not know (%s) and is not set as the first statement of %s (line %d): with \"var\" the caller''s old value can stay where \"out\" cleared it"',
+    'msgstr "nicht in der Gl'#$00FC'hbirne - %s hat einen verwalteten oder der Hilfe unbekannten Typ (%s) und wird nicht als erste Anweisung von %s gesetzt (Zeile %d): mit \"var\" kann der alte Wert des Aufrufers stehen bleiben, wo \"out\" ihn leerte"',
     '',
     'msgid "the name \"%s\" already occurs in the code of the file"',
     'msgstr "der Name \"%s\" kommt im Code der Datei schon vor"',
@@ -7334,7 +7334,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7041 Zeilen, 346200 Bytes
+  // i18n\fr.po - 7041 Zeilen, 346266 Bytes
   CPoLines_fr: array[0..7040] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -11045,8 +11045,8 @@ const
     'msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"',
     'msgstr "la m'#$00E9'thode est visible hors de l''unit'#$00E9' (pas private, classe dans la section interface) - d''autres unit'#$00E9's peuvent l''utiliser comme pointeur de m'#$00E9'thode"',
     '',
-    'msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller''s old value can stay where \"out\" cleared it"',
-    'msgstr "pas dans l''ampoule - %s a un type g'#$00E9'r'#$00E9' et n''est pas affect'#$00E9' comme premi'#$00E8're instruction de %s (ligne %d) : avec '#$00AB' var '#$00BB', l''ancienne valeur de l''appelant peut rester l'#$00E0' o'#$00F9' '#$00AB' out '#$00BB' la vidait"',
+    'msgid "not in the light bulb - %s has a managed type or one the quick fix does not know (%s) and is not set as the first statement of %s (line %d): with \"var\" the caller''s old value can stay where \"out\" cleared it"',
+    'msgstr "pas dans l''ampoule - %s a un type g'#$00E9'r'#$00E9' ou inconnu de l''aide (%s) et n''est pas affect'#$00E9' comme premi'#$00E8're instruction de %s (ligne %d) : avec '#$00AB' var '#$00BB', l''ancienne valeur de l''appelant peut rester l'#$00E0' o'#$00F9' '#$00AB' out '#$00BB' la vidait"',
     '',
     'msgid "the name \"%s\" already occurs in the code of the file"',
     'msgstr "le nom '#$00AB' %s '#$00BB' appara'#$00EE't d'#$00E9'j'#$00E0' dans le code du fichier"',

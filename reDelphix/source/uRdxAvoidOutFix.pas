@@ -106,10 +106,15 @@ const
   R_OUT_INTERFACE = 'the routine is declared in the interface section (line '
     + '%d) - other units can use it as a procedure value';
   // rwE30 Stufe 2 (AssignedFirstReason): der Hinweis einer Hilfe nur im
-  // Menue.
-  R_OUT_NOT_FIRST = 'not in the light bulb - %s has a managed type and is '
-    + 'not set as the first statement of %s (line %d): with "var" the '
-    + 'caller''s old value can stay where "out" cleared it';
+  // Menue. Seit Fix-Runde 4 nach rwE32 (Kastri DW.EXIF.Win.pas:102
+  // 'apropitem hat einen verwalteten Typ' - PPropertyItem ist ein Zeiger,
+  // den die Hilfe nur nicht kennt): "verwaltet ODER unbekannt", der Typ in
+  // Klammern, der Name wie im Text. %s Parameter, %s Typ, %s Routine, %d
+  // Zeile.
+  R_OUT_NOT_FIRST = 'not in the light bulb - %s has a managed type or one '
+    + 'the quick fix does not know (%s) and is not set as the first '
+    + 'statement of %s (line %d): with "var" the caller''s old value can '
+    + 'stay where "out" cleared it';
   R_OUT_VISIBLE = 'the method is visible outside the unit (not private, '
     + 'class in the interface section) - other units can use it as a method '
     + 'pointer';
@@ -901,7 +906,7 @@ end;
 // Weg offen. '' oder der Grund mit der Zeile der Stelle, an der es
 // scheitert.
 function FirstAssignReason(AMap: TRdxCodeMap; const R: TRdxRoutine;
-  const ALow, AName, ARoutine: string): string;
+  const ALow, AName, AType, ARoutine: string): string;
 var
   T, Done : TRdxToken;
   Li      : Integer;
@@ -911,16 +916,28 @@ begin
   while (T.Low <> '') and TokBefore(T, R.Body) do
   begin
     if SameIdent(T.Low, ALow) and (Before(AMap, T).Low <> '.') then
-      Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, T.Line]));
+      Exit(_(R_OUT_NOT_FIRST, [AName, AType, ARoutine, T.Line]));
     T := After(AMap, T);
   end;
   if not SetsFirst(AMap, After(AMap, R.Body), R.EndTok, ALow, Done, Li) then
-    Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, Li]));
+    Exit(_(R_OUT_NOT_FIRST, [AName, AType, ARoutine, Li]));
   if Done.Low = '' then
     Done := R.EndTok;
   if DirectiveBetween(AMap, R.Body, Done.Line, Done.Col) then
-    Exit(_(R_OUT_NOT_FIRST, [AName, ARoutine, Done.Line]));
+    Exit(_(R_OUT_NOT_FIRST, [AName, AType, ARoutine, Done.Line]));
   Result := '';
+end;
+
+// Das erste Glied der Liste AList ('A, B' -> 'A'), AList ohne es ('B').
+function NextListItem(var AList: string): string;
+var
+  Comma : Integer;
+begin
+  Comma := Pos(',', AList);
+  if Comma = 0 then
+    Comma := Length(AList) + 1;
+  Result := Copy(AList, 1, Comma - 1);
+  Delete(AList, 1, Comma);
 end;
 
 // Verwaltete Typen (Changes): out gibt den Wert des Aufrufers beim Aufruf
@@ -931,26 +948,29 @@ end;
 // 1070 'GetPropUtf8(.. out dest: RawUtf8)' setzt dest nur bedingt, die
 // Aufrufer reichen 'result' durch; ColorPreview.Parser.pas:341). Je Name
 // aus ANames ('a,b'). '' oder der Hinweis (R_OUT_NOT_FIRST) - auch ohne
-// lesbaren begin-Rumpf (asm).
+// lesbaren begin-Rumpf (asm). Der Hinweis nennt die Namen wie im Text
+// (ADisplay, ParamNames: 'A, B' - bis Fix-Runde 4 nach rwE32 klein:
+// 'apropitem') und den Typ ATypeText.
 function AssignedFirstReason(AMap: TRdxCodeMap; const AImpl: TRdxOutHead;
-  const ANames, AName: string): string;
+  const ANames, ADisplay, ATypeText, AName: string): string;
 var
-  R     : TRdxRoutine;
-  Rest  : string;
-  Comma : Integer;
+  R           : TRdxRoutine;
+  Rest, Shown : string;
+  Comma       : Integer;
 begin
   if (TRdxBlocks.ReadRoutine(AMap, AImpl.Kw, R) <> '')
      or (R.Body.Low <> 'begin') then
-    Exit(_(R_OUT_NOT_FIRST, [ANames, AName, AImpl.Kw.Line]));
+    Exit(_(R_OUT_NOT_FIRST, [ADisplay, ATypeText, AName, AImpl.Kw.Line]));
   Result := '';
   Rest := ANames;
+  Shown := ADisplay;
   while (Result = '') and (Rest <> '') do
   begin
     Comma := Pos(',', Rest);
     if Comma = 0 then
       Comma := Length(Rest) + 1;
     Result := FirstAssignReason(AMap, R, Copy(Rest, 1, Comma - 1),
-      Copy(Rest, 1, Comma - 1), AName);
+      Trim(NextListItem(Shown)), ATypeText, AName);
     Delete(Rest, 1, Comma);
   end;
 end;
@@ -972,6 +992,44 @@ begin
     T := After(AMap, T);
     if not T.IsWord then Break;
     Result := Result + ', ' + TokText(AMap, T);
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Typ hinter dem ':' der Parameter ab AOut wie im Text (ReadParam
+// liest ihn klein ohne Trenner): Woerter mit einem Leerzeichen getrennt,
+// sonst ohne ('array of Byte', 'System.UnicodeString', 'TArray<Integer>').
+function ParamTypeText(AMap: TRdxCodeMap; const AOut: TRdxToken): string;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+begin
+  Result := '';
+  T := After(AMap, AOut);
+  while (T.Low <> '') and (T.Low <> ':') and (T.Low <> ';')
+     and (T.Low <> ')') do
+    T := After(AMap, T);
+  if T.Low <> ':' then
+    Exit;
+  Depth := 0;
+  P := T;
+  T := After(AMap, T);
+  while T.Low <> '' do
+  begin
+    if (T.Low = '(') or (T.Low = '[') or (T.Low = '<') then
+      Inc(Depth)
+    else if (T.Low = ')') or (T.Low = ']') or (T.Low = '>') then
+    begin
+      if Depth = 0 then
+        Break;
+      Dec(Depth);
+    end
+    else if (Depth = 0) and ((T.Low = ';') or (T.Low = '=')) then
+      Break;
+    if (Result <> '') and T.IsWord and P.IsWord then
+      Result := Result + ' ';
+    Result := Result + TokText(AMap, T);
+    P := T;
     T := After(AMap, T);
   end;
 end;
@@ -1285,7 +1343,8 @@ begin
   // 698 - verhaltensaendernd und in der Gluehbirne).
   if APlan.Changes then
   begin
-    APlan.Caution := AssignedFirstReason(AMap, Impl, Names, Name);
+    APlan.Caution := AssignedFirstReason(AMap, Impl, Names, APlan.Name,
+      ParamTypeText(AMap, OutTok), Name);
     APlan.MenuOnly := APlan.Caution <> '';
   end;
   if HasDecl then
