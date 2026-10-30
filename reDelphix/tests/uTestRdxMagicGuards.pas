@@ -1129,6 +1129,18 @@ begin
     AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
       ['jvcl.inc']);
     WriteDproj(T.B + 'PyScripter.dproj', '20.3');
+    // ... eine .dof gleichen Namens neben der .dproj (jvcl install\
+    // JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj - das Programm baut auch
+    // Delphi 6/7; gilt ebenso fuer den Hauptweg von SCA128) ...
+    WriteText(T.B + 'PyScripter.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
+      ['jvcl.inc']);
+    DeleteFile(T.B + 'PyScripter.dof');
+    WriteText(T.B + 'PyScripter.cfg', '-$A8');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses,
+      True), '.cfg neben .dproj ist kein altes Projekt');
     // ... und ein Programm, das die Unit nicht enthaelt.
     WriteText(T.B + 'PyScripter.dpr', 'program PyScripter;' + #13#10
       + 'begin' + #13#10 + 'end.');

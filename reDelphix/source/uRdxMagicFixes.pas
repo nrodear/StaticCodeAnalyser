@@ -449,6 +449,9 @@ const
     'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
   PAIR_OPTION_EXTENSIONS: array[0..2] of string = ('.dof', '.cfg',
     '.bdsproj');
+  // ... davon die, die nur die alten IDEs schreiben (ModernProjectProof:
+  // neben einer .dproj gleichen Namens heisst eine .cfg nichts).
+  LEGACY_OPTION_EXTENSIONS: array[0..1] of string = ('.dof', '.bdsproj');
   // ... im Verzeichnis der Unit und so vielen darueber (Korpus: doublecmd-
   // Plugins eine Ebene, CnWizards_L4.lpk zwei Ebenen ueber den Units).
   PROJECT_LEVELS = 2;
@@ -2237,6 +2240,21 @@ begin
 end;
 
 
+// Traegt das Programm APrg unter AFiles eine .dof bzw. .bdsproj gleichen
+// Namens (LEGACY_OPTION_EXTENSIONS; ModernProjectProof, rwE32 Stufe 4)?
+function OldOptionsOf(const AFiles: TRdxProjectFiles;
+  const APrg: string): Boolean;
+var
+  Opt : string;
+begin
+  Result := False;
+  for Opt in AFiles.Opts do
+    if SameText(ChangeFileExt(Opt, ''), ChangeFileExt(APrg, ''))
+       and InList(LowerCase(ExtractFileExt(Opt)), LEGACY_OPTION_EXTENSIONS)
+    then
+      Exit(True);
+end;
+
 // Hauptweg SCA128/SCA059 (lfFormatSettingsVar, rwE31 Stufe 3): ist die
 // Unit Teil eines Delphi-Projekts ab der Schwelle? Das NAECHSTE Verzeichnis
 // im Fenster mit Delphi-Projektdateien (wie ProjectWalkReason) traegt keine
@@ -2248,6 +2266,11 @@ end;
 // (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
 // 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
 // der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
+// Seit rwE32 Stufe 4 (die Ausnahmeklassen fragen hier auch) zaehlt ein
+// Programm nicht, das neben seiner .dproj eine .dof oder .bdsproj GLEICHEN
+// Namens traegt (OldOptionsOf) - es wird auch mit Delphi bis 2006 gebaut
+// (jvcl install\JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj, das
+// Installationsprogramm uebersetzt jedes Delphi ab 6 selbst).
 // Netzpfad: nein (die Hilfe liest dort nichts). Mit Cache (GDiskCache, Art
 // 'K').
 function ModernProjectProof(const AFileName: string;
@@ -2274,6 +2297,7 @@ begin
         for Prg in Files.Programs do
           if not Result
              and InList(LowerCase(ChangeFileExt(Prg, '')), Files.DprojBases)
+             and not OldOptionsOf(Files, Prg)
              and HeadText(IncludeTrailingPathDelimiter(Dir) + Prg, Text) then
             Result := DpkContains(LowerCase(Text), LowFile);
       Break;
