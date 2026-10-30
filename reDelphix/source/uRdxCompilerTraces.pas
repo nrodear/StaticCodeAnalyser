@@ -277,6 +277,13 @@ function UnconditionalInvariantLine(AMap: TRdxCodeMap): Integer;
 // Format (rwE30 Stufe 2: HeidiSQL heidisql.dpr setzt ShortDateFormat
 // 'yyyy/mm/dd'); TFormatSettings.Invariant liefe daran vorbei.
 function GlobalSettingsWriteLine(AMap: TRdxCodeMap; out AField: string): Integer;
+// Der erste Eintrag einer uses-Klausel AUSSERHALB jedes Bedingungsblocks,
+// dessen Name (klein, Glieder mit '.') in ALowNames steht - wie im Text
+// geschrieben; '' ohne. rwE32 Stufe 4: die FPC-only-Units eines Programms
+// (uRdxMagicFixes.FpcOnlyProgram - doublecmd Zip.dpr 'FPCAdds',
+// SevenZipWcx.dpr 'CMem').
+function UnconditionalUsesOf(AMap: TRdxCodeMap;
+  const ALowNames: array of string): string;
 
 // Uebersetzt ein Compiler die Datei? Skript-Units ('unit X;' ohne
 // implementation-Teil: xEdit-Skripte, JvInterpreter-Beispiele) und
@@ -1002,6 +1009,50 @@ begin
         Exit(T.Line);
     end;
     T := NextTokenOnLineWith(AMap, T, 'invariant');
+  end;
+end;
+
+function UnconditionalUsesOf(AMap: TRdxCodeMap;
+  const ALowNames: array of string): string;
+var
+  Dirs       : TRdxCondDirectives;
+  T, E, Stop : TRdxToken;
+  Name       : string;
+  i          : Integer;
+  Read       : Boolean;
+begin
+  Result := '';
+  Read := False;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      E := After(AMap, T);
+      while (E.Low <> '') and (E.Low <> ';') do
+      begin
+        Name := UsesEntry(AMap, E, Stop);
+        for i := Low(ALowNames) to High(ALowNames) do
+          if Name = ALowNames[i] then
+          begin
+            if not Read then
+            begin
+              Dirs := ConditionalDirectives(AMap);
+              Read := True;
+            end;
+            if UnconditionalAt(Dirs, E.Line, E.Col) then
+              Exit(Copy(AMap.Raw(E.Line), E.Col, Length(Name)));
+          end;
+        // Hinter 'in' der Pfad, dann ',' oder ';' (wie ScopeProof).
+        while (Stop.Low <> '') and (Stop.Low <> ',') and (Stop.Low <> ';') do
+          Stop := After(AMap, Stop);
+        if Stop.Low = ',' then
+          E := After(AMap, Stop)
+        else
+          E := Stop;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
 end;
 

@@ -436,6 +436,13 @@ const
   // Optionen, die die IDE bis Delphi 2007 schrieb; neuere legen sie nur
   // neben eine .dproj gleichen Namens), .bdsproj (BDS 2005/2006).
   DPR_EXTENSION = '.dpr';
+  // FPC-Programme (FpcOnlyProgram, rwE32 Stufe 4): ein Lazarus-Projekt
+  // nennt seine Dateien so ('<Filename Value="Zip.dpr"/>', klein) ...
+  LPI_EXTENSION = '.lpi';
+  LPI_FILE_TAG = '<filename value="';
+  // ... und Units, die nur FPC bzw. Lazarus mitbringen (klein).
+  FPC_ONLY_UNITS: array[0..7] of string = ('fpcadds', 'cmem', 'cthreads',
+    'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
   PAIR_OPTION_EXTENSIONS: array[0..2] of string = ('.dof', '.cfg',
     '.bdsproj');
   // ... im Verzeichnis der Unit und so vielen darueber (Korpus: doublecmd-
@@ -1204,9 +1211,12 @@ type
   //            CnDebugViewer64.dproj: der eine Bau ist Delphi 5-7);
   //   LoneDpr  ein Programm (.dpr) ganz ohne Projektdatei gleichen Namens -
   //            neben einem Lazarus-Projekt ein Doppel-Compiler-Projekt fuer
-  //            altes Delphi (RechnungDelphi.dpr neben Rechnung.lpi);
+  //            altes Delphi (RechnungDelphi.dpr neben Rechnung.lpi); seit
+  //            rwE32 Stufe 4 nicht, wenn es ein FPC-Programm ist
+  //            (FpcOnlyProgram: Hauptdatei einer .lpi, FPC-only-Units);
   //   Programs die .dpr des Verzeichnisses (SettingsProgramReason).
-  // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein).
+  // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein),
+  // LazProjects die .lpi (FpcOnlyProgram).
   TRdxProjectFiles = record
     Lazarus    : string;
     Legacy     : string;
@@ -1218,6 +1228,7 @@ type
     Bases      : TArray<string>;
     Opts       : TArray<string>;
     DprojBases : TArray<string>;
+    LazProjects: TArray<string>;
   end;
 
 // Die ersten DPROJ_HEAD_BYTES der Datei APath als ANSI-Text; False, wenn
@@ -1288,6 +1299,8 @@ begin
     AddText(AFiles.Opts, AName);
   if Ext = DPROJ_EXTENSION then
     AddText(AFiles.DprojBases, LowerCase(ChangeFileExt(AName, '')));
+  if Ext = LPI_EXTENSION then
+    AddText(AFiles.LazProjects, AName);
   if InList(Ext, LAZARUS_EXTENSIONS) then
   begin
     if AFiles.Lazarus = '' then
@@ -1315,9 +1328,45 @@ begin
   end;
 end;
 
+// Ist das Programm APrg in ADir ein FPC-Programm (rwE32 Stufe 4, Nico-
+// Entscheid: ein FPC-only-Projekt ist kein Beleg fuer ein altes Delphi)?
+// Ja, wenn eine .lpi des Verzeichnisses (ALazProjects) es als Datei nennt
+// ('<Filename Value="Zip.dpr"/>' - in einem Lazarus-Projekt die
+// Hauptdatei; doublecmd plugins\wcx\zip\src, wdx\deb_wdx\src,
+// wcx\sevenzip\src) oder es eine Unit nur von FPC/Lazarus ausserhalb jeder
+// Weiche einbindet (FPC_ONLY_UNITS: 'FPCAdds', 'CMem' ...). PairsIn fragt
+// es nur fuer ein Programm ohne eigene Projektdatei.
+function FpcOnlyProgram(const ADir, APrg: string;
+  const ALazProjects: TArray<string>): Boolean;
+var
+  Lpi, Text, Key : string;
+  SL             : TStringList;
+  Map            : TRdxCodeMap;
+begin
+  Result := False;
+  Key := LPI_FILE_TAG + LowerCase(APrg) + '"';
+  for Lpi in ALazProjects do
+    if HeadText(IncludeTrailingPathDelimiter(ADir) + Lpi, Text)
+       and (Pos(Key, LowerCase(Text)) > 0) then
+      Exit(True);
+  if not HeadText(IncludeTrailingPathDelimiter(ADir) + APrg, Text) then
+    Exit;
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Text;
+    Map := TRdxCodeMap.Create(SL);
+    Result := UnconditionalUsesOf(Map, FPC_ONLY_UNITS) <> '';
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
 // OldPair und LoneDpr aus den gesammelten Namen (s. TRdxProjectFiles): je
-// Projekt der erste Treffer in der Reihenfolge der Platte.
-procedure PairsIn(var AFiles: TRdxProjectFiles);
+// Projekt der erste Treffer in der Reihenfolge der Platte. ADir: das
+// Verzeichnis (FpcOnlyProgram liest dort .lpi und .dpr).
+procedure PairsIn(var AFiles: TRdxProjectFiles; const ADir: string);
 var
   Base, Opt, Prg : string;
   Paired         : Boolean;
@@ -1337,7 +1386,8 @@ begin
     Paired := InList(Base, AFiles.DprojBases);
     for Opt in AFiles.Opts do
       Paired := Paired or (LowerCase(ChangeFileExt(Opt, '')) = Base);
-    if not Paired then
+    if not Paired and not ((AFiles.Lazarus <> '')
+       and FpcOnlyProgram(ADir, Prg, AFiles.LazProjects)) then
     begin
       AFiles.LoneDpr := Prg;
       Break;
@@ -1362,7 +1412,7 @@ begin
   finally
     FindClose(SR);
   end;
-  PairsIn(Result);
+  PairsIn(Result, ADir);
 end;
 
 // Die ProjectVersion in Zehnteln als Text ('185' -> '18.5').

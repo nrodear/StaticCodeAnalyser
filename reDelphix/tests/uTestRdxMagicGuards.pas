@@ -51,6 +51,8 @@ type
     [Test] procedure Disk_KitIncludeModernProject_Refutes;
     [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
     [Test] procedure Disk_MainWayIncludeSwitch_M1b;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Disk_FpcOnlyProgram_NoDelphiEvidence;
   end;
 
 implementation
@@ -986,6 +988,67 @@ begin
       True), 'anderes Programm, Gegenbeweis');
   finally
     RemoveTree(Tr.Root);
+  end;
+end;
+
+{ ---- Realworld-Test rwE32 Stufe 4 ---- }
+
+procedure TTestRdxMagicGuards.Disk_FpcOnlyProgram_NoDelphiEvidence;
+const
+  LPI_FMT = '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 + '<CONFIG>'
+    + #13#10 + '  <ProjectOptions>' + #13#10 + '    <Units>' + #13#10
+    + '      <Unit>' + #13#10 + '        <Filename Value="%s"/>' + #13#10
+    + '        <IsPartOfProject Value="True"/>' + #13#10 + '      </Unit>'
+    + #13#10 + '    </Units>' + #13#10 + '  </ProjectOptions>' + #13#10
+    + '</CONFIG>';
+var
+  T : TTree;
+begin
+  // doublecmd plugins\wdx\deb_wdx\src: deb_wdx.dpr ist die Hauptdatei von
+  // deb_wdx.lpi (dpkg_deb.pas:110/192/251, SCA127) - bis dahin "Delphi-
+  // Programm ohne .dproj neben dem Lazarus-Projekt" (R_DUAL_PROJECT), obwohl
+  // kein Delphi das Projekt baut (Nico-Entscheid: ein FPC-only-Projekt ist
+  // kein Beleg).
+  T := NewTree;
+  try
+    WriteText(T.C + 'deb_wdx.lpi', Format(LPI_FMT, ['deb_wdx.dpr']));
+    WriteText(T.C + 'deb_wdx.dpr', 'library deb_wdx;' + #13#10 + 'uses'
+      + #13#10 + '  SysUtils, Classes;' + #13#10 + 'begin' + #13#10 + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      'Hauptdatei der .lpi');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'Hauptdatei der .lpi, FormatSettings');
+    // doublecmd plugins\wcx\zip\src: Zip.dpr bindet FPCAdds ein (die .lpi
+    // nennt hier eine andere Datei) - auch ohne .lpi-Eintrag FPC.
+    WriteText(T.C + 'deb_wdx.lpi', Format(LPI_FMT, ['other.lpr']));
+    WriteText(T.C + 'deb_wdx.dpr', 'library Zip;' + #13#10 + 'uses' + #13#10
+      + '{$IFDEF UNIX}' + #13#10 + '  cthreads,' + #13#10 + '{$ENDIF}'
+      + #13#10 + '  FPCAdds,' + #13#10 + '  SysUtils;' + #13#10 + 'begin'
+      + #13#10 + 'end.');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      'FPCAdds ohne Weiche');
+    // Gegenproben: die FPC-Unit nur unter einer Weiche ...
+    WriteText(T.C + 'deb_wdx.dpr', 'library deb_wdx;' + #13#10 + 'uses'
+      + #13#10 + '{$IFDEF FPC}' + #13#10 + '  cthreads,' + #13#10 + '{$ENDIF}'
+      + #13#10 + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
+      ['deb_wdx.dpr', 'deb_wdx.lpi', 'ENotImplemented']);
+    // ... und mORMot2 10-InvoiceExample\src: RechnungDaemon.dpr ist die
+    // Hauptdatei von RechnungDaemon.lpi, RechnungDelphi.dpr daneben gehoert
+    // zu keiner .lpi - das Doppel-Compiler-Projekt sperrt weiter.
+    DeleteFile(T.C + 'deb_wdx.dpr');
+    DeleteFile(T.C + 'deb_wdx.lpi');
+    WriteText(T.C + 'Rechnung.lpi', Format(LPI_FMT, ['Rechnung.lpr']));
+    WriteText(T.C + 'RechnungDaemon.lpi', Format(LPI_FMT,
+      ['RechnungDaemon.dpr']));
+    WriteText(T.C + 'RechnungDaemon.dpr', 'program RechnungDaemon;');
+    Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      'nur das FPC-Programm');
+    WriteText(T.C + 'RechnungDelphi.dpr', 'program RechnungDelphi;');
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
+      ['RechnungDelphi.dpr']);
+  finally
+    RemoveTree(T.Root);
   end;
 end;
 
