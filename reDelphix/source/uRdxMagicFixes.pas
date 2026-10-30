@@ -361,8 +361,9 @@ type
     // Pakete nur ab 10.3 - PackageFloorProof).
     // Seit rwE32 Stufe 4 fragt lfExceptionClasses das Kit-Include wie
     // lfFormatSettingsVar (vorher im Planer); ein Projekt der Unit ab 2009
-    // widerlegt es und die Weichen der Includes - seit rwE33 Stufe 5 ebenso
-    // ein reines FPC-Projekt der Unit (FpcOnlyProjectProof).
+    // widerlegt es und die Weichen der Includes - seit rwE33 Stufe 5 ein
+    // reines FPC-Projekt der Unit (FpcOnlyProjectProof) nur diese Weichen,
+    // nicht das Kit-Include (Review e/HilfeFixX).
     // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks; das
     // Kit-Include der Datei selbst sperrt dort weiter), sonst wie
     // FileReason. '' oder der Grund.
@@ -2366,6 +2367,11 @@ end;
 // (Abbrevia-Erbe), gebaut wird die Unit nur von Zip.lpi (OtherUnitFiles
 // 'fparchive', Hauptdatei Zip.dpr mit FPCAdds). Netzpfad: nein. Mit Cache
 // (GDiskCache, Art 'Z').
+// Grenze (Review e/HilfeFixX): ein Delphi-Projekt AUSSERHALB des Fensters
+// sieht die Probe nicht (cnwizards AIAgentGUITest.dpr mit .dof bindet
+// '..\..\..\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas' ein) - darum
+// widerlegt sie nur die Weichen gewoehnlicher Includes, kein Kit-Include
+// (ProjectReason).
 function FpcOnlyProjectProof(const AFileName: string): Boolean;
 var
   Dir, Up, UnitDir, Prg, Lpi, Key, Cached : string;
@@ -2661,10 +2667,7 @@ begin
   if AFeature in [lfFormatSettingsVar, lfExceptionClasses,
     lfFormatInvariant] then
   begin
-    // Fuer die Ausnahmeklassen widerlegt ein reines FPC-Projekt der Unit die
-    // Delphi-Weichen ebenso (FpcOnlyProjectProof, rwE33 Stufe 5).
-    Modern := ModernProjectProof(AFileName, AFeature)
-      or ((AFeature = lfExceptionClasses) and FpcOnlyProjectProof(AFileName));
+    Modern := ModernProjectProof(AFileName, AFeature);
     Result := KitIncludeReason(AMap, AFeature, Modern);
     if Result <> '' then Exit;
   end;
@@ -2691,6 +2694,17 @@ begin
   // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
   // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
   // (mormot.defines.inc liegt nicht neben api.impl.pas).
+  // Fuer die Ausnahmeklassen widerlegt seit rwE33 Stufe 5 auch ein reines
+  // FPC-Projekt der Unit (FpcOnlyProjectProof) die Delphi-Weichen der
+  // Includes - nur hier, nicht das Kit-Include oben (Review e/HilfeFixX):
+  // cnwizards Test\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas bindet
+  // CnPack.inc ein, neben ihr nur AIAgentTest.lpi - gebaut wird sie aber
+  // auch von Test\Delphi\Program\AIAgent\AIAgentGUITest.dpr mit .dof
+  // (Delphi bis 7), ausserhalb des Fensters. Ein Kit (CnPack, JVCL, JCL,
+  // Indy, mORMot) baut erklaertermassen auch mit altem Delphi.
+  if (Result = '') and AIncludes and (AFeature = lfExceptionClasses)
+     and not Modern then
+    Modern := FpcOnlyProjectProof(AFileName);
   if (Result = '')
      and ((AIncludes
            and not ((AFeature in [lfExceptionClasses, lfFormatInvariant])

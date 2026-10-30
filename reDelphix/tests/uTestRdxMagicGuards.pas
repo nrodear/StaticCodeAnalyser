@@ -1324,6 +1324,8 @@ procedure TTestRdxMagicGuards.Disk_ExceptionClasses_FpcOnlyProjectRefutes;
 const
   SRC = 'unit u;' + #13#10 + '{$I AbDefine.inc}' + #13#10 + 'interface'
     + #13#10 + 'implementation' + #13#10 + 'end.';
+  SRC_KIT = 'unit u;' + #13#10 + '{$I CnPack.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
   INC = '{$IFNDEF FPC}' + #13#10
     + '  {$IF DEFINED(LINUX) AND (CompilerVersion < 15)}' + #13#10
     + '    {$DEFINE KYLIX}' + #13#10 + '  {$IFEND}' + #13#10 + '{$ENDIF}';
@@ -1380,6 +1382,13 @@ begin
     RemoveDir(T.A + 'packages');
     Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
       'wieder nur FPC');
+    // Ein Kit-Include widerlegt das FPC-Projekt nicht (Review e/HilfeFixX):
+    // cnwizards Test\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas
+    // ('{$I CnPack.inc}', nur AIAgentTest.lpi daneben) baut auch
+    // Test\Delphi\Program\AIAgent\AIAgentGUITest.dpr mit .dof (Delphi bis
+    // 7) - ausserhalb des Fensters. Bis dahin: '' (rot).
+    AssertNames(ProjectReasonOf(T.U, SRC_KIT, lfExceptionClasses, True),
+      ['cnpack.inc']);
   finally
     RemoveTree(T.Root);
   end;
