@@ -99,6 +99,9 @@ type
     // Review e/HilfeFixR: der Selektor wandelt eine Zahl in die Aufzaehlung
     // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
     [Test] procedure Sca168_RaiseMenu_CastSelector;
+    // Fix-Runde 5 nach rwE33 (doublecmd fFindDlg.pas:1913): der Anfangswert
+    // der Deklaration ist eine Vorbelegung (E5).
+    [Test] procedure Sca168_RaiseLock_PresetDeclInit;
     // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
     // WM_APP): auch Messages hat im Detektor keine Liste.
     [Test] procedure Sca007_ForeignIdent_Messages;
@@ -1354,6 +1357,69 @@ begin
   Src := WithTypes(['  TKind = (kA, kB);'], ['  case TItem(P).Kind of',
     '    kA: A;', '    kB: B;', '  end;']);
   Assert.AreEqual('', CaseMenu(Src, 8), 'Feld nach Umwandlung');
+end;
+
+// ---- SCA168.2, Fix-Runde 5 nach rwE33 ----
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetDeclInit;
+var
+  R, Src : string;
+begin
+  // doublecmd fFindDlg.pas:1907/1913 (minimiert): 'sActionWithFilters:
+  // string = (Leerstring);' im var-Abschnitt (FPC) - fonsKeep hat keinen
+  // Arm und behaelt den Leerstring, das ist dort der normale Weg. Bis rwE33
+  // nur im Menue, nicht gesperrt (rot ohne Fix: '').
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TFiltersOnNewSearch = (fonsKeep, fonsClear, fonsPrompt);',
+    'implementation',
+    'procedure TfrmFindDlg.cm_NewSearch(const Params: array of string);',
+    'var', '  Param: string;', '  sActionWithFilters: string = '''';',
+    'begin', '  StopSearch;', '  if length(Params) = 0 then', '  begin',
+    '    case gNewSearchClearFiltersAction of',
+    '      fonsClear: sActionWithFilters := ''clear'';',
+    '      fonsPrompt: if msgYesNo(rsClearFiltersOrNot) then '
+    + 'sActionWithFilters := ''clear'';', '    end;', '  end;',
+    '  for Param in Params do',
+    '    GetParamValue(Param, ''filters'', sActionWithFilters);', 'end;',
+    'end.']);
+  R := CaseLock(Src, 14);
+  Assert.IsTrue(Pos('sActionWithFilters', R) > 0, R);
+  Assert.IsTrue(Pos('9', R) > 0, 'Zeile: ' + R);
+  // Eine Inline-Variable mit Anfangswert vor dem case (Delphi; rot ohne
+  // Fix: '').
+  Src := WithTypes(['  TE = (eA, eB);'], ['  var X: Integer := 0;',
+    '  case E of', '    eA: X := 1;', '  end;']);
+  R := CaseLock(Src, 9);
+  Assert.IsTrue(Pos('X', R) > 0, R);
+  Assert.IsTrue(Pos('8', R) > 0, 'Zeile: ' + R);
+  Assert.AreNotEqual('', CaseLock(WithTypes(['  TE = (eA, eB);'],
+    ['  var X := 0;', '  case E of', '    eA: X := 1;', '  end;']), 9),
+    'Inline ohne Typ');
+  // Gegenprobe: ohne Anfangswert keine Vorbelegung - nur im Menue.
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    eA: X := 1;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'ohne Anfangswert');
+  Assert.AreNotEqual('', CaseMenu(Src, 10), 'Menue');
+  Assert.AreEqual('', CaseLock(WithTypes(['  TE = (eA, eB);'],
+    ['  var X: Integer;', '  case E of', '    eA: X := 1;', '  end;']), 9),
+    'Inline ohne Anfangswert');
+  // Gegenprobe: den Anfangswert traegt nur die lokale Routine davor - ihr
+  // X ist ein anderes (rot, wenn die Suche lokale Routinen mitliest).
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', '  procedure Inner;', '  var',
+    '    X: Integer = 1;', '  begin', '    Use(X);', '  end;', 'var',
+    '  X: Integer;', 'begin', '  case E of', '    eA: X := 1;', '  end;',
+    'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 16), 'lokale Routine');
+  // Gegenprobe: jeder Wert hat einen Arm - der Anfangswert aendert nichts,
+  // Gluehbirne (wie bei einer Zuweisung davor).
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'var', '  X: Integer = 0;', 'begin',
+    '  case E of', '    eA: X := 1;', '    eB: X := 2;', '  end;', 'end;',
+    'end.']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 10), 'Gluehbirne');
 end;
 
 // ---- SCA007, Fix-Runde 4 (rwE32) ----

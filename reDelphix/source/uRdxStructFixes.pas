@@ -2167,6 +2167,101 @@ begin
   end;
 end;
 
+// Der Grund von PresetLockReason: ANameTok bekommt auf seiner Zeile den
+// Wert.
+function PresetReason(AMap: TRdxCodeMap; const ANameTok: TRdxToken): string;
+begin
+  Result := _('%s gets a value before the case (line %d) - values without '
+    + 'an arm keep it, that is the normal path there; raise would break it',
+    [TokText(AMap, ANameTok), ANameTok.Line]);
+end;
+
+// Traegt die Deklaration ab dem Namen ANameTok einen Anfangswert - AOp
+// ('=' im var-Abschnitt, ':=' bei einer Inline-Variablen) auf
+// Klammertiefe 0 vor dem ';' ('X: T = 0', 'var X: T := 0', 'var X := 0')?
+// Nur ein einzelner Name (eine Liste 'A, B: T' traegt keinen); ein Typ mit
+// Rumpf (record, object, class, interface) bleibt offen (False).
+function DeclInitialized(AMap: TRdxCodeMap; const ANameTok: TRdxToken;
+  const AOp: string): Boolean;
+const
+  MAX_DECL_SCAN = 200;
+var
+  T, P         : TRdxToken;
+  Paren, Steps : Integer;
+begin
+  Result := False;
+  T := After(AMap, ANameTok);
+  if T.Low = AOp then
+    Exit(True);
+  if T.Low <> ':' then Exit;
+  Paren := 0;
+  Steps := 0;
+  P := T;
+  T := After(AMap, T);
+  while (T.Low <> '') and (Steps < MAX_DECL_SCAN) do
+  begin
+    Inc(Steps);
+    if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if (T.Low = ')') or (T.Low = ']') then
+      Dec(Paren)
+    else if Paren = 0 then
+    begin
+      if T.Low = ';' then Exit;
+      if T.Low = AOp then Exit(True);
+      if IsKeywordAfter(T, P) and (InList(T.Low, ['record', 'class',
+         'interface', 'begin', 'end']) or ((T.Low = 'object')
+         and (P.Low <> 'of'))) then
+        Exit;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Name aus ANames, den der var-Abschnitt der Routine R (zwischen dem
+// ';' ihres Kopfs und ihrem Rumpf; lokale Routinen uebersprungen) mit
+// Anfangswert deklariert: sein Token, Low = '' ohne. Lokale Routinen mit
+// unsicheren Grenzen und Typen mit Rumpf beenden die Suche ohne Treffer.
+function InitializedLocal(AMap: TRdxCodeMap; const R: TRdxRoutine;
+  const ANames: TArray<string>): TRdxToken;
+var
+  T, P : TRdxToken;
+  Sub  : TRdxRoutine;
+  InVar : Boolean;
+begin
+  Result := Default(TRdxToken);
+  InVar := False;
+  P := R.HeaderEnd;
+  T := After(AMap, P);
+  while (T.Low <> '') and TokBefore(T, R.Body) do
+  begin
+    if IsKeywordAfter(T, P) and InList(T.Low, ['var', 'threadvar']) then
+      InVar := True
+    else if IsKeywordAfter(T, P) and InList(T.Low, ['const', 'type',
+       'label', 'resourcestring']) then
+      InVar := False
+    else if IsKeywordAfter(T, P) and (InList(T.Low, ['record', 'class',
+       'interface']) or ((T.Low = 'object') and (P.Low <> 'of'))) then
+      Exit
+    else if (P.Low = ';') and IsRoutineHeadAfter(T, P) then
+    begin
+      if TRdxBlocks.ReadRoutine(AMap, T, Sub) <> '' then
+        Exit;
+      InVar := False;
+      P := Sub.Last;
+      T := After(AMap, P);
+      Continue;
+    end
+    else if InVar and T.IsWord and InList(T.Low, ANames)
+       and InList(P.Low, [';', 'var', 'threadvar'])
+       and DeclInitialized(AMap, T, '=') then
+      Exit(T);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
 // E5 b: bekommt ein Name, dem ein Arm des case etwas zuweist, VOR dem case
 // schon seinen Wert - als eigene Anweisung im selben oder einem
 // umschliessenden Anweisungsteil, so dass sie das case immer erreicht
@@ -2176,18 +2271,25 @@ end;
 // Rueckwaerts bis zum Kopf der Routine; ganze Bloecke davor (begin..end,
 // auch die Zweige eines if) zaehlen nicht, ebenso eine Zuweisung im then-
 // oder else-Zweig ohne begin (sie steht nicht hinter ';' bzw. einem
-// Blockanfang). '' oder der Grund.
+// Blockanfang). Fix-Runde 5 nach rwE33 (doublecmd fFindDlg.pas:1907/1913):
+// auch der Anfangswert der Deklaration - im var-Abschnitt der Routine um
+// das case ('sActionWithFilters: string = (Leerstring);', FPC) bzw. als Inline-
+// Variable davor ('var X: T := 0;'). '' oder der Grund.
 function PresetLockReason(AMap: TRdxCodeMap;
   const ACase, AEnd: TRdxToken): string;
 var
   Names : TArray<string>;
   W     : TRdxBackBalance;
   N     : TRdxToken;
+  R     : TRdxRoutine;
+  Own   : Boolean;
   Steps : Integer;
 begin
   Result := '';
   Names := AssignedInCase(AMap, ACase, AEnd);
   if Names = nil then Exit;
+  // Die Routine, in deren Rumpf das case steht (ihr var-Abschnitt).
+  Own := BeginBodyAround(AMap, ACase, R) = rbfFound;
   Steps := 0;
   W.Start(AMap, ACase);
   while W.Next do
@@ -2205,9 +2307,24 @@ begin
         N := After(AMap, W.Tok);
         if N.IsWord and InList(N.Low, Names) and (After(AMap, N).Low = ':=')
         then
-          Exit(_('%s gets a value before the case (line %d) - values without '
-            + 'an arm keep it, that is the normal path there; raise would '
-            + 'break it', [TokText(AMap, N), N.Line]));
+          Exit(PresetReason(AMap, N));
+        // Eine Inline-Variable mit Anfangswert ('var X: T := 0;').
+        if (N.Low = 'var') and IsKeywordAfter(N, W.Tok) then
+        begin
+          N := After(AMap, N);
+          if N.IsWord and InList(N.Low, Names)
+             and DeclInitialized(AMap, N, ':=') then
+            Exit(PresetReason(AMap, N));
+        end;
+      end;
+      // Am begin der Routine um das case: ihr var-Abschnitt davor. Der Lauf
+      // erreicht es auf Tiefe 0 nur, wenn das case in ihrem eigenen
+      // Anweisungsteil steht (nicht in einer anonymen Methode).
+      if Own and SameTok(W.Tok, R.Body) then
+      begin
+        N := InitializedLocal(AMap, R, Names);
+        if N.Low <> '' then
+          Exit(PresetReason(AMap, N));
       end;
     end;
     W.Balance;
