@@ -7712,7 +7712,7 @@ msgstr ""
 msgid "the file does not start with unit (include file or script?) - the help does not find its end"
 msgstr ""
 
-#: reDelphix/source/uRdxCompilerTraces.pas:675
+#: reDelphix/source/uRdxCompilerTraces.pas:690
 msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
 msgstr ""
 
@@ -9093,7 +9093,7 @@ msgstr ""
 msgid "unhandled values raise EInvalidOpException"
 msgstr ""
 
-#: reDelphix/source/uRdxCompilerTraces.pas:686
+#: reDelphix/source/uRdxCompilerTraces.pas:701
 msgid "unit without an implementation part (script?) - only the compiler knows %s"
 msgstr ""
 
