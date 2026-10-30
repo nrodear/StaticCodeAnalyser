@@ -72,6 +72,9 @@ type
     // ... Sperrtext dpp_PascalParser.pas:80 (Aufruf der Ueberladung ohne
     // Parameter ist kein Methodenzeiger).
     [Test] procedure ParamlessOverloadCall_PairReason;
+    // ... Sperrtext mormot.core.os.security.pas:1425, mormot.net.sock.pas:
+    // 4744 (freie Funktion hinter einem Typkopf-Zwilling record/object).
+    [Test] procedure TwinTypeHead_FreeRoutineNotInType;
   end;
 
 {$IFNDEF FPC}
@@ -822,6 +825,33 @@ begin
     'function TParser.GetToken(out p: Pointer): Boolean;', 'begin',
     '  p := GetToken;', '  Result := p <> nil;', 'end;', 'end.']);
   AssertRefused(Src, 'function GetToken(out', _(R_OUT_HEADS, [4, 'GetToken']));
+end;
+
+procedure TTestRdxAvoidOutFix.TwinTypeHead_FreeRoutineNotInType;
+var
+  Src : string;
+begin
+  // mORMot mormot.core.os.security.pas:1063/1425 (minimiert): der Typkopf
+  // steht doppelt im {$ifdef} (record bzw. object), beide teilen EIN end.
+  // InsideTypeBody (uRdxBlocks) zaehlte rueckwaerts beide Koepfe - die
+  // freie Funktion dahinter galt als "in einem Typ deklariert"
+  // (R_OUT_IN_TYPE, rot ohne Fix). Jetzt der richtige Grund: im
+  // interface-Teil deklariert.
+  Src := Join(['unit t;', 'interface', 'type', '  {$ifdef USERECORD}',
+    '  TTree = record', '  {$else}', '  TTree = object', '  {$endif}',
+    '  private', '    Count: Integer;', '  end;', '',
+    'function KnownRid(const S: string; out R: Integer): Boolean;',
+    'implementation',
+    'function KnownRid(const S: string; out R: Integer): Boolean;', 'begin',
+    '  R := 0;', '  Result := S <> '''';', 'end;', 'end.']);
+  AssertRefused(Src, 'function KnownRid(', _(R_OUT_INTERFACE, [13]));
+  // Gegenprobe: ein Kopf IM Zwilling (ohne Implementierung hier) steht
+  // weiter in einem Typ.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation', 'type',
+    '  {$ifdef USERECORD}', '  TTree = record', '  {$else}',
+    '  TTree = object', '  {$endif}',
+    '    procedure Load(out R: Integer);', '  end;', 'end.']),
+    'procedure Load(', _(R_OUT_IN_TYPE, ['Load']));
 end;
 
 {$IFNDEF FPC}
