@@ -824,6 +824,9 @@ begin
     '{$DEFINE X}', '{$ENDIF}'], ['  if Ratio = 0 then Work;']);
   Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
     Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+end;
+
+{ ---- Realwelt-Test rwE32 (Fix-Runde 4, Gruppe Q) ---- }
 
 procedure TTestRdxFloatEqualityFix.DefaultOmission_NoHelp;
 var
