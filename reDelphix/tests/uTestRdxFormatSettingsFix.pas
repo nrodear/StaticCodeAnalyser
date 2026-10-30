@@ -85,6 +85,8 @@ type
     // ---- Realworld-Test rwE33 Stufe 5 ----
     [Test] procedure Sca128_Alt_DisplayGridAndTextParam_NoHelp;
     [Test] procedure Sca128_Alt_ClassSettingsOtherFamily_Helps;
+    [Test] procedure Sca128_Alt_CoupledViaList_NoHelp;
+    [Test] procedure Sca128_Alt_ConcatOnly_NotCoupled;
   end;
 
 {$IFNDEF FPC}
@@ -1568,6 +1570,77 @@ begin
     + ' FFormatSettings);');
   AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
     ['TTpl', 'FFormatSettings', 8]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledViaList_NoHelp;
+const
+  FILL: array[0..4] of string = ('  for Item in History do begin',
+    '    QueryDay := DateToStr(Item.Time);',
+    '    if Tab.HistoryDays.IndexOf(QueryDay) = -1 then',
+    '      Tab.HistoryDays.Add(QueryDay);', '  end;');
+  LOOP = '  for i := History.Count - 1 downto 0 do begin';
+  READ = '    QueryDay := DateToStr(History[i].Time);';
+var
+  Src, Reason : string;
+begin
+  // HeidiSQL main.pas:14718: Zeile 14698 legt 'DateToStr(Item.Time)' ueber
+  // QueryDay in Tab.HistoryDays, Zeile 14719 vergleicht das umgestellte
+  // QueryDay damit - nur diese Seite auf Invariant, und kein Tag passt mehr
+  // (alle Eintraege geloescht). Bis dahin nannte der Grund das Klassenfeld
+  // FFormatSettings bzw. den Plattenblick (V und W heissen gleich).
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Tab.HistoryDays[Node.Index] then',
+    '      History.Delete(i);', '  end;']);
+  AssertRefused(Src, BODY_LINE + 6, Msg('datetostr'), _(R_FS_COUPLED_PAIR,
+    [BODY_LINE + 7, 'QueryDay', 'Tab.HistoryDays', BODY_LINE + 1,
+    'DateToStr']), True);
+  // Der Hauptweg bleibt.
+  Assert.IsTrue(Fix(Src, BODY_LINE + 6, Msg('datetostr'), False, Reason) <> '',
+    'Hauptweg: ' + Reason);
+  // Gegenproben: QueryDay geht nur ins Protokoll bzw. wird mit einer
+  // anderen Liste verglichen - Invariant bleibt angeboten.
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    Log(QueryDay);', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Other.HistoryDays[0] then', '      Foo;', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ConcatOnly_NotCoupled;
+const
+  ISO = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d);';
+  ISO_INV = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d, '
+    + 'TFormatSettings.Invariant);';
+  ZONE = '  s := FormatDateTime(''hh:nn'', x);';
+  TAIL: array[0..3] of string = ('  if x > 0 then', '    r := r + ''+'' + s',
+    '  else', '    r := r + ''Z'';');
+begin
+  // jcl JclDebugSerialization.pas:242: 'Result := Result + ''+'' + S' setzt
+  // zwei je fuer sich formatierte Teile zusammen - die Umstellung von Zeile
+  // 242 bricht nichts an Zeile 244. Bis dahin nannte der Grund Zeile 244
+  // als gekoppeltes Gegenstueck (dort sperrt der Altcompiler ohnehin).
+  AssertFixed(InUnit([ISO_INV, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]),
+    InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]), BODY_LINE,
+    Msg('formatdatetime'), True);
+  // Gegenproben: das Ganze wird gelesen bzw. verglichen - die Verkettung
+  // koppelt weiter.
+  AssertRefused(InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3],
+    '  d := StrToDateTime(r);']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 3, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  AssertRefused(InUnit([ISO, ZONE, '  r := r + s;', '  if r = Expected then',
+    '    Foo;']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  // Ein Vergleich in der Zuweisung selbst ist keine Verkettung.
+  AssertRefused(InUnit([ISO, ZONE, '  b := r + s = Expected;']), BODY_LINE,
+    Msg('formatdatetime'), _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's',
+    BODY_LINE + 1, 'FormatDateTime']), True);
 end;
 
 {$IFNDEF FPC}

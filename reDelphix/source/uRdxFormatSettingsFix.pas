@@ -1064,6 +1064,70 @@ begin
     Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
 end;
 
+// ---- Ketten 'A.B[i].C' (Anzeige-Ziel, Behaelter der Kopplung) ----
+// Bis rwE33 Stufe 5 im Abschnitt Anzeige-Ziel; seitdem liest auch die
+// Kopplung ueber einen Behaelter (StoredChain) Ketten.
+
+const
+  // So weit lesen OpenerOf, DisplayTarget und CallAroundArg rueckwaerts.
+  MAX_DISPLAY_TOKENS = 2000;
+
+// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
+function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  Count := 0;
+  T := AClose;
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Depth := Depth - ParenDelta(T);
+    if Depth = 0 then
+      Exit(T);
+    Inc(Count);
+    T := Before(AMap, T);
+  end;
+end;
+
+// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
+// und Klammergruppen hinter einem Glied).
+function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
+var
+  P, T : TRdxToken;
+begin
+  Result := ALast;
+  P := Before(AMap, Result);
+  while P.Low = '.' do
+  begin
+    T := Before(AMap, P);
+    while (T.Low = ']') or (T.Low = ')') do
+    begin
+      T := OpenerOf(AMap, T);
+      if T.Low = '' then Exit;
+      T := Before(AMap, T);
+    end;
+    if not T.IsWord then Exit;
+    Result := T;
+    P := Before(AMap, Result);
+  end;
+end;
+
+// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
+// nur ALast).
+function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
+var
+  S : TRdxToken;
+begin
+  S := ChainStart(AMap, ALast);
+  if S.Line <> ALast.Line then
+    Exit(TokText(AMap, ALast));
+  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
+end;
+
 // ---- Gekoppelte Auswertung (Alt-Weg, rwE31 Stufe 3) ----
 // Nico-Ergaenzung zu M2: ein Gegenstueck, das in derselben Routine DIREKT
 // mit dem Ergebnis verglichen oder mit ihm gekoppelt ausgewertet wird, ist
@@ -1087,7 +1151,21 @@ end;
 //   * V und das Ziel W eines Gegenstuecks (IsPartnerAt; 'W := DateToStr(..)')
 //     nennt, bzw. das umgestellte Stueck W nennt (R_FS_COUPLED_PAIR);
 //   * selbst das Gegenstueck traegt und V nennt ('if DateToStr(x) = V',
-//     'TryStrToCurr(V, y)' - R_FS_COUPLED_CALL).
+//     'TryStrToCurr(V, y)' - R_FS_COUPLED_CALL);
+//   * seit rwE33 Stufe 5 V und eine Kette X nennt, in die das Gegenstueck
+//     W gelegt hat ('X.Add(W)' bis zur naechsten Zuweisung an W; das Stueck
+//     liegt hinter der umgestellten Zuweisung, vor der naechsten an V) -
+//     HeidiSQL main.pas:14718: 'QueryDay := DateToStr(Item.Time);
+//     Tab.HistoryDays.Add(QueryDay)' (14698) und 'QueryDay :=
+//     DateToStr(History[i].Time); if QueryDay <> Tab.HistoryDays[..]'
+//     (R_FS_COUPLED_PAIR mit X als Ziel des Gegenstuecks). Bis dahin
+//     zaehlte das nicht (V und W heissen gleich), und der Grund der Klasse
+//     bzw. des Plattenblicks stand vorn.
+// Keine Kopplung ist seit rwE33 Stufe 5 ein Stueck, das V und W nur
+// verkettet ('Result := Result + ''+'' + S', JclDebugSerialization.pas:242
+// - zwei Teile, je fuer sich formatiert; ConcatOnly), solange das Ziel der
+// Verkettung in der Routine sonst nur weiter verkettet wird (ein Leser
+// 'StrToDateTime(S)' oder Vergleich 'S = ..' des Ganzen koppelt weiter).
 // V bzw. W zaehlen nur hinter einem schreibenden Aufruf (TEXT_WRITERS):
 // dann sind sie Text im jeweiligen Format; hinter einem Leser stehen Zahl
 // bzw. Datum, und deren Vergleich haengt nicht am Format.
@@ -1116,6 +1194,11 @@ const
   TEXT_WRITERS: array[0..10] of string = ('datetostr', 'timetostr',
     'datetimetostr', 'formatdatetime', 'floattostr', 'currtostr',
     'formatfloat', 'formatcurr', 'floattostrf', 'currtostrf', 'format');
+  // Vergleiche (ConcatOnly; 'in' ist ein Schluesselwort und endet dort
+  // ohnehin).
+  COMPARE_OPS: array[0..5] of string = ('=', '<>', '<', '>', '<=', '>=');
+  // 'X.Add(W)' legt W in den Behaelter X (StoredChain).
+  NAME_ADD = 'add';
 
 // Die Stuecke zwischen AFrom und ATo (beide ausgenommen).
 function PiecesIn(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): TPieces;
@@ -1289,6 +1372,131 @@ begin
   end;
 end;
 
+// Ist das Stueck eine Zuweisung, deren rechte Seite nur verkettet: auf
+// Klammertiefe 0 nur Woerter (keine Schluesselwoerter), Zahlen, '+' und
+// '.', kein Vergleich auch in Klammern, und die Namen ANames nur auf Tiefe 0
+// (nicht als Argument einer Routine)?
+function ConcatOnly(AMap: TRdxCodeMap; const APiece: TPiece;
+  const ANames: array of string): Boolean;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+  Rhs   : Boolean;
+begin
+  Result := False;
+  if PieceTarget(AMap, APiece).Low = '' then Exit;
+  Depth := 0;
+  Rhs := False;
+  P := Default(TRdxToken);
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if Rhs then
+    begin
+      if InList(T.Low, COMPARE_OPS) then
+        Exit;
+      if T.IsWord then
+      begin
+        if IsKeyword(T.Low) and IsKeywordAfter(T, P) then
+          Exit;
+        if (Depth > 0) and InList(T.Low, ANames) then
+          Exit;
+      end
+      else if (Depth = 0) and (ParenDelta(T) = 0)
+              and not ((T.Low = '+') or (T.Low = '.')
+                       or CharInSet(T.Low[1], ['0'..'9', '#', '$'])) then
+        Exit;
+    end
+    else if (T.Low = ':=') and (Depth = 0) then
+      Rhs := True;
+    Depth := Depth + ParenDelta(T);
+    if SameTok(T, APiece.Last) then Break;
+    P := T;
+    T := After(AMap, T);
+  end;
+  Result := Rhs;
+end;
+
+// Die Verkettung im Stueck AConcat (ConcatOnly mit ANames) entkoppelt nur,
+// wenn ihr Ziel in den anderen Stuecken der Routine (ausser den
+// umgestellten) hoechstens weiter verkettet wird ('Result := Result +
+// ''Z''') - jede andere Nennung (Leser, Vergleich, Argument) koppelt.
+function ConcatDecouples(AMap: TRdxCodeMap; const APieces: TPieces;
+  const AEdited: array of Boolean; AConcat: Integer;
+  const ANames: array of string): Boolean;
+var
+  Target : TRdxToken;
+  j      : Integer;
+begin
+  Result := ConcatOnly(AMap, APieces[AConcat], ANames);
+  if not Result then Exit;
+  Target := PieceTarget(AMap, APieces[AConcat]);
+  for j := 0 to High(APieces) do
+    if (j <> AConcat) and not AEdited[j]
+       and PieceNames(AMap, APieces[j], Target.Low)
+       and not ((PieceTarget(AMap, APieces[j]).Low = Target.Low)
+                and ConcatOnly(AMap, APieces[j], [Target.Low])) then
+      Exit(False);
+end;
+
+// Der Behaelter, in den die Stuecke hinter AFrom den Wert W legen ('X.Add(W)'
+// mit W als einzigem Argument), bis W neu geschrieben wird bzw. ein
+// umgestelltes Stueck kommt: das letzte Glied von X; leer ohne. AChain: X
+// wie geschrieben.
+function StoredChain(AMap: TRdxCodeMap; const APieces: TPieces;
+  const AEdited: array of Boolean; AFrom: Integer; const W: TRdxToken;
+  out AChain: string): TRdxToken;
+var
+  k         : Integer;
+  T, A, Dot : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  AChain := '';
+  for k := AFrom + 1 to High(APieces) do
+  begin
+    if AEdited[k] or (PieceTarget(AMap, APieces[k]).Low = W.Low) then
+      Exit;
+    T := APieces[k].First;
+    while T.Low <> '' do
+    begin
+      if T.IsWord and (T.Low = W.Low) and (Before(AMap, T).Low = '(')
+         and (After(AMap, T).Low = ')') then
+      begin
+        A := Before(AMap, Before(AMap, T));
+        Dot := Before(AMap, A);
+        if A.IsWord and (A.Low = NAME_ADD) and (Dot.Low = '.')
+           and Before(AMap, Dot).IsWord then
+        begin
+          Result := Before(AMap, Dot);
+          AChain := ChainText(AMap, Result);
+          Exit;
+        end;
+      end;
+      if SameTok(T, APieces[k].Last) then Break;
+      T := After(AMap, T);
+    end;
+  end;
+end;
+
+// Nennt das Stueck die Kette, deren letztes Glied AOwner ist (gleicher Text,
+// gross/klein egal)?
+function PieceHasChain(AMap: TRdxCodeMap; const APiece: TPiece;
+  const AOwner: TRdxToken; const AChain: string): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if T.IsWord and (T.Low = AOwner.Low)
+       and SameText(ChainText(AMap, T), AChain) then
+      Exit(True);
+    if SameTok(T, APiece.Last) then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
 // Der Grund der gekoppelten Auswertung (s. Kopf des Abschnitts); '' ohne.
 function CoupledReason(AMap: TRdxCodeMap; const ASites: TCallSites): string;
 var
@@ -1297,10 +1505,12 @@ var
   Edited            : array of Boolean;
   i, k, Li, Line0   : Integer;
   V, W, Partner     : TRdxToken;
-  Text, Call        : string;
+  Text, Call, Chain : string;
   WantDate, WantNum : Boolean;
   Writer            : Boolean;
   Best              : Int64;
+  EditIdx, m        : Integer;
+  Owner             : TRdxToken;
 begin
   Result := '';
   if (Length(ASites) = 0)
@@ -1311,11 +1521,15 @@ begin
   Pieces := PiecesIn(AMap, R.Body, R.EndTok);
   SetLength(Edited, Length(Pieces));
   V := Default(TRdxToken);
+  EditIdx := -1;
   for i := 0 to High(Pieces) do
   begin
     Edited[i] := PieceHasSite(Pieces[i], ASites);
-    if Edited[i] and (V.Low = '') then
+    if Edited[i] and (EditIdx < 0) then
+    begin
+      EditIdx := i;
       V := PieceTarget(AMap, Pieces[i]);
+    end;
   end;
   // Nur ein schreibender Aufruf macht V zu Text im umgestellten Format.
   Writer := False;
@@ -1359,6 +1573,26 @@ begin
       NoteCoupling(Line0, Partner.Line, Partner.Line, _(R_FS_COUPLED_CALL,
         [Partner.Line, TokText(AMap, V), TokText(AMap, Partner)]), Best,
         Result);
+    // Ueber einen Behaelter (rwE33 Stufe 5, s. Kopf des Abschnitts): die
+    // Stuecke hinter der umgestellten Zuweisung bis zur naechsten an V.
+    if (V.Low <> '') and (W.Low <> '') then
+    begin
+      Owner := StoredChain(AMap, Pieces, Edited, i, W, Chain);
+      if Owner.Low <> '' then
+      begin
+        m := EditIdx + 1;
+        while (m <= High(Pieces))
+              and (PieceTarget(AMap, Pieces[m]).Low <> V.Low) do
+        begin
+          if not Edited[m] and PieceNames(AMap, Pieces[m], V.Low)
+             and PieceHasChain(AMap, Pieces[m], Owner, Chain) then
+            NoteCoupling(Line0, Partner.Line, Pieces[m].First.Line,
+              _(R_FS_COUPLED_PAIR, [Pieces[m].First.Line, TokText(AMap, V),
+              Chain, Partner.Line, TokText(AMap, Partner)]), Best, Result);
+          Inc(m);
+        end;
+      end;
+    end;
     if (W.Low = '') or (W.Low = V.Low) then Continue;
     for k := 0 to High(Pieces) do
       if Edited[k] and PieceNames(AMap, Pieces[k], W.Low) then
@@ -1368,7 +1602,9 @@ begin
           Result)
       else if (k <> i) and not Edited[k] and (V.Low <> '')
               and PieceNames(AMap, Pieces[k], V.Low)
-              and PieceNames(AMap, Pieces[k], W.Low) then
+              and PieceNames(AMap, Pieces[k], W.Low)
+              and not ConcatDecouples(AMap, Pieces, Edited, k,
+                [V.Low, W.Low]) then
         NoteCoupling(Line0, Partner.Line, Pieces[k].First.Line,
           _(R_FS_COUPLED_PAIR, [Pieces[k].First.Line, TokText(AMap, V),
           TokText(AMap, W), Partner.Line, TokText(AMap, Partner)]), Best,
@@ -1446,68 +1682,11 @@ const
   // Typumwandlungen, durch die der Text unveraendert geht
   // ('Application.MessageBox(PChar(..), ..)').
   TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
-  MAX_DISPLAY_TOKENS = 2000;
   // 'Self.FFS' als Argument (FieldUsedForFamily).
   NAME_SELF = 'self';
   // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
   PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
     'formatcurr', 'format');
-
-// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
-function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
-var
-  T     : TRdxToken;
-  Depth : Integer;
-  Count : Integer;
-begin
-  Result := Default(TRdxToken);
-  Depth := 0;
-  Count := 0;
-  T := AClose;
-  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
-  begin
-    Depth := Depth - ParenDelta(T);
-    if Depth = 0 then
-      Exit(T);
-    Inc(Count);
-    T := Before(AMap, T);
-  end;
-end;
-
-// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
-// und Klammergruppen hinter einem Glied).
-function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
-var
-  P, T : TRdxToken;
-begin
-  Result := ALast;
-  P := Before(AMap, Result);
-  while P.Low = '.' do
-  begin
-    T := Before(AMap, P);
-    while (T.Low = ']') or (T.Low = ')') do
-    begin
-      T := OpenerOf(AMap, T);
-      if T.Low = '' then Exit;
-      T := Before(AMap, T);
-    end;
-    if not T.IsWord then Exit;
-    Result := T;
-    P := Before(AMap, Result);
-  end;
-end;
-
-// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
-// nur ALast).
-function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
-var
-  S : TRdxToken;
-begin
-  S := ChainStart(AMap, ALast);
-  if S.Line <> ALast.Line then
-    Exit(TokText(AMap, ALast));
-  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
-end;
 
 // Nennt ein Glied der Kette vor ALast etwas, das nach Daten klingt, oder ist
 // der Besitzer von ALast eine moegliche Stringliste (s. Kopf des Abschnitts)?
