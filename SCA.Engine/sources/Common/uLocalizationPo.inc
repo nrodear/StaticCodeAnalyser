@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7042 Zeilen, 332571 Bytes
-  CPoLines_de: array[0..7041] of string = (
+  // i18n\de.po - 7045 Zeilen, 332795 Bytes
+  CPoLines_de: array[0..7044] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6923,6 +6923,9 @@ const
     'msgid "it stands there only under a compiler condition (line %d); %s"',
     'msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"',
     '',
+    'msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"',
+    'msgstr "%s steht in uses nur unter bedingter '#$00DC'bersetzung (Zeile %d), nicht in jedem Zweig um diese Stelle; %s"',
+    '',
     'msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"',
     'msgstr "Lazarus-/FPC-Datei (%s) - FPC 3.2 kennt kein TFormatSettings.Invariant"',
     '',
@@ -7331,8 +7334,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
-  CPoLines_fr: array[0..7037] of string = (
+  // i18n\fr.po - 7041 Zeilen, 346200 Bytes
+  CPoLines_fr: array[0..7040] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14236,6 +14239,9 @@ const
     '',
     'msgid "it stands there only under a compiler condition (line %d); %s"',
     'msgstr "elle n''y figure que sous une condition de compilation (ligne %d) ; %s"',
+    '',
+    'msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"',
+    'msgstr "%s ne figure dans uses que sous une condition de compilation (ligne %d), pas dans chaque branche autour de cet endroit ; %s"',
     '',
     'msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"',
     'msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne conna'#$00EE't pas TFormatSettings.Invariant"',

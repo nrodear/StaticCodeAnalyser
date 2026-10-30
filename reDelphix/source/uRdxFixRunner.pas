@@ -208,6 +208,7 @@ uses
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uRdxText,          // _, MsgNoFileOpen, MsgMovedSuffix, MsgStaleSuffix (E29, C1)
+  uRdxPlacesRunner,  // TRdxPlacesRunner.UsesReason (AppendUses, Fix-Runde 4)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -611,9 +612,10 @@ begin
     First, Last);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
-    // Dieselbe msgid wie uRdxRecipeRunner.FormatUsesReason (Format()).
-    AOutcome.Reason := _('%s is missing in uses: %s',
-      [AQualifiedName, Plan.Reason]);
+    // Derselbe Satz wie uRdxPlacesRunner.FormatUsesReason (Format()); nur
+    // bedingt eingebunden: "steht nur unter bedingter Uebersetzung" statt
+    // "fehlt" (Fix-Runde 4 nach rwE32, ClassBrowser.pas:507).
+    AOutcome.Reason := TRdxPlacesRunner.UsesReason(Plan, AQualifiedName);
     AOutcome.Edits := nil;
     Exit(False);
   end;

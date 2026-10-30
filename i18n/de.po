@@ -6906,6 +6906,9 @@ msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysU
 msgid "it stands there only under a compiler condition (line %d); %s"
 msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"
 
+msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"
+msgstr "%s steht in uses nur unter bedingter Übersetzung (Zeile %d), nicht in jedem Zweig um diese Stelle; %s"
+
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
 msgstr "Lazarus-/FPC-Datei (%s) - FPC 3.2 kennt kein TFormatSettings.Invariant"
 

@@ -100,8 +100,8 @@ function BranchUsesUnit(const AUnit, AImpl: string;
 // Die Hilfe (AAlt: der zweite Eintrag) fuer den ersten Fund der Art AKind
 // in BranchUsesUnit(AUnit, AImpl, ..): im Zweig frei mit AEdits
 // Ersetzungen, keine fuer uses (kein ' + uses' im Hinweis); ausserhalb
-// gesperrt mit R_USES_CONDITIONAL fuer die Zeile des Eintrags (AQualified
-// im Grund), ohne Ersetzung.
+// gesperrt mit R_USES_ONLY_CONDITIONAL fuer die Zeile des Eintrags
+// (AQualified im Grund), ohne Ersetzung.
 procedure AssertBranchUses(const AUnit, AQualified, AImpl: string;
   AKind: TFindingKind; AAlt: Boolean; AEdits: Integer; ADetect: TDetectFunc);
 
@@ -113,7 +113,7 @@ uses
   uParser2,           // TParser2
   uEngineApi,         // TSourcePlaces
   uRdxFixTable,       // TRdxFixTable.FixFor
-  uRdxPlacesRunner,   // R_USES_CONDITIONAL (AssertBranchUses)
+  uRdxPlacesRunner,   // R_USES_ONLY_CONDITIONAL (AssertBranchUses)
   uRdxText,           // _, MsgByHand (AssertBranchUses)
   uTestRdxTextKit;    // TempName, WriteText, Apply (Review R6-08)
 
@@ -340,8 +340,8 @@ begin
   Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
   O := PlanFirstIn(BranchUsesUnit(AUnit, AImpl, False), AKind, AAlt, ADetect);
   Assert.IsFalse(O.Enabled, 'Stelle ausserhalb des Zweigs');
-  Assert.AreEqual(_('%s is missing in uses: %s', [AQualified,
-    _(R_USES_CONDITIONAL, [BRANCH_USES_LINE, MsgByHand])]), O.Reason);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, [AQualified, BRANCH_USES_LINE,
+    MsgByHand]), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 

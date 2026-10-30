@@ -52,6 +52,13 @@ const
   // MsgByHand.
   R_USES_CONDITIONAL = 'it stands there only under a compiler condition '
     + '(line %d); %s';
+  // Der ganze Satz dazu (TRdxPlacesRunner.UsesReason, Fix-Runde 4 nach
+  // rwE32: Dev-Cpp ClassBrowser.pas:507 - "System.SysUtils fehlt in uses"
+  // stimmte nicht, die Unit steht in '{$IFDEF WIN32}' UND '{$IFDEF LINUX}',
+  // nur gilt keiner der beiden sicher). %s die Unit, %d die Zeile des
+  // ersten Eintrags, %s MsgByHand.
+  R_USES_ONLY_CONDITIONAL = '%s stands in uses only under a compiler '
+    + 'condition (line %d), not in every branch around this place; %s';
 
 type
   // Was fuer eine fehlende Unit in der uses-Klausel zu tun ist (AH19).
@@ -60,6 +67,10 @@ type
     Name   : string;      // der einzufuegende Name ('System.SysUtils' / 'SysUtils')
     Edit   : TRdxEdit;    // die Ersetzung, wenn Needed und Reason = ''
     Reason : string;      // wenn Needed, aber keine Stelle bestimmbar
+    // > 0: die Unit steht nur unter bedingter Uebersetzung in uses (die
+    // Zeile des ersten Eintrags), Reason ist R_USES_CONDITIONAL - den
+    // ganzen Satz fuer den Benutzer baut UsesReason.
+    CondLine : Integer;
   end;
 
   // Die Anfrage an Describe: Zeile und Anker der Regel ('assign', 'call',
@@ -210,10 +221,27 @@ type
     // (0 = wie AAtLine): JEDE Zeile von AAtLine bis AAtEndLine muss in den
     // Zweigen liegen, dazu das Ende von AAtEndLine hinter ihren
     // Direktiven (TextCovers; Fix-Runde 4: die Ersetzungen von SCA168.2
-    // stehen auf der Zeile des letzten Arms und des 'end').
+    // stehen auf der Zeile des letzten Arms und des 'end'). Steht die Unit
+    // in jedem Zweig von '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (CEF4Delphi:
+    // '{$IFDEF DELPHI16_UP} System.SysUtils, .. {$ELSE} SysUtils, ..
+    // {$ENDIF}'), sieht sie schon der Baum - er parst genau einen der
+    // Zweige (Ein-Zweig-Sicht), die Unit ist da (geprueft Fix-Runde 4 nach
+    // rwE32, PlanUses_EntryInEachElseBranch_Present). Zwei getrennte
+    // Bloecke ohne {$ELSE} ('{$IFDEF WIN32} .. SysUtils .. {$ENDIF}
+    // {$IFDEF LINUX} .. SysUtils .. {$ENDIF}', Dev-Cpp ClassBrowser.pas)
+    // beweisen nichts - es kann keiner gelten: gesperrt. Gesperrt wegen
+    // eines nur bedingten Eintrags traegt der Plan CondLine (UsesReason).
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string;
       AAtLine: Integer = 0; AAtEndLine: Integer = 0): TRdxUsesPlan; static;
+
+    // Der Grund fuer den Benutzer zu einem gesperrten Plan (Needed, Reason
+    // gesetzt) der Unit AQualifiedName: mit CondLine R_USES_ONLY_CONDITIONAL
+    // ("steht nur unter bedingter Uebersetzung"), sonst '%s is missing in
+    // uses: <Reason>' - fuer AppendUses (uRdxFixRunner) und
+    // FormatUsesReason.
+    class function UsesReason(const APlan: TRdxUsesPlan;
+      const AQualifiedName: string): string; static;
 
     // Erste Zeile mit einer Compiler-Direktive ('{$' oder '(*$') in der
     // Klausel von AEntries - von der Zeile des Schluesselworts 'uses' bis
@@ -667,7 +695,7 @@ begin
     // eine Kette in einem anderen Zweig gibt den Eintrag dann frei, ein
     // gesperrter Eintrag auf jeder Kette ausserhalb waere Rauschen.
     AOutcome.FileWide := True;
-    Exit(_('%s is missing in uses: %s', ['System.SysUtils', Plan.Reason]));
+    Exit(TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
   end;
   AOutcome.NeedsUses := True;
   AOutcome.UsesName  := Plan.Name;
@@ -1501,6 +1529,7 @@ begin
   if Li > 0 then
   begin
     Result.Reason := _(R_USES_CONDITIONAL, [Li, MsgByHand]);
+    Result.CondLine := Li;
     Exit;
   end;
   // FPC 3.2 kennt keine Unit-Scopes: eine Datei mit FPC-Weiche bekommt
@@ -1520,6 +1549,16 @@ begin
     PlanIntoClause(APlaces, Entries, Result)
   else
     PlanNewClause(APlaces, Result);
+end;
+
+class function TRdxPlacesRunner.UsesReason(const APlan: TRdxUsesPlan;
+  const AQualifiedName: string): string;
+begin
+  if APlan.CondLine > 0 then
+    Result := _(R_USES_ONLY_CONDITIONAL, [AQualifiedName, APlan.CondLine,
+      MsgByHand])
+  else
+    Result := _('%s is missing in uses: %s', [AQualifiedName, APlan.Reason]);
 end;
 
 end.

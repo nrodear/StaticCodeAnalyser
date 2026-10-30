@@ -6902,6 +6902,9 @@ msgstr "le fichier teste d'anciens compilateurs (%s, ligne %d) - %s n'existe dan
 msgid "it stands there only under a compiler condition (line %d); %s"
 msgstr "elle n'y figure que sous une condition de compilation (ligne %d) ; %s"
 
+msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"
+msgstr "%s ne figure dans uses que sous une condition de compilation (ligne %d), pas dans chaque branche autour de cet endroit ; %s"
+
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
 msgstr "fichier Lazarus/FPC (%s) - FPC 3.2 ne connaît pas TFormatSettings.Invariant"
 
