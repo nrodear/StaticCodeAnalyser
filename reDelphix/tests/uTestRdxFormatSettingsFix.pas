@@ -80,6 +80,7 @@ type
     [Test] procedure Sca128_Alt_PairHint_OnlySameRoutine;
     [Test] procedure Sca128_Alt_PairHint_LiteralReader_None;
     [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
+    [Test] procedure Sca128_Alt_KitInclude_DiskCheckOrWith;
   end;
 
 {$IFNDEF FPC}
@@ -1390,6 +1391,35 @@ begin
   // Ohne weiteren Grund bleibt das with der Grund.
   AssertRefused(InUnit(WITH_BODY), BODY_LINE + 1, Msg('datetostr'),
     _(R_FS_WITH, [BODY_LINE]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_KitInclude_DiskCheckOrWith;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4, mORMot2 dmvc-ai 01-basicdemo_server\src\api.impl.pas:50
+  // (sperre_unnoetig): '{$I mormot.defines.inc}' sperrte den Alt-Weg im
+  // Planer, Eintrag 1 galt per .dproj 20.3 (Delphi 12). Jetzt prueft das
+  // Kit-Include wie beim Hauptweg der Plattenblick (ein Projekt der Unit ab
+  // 10.3 widerlegt es - uTestRdxMagicGuards.Disk_KitIncludeModernProject_
+  // RefutesInvariant); der Planer allein bietet an.
+  Src := UnitText('SysUtils', ['{$I mormot.defines.inc}'],
+    ['  r := TimeToStr(Time);']);
+  AssertFixed(UnitText('SysUtils', ['{$I mormot.defines.inc}'],
+    ['  r := TimeToStr(Time, TFormatSettings.Invariant);']), Src,
+    BODY_LINE + 1, Msg('timetostr'), True);
+  // Mit with sperrt der Planer ohnehin; dann nennt er den Altcompiler des
+  // Kit-Includes wie Eintrag 1 (jcl FileViewer.pas:601 'jcl.inc, Zeile 28'
+  // statt des with).
+  Src := UnitText('SysUtils', ['{$I jcl.inc}'], ['  with Obj do',
+    '    r := DateToStr(d);']);
+  AssertRefused(Src, BODY_LINE + 2, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['jcl.inc', 6]), True);
+  // Eine Versionsfrage in der Datei sperrt im Planer weiter (vor dem
+  // Kit-Include).
+  AssertRefused(UnitText('SysUtils', ['{$I jcl.inc}', '{$IFDEF COMPILER5_UP}',
+    '{$ENDIF}'], ['  r := DateToStr(d);']), BODY_LINE + 3, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['COMPILER5_UP', 7]), True);
 end;
 
 {$IFNDEF FPC}

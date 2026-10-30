@@ -460,10 +460,19 @@ begin
     UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
     ['  r := Format(''%.2f'', [x]);', '  for var i := 1 to 3 do Foo;']),
     BODY_LINE + 1, Msg('%.2f'), True);
-  // Gegenprobe: ohne Inline-Variable sperrt das Kit-Include.
-  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
-    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
-    _(R_FS_OLD_INVARIANT, ['mormot.defines.inc', 6]), True);
+  // Ohne Inline-Variable prueft das Kit-Include seit rwE32 Stufe 4 der
+  // Plattenblick (dort widerlegt es ein Projekt der Unit ab 10.3 - mORMot2
+  // dmvc-ai 19-basicdemo_vclclient MainFormU.pas:165; uTestRdxMagicGuards.
+  // Disk_KitIncludeModernProject_RefutesInvariant), nicht mehr der Planer.
+  AssertFixed(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x], TFormatSettings.Invariant);']),
+    UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'), True);
+  // Gegenprobe: eine Versionsfrage IN der Datei sperrt im Planer weiter.
+  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}',
+    '{$ifdef ISDELPHI2007ANDUP}', '{$endif}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 3, Msg('%.2f'),
+    _(R_FS_OLD_INVARIANT, ['ISDELPHI2007ANDUP', 7]), True);
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Alt_ArgsReadFormatSettings_NoHelp;

@@ -1917,7 +1917,13 @@ begin
     if (Li > 0)
        and not AllFpcExcluded(ConditionalDirectives(AMap), ASites) then
       Exit(_(R_FS_FPC, [Li]));
-    Trace := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
+    // Nur die Bedingungen der Datei (seit rwE32 Stufe 4 wie der Hauptweg):
+    // ein Kit-Include (mormot.defines.inc, jvcl.inc ..) prueft der
+    // Plattenblick, und ein Projekt der Unit ab Delphi 10.3 widerlegt es
+    // (uRdxMagicFixes.ProjectReason, ModernProjectProof) - mORMot2 dmvc-ai
+    // api.impl.pas:50: Eintrag 1 galt per .dproj 20.3 (Delphi 12), Eintrag
+    // 2 sperrte mit 'bis Delphi 10.3 (mormot.defines.inc)'.
+    Trace := OldCompilerTraceOf(AMap, FLOOR_INLINE_DECL, True, False, Li);
     if Trace <> '' then
       Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
   end;
@@ -1931,7 +1937,18 @@ begin
   if Li > 0 then
     Exit(_(R_FS_SETTINGS_SET, [Trace, Li]));
   if WithLine > 0 then
+  begin
+    // Das with sperrt ohnehin (ohne Plattenblick): traegt die Datei ein
+    // Kit-Include, ist dessen Altcompiler der tragende Grund - Eintrag 1
+    // nennt ihn ebenso (jcl FileViewer.pas:601 'jcl.inc, Zeile 28').
+    if not Proven then
+    begin
+      Trace := OldCompilerTraceOf(AMap, FLOOR_INLINE_DECL, False, True, Li);
+      if Trace <> '' then
+        Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
+    end;
     Exit(_(R_FS_WITH, [WithLine]));
+  end;
   Result := '';
 end;
 

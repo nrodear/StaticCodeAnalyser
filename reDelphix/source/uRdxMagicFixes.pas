@@ -348,12 +348,13 @@ type
     // Weiche, fragt er die Platte nicht nach Compilern - fuer
     // lfFormatInvariant aber weiter nach Programmen, die die globale
     // FormatSettings selbst einstellen (SettingsWalkReason, Review
-    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
-    // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
-    // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
-    // Dateinamen geprueft) - FileReason und, mit AIncludes bzw. seit dem
-    // Nico-Entscheid M1b fuer lfFormatSettingsVar ohne Projekt der Unit ab
-    // XE, IncludeReason
+    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3,
+    // fuer lfFormatInvariant seit rwE32 Stufe 4 zuerst ein Kit-Include der
+    // Unit (KitIncludeReason; widerlegt nur durch ein Programm mit .dproj ab
+    // XE bzw. 10.3, das die Unit enthaelt, auch ohne Dateinamen geprueft) -
+    // FileReason und, mit AIncludes (fuer lfFormatInvariant nur ohne ein
+    // solches Projekt) bzw. seit dem Nico-Entscheid M1b fuer
+    // lfFormatSettingsVar ohne Projekt der Unit ab XE, IncludeReason
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
     // Pakete nur ab 10.3 - PackageFloorProof).
@@ -686,6 +687,10 @@ const
   // Kit-Include, %d seine Zeile.
   R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
     + 'variable FormatSettings exists from Delphi XE on';
+  // Alt-Weg SCA128.2/SCA059.2 (KitIncludeReason, rwE32 Stufe 4): derselbe
+  // Satz wie R_FS_OLD_INVARIANT in uRdxFormatSettingsFix (eine msgid).
+  R_KIT_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
+    + 'line %d) - TFormatSettings.Invariant is only checked from there on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -2231,21 +2236,26 @@ begin
   end;
 end;
 
-// Hauptweg SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc,
-// jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
-// seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
-// Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
-// '' oder der Grund.
-function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean): string;
+// SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc, jvcl.inc ..
+// - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft fuer den
+// Hauptweg seit rwE31 Stufe 3, fuer den Alt-Weg (lfFormatInvariant) seit
+// rwE32 Stufe 4 nur die Bedingungen der Datei) sperrt, ausser ein Projekt
+// der Unit ab der Schwelle von AFeature widerlegt es (AModern:
+// ModernProjectProof - Delphi XE bzw. 10.3). '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AFeature: TRdxLateFeature;
+  AModern: Boolean): string;
 var
   Kit : string;
   Li  : Integer;
 begin
   Result := '';
-  Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
+  Kit := OldCompilerTraceOf(AMap, FloorOf(AFeature), False, True, Li);
   if (Kit = '') or AModern then
     Exit;
-  Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+  if AFeature = lfFormatInvariant then
+    Result := _(R_KIT_OLD_INVARIANT, [Kit, Li])
+  else
+    Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
 
 
@@ -2419,12 +2429,16 @@ begin
       Result := SettingsWalkReason(AFileName);
     Exit;
   end;
-  // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
-  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
-  if AFeature = lfFormatSettingsVar then
+  // Ein Kit-Include der Unit (Hauptweg seit rwE31 Stufe 3, Alt-Weg seit
+  // rwE32 Stufe 4 hier statt im Planer) - auch ohne Dateinamen (dann ohne
+  // Widerlegung). Fuer den Alt-Weg widerlegt ein Projekt der Unit ab 10.3
+  // auch die Includes (unten): mORMot2 dmvc-ai 01-basicdemo_server
+  // api.impl.pas:50 - Eintrag 1 galt per .dproj 20.3, Eintrag 2 sperrte mit
+  // 'bis Delphi 10.3 (mormot.defines.inc)'.
+  if AFeature in [lfFormatSettingsVar, lfFormatInvariant] then
   begin
     Modern := ModernProjectProof(AFileName, AFeature);
-    Result := KitIncludeReason(AMap, Modern);
+    Result := KitIncludeReason(AMap, AFeature, Modern);
     if Result <> '' then Exit;
   end;
   if AFileName = '' then Exit;
@@ -2437,8 +2451,15 @@ begin
   // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
   // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
   // erst ab XE.
-  if (Result = '') and (AIncludes
-     or ((AFeature = lfFormatSettingsVar) and not Modern)) then
+  // Alt-Weg (rwE32 Stufe 4, gleiche Belegpruefung wie der Hauptweg): baut
+  // ein Programm mit .dproj ab 10.3 die Unit (Modern), liest er die Includes
+  // nicht - ihre Weichen gelten anderen Compilern als diesem Projekt; ein
+  // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
+  // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
+  // (mormot.defines.inc liegt nicht neben api.impl.pas).
+  if (Result = '')
+     and ((AIncludes and not ((AFeature = lfFormatInvariant) and Modern))
+          or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant

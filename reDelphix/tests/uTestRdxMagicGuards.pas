@@ -49,6 +49,7 @@ type
     [Test] procedure Disk_ProgramSetsSettings_Refused;
     // ---- Realworld-Test rwE31 Stufe 3 ----
     [Test] procedure Disk_KitIncludeModernProject_Refutes;
+    [Test] procedure Disk_KitIncludeModernProject_RefutesInvariant;
     [Test] procedure Disk_FmxPackageFloor_RefutesInclude;
     [Test] procedure Disk_MainWayIncludeSwitch_M1b;
   end;
@@ -735,9 +736,55 @@ begin
     WriteDproj(T.B + 'other.dproj', '20.3');
     AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatSettingsVar, False),
       ['mormot.defines.inc']);
-    // Der Invariant-Weg fragt das Kit-Include weiter im Planer (hier nicht).
+    // Seit rwE32 Stufe 4 fragt auch der Invariant-Weg das Kit-Include hier
+    // (bis dahin im Planer) - ohne Projekt der Unit sperrt es
+    // (Disk_KitIncludeModernProject_RefutesInvariant).
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, False),
+      ['mormot.defines.inc', 'TFormatSettings.Invariant']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_KitIncludeModernProject_RefutesInvariant;
+const
+  KIT_SRC = 'unit u;' + #13#10 + '{$I mormot.defines.inc}' + #13#10
+    + 'interface' + #13#10 + 'uses SysUtils;' + #13#10 + 'implementation'
+    + #13#10 + 'end.';
+  DPR_SRC = 'program demo;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // rwE32 Stufe 4, mORMot2 ex\ThirdPartyDemos\dmvc-ai\01-basicdemo_server\
+  // src\api.impl.pas:50 (sperre_unnoetig; ebenso die Sperrtexte von
+  // 19-basicdemo_vclclient MainFormU.pas:165 und 56-articles_crud_vcl_client
+  // MainFormU.pas:206): Eintrag 1 galt per .dproj 20.3 (Delphi 12), der
+  // Invariant-Weg sperrte mit 'bis Delphi 10.3 (mormot.defines.inc)' - und
+  // ohne diesen Planer-Grund mit dem nicht gefundenen Include. Jetzt dieselbe
+  // Belegpruefung (ModernProjectProof, Schwelle 10.3 = ProjectVersion 18.5).
+  // AIncludes = True wie im Adapter.
+  T := NewTree;
+  try
+    // Ohne Projekt: das Kit-Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, True),
+      ['mormot.defines.inc', 'TFormatSettings.Invariant']);
+    // Das Programm eine Ebene hoeher enthaelt die Unit, .dproj ab 10.3:
+    // weder das Kit-Include noch das (nicht gefundene) Include sperrt.
+    WriteText(T.B + 'demo.dpr', DPR_SRC);
+    WriteDproj(T.B + 'demo.dproj', '20.3');
     Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant,
-      False), 'Invariant ohne Includes');
+      True), 'Projekt ab 10.3');
+    // Gegenproben: eine .dproj ab XE, aber vor 10.3 (18.0 = Delphi 10.2) ...
+    WriteDproj(T.B + 'demo.dproj', '18.0');
+    Assert.IsTrue(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, True) <> '',
+      'Projekt vor 10.3');
+    // ... und ein Lazarus-Projekt neben der Unit (FPC 3.2 kennt kein
+    // Invariant) sperren weiter.
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    WriteText(T.C + 'demo.lpi', '<CONFIG/>');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, True),
+      ['demo.lpi']);
   finally
     RemoveTree(T.Root);
   end;
