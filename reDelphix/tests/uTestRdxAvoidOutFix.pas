@@ -75,6 +75,9 @@ type
     // ... Sperrtext mormot.core.os.security.pas:1425, mormot.net.sock.pas:
     // 4744 (freie Funktion hinter einem Typkopf-Zwilling record/object).
     [Test] procedure TwinTypeHead_FreeRoutineNotInType;
+    // ... nur-menue-unnoetig mormot.crypt.secure.pas:597 (Record derselben
+    // Unit mit Methoden und Typkopf-Zwilling).
+    [Test] procedure TwinRecordWithMethods_SameMeaning;
   end;
 
 {$IFNDEF FPC}
@@ -852,6 +855,57 @@ begin
     '  TTree = object', '  {$endif}',
     '    procedure Load(out R: Integer);', '  end;', 'end.']),
     'procedure Load(', _(R_OUT_IN_TYPE, ['Load']));
+end;
+
+// Die Unit des Musters mormot.crypt.secure.pas:586-630/4285 (minimiert):
+// TSynHasher mit Typkopf-Zwilling record/object, privaten Feldern einfacher
+// Typen, Methoden, Direktiven und einer Property; AExtra steht als weiteres
+// Mitglied unter private.
+function HasherUnit(const AExtra: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type',
+    '  THashAlgo = (hfMD5, hfSHA1);', '  {$ifdef USERECORD}',
+    '  TSynHasher = record', '  {$else}', '  TSynHasher = object',
+    '  {$endif}', '  private', '    ctxt: array[1..64] of Byte;',
+    '    fAlgo: THashAlgo;', AExtra,
+    '    procedure CopyTo(out aHasher: TSynHasher); {$ifdef FPC} inline; '
+    + '{$endif}', '  public', '    function Init(aAlgo: THashAlgo): Boolean;',
+    '    function Full(aAlgo: THashAlgo; aBuffer: Pointer;',
+    '      aLen: Integer = 0): Integer; overload;',
+    '    property Algo: THashAlgo read fAlgo;', '  end;', 'implementation',
+    'procedure TSynHasher.CopyTo(out aHasher: TSynHasher);', 'begin',
+    '  if fAlgo = hfMD5 then', '    aHasher := Self;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxAvoidOutFix.TwinRecordWithMethods_SameMeaning;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // Bis dahin "ahasher hat einen verwalteten Typ" und nur im Menue: der
+  // zweite Kopf zaehlte nicht, der Rumpf des ersten begann mit dem Namen
+  // des zweiten, Methoden und Abschnitte machten den Typ "unbekannt" (rot
+  // ohne Fix: Changes und MenuOnly). Jetzt bedeutungsgleich, Gluehbirne.
+  Src := HasherUnit('    fSize: Integer;');
+  Assert.AreEqual(StringReplace(Src, 'out aHasher', 'var aHasher',
+    [rfReplaceAll]), Fix(Src, 'procedure CopyTo(', P));
+  Assert.IsFalse(P.Changes, 'Felder einfach, Methoden ohne Daten');
+  Assert.IsFalse(P.MenuOnly, 'Gluehbirne');
+  // Gegenproben: ein string-Feld, ein class operator (Initialize macht
+  // den Record verwaltet), class var, ein Vorfahr des object.
+  Src := HasherUnit('    fName: string;');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'string-Feld');
+  Src := HasherUnit('    class operator Initialize(out Dest: TSynHasher);');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'class operator');
+  Src := HasherUnit('    class var Count: Integer;');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'class var');
+  Src := StringReplace(HasherUnit('    fSize: Integer;'),
+    'TSynHasher = object', 'TSynHasher = object(TBase)', []);
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'object mit Vorfahr');
 end;
 
 {$IFNDEF FPC}

@@ -215,6 +215,19 @@ const
   // die Deklaration 'Name = ..'.
   MAX_TYPE_DEPTH = 3;
   TYPE_DECL_PREV: array[0..1] of string = ('type', ';');
+  // PlainRecordBody (rwE32 Stufe 4, mormot.crypt.secure.pas:597): Abschnitte
+  // und Methoden eines record- oder object-Typs tragen keine Daten ...
+  RECORD_SECTIONS: array[0..4] of string = ('private', 'protected', 'public',
+    'published', 'strict');
+  MEMBER_HEADS: array[0..4] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'property');
+  // ... auch nicht die Direktiven hinter ihrem ';' ('inline;', 'overload;',
+  // 'message WM_X;', 'default;').
+  MEMBER_DIRECTIVES: array[0..20] of string = ('inline', 'overload',
+    'static', 'virtual', 'dynamic', 'abstract', 'override', 'reintroduce',
+    'final', 'cdecl', 'stdcall', 'register', 'pascal', 'safecall', 'winapi',
+    'message', 'deprecated', 'platform', 'experimental', 'default',
+    'assembler');
   // SetsFirst: hier endet eine Zuweisung ohne ';' (RhsClean) ...
   BRANCH_STOPS: array[0..1] of string = ('else', 'end');
   // ... und das darf die Bedingung eines if nicht tragen (IfSets): eine
@@ -1080,9 +1093,48 @@ begin
     or LocalPlainType(AMap, ATypeLow, ADepth + 1);
 end;
 
-// Der Rumpf 'record .. end' ab ARecord: nur Felder 'A, B: T;' einfacher
-// Typen (PlainTypeName), auch statische Arrays 'array[..] of T' - kein
-// Variantenteil, keine Methode, kein Abschnitt (dann False: unbekannt).
+// Ab dem Kopfwort AKw einer Methode bzw. Property (MEMBER_HEADS) bis
+// hinter das ';' auf Klammertiefe 0 und die Direktiven dahinter
+// (MEMBER_DIRECTIVES, nicht als Feld 'static: T'): das Token danach. Low =
+// '' bei einem Schluesselwort, das dort nicht steht (begin, end, record,
+// case - unlesbar).
+function SkipMember(AMap: TRdxCodeMap; const AKw: TRdxToken): TRdxToken;
+var
+  T, N  : TRdxToken;
+  Depth : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  T := After(AMap, AKw);
+  while T.Low <> '' do
+  begin
+    if (T.Low = '(') or (T.Low = '[') then
+      Inc(Depth)
+    else if ((T.Low = ')') or (T.Low = ']')) and (Depth > 0) then
+      Dec(Depth)
+    else if (Depth = 0) and InList(T.Low, ['begin', 'end', 'record',
+       'case']) then
+      Exit
+    else if (Depth = 0) and (T.Low = ';') then
+    begin
+      T := After(AMap, T);
+      N := After(AMap, T);
+      if not InList(T.Low, MEMBER_DIRECTIVES) or (N.Low = ':')
+         or (N.Low = ',') then
+        Exit(T);
+    end;
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Rumpf 'record .. end' bzw. 'object .. end' ab ARecord: nur Felder
+// 'A, B: T;' einfacher Typen (PlainTypeName), auch statische Arrays
+// 'array[..] of T'; seit rwE32 Stufe 4 (mORMot mormot.crypt.secure.pas:597
+// TSynHasher) auch Abschnitte (private, public ..), Methoden und
+// Properties (SkipMember) - sie tragen keine Daten. Kein Variantenteil,
+// kein 'class var'/'class operator' (ein Initialize/Finalize macht den
+// Record verwaltet), kein var/const/type im Rumpf, kein Vorfahr
+// 'object(TBase)' (dann False: unbekannt).
 function PlainRecordBody(AMap: TRdxCodeMap; const ARecord: TRdxToken;
   ADepth: Integer): Boolean;
 var
@@ -1094,6 +1146,22 @@ begin
   begin
     if T.Low = 'end' then
       Exit(True);
+    if InList(T.Low, RECORD_SECTIONS) then
+    begin
+      T := After(AMap, T);
+      Continue;
+    end;
+    if T.Low = 'class' then
+    begin
+      T := After(AMap, T);
+      if not InList(T.Low, MEMBER_HEADS) then Exit;   // class var, operator
+    end;
+    if InList(T.Low, MEMBER_HEADS) then
+    begin
+      T := SkipMember(AMap, T);
+      if T.Low = '' then Exit;
+      Continue;
+    end;
     while T.IsWord do
     begin
       T := After(AMap, T);
@@ -1158,8 +1226,24 @@ begin
     Decl := After(AMap, Decl);
   if (Decl.Low = '(') or (Decl.Low = '^') or (Decl.Low = 'set') then
     Exit(True);
-  if Decl.Low = 'record' then
+  if (Decl.Low = 'record') or (Decl.Low = 'object') then
+  begin
+    // Der Kopf doppelt in zwei Zweigen ('{$ifdef X} TFoo = record {$else}
+    // TFoo = object {$endif}', mORMot; rwE32 Stufe 4,
+    // mormot.crypt.secure.pas:590/592): der zweite zaehlte nicht (davor
+    // steht 'record', nicht ';'), sein Rumpf ist der beider.
+    N := After(AMap, Decl);
+    if (N.Low = ATypeLow) and (After(AMap, N).Low = '=')
+       and DirectiveBetween(AMap, Decl, N.Line, N.Col) then
+    begin
+      Decl := After(AMap, After(AMap, N));
+      if Decl.Low = 'packed' then
+        Decl := After(AMap, Decl);
+      if (Decl.Low <> 'record') and (Decl.Low <> 'object') then
+        Exit;
+    end;
     Exit(PlainRecordBody(AMap, Decl, ADepth));
+  end;
   N := After(AMap, Decl);
   Result := Decl.IsWord and (N.Low = ';')
     and PlainTypeName(AMap, Decl.Low, ADepth);
