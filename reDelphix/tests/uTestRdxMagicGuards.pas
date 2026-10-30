@@ -58,6 +58,11 @@ type
     [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
     [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
     [Test] procedure Traces_FpcVerSymbols;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Disk_ExceptionClasses_FpcOnlyProjectRefutes;
+    [Test] procedure Disk_FpcOnlyProject_UnitSearchPathOnly;
+    [Test] procedure Traces_NameOldBranchFirst;
+    [Test] procedure Traces_PrefixedCompilerSymbols;
   end;
 
 implementation
@@ -1312,6 +1317,241 @@ begin
   Assert.AreEqual('VER5X', TraceOf('{$IFDEF VER5X}', FLOOR_EXCEPTION_CLASSES));
   Assert.AreEqual('VER9X', TraceOf('{$IFDEF VER9X}', FLOOR_MATH_TOLERANCE));
   Assert.AreEqual('VER70', TraceOf('{$IFDEF VER70}', FLOOR_EXCEPTION_CLASSES));
+end;
+
+{ ---- Realworld-Test rwE33 Stufe 5 ---- }
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_FpcOnlyProjectRefutes;
+const
+  SRC = 'unit u;' + #13#10 + '{$I AbDefine.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  SRC_KIT = 'unit u;' + #13#10 + '{$I CnPack.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  INC = '{$IFNDEF FPC}' + #13#10
+    + '  {$IF DEFINED(LINUX) AND (CompilerVersion < 15)}' + #13#10
+    + '    {$DEFINE KYLIX}' + #13#10 + '  {$IFEND}' + #13#10 + '{$ENDIF}';
+  LPI_FMT = '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 + '<CONFIG>'
+    + #13#10 + '  <CompilerOptions>' + #13#10 + '    <SearchPaths>' + #13#10
+    + '      <OtherUnitFiles Value="%s"/>' + #13#10 + '    </SearchPaths>'
+    + #13#10 + '  </CompilerOptions>' + #13#10 + '  <Units>' + #13#10
+    + '    <Unit>' + #13#10 + '      <Filename Value="Zip.dpr"/>' + #13#10
+    + '    </Unit>' + #13#10 + '  </Units>' + #13#10 + '</CONFIG>';
+  DPR_SRC = 'library Zip;' + #13#10 + 'uses' + #13#10 + '  FPCAdds,' + #13#10
+    + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // doublecmd plugins\wcx\zip\src\fparchive\abzipprc.pas:212 (SCA127/
+  // SCA127.2): AbDefine.inc fragt im Zweig '{$IFNDEF FPC}' nach
+  // 'CompilerVersion < 15' (Abbrevia-Erbe); gebaut wird die Unit nur von
+  // Zip.lpi eine Ebene hoeher (OtherUnitFiles 'fparchive', Hauptdatei
+  // Zip.dpr). FPC 3.2.2 kennt beide Klassen - die Delphi-Weiche belegt
+  // keinen Compiler, der die Unit baut (Nico-Entscheid). Bis dahin sperrte
+  // IncludeReason mit 'AbDefine.inc .. COMPILERVERSION < 15'.
+  T := NewTree;
+  try
+    WriteText(T.C + 'AbDefine.inc', INC);
+    // Ohne Projekt (eine Bibliothek): das Include sperrt.
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc', 'COMPILERVERSION < 15']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['c;../../sdk']));
+    WriteText(T.B + 'Zip.dpr', DPR_SRC);
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'nur FPC baut die Unit');
+    // Gegenproben: die .lpi sucht die Unit nicht ...
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['cc;../../sdk']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../../sdk;c/']));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Eintrag mit / am Ende');
+    // ... ein Delphi-Programm daneben (kein FPC-Programm) ...
+    WriteText(T.B + 'ZipDelphi.dpr', 'library ZipDelphi;' + #13#10 + 'uses'
+      + #13#10 + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['ZipDelphi.dpr']);
+    DeleteFile(T.B + 'ZipDelphi.dpr');
+    // ... eine alte Projekt- bzw. Optionsdatei ...
+    WriteText(T.A + 'Zip.cfg', '-$A8');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.A + 'Zip.cfg');
+    // ... ein Paketordner im Fenster.
+    ForceDirectories(T.A + 'packages');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    RemoveDir(T.A + 'packages');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'wieder nur FPC');
+    // Ein Kit-Include widerlegt das FPC-Projekt nicht (Review e/HilfeFixX):
+    // cnwizards Test\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas
+    // ('{$I CnPack.inc}', nur AIAgentTest.lpi daneben) baut auch
+    // Test\Delphi\Program\AIAgent\AIAgentGUITest.dpr mit .dof (Delphi bis
+    // 7) - ausserhalb des Fensters. Bis dahin: '' (rot).
+    AssertNames(ProjectReasonOf(T.U, SRC_KIT, lfExceptionClasses, True),
+      ['cnpack.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_FpcOnlyProject_UnitSearchPathOnly;
+const
+  SRC = 'unit u;' + #13#10 + '{$I AbDefine.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  INC = '{$IF CompilerVersion < 15}' + #13#10 + '  {$DEFINE OLD}' + #13#10
+    + '{$IFEND}';
+  // Der Unit-Suchpfad (%s) und weitere Pfade bzw. Dateien der .lpi (%s).
+  LPI_FMT = '<CONFIG>' + #13#10 + '  <CompilerOptions>' + #13#10
+    + '    <SearchPaths>' + #13#10 + '      <OtherUnitFiles Value="%s"/>'
+    + #13#10 + '%s' + '    </SearchPaths>' + #13#10 + '  </CompilerOptions>'
+    + #13#10 + '  <Units>' + #13#10 + '    <Unit>' + #13#10
+    + '      <Filename Value="Zip.dpr"/>' + #13#10 + '    </Unit>' + #13#10
+    + '%s' + '  </Units>' + #13#10 + '</CONFIG>';
+  DPR_SRC = 'library Zip;' + #13#10 + 'uses' + #13#10 + '  FPCAdds,' + #13#10
+    + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // Review e/HilfeFixX: LpiCoversDir las jeden Pfad der .lpi - auch
+  // UnitOutputDirectory="lib" bzw. IncludeFiles machten eine Unit in lib\
+  // bzw. inc\ zum Teil des FPC-Projekts. Nur der Unit-Suchpfad
+  // (OtherUnitFiles) und die Units-Liste zaehlen. Bis dahin: '' (rot).
+  T := NewTree;
+  try
+    WriteText(T.C + 'AbDefine.inc', INC);
+    WriteText(T.B + 'Zip.dpr', DPR_SRC);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk',
+      '      <UnitOutputDirectory Value="c"/>' + #13#10, '']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk',
+      '      <IncludeFiles Value="$(ProjOutDir);c"/>' + #13#10, '']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    // Die Units-Liste nennt eine Datei dort - die Unit gehoert dazu.
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk', '',
+      '    <Unit>' + #13#10 + '      <Filename Value="c/u.pas"/>' + #13#10
+      + '    </Unit>' + #13#10]));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Units-Liste');
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk;$(ProjPath)/c', '',
+      '']));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Suchpfad mit $(ProjPath)');
+    // Gegenproben: eine Projektgruppe bzw. ein C++Builder-Projekt im
+    // Fenster deutet auf Delphi (Review e/HilfeFixX).
+    WriteText(T.A + 'All.groupproj', '<Project/>');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.A + 'All.groupproj');
+    WriteText(T.C + 'Zip.cbproj', '<Project/>');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.C + 'Zip.cbproj');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'wieder nur FPC');
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+// OldCompilerTraceOf (nur die Bedingungen) auf ASource; ALine die Zeile.
+function TraceIn(const ASource: string; const AFloor: TRdxCompilerFloor;
+  out ALine: Integer): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := OldCompilerTraceOf(Map, AFloor, True, False, ALine);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Traces_NameOldBranchFirst;
+var
+  Src : string;
+  Li  : Integer;
+begin
+  // jvcl install\JVCLInstall\Compile.pas:512 (SCA127/SCA127.2): die Sperre
+  // nannte '{$IF CompilerVersion >= 20.0}' (Zeile 32, eine Weiche fuer NEUE
+  // Compiler), obwohl Zeile 182 '{$IFNDEF COMPILER12_UP}' den alten Zweig
+  // selbst nennt. Bis dahin: 'COMPILERVERSION >= 20.0', Zeile 2 (rot).
+  Src := Join(['unit u;', '{$IF CompilerVersion >= 20.0} // Delphi 2009+',
+    '  {$DEFINE D2009}', '{$IFEND}', 'interface', 'implementation', 'uses',
+    '  {$IFNDEF COMPILER12_UP}', '  JclStrings,', '  {$ENDIF}', '  SysUtils;',
+    'end.']);
+  Assert.AreEqual('COMPILER12_UP', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(8, Li, 'Zeile');
+  // In einer Direktive geht der alte Vergleich ebenso vor ...
+  Src := Join(['unit u;',
+    '{$IF (CompilerVersion >= 18) OR (CompilerVersion < 15)}', '{$IFEND}',
+    'interface', 'end.']);
+  Assert.AreEqual('COMPILERVERSION < 15',
+    TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  // ... 'NOT DEFINED(.._UP)' und ein genanntes altes Delphi (VER130) auch.
+  Src := Join(['unit u;', '{$IFDEF DELPHI6_UP}', '{$ENDIF}',
+    '{$IF NOT DEFINED(COMPILER12_UP)}', '{$IFEND}', 'interface', 'end.']);
+  Assert.AreEqual('COMPILER12_UP', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(4, Li, 'Zeile NOT DEFINED');
+  Src := Join(['unit u;', '{$IFDEF COMPILER12_UP}', '{$ENDIF}',
+    '{$IFDEF VER130}', '{$ENDIF}', 'interface', 'end.']);
+  Assert.AreEqual('VER130', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(4, Li, 'Zeile VER130');
+  // Gegenprobe: ohne alten Zweig bleibt die erste Weiche der Beleg -
+  // gesperrt wird wie bisher (die Schwelle selbst zaehlt mit).
+  Src := Join(['unit u;', '{$IF CompilerVersion >= 20.0}', '{$IFEND}',
+    '{$IFDEF COMPILER6_UP}', '{$ENDIF}', 'interface', 'end.']);
+  Assert.AreEqual('COMPILERVERSION >= 20.0',
+    TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(2, Li, 'Zeile der ersten Weiche');
+end;
+
+procedure TTestRdxMagicGuards.Traces_PrefixedCompilerSymbols;
+var
+  Map : TRdxCodeMap;
+  Src : string;
+begin
+  // Dev-Cpp Source\VCL\SynEdit\SynGen\SynGenUnit.pas:623 (SCA128): die
+  // Datei fragt '{$IFNDEF SYN_COMPILER_6_UP}' (SynEdit.inc, Delphi 6 in
+  // JEDI-Zaehlung) - die globale FormatSettings gibt es erst ab XE. JCL
+  // 'COMPILER6_UP' sperrte schon, das Praefix SYN_ las OldVersionWord
+  // nicht. Bis dahin: '' (rot).
+  Assert.AreEqual('SYN_COMPILER_6_UP', TraceOf('{$IFNDEF SYN_COMPILER_6_UP}',
+    FLOOR_SETTINGS_VAR));
+  Assert.AreEqual('SYN_COMPILER_6_UP', TraceOf('{$IFNDEF SYN_COMPILER_6_UP}',
+    FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('XCOMPILER7_UP', TraceOf('{$IFDEF XCOMPILER7_UP}',
+    FLOOR_SETTINGS_VAR));
+  Assert.AreEqual('COMPILER_6_UP', TraceOf('{$IFNDEF COMPILER_6_UP}',
+    FLOOR_SETTINGS_VAR));
+  // Gegenproben: ohne Zahl, ohne Zusatz "ab", ab der Schwelle.
+  Assert.AreEqual('', TraceOf('{$IFDEF MYCOMPILER_CHECK}', FLOOR_SETTINGS_VAR),
+    'ohne Zahl');
+  Assert.AreEqual('', TraceOf('{$IFDEF SYN_COMPILER_64}', FLOOR_SETTINGS_VAR),
+    'ohne Zusatz');
+  Assert.AreEqual('', TraceOf('{$IFNDEF SYN_COMPILER_16_UP}',
+    FLOOR_SETTINGS_VAR), 'ab der Schwelle (COMPILER16 = XE2)');
+  // Der Zweig '{$IFDEF SYN_COMPILER_6_UP}' gilt nur fuer Delphi ab 6
+  // (NewOnlyAt, SCA144 Math ab Delphi 6) - die neue Spur sperrt dort nicht.
+  Src := Join(['unit u;', '{$IFDEF SYN_COMPILER_6_UP}', 'x', '{$ENDIF}',
+    '{$IFNDEF SYN_COMPILER_6_UP}', 'y', '{$ENDIF}']);
+  Map := NewMap(Src);
+  try
+    Assert.IsTrue(NewOnlyAt(ConditionalDirectives(Map), 3, 1,
+      FLOOR_MATH_TOLERANCE), 'Zweig ab Delphi 6');
+    Assert.IsFalse(NewOnlyAt(ConditionalDirectives(Map), 6, 1,
+      FLOOR_MATH_TOLERANCE), 'Zweig vor Delphi 6');
+  finally
+    Map.Free;
+  end;
 end;
 
 initialization

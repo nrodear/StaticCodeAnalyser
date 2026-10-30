@@ -361,7 +361,9 @@ type
     // Pakete nur ab 10.3 - PackageFloorProof).
     // Seit rwE32 Stufe 4 fragt lfExceptionClasses das Kit-Include wie
     // lfFormatSettingsVar (vorher im Planer); ein Projekt der Unit ab 2009
-    // widerlegt es und die Weichen der Includes.
+    // widerlegt es und die Weichen der Includes - seit rwE33 Stufe 5 ein
+    // reines FPC-Projekt der Unit (FpcOnlyProjectProof) nur diese Weichen,
+    // nicht das Kit-Include (Review e/HilfeFixX).
     // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks; das
     // Kit-Include der Datei selbst sperrt dort weiter), sonst wie
     // FileReason. '' oder der Grund.
@@ -446,6 +448,14 @@ const
   // nennt seine Dateien so ('<Filename Value="Zip.dpr"/>', klein) ...
   LPI_EXTENSION = '.lpi';
   LPI_FILE_TAG = '<filename value="';
+  // ... und der Unit-Suchpfad einer .lpi (LpiCoversDir, rwE33 Stufe 5;
+  // IncludeFiles, UnitOutputDirectory, ObjectPath, Libraries zaehlen nicht).
+  LPI_UNIT_PATH_TAG = '<otherunitfiles value="';
+  // Weitere Spuren von Delphi bzw. C++Builder im Fenster, die nur
+  // FpcOnlyProjectProof liest (Review e/HilfeFixX): Projektgruppen und
+  // C++Builder-Projekte bzw. -Pakete.
+  DELPHI_HINT_EXTENSIONS: array[0..3] of string = ('.groupproj', '.bdsgroup',
+    '.cbproj', '.bpk');
   // ... und Units, die nur FPC bzw. Lazarus mitbringen (klein).
   FPC_ONLY_UNITS: array[0..7] of string = ('fpcadds', 'cmem', 'cthreads',
     'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
@@ -1235,7 +1245,8 @@ type
   //            (FpcOnlyProgram: Hauptdatei einer .lpi, FPC-only-Units);
   //   Programs die .dpr des Verzeichnisses (SettingsProgramReason).
   // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein),
-  // LazProjects die .lpi (FpcOnlyProgram).
+  // LazProjects die .lpi (FpcOnlyProgram), DelphiHint die erste Datei aus
+  // DELPHI_HINT_EXTENSIONS (FpcOnlyProjectProof).
   TRdxProjectFiles = record
     Lazarus    : string;
     Legacy     : string;
@@ -1248,6 +1259,7 @@ type
     Opts       : TArray<string>;
     DprojBases : TArray<string>;
     LazProjects: TArray<string>;
+    DelphiHint : string;
   end;
 
 // Die ersten DPROJ_HEAD_BYTES der Datei APath als ANSI-Text; False, wenn
@@ -1320,6 +1332,8 @@ begin
     AddText(AFiles.DprojBases, LowerCase(ChangeFileExt(AName, '')));
   if Ext = LPI_EXTENSION then
     AddText(AFiles.LazProjects, AName);
+  if InList(Ext, DELPHI_HINT_EXTENSIONS) and (AFiles.DelphiHint = '') then
+    AFiles.DelphiHint := AName;
   if InList(Ext, LAZARUS_EXTENSIONS) then
   begin
     if AFiles.Lazarus = '' then
@@ -2322,6 +2336,154 @@ begin
   end;
 end;
 
+// Die Werte des Attributs hinter ATag in ALowText ('<otherunitfiles
+// value="a;b"' -> 'a;b'), je bis zum '"'.
+function TagValues(const ALowText, ATag: string): TArray<string>;
+var
+  Rest : string;
+  P, Q : Integer;
+begin
+  Result := nil;
+  Rest := ALowText;
+  P := Pos(ATag, Rest);
+  while P > 0 do
+  begin
+    Rest := Copy(Rest, P + Length(ATag), MaxInt);
+    Q := Pos('"', Rest);
+    if Q = 0 then Break;
+    AddText(Result, Copy(Rest, 1, Q - 1));
+    Rest := Copy(Rest, Q + 1, MaxInt);
+    P := Pos(ATag, Rest);
+  end;
+end;
+
+// Ein Pfad aus einer .lpi (klein, '/') ohne fuehrendes './' bzw.
+// '$(projpath)/' und ohne '/' am Ende.
+function LpiPath(const AEntry: string): string;
+const
+  PROJ_PATH = '$(projpath)/';
+begin
+  Result := Trim(AEntry);
+  if Copy(Result, 1, Length(PROJ_PATH)) = PROJ_PATH then
+    Delete(Result, 1, Length(PROJ_PATH));
+  if Copy(Result, 1, 2) = './' then
+    Delete(Result, 1, 2);
+  while (Result <> '') and (Result[Length(Result)] = '/') do
+    Delete(Result, Length(Result), 1);
+end;
+
+// Sucht die .lpi ALpi in ADir die Units im Verzeichnis AUnitDir? Ja, wenn es
+// ADir selbst ist (dort sucht Lazarus immer), wenn ein Eintrag des
+// Unit-Suchpfads dorthin fuehrt ('<OtherUnitFiles Value="fparchive;../sdk"/>')
+// oder die Units-Liste eine Datei dort nennt ('<Filename
+// Value="fparchive/abzipprc.pas"/>'). Andere Pfade der .lpi - IncludeFiles,
+// UnitOutputDirectory, ObjectPath, Libraries - zaehlen nicht (Review
+// e/HilfeFixX: 'UnitOutputDirectory="lib"' macht eine Unit in lib\ nicht
+// zum Teil des Projekts).
+function LpiCoversDir(const ADir, ALpi, AUnitDir: string): Boolean;
+var
+  Base, UnitBase, Rel, Text, Value, Entry : string;
+  P                                       : Integer;
+begin
+  Result := False;
+  Base := IncludeTrailingPathDelimiter(ADir);
+  UnitBase := IncludeTrailingPathDelimiter(AUnitDir);
+  if SameText(UnitBase, Base) then
+    Exit(True);
+  if not SameText(Copy(UnitBase, 1, Length(Base)), Base) then Exit;
+  Rel := LowerCase(ExcludeTrailingPathDelimiter(Copy(UnitBase,
+    Length(Base) + 1, MaxInt)));
+  Rel := StringReplace(Rel, '\', '/', [rfReplaceAll]);
+  if (Rel = '') or not HeadText(Base + ALpi, Text) then Exit;
+  Text := StringReplace(LowerCase(Text), '\', '/', [rfReplaceAll]);
+  for Value in TagValues(Text, LPI_UNIT_PATH_TAG) do
+  begin
+    Entry := Value + ';';
+    P := Pos(';', Entry);
+    while P > 0 do
+    begin
+      if LpiPath(Copy(Entry, 1, P - 1)) = Rel then
+        Exit(True);
+      Entry := Copy(Entry, P + 1, MaxInt);
+      P := Pos(';', Entry);
+    end;
+  end;
+  for Value in TagValues(Text, LPI_FILE_TAG) do
+  begin
+    Entry := LpiPath(Value);
+    P := LastDelimiter('/', Entry);
+    if (P > 0) and (LpiPath(Copy(Entry, 1, P - 1)) = Rel) then
+      Exit(True);
+  end;
+end;
+
+// Ausnahmeklassen (lfExceptionClasses, rwE33 Stufe 5): baut nur FPC die
+// Unit? Im Fenster von ProjectWalkReason (Verzeichnis der Unit und bis
+// PROJECT_LEVELS darueber) sucht eine .lpi die Unit (LpiCoversDir), und
+// nichts deutet auf Delphi: keine .dproj, keine alte Projekt- oder
+// Optionsdatei (.dof/.bdsproj/.bpr/.bpg/.cfg), keine Projektgruppe oder
+// C++Builder-Datei (.groupproj/.bdsgroup/.cbproj/.bpk, Review
+// e/HilfeFixX), keine .dpk, kein Paketordner (PACKAGE_DIRS, wie
+// PackagesReason) und jede .dpr ist ein FPC-Programm
+// (FpcOnlyProgram). Dann belegt die Delphi-Weiche eines Includes keinen
+// Compiler, der die Unit baut (Nico-Entscheid: ein FPC-only-Projekt ist kein
+// Beleg fuer ein altes Delphi - und ein altes Delphi baut es nicht); FPC
+// 3.2.2 kennt die drei Klassen (rtl\objpas\sysutils\sysutilh.inc).
+// doublecmd plugins\wcx\zip\src\fparchive\abzipprc.pas:212 (SCA127):
+// AbDefine.inc fragt im Zweig '{$IFNDEF FPC}' nach 'CompilerVersion < 15'
+// (Abbrevia-Erbe), gebaut wird die Unit nur von Zip.lpi (OtherUnitFiles
+// 'fparchive', Hauptdatei Zip.dpr mit FPCAdds). Netzpfad: nein. Mit Cache
+// (GDiskCache, Art 'Z').
+// Grenze (Review e/HilfeFixX): ein Delphi-Projekt AUSSERHALB des Fensters
+// sieht die Probe nicht (cnwizards AIAgentGUITest.dpr mit .dof bindet
+// '..\..\..\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas' ein) - darum
+// widerlegt sie nur die Weichen gewoehnlicher Includes, kein Kit-Include
+// (ProjectReason).
+function FpcOnlyProjectProof(const AFileName: string): Boolean;
+var
+  Dir, Up, UnitDir, Prg, Lpi, Key, Cached : string;
+  Level, i                                : Integer;
+  Files                                   : TRdxProjectFiles;
+  Covered, Delphi                         : Boolean;
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('Z', lfExceptionClasses, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Covered := False;
+  Delphi := False;
+  UnitDir := ExtractFileDir(AFileName);
+  Dir := UnitDir;
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Delphi then Break;
+    Files := ProjectFilesIn(Dir, FloorOf(lfExceptionClasses).ProjectVersion);
+    // Bases zaehlt jede .dpr und .dpk, Programs nur die .dpr.
+    Delphi := (Files.Dproj <> '') or (Files.Legacy <> '')
+      or (Files.DelphiHint <> '') or (Length(Files.Opts) > 0)
+      or (Length(Files.Bases) > Length(Files.Programs));
+    for i := 0 to High(PACKAGE_DIRS) do
+      Delphi := Delphi
+        or DirectoryExists(IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i]);
+    for Prg in Files.Programs do
+      Delphi := Delphi or not FpcOnlyProgram(Dir, Prg, Files.LazProjects);
+    for Lpi in Files.LazProjects do
+      Covered := Covered or LpiCoversDir(Dir, Lpi, UnitDir);
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  Result := Covered and not Delphi;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'Z';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
 // SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc, jvcl.inc ..
 // - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft fuer den
 // Hauptweg seit rwE31 Stufe 3, fuer den Alt-Weg (lfFormatInvariant) seit
@@ -2599,6 +2761,17 @@ begin
   // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
   // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
   // (mormot.defines.inc liegt nicht neben api.impl.pas).
+  // Fuer die Ausnahmeklassen widerlegt seit rwE33 Stufe 5 auch ein reines
+  // FPC-Projekt der Unit (FpcOnlyProjectProof) die Delphi-Weichen der
+  // Includes - nur hier, nicht das Kit-Include oben (Review e/HilfeFixX):
+  // cnwizards Test\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas bindet
+  // CnPack.inc ein, neben ihr nur AIAgentTest.lpi - gebaut wird sie aber
+  // auch von Test\Delphi\Program\AIAgent\AIAgentGUITest.dpr mit .dof
+  // (Delphi bis 7), ausserhalb des Fensters. Ein Kit (CnPack, JVCL, JCL,
+  // Indy, mORMot) baut erklaertermassen auch mit altem Delphi.
+  if (Result = '') and AIncludes and (AFeature = lfExceptionClasses)
+     and not Modern then
+    Modern := FpcOnlyProjectProof(AFileName);
   if (Result = '')
      and ((AIncludes
            and not ((AFeature in [lfExceptionClasses, lfFormatInvariant])

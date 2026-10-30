@@ -560,6 +560,17 @@ begin
     '{$IFEND}'], ['  raise Exception.Create(''x'');']);
   AssertRefused(Src, LineOf(Src, 'raise '),
     _(R_RAWEXC_OLD, ['COMPILERVERSION >= 20', 3, RAWEXC_ARGUMENT]));
+  // rwE33 Stufe 5 (jvcl install\JVCLInstall\Compile.pas:512): steht danach
+  // eine Weiche, die den alten Zweig selbst nennt ('{$IFNDEF
+  // COMPILER12_UP}'), nennt der Grund sie - bis dahin 'COMPILERVERSION >=
+  // 20.0, Zeile 3'.
+  Src := WrapWith(['{$IF CompilerVersion >= 20.0}', '{$DEFINE NEWRTL}',
+    '{$IFEND}', '{$IFNDEF COMPILER12_UP}', 'type PtrInt = Integer;',
+    '{$ENDIF}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILER12_UP', 6, RAWEXC_ARGUMENT]));
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILER12_UP', 6, RAWEXC_INVALID_OP]), True);
 end;
 
 procedure TTestRdxRawExceptionFix.NewCompilerSwitch_Helps;

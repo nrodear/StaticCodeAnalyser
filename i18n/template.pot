@@ -645,7 +645,7 @@ msgstr ""
 msgid "%s is a Variant - a literal branch would give it another VarType than the result of IfThen"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1212
+#: reDelphix/source/uRdxMagicFixes.pas:1222
 msgid "%s is a binary or octal literal - the code action only handles decimal and hexadecimal numbers"
 msgstr ""
 
@@ -748,7 +748,7 @@ msgstr ""
 msgid "%s is in a string literal (line %d) - call by name (GetProcAddress, MethodAddress, RTTI, script)?"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:886
+#: reDelphix/source/uRdxMagicFixes.pas:896
 msgid "%s is in line %d, a continuation line of the if condition - the constant would belong before the if line (not supported)"
 msgstr ""
 
@@ -1882,11 +1882,11 @@ msgstr ""
 msgid "Delete unused routine %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1469
+#: reDelphix/source/uRdxMagicFixes.pas:1483
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1469
+#: reDelphix/source/uRdxMagicFixes.pas:1483
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr ""
 
@@ -2543,19 +2543,19 @@ msgstr ""
 msgid "Large integer literal without digit grouping"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2030
+#: reDelphix/source/uRdxMagicFixes.pas:2044
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2030
+#: reDelphix/source/uRdxMagicFixes.pas:2044
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2030
+#: reDelphix/source/uRdxMagicFixes.pas:2044
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2030
+#: reDelphix/source/uRdxMagicFixes.pas:2044
 msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -2563,19 +2563,19 @@ msgstr ""
 msgid "Lazarus/FPC file (%s) - FPC 3.2 does not know digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2087
+#: reDelphix/source/uRdxMagicFixes.pas:2101
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2087
+#: reDelphix/source/uRdxMagicFixes.pas:2101
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2087
+#: reDelphix/source/uRdxMagicFixes.pas:2101
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2087
+#: reDelphix/source/uRdxMagicFixes.pas:2101
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -4388,12 +4388,12 @@ msgstr ""
 msgid "an inherited call is not of the form \"inherited;\" or \"inherited Name(...);\" on one line - %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1079
-#: reDelphix/source/uRdxMagicFixes.pas:1124
+#: reDelphix/source/uRdxMagicFixes.pas:1089
+#: reDelphix/source/uRdxMagicFixes.pas:1134
 msgid "an inline constant"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1052
+#: reDelphix/source/uRdxMagicFixes.pas:1062
 msgid "an inline constant exists only from Delphi 10.3 on - the file shows traces of older compilers (%s, line %d); %s"
 msgstr ""
 
@@ -4470,7 +4470,7 @@ msgstr ""
 msgid "assembler body - it can reach Self through a register"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1076
+#: reDelphix/source/uRdxMagicFixes.pas:1086
 msgid "at the literal in column %d the code action reads \"%s\" instead of %s"
 msgstr ""
 
@@ -5264,7 +5264,7 @@ msgstr ""
 msgid "include %s %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2715
+#: reDelphix/source/uRdxMagicFixes.pas:2888
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
 msgstr ""
 
@@ -5407,7 +5407,7 @@ msgstr ""
 msgid "line %d carries more than \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:862
+#: reDelphix/source/uRdxMagicFixes.pas:872
 msgid "line %d carries no if"
 msgstr ""
 
@@ -5575,8 +5575,8 @@ msgid "network path %s - the quick fix reads no include files there (the menu is
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:508
-#: reDelphix/source/uRdxMagicFixes.pas:2090
-#: reDelphix/source/uRdxMagicFixes.pas:2215
+#: reDelphix/source/uRdxMagicFixes.pas:2104
+#: reDelphix/source/uRdxMagicFixes.pas:2229
 msgid "network path %s - the quick fix reads no project or include files there (the menu is built in the main thread); %s"
 msgstr ""
 
@@ -5977,7 +5977,7 @@ msgstr ""
 msgid "no identifier with a non-ASCII character in the code of the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:879
+#: reDelphix/source/uRdxMagicFixes.pas:889
 msgid "no if condition on line %d compares with %s"
 msgstr ""
 
@@ -6352,33 +6352,33 @@ msgstr ""
 msgid "of the routine %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1465
-#: reDelphix/source/uRdxMagicFixes.pas:1467
+#: reDelphix/source/uRdxMagicFixes.pas:1479
+#: reDelphix/source/uRdxMagicFixes.pas:1481
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
 msgstr ""
 
@@ -6596,47 +6596,47 @@ msgstr ""
 msgid "own unit %s in the project"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), and TFormatSettings.Invariant is only checked from there on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1836
+#: reDelphix/source/uRdxMagicFixes.pas:1850
 msgid "package %s in the directory %s contains the unit and is meant for a Delphi before XE (%s), which has no global variable FormatSettings; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1815
+#: reDelphix/source/uRdxMagicFixes.pas:1829
 msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1815
+#: reDelphix/source/uRdxMagicFixes.pas:1829
 msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1815
+#: reDelphix/source/uRdxMagicFixes.pas:1829
 msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1815
+#: reDelphix/source/uRdxMagicFixes.pas:1829
 msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1815
+#: reDelphix/source/uRdxMagicFixes.pas:1829
 msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before XE, which has no global variable FormatSettings; %s"
 msgstr ""
 
@@ -6679,51 +6679,51 @@ msgstr ""
 msgid "procedural block (%s ...) - parameters of a statement do not apply inside it; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - TFormatSettings.Invariant is only checked from there on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline variables there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 11 = %s) - there are no digit separators there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented do not exist there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1461
+#: reDelphix/source/uRdxMagicFixes.pas:1475
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi XE = %s) - there is no global variable FormatSettings there; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline constants; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 11, which has no digit separators; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1459
+#: reDelphix/source/uRdxMagicFixes.pas:1473
 msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
 msgstr ""
 
@@ -7672,7 +7672,7 @@ msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:2041
 #: reDelphix/source/uRdxFormatSettingsFix.pas:2061
-#: reDelphix/source/uRdxMagicFixes.pas:2348
+#: reDelphix/source/uRdxMagicFixes.pas:2510
 msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
 msgstr ""
 
@@ -7685,12 +7685,12 @@ msgstr ""
 msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2347
+#: reDelphix/source/uRdxMagicFixes.pas:2509
 msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
 msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:2019
-#: reDelphix/source/uRdxMagicFixes.pas:2350
+#: reDelphix/source/uRdxMagicFixes.pas:2512
 msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
 msgstr ""
 
@@ -7761,7 +7761,7 @@ msgstr ""
 msgid "the file does not start with unit (include file or script?) - the help does not find its end"
 msgstr ""
 
-#: reDelphix/source/uRdxCompilerTraces.pas:690
+#: reDelphix/source/uRdxCompilerTraces.pas:825
 msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
 msgstr ""
 
@@ -7931,15 +7931,15 @@ msgstr ""
 msgid "the host name is not a fixed name (placeholder or special characters)"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:882
+#: reDelphix/source/uRdxMagicFixes.pas:892
 msgid "the if condition on line %d compares %d times with %s - ambiguous; the quick fix replaces exactly one literal"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:875
+#: reDelphix/source/uRdxMagicFixes.pas:885
 msgid "the if condition on line %d compares with %s - with digit separators the detector reads only the first block %s (false alarm); no literal to replace"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:868
+#: reDelphix/source/uRdxMagicFixes.pas:878
 msgid "the if condition on line %d compares with %s and with %s - ambiguous (with digit separators the detector reads only the first block); the quick fix replaces exactly one literal"
 msgstr ""
 
@@ -7981,23 +7981,23 @@ msgstr ""
 msgid "the implementation of %s is not in this file"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2365
-#: reDelphix/source/uRdxMagicFixes.pas:2686
+#: reDelphix/source/uRdxMagicFixes.pas:2527
+#: reDelphix/source/uRdxMagicFixes.pas:2859
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no TFormatSettings.Invariant"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2365
-#: reDelphix/source/uRdxMagicFixes.pas:2686
+#: reDelphix/source/uRdxMagicFixes.pas:2527
+#: reDelphix/source/uRdxMagicFixes.pas:2859
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit separators"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2365
-#: reDelphix/source/uRdxMagicFixes.pas:2686
+#: reDelphix/source/uRdxMagicFixes.pas:2527
+#: reDelphix/source/uRdxMagicFixes.pas:2859
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline constants"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2365
-#: reDelphix/source/uRdxMagicFixes.pas:2686
+#: reDelphix/source/uRdxMagicFixes.pas:2527
+#: reDelphix/source/uRdxMagicFixes.pas:2859
 msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline variables"
 msgstr ""
 
@@ -8005,27 +8005,27 @@ msgstr ""
 msgid "the include %s names %s - as a declaration (E2065 after the deletion), call or property accessor (E2003), and the quick fix does not see it"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline constant exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - an inline variable exists only from Delphi 10.3 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - digit separators exist only from Delphi 11 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:2689
+#: reDelphix/source/uRdxMagicFixes.pas:2862
 msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"
 msgstr ""
 
@@ -8182,7 +8182,7 @@ msgstr ""
 msgid "the line is in the initialization/finalization section - whether an inline declaration is valid there has not been measured"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1040
+#: reDelphix/source/uRdxMagicFixes.pas:1050
 msgid "the line is in the main block of the program or library (begin from line %d) - whether an inline declaration is valid there has not been measured; %s"
 msgstr ""
 
@@ -8456,7 +8456,7 @@ msgstr ""
 msgid "the message lists only part of the placeholders - the right one could be missing"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1106
+#: reDelphix/source/uRdxMagicFixes.pas:1116
 msgid "the message names %s - the detector does not report signed numbers, the literal has no sign; not supported"
 msgstr ""
 
@@ -8496,7 +8496,7 @@ msgstr ""
 msgid "the message names no nesting kind"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1104
+#: reDelphix/source/uRdxMagicFixes.pas:1114
 msgid "the message names no number (\"Magic number \"N\" ...\")"
 msgstr ""
 
@@ -8731,7 +8731,7 @@ msgstr ""
 msgid "the product is now computed in 64 bits - a result above MaxInt is kept instead of silently truncated; with overflow checking (Q+) the exception EIntOverflow goes away"
 msgstr ""
 
-#: reDelphix/source/uRdxMagicFixes.pas:1955
+#: reDelphix/source/uRdxMagicFixes.pas:1969
 msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"
 msgstr ""
 
@@ -9146,7 +9146,7 @@ msgstr ""
 msgid "unhandled values raise EInvalidOpException"
 msgstr ""
 
-#: reDelphix/source/uRdxCompilerTraces.pas:701
+#: reDelphix/source/uRdxCompilerTraces.pas:836
 msgid "unit without an implementation part (script?) - only the compiler knows %s"
 msgstr ""
 
