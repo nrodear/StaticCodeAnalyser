@@ -100,8 +100,12 @@ type
     // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
     [Test] procedure Sca168_RaiseMenu_CastSelector;
     // Fix-Runde 5 nach rwE33 (doublecmd fFindDlg.pas:1913): der Anfangswert
-    // der Deklaration ist eine Vorbelegung (E5).
+    // der Deklaration ist eine Vorbelegung (E5) ...
     [Test] procedure Sca168_RaiseLock_PresetDeclInit;
+    // ... und eine Zuweisung vor einem umschliessenden if (fmultirename.pas
+    // :1061/1067) - die Gegenproben im anderen Zweig, nach dem case, in
+    // einer Schleife nach dem case, in einer lokalen Routine.
+    [Test] procedure Sca168_RaiseLock_PresetEnclosingIf;
     // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
     // WM_APP): auch Messages hat im Detektor keine Liste.
     [Test] procedure Sca007_ForeignIdent_Messages;
@@ -1420,6 +1424,57 @@ begin
     'end.']);
   Assert.AreEqual('', CaseLock(Src, 10), 'voll abgedeckt');
   Assert.AreEqual('', CaseMenu(Src, 10), 'Gluehbirne');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetEnclosingIf;
+var
+  R, Src : string;
+begin
+  // doublecmd fmultirename.pas:1061/1067 (minimiert, ein Wert ohne Arm):
+  // 'Result := False;' vor dem if, das case im else-Zweig mit begin. Die
+  // Suche geht schon seit rwE32 ueber umschliessende Anweisungsteile (gruen
+  // ohne Fix; der Fall dort ist voll abgedeckt, siehe unten).
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  Result := False;',
+    '  if C then', '    Result := True', '  else', '  begin',
+    '    case E of', '      mA: Result := True;', '      mB: Result := True;',
+    '    end;', '  end;']);
+  R := CaseLock(Src, 13);
+  Assert.IsTrue(Pos('Result', R) > 0, R);
+  Assert.IsTrue(Pos('8', R) > 0, 'Zeile: ' + R);
+  // Jeder Wert hat einen Arm (fmultirename.pas:1067 selbst): das raise ist
+  // unerreichbar, Gluehbirne trotz Vorbelegung (Entwurf rwE32).
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  Result := False;',
+    '  if C then', '    Result := True', '  else', '  begin',
+    '    case E of', '      mA: Result := True;', '      mB: Result := True;',
+    '      mC: Result := False;', '    end;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 13), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 13), 'Gluehbirne');
+  // Gegenprobe: die Zuweisung steht im else-Zweig eines if davor, ohne
+  // und mit begin - sie erreicht das case nicht sicher.
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  if C then', '    D := 0',
+    '  else', '    Result := False;', '  case E of', '    mA: Result := True;',
+    '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 12), 'else-Zweig');
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  if C then', '    D := 0',
+    '  else', '  begin', '    Result := False;', '  end;', '  case E of',
+    '    mA: Result := True;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 14), 'else-Block');
+  // Gegenprobe: die Zuweisung steht erst nach dem case - auch in einer
+  // Schleife, deren Rumpf das case traegt.
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  case E of',
+    '    mA: Result := True;', '  end;', '  Result := False;']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'nach dem case');
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  for I := 0 to 3 do',
+    '  begin', '    case E of', '      mA: Result := True;', '    end;',
+    '    Result := False;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'Schleife nach dem case');
+  // Gegenprobe: die Zuweisung steht in einer lokalen Routine davor.
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (mA, mB, mC);',
+    'implementation', 'function F: Boolean;', '  procedure Inner;',
+    '  begin', '    X := 0;', '  end;', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    mA: X := 1;', '  end;', '  Result := X = 1;', 'end;',
+    'end.']);
+  Assert.AreEqual('', CaseLock(Src, 14), 'lokale Routine');
 end;
 
 // ---- SCA007, Fix-Runde 4 (rwE32) ----
