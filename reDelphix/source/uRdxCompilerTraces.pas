@@ -498,12 +498,41 @@ begin
     Result := -1;
 end;
 
+// Die Zahl n eines Versionssymbols der JEDI-Zaehlung mit Bibliotheks-
+// Praefix bzw. '_' vor der Zahl (rwE33 Stufe 5): '<X>COMPILERn_UP',
+// '<X>_COMPILER_n_UP' (SynEdit.inc 'SYN_COMPILER_6_UP'), auch
+// 'COMPILER_6_UP' - nur mit einem Zusatz "ab" (UP_SUFFIXES ohne den
+// leeren); -1 sonst. Ohne Zahl ('MYCOMPILER_CHECK') oder ohne Zusatz
+// ('X_COMPILER_64' - eher 64 Bit als Delphi 64) nicht.
+function PrefixedCompilerNumber(const AUpper: string): Integer;
+const
+  KEY = 'COMPILER';
+var
+  P, i, j : Integer;
+  Rest    : string;
+begin
+  Result := -1;
+  P := Pos(KEY, AUpper);
+  if P = 0 then Exit;
+  i := P + Length(KEY);
+  if (i <= Length(AUpper)) and (AUpper[i] = '_') then
+    Inc(i);
+  j := i;
+  while (j <= Length(AUpper)) and CharInSet(AUpper[j], ['0'..'9']) do
+    Inc(j);
+  if j = i then Exit;
+  Rest := StringReplace(Copy(AUpper, j, MaxInt), '_', '', [rfReplaceAll]);
+  if (Rest <> '') and InList(Rest, UP_SUFFIXES) then
+    Result := StrToIntDef(Copy(AUpper, i, j - i), -1);
+end;
+
 // Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor). VERn
 // unter VER80: ein FPC-Symbol (FpcVerVersion) zaehlt mit FpcFull, jedes
 // andere wie VERnnn (Review e/HilfeFixP: 'VER5X', 'VER9X').
 // VERnnn, DELPHIn, DELPHI2005.., COMPILERn, BCBn, RTLnnn, mit XeNames
-// dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole - wer danach
-// fragt, baut auch mit dem aelteren Compiler.
+// dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole, seit rwE33 Stufe
+// 5 COMPILERn mit Praefix (PrefixedCompilerNumber) - wer danach fragt,
+// baut auch mit dem aelteren Compiler.
 function OldVersionWord(const AUpper: string;
   const AFloor: TRdxCompilerFloor): Boolean;
 var
@@ -526,6 +555,8 @@ begin
       Result := Result or (N < AFloor.Ver);
   end;
   N := NumberAfter(AUpper, 'COMPILER');
+  Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
+  N := PrefixedCompilerNumber(AUpper);
   Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
   N := NumberAfter(AUpper, 'BCB');
   Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
@@ -856,6 +887,11 @@ begin
   N := NumberAfter(AUpper, 'COMPILER');
   if N >= 0 then
     Exit(UpSuffix(AUpper, 'COMPILER') and (N >= AFloor.Compiler));
+  // Mit Praefix ('SYN_COMPILER_6_UP', rwE33 Stufe 5) - wie OldVersionWord,
+  // sonst sperrte die Spur auch Zeilen in ihrem Zweig fuer neue Compiler.
+  N := PrefixedCompilerNumber(AUpper);
+  if N >= 0 then
+    Exit(N >= AFloor.Compiler);
   N := NumberAfter(AUpper, 'BCB');
   if N >= 0 then
     Exit(UpSuffix(AUpper, 'BCB') and (N >= AFloor.Compiler));

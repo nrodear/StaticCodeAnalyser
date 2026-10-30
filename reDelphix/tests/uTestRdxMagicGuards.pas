@@ -58,6 +58,8 @@ type
     [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
     [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
     [Test] procedure Traces_FpcVerSymbols;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Traces_PrefixedCompilerSymbols;
   end;
 
 implementation
@@ -1312,6 +1314,48 @@ begin
   Assert.AreEqual('VER5X', TraceOf('{$IFDEF VER5X}', FLOOR_EXCEPTION_CLASSES));
   Assert.AreEqual('VER9X', TraceOf('{$IFDEF VER9X}', FLOOR_MATH_TOLERANCE));
   Assert.AreEqual('VER70', TraceOf('{$IFDEF VER70}', FLOOR_EXCEPTION_CLASSES));
+end;
+
+{ ---- Realworld-Test rwE33 Stufe 5 ---- }
+
+procedure TTestRdxMagicGuards.Traces_PrefixedCompilerSymbols;
+var
+  Map : TRdxCodeMap;
+  Src : string;
+begin
+  // Dev-Cpp Source\VCL\SynEdit\SynGen\SynGenUnit.pas:623 (SCA128): die
+  // Datei fragt '{$IFNDEF SYN_COMPILER_6_UP}' (SynEdit.inc, Delphi 6 in
+  // JEDI-Zaehlung) - die globale FormatSettings gibt es erst ab XE. JCL
+  // 'COMPILER6_UP' sperrte schon, das Praefix SYN_ las OldVersionWord
+  // nicht. Bis dahin: '' (rot).
+  Assert.AreEqual('SYN_COMPILER_6_UP', TraceOf('{$IFNDEF SYN_COMPILER_6_UP}',
+    FLOOR_SETTINGS_VAR));
+  Assert.AreEqual('SYN_COMPILER_6_UP', TraceOf('{$IFNDEF SYN_COMPILER_6_UP}',
+    FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('XCOMPILER7_UP', TraceOf('{$IFDEF XCOMPILER7_UP}',
+    FLOOR_SETTINGS_VAR));
+  Assert.AreEqual('COMPILER_6_UP', TraceOf('{$IFNDEF COMPILER_6_UP}',
+    FLOOR_SETTINGS_VAR));
+  // Gegenproben: ohne Zahl, ohne Zusatz "ab", ab der Schwelle.
+  Assert.AreEqual('', TraceOf('{$IFDEF MYCOMPILER_CHECK}', FLOOR_SETTINGS_VAR),
+    'ohne Zahl');
+  Assert.AreEqual('', TraceOf('{$IFDEF SYN_COMPILER_64}', FLOOR_SETTINGS_VAR),
+    'ohne Zusatz');
+  Assert.AreEqual('', TraceOf('{$IFNDEF SYN_COMPILER_16_UP}',
+    FLOOR_SETTINGS_VAR), 'ab der Schwelle (COMPILER16 = XE2)');
+  // Der Zweig '{$IFDEF SYN_COMPILER_6_UP}' gilt nur fuer Delphi ab 6
+  // (NewOnlyAt, SCA144 Math ab Delphi 6) - die neue Spur sperrt dort nicht.
+  Src := Join(['unit u;', '{$IFDEF SYN_COMPILER_6_UP}', 'x', '{$ENDIF}',
+    '{$IFNDEF SYN_COMPILER_6_UP}', 'y', '{$ENDIF}']);
+  Map := NewMap(Src);
+  try
+    Assert.IsTrue(NewOnlyAt(ConditionalDirectives(Map), 3, 1,
+      FLOOR_MATH_TOLERANCE), 'Zweig ab Delphi 6');
+    Assert.IsFalse(NewOnlyAt(ConditionalDirectives(Map), 6, 1,
+      FLOOR_MATH_TOLERANCE), 'Zweig vor Delphi 6');
+  finally
+    Map.Free;
+  end;
 end;
 
 initialization
