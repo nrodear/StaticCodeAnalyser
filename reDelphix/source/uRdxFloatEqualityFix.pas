@@ -65,6 +65,22 @@ unit uRdxFloatEqualityFix;
 //     <> 1' in einer Funktion, die eine Property mit 'stored' nennt
 //     (FMX.SVGIconImage.pas:244 StoreOpacity: ein Wert nahe am Vorgabewert
 //     wuerde nicht gespeichert und kaeme als genau 1 zurueck).
+//   - seit rwE32 zwei weitere: eine DEFAULT-WERT-AUSLASSUNG - 'if V <> 0
+//     then <Aufruf>(.. V ..)' mit genau einer Anweisung im then-Zweig,
+//     deren Name ein Schreib-Verb traegt (Write, Store, Save, Put, Serial,
+//     Add, Append, Set am Anfang eines Namensteils; SinkCallLine):
+//     CnMsgFiler.pas:505 'if Value <> 0 then InternalWriteText(..,
+//     CnXMLRealToStr(Value))' schriebe |v| < 1E-12 nicht mehr, beim Laden
+//     kaeme 0 zurueck - wie die stored-Funktion; ebenso CEF4Delphi
+//     'TempParams.SetDouble(''tiltY'', tiltY)', doublecmd dcxmlconfig
+//     'AddValue(.., AValue)' gegen DefaultValue. Ein begin-Block oder ein
+//     Aufruf ohne solches Verb bleibt frei ('RotatePoint(sp, pt2,
+//     -rectAngle)', 'CheckEquals(..)'); ein REDUNDANTER SONDERFALL - ein
+//     vorderes Glied derselben else-if-Kette prueft genau denselben
+//     Vergleich mit '=' schon exakt (RepeatedInChainLine): MakePNG
+//     pngimage.pas:4081 'if Exponent = 0.0 then Result := 1.0 else if
+//     (Base = 0) or (Exponent = 0) then Result := 0' - der zweite Teil ist
+//     tot, IsZero machte ihn lebendig (Power(2, 1E-20) gaebe 0 statt ~1).
 // Der TYPBEWEIS gehoert in den Adapter (Hausregel uRdxFixTable): er fragt
 // DeclaredTypeOf je Bezeichner und reicht die Typen an TypeReason; dazu
 // InWithBlock und die Herabstufung des Detektors (fcLow) an ContextReason.
@@ -126,6 +142,13 @@ const
     + 'tolerance small values would silently become that text';
   R_FLOAT_STORED = '"%s" decides whether a property is stored (stored %s) '
     + '- with a tolerance values close to the default would not be saved';
+  // rwE32: Default-Wert-Auslassung und redundanter Sonderfall (s. Kopf).
+  R_FLOAT_SINK = '"%s" leaves out the default value - only another value is '
+    + 'passed to %s (line %d), with a tolerance values close to it would '
+    + 'silently not be written';
+  R_FLOAT_REPEATED = '"%s" is already decided by the exact comparison in '
+    + 'line %d of the same if-else chain - a tolerance would change the '
+    + 'result here for values close to it';
 
   // Die Funktionen der Ersetzung (Name im Menuetext).
   CALL_SAME_VALUE = 'SameValue';
@@ -252,6 +275,21 @@ const
     'string', 'ansistring', 'widestring', 'unicodestring', 'shortstring',
     'pointer', 'variant', 'olevariant', 'tdatetime', 'tdate', 'ttime',
     'comp');
+  // Default-Wert-Auslassung (rwE32): Verben eines Aufrufs, der einen Wert
+  // wegschreibt - am Anfang eines Namensteils (InternalWriteText,
+  // SetDouble, AddValue, writefloat; nicht Output, Offset).
+  SINK_VERBS: array[0..7] of string = ('write', 'store', 'save', 'put',
+    'serial', 'add', 'append', 'set');
+  // Hinter dem Aufruf endet die Anweisung.
+  SINK_END: array[0..2] of string = (';', 'else', 'end');
+  // Rueckwaerts bis zum if der Bedingung (ConditionIf): diese Token
+  // beenden die Suche ohne Treffer - die Stelle steht nicht in einer
+  // if-Bedingung.
+  COND_STOP: array[0..16] of string = (';', 'then', 'do', 'begin', 'else',
+    'end', ':=', 'of', 'repeat', 'until', 'while', 'case', 'try', 'except',
+    'finally', 'var', 'const');
+  // So viele Glieder einer else-if-Kette liest RepeatedInChainLine.
+  MAX_CHAIN = 64;
 
 // Eine Null wie der Detektor sie liest: '0', '00', '0.0', '0.00'.
 function IsZeroText(const S: string): Boolean;
@@ -774,6 +812,181 @@ begin
   end;
 end;
 
+// Beginnt ein Namensteil von AName mit einem Verb aus SINK_VERBS? Ein
+// Namensteil beginnt am Anfang, hinter '_' und an einem Grossbuchstaben
+// hinter einem Kleinbuchstaben oder einer Ziffer.
+function IsSinkName(const AName: string): Boolean;
+var
+  i, k : Integer;
+  Low  : string;
+begin
+  Result := False;
+  Low := LowerCase(AName);
+  for i := 1 to Length(AName) do
+    if (i = 1) or (AName[i - 1] = '_')
+       or (CharInSet(AName[i], ['A'..'Z'])
+           and CharInSet(AName[i - 1], ['a'..'z', '0'..'9'])) then
+      for k := 0 to High(SINK_VERBS) do
+        if Copy(Low, i, Length(SINK_VERBS[k])) = SINK_VERBS[k] then
+          Exit(True);
+end;
+
+// Default-Wert-Auslassung (rwE32, s. Kopf): der then-Zweig hinter AThen
+// ist EINE Anweisung, ein Aufruf 'Name(..)' bzw. 'A.B.Name(..)', dessen
+// Name ein Verb aus SINK_VERBS traegt und dessen Argumente einen der
+// Operanden ANames (klein; '' passt nie) nennen - auch verschachtelt
+// ('InternalWriteText(E, N, CnXMLRealToStr(Value))'). Die Zeile des
+// Aufrufs und sein Name (ASink), 0 ohne.
+function SinkCallLine(AMap: TRdxCodeMap; const AThen: TRdxToken;
+  const ANames: array of string; out ASink: string): Integer;
+var
+  F, Callee, N, C, A : TRdxToken;
+begin
+  Result := 0;
+  ASink := '';
+  F := After(AMap, AThen);
+  if not F.IsWord or IsKeyword(F.Low) then
+    Exit;   // begin-Block, Zuweisung an ein Schluesselwort ...
+  Callee := F;
+  N := After(AMap, F);
+  while (N.Low = '.') and After(AMap, N).IsWord do
+  begin
+    Callee := After(AMap, N);
+    N := After(AMap, Callee);
+  end;
+  if N.Low <> '(' then
+    Exit;   // Zuweisung, Aufruf ohne Argumente
+  C := MatchClose(AMap, N);
+  if (C.Low = '') or not InList(After(AMap, C).Low, SINK_END) then
+    Exit;
+  if not IsSinkName(TokText(AMap, Callee)) then
+    Exit;
+  A := After(AMap, N);
+  while (A.Low <> '') and TokBefore(A, C) do
+  begin
+    if A.IsWord and InList(A.Low, ANames) and (Before(AMap, A).Low <> '.') then
+    begin
+      ASink := TokText(AMap, Callee);
+      Exit(F.Line);
+    end;
+    A := After(AMap, A);
+  end;
+end;
+
+// Das if, in dessen Bedingung ATok steht - rueckwaerts bis zum ersten if;
+// Low = '' ohne, auch wenn vorher ein Token aus COND_STOP kommt oder
+// MAX_BACK Token gelesen sind.
+function ConditionIf(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Steps : Integer;
+begin
+  Result := Default(TRdxToken);
+  Steps := 0;
+  T := Before(AMap, ATok);
+  while (T.Low <> '') and (Steps < MAX_BACK) do
+  begin
+    if T.Low = 'if' then
+      Exit(T);
+    if InList(T.Low, COND_STOP) then
+      Exit;
+    Inc(Steps);
+    T := Before(AMap, T);
+  end;
+end;
+
+// Eine Seite eines Vergleichs gleich der Seite aus der Meldung? Nullen
+// gelten gleich ('0' und '0.0'), sonst der Text ohne Gross/klein.
+function SameSide(const AText, AMsgSide: string): Boolean;
+begin
+  if IsZeroText(AMsgSide) then
+    Result := IsZeroText(AText)
+  else
+    Result := SameText(AText, AMsgSide);
+end;
+
+// Ist die Bedingung zwischen AIf und AThen GENAU der exakte Vergleich
+// 'ALeft = ARight' (Seiten in beliebiger Reihenfolge, aeussere Klammern
+// zaehlen nicht)?
+function IsSameEquality(AMap: TRdxCodeMap; const AIf, AThen: TRdxToken;
+  const ALeft, ARight: string): Boolean;
+var
+  Toks       : TArray<TRdxToken>;
+  T          : TRdxToken;
+  Lo, Hi, i  : Integer;
+  Eq         : Integer;
+  L, R       : string;
+begin
+  Result := False;
+  Toks := nil;
+  T := After(AMap, AIf);
+  while (T.Low <> '') and TokBefore(T, AThen) do
+  begin
+    AddToken(Toks, T);
+    T := After(AMap, T);
+  end;
+  Lo := 0;
+  Hi := High(Toks);
+  while (Hi > Lo) and (Toks[Lo].Low = '(')
+     and SameTok(MatchClose(AMap, Toks[Lo]), Toks[Hi]) do
+  begin
+    Inc(Lo);
+    Dec(Hi);
+  end;
+  Eq := -1;
+  for i := Lo to Hi do
+    if Toks[i].Low = '=' then
+    begin
+      if Eq >= 0 then
+        Exit;   // zwei Vergleiche
+      Eq := i;
+    end
+    else if not (Toks[i].IsWord or (Toks[i].Low = '.')
+                 or CharInSet(Toks[i].Low[1], ['0'..'9'])) then
+      Exit;     // Operator, Klammer, Aufruf - kein schlichter Vergleich
+  if (Eq <= Lo) or (Eq >= Hi) then
+    Exit;
+  L := '';
+  for i := Lo to Eq - 1 do
+    L := L + Toks[i].Low;
+  R := '';
+  for i := Eq + 1 to Hi do
+    R := R + Toks[i].Low;
+  Result := (SameSide(L, ALeft) and SameSide(R, ARight))
+    or (SameSide(L, ARight) and SameSide(R, ALeft));
+end;
+
+// Redundanter Sonderfall (rwE32, s. Kopf): steht der Vergleich ab ALTok
+// in der Bedingung eines 'else if', und prueft ein vorderes Glied DERSELBEN
+// Kette schon genau 'ALeft = ARight' exakt? Dann ist der Vergleich hier
+// entschieden (bei '=' nie wahr, bei '<>' immer) - eine Toleranz machte
+// ihn fuer Werte nahe daran wieder lebendig. Die Zeile jenes if, 0 ohne.
+function RepeatedInChainLine(AMap: TRdxCodeMap; const ALTok: TRdxToken;
+  const ALeft, ARight: string): Integer;
+var
+  IfTok, ElseTok, PrevIf : TRdxToken;
+  Scan                   : TRdxElseScan;
+  n                      : Integer;
+begin
+  Result := 0;
+  IfTok := ConditionIf(AMap, ALTok);
+  if IfTok.Low = '' then
+    Exit;
+  ElseTok := Before(AMap, IfTok);
+  n := 0;
+  while (ElseTok.Low = 'else') and (n < MAX_CHAIN) do
+  begin
+    Scan := ElseOwner(AMap, ElseTok);
+    if (Scan.Owner <> eoIf)
+       or (FindOwner(AMap, Scan.Decider, IF_OWNERS, PrevIf) <> '') then
+      Exit;
+    if IsSameEquality(AMap, PrevIf, Scan.Decider, ALeft, ARight) then
+      Exit(PrevIf.Line);
+    ElseTok := Before(AMap, PrevIf);
+    Inc(n);
+  end;
+end;
+
 // Ein Operand klein, '' fuer eine Zahl (sie bindet an nichts).
 function OperandLow(const AOperand: string): string;
 begin
@@ -873,6 +1086,7 @@ var
   WithL, WithR : string;
   ThenTok      : TRdxToken;
   Stored       : string;
+  Sink         : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -969,17 +1183,17 @@ begin
     AReason := _(R_FLOAT_GUARD, [Cmp]);
     Exit;
   end;
+  // Literale nennt der Zweig nicht als Bezeichner - '' passt nie.
+  if IsLiteral(Left) then
+    Names[0] := ''
+  else
+    Names[0] := LowerCase(Left);
+  if IsLiteral(Right) then
+    Names[1] := ''
+  else
+    Names[1] := LowerCase(Right);
   if N.Low = 'then' then
   begin
-    // Literale nennt der Zweig nicht als Bezeichner - '' passt nie.
-    if IsLiteral(Left) then
-      Names[0] := ''
-    else
-      Names[0] := LowerCase(Left);
-    if IsLiteral(Right) then
-      Names[1] := ''
-    else
-      Names[1] := LowerCase(Right);
     Li := TolerantCheckLine(AMap, N, Names);
     if Li > 0 then
     begin
@@ -1013,6 +1227,22 @@ begin
   if Stored <> '' then
   begin
     AReason := _(R_FLOAT_STORED, [Cmp, Stored]);
+    Exit;
+  end;
+  // rwE32: Default-Wert-Auslassung und redundanter Sonderfall (s. Kopf).
+  if (Op = '<>') and (ThenTok.Low = 'then') then
+  begin
+    Li := SinkCallLine(AMap, ThenTok, Names, Sink);
+    if Li > 0 then
+    begin
+      AReason := _(R_FLOAT_SINK, [Cmp, Sink, Li]);
+      Exit;
+    end;
+  end;
+  Li := RepeatedInChainLine(AMap, LTok, Left, Right);
+  if Li > 0 then
+  begin
+    AReason := _(R_FLOAT_REPEATED, [Cmp, Li]);
     Exit;
   end;
 

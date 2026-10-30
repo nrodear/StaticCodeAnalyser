@@ -100,7 +100,7 @@ msgstr ""
 msgid "\"%s\" between Create(True) and Resume - Resume could run more than once or for another thread"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1015
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1229
 msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
 msgstr ""
 
@@ -112,15 +112,15 @@ msgstr ""
 msgid "\"%s\" follows the section - it is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:969
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1183
 msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1002
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1216
 msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:986
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1200
 msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
 msgstr ""
 
@@ -160,6 +160,10 @@ msgstr ""
 msgid "\"%s\" is a parameter of the routine - the list comes from the caller"
 msgstr ""
 
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1245
+msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"
+msgstr ""
+
 #: reDelphix/source/uRdxObjectListFix.pas:729
 msgid "\"%s\" is assigned %d times in the routine - the help needs exactly one \"TList<%s>.Create\""
 msgstr ""
@@ -197,11 +201,11 @@ msgstr ""
 msgid "\"%s\" is overloaded - the help does not pick one of the declarations"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:950
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1164
 msgid "\"%s\" is part of a larger expression (\"%s\" after it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:944
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1158
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
@@ -222,6 +226,10 @@ msgstr ""
 msgid "\"%s\" is written like a C or platform API name (underscore, no capital letter or a k constant) - a capital first letter does not make it PascalCase; rename it by hand or suppress the finding"
 msgstr ""
 
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1238
+msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"
+msgstr ""
+
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:526
 msgid "\"%s\" occurs on line %d before its declaration - there it means something else"
 msgstr ""
@@ -239,7 +247,7 @@ msgstr ""
 msgid "\"%s\" stands between the two sections - the declarations of the second one would belong to it"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:955
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1169
 msgid "\"%s\" stands in a list that is not a call argument (enumeration, set or declaration)"
 msgstr ""
 
@@ -247,7 +255,7 @@ msgstr ""
 msgid "\"%s\" was not imported: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1008
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1222
 msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"
 msgstr ""
 
@@ -625,7 +633,7 @@ msgstr ""
 msgid "%s is \"%s\" - other code depends on its exact signature"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1059
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1289
 msgid "%s is Currency - a fixed-point type compares exactly, SameValue would add a tolerance"
 msgstr ""
 
@@ -678,7 +686,7 @@ msgstr ""
 msgid "%s is called as %s - another routine than the one of SysUtils"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1061
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1291
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
@@ -3613,8 +3621,8 @@ msgstr ""
 msgid "Silent Mode"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1081
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1083
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1311
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1313
 msgid "Single %s compared with %s - the SameValue overloads could be ambiguous (E2251)"
 msgstr ""
 
@@ -4688,7 +4696,7 @@ msgstr ""
 msgid "comment in the unreachable code - it may document parked code; delete by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:936
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1150
 msgid "comment inside \"%s\""
 msgstr ""
 
@@ -4802,8 +4810,8 @@ msgstr ""
 msgid "comment, string or directive on the line"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:893
-#: reDelphix/source/uRdxFloatEqualityFix.pas:925
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1107
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1139
 msgid "comparison \"%s\" not on the reported line"
 msgstr ""
 
@@ -6205,7 +6213,7 @@ msgstr ""
 msgid "no var section before the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:888
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1102
 msgid "no variable in \"%s\""
 msgstr ""
 
@@ -7538,7 +7546,7 @@ msgstr ""
 msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1111
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1341
 msgid "the detector rates the comparison as intended (guard or sentinel value) - the exact comparison is right there"
 msgstr ""
 
@@ -7667,7 +7675,7 @@ msgstr ""
 msgid "the file declares its own %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1022
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1252
 msgid "the file declares its own %s - it is not the function of System.Math"
 msgstr ""
 
@@ -8089,7 +8097,7 @@ msgstr ""
 msgid "the line has more than one header of the method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:930
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1144
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
 
@@ -8288,7 +8296,7 @@ msgstr ""
 msgid "the message does not name the bounds - analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:882
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1096
 msgid "the message does not name the comparison"
 msgstr ""
 
@@ -9032,7 +9040,7 @@ msgstr ""
 msgid "type of %s not proven here - it must be declared as %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1057
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1287
 msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
 msgstr ""
 
@@ -9196,8 +9204,8 @@ msgstr ""
 msgid "with statement in the routine - an argument could be a member"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1028
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1117
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1258
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1347
 msgid "with statement in the routine - an operand or %s could bind to a member"
 msgstr ""
 

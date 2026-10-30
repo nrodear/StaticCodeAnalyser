@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7042 Zeilen, 332571 Bytes
-  CPoLines_de: array[0..7041] of string = (
+  // i18n\de.po - 7049 Zeilen, 333309 Bytes
+  CPoLines_de: array[0..7048] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2875,6 +2875,13 @@ const
     '',
     'msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"',
     'msgstr "\"%s\" entscheidet, ob eine Property gespeichert wird (stored %s) - mit Toleranz w'#$00FC'rden Werte nahe am Vorgabewert nicht gespeichert"',
+    '',
+    '# reDelphix rwE32 Gruppe Q (uRdxFloatEqualityFix: Default-Wert-Auslassung, redundanter Sonderfall)',
+    'msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"',
+    'msgstr "\"%s\" l'#$00E4'sst den Vorgabewert aus - nur ein anderer Wert geht an %s (Zeile %d), mit Toleranz w'#$00FC'rden Werte nahe daran still nicht geschrieben"',
+    '',
+    'msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"',
+    'msgstr "\"%s\" ist schon durch den exakten Vergleich in Zeile %d derselben if-else-Kette entschieden - eine Toleranz '#$00E4'nderte hier das Ergebnis f'#$00FC'r Werte nahe daran"',
     '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"',
@@ -7331,8 +7338,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
-  CPoLines_fr: array[0..7037] of string = (
+  // i18n\fr.po - 7045 Zeilen, 346737 Bytes
+  CPoLines_fr: array[0..7044] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -10189,6 +10196,13 @@ const
     '',
     'msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"',
     'msgstr "'#$00AB' %s '#$00BB' d'#$00E9'cide si une propri'#$00E9't'#$00E9' est enregistr'#$00E9'e (stored %s) - avec une tol'#$00E9'rance, des valeurs proches de la valeur par d'#$00E9'faut ne seraient pas enregistr'#$00E9'es"',
+    '',
+    '# reDelphix rwE32 Gruppe Q (uRdxFloatEqualityFix: valeur par d'#$00E9'faut omise, cas particulier redondant)',
+    'msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"',
+    'msgstr "'#$00AB' %s '#$00BB' omet la valeur par d'#$00E9'faut - seule une autre valeur est pass'#$00E9'e '#$00E0' %s (ligne %d), avec une tol'#$00E9'rance des valeurs proches ne seraient silencieusement pas '#$00E9'crites"',
+    '',
+    'msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"',
+    'msgstr "'#$00AB' %s '#$00BB' est d'#$00E9'j'#$00E0' tranch'#$00E9' par la comparaison exacte de la ligne %d de la m'#$00EA'me cha'#$00EE'ne if-else - une tol'#$00E9'rance changerait ici le r'#$00E9'sultat pour des valeurs proches"',
     '',
     'msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"',
     'msgstr "'#$00AB' %s '#$00BB' n''est pas d'#$00E9'clar'#$00E9'e dans le corps d''une classe de ce fichier (routine libre, record, interface, ou la classe se trouve dans un include)"',
