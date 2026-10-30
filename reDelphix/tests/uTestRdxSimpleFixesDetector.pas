@@ -1765,8 +1765,9 @@ var
 begin
   Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses', '{$IFDEF RDX_W}',
     '  Windows, Classes, SysUtils;', '{$ENDIF}', '{$IFDEF RDX_L}',
-    '  Classes, SysUtils;', '{$ENDIF}', 'implementation', 'procedure P;',
-    'begin', 'end;', 'end.']), 'SysUtils', 'System.SysUtils', 12);
+    '  Classes, SysUtils;', '{$ENDIF}', 'type', '  TFoo = class', '  end;',
+    'implementation', 'procedure P;', 'begin', 'end;', 'end.']), 'SysUtils',
+    'System.SysUtils', 15);
   Assert.IsTrue(Plan.Needed);
   Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
   Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
