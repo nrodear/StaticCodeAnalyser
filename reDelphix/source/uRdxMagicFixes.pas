@@ -167,7 +167,7 @@ type
   //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException, seit
   //                     dem Nachzug zu e/HilfeFixJ auch SCA020.2
   //                     (ENotImplemented) und SCA168.2 (EInvalidOpException)
-  //                     - ab Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test
+  //                     - ab Delphi 2009 (FLOOR_EXCEPTION_CLASSES; Realworld-Test
   //                     rwE30 Stufe 2, Nico-Entscheid "Sperre bei Beleg":
   //                     GExperts fuer Delphi 3-6 mit .dof, CnWizards_D5..
   //                     D2007 in Source\, CnDebugViewer.dpr mit .dof). FPC
@@ -357,8 +357,12 @@ type
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
     // Pakete nur ab 10.3 - PackageFloorProof).
-    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks), sonst
-    // wie FileReason. '' oder der Grund.
+    // Seit rwE32 Stufe 4 fragt lfExceptionClasses das Kit-Include wie
+    // lfFormatSettingsVar (vorher im Planer); ein Projekt der Unit ab 2009
+    // widerlegt es und die Weichen der Includes.
+    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks; das
+    // Kit-Include der Datei selbst sperrt dort weiter), sonst wie
+    // FileReason. '' oder der Grund.
     class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature; AIncludes: Boolean): string; static;
   end;
@@ -693,6 +697,12 @@ const
   // Kit-Include, %d seine Zeile.
   R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
     + 'variable FormatSettings exists from Delphi XE on';
+  // Dasselbe fuer die Ausnahmeklassen (lfExceptionClasses, rwE32 Stufe 4 -
+  // bis dahin sperrte das Kit-Include im Planer, R_RAWEXC_OLD): die Saetze
+  // des Plattenblicks nennen alle drei Klassen.
+  R_KIT_OLD_EXC = 'the file asks for old compilers (%s, line %d) - the '
+    + 'exception classes EArgumentException, EInvalidOpException and '
+    + 'ENotImplemented exist only from Delphi 2009 on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -710,7 +720,7 @@ begin
   else if AFeature = lfFormatSettingsVar then
     Result := FLOOR_SETTINGS_VAR
   else if AFeature = lfExceptionClasses then
-    Result := FLOOR_DEFAULT_FN
+    Result := FLOOR_EXCEPTION_CLASSES
   else
     Result := FLOOR_INLINE_DECL;
 end;
@@ -2285,17 +2295,25 @@ end;
 // jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
 // seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
 // Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
-// '' oder der Grund.
-function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean): string;
+// Seit rwE32 Stufe 4 ebenso fuer die Ausnahmeklassen (lfExceptionClasses,
+// Projekt ab Delphi 2009): pyscripter Source\JvDockSupportControl.pas:885
+// war wegen '{$I jvcl.inc}' gesperrt, JvDockVIDStyle.pas:1603 daneben
+// (dasselbe Include, 'for var' beweist 10.3) angeboten - beide stehen in
+// PyScripter.dpr mit .dproj 20.3. '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean;
+  AFeature: TRdxLateFeature): string;
 var
   Kit : string;
   Li  : Integer;
 begin
   Result := '';
-  Kit := OldCompilerTraceOf(AMap, FLOOR_SETTINGS_VAR, False, True, Li);
+  Kit := OldCompilerTraceOf(AMap, FloorOf(AFeature), False, True, Li);
   if (Kit = '') or AModern then
     Exit;
-  Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+  if AFeature = lfExceptionClasses then
+    Result := _(R_KIT_OLD_EXC, [Kit, Li])
+  else
+    Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
 
 
@@ -2453,9 +2471,6 @@ var
 begin
   Result := '';
   Modern := False;
-  // Kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und sperrt
-  // nicht (die anderen Sprachmittel sperren dort, FileReason).
-  if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
   Proof := ModernProof(AMap);
   // Der Gegenbeweis (bzw. Invariant ohne Weiche) widerlegt nur die
   // Compiler-Spuren; ein Programm, das die globale FormatSettings selbst
@@ -2470,13 +2485,18 @@ begin
     Exit;
   end;
   // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
-  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung).
-  if AFeature = lfFormatSettingsVar then
+  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung). Seit rwE32
+  // Stufe 4 auch fuer die Ausnahmeklassen (Projekt der Unit ab 2009), dort
+  // auch auf einem Netzpfad (der Text der Datei ist der Beleg).
+  if AFeature in [lfFormatSettingsVar, lfExceptionClasses] then
   begin
     Modern := ModernProjectProof(AFileName, AFeature);
-    Result := KitIncludeReason(AMap, Modern);
+    Result := KitIncludeReason(AMap, Modern, AFeature);
     if Result <> '' then Exit;
   end;
+  // Sonst kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und
+  // sperrt nicht (die anderen Sprachmittel sperren dort, FileReason).
+  if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
   if AFileName = '' then Exit;
   Result := FileReason(AFileName, AFeature);
   // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): auch der
@@ -2487,8 +2507,11 @@ begin
   // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
   // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
   // erst ab XE.
-  if (Result = '') and (AIncludes
-     or ((AFeature = lfFormatSettingsVar) and not Modern)) then
+  // Ebenso fuer die Ausnahmeklassen (rwE32 Stufe 4): ein Projekt der Unit
+  // ab 2009 widerlegt auch die Weichen der Includes.
+  if (Result = '')
+     and ((AIncludes and not ((AFeature = lfExceptionClasses) and Modern))
+       or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant

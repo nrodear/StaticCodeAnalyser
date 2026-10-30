@@ -53,6 +53,8 @@ type
     [Test] procedure Disk_MainWayIncludeSwitch_M1b;
     // ---- Realworld-Test rwE32 Stufe 4 ----
     [Test] procedure Disk_FpcOnlyProgram_NoDelphiEvidence;
+    [Test] procedure Disk_ExceptionClasses_FpcVersionNoEvidence;
+    [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
   end;
 
 implementation
@@ -60,6 +62,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
+  uRdxCompilerTraces, // FLOOR_EXCEPTION_CLASSES (rwE32 Stufe 4)
   uRdxText,          // SetRdxLanguageOverride, MsgByHand
   uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
@@ -1047,6 +1050,89 @@ begin
     WriteText(T.C + 'RechnungDelphi.dpr', 'program RechnungDelphi;');
     AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
       ['RechnungDelphi.dpr']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_FpcVersionNoEvidence;
+const
+  SRC = 'unit u;' + #13#10 + 'interface' + #13#10 + '{$I defs.inc}' + #13#10
+    + 'implementation' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // doublecmd src\umaincommands.pas:4399 (SCA168.2): '{$IF FPC_FULLVERSION
+  // >= 020501}' ist eine reine FPC-Abfrage - FPC kennt EInvalidOpException,
+  // ein altes Delphi belegt sie nicht (Nico-Entscheid). Bis dahin teilten die
+  // Ausnahmeklassen FLOOR_DEFAULT_FN (FPC 3.0 fuer Default(T)).
+  Assert.AreEqual<Integer>(0, FLOOR_EXCEPTION_CLASSES.FpcFull);
+  Assert.AreEqual<Integer>(30000, FLOOR_DEFAULT_FN.FpcFull,
+    'SCA121 unveraendert');
+  Assert.IsTrue(TRdxMagicFixes.FpcKnows(lfExceptionClasses));
+  // Im Include (der Plattenblick liest es mit FloorOf).
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IF FPC_FULLVERSION >= 020501}' + #13#10
+      + '  {$DEFINE NEWFPC}' + #13#10 + '{$IFEND}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'FPC_FULLVERSION im Include');
+    // Gegenprobe: eine Delphi-Weiche vor 2009 im Include sperrt weiter.
+    WriteText(T.C + 'defs.inc', '{$IF CompilerVersion < 20}' + #13#10
+      + '  {$DEFINE OLD}' + #13#10 + '{$IFEND}');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['defs.inc', 'COMPILERVERSION < 20']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_ExceptionClasses_KitIncludeModernProject;
+const
+  KIT_SRC = 'unit u;' + #13#10 + '{$I jvcl.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  DPR_SRC = 'program PyScripter;' + #13#10 + 'uses' + #13#10
+    + '  u in ''c\u.pas'';' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T   : TTree;
+  Net : string;
+begin
+  // pyscripter Source\JvDockSupportControl.pas:885 (SCA168.2): '{$I
+  // jvcl.inc}' sperrte im Planer, JvDockVIDStyle.pas:1603 daneben (dasselbe
+  // Include, 'for var' beweist 10.3) bekam die Hilfe. Beide stehen in
+  // PyScripter.dpr mit PyScripter.dproj (ProjectVersion 20.3). Seit rwE32
+  // Stufe 4 fragt der Plattenblick das Kit-Include wie beim Hauptweg von
+  // SCA128 (ModernProjectProof).
+  T := NewTree;
+  try
+    // Ohne Projekt (JVCL selbst): das Kit-Include sperrt - auch ohne
+    // Dateinamen und auf einem Netzpfad (der Text ist der Beleg).
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc', 'ENotImplemented']);
+    AssertNames(ProjectReasonOf('', KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    Net := PathDelim + PathDelim + 'rdx-e32-gibt-es-nicht' + PathDelim
+      + 'share' + PathDelim + 'u.pas';
+    AssertNames(ProjectReasonOf(Net, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    // Das Programm eine Ebene hoeher enthaelt die Unit, .dproj ab 2009 -
+    // widerlegt, auch die Weichen eines Includes daneben.
+    WriteText(T.C + 'jvcl.inc', '{$IFDEF VER130}' + #13#10
+      + '  {$DEFINE COMPILER5}' + #13#10 + '{$ENDIF}');
+    WriteText(T.B + 'PyScripter.dpr', DPR_SRC);
+    WriteDproj(T.B + 'PyScripter.dproj', '20.3');
+    Assert.AreEqual('', ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses,
+      True), 'Projekt ab 2009');
+    // Gegenproben: eine .dproj ohne Version (Delphi 2007) ...
+    WriteDproj(T.B + 'PyScripter.dproj', '');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
+    WriteDproj(T.B + 'PyScripter.dproj', '20.3');
+    // ... und ein Programm, das die Unit nicht enthaelt.
+    WriteText(T.B + 'PyScripter.dpr', 'program PyScripter;' + #13#10
+      + 'begin' + #13#10 + 'end.');
+    AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
+      ['jvcl.inc']);
   finally
     RemoveTree(T.Root);
   end;
