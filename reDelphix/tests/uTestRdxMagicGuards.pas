@@ -59,6 +59,7 @@ type
     [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
     [Test] procedure Traces_FpcVerSymbols;
     // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Traces_NameOldBranchFirst;
     [Test] procedure Traces_PrefixedCompilerSymbols;
   end;
 
@@ -1317,6 +1318,64 @@ begin
 end;
 
 { ---- Realworld-Test rwE33 Stufe 5 ---- }
+
+// OldCompilerTraceOf (nur die Bedingungen) auf ASource; ALine die Zeile.
+function TraceIn(const ASource: string; const AFloor: TRdxCompilerFloor;
+  out ALine: Integer): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := OldCompilerTraceOf(Map, AFloor, True, False, ALine);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Traces_NameOldBranchFirst;
+var
+  Src : string;
+  Li  : Integer;
+begin
+  // jvcl install\JVCLInstall\Compile.pas:512 (SCA127/SCA127.2): die Sperre
+  // nannte '{$IF CompilerVersion >= 20.0}' (Zeile 32, eine Weiche fuer NEUE
+  // Compiler), obwohl Zeile 182 '{$IFNDEF COMPILER12_UP}' den alten Zweig
+  // selbst nennt. Bis dahin: 'COMPILERVERSION >= 20.0', Zeile 2 (rot).
+  Src := Join(['unit u;', '{$IF CompilerVersion >= 20.0} // Delphi 2009+',
+    '  {$DEFINE D2009}', '{$IFEND}', 'interface', 'implementation', 'uses',
+    '  {$IFNDEF COMPILER12_UP}', '  JclStrings,', '  {$ENDIF}', '  SysUtils;',
+    'end.']);
+  Assert.AreEqual('COMPILER12_UP', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(8, Li, 'Zeile');
+  // In einer Direktive geht der alte Vergleich ebenso vor ...
+  Src := Join(['unit u;',
+    '{$IF (CompilerVersion >= 18) OR (CompilerVersion < 15)}', '{$IFEND}',
+    'interface', 'end.']);
+  Assert.AreEqual('COMPILERVERSION < 15',
+    TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  // ... 'NOT DEFINED(.._UP)' und ein genanntes altes Delphi (VER130) auch.
+  Src := Join(['unit u;', '{$IFDEF DELPHI6_UP}', '{$ENDIF}',
+    '{$IF NOT DEFINED(COMPILER12_UP)}', '{$IFEND}', 'interface', 'end.']);
+  Assert.AreEqual('COMPILER12_UP', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(4, Li, 'Zeile NOT DEFINED');
+  Src := Join(['unit u;', '{$IFDEF COMPILER12_UP}', '{$ENDIF}',
+    '{$IFDEF VER130}', '{$ENDIF}', 'interface', 'end.']);
+  Assert.AreEqual('VER130', TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(4, Li, 'Zeile VER130');
+  // Gegenprobe: ohne alten Zweig bleibt die erste Weiche der Beleg -
+  // gesperrt wird wie bisher (die Schwelle selbst zaehlt mit).
+  Src := Join(['unit u;', '{$IF CompilerVersion >= 20.0}', '{$IFEND}',
+    '{$IFDEF COMPILER6_UP}', '{$ENDIF}', 'interface', 'end.']);
+  Assert.AreEqual('COMPILERVERSION >= 20.0',
+    TraceIn(Src, FLOOR_EXCEPTION_CLASSES, Li));
+  Assert.AreEqual<Integer>(2, Li, 'Zeile der ersten Weiche');
+end;
 
 procedure TTestRdxMagicGuards.Traces_PrefixedCompilerSymbols;
 var

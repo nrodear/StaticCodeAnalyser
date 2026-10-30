@@ -78,6 +78,21 @@ unit uRdxCompilerTraces;
 // generischen SynEditJedi.inc belegt dort kein altes Delphi).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
 // (UnconditionalAt, FpcExcludedAt, NewOnlyAt).
+//
+// rwE33 Stufe 5:
+//   * Versionssymbole mit Bibliotheks-Praefix zaehlen wie COMPILERn, wenn
+//     ein Zusatz "ab" folgt (PrefixedCompilerNumber): SynEdit.inc
+//     'SYN_COMPILER_6_UP' (Dev-Cpp SynGen\SynGenUnit.pas:245 - SCA128
+//     bot die globale FormatSettings an, die es erst ab XE gibt; JCL
+//     'COMPILER6_UP' sperrte schon).
+//   * Der Grund nennt den TREFFENDEREN Beleg (OldCompilerTraceOf): eine
+//     Weiche, die nur fuer NEUE Compiler gilt ('{$IFDEF COMPILER12_UP}',
+//     '{$IF CompilerVersion >= 20}'), zeigt nur, dass die Datei die Version
+//     unterscheidet; '{$IFNDEF COMPILER12_UP}', 'CompilerVersion < 15' und
+//     '{$IFDEF VER130}' nennen den alten Zweig selbst. Die erste solche
+//     Spur geht vor, sonst die erste schwache - gesperrt wird wie bisher
+//     (jvcl install\JVCLInstall\Compile.pas:512 nannte 'COMPILERVERSION >=
+//     20.0' aus Zeile 32, Zeile 182 traegt '{$IFNDEF COMPILER12_UP}').
 
 interface
 
@@ -220,7 +235,9 @@ const
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der
-// Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur.
+// Include-Datei, ALine ihre Zeile; '' und 0 ohne Spur. Seit rwE33 Stufe 5
+// die erste, die den alten Zweig selbst nennt (s. Kopf), und nur ohne eine
+// solche die erste Weiche fuer neue Compiler.
 function OldCompilerTrace(AMap: TRdxCodeMap; const AFloor: TRdxCompilerFloor;
   out ALine: Integer): string;
 // Die Spur alter Compiler (bis AFloor) in den BEDINGUNGEN der Datei
@@ -626,33 +643,110 @@ begin
     Result := (N >= 0) and (N < AFloor.FpcFull);
 end;
 
-// Eine Spur alter Compiler im Bedingungstext AArgs ('{$IFDEF DELPHI2007_UP}',
-// '{$IF CompilerVersion < 20}') - das Symbol bzw. der Vergleich; '' ohne.
-function OldSymbolIn(const AArgs: string;
-  const AFloor: TRdxCompilerFloor): string;
+// Heisst das Versionssymbol AUpper "ab dieser Version" (WeakTraceAt)? Ein
+// Zusatz aus UP_SUFFIXES (nicht der leere) direkt hinter der letzten
+// Ziffer ('COMPILER12_UP', 'DELPHIXE2_UP', 'ISDELPHI2005ANDUP') bzw. - ohne
+// Ziffer - am Ende ('DELPHIX_TOKYO_UP'); dazu CONDITIONALEXPRESSIONS (ab
+// Delphi 6) und die Unicode-Fragen von mORMot (ab 2009).
+function UpWord(const AUpper: string): Boolean;
+var
+  i    : Integer;
+  Rest : string;
+  S    : string;
+begin
+  if (AUpper = D6_QUESTION) or InList(AUpper, MORMOT_UNICODE) then
+    Exit(True);
+  i := Length(AUpper);
+  while (i >= 1) and not CharInSet(AUpper[i], ['0'..'9']) do
+    Dec(i);
+  Rest := StringReplace(Copy(AUpper, i + 1, MaxInt), '_', '', [rfReplaceAll]);
+  Result := False;
+  for S in UP_SUFFIXES do
+    if (S <> '') and ((Rest = S) or ((i = 0) and (Length(Rest) > Length(S))
+       and (Copy(Rest, Length(Rest) - Length(S) + 1, MaxInt) = S))) then
+      Exit(True);
+end;
+
+// Gilt die Spur an AToks[i] in einer Direktive AWord nur fuer einen Zweig
+// NEUER Compiler (rwE33 Stufe 5, s. Kopf)? Ein "ab"-Symbol (UpWord) in
+// '{$IFDEF}' bzw. 'DEFINED(..)' und ein Vergleich '>=' bzw. '>'
+// (AComparison: AToks[i] beginnt einen Vergleich, OldComparisonAt) - nicht
+// in '{$IFNDEF}' und nicht hinter 'NOT'. Sie belegt nur, dass die Datei die
+// Version unterscheidet; der Grund nennt lieber eine Spur, die den alten
+// Zweig selbst nennt.
+function WeakTraceAt(const AWord: string; const AToks: TArray<string>;
+  i: Integer; AComparison: Boolean): Boolean;
+var
+  j : Integer;
+begin
+  if AWord = 'ifndef' then
+    Exit(False);
+  j := i - 1;
+  if (j >= 0) and (AToks[j] = 'DEFINED') then
+    Dec(j);
+  if (j >= 0) and (AToks[j] = 'NOT') then
+    Exit(False);
+  if AComparison then
+    Result := (AToks[i + 1] = '>=') or (AToks[i + 1] = '>')
+  else
+    Result := UpWord(AToks[i]);
+end;
+
+// Eine Spur alter Compiler im Bedingungstext AArgs der Direktive AWord
+// ('{$IFDEF DELPHI2007_UP}', '{$IF CompilerVersion < 20}') - das Symbol
+// bzw. der Vergleich; '' ohne. Die erste, die den alten Zweig nennt, sonst
+// die erste schwache (AWeak, WeakTraceAt).
+function OldSymbolIn(const AWord, AArgs: string;
+  const AFloor: TRdxCompilerFloor; out AWeak: Boolean): string;
 var
   Toks : TArray<string>;
   i    : Integer;
+  S    : string;
+  Weak : Boolean;
 begin
   Result := '';
+  AWeak := False;
   Toks := ConditionTokens(AArgs);
   for i := 0 to High(Toks) do
+  begin
     if OldVersionWord(Toks[i], AFloor) then
-      Exit(Toks[i])
+    begin
+      S := Toks[i];
+      Weak := WeakTraceAt(AWord, Toks, i, False);
+    end
     else if OldComparisonAt(Toks, i, AFloor) then
-      Exit(Toks[i] + ' ' + Toks[i + 1] + ' ' + Toks[i + 2]);
+    begin
+      S := Toks[i] + ' ' + Toks[i + 1] + ' ' + Toks[i + 2];
+      Weak := WeakTraceAt(AWord, Toks, i, True);
+    end
+    else
+      Continue;
+    if not Weak then
+    begin
+      AWeak := False;
+      Exit(S);
+    end;
+    if Result = '' then
+    begin
+      Result := S;
+      AWeak := True;
+    end;
+  end;
 end;
 
 // Die Spur alter Compiler in der Direktive an (ALine, ACol): ein
 // Kit-Include (KIT_INCLUDES, klein ohne Pfad) oder ein Versionssymbol in
-// einer Bedingung; '' ohne.
+// einer Bedingung; '' ohne. AWeak: nur eine Weiche fuer neue Compiler
+// (OldSymbolIn; ein Kit-Include nie).
 function OldTraceAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
-  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean): string;
+  const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
+  out AWeak: Boolean): string;
 var
   W   : string;
   Arg : Boolean;
 begin
   Result := '';
+  AWeak := False;
   W := DirectiveWord(AMap, ALine, ACol, Arg);
   if AKits and InList(W, INCLUDE_WORDS) then
   begin
@@ -662,7 +756,7 @@ begin
       Result := '';
   end
   else if AConditions and InList(W, CONDITION_WORDS) then
-    Result := OldSymbolIn(DirectiveArgs(AMap, ALine, ACol), AFloor);
+    Result := OldSymbolIn(W, DirectiveArgs(AMap, ALine, ACol), AFloor, AWeak);
 end;
 
 // Der Lauf ueber alle Direktiven: NextDirective (uRdxCodeMap; bis zur
@@ -673,11 +767,16 @@ begin
   Result := OldCompilerTraceOf(AMap, AFloor, True, True, ALine);
 end;
 
+// Ob eine Spur da ist, entscheidet wie bis rwE33 jede Direktive; nur die
+// GENANNTE ist die erste starke (OldTraceAt, AWeak) - bis dahin endete der
+// Lauf an der ersten Spur. Ohne starke liest er die ganze Datei.
 function OldCompilerTraceOf(AMap: TRdxCodeMap;
   const AFloor: TRdxCompilerFloor; AConditions, AKits: Boolean;
   out ALine: Integer): string;
 var
   Li, Co : Integer;
+  S      : string;
+  Weak   : Boolean;
 begin
   Result := '';
   ALine := 0;
@@ -685,11 +784,16 @@ begin
   Co := 1;
   while NextDirective(AMap, Li, Co) do
   begin
-    Result := OldTraceAt(AMap, Li, Co, AFloor, AConditions, AKits);
-    if Result <> '' then
+    S := OldTraceAt(AMap, Li, Co, AFloor, AConditions, AKits, Weak);
+    if (S <> '') and not Weak then
     begin
       ALine := Li;
-      Exit;
+      Exit(S);
+    end;
+    if (S <> '') and (Result = '') then
+    begin
+      Result := S;
+      ALine := Li;
     end;
     Inc(Co);
   end;
