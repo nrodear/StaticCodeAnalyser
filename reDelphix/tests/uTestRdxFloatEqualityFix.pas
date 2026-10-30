@@ -795,6 +795,18 @@ begin
     '{$ENDIF}']);
   Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
     Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // (Review e/HilfeFixP) ... aber nicht ein Zweig, dessen Symbol nur mit
+  // der Zahl beginnt: 'DELPHI7OROLDER' (JvGnugettext.pas) gilt gerade fuer
+  // die alten Compiler (ebenso 'DELPHI2007OROLDER') - ohne den Nachzug als
+  // "ab Delphi 7" bzw. "ab 2007" gelesen und angeboten (rot).
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFDEF DELPHI7OROLDER}', '  if Ratio = 0 then Work;', '{$ENDIF}']);
+  AssertRefused(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 3, 'IsZero']));
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFDEF DELPHI2007OROLDER}', '  if Ratio = 0 then Work;', '{$ENDIF}']);
+  AssertRefused(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 3, 'IsZero']));
   // ... eine Frage erst nach Delphi 7 ...
   Src := HeadUnit(['{$IFDEF COMPILER7_UP}', 'uses Classes;', '{$ENDIF}'],
     ['  if Ratio = 0 then Work;']);

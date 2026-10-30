@@ -1245,6 +1245,14 @@ begin
   Assert.AreEqual('VER150', TraceOf('{$IFDEF VER150}', FLOOR_EXCEPTION_CLASSES));
   Assert.AreEqual('', TraceOf('{$IFDEF VER140}', FLOOR_MATH_TOLERANCE),
     'Delphi 6 kennt Math.IsZero');
+  // Review e/HilfeFixP: nur die Form von FPC (einstellige Hauptversion,
+  // Ziffern und '_') zaehlt als FPC - eigene Symbole unter VER80 bleiben
+  // alte Delphi-Spuren (doublecmd kascrypt std.inc '{$define VER5X}' unter
+  // VER130, jvcl devtools gifimage.pas 'VER9x' fuer Delphi 2/3, Borland
+  // Pascal VER70). Ohne den Nachzug: '' (rot).
+  Assert.AreEqual('VER5X', TraceOf('{$IFDEF VER5X}', FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('VER9X', TraceOf('{$IFDEF VER9X}', FLOOR_MATH_TOLERANCE));
+  Assert.AreEqual('VER70', TraceOf('{$IFDEF VER70}', FLOOR_EXCEPTION_CLASSES));
 end;
 
 initialization

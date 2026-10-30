@@ -323,7 +323,12 @@ const
   // Versionssymbole von FPC ('VER3_2_4' = FPC 3.2.4, rwE32 Stufe 4 - mORMot2
   // test\test.core.base.pas zaehlte bis dahin als Delphi vor 2009). Sie
   // zaehlen wie 'FPC_FULLVERSION < n' (FpcVerVersion, AFloor.FpcFull).
+  // Nur die Form von FPC (einstellige Hauptversion, nur Ziffern und '_'):
+  // 'VER5X' (kascrypt std.inc: Delphi 5), 'VER9X' (gifimage.pas: Delphi
+  // 2/3), 'VER70' (Borland Pascal 7) bleiben alte Spuren wie bis dahin
+  // (Review e/HilfeFixP).
   FIRST_DELPHI_VER = 80;
+  FPC_MAX_MAJOR = 9;
   // XeNames: Delphi XE bis XE8 (immer, alle vor 10.3) und 10 bis 11 mit
   // Namen (jedi.inc und andere) - diese mit ihrer CompilerVersion, sie
   // zaehlen bis AFloor.Version wie die Zahlen (Integration QFI2: bis dahin
@@ -339,6 +344,11 @@ const
   // Die CompilerVersion dieser Namen fuer NewVersionWord: Delphi XE und 6.
   XE_VERSION = 22;
   D6_VERSION = 14;
+  // Die Zusaetze hinter der Versionszahl, die "ab" heissen (UpSuffix, ohne
+  // '_'): keiner ('VER140', 'COMPILER6'), 'COMPILER6_UP', 'DELPHI6UP',
+  // 'DELPHI2005_PLUS', '_OR_HIGHER' (Korpus rwE32), 'ANDUP'.
+  UP_SUFFIXES: array[0..5] of string = ('', 'UP', 'ANDUP', 'PLUS',
+    'ORHIGHER', 'ORNEWER');
   // ConditionTokens: Zeichen eines Worts bzw. eines Vergleichs.
   WORD_CHARS: TSysCharSet = ['A'..'Z', '0'..'9', '_', '.'];
   COMPARE_CHARS: TSysCharSet = ['<', '>', '='];
@@ -480,7 +490,7 @@ begin
       V := StrToIntDef(Copy(Rest, 1, P - 1), -1);
       Delete(Rest, 1, P);
     end;
-    if (V < 0) or (V > 99) then
+    if (V < 0) or (V > 99) or ((i = 1) and (V > FPC_MAX_MAJOR)) then
       Exit(-1);
     Result := Result * 100 + V;
   end;
@@ -488,14 +498,16 @@ begin
     Result := -1;
 end;
 
-// Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor):
+// Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor). VERn
+// unter VER80: ein FPC-Symbol (FpcVerVersion) zaehlt mit FpcFull, jedes
+// andere wie VERnnn (Review e/HilfeFixP: 'VER5X', 'VER9X').
 // VERnnn, DELPHIn, DELPHI2005.., COMPILERn, BCBn, RTLnnn, mit XeNames
 // dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole - wer danach
 // fragt, baut auch mit dem aelteren Compiler.
 function OldVersionWord(const AUpper: string;
   const AFloor: TRdxCompilerFloor): Boolean;
 var
-  N : Integer;
+  N, Fpc : Integer;
 begin
   if OldMormotWord(AUpper, AFloor) then
     Exit(True);
@@ -507,8 +519,11 @@ begin
     Result := Result or (N < AFloor.Ver)
   else if N >= 0 then
   begin
-    N := FpcVerVersion(AUpper);
-    Result := Result or ((N >= 0) and (N < AFloor.FpcFull));
+    Fpc := FpcVerVersion(AUpper);
+    if Fpc >= 0 then
+      Result := Result or (Fpc < AFloor.FpcFull)
+    else
+      Result := Result or (N < AFloor.Ver);
   end;
   N := NumberAfter(AUpper, 'COMPILER');
   Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
@@ -799,6 +814,21 @@ end;
 // Jahreszahlen (DELPHI2005..) nur fuer eine Schwelle vor 2005 (DelphiYear
 // darunter) - die Zaehlung der anderen Schwellen ist dort "bis
 // einschliesslich" und belegt kein "ab".
+// Hinter Praefix und Zahl nur ein Zusatz, der "ab" heisst (UpSuffix,
+// Review e/HilfeFixP): 'DELPHI7OROLDER' (JvGnugettext.pas), 'BCB5OR6',
+// 'DELPHI64_TEMPORARY' oder '_DOWN' sind kein Zweig nur fuer neue
+// Compiler - nein.
+function UpSuffix(const AUpper, APrefix: string): Boolean;
+var
+  i : Integer;
+begin
+  i := Length(APrefix) + 1;
+  while (i <= Length(AUpper)) and CharInSet(AUpper[i], ['0'..'9']) do
+    Inc(i);
+  Result := InList(StringReplace(Copy(AUpper, i, MaxInt), '_', '',
+    [rfReplaceAll]), UP_SUFFIXES);
+end;
+
 function NewVersionWord(const AUpper: string;
   const AFloor: TRdxCompilerFloor): Boolean;
 var
@@ -808,26 +838,29 @@ begin
   if N >= 0 then
     Exit(N >= AFloor.Version);
   if Copy(AUpper, 1, Length(XE_PREFIX)) = XE_PREFIX then
-    Exit(XE_VERSION >= AFloor.Version);
-  if Copy(AUpper, 1, Length(D6_QUESTION)) = D6_QUESTION then
+    Exit(UpSuffix(AUpper, XE_PREFIX) and (XE_VERSION >= AFloor.Version));
+  if AUpper = D6_QUESTION then
     Exit(D6_VERSION >= AFloor.Version);
   N := NumberAfter(AUpper, 'DELPHI');
+  if (N >= 1) and not UpSuffix(AUpper, 'DELPHI') then
+    Exit(False);
   if N >= FIRST_DELPHI_YEAR then
     Exit(AFloor.DelphiYear < FIRST_DELPHI_YEAR);
   if N >= 1 then
     Exit(N >= AFloor.DelphiNumber);
   N := NumberAfter(AUpper, 'VER');
   if N >= FIRST_DELPHI_VER then
-    Exit(N >= AFloor.Ver);
+    Exit(UpSuffix(AUpper, 'VER') and (N >= AFloor.Ver));
   if N >= 0 then
     Exit(False);
   N := NumberAfter(AUpper, 'COMPILER');
-  if N < 0 then
-    N := NumberAfter(AUpper, 'BCB');
   if N >= 0 then
-    Exit(N >= AFloor.Compiler);
+    Exit(UpSuffix(AUpper, 'COMPILER') and (N >= AFloor.Compiler));
+  N := NumberAfter(AUpper, 'BCB');
+  if N >= 0 then
+    Exit(UpSuffix(AUpper, 'BCB') and (N >= AFloor.Compiler));
   N := NumberAfter(AUpper, 'RTL');
-  Result := (N >= 0) and (N >= AFloor.Rtl);
+  Result := (N >= 0) and UpSuffix(AUpper, 'RTL') and (N >= AFloor.Rtl);
 end;
 
 // Gilt die Bedingung AArgs ({$IF}, gross ohne Leerraum) nur fuer Compiler
