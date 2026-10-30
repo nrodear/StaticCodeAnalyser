@@ -508,6 +508,64 @@ begin
   Result := _(R_REMOTE_READS[AWhat], [Place, MsgByHand]);
 end;
 
+// SCA128/SCA059 (Realworld-Test rwE29): was nur Dateiname und Platte
+// wissen - der Plattenblick von SCA014 (TRdxMagicFixes, wie
+// PlanDigitGrouping): Netzpfad, Lazarus-Dateiart bzw. -Projekt neben der
+// Unit, alte Delphi-Projektdatei bzw. .dproj vor der Schwelle, Weichen in
+// den Includes. AFeature: lfFormatSettingsVar fuer den Hauptweg (die
+// globale Variable ab Delphi XE; FPC kennt sie - Lazarus sperrt nicht),
+// lfFormatInvariant fuer den Alt-Weg (ab 10.3 geprueft, FPC 3.2 kennt
+// TFormatSettings.Invariant nicht). Die FPC-Weiche und alte Spuren IN der
+// Datei prueft schon der Planer. Fundstellen: GExperts GX_DbugIntf.pas
+// (Delphi 1-6, GExpert4.dof), Rechnung.lpi (rgReportPayments.pas,
+// rgInvoiceItemEdit.pas), Img32.inc mit '{$IFDEF FPC}' (Img32.SVG.Path.pas).
+// Die Includes fragte bis rwE31 Stufe 3 NUR der Alt-Weg (Entscheid Nico
+// nach dem Review e/HilfeFixC, M1): fuer den Hauptweg beweist eine
+// Versionsweiche in jedi.inc & Co. nichts (die Kits bauen mit vielen
+// Versionen, auch ab XE), und ein nicht gefundenes Include sperrt ihn
+// nicht - sonst fielen rund 40 % (SCA128) bzw. 50 % (SCA059) der
+// Hauptweg-Angebote weg. Seit rwE31 Stufe 3 sperrt den Hauptweg ein
+// Kit-Include der Unit und (Nico-Entscheid M1b, 2026-10-30) eine
+// Delphi-Weiche bis XE in einem gelesenen Include - beides nur, wenn kein
+// Programm mit .dproj ab XE im Fenster die Unit enthaelt
+// (TRdxMagicFixes.ProjectReason, ModernProjectProof; Clipper.inc in
+// doublecmd Image32). FPC-Weichen und nicht gefundene Includes sperren ihn
+// weiter nicht. Dazu die Spuren in der Unit (Planer) und alte
+// Projektdateien (FileReason). Die Netzpfad-Sperre bleibt fuer beide Wege:
+// sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
+// liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
+// die Projekt-Sperre nicht pruefbar).
+// Seit rwE30 Stufe 2 ueber TRdxMagicFixes.ProjectReason: beweist die
+// Datei selbst einen neueren Compiler (Inline-Variable, RTL-Namensraum)
+// bzw. nutzt sie Invariant ohne Weiche, fragt er die Platte nicht. Auch
+// fuer SCA127 (lfExceptionClasses, mit Includes; dort sperrt der Netzpfad
+// nicht - kein Beleg) und seit dem Nachzug zu e/HilfeFixJ fuer die
+// raise-Varianten von SCA020 und SCA168 (ENotImplemented,
+// EInvalidOpException - dieselbe Schwelle Delphi 2009).
+procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
+  AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
+var
+  Map : TRdxCodeMap;
+begin
+  if not AOutcome.Enabled then Exit;
+  AOutcome.Reason := '';
+  if TRdxMagicFixes.MissingBlocks(AFeature) then
+    AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
+  if AOutcome.Reason = '' then
+  begin
+    Map := TRdxCodeMap.Acquire(ALines);
+    try
+      AOutcome.Reason := TRdxMagicFixes.ProjectReason(AFinding.FileName, Map,
+        AFeature, AFeature in [lfFormatInvariant, lfExceptionClasses]);
+    finally
+      TRdxCodeMap.Release(Map);
+    end;
+  end;
+  if AOutcome.Reason = '' then Exit;
+  AOutcome.Enabled := False;
+  AOutcome.Edits := nil;
+end;
+
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
 // Platte neben der Unit (Gegen-Review H3, Minor 4) - sie koennen die
 // Routine deklarieren oder rufen; nicht gefunden heisst keine Hilfe. Nur,
@@ -921,11 +979,16 @@ begin
   Result := TRdxFixRunner.CaseElseFix(APlaces, ALines, AFinding.LineInt);
 end;
 
+// SCA168, zweiter Eintrag: EInvalidOpException gibt es erst ab Delphi 2009 -
+// neben den Spuren in der Datei (Planer, OldExceptionClassReason) wie SCA127
+// der Plattenblick (Nico-Entscheid "Altcompiler: Sperre nur bei Beleg",
+// Nachzug Review e/HilfeFixJ).
 function PlanCaseRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.CaseRaiseFix(APlaces, ALines, AFinding.LineInt,
     AUsesNames);
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
 end;
 
 // SCA101 und SCA099 - BlockFix unterscheidet die Art selbst.
@@ -982,10 +1045,13 @@ begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message, EmptyIntentOnMap);
 end;
 
+// SCA020, zweiter Eintrag: ENotImplemented gibt es erst ab Delphi 2009 - der
+// Plattenblick wie bei SCA168.2 (PlanCaseRaise).
 function PlanEmptyRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := EmptyRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
 end;
 
 function PlanMissingRaise(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1520,62 +1586,6 @@ end;
   SCA154 und SCA131; die Antworten pruefen reine Funktionen der Units
   (ProofReason, TypeReason, OperandReason, VariantReason - dort stehen die
   msgids, tools/i18n_extract.py loest nur Konstanten derselben Unit auf). ---- }
-
-// SCA128/SCA059 (Realworld-Test rwE29): was nur Dateiname und Platte
-// wissen - der Plattenblick von SCA014 (TRdxMagicFixes, wie
-// PlanDigitGrouping): Netzpfad, Lazarus-Dateiart bzw. -Projekt neben der
-// Unit, alte Delphi-Projektdatei bzw. .dproj vor der Schwelle, Weichen in
-// den Includes. AFeature: lfFormatSettingsVar fuer den Hauptweg (die
-// globale Variable ab Delphi XE; FPC kennt sie - Lazarus sperrt nicht),
-// lfFormatInvariant fuer den Alt-Weg (ab 10.3 geprueft, FPC 3.2 kennt
-// TFormatSettings.Invariant nicht). Die FPC-Weiche und alte Spuren IN der
-// Datei prueft schon der Planer. Fundstellen: GExperts GX_DbugIntf.pas
-// (Delphi 1-6, GExpert4.dof), Rechnung.lpi (rgReportPayments.pas,
-// rgInvoiceItemEdit.pas), Img32.inc mit '{$IFDEF FPC}' (Img32.SVG.Path.pas).
-// Die Includes fragte bis rwE31 Stufe 3 NUR der Alt-Weg (Entscheid Nico
-// nach dem Review e/HilfeFixC, M1): fuer den Hauptweg beweist eine
-// Versionsweiche in jedi.inc & Co. nichts (die Kits bauen mit vielen
-// Versionen, auch ab XE), und ein nicht gefundenes Include sperrt ihn
-// nicht - sonst fielen rund 40 % (SCA128) bzw. 50 % (SCA059) der
-// Hauptweg-Angebote weg. Seit rwE31 Stufe 3 sperrt den Hauptweg ein
-// Kit-Include der Unit und (Nico-Entscheid M1b, 2026-10-30) eine
-// Delphi-Weiche bis XE in einem gelesenen Include - beides nur, wenn kein
-// Programm mit .dproj ab XE im Fenster die Unit enthaelt
-// (TRdxMagicFixes.ProjectReason, ModernProjectProof; Clipper.inc in
-// doublecmd Image32). FPC-Weichen und nicht gefundene Includes sperren ihn
-// weiter nicht. Dazu die Spuren in der Unit (Planer) und alte
-// Projektdateien (FileReason). Die Netzpfad-Sperre bleibt fuer beide Wege:
-// sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
-// liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
-// die Projekt-Sperre nicht pruefbar).
-// Seit rwE30 Stufe 2 ueber TRdxMagicFixes.ProjectReason: beweist die
-// Datei selbst einen neueren Compiler (Inline-Variable, RTL-Namensraum)
-// bzw. nutzt sie Invariant ohne Weiche, fragt er die Platte nicht. Auch
-// fuer SCA127 (lfExceptionClasses, mit Includes; dort sperrt der Netzpfad
-// nicht - kein Beleg).
-procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
-  AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
-var
-  Map : TRdxCodeMap;
-begin
-  if not AOutcome.Enabled then Exit;
-  AOutcome.Reason := '';
-  if TRdxMagicFixes.MissingBlocks(AFeature) then
-    AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
-  if AOutcome.Reason = '' then
-  begin
-    Map := TRdxCodeMap.Acquire(ALines);
-    try
-      AOutcome.Reason := TRdxMagicFixes.ProjectReason(AFinding.FileName, Map,
-        AFeature, AFeature in [lfFormatInvariant, lfExceptionClasses]);
-    finally
-      TRdxCodeMap.Release(Map);
-    end;
-  end;
-  if AOutcome.Reason = '' then Exit;
-  AOutcome.Enabled := False;
-  AOutcome.Edits := nil;
-end;
 
 // SCA128 (Charge QF1): ', FormatSettings' an jeden Aufruf der Liste auf der
 // Fundzeile - die Textlogik in uRdxFormatSettingsFix.

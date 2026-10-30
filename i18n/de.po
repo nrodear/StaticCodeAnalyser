@@ -6993,23 +6993,23 @@ msgstr "Werte von %s ohne Zweig: %s - sie können hier Normalfall sein, und rais
 msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
 msgstr "nicht in der Glühbirne: %s; unbehandelte Werte lösen EInvalidOpException aus"
 
-msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"
+msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
 
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"
 msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort gibt es keine globale Variable FormatSettings; %s"
 
-msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
 
-msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 2009 (%s), und dort gibt es weder EArgumentException noch EInvalidOpException; %s"
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 2009 (%s), und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
 
-msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - there is neither EArgumentException nor EInvalidOpException there; %s"
-msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 2009 = %s) - dort gibt es weder EArgumentException noch EInvalidOpException; %s"
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented do not exist there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 2009 = %s) - dort gibt es die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented nicht; %s"
 
-msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 2009, und dort gibt es weder EArgumentException noch EInvalidOpException; %s"
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
 
 msgid "the call of %s does not close within %d lines"
 msgstr "der Aufruf von %s schließt nicht innerhalb von %d Zeilen"
@@ -7020,8 +7020,8 @@ msgstr "der Aufruf von %s läuft von Zeile %d bis Zeile %d über eine Compiler-D
 msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"
 msgstr "die Datei stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei"
 
-msgid "the include %s shows traces of older compilers (%s, line %d) - EArgumentException and EInvalidOpException exist only from Delphi 2009 on; %s"
-msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - EArgumentException und EInvalidOpException gibt es erst ab Delphi 2009; %s"
+msgid "the include %s shows traces of older compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009; %s"
 
 msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"
 msgstr "das Programm %s im Verzeichnis %s enthält die Unit und stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei; %s"

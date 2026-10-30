@@ -601,7 +601,10 @@ begin
     DeleteFile(T.C + 'CnDebugViewer64.dproj');
     WriteText(T.C + 'Tool.dpr', 'program Tool;');
     WriteText(T.C + 'Tool.cfg', '-$A8');
-    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses), ['.cfg']);
+    // Nachzug Review e/HilfeFixJ: die Saetze nennen alle drei Klassen ab
+    // Delphi 2009 (SCA127, SCA020.2 ENotImplemented, SCA168.2).
+    AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses), ['.cfg',
+      'ENotImplemented']);
   finally
     RemoveTree(T.Root);
   end;
@@ -624,7 +627,7 @@ begin
     AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
       ['RechnungDelphi.dpr', 'Rechnung.lpi']);
     AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
-      ['RechnungDelphi.dpr', 'Rechnung.lpi']);
+      ['RechnungDelphi.dpr', 'Rechnung.lpi', 'ENotImplemented']);
     // Gegenprobe: mit eigener .dproj ist das Programm neu.
     WriteDproj(T.C + 'RechnungDelphi.dproj', '19.5');
     Assert.AreEqual('', TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
@@ -656,7 +659,8 @@ begin
     WriteText(T.C + 'GX_CondDefine.inc', '{$IFDEF VER140}' + #13#10
       + '  {$DEFINE GX_VER140}' + #13#10 + '{$ENDIF}');
     AssertNames(ProjectReasonOf(T.U, Format(SRC_INC, ['GX_CondDefine.inc']),
-      lfExceptionClasses, True), ['GX_CondDefine.inc', 'VER140']);
+      lfExceptionClasses, True), ['GX_CondDefine.inc', 'VER140',
+      'ENotImplemented']);
     // Gegenprobe: ein Include nur mit neuen Versionen.
     WriteText(T.C + 'GX_CondDefine.inc', '{$IFDEF VER350}' + #13#10
       + '  {$DEFINE D11}' + #13#10 + '{$ENDIF}');
@@ -665,7 +669,7 @@ begin
     // GExperts: die alte Projektdatei zwei Ebenen hoeher.
     WriteText(T.A + 'GExpert4.dof', '[Compiler]');
     AssertNames(ProjectReasonOf(T.U, 'unit u; implementation end.',
-      lfExceptionClasses, True), ['GExpert4.dof']);
+      lfExceptionClasses, True), ['GExpert4.dof', 'ENotImplemented']);
     // Netzpfad: kein Beleg (SCA127), Grund fuer die anderen.
     Net := PathDelim + PathDelim + 'rdx-e30-gibt-es-nicht' + PathDelim
       + 'share' + PathDelim + 'u.pas';

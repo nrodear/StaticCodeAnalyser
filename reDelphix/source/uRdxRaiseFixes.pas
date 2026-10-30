@@ -80,9 +80,11 @@ type
 // uRdxRawExceptionFix, lfExceptionClasses). Fragt die Datei nach einem
 // aelteren Compiler (uRdxCompilerTraces.OldCompilerTrace) und beweist sie
 // keinen neueren (ModernProof), der Grund; sonst ''. Nur die Spuren in der
-// Datei (Nico-Entscheid "Sperre nur bei Beleg") - den Plattenblick
-// (Projektdateien) fragt fuer diese Klassen niemand: seine Gruende nennen
-// EArgumentException/EInvalidOpException (uRdxMagicFixes, lfExceptionClasses).
+// Datei (Nico-Entscheid "Sperre nur bei Beleg"); den Plattenblick
+// (Projektdateien, Pakete, Includes) fragen die Adapter danach wie bei
+// SCA127 (uRdxFixTable.PlanEmptyRaise/PlanCaseRaise ueber
+// FormatSettingsDiskCheck mit lfExceptionClasses - seine Saetze nennen alle
+// drei Klassen; Nachzug Review e/HilfeFixJ).
 function OldExceptionClassReason(AMap: TRdxCodeMap;
   const AClass: string): string;
 

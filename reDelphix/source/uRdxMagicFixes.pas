@@ -164,12 +164,14 @@ type
   //                     (2026-10-30) ueber ProjectReason - nur ohne
   //                     Projekt der Unit ab XE, nur Delphi-Weichen bis XE
   //                     (R_INC_OLD), kein Grund fuer ein fehlendes Include.
-  //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException - ab
-  //                     Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test rwE30
-  //                     Stufe 2, Nico-Entscheid "Sperre bei Beleg": GExperts
-  //                     fuer Delphi 3-6 mit .dof, CnWizards_D5..D2007 in
-  //                     Source\, CnDebugViewer.dpr mit .dof). FPC kennt
-  //                     beide. Hier ist der Normalfall modern: ein Deckel,
+  //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException, seit
+  //                     dem Nachzug zu e/HilfeFixJ auch SCA020.2
+  //                     (ENotImplemented) und SCA168.2 (EInvalidOpException)
+  //                     - ab Delphi 2009 (FLOOR_DEFAULT_FN; Realworld-Test
+  //                     rwE30 Stufe 2, Nico-Entscheid "Sperre bei Beleg":
+  //                     GExperts fuer Delphi 3-6 mit .dof, CnWizards_D5..
+  //                     D2007 in Source\, CnDebugViewer.dpr mit .dof). FPC
+  //                     kennt alle drei. Hier ist der Normalfall modern: ein Deckel,
   //                     der Pakete ungelesen laesst, und ein nicht
   //                     gefundenes Include sind KEIN Beleg (MissingBlocks) -
   //                     anders als fuer die Sprachmittel ab 10.3/11.
@@ -538,8 +540,8 @@ const
       + 'with a Delphi before XE, which has no global variable FormatSettings; '
       + '%s',
     'old project file %s in the directory %s - the unit probably also builds '
-      + 'with a Delphi before 2009, which has neither EArgumentException nor '
-      + 'EInvalidOpException; %s');
+      + 'with a Delphi before 2009, which lacks the exception classes '
+      + 'EArgumentException, EInvalidOpException and ENotImplemented; %s');
   R_OLD_DPROJ: array[TRdxLateFeature] of string = (
     'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
       + '= %s) - there are no inline constants there; %s',
@@ -552,8 +554,8 @@ const
     'project %s in the directory %s with ProjectVersion %s (before Delphi XE '
       + '= %s) - there is no global variable FormatSettings there; %s',
     'project %s in the directory %s with ProjectVersion %s (before Delphi 2009 '
-      + '= %s) - there is neither EArgumentException nor EInvalidOpException '
-      + 'there; %s');
+      + '= %s) - the exception classes EArgumentException, EInvalidOpException '
+      + 'and ENotImplemented do not exist there; %s');
   R_NO_VERSION: array[TRdxLateFeature] of string = (
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
@@ -572,8 +574,8 @@ const
       + 'XE, which has no global variable FormatSettings; %s',
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
-      + '2009, which has neither EArgumentException nor EInvalidOpException; '
-      + '%s');
+      + '2009, which lacks the exception classes EArgumentException, '
+      + 'EInvalidOpException and ENotImplemented; %s');
   // Ein Paket, das die Unit enthaelt (PackagesReason, rwE29): %s Paket,
   // %s Verzeichnis, %s der Beleg (Ordnername 'd104' bzw. "LIBSUFFIX '104'"),
   // %s MsgByHand.
@@ -591,8 +593,8 @@ const
       + 'Delphi before XE (%s), which has no global variable FormatSettings; '
       + '%s',
     'package %s in the directory %s contains the unit and is meant for a '
-      + 'Delphi before 2009 (%s), which has neither EArgumentException nor '
-      + 'EInvalidOpException; %s');
+      + 'Delphi before 2009 (%s), which lacks the exception classes '
+      + 'EArgumentException, EInvalidOpException and ENotImplemented; %s');
   // Der Deckel MAX_PACKAGE_READS ist erschoepft, in einem alten oder
   // unbekannten Paketordner bleibt eine .dpk ungelesen (Review
   // e/HilfeFixB): %s der Ordner, %d der Deckel, %s MsgByHand. Fuer
@@ -641,9 +643,9 @@ const
       + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s',
     'the include %s shows traces of older compilers (%s, line %d) - the global '
       + 'variable FormatSettings exists only from Delphi XE on; %s',
-    'the include %s shows traces of older compilers (%s, line %d) - '
-      + 'EArgumentException and EInvalidOpException exist only from Delphi '
-      + '2009 on; %s');
+    'the include %s shows traces of older compilers (%s, line %d) - the '
+      + 'exception classes EArgumentException, EInvalidOpException and '
+      + 'ENotImplemented exist only from Delphi 2009 on; %s');
   // Ein Programm ohne Projektdatei neben einem Lazarus-Projekt (rwE30 Stufe
   // 2, PairsIn: RechnungDelphi.dpr neben Rechnung.lpi - ausdruecklich fuer
   // Delphi 7 und FPC geschrieben): %s das Programm, %s das Lazarus-Projekt,
@@ -667,8 +669,9 @@ const
       + 'directory %s - written for FPC and an older Delphi, which has no '
       + 'global variable FormatSettings; %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has neither '
-      + 'EArgumentException nor EInvalidOpException; %s');
+      + 'directory %s - written for FPC and an older Delphi, which lacks the '
+      + 'exception classes EArgumentException, EInvalidOpException and '
+      + 'ENotImplemented; %s');
   // Ein Programm, das die Unit enthaelt, setzt die globale FormatSettings
   // selbst (rwE30 Stufe 2, HeidiSQL packages\Delphi12.3\heidisql.dpr:
   // 'FormatSettings.ShortDateFormat := ''yyyy/mm/dd'''): Invariant liefe

@@ -214,6 +214,9 @@ type
     [Test] procedure Sca120_RoundTrip_CatalogExample;
     [Test] procedure Sca122_RoundTrip_CatalogExample;
     [Test] procedure Sca122_InnerTry_NoHelp;
+    // Nachzug Review e/HilfeFixJ: alte Projektdatei neben der Datei sperrt
+    // die raise-Varianten von SCA020 und SCA168 wie SCA127.
+    [Test] procedure Raise_OldProjectOnDisk_NoHelp;
   end;
 
   // Deklarationen (uRdxDeclFixes): SCA117, SCA197, SCA149.
@@ -2192,6 +2195,65 @@ begin
   AssertNoHelp(InRoutine(Join(['try', '  Obj.Free;', 'except',
     '  on E: Exception do', '    try', '      Obj := nil;', '    except',
     '      raise E;', '    end;', 'end;'])), fkReRaiseException, 'inneren try');
+end;
+
+// Nachzug Review e/HilfeFixJ (Nico-Entscheid "Altcompiler: Sperre nur bei
+// Beleg", wie SCA127 Table_OldProjectNearby_NoHelp): die Datei fragt nach
+// keinem Compiler, aber eine alte Projektdatei (.dof, Delphi 1-7) neben ihr
+// baut sie mit einem Delphi vor 2009 - dort gibt es weder ENotImplemented
+// (SCA020.2) noch EInvalidOpException (SCA168.2). Bis dahin fragten die
+// Adapter nur die Spuren IN der Datei (OldExceptionClassReason) - beide
+// Eintraege waren angeboten (rot ohne den Fix). Gegenprobe: dieselbe Datei
+// neben einer .dproj ab Delphi 2009 (ProjectVersion 19.5) - frei.
+procedure TTestRdxSimpleFixesDetector7.Raise_OldProjectOnDisk_NoHelp;
+var
+  Root, Dir, U, Dof     : string;
+  Src020, Src168        : string;
+  Seen020, Seen168      : TArray<TSeen>;
+  O                     : TRdxFixOutcome;
+begin
+  Src020 := InImplementation(Join(['procedure P;', 'begin', 'end;']));
+  Seen020 := Detect(Src020, fkEmptyMethod);
+  Assert.AreEqual<Integer>(1, Length(Seen020), 'SCA020 meldet');
+  // Jeder Wert hat einen Arm - die raise-Variante stuende in der Gluehbirne.
+  Src168 := Join(['unit t;', 'interface', 'uses', '  SysUtils;', 'type',
+    '  TAbArchiveAction = (aaFailed, aaNone, aaDelete);', 'implementation',
+    'procedure P(A: TAbArchiveAction);', 'begin', '  case A of',
+    '    aaNone: Exit;', '    aaDelete, aaFailed: Exit;', '  end;', 'end;',
+    'end.']);
+  Seen168 := Detect(Src168, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen168), 'SCA168 meldet');
+  Root := NewTempDir('rdx_raise_old_');
+  try
+    Dir := Root + 'tool' + PathDelim + 'src' + PathDelim;
+    ForceDirectories(Dir);
+    U := Dir + 't.pas';
+    Dof := Dir + 'Tool.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanAltFixIn(Src020, U, fkEmptyMethod, Seen020[0]);
+    Assert.AreEqual<Integer>(1, O.Variant, 'SCA020: zweiter Eintrag');
+    Assert.IsFalse(O.Enabled, 'SCA020.2 gesperrt');
+    Assert.IsTrue(Pos('Tool.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('ENotImplemented', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'SCA020: keine Ersetzung');
+    O := PlanAltFixIn(Src168, U, fkDefaultCaseInCaseStatement, Seen168[0]);
+    Assert.AreEqual<Integer>(1, O.Variant, 'SCA168: zweiter Eintrag');
+    Assert.IsFalse(O.Enabled, 'SCA168.2 gesperrt');
+    Assert.IsTrue(Pos('Tool.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('EInvalidOpException', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'SCA168: keine Ersetzung');
+    // Gegenprobe: das Projekt ist ab Delphi 2009 (.dproj, keine .dof).
+    DeleteFile(Dof);
+    WriteText(Dir + 'Tool.dproj', '<Project><PropertyGroup>'
+      + '<ProjectVersion>19.5</ProjectVersion></PropertyGroup></Project>');
+    O := PlanAltFixIn(Src020, U, fkEmptyMethod, Seen020[0]);
+    Assert.IsTrue(O.Enabled, 'SCA020.2 frei: ' + O.Reason);
+    O := PlanAltFixIn(Src168, U, fkDefaultCaseInCaseStatement, Seen168[0]);
+    Assert.IsTrue(O.Enabled, 'SCA168.2 frei: ' + O.Reason);
+    Assert.IsFalse(O.MenuOnly, 'SCA168.2 Gluehbirne: ' + O.Hint);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 { ---- SCA117 / SCA197 / SCA149 ---- }

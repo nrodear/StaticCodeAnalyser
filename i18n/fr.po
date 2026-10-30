@@ -6989,23 +6989,23 @@ msgstr "valeurs de %s sans branche : %s - elles peuvent être normales ici, et r
 msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
 msgstr "pas dans l'ampoule : %s ; les valeurs non traitées lèvent EInvalidOpException"
 
-msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "programme Delphi %s sans .dproj à côté du projet Lazarus %s dans le répertoire %s - écrit pour FPC et un Delphi plus ancien, qui n'a ni EArgumentException ni EInvalidOpException; %s"
+msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "programme Delphi %s sans .dproj à côté du projet Lazarus %s dans le répertoire %s - écrit pour FPC et un Delphi plus ancien, qui n'a pas les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented; %s"
 
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"
 msgstr "programme Delphi %s sans .dproj à côté du projet Lazarus %s dans le répertoire %s - écrit pour FPC et un Delphi plus ancien, qui n'a pas de variable globale FormatSettings; %s"
 
-msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 2009, qui n'a ni EArgumentException ni EInvalidOpException; %s"
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "ancien fichier de projet %s dans le répertoire %s - l'unité se compile sans doute aussi avec un Delphi antérieur à 2009, qui n'a pas les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented; %s"
 
-msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 2009 (%s), qui n'a ni EArgumentException ni EInvalidOpException; %s"
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "le paquet %s dans le répertoire %s contient l'unité et vise un Delphi antérieur à 2009 (%s), qui n'a pas les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented; %s"
 
-msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - there is neither EArgumentException nor EInvalidOpException there; %s"
-msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 2009 = %s) - ni EArgumentException ni EInvalidOpException n'y existent; %s"
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented do not exist there; %s"
+msgstr "projet %s dans le répertoire %s avec ProjectVersion %s (avant Delphi 2009 = %s) - les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented n'y existent pas; %s"
 
-msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which has neither EArgumentException nor EInvalidOpException; %s"
-msgstr "projet %s dans le répertoire %s sans ProjectVersion lisible (Delphi 2007 n'en écrivait pas) - l'unité se compile sans doute aussi avec un Delphi antérieur à 2009, qui n'a ni EArgumentException ni EInvalidOpException; %s"
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "projet %s dans le répertoire %s sans ProjectVersion lisible (Delphi 2007 n'en écrivait pas) - l'unité se compile sans doute aussi avec un Delphi antérieur à 2009, qui n'a pas les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented; %s"
 
 msgid "the call of %s does not close within %d lines"
 msgstr "l'appel de %s ne se ferme pas dans les %d lignes"
@@ -7016,8 +7016,8 @@ msgstr "l'appel de %s s'étend de la ligne %d à la ligne %d par-dessus une dire
 msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"
 msgstr "le fichier règle lui-même la variable globale FormatSettings (%s, ligne %d) - TFormatSettings.Invariant contournerait ces réglages"
 
-msgid "the include %s shows traces of older compilers (%s, line %d) - EArgumentException and EInvalidOpException exist only from Delphi 2009 on; %s"
-msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - EArgumentException et EInvalidOpException n'existent qu'à partir de Delphi 2009; %s"
+msgid "the include %s shows traces of older compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on; %s"
+msgstr "le fichier include %s porte des traces de compilateurs plus anciens (%s, ligne %d) - les classes d'exception EArgumentException, EInvalidOpException et ENotImplemented n'existent qu'à partir de Delphi 2009; %s"
 
 msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"
 msgstr "le programme %s dans le répertoire %s contient l'unité et règle lui-même la variable globale FormatSettings (%s, ligne %d) - TFormatSettings.Invariant contournerait ces réglages; %s"
