@@ -52,6 +52,8 @@ type
     [Test] procedure Sca059_Alt_ArgsReadFormatSettings_NoHelp;
     // ---- Realworld-Test rwE32 Stufe 4 ----
     [Test] procedure Sca059_Alt_Display_NoHelp;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Sca059_Alt_CellTextParam_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -529,6 +531,40 @@ begin
     + 'TFormatSettings.Invariant);']),
     InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x]);']), BODY_LINE,
     Msg('%.2f'), True);
+end;
+
+// ---- Realworld-Test rwE33 Stufe 5 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_CellTextParam_NoHelp;
+const
+  FMT = '%.0n';
+  HEAD: array[0..1] of string = (
+    'procedure TfrmLogAnalyzer.vstFormsGetText(Sender: TBaseVirtualTree;',
+    '  Node: PVirtualNode; Column: TColumnIndex; var CellText: string);');
+  LINE = 'Format(''%.0n'', [Round(Data.PEntry.Value1) + 0.0]';
+var
+  Src : string;
+begin
+  // TES5Edit xEdit\xeLogAnalyzerForm.pas:326/:329: CellText ist der
+  // var-Parameter des OnGetText-Ereignisses - die Zelle zeigt den Text an.
+  // Bis dahin bot der Alt-Weg Invariant an (in der Birne).
+  Src := UnitText(RTL_USES, [HEAD[0], HEAD[1], 'begin', '  case Column of',
+    '    2: CellText := ' + LINE + ');', '  end;', 'end;'], []);
+  AssertRefused(Src, 10, Msg(FMT), _(R_FS_DISPLAY, [10, 'CellText']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(UnitText(RTL_USES, [HEAD[0], HEAD[1], 'begin', '  case Column of',
+    '    2: CellText := ' + LINE + ', FormatSettings);', '  end;', 'end;'], []),
+    Src, 10, Msg(FMT));
+  // Gegenproben: ein Wert-Parameter bzw. eine lokale Variable dieses Namens,
+  // ein Member - Invariant bleibt angeboten.
+  Src := UnitText(RTL_USES, ['function Cell(CellText: string): string;',
+    'begin', '  CellText := ' + LINE + ');', '  Result := CellText;', 'end;'],
+    []);
+  AssertFixed(StringReplace(Src, '0.0]);', '0.0], TFormatSettings.Invariant);',
+    []), Src, 8, Msg(FMT), True);
+  AssertFixed(InUnit(['  Item.CellText := ' + LINE
+    + ', TFormatSettings.Invariant);']), InUnit(['  Item.CellText := ' + LINE
+    + ');']), BODY_LINE, Msg(FMT), True);
 end;
 
 {$IFNDEF FPC}

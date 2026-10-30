@@ -677,23 +677,31 @@ const
   // Delphi 7 und FPC geschrieben): %s das Programm, %s das Lazarus-Projekt,
   // %s das Verzeichnis, %s MsgByHand. Nur die Sprachmittel, die FPC kennt,
   // sehen den Satz (sonst sperrt das Lazarus-Projekt zuerst) - die anderen
-  // tragen den von lfFormatSettingsVar (keine eigene msgid).
+  // tragen den von lfFormatSettingsVar (keine eigene msgid). Bis rwE33 Stufe
+  // 5 'written for FPC and an older Delphi, which has no global variable
+  // FormatSettings; von Hand' - FPC 3.2.2 hat die Variable, und das lose
+  // 'von Hand' steht jetzt in einem Satz (rgInvoiceItemEdit.pas:217).
   R_DUAL_PROJECT: array[TRdxLateFeature] of string = (
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has no '
-      + 'global variable FormatSettings; %s',
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has no '
-      + 'global variable FormatSettings; %s',
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has no '
-      + 'global variable FormatSettings; %s',
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has no '
-      + 'global variable FormatSettings; %s',
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
-      + 'directory %s - written for FPC and an older Delphi, which has no '
-      + 'global variable FormatSettings; %s',
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
     'Delphi program %s without .dproj next to the Lazarus project %s in the '
       + 'directory %s - written for FPC and an older Delphi, which lacks the '
       + 'exception classes EArgumentException, EInvalidOpException and '
@@ -720,8 +728,8 @@ const
     + 'ENotImplemented exist only from Delphi 2009 on';
   // Alt-Weg SCA128.2/SCA059.2 (KitIncludeReason, rwE32 Stufe 4): derselbe
   // Satz wie R_FS_OLD_INVARIANT in uRdxFormatSettingsFix (eine msgid).
-  R_KIT_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
-    + 'line %d) - TFormatSettings.Invariant is only checked from there on';
+  R_KIT_OLD_INVARIANT = 'the file asks for old compilers (%s, line %d) - '
+    + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '

@@ -82,6 +82,11 @@ type
     [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
     [Test] procedure Sca128_Alt_KitInclude_DiskCheckOrWith;
     [Test] procedure Sca128_Alt_ClassSettingsField_NoHelp;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+    [Test] procedure Sca128_Alt_ClassSettingsOtherFamily_Helps;
+    [Test] procedure Sca128_Alt_CoupledViaList_NoHelp;
+    [Test] procedure Sca128_Alt_ConcatOnly_NotCoupled;
   end;
 
 {$IFNDEF FPC}
@@ -1425,8 +1430,10 @@ end;
 
 // Eine Unit mit Klasse TTpl (Felder AFields im Rumpf) und der Methode
 // TTpl.Fmt, deren Rumpfzeile 'Result := FormatDateTime(S, Now);' in Zeile
-// 12 + Length(AFields) steht.
-function ClassUnit(const AFields: array of string): string;
+// 12 + Length(AFields) steht; mit AUse dahinter die Methode
+// <AOwner>.Other(d: TDateTime) mit dem Rumpf AUse.
+function ClassUnit(const AFields: array of string; const AUse: string = '';
+  const AOwner: string = 'TTpl'): string;
 var
   S : string;
 begin
@@ -1441,7 +1448,11 @@ begin
     + CRLF + 'implementation' + CRLF
     + 'function TTpl.Fmt(const S: string; const AFS: TFormatSettings): string;'
     + CRLF + 'begin' + CRLF + '  Result := FormatDateTime(S, Now);' + CRLF
-    + 'end;' + CRLF + 'end.';
+    + 'end;' + CRLF;
+  if AUse <> '' then
+    Result := Result + 'function ' + AOwner + '.Other(d: TDateTime): string;'
+      + CRLF + 'begin' + CRLF + AUse + CRLF + 'end;' + CRLF;
+  Result := Result + 'end.';
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsField_NoHelp;
@@ -1453,8 +1464,11 @@ begin
   // 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
   // einstellbar); Invariant verwuerfe die eingestellte Template-Locale. Der
   // Alt-Weg sperrt mit Hinweis auf das Feld - Parameter, Rueckgabetyp und
-  // Property zaehlen nicht als Feld.
-  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;']);
+  // Property zaehlen nicht als Feld. Seit rwE33 Stufe 5 nur, wenn eine
+  // Methode der Klasse das Feld fuer dieselbe Familie uebergibt (TemplatePro
+  // .pas:889 'DateToStr(.., fLocaleFormatSettings)').
+  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;'],
+    '  Result := DateToStr(d, fLocaleFormatSettings);');
   AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
     ['TTpl', 'fLocaleFormatSettings', 8]), True);
   // Der Hauptweg bleibt (gleiche Bedeutung).
@@ -1476,6 +1490,184 @@ begin
   AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
     'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 16,
     Msg('formatdatetime'), True);
+end;
+
+// ---- Realworld-Test rwE33 Stufe 5 ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+const
+  INV = ', TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6, Luecken der Stufe 5. mORMot2 dmvc-ai
+  // 56-articles_crud_vcl_client MainFormU.pas:206: die Zelle eines
+  // TStringGrid zeigt den Preis an.
+  AssertDisplay(InUnit(['  gridArticles.Cells[3, i + 1] := '
+    + 'CurrToStr(fArticles[i].Price);']), BODY_LINE, Msg('currtostr'),
+    BODY_LINE, 'gridArticles.Cells[3, i + 1]');
+  // Der Hint-Text des OnGetHint-Ereignisses (out-Parameter, zwei Namen in
+  // der Gruppe) - SCA059 mit CellText: uTestRdxFormatLocaleFix.
+  Src := UnitText(RTL_USES, ['procedure TF.vstGetHint(Sender: TObject;',
+    '  out LineBreakStyle, HintText: string);', 'begin',
+    '  HintText := ''Stand: '' + DateToStr(d);', 'end;'], []);
+  AssertDisplay(Src, 9, Msg('datetostr'), 9, 'HintText');
+  // Gegenproben: ein anderes indiziertes Ziel, Cells ohne Objekt davor,
+  // eine lokale Variable CellText, ein Wert-Parameter HintText -
+  // Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Data[3] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Data[3] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'), True);
+  AssertFixed(InUnit(['  Cells[3, 1] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Cells[3, 1] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'),
+    True);
+  Src := UnitText(RTL_USES, ['procedure Q;', 'var', '  CellText: string;',
+    'begin', '  CellText := FloatToStr(x);', '  Log(CellText);', 'end;'], []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 10, Msg('floattostr'), True);
+  Src := UnitText(RTL_USES, ['function Q(HintText: string): string;',
+    'begin', '  HintText := FloatToStr(x);', '  Result := HintText;', 'end;'],
+    []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 8, Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsOtherFamily_Helps;
+const
+  FIELD = '    FFormatSettings: TFormatSettings;';
+  INV = 'FormatDateTime(S, Now, TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // HeidiSQL main.pas:4415 (ebenso 5674, 11246, 11252, 14718): TMainForm
+  // traegt FFormatSettings = TFormatSettings.Create('en-US') und uebergibt es
+  // nur an StrToFloat (Zeile 10680) - der Grund riet, das Feld an
+  // DateTimeToStr zu geben; das braeche das Datum wie Invariant. Kein Grund
+  // der Klasse mehr (der Planer allein bietet an; in HeidiSQL sperrt danach
+  // der Plattenblick: heidisql.dpr stellt die globale FormatSettings ein).
+  Src := ClassUnit([FIELD],
+    '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Nur als Member gelesen bzw. gar nicht uebergeben.
+  Src := ClassUnit([FIELD], '  Result := StringReplace(S, '
+    + 'FFormatSettings.DecimalSeparator, ''.'', []);');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  Src := ClassUnit([FIELD]);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Dieselbe Familie in einer Methode einer anderen Klasse.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, FFormatSettings);',
+    'TOther');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Gegenproben: dieselbe Familie in der Klasse (auch 'Self.' und ueber
+  // mehrere Argumente) - der Grund bleibt.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, Self.FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := FormatDateTime(''hh:nn'', d,'
+    + ' FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  // Review e/HilfeFixV: der Grund faellt nur mit Beweis weg - eine Kopie
+  // des Feldes, eine eigene Routine, ein with oder ein Member fuer
+  // Datum/Uhrzeit koennen dem Datum dienen; der Grund bleibt (bis dahin
+  // bot der Alt-Weg hier Invariant an).
+  Src := ClassUnit([FIELD], '  L := FFormatSettings;' + CRLF
+    + '  Result := DateToStr(d, L);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := MyDateText(d, FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  with FFormatSettings do' + CRLF
+    + '    Result := ShortDateFormat;');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  FFormatSettings.ShortDateFormat := '
+    + '''yyyy-mm-dd'';');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  // HeidiSQL main.pas:1420: die Property gibt das Feld nach aussen, die
+  // Datei selbst liest damit nur Zahlen - kein Grund der Klasse.
+  Src := ClassUnit([FIELD, '    property FormatSettings: TFormatSettings '
+    + 'read FFormatSettings;'], '  FFormatSettings := '
+    + 'TFormatSettings.Create(''en-US'');' + CRLF
+    + '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 16,
+    Msg('formatdatetime'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledViaList_NoHelp;
+const
+  FILL: array[0..4] of string = ('  for Item in History do begin',
+    '    QueryDay := DateToStr(Item.Time);',
+    '    if Tab.HistoryDays.IndexOf(QueryDay) = -1 then',
+    '      Tab.HistoryDays.Add(QueryDay);', '  end;');
+  LOOP = '  for i := History.Count - 1 downto 0 do begin';
+  READ = '    QueryDay := DateToStr(History[i].Time);';
+var
+  Src, Reason : string;
+begin
+  // HeidiSQL main.pas:14718: Zeile 14698 legt 'DateToStr(Item.Time)' ueber
+  // QueryDay in Tab.HistoryDays, Zeile 14719 vergleicht das umgestellte
+  // QueryDay damit - nur diese Seite auf Invariant, und kein Tag passt mehr
+  // (alle Eintraege geloescht). Bis dahin nannte der Grund das Klassenfeld
+  // FFormatSettings bzw. den Plattenblick (V und W heissen gleich).
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Tab.HistoryDays[Node.Index] then',
+    '      History.Delete(i);', '  end;']);
+  AssertRefused(Src, BODY_LINE + 6, Msg('datetostr'), _(R_FS_COUPLED_PAIR,
+    [BODY_LINE + 7, 'QueryDay', 'Tab.HistoryDays', BODY_LINE + 1,
+    'DateToStr']), True);
+  // Der Hauptweg bleibt.
+  Assert.IsTrue(Fix(Src, BODY_LINE + 6, Msg('datetostr'), False, Reason) <> '',
+    'Hauptweg: ' + Reason);
+  // Gegenproben: QueryDay geht nur ins Protokoll bzw. wird mit einer
+  // anderen Liste verglichen - Invariant bleibt angeboten.
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    Log(QueryDay);', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Other.HistoryDays[0] then', '      Foo;', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ConcatOnly_NotCoupled;
+const
+  ISO = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d);';
+  ISO_INV = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d, '
+    + 'TFormatSettings.Invariant);';
+  ZONE = '  s := FormatDateTime(''hh:nn'', x);';
+  TAIL: array[0..3] of string = ('  if x > 0 then', '    r := r + ''+'' + s',
+    '  else', '    r := r + ''Z'';');
+begin
+  // jcl JclDebugSerialization.pas:242: 'Result := Result + ''+'' + S' setzt
+  // zwei je fuer sich formatierte Teile zusammen - die Umstellung von Zeile
+  // 242 bricht nichts an Zeile 244. Bis dahin nannte der Grund Zeile 244
+  // als gekoppeltes Gegenstueck (dort sperrt der Altcompiler ohnehin).
+  AssertFixed(InUnit([ISO_INV, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]),
+    InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]), BODY_LINE,
+    Msg('formatdatetime'), True);
+  // Gegenproben: das Ganze wird gelesen bzw. verglichen - die Verkettung
+  // koppelt weiter.
+  AssertRefused(InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3],
+    '  d := StrToDateTime(r);']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 3, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  AssertRefused(InUnit([ISO, ZONE, '  r := r + s;', '  if r = Expected then',
+    '    Foo;']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  // Ein Vergleich in der Zuweisung selbst ist keine Verkettung.
+  AssertRefused(InUnit([ISO, ZONE, '  b := r + s = Expected;']), BODY_LINE,
+    Msg('formatdatetime'), _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's',
+    BODY_LINE + 1, 'FormatDateTime']), True);
 end;
 
 {$IFNDEF FPC}

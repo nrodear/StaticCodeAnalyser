@@ -86,7 +86,7 @@ unit uRdxFormatSettingsFix;
 //   * Alt-Weg: die Datei eine FPC-Weiche oder einen FPC-Modus traegt (FPC
 //     3.2.2 kennt kein TFormatSettings.Invariant) - ausser alle Aufrufe
 //     stehen in einem Zweig ohne FPC ('{$IF NOT DEFINED(FPC)}') -, nach
-//     Compilern bis Delphi 10.3 fragt (belegt ist Invariant in den Docwiki-
+//     Compilern vor Delphi 10.3 fragt (belegt ist Invariant in den Docwiki-
 //     Staenden ab Rio - dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL) -
 //     beides nicht, wenn die Datei eine Inline-Variable oder Invariant selbst
 //     ohne Weiche nutzt (rwE30 Stufe 2) -, ein eigenes TFormatSettings
@@ -165,8 +165,12 @@ const
     + 'variable FormatSettings exists from Delphi XE on';
   R_FS_FPC = 'the file is also written for FPC (line %d) - FPC 3.2 knows no '
     + 'TFormatSettings.Invariant';
-  R_FS_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
-    + 'line %d) - TFormatSettings.Invariant is only checked from there on';
+  // Bis rwE33 Stufe 5 'asks for compilers up to Delphi 10.3' - bei
+  // COMPILER6_UP (Frage nach Delphi 6 und neuer, CnTestDesignMenuWizard.pas:
+  // 303) falsch; jetzt wie R_FS_OLD_VAR (derselbe Satz als
+  // R_KIT_OLD_INVARIANT in uRdxMagicFixes, eine msgid).
+  R_FS_OLD_INVARIANT = 'the file asks for old compilers (%s, line %d) - '
+    + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on';
   R_FS_OWN_TYPE = 'the file declares its own TFormatSettings (line %d)';
   // Alt-Weg (rwE30 Stufe 2): die Datei stellt die globale FormatSettings
   // selbst ein - %s das Feld, %d die Zeile.
@@ -216,8 +220,9 @@ const
     + 'locale is the right one; TFormatSettings.Invariant would show decimal '
     + 'point and MM/dd/yyyy';
   // Alt-Weg (rwE32 Stufe 4, ClassSettingsReason): die Klasse der Methode
-  // traegt ein eigenes TFormatSettings-Feld - %s die Klasse, %s das Feld,
-  // %d seine Zeile.
+  // traegt ein eigenes TFormatSettings-Feld, das Aufrufen derselben Familie
+  // dienen kann (seit rwE33 Stufe 5) - %s die Klasse, %s das Feld, %d seine
+  // Zeile.
   R_FS_CLASS_SETTINGS = 'the class %s carries its own format settings %s '
     + '(line %d) - pass those by hand instead of TFormatSettings.Invariant, '
     + 'which would drop what is set there';
@@ -1059,6 +1064,70 @@ begin
     Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
 end;
 
+// ---- Ketten 'A.B[i].C' (Anzeige-Ziel, Behaelter der Kopplung) ----
+// Bis rwE33 Stufe 5 im Abschnitt Anzeige-Ziel; seitdem liest auch die
+// Kopplung ueber einen Behaelter (StoredChain) Ketten.
+
+const
+  // So weit lesen OpenerOf, DisplayTarget und CallAroundArg rueckwaerts.
+  MAX_DISPLAY_TOKENS = 2000;
+
+// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
+function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  Count := 0;
+  T := AClose;
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Depth := Depth - ParenDelta(T);
+    if Depth = 0 then
+      Exit(T);
+    Inc(Count);
+    T := Before(AMap, T);
+  end;
+end;
+
+// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
+// und Klammergruppen hinter einem Glied).
+function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
+var
+  P, T : TRdxToken;
+begin
+  Result := ALast;
+  P := Before(AMap, Result);
+  while P.Low = '.' do
+  begin
+    T := Before(AMap, P);
+    while (T.Low = ']') or (T.Low = ')') do
+    begin
+      T := OpenerOf(AMap, T);
+      if T.Low = '' then Exit;
+      T := Before(AMap, T);
+    end;
+    if not T.IsWord then Exit;
+    Result := T;
+    P := Before(AMap, Result);
+  end;
+end;
+
+// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
+// nur ALast).
+function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
+var
+  S : TRdxToken;
+begin
+  S := ChainStart(AMap, ALast);
+  if S.Line <> ALast.Line then
+    Exit(TokText(AMap, ALast));
+  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
+end;
+
 // ---- Gekoppelte Auswertung (Alt-Weg, rwE31 Stufe 3) ----
 // Nico-Ergaenzung zu M2: ein Gegenstueck, das in derselben Routine DIREKT
 // mit dem Ergebnis verglichen oder mit ihm gekoppelt ausgewertet wird, ist
@@ -1082,7 +1151,21 @@ end;
 //   * V und das Ziel W eines Gegenstuecks (IsPartnerAt; 'W := DateToStr(..)')
 //     nennt, bzw. das umgestellte Stueck W nennt (R_FS_COUPLED_PAIR);
 //   * selbst das Gegenstueck traegt und V nennt ('if DateToStr(x) = V',
-//     'TryStrToCurr(V, y)' - R_FS_COUPLED_CALL).
+//     'TryStrToCurr(V, y)' - R_FS_COUPLED_CALL);
+//   * seit rwE33 Stufe 5 V und eine Kette X nennt, in die das Gegenstueck
+//     W gelegt hat ('X.Add(W)' bis zur naechsten Zuweisung an W; das Stueck
+//     liegt hinter der umgestellten Zuweisung, vor der naechsten an V) -
+//     HeidiSQL main.pas:14718: 'QueryDay := DateToStr(Item.Time);
+//     Tab.HistoryDays.Add(QueryDay)' (14698) und 'QueryDay :=
+//     DateToStr(History[i].Time); if QueryDay <> Tab.HistoryDays[..]'
+//     (R_FS_COUPLED_PAIR mit X als Ziel des Gegenstuecks). Bis dahin
+//     zaehlte das nicht (V und W heissen gleich), und der Grund der Klasse
+//     bzw. des Plattenblicks stand vorn.
+// Keine Kopplung ist seit rwE33 Stufe 5 ein Stueck, das V und W nur
+// verkettet ('Result := Result + ''+'' + S', JclDebugSerialization.pas:242
+// - zwei Teile, je fuer sich formatiert; ConcatOnly), solange das Ziel der
+// Verkettung in der Routine sonst nur weiter verkettet wird (ein Leser
+// 'StrToDateTime(S)' oder Vergleich 'S = ..' des Ganzen koppelt weiter).
 // V bzw. W zaehlen nur hinter einem schreibenden Aufruf (TEXT_WRITERS):
 // dann sind sie Text im jeweiligen Format; hinter einem Leser stehen Zahl
 // bzw. Datum, und deren Vergleich haengt nicht am Format.
@@ -1111,6 +1194,11 @@ const
   TEXT_WRITERS: array[0..10] of string = ('datetostr', 'timetostr',
     'datetimetostr', 'formatdatetime', 'floattostr', 'currtostr',
     'formatfloat', 'formatcurr', 'floattostrf', 'currtostrf', 'format');
+  // Vergleiche (ConcatOnly; 'in' ist ein Schluesselwort und endet dort
+  // ohnehin).
+  COMPARE_OPS: array[0..5] of string = ('=', '<>', '<', '>', '<=', '>=');
+  // 'X.Add(W)' legt W in den Behaelter X (StoredChain).
+  NAME_ADD = 'add';
 
 // Die Stuecke zwischen AFrom und ATo (beide ausgenommen).
 function PiecesIn(AMap: TRdxCodeMap; const AFrom, ATo: TRdxToken): TPieces;
@@ -1284,6 +1372,131 @@ begin
   end;
 end;
 
+// Ist das Stueck eine Zuweisung, deren rechte Seite nur verkettet: auf
+// Klammertiefe 0 nur Woerter (keine Schluesselwoerter), Zahlen, '+' und
+// '.', kein Vergleich auch in Klammern, und die Namen ANames nur auf Tiefe 0
+// (nicht als Argument einer Routine)?
+function ConcatOnly(AMap: TRdxCodeMap; const APiece: TPiece;
+  const ANames: array of string): Boolean;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+  Rhs   : Boolean;
+begin
+  Result := False;
+  if PieceTarget(AMap, APiece).Low = '' then Exit;
+  Depth := 0;
+  Rhs := False;
+  P := Default(TRdxToken);
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if Rhs then
+    begin
+      if InList(T.Low, COMPARE_OPS) then
+        Exit;
+      if T.IsWord then
+      begin
+        if IsKeyword(T.Low) and IsKeywordAfter(T, P) then
+          Exit;
+        if (Depth > 0) and InList(T.Low, ANames) then
+          Exit;
+      end
+      else if (Depth = 0) and (ParenDelta(T) = 0)
+              and not ((T.Low = '+') or (T.Low = '.')
+                       or CharInSet(T.Low[1], ['0'..'9', '#', '$'])) then
+        Exit;
+    end
+    else if (T.Low = ':=') and (Depth = 0) then
+      Rhs := True;
+    Depth := Depth + ParenDelta(T);
+    if SameTok(T, APiece.Last) then Break;
+    P := T;
+    T := After(AMap, T);
+  end;
+  Result := Rhs;
+end;
+
+// Die Verkettung im Stueck AConcat (ConcatOnly mit ANames) entkoppelt nur,
+// wenn ihr Ziel in den anderen Stuecken der Routine (ausser den
+// umgestellten) hoechstens weiter verkettet wird ('Result := Result +
+// ''Z''') - jede andere Nennung (Leser, Vergleich, Argument) koppelt.
+function ConcatDecouples(AMap: TRdxCodeMap; const APieces: TPieces;
+  const AEdited: array of Boolean; AConcat: Integer;
+  const ANames: array of string): Boolean;
+var
+  Target : TRdxToken;
+  j      : Integer;
+begin
+  Result := ConcatOnly(AMap, APieces[AConcat], ANames);
+  if not Result then Exit;
+  Target := PieceTarget(AMap, APieces[AConcat]);
+  for j := 0 to High(APieces) do
+    if (j <> AConcat) and not AEdited[j]
+       and PieceNames(AMap, APieces[j], Target.Low)
+       and not ((PieceTarget(AMap, APieces[j]).Low = Target.Low)
+                and ConcatOnly(AMap, APieces[j], [Target.Low])) then
+      Exit(False);
+end;
+
+// Der Behaelter, in den die Stuecke hinter AFrom den Wert W legen ('X.Add(W)'
+// mit W als einzigem Argument), bis W neu geschrieben wird bzw. ein
+// umgestelltes Stueck kommt: das letzte Glied von X; leer ohne. AChain: X
+// wie geschrieben.
+function StoredChain(AMap: TRdxCodeMap; const APieces: TPieces;
+  const AEdited: array of Boolean; AFrom: Integer; const W: TRdxToken;
+  out AChain: string): TRdxToken;
+var
+  k         : Integer;
+  T, A, Dot : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  AChain := '';
+  for k := AFrom + 1 to High(APieces) do
+  begin
+    if AEdited[k] or (PieceTarget(AMap, APieces[k]).Low = W.Low) then
+      Exit;
+    T := APieces[k].First;
+    while T.Low <> '' do
+    begin
+      if T.IsWord and (T.Low = W.Low) and (Before(AMap, T).Low = '(')
+         and (After(AMap, T).Low = ')') then
+      begin
+        A := Before(AMap, Before(AMap, T));
+        Dot := Before(AMap, A);
+        if A.IsWord and (A.Low = NAME_ADD) and (Dot.Low = '.')
+           and Before(AMap, Dot).IsWord then
+        begin
+          Result := Before(AMap, Dot);
+          AChain := ChainText(AMap, Result);
+          Exit;
+        end;
+      end;
+      if SameTok(T, APieces[k].Last) then Break;
+      T := After(AMap, T);
+    end;
+  end;
+end;
+
+// Nennt das Stueck die Kette, deren letztes Glied AOwner ist (gleicher Text,
+// gross/klein egal)?
+function PieceHasChain(AMap: TRdxCodeMap; const APiece: TPiece;
+  const AOwner: TRdxToken; const AChain: string): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := APiece.First;
+  while T.Low <> '' do
+  begin
+    if T.IsWord and (T.Low = AOwner.Low)
+       and SameText(ChainText(AMap, T), AChain) then
+      Exit(True);
+    if SameTok(T, APiece.Last) then Exit;
+    T := After(AMap, T);
+  end;
+end;
+
 // Der Grund der gekoppelten Auswertung (s. Kopf des Abschnitts); '' ohne.
 function CoupledReason(AMap: TRdxCodeMap; const ASites: TCallSites): string;
 var
@@ -1292,10 +1505,12 @@ var
   Edited            : array of Boolean;
   i, k, Li, Line0   : Integer;
   V, W, Partner     : TRdxToken;
-  Text, Call        : string;
+  Text, Call, Chain : string;
   WantDate, WantNum : Boolean;
   Writer            : Boolean;
   Best              : Int64;
+  EditIdx, m        : Integer;
+  Owner             : TRdxToken;
 begin
   Result := '';
   if (Length(ASites) = 0)
@@ -1306,11 +1521,15 @@ begin
   Pieces := PiecesIn(AMap, R.Body, R.EndTok);
   SetLength(Edited, Length(Pieces));
   V := Default(TRdxToken);
+  EditIdx := -1;
   for i := 0 to High(Pieces) do
   begin
     Edited[i] := PieceHasSite(Pieces[i], ASites);
-    if Edited[i] and (V.Low = '') then
+    if Edited[i] and (EditIdx < 0) then
+    begin
+      EditIdx := i;
       V := PieceTarget(AMap, Pieces[i]);
+    end;
   end;
   // Nur ein schreibender Aufruf macht V zu Text im umgestellten Format.
   Writer := False;
@@ -1354,6 +1573,26 @@ begin
       NoteCoupling(Line0, Partner.Line, Partner.Line, _(R_FS_COUPLED_CALL,
         [Partner.Line, TokText(AMap, V), TokText(AMap, Partner)]), Best,
         Result);
+    // Ueber einen Behaelter (rwE33 Stufe 5, s. Kopf des Abschnitts): die
+    // Stuecke hinter der umgestellten Zuweisung bis zur naechsten an V.
+    if (V.Low <> '') and (W.Low <> '') then
+    begin
+      Owner := StoredChain(AMap, Pieces, Edited, i, W, Chain);
+      if Owner.Low <> '' then
+      begin
+        m := EditIdx + 1;
+        while (m <= High(Pieces))
+              and (PieceTarget(AMap, Pieces[m]).Low <> V.Low) do
+        begin
+          if not Edited[m] and PieceNames(AMap, Pieces[m], V.Low)
+             and PieceHasChain(AMap, Pieces[m], Owner, Chain) then
+            NoteCoupling(Line0, Partner.Line, Pieces[m].First.Line,
+              _(R_FS_COUPLED_PAIR, [Pieces[m].First.Line, TokText(AMap, V),
+              Chain, Partner.Line, TokText(AMap, Partner)]), Best, Result);
+          Inc(m);
+        end;
+      end;
+    end;
     if (W.Low = '') or (W.Low = V.Low) then Continue;
     for k := 0 to High(Pieces) do
       if Edited[k] and PieceNames(AMap, Pieces[k], W.Low) then
@@ -1363,7 +1602,9 @@ begin
           Result)
       else if (k <> i) and not Edited[k] and (V.Low <> '')
               and PieceNames(AMap, Pieces[k], V.Low)
-              and PieceNames(AMap, Pieces[k], W.Low) then
+              and PieceNames(AMap, Pieces[k], W.Low)
+              and not ConcatDecouples(AMap, Pieces, Edited, k,
+                [V.Low, W.Low]) then
         NoteCoupling(Line0, Partner.Line, Pieces[k].First.Line,
           _(R_FS_COUPLED_PAIR, [Pieces[k].First.Line, TokText(AMap, V),
           TokText(AMap, W), Partner.Line, TokText(AMap, Partner)]), Best,
@@ -1380,6 +1621,12 @@ end;
 //     Text') - '.Text' nicht, wenn ein Glied der Kette nach Daten klingt
 //     (DATA_PARTS: 'Query.SQL.Text', 'Node.Text', 'Json.Text') oder der
 //     Besitzer eine Stringliste sein kann (TEXT_OWNERS: 'SL.Text');
+//   * seit rwE33 Stufe 5 Zuweisung an 'X.Cells[..]' (TStringGrid; mORMot2
+//     dmvc-ai 56-articles_crud_vcl_client MainFormU.pas:206, DATA_PARTS wie
+//     bei '.Text') und an den var- bzw. out-Parameter 'CellText' bzw.
+//     'HintText' der Routine (OnGetText/OnGetHint des VirtualTree; TES5Edit
+//     xeLogAnalyzerForm.pas:326/:329, SCA059) - ein gleichnamiger
+//     Wert-Parameter, eine lokale Variable oder ein Member zaehlen nicht;
 //   * Argument von 'Items.Add', 'Items.Insert', 'Lines.Add', 'Lines.Insert',
 //     'ShowMessage', 'MessageDlg', 'Application.MessageBox'.
 // Gelesen wird rueckwaerts ab dem Namen (samt 'SysUtils.'): Klammergruppen
@@ -1408,6 +1655,18 @@ const
   NAME_APPLICATION = 'application';
   NAME_MESSAGEBOX = 'messagebox';
   NAME_DIALOGS = 'dialogs';
+  // 'Grid.Cells[c, r] :=' (TStringGrid, TDrawGrid; rwE33 Stufe 5).
+  NAME_CELLS = 'cells';
+  // Die Text-Parameter der Anzeige-Ereignisse (OnGetText, OnGetHint des
+  // VirtualTree; rwE33 Stufe 5) - nur als var- bzw. out-Parameter
+  // (VarParamOf) ...
+  DISPLAY_PARAMS: array[0..1] of string = ('celltext', 'hinttext');
+  // ... davor steht der Name im Kopf, dahinter folgt ...
+  PARAM_PREV: array[0..6] of string = ('(', ';', ',', 'const', 'var', 'out',
+    'constref');
+  PARAM_NEXT: array[0..3] of string = (',', ':', ';', ')');
+  // ... und so beginnt eine Gruppe, in die die Routine schreibt.
+  PARAM_WRITABLE: array[0..1] of string = ('var', 'out');
   // Teile von Namen, die bei '.Text' nach Daten statt Anzeige klingen ...
   DATA_PARTS: array[0..13] of string = ('sql', 'xml', 'json', 'node', 'query',
     'param', 'field', 'attr', 'stream', 'request', 'response', 'body',
@@ -1423,66 +1682,17 @@ const
   // Typumwandlungen, durch die der Text unveraendert geht
   // ('Application.MessageBox(PChar(..), ..)').
   TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
-  MAX_DISPLAY_TOKENS = 2000;
+  // Was an einer Nennung des Feldes der Familie nichts traegt
+  // (FieldUsedForFamily): 'property P: TFormatSettings read F write F' ...
+  PROPERTY_ACCESS: array[0..1] of string = ('read', 'write');
+  // ... und bei Aufrufen nur der Familie Datum/Uhrzeit die Member fuer
+  // Zahlen ('F.DecimalSeparator', HeidiSQL main.pas:10686).
+  NUMBER_MEMBERS: array[0..5] of string = ('decimalseparator',
+    'thousandseparator', 'currencystring', 'currencyformat', 'negcurrformat',
+    'currencydecimals');
   // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
   PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
     'formatcurr', 'format');
-
-// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
-function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
-var
-  T     : TRdxToken;
-  Depth : Integer;
-  Count : Integer;
-begin
-  Result := Default(TRdxToken);
-  Depth := 0;
-  Count := 0;
-  T := AClose;
-  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
-  begin
-    Depth := Depth - ParenDelta(T);
-    if Depth = 0 then
-      Exit(T);
-    Inc(Count);
-    T := Before(AMap, T);
-  end;
-end;
-
-// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
-// und Klammergruppen hinter einem Glied).
-function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
-var
-  P, T : TRdxToken;
-begin
-  Result := ALast;
-  P := Before(AMap, Result);
-  while P.Low = '.' do
-  begin
-    T := Before(AMap, P);
-    while (T.Low = ']') or (T.Low = ')') do
-    begin
-      T := OpenerOf(AMap, T);
-      if T.Low = '' then Exit;
-      T := Before(AMap, T);
-    end;
-    if not T.IsWord then Exit;
-    Result := T;
-    P := Before(AMap, Result);
-  end;
-end;
-
-// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
-// nur ALast).
-function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
-var
-  S : TRdxToken;
-begin
-  S := ChainStart(AMap, ALast);
-  if S.Line <> ALast.Line then
-    Exit(TokText(AMap, ALast));
-  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
-end;
 
 // Nennt ein Glied der Kette vor ALast etwas, das nach Daten klingt, oder ist
 // der Besitzer von ALast eine moegliche Stringliste (s. Kopf des Abschnitts)?
@@ -1534,13 +1744,99 @@ begin
   end;
 end;
 
+// Ist ANameLow im Kopf von R ein var- oder out-Parameter ('var CellText:
+// string', 'out A, B: Integer')? Gelesen wie uRdxTypeProof.ParamOf (dort
+// ohne die Art des Parameters): Klammern in Typ oder Vorgabewert zaehlen
+// nicht, ein Attribut vor dem Namen ('[Ref]') ebenso wenig - dann nein.
+function VarParamOf(AMap: TRdxCodeMap; const R: TRdxRoutine;
+  const ANameLow: string): Boolean;
+var
+  T, P, Close : TRdxToken;
+begin
+  Result := False;
+  T := After(AMap, R.NameTok);
+  if T.Low = '<' then
+    T := AfterClose(AMap, T);
+  if T.Low <> '(' then
+    Exit;
+  Close := MatchClose(AMap, T);
+  if Close.Low = '' then
+    Exit;
+  P := T;
+  T := After(AMap, T);
+  while (T.Low <> '') and TokBefore(T, Close) do
+  begin
+    if ((T.Low = '(') or (T.Low = '[')) and (P.Low <> ';') then
+    begin
+      P := MatchClose(AMap, T);
+      if P.Low = '' then
+        Exit;
+      T := After(AMap, P);
+      Continue;
+    end;
+    if T.IsWord and (T.Low = ANameLow) and InList(P.Low, PARAM_PREV)
+       and InList(After(AMap, T).Low, PARAM_NEXT) then
+    begin
+      // Zurueck zum Anfang der Gruppe 'var A, B: ..'.
+      while P.Low = ',' do
+        P := Before(AMap, Before(AMap, P));
+      Exit(InList(P.Low, PARAM_WRITABLE));
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist ATarget der Text-Parameter eines Anzeige-Ereignisses (DISPLAY_PARAMS:
+// 'CellText' aus OnGetText, 'HintText' aus OnGetHint des VirtualTree), als
+// var- bzw. out-Parameter der Routine um ihn? Nur der blosse Name ('X.CellText'
+// ist ein Member).
+function DisplayParam(AMap: TRdxCodeMap; const ATarget: TRdxToken): Boolean;
+var
+  R : TRdxRoutine;
+begin
+  Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PARAMS)
+    and (Before(AMap, ATarget).Low <> '.')
+    and (BeginBodyAround(AMap, ATarget, R) = rbfFound)
+    and VarParamOf(AMap, R, ATarget.Low);
+end;
+
 // Ist ATarget (das Token vor ':=') ein Anzeige-Ziel (s. Kopf)? True mit
 // dem Ziel wie geschrieben und seiner Zeile.
 function DisplayAssign(AMap: TRdxCodeMap; const ATarget: TRdxToken;
   out AWhat: string; out ALine: Integer): Boolean;
+var
+  Open, Cells, S : TRdxToken;
 begin
   AWhat := '';
   ALine := 0;
+  // 'Grid.Cells[c, r] :=' (rwE33 Stufe 5, mORMot2 dmvc-ai MainFormU.pas:206).
+  if ATarget.Low = ']' then
+  begin
+    Open := OpenerOf(AMap, ATarget);
+    Cells := Before(AMap, Open);
+    Result := (Open.Low = '[') and Cells.IsWord and (Cells.Low = NAME_CELLS)
+      and (Before(AMap, Cells).Low = '.')
+      and not ChainLooksLikeData(AMap, Cells);
+    if Result then
+    begin
+      S := ChainStart(AMap, Cells);
+      if S.Line = ATarget.Line then
+        AWhat := Copy(AMap.Raw(S.Line), S.Col, ATarget.EndCol - S.Col)
+      else
+        AWhat := ChainText(AMap, Cells);
+      ALine := Cells.Line;
+    end;
+    Exit;
+  end;
+  // 'CellText :=' im OnGetText-Ereignis (rwE33 Stufe 5, TES5Edit
+  // xeLogAnalyzerForm.pas:326/:329).
+  if DisplayParam(AMap, ATarget) then
+  begin
+    AWhat := TokText(AMap, ATarget);
+    ALine := ATarget.Line;
+    Exit(True);
+  end;
   Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PROPS)
     and (Before(AMap, ATarget).Low = '.')
     and not ((ATarget.Low = NAME_TEXT) and ChainLooksLikeData(AMap, ATarget));
@@ -1615,8 +1911,11 @@ end;
 // schreibt es nicht selbst ein - das waere eine andere Bedeutung). Ein Feld
 // heisst: 'Name: TFormatSettings;' auf Klammertiefe 0 im Klassenrumpf
 // (auch 'A, B: ..' und 'class var'), nicht Parameter, Rueckgabetyp oder
-// Property. Mehrere Felder, mehrere Klassenkoepfe gleichen Namens oder
-// eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
+// Property. Seit rwE33 Stufe 5 nicht, wenn die Datei belegt, dass das Feld
+// nur der anderen Familie dient (FieldUsedForFamily; HeidiSQL main.pas:4415
+// - ein Feld nur fuer Zahlen ist kein Rat fuer DateTimeToStr, dort greift
+// der naechste Grund). Mehrere Felder, mehrere Klassenkoepfe
+// gleichen Namens oder eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
 // Literal festlegt ('FormatDateTime(''yyyy-mm-dd hh:nn:ss'', ..)',
 // TemplatePro.pas:3170 - dort schreibt Invariant das gewollte ISO-Format,
 // das Feld setzte dagegen einen eingestellten Zeittrenner ein; Stufe 4: ok).
@@ -1678,6 +1977,119 @@ begin
   Result := LiteralFirstArg(AMap, Li, Co, Upto, Lit);
 end;
 
+// Die Routine eines Aufrufs der Familie: Datum/Uhrzeit (PAIR_DATE) bzw. Zahl
+// (PAIR_NUMBER und Format - SCA059 meldet es nur mit Float-Spec).
+function FamilyCall(const ALow: string; AWantDate, AWantNum: Boolean): Boolean;
+begin
+  Result := (AWantDate and InList(ALow, PAIR_DATE))
+    or (AWantNum and (InList(ALow, PAIR_NUMBER) or InList(ALow, FORMAT_FUNCS)));
+end;
+
+// Der Aufruf, in dessen Klammern AFirst..ALast als ganzes Argument steht
+// ('DateToStr(d, FFS)', 'DateToStr(d, Self.FFS)'): der Name vor der
+// oeffnenden Klammer; leer, wenn das Argument anders steht oder vorher ';'
+// bzw. ein Schluesselwort auf Tiefe 0 kommt.
+function CallAroundArg(AMap: TRdxCodeMap; const AFirst,
+  ALast: TRdxToken): TRdxToken;
+var
+  P, Q  : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Q := After(AMap, ALast);
+  if (Q.Low <> ',') and (Q.Low <> ')') then Exit;
+  Depth := 0;
+  Count := 0;
+  P := Before(AMap, AFirst);
+  while (P.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Inc(Count);
+    if (P.Low = ')') or (P.Low = ']') then
+      Inc(Depth)
+    else if (P.Low = '(') or (P.Low = '[') then
+    begin
+      if Depth = 0 then
+      begin
+        if P.Low = '(' then
+          Result := Before(AMap, P);
+        Exit;
+      end;
+      Dec(Depth);
+    end
+    else if (Depth = 0) and ((P.Low = ';')
+            or (P.IsWord and IsKeyword(P.Low)
+                and IsKeywordAfter(P, Before(AMap, P)))) then
+      Exit;
+    P := Before(AMap, P);
+  end;
+end;
+
+// Kann das Feld AField der Klasse APath Aufrufen derselben Familie wie die
+// Aufrufe ASites dienen? Seit rwE33 Stufe 5 Bedingung des Grundes (HeidiSQL
+// main.pas:4415/5674/11246/11252/14718: TMainForm.FFormatSettings =
+// TFormatSettings.Create('en-US') liest in der Datei nur Zahlen -
+// 'StrToFloat(.., FFormatSettings)', 'FFormatSettings.DecimalSeparator' -,
+// die Aufrufe dort schreiben Datum/Uhrzeit; der Rat, das Feld zu
+// uebergeben, braeche sie wie Invariant). Der Grund faellt nur mit Beweis
+// weg (Review e/HilfeFixV - bis dahin zaehlte nur 'DateToStr(d, F)' in
+// einer Methode der Klasse, und eine Kopie 'L := F', eine eigene Routine
+// 'Fmt(d, F)' oder eine eingebettete Routine gaben Invariant frei): JEDE
+// Nennung des Feldes in der Datei (auch 'Self.F', 'X.F') muss etwas sein,
+// das der Familie nichts traegt - eine Deklaration ('F: Typ'), Ziel einer
+// Zuweisung ('F := ..'), Klausel einer Property ('read F'), bei Aufrufen
+// nur der Familie Datum/Uhrzeit ein Member fuer Zahlen
+// ('F.DecimalSeparator') oder ganzes Argument einer RTL-Routine der
+// ANDEREN Familie ('StrToFloat(.., F)'). Nennungen in Methoden einer
+// anderen Klasse zaehlen nicht (dort ist es deren Feld).
+function FieldUsedForFamily(AMap: TRdxCodeMap; const AField: TRdxToken;
+  const APath: string; const ASites: TCallSites): Boolean;
+var
+  WantDate, WantNum : Boolean;
+  Li, i             : Integer;
+  T, N, Call        : TRdxToken;
+  R                 : TRdxRoutine;
+begin
+  Result := True;
+  FamiliesOf(ASites, WantDate, WantNum);
+  for i := 0 to High(ASites) do
+    WantNum := WantNum or InList(ASites[i].Name.Low, FORMAT_FUNCS);
+  for Li := 1 to AMap.LineCount do
+  begin
+    if Pos(AField.Low, LowerCase(AMap.Raw(Li))) = 0 then
+      Continue;
+    T := NextToken(AMap, Li, 1);
+    while (T.Low <> '') and (T.Line = Li) do
+    begin
+      if T.IsWord and (T.Low = AField.Low) and not SameTok(T, AField)
+         and not ((BeginBodyAround(AMap, T, R) = rbfFound)
+                  and (Length(R.Parts) >= 2)
+                  and not SameText(Copy(R.Name, 1,
+                    LastDelimiter('.', R.Name) - 1), APath)) then
+      begin
+        N := After(AMap, T);
+        if N.Low = '.' then
+        begin
+          // Ein Member: nur einer fuer Zahlen bei Datum/Uhrzeit traegt nichts.
+          if not (WantDate and not WantNum
+                  and InList(After(AMap, N).Low, NUMBER_MEMBERS)) then
+            Exit;
+        end
+        else if not ((N.Low = ':') or (N.Low = ':=')
+                     or InList(Before(AMap, T).Low, PROPERTY_ACCESS)) then
+        begin
+          Call := CallAroundArg(AMap, ChainStart(AMap, T), T);
+          if not Call.IsWord or FamilyCall(Call.Low, WantDate, WantNum)
+             or not FamilyCall(Call.Low, True, True) then
+            Exit;
+        end;
+      end;
+      T := After(AMap, T);
+    end;
+  end;
+  Result := False;
+end;
+
 // Der Grund, wenn der erste Aufruf in einer Methode steht, deren Klasse
 // eigene Einstellungen traegt (s. Kopf des Abschnitts); '' sonst.
 function ClassSettingsReason(AMap: TRdxCodeMap;
@@ -1704,7 +2116,7 @@ begin
   Heads := TRdxBlocks.FindClassHeads(AMap, Path);
   if Length(Heads) <> 1 then Exit;
   Field := SettingsFieldIn(AMap, Heads[0]);
-  if Field.Low <> '' then
+  if (Field.Low <> '') and FieldUsedForFamily(AMap, Field, Path, ASites) then
     Result := _(R_FS_CLASS_SETTINGS, [Path, TokText(AMap, Field),
       Field.Line]);
 end;
