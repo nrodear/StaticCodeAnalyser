@@ -1664,6 +1664,41 @@ begin
   Assert.AreEqual('', Plan.Reason);
   Assert.AreEqual('System.Math', Plan.Name);
   Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
+  // rwE32 (Kastri DW.Camera.pas:533, minimiert): 'FMX.Platform' steht
+  // ausserhalb jedes Zweigs, die Zweige trennen nur Plattformen - die Datei
+  // uebersetzt nur ein Compiler mit Unit-Scopes, der Name bleibt
+  // qualifiziert (UnitScopesProven). Bis dahin 'Math,
+  // FMX.Platform'. Die Liste ist unsortiert: vorn eingefuegt.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses', '  FMX.Platform,', '{$IFDEF ANDROID}', '  DW.Camera.Android,',
+    '{$ENDIF}', '  DW.OSLog;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('FMX.Platform', Plan.Edit.Expected);
+  Assert.AreEqual('System.Math, FMX.Platform', Plan.Edit.NewText);
+  // Review e/HilfeFixQ: der Beweis gilt fuer die ganze Datei
+  // (uRdxCompilerTraces.ModernProof) - 'System.Classes' unbedingt im
+  // interface-uses genuegt auch fuer die Klausel des implementation-
+  // Abschnitts (mit der eigenen Probe der Klausel: 'Math, Baz').
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'implementation', 'uses {$IFNDEF WIN32} Foo16, {$ENDIF} Baz;', 'end.']),
+    'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, System.Math', Plan.Edit.NewText);
+  // Gegenprobe: 'Data.Main' ist fuer IsRtlScopedName ein Scope-Name, kann
+  // aber eine eigene Unit eines Delphi vor XE2 sein - ModernProof zaehlt
+  // nur System./Winapi./Vcl./FMX.: Kurzname (mit der eigenen Probe der
+  // Klausel bis dahin 'System.Math, Data.Main').
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses Data.Main, {$IFDEF RDX_X} Foo, {$ENDIF} Baz;', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Math', Plan.Name);
 end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'

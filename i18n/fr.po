@@ -2855,6 +2855,13 @@ msgstr "« %s » écrit un texte pour 0 exactement (ligne %d) - avec une toléra
 msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
 msgstr "« %s » décide si une propriété est enregistrée (stored %s) - avec une tolérance, des valeurs proches de la valeur par défaut ne seraient pas enregistrées"
 
+# reDelphix rwE32 Gruppe Q (uRdxFloatEqualityFix: valeur par défaut omise, cas particulier redondant)
+msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"
+msgstr "« %s » omet la valeur par défaut - seule une autre valeur est passée à %s (ligne %d), avec une tolérance des valeurs proches ne seraient silencieusement pas écrites"
+
+msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"
+msgstr "« %s » est déjà tranché par la comparaison exacte de la ligne %d de la même chaîne if-else - une tolérance changerait ici le résultat pour des valeurs proches"
+
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr "« %s » n'est pas déclarée dans le corps d'une classe de ce fichier (routine libre, record, interface, ou la classe se trouve dans un include)"
 

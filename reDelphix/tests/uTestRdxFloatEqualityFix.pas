@@ -60,6 +60,9 @@ type
     [Test] procedure BaseFloatType_Aliases;
     // ---- rwE32 Stufe 4 (Fix-Runde 4) ----
     [Test] procedure OldCompilerFile_NoHelp;
+    // ---- Realwelt-Test rwE32 (Fix-Runde 4) ----
+    [Test] procedure DefaultOmission_NoHelp;
+    [Test] procedure RepeatedInChain_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -821,6 +824,82 @@ begin
     '{$DEFINE X}', '{$ENDIF}'], ['  if Ratio = 0 then Work;']);
   Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
     Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+
+procedure TTestRdxFloatEqualityFix.DefaultOmission_NoHelp;
+var
+  Src : string;
+begin
+  // cnwizards CnMsgFiler.pas:505 WriteFloatProp: mit 'not IsZero(Value)'
+  // kaeme |v| < 1E-12 nicht mehr in die XML-Datei und beim Laden als 0
+  // zurueck. Ohne den Fix: 'if not IsZero(Ratio) then' angeboten.
+  AssertRefused(Wrap(['  if Ratio <> 0 then', '    InternalWriteText(Other, '
+    + 'CnXMLRealToStr(Ratio));']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_SINK, ['Ratio <> 0', 'InternalWriteText', LINE + 1]));
+  // CEF4Delphi uCEFChromiumCore.pas:7539: geklammert, Methode, Set-Verb.
+  AssertRefused(Wrap(['  if (Ratio <> 0) then', '    TempParams.SetDouble('
+    + '''ratio'', Ratio);']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_SINK, ['Ratio <> 0', 'SetDouble', LINE + 1]));
+  // doublecmd dcxmlconfig.pas:407: gegen einen Vorgabe-Parameter.
+  AssertRefused(Wrap(['  if Ratio <> Other then AddValue(Node, Ratio);']),
+    LINE, 'Ratio', '<>', 'Other',
+    _(R_FLOAT_SINK, ['Ratio <> Other', 'AddValue', LINE]));
+  // Gegenproben - die Hilfe bleibt: ein Aufruf ohne Schreib-Verb
+  // (Img32.SVG.Path.pas:657, 'ok'), 'set' mitten im Namensteil (Offset),
+  // ein begin-Block (uqtwsbuttons.pas:70, 'ok'), der Operand nicht unter
+  // den Argumenten, '=' statt '<>'.
+  Src := Wrap(['  if Ratio <> 0 then', '    RotatePoint(Sp, Pt2, -Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Offset(Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then', '  begin', '    WriteValue(Ratio);',
+    '  end;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then WriteValue(Other);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio = 0 then WriteValue(Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.RepeatedInChain_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl MakePNG pngimage.pas:4081 (eigene Power): der Exponent-Teil ist
+  // nach 'if Exponent = 0.0' tot - IsZero machte ihn lebendig, Power(2,
+  // 1E-20) gaebe 0 statt ~1. Ohne den Fix: '(IsZero(Ratio))' angeboten.
+  AssertRefused(Wrap(['  if Ratio = 0.0 then', '    Other := 1.0',
+    '  else if (Other = 0) or (Ratio = 0) then Other := 0', '  else',
+    '    Other := Exp(Ratio);']), LINE + 2, 'Ratio', '=', '0',
+    _(R_FLOAT_REPEATED, ['Ratio = 0', LINE]));
+  // Ueber ein Glied dazwischen und einen begin-Block, Seiten vertauscht und
+  // geklammert, '<>' (dort immer wahr).
+  AssertRefused(Wrap(['  if (0 = Ratio) then', '  begin', '    Other := 1;',
+    '  end', '  else if Other > 1 then', '    Other := 2',
+    '  else if Ratio <> 0 then', '    Work;']), LINE + 6, 'Ratio', '<>', '0',
+    _(R_FLOAT_REPEATED, ['Ratio <> 0', LINE]));
+  // Gegenproben - die Hilfe bleibt: ein anderer Wert davor, '<>' davor,
+  // ein eigenes if hinter ';', ein if im else-Block (kein else-if).
+  Src := Wrap(['  if Ratio = 0 then', '    Other := 0', '  else if Ratio = 1 then',
+    '    Other := 1;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 1', 'SameValue(Ratio, 1)', []),
+    Applied(Src, LINE + 2, 'Ratio', '=', '1'));
+  Src := Wrap(['  if Ratio <> 0 then', '    Work', '  else if Ratio = 0 then',
+    '    Other := 1;']);
+  Assert.AreEqual(StringReplace(Src, 'if Ratio = 0', 'if IsZero(Ratio)', []),
+    Applied(Src, LINE + 2, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio = 0 then Other := 1;', '  if Ratio = 0 then Work;']);
+  Assert.AreEqual(Wrap(['  if Ratio = 0 then Other := 1;',
+    '  if IsZero(Ratio) then Work;']), Applied(Src, LINE + 1, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio = 0 then', '    Other := 1', '  else', '  begin',
+    '    if Ratio = 0 then Work;', '  end;']);
+  Assert.AreEqual(Wrap(['  if Ratio = 0 then', '    Other := 1', '  else',
+    '  begin', '    if IsZero(Ratio) then Work;', '  end;']),
+    Applied(Src, LINE + 4, 'Ratio', '=', '0'));
 end;
 
 {$IFNDEF FPC}

@@ -100,7 +100,7 @@ msgstr ""
 msgid "\"%s\" between Create(True) and Resume - Resume could run more than once or for another thread"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1032
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1246
 msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
 msgstr ""
 
@@ -112,15 +112,15 @@ msgstr ""
 msgid "\"%s\" follows the section - it is not empty"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:986
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1200
 msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1019
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1233
 msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1003
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1217
 msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
 msgstr ""
 
@@ -160,6 +160,10 @@ msgstr ""
 msgid "\"%s\" is a parameter of the routine - the list comes from the caller"
 msgstr ""
 
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1262
+msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"
+msgstr ""
+
 #: reDelphix/source/uRdxObjectListFix.pas:729
 msgid "\"%s\" is assigned %d times in the routine - the help needs exactly one \"TList<%s>.Create\""
 msgstr ""
@@ -197,11 +201,11 @@ msgstr ""
 msgid "\"%s\" is overloaded - the help does not pick one of the declarations"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:967
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1181
 msgid "\"%s\" is part of a larger expression (\"%s\" after it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:961
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1175
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
 msgstr ""
 
@@ -222,6 +226,10 @@ msgstr ""
 msgid "\"%s\" is written like a C or platform API name (underscore, no capital letter or a k constant) - a capital first letter does not make it PascalCase; rename it by hand or suppress the finding"
 msgstr ""
 
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1255
+msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"
+msgstr ""
+
 #: reDelphix/source/uRdxLocalConstantNameFix.pas:526
 msgid "\"%s\" occurs on line %d before its declaration - there it means something else"
 msgstr ""
@@ -239,7 +247,7 @@ msgstr ""
 msgid "\"%s\" stands between the two sections - the declarations of the second one would belong to it"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:972
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1186
 msgid "\"%s\" stands in a list that is not a call argument (enumeration, set or declaration)"
 msgstr ""
 
@@ -247,7 +255,7 @@ msgstr ""
 msgid "\"%s\" was not imported: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1025
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1239
 msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"
 msgstr ""
 
@@ -303,7 +311,7 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:583
+#: reDelphix/source/uRdxPlacesRunner.pas:586
 msgid "%d according to the compiler (%s)"
 msgstr ""
 
@@ -457,11 +465,11 @@ msgstr ""
 msgid "%d self-assignments of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:588
+#: reDelphix/source/uRdxPlacesRunner.pas:591
 msgid "%d terms behind %s, %s"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:586
+#: reDelphix/source/uRdxPlacesRunner.pas:589
 msgid "%d terms, %s"
 msgstr ""
 
@@ -625,7 +633,7 @@ msgstr ""
 msgid "%s is \"%s\" - other code depends on its exact signature"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1083
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1313
 msgid "%s is Currency - a fixed-point type compares exactly, SameValue would add a tolerance"
 msgstr ""
 
@@ -678,7 +686,7 @@ msgstr ""
 msgid "%s is called as %s - another routine than the one of SysUtils"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1085
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1315
 msgid "%s is declared as %s - not Single, Double, Extended or Real"
 msgstr ""
 
@@ -745,7 +753,7 @@ msgid "%s is in the published or default section of %s - a form file may bind it
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:615
-#: reDelphix/source/uRdxPlacesRunner.pas:670
+#: reDelphix/source/uRdxPlacesRunner.pas:673
 msgid "%s is missing in uses: %s"
 msgstr ""
 
@@ -929,7 +937,7 @@ msgstr ""
 msgid "%s() in the function %s - without parentheses the meaning depends on the dialect (recursion or result)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:590
+#: reDelphix/source/uRdxPlacesRunner.pas:593
 msgid "%s, %d numeric (%%d/%%u)"
 msgstr ""
 
@@ -3613,8 +3621,8 @@ msgstr ""
 msgid "Silent Mode"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1105
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1107
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1335
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1337
 msgid "Single %s compared with %s - the SameValue overloads could be ambiguous (E2251)"
 msgstr ""
 
@@ -4336,7 +4344,7 @@ msgstr ""
 msgid "all other values: do nothing (as before)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:581
+#: reDelphix/source/uRdxPlacesRunner.pas:584
 msgid "all proven"
 msgstr ""
 
@@ -4527,11 +4535,11 @@ msgstr ""
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:366
+#: reDelphix/source/uRdxPlacesRunner.pas:369
 msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:392
+#: reDelphix/source/uRdxPlacesRunner.pas:395
 msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
 msgstr ""
 
@@ -4680,7 +4688,7 @@ msgstr ""
 msgid "comment in the head of the if or beside its end"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:746
+#: reDelphix/source/uRdxPlacesRunner.pas:749
 msgid "comment in the range"
 msgstr ""
 
@@ -4688,7 +4696,7 @@ msgstr ""
 msgid "comment in the unreachable code - it may document parked code; delete by hand"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:953
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1167
 msgid "comment inside \"%s\""
 msgstr ""
 
@@ -4802,8 +4810,8 @@ msgstr ""
 msgid "comment, string or directive on the line"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:910
-#: reDelphix/source/uRdxFloatEqualityFix.pas:942
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1124
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1156
 msgid "comparison \"%s\" not on the reported line"
 msgstr ""
 
@@ -5314,7 +5322,7 @@ msgstr ""
 msgid "interface chain too long - boundaries not certain"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1503
+#: reDelphix/source/uRdxPlacesRunner.pas:1540
 msgid "it stands there only under a compiler condition (line %d); %s"
 msgstr ""
 
@@ -5372,7 +5380,7 @@ msgstr ""
 msgid "line %d carries %s - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:358
+#: reDelphix/source/uRdxPlacesRunner.pas:361
 msgid "line %d carries %s, the finding names %s"
 msgstr ""
 
@@ -5423,11 +5431,11 @@ msgstr ""
 msgid "line %d is ambiguous (%d statements with a nil comparison)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:321
+#: reDelphix/source/uRdxPlacesRunner.pas:324
 msgid "line %d is ambiguous (%d statements)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1460
+#: reDelphix/source/uRdxPlacesRunner.pas:1497
 msgid "line %d of the section not readable"
 msgstr ""
 
@@ -5726,11 +5734,11 @@ msgstr ""
 msgid "no assignment \"%s :=\" at the start of a statement on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:608
+#: reDelphix/source/uRdxPlacesRunner.pas:611
 msgid "no assignment with a chain"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:610
+#: reDelphix/source/uRdxPlacesRunner.pas:613
 msgid "no assignment with a chain: %s"
 msgstr ""
 
@@ -5851,7 +5859,7 @@ msgstr ""
 msgid "no declaration that can carry the attribute follows the blank line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:600
+#: reDelphix/source/uRdxPlacesRunner.pas:603
 #: reDelphix/source/uRdxRecipeRunner.pas:493
 msgid "no description"
 msgstr ""
@@ -6144,7 +6152,7 @@ msgstr ""
 msgid "no statement \"%s := %s * %s;\" starts on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:319
+#: reDelphix/source/uRdxPlacesRunner.pas:322
 msgid "no statement found on line %d"
 msgstr ""
 
@@ -6197,7 +6205,7 @@ msgstr ""
 msgid "no unit line found"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1430
+#: reDelphix/source/uRdxPlacesRunner.pas:1467
 msgid "no uses clause and no interface/implementation"
 msgstr ""
 
@@ -6209,7 +6217,7 @@ msgstr ""
 msgid "no var section before the declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:905
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1119
 msgid "no variable in \"%s\""
 msgstr ""
 
@@ -6724,7 +6732,7 @@ msgstr ""
 msgid "raise is in the handler of \"%s\", not of \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:728
+#: reDelphix/source/uRdxPlacesRunner.pas:731
 msgid "range not readable"
 msgstr ""
 
@@ -7031,7 +7039,7 @@ msgstr ""
 msgid "tabs become spaces - the same result for every tab width in question; tabs in strings stay"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:710
+#: reDelphix/source/uRdxPlacesRunner.pas:713
 msgid "target '%s' is %s - Format returns UnicodeString"
 msgstr ""
 
@@ -7546,7 +7554,7 @@ msgstr ""
 msgid "the declaration of %s.%s in line %d cannot be read - whether it is abstract remains open; %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1135
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1365
 msgid "the detector rates the comparison as intended (guard or sentinel value) - the exact comparison is right there"
 msgstr ""
 
@@ -7637,7 +7645,7 @@ msgstr ""
 msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1056
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1286
 msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"
 msgstr ""
 
@@ -7685,7 +7693,7 @@ msgstr ""
 msgid "the file declares its own %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1039
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1269
 msgid "the file declares its own %s - it is not the function of System.Math"
 msgstr ""
 
@@ -8111,7 +8119,7 @@ msgstr ""
 msgid "the line has more than one header of the method %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:947
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1161
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
 
@@ -8310,7 +8318,7 @@ msgstr ""
 msgid "the message does not name the bounds - analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:899
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1113
 msgid "the message does not name the comparison"
 msgstr ""
 
@@ -8814,7 +8822,7 @@ msgstr ""
 msgid "the second call goes away - the parent method runs only once; check order and side effects"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1452
+#: reDelphix/source/uRdxPlacesRunner.pas:1489
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr ""
 
@@ -8834,7 +8842,7 @@ msgstr ""
 msgid "the statement before the line is not \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:403
+#: reDelphix/source/uRdxPlacesRunner.pas:406
 msgid "the statement cannot be described"
 msgstr ""
 
@@ -9010,7 +9018,7 @@ msgstr ""
 msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1441
+#: reDelphix/source/uRdxPlacesRunner.pas:1478
 msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"
 msgstr ""
 
@@ -9026,7 +9034,7 @@ msgstr ""
 msgid "the word is already lower case"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:643
+#: reDelphix/source/uRdxPlacesRunner.pas:646
 msgid "there are only literals behind %s"
 msgstr ""
 
@@ -9054,7 +9062,7 @@ msgstr ""
 msgid "type of %s not proven here - it must be declared as %s"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1081
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1311
 msgid "type of %s not proven here - only Single, Double, Extended and Real operands are rewritten"
 msgstr ""
 
@@ -9130,7 +9138,7 @@ msgid "untyped \"out\" parameter - \"var\" would mean something else"
 msgstr ""
 
 #: reDelphix/source/uRdxActionCore.pas:559
-#: reDelphix/source/uRdxPlacesRunner.pas:991
+#: reDelphix/source/uRdxPlacesRunner.pas:1001
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
@@ -9138,7 +9146,7 @@ msgstr ""
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1000
+#: reDelphix/source/uRdxPlacesRunner.pas:1010
 msgid "uses entry in line %d not readable"
 msgstr ""
 
@@ -9218,8 +9226,8 @@ msgstr ""
 msgid "with statement in the routine - an argument could be a member"
 msgstr ""
 
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1045
-#: reDelphix/source/uRdxFloatEqualityFix.pas:1141
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1275
+#: reDelphix/source/uRdxFloatEqualityFix.pas:1371
 msgid "with statement in the routine - an operand or %s could bind to a member"
 msgstr ""
 
