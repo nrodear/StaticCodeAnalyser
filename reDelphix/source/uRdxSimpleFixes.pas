@@ -162,12 +162,28 @@ type
     // nicht auf einer Zeile mit 'with' (WithBefore: AName koennte dort ein
     // Member sein). Kommentare, Strings und Direktiven tragen keine Token.
     // Leer, wenn die Datei selbst eine Routine AName deklariert
-    // (DeclaresRoutine, auch als Methode): ein Aufruf bewiese dann nichts.
-    // Ob der Aufruf dort uebersetzt wird, wo er gebraucht wird, prueft der
-    // Aufrufer (TRdxPlacesRunner.CoveringPlace). GRENZE: ein Member AName
-    // eines fremden Vorfahren der Klasse um den Aufruf sieht der Text nicht.
+    // (DeclaresRoutine, auch als Methode) oder AName irgendwo im Code vor
+    // ':', '=', ',' bzw. ':=' steht (Feld, Variable, Parameter, Property,
+    // Konstante 'FreeAndNil: procedure(..)' - Review e/HilfeFixU, MINOR 2):
+    // ein Aufruf bewiese dann nichts. Ob der Aufruf dort uebersetzt wird,
+    // wo er gebraucht wird, prueft der Aufrufer (TRdxPlacesRunner.
+    // CoveringPlace), ob er dasselbe bindet wie die Stelle CallsBindingAt.
     class function UnqualifiedCalls(AMap: TRdxCodeMap;
       const AName: string): TArray<TRdxToken>; static;
+    // Die Aufrufe aus UnqualifiedCalls, die AName so binden wie die Stelle
+    // ALine (Review e/HilfeFixU, MINOR 1): keine umschliessende Routine
+    // deklariert AName (TRdxTypeProof.LocalBinding = lkNone, am Aufruf und
+    // an ALine), und der Aufruf steht in einer freien Routine bzw. auf
+    // Unit-Ebene oder in einer Methode DERSELBEN Klasse wie ALine (Klasse
+    // aus dem Kopf der aeussersten Routine, 'procedure TKlasse.X'). Ein
+    // Aufruf in einer Methode von TA kann ein geerbtes oder Helper-Member
+    // FreeAndNil einer fremden Unit meinen - an einer Stelle in einer freien
+    // Routine oder in TB fehlte es (E2003). Die Gegenrichtung (Aufruf frei,
+    // Stelle in einer Methode) bleibt: dort riefe auch die uses-Ergaenzung
+    // das Member. GRENZE: ein fremdes Member AName der Klasse der Stelle
+    // sieht der Text nicht (wie vorher mit uses-Ergaenzung).
+    class function CallsBindingAt(AMap: TRdxCodeMap; const AName: string;
+      ALine: Integer): TArray<TRdxToken>; static;
 
     // ---- Editorhilfen Stufe 2, Rest (Nico 2026-10-10: "baue weitere") ----
 
@@ -321,6 +337,9 @@ const
   SPAN_074 = 'sca074';
   SPAN_087 = 'sca087';
   SPAN_139 = 'sca139';
+  // Dahinter ist ein Name deklariert oder zugewiesen, nicht aufgerufen
+  // (UnqualifiedCalls).
+  DECL_AFTER: array[0..3] of string = (':', '=', ',', ':=');
   // Die Code-Stuecke der Gruende "<Code> steht nicht mehr an der gemeldeten
   // Stelle" (MsgNoLongerAtReportedPlace, uRdxText) - Quelltext, keine
   // Uebersetzung.
@@ -905,8 +924,8 @@ end;
 class function TRdxSimpleFixes.UnqualifiedCalls(AMap: TRdxCodeMap;
   const AName: string): TArray<TRdxToken>;
 var
-  Low  : string;
-  T, P : TRdxToken;
+  Low     : string;
+  T, P, N : TRdxToken;
 begin
   Result := nil;
   if (AName = '') or TRdxTypeProof.DeclaresRoutine(AMap, AName) then
@@ -918,11 +937,57 @@ begin
     if T.Low = Low then
     begin
       P := Before(AMap, T);
-      if (After(AMap, T).Low = '(') and (P.Low <> '.')
-         and (P.Low <> 'inherited') and not WithBefore(AMap, T.Line) then
+      N := After(AMap, T);
+      // 'FreeAndNil: procedure(..)', 'FreeAndNil = ..', 'A, FreeAndNil: T',
+      // 'FreeAndNil := ..': der Name ist hier auch etwas anderes.
+      if InList(N.Low, DECL_AFTER) then
+        Exit(nil);
+      if (N.Low = '(') and (P.Low <> '.') and (P.Low <> 'inherited')
+         and not WithBefore(AMap, T.Line) then
         AddToken(Result, T);
     end;
     T := NextTokenOnLineWith(AMap, T, Low);
+  end;
+end;
+
+// Die Klasse der aeussersten Routine um die Stelle (LocalBinding:
+// 'TFoo.Bar' -> 'TFoo'); '' in einer freien Routine oder auf Unit-Ebene.
+function ClassOfBinding(const AFind: TRdxLocalFind): string;
+var
+  P : Integer;
+begin
+  Result := '';
+  P := LastDelimiter('.', AFind.OuterName);
+  if (AFind.Routines > 0) and (P > 0) then
+    Result := Copy(AFind.OuterName, 1, P - 1);
+end;
+
+class function TRdxSimpleFixes.CallsBindingAt(AMap: TRdxCodeMap;
+  const AName: string; ALine: Integer): TArray<TRdxToken>;
+var
+  At, C     : TRdxToken;
+  Site, Use : TRdxLocalFind;
+  SiteClass : string;
+  UseClass  : string;
+begin
+  Result := nil;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  At := NextToken(AMap, ALine, 1);
+  if (At.Low = '') or (At.Line <> ALine) then
+    Exit;
+  Site := TRdxTypeProof.LocalBinding(AMap, At, AName);
+  if Site.Kind <> lkNone then
+    Exit;
+  SiteClass := ClassOfBinding(Site);
+  for C in UnqualifiedCalls(AMap, AName) do
+  begin
+    Use := TRdxTypeProof.LocalBinding(AMap, C, AName);
+    if Use.Kind <> lkNone then
+      Continue;
+    UseClass := ClassOfBinding(Use);
+    if (UseClass = '') or SameText(UseClass, SiteClass) then
+      AddToken(Result, C);
   end;
 end;
 

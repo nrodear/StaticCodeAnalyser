@@ -649,14 +649,15 @@ end;
 // SCA085/SCA139 (rwE33 Stufe 5, Dev-Cpp InstallWizards.pas:684 - SysUtils
 // nur in '{$IFDEF WIN32}' und '{$IFDEF LINUX}', FreeAndNil unqualifiziert
 // in Zeile 265/476/738): ruft die Datei FreeAndNil schon im Code auf
-// (TRdxSimpleFixes.UnqualifiedCalls), an einer Stelle, die ueberall
+// (TRdxSimpleFixes.CallsBindingAt: in einer freien Routine oder einer
+// Methode derselben Klasse wie die Stelle), an einer Stelle, die ueberall
 // uebersetzt wird, wo die Ersetzungen AEdits landen (TRdxPlacesRunner.
 // CoveringPlace mit EditLines)? Dann loest 'FreeAndNil(X)' dort genauso
 // auf wie dieser Aufruf - dieselbe Unit, derselbe Name; die uses-Klausel
 // bleibt, wie sie ist (AppendSysUtils entfaellt). Der Beweis gilt dem
 // Namen, nicht der Unit: kaeme FreeAndNil aus einer anderen Unit, riefe
 // die Hilfe dieselbe Routine wie der Code daneben (GRENZE wie
-// UnqualifiedCalls: ein geerbtes Member FreeAndNil eines fremden Vorfahren
+// CallsBindingAt: ein fremdes Member FreeAndNil der Klasse der Stelle
 // sieht der Text nicht). Die Zeile des Aufrufs, 0 ohne. Die beiden Zweige
 // allein (WIN32 und LINUX) beweisen nichts - es gibt weitere Ziele
 // (MACOS ...).
@@ -672,7 +673,7 @@ begin
   EditLines(AEdits, First, Last);
   if First < 1 then
     Exit;
-  Calls := TRdxSimpleFixes.UnqualifiedCalls(AMap, 'FreeAndNil');
+  Calls := TRdxSimpleFixes.CallsBindingAt(AMap, 'FreeAndNil', First);
   if Length(Calls) = 0 then
     Exit;
   SetLength(Ls, Length(Calls));

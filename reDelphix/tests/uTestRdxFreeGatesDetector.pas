@@ -88,7 +88,9 @@ type
     // Aufruf und Stelle im selben Zweig: frei.
     [Test] procedure Sca085_FreeAndNilCalledInSiteBranch_Helps;
     // Gegenproben: nur in einem anderen Zweig, nur im Kommentar, nur
-    // qualifiziert, eigene FreeAndNil der Unit - gesperrt wie bisher.
+    // qualifiziert, eigene FreeAndNil der Unit - gesperrt wie bisher; seit
+    // dem Review-Nachzug auch: nur in einer anderen Klasse, Variable
+    // FreeAndNil.
     [Test] procedure Sca085_FreeAndNilNotProven_Locked;
     // SCA139 nimmt denselben Beweis.
     [Test] procedure Sca139_FreeAndNilCalled_Helps;
@@ -654,6 +656,16 @@ begin
   AssertKnownLocked(Format(UNIT_KNOWN, ['procedure FreeAndNil(var AObj);'
     + #13#10'begin'#13#10'end;', DROP_CALL, DONE_085, '']),
     'eigene FreeAndNil der Unit');
+  // Review e/HilfeFixU (MINOR 1/2): der Aufruf nur in einer Methode einer
+  // ANDEREN Klasse (TOther koennte ein geerbtes Member FreeAndNil haben)
+  // bzw. eine Variable FreeAndNil in der Unit - vor dem Nachzug frei.
+  AssertKnownLocked(Format(UNIT_KNOWN, [Join(['type', '  TOther = class',
+    '    procedure Run(var AObj: TObject);', '  end;',
+    'procedure TOther.Run(var AObj: TObject);', 'begin', DROP_CALL, 'end;']),
+    '', DONE_085, '']), 'Aufruf nur in einer anderen Klasse');
+  AssertKnownLocked(Format(UNIT_KNOWN, [Join(['var',
+    '  FreeAndNil: procedure(var AObj);']), DROP_CALL, DONE_085, '']),
+    'Variable FreeAndNil der Unit');
 end;
 
 procedure TTestRdxFreeKnownDetector.Sca139_FreeAndNilCalled_Helps;

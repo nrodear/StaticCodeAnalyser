@@ -71,6 +71,8 @@ type
   public
     [Test] procedure UnqualifiedCalls_OnlyPlainCodeCalls;
     [Test] procedure UnqualifiedCalls_OwnDeclaration_None;
+    // Review e/HilfeFixU, MINOR 1: Beleg nur frei oder aus derselben Klasse.
+    [Test] procedure CallsBindingAt_FreeOrSameClass;
     [Test] procedure CoveringPlace_Branches;
   end;
 
@@ -1410,6 +1412,68 @@ begin
     'implementation', 'procedure FreeAndNilAll(var O);', 'begin', 'end;',
     'procedure P(var A: TObject);', 'begin', CALL, 'end;', 'end.']),
     'FreeAndNil')), 'anderer Name');
+  // Review e/HilfeFixU, MINOR 2: ein Feld bzw. eine Variable FreeAndNil
+  // (Prozedurtyp) zaehlt wie eine eigene Deklaration. Rot vor dem
+  // Nachzug: je ein Aufruf.
+  Assert.AreEqual<Integer>(0, Length(CallsIn(Join(['unit u;', 'interface',
+    'type', '  TFoo = class', '    FreeAndNil: procedure(var O);', '  end;',
+    'implementation', 'procedure P(var A: TObject);', 'begin', CALL, 'end;',
+    'end.']), 'FreeAndNil')), 'Feld');
+  Assert.AreEqual<Integer>(0, Length(CallsIn(Join(['unit u;', 'interface',
+    'implementation', 'var', '  Other, FreeAndNil: procedure(var O);',
+    'procedure P(var A: TObject);', 'begin', CALL, 'end;', 'end.']),
+    'FreeAndNil')), 'Variable');
+end;
+
+// CallsBindingAt(FreeAndNil) an ALine von KNOWN_CLASSES, als Zeilen.
+function BindingLinesAt(ALine: Integer): string;
+const
+  KNOWN_CLASSES: array[0..30] of string = ('unit u;', 'interface', 'type',
+    '  TA = class', '    procedure Run(var O: TObject);', '  end;',
+    '  TB = class', '    procedure Done(var O: TObject);', '  end;',
+    'implementation',
+    'procedure TA.Run(var O: TObject);', 'begin',     // 11
+    '  FreeAndNil(O);', 'end;',                       // 13 in TA
+    'procedure Free1(var O: TObject);', 'begin',      // 15
+    '  FreeAndNil(O);', 'end;',                       // 17 frei
+    'procedure TB.Done(var O: TObject);',             // 19
+    '  procedure Inner;', '  begin',
+    '    FreeAndNil(O);', '  end;',                   // 22 in TB (verschachtelt)
+    'begin', '  O.Free;', 'end;',                     // 25 Stelle in TB
+    'procedure Free2(var O: TObject);', 'begin',      // 27
+    '  O.Free;', 'end;',                              // 29 Stelle frei
+    'end.');
+var
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Calls : TArray<TRdxToken>;
+  i     : Integer;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join(KNOWN_CLASSES);
+    Map := TRdxCodeMap.Create(SL);
+    Calls := TRdxSimpleFixes.CallsBindingAt(Map, 'FreeAndNil', ALine);
+    for i := 0 to High(Calls) do
+      Result := Result + IntToStr(Calls[i].Line) + ' ';
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxFreeAndNilKnown.CallsBindingAt_FreeOrSameClass;
+begin
+  // Review e/HilfeFixU, MINOR 1: ein Aufruf in einer Methode von TA kann
+  // ein geerbtes/Helper-Member FreeAndNil meinen - er belegt nichts fuer
+  // TB und nichts fuer eine freie Routine. Rot vor dem Nachzug:
+  // CallsBindingAt gab es nicht (Bau-Fehler); UnqualifiedCalls allein
+  // lieferte 13 17 22.
+  Assert.AreEqual('17 22 ', BindingLinesAt(25), 'Stelle in TB.Done');
+  Assert.AreEqual('17 ', BindingLinesAt(29), 'Stelle in einer freien Routine');
+  Assert.AreEqual('', BindingLinesAt(0), 'keine Zeile');
 end;
 
 procedure TTestRdxFreeAndNilKnown.CoveringPlace_Branches;
