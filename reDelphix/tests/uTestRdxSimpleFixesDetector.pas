@@ -1664,6 +1664,19 @@ begin
   Assert.AreEqual('', Plan.Reason);
   Assert.AreEqual('System.Math', Plan.Name);
   Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
+  // rwE32 (Kastri DW.Camera.pas:533, minimiert): 'FMX.Platform' steht
+  // ausserhalb jedes Zweigs, die Zweige trennen nur Plattformen - die Datei
+  // uebersetzt nur ein Compiler mit Unit-Scopes, der Name bleibt
+  // qualifiziert (ScopedEntryUnconditional). Bis dahin 'Math,
+  // FMX.Platform'. Die Liste ist unsortiert: vorn eingefuegt.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses', '  FMX.Platform,', '{$IFDEF ANDROID}', '  DW.Camera.Android,',
+    '{$ENDIF}', '  DW.OSLog;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('FMX.Platform', Plan.Edit.Expected);
+  Assert.AreEqual('System.Math, FMX.Platform', Plan.Edit.NewText);
 end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'

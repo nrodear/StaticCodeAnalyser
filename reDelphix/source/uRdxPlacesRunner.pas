@@ -189,7 +189,9 @@ type
     // Klausel kein {$I} traegt (UnconditionalPlace; JvCalc.pas:487 'uses
     // {$IFNDEF WIN32} JvStr16, {$ENDIF} JvVCLUtils, .. JvToolEdit;' - der
     // neue Name gilt dann in jedem Zweig - als Kurzname, die Zweige
-    // koennen Compiler ohne Unit-Scopes bedienen). Ohne jede uses-Klausel
+    // koennen Compiler ohne Unit-Scopes bedienen; qualifiziert, wenn ein
+    // Eintrag mit Unit-Scope ausserhalb jedes Zweigs steht, rwE32
+    // ScopedEntryUnconditional). Ohne jede uses-Klausel
     // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
     // Reason 'keine uses-Klausel und kein interface/implementation'; steht
@@ -940,6 +942,8 @@ end;
 function UnconditionalPlace(APlaces: TSourcePlaces;
   const AEntries: TArray<TRefactorSpan>; var AAnchor: TRefactorSpan;
   var AAppend: Boolean): Boolean; forward;
+function ScopedEntryUnconditional(APlaces: TSourcePlaces;
+  const AEntries: TArray<TRefactorSpan>): Boolean; forward;
 
 // Die Einfuegung in eine bestehende Klausel (PlanUses). APlan.Name steht.
 procedure PlanIntoClause(APlaces: TSourcePlaces;
@@ -959,8 +963,14 @@ begin
   // der Name kommt unbedingt hinein (UnconditionalPlace) und gilt in
   // jedem Zweig, einen Unit-Scope-Namen kennen Compiler vor XE2 nicht.
   // Darum der Kurzname wie in einer Datei mit FPC-Weiche - Delphi loest
-  // ihn ueber die Vorgabe-Scopes ebenso auf (Review e/HilfeFixL).
-  if (Dir > 0) and TRdxRecipes.IsRtlScopedName(APlan.Name) then
+  // ihn ueber die Vorgabe-Scopes ebenso auf (Review e/HilfeFixL). Nicht,
+  // wenn ein Eintrag mit Unit-Scope ausserhalb jedes Zweigs steht
+  // (ScopedEntryUnconditional, rwE32 Kastri DW.Camera.pas:533: unbedingt
+  // 'FMX.Platform', danach Zweige fuer ANDROID und IOS): dann kennt jeder
+  // Compiler, der die Datei uebersetzt, Unit-Scopes - der Name bleibt im
+  // Stil der Datei.
+  if (Dir > 0) and TRdxRecipes.IsRtlScopedName(APlan.Name)
+     and not ScopedEntryUnconditional(APlaces, AEntries) then
     APlan.Name := Copy(APlan.Name, Pos('.', APlan.Name) + 1, MaxInt);
   SetLength(Names, Length(AEntries));
   for i := 0 to High(AEntries) do
@@ -1353,6 +1363,36 @@ begin
           AAppend := False;
           Exit(True);
         end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Steht in der Klausel AEntries ein Eintrag mit Delphi-Unit-Scope
+// ('System.Classes', 'FMX.Platform' - IsRtlScopedName, so wie er im Puffer
+// steht) ausserhalb jedes bedingten Zweigs (AnchorUnconditional)? Dann
+// uebersetzt die Datei nur ein Compiler mit Unit-Scopes (ab XE2) - auch
+// in einer Klausel mit Direktiven passt der qualifizierte Name (rwE32,
+// PlanIntoClause).
+function ScopedEntryUnconditional(APlaces: TSourcePlaces;
+  const AEntries: TArray<TRefactorSpan>): Boolean;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+  i     : Integer;
+begin
+  Result := False;
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      for i := 0 to High(AEntries) do
+        if TRdxRecipes.IsRtlScopedName(Trim(APlaces.TextOf(AEntries[i])))
+           and AnchorUnconditional(APlaces, Map, AEntries[i]) then
+          Exit(True);
     finally
       Map.Free;
     end;

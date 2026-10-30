@@ -1489,8 +1489,10 @@ begin
     'uses (*$IFDEF FPC*)LCLIntf(*$ELSE*)Classes(*$ENDIF*);'), 'Text := Marker', O));
   Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
   // Gegenproben: neben einem unbedingten Eintrag wird eingefuegt - als
-  // Kurzname auch in einer Datei mit Unit-Scopes (die Zweige koennen
-  // Compiler ohne Scopes bedienen, Review e/HilfeFixL).
+  // Kurzname, wenn die Zweige Compiler ohne Scopes bedienen koennen (Review
+  // e/HilfeFixL); steht wie hier 'System.Classes' ausserhalb jedes Zweigs,
+  // uebersetzt die Datei nur ein Compiler mit Unit-Scopes - qualifiziert
+  // (rwE32, ScopedEntryUnconditional; bis dahin 'SysUtils, System.Classes').
   Assert.IsTrue(RunRecipe(WithUses(CHAIN,
     'uses Classes (*$IFDEF RDX_NEVER_DEFINED*), Windows (*$ENDIF*);'),
     'Text := Marker', O), O.Reason);
@@ -1498,7 +1500,7 @@ begin
   Assert.IsTrue(RunRecipe(WithUses(CHAIN, 'uses System.Classes '
     + '(*$IFDEF RDX_NEVER_DEFINED*), Winapi.Windows (*$ENDIF*);'),
     'Text := Marker', O), O.Reason);
-  Assert.AreEqual('SysUtils, System.Classes', O.UsesEdit.NewText);
+  Assert.AreEqual('System.SysUtils, System.Classes', O.UsesEdit.NewText);
 end;
 
 procedure TTestRdxSca044.Uses_Missing_LineCommentAfterLast_InsertsBeforeLast;
