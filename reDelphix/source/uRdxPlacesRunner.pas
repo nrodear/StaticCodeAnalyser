@@ -245,6 +245,19 @@ type
     class function UsesReason(const APlan: TRdxUsesPlan;
       const AQualifiedName: string): string; static;
 
+    // Die erste der Stellen (ALines[i], ACols[i]), die ueberall uebersetzt
+    // wird, wo die Zeilen AAtLine bis AAtEndLine uebersetzt werden: jeder
+    // bedingte Zweig um sie umfasst auch diese Zeilen - dieselbe Probe wie
+    // fuer einen uses-Eintrag in PlanUses (TextCovers: Anfang von AAtLine,
+    // Ende von AAtEndLine hinter ihren Direktiven). Ihr Index, -1 ohne
+    // (auch ohne Stelle oder ohne gueltige Zeilen). Fuer SCA085/SCA139
+    // (uRdxFixRunner, rwE33 Stufe 5): ein FreeAndNil-Aufruf, der dort
+    // uebersetzt wird, wo die Ersetzung landet, beweist den Namen an der
+    // Stelle.
+    class function CoveringPlace(APlaces: TSourcePlaces;
+      const ALines, ACols: TArray<Integer>;
+      AAtLine, AAtEndLine: Integer): Integer; static;
+
     // Erste Zeile mit einer Compiler-Direktive ('{$' oder '(*$') in der
     // Klausel von AEntries - von der Zeile des Schluesselworts 'uses' bis
     // zum letzten Eintrag -, oder die Zeile des '{$IFDEF..}', in dessen
@@ -1596,6 +1609,45 @@ begin
       MsgByHand])
   else
     Result := _('%s is missing in uses: %s', [AQualifiedName, APlan.Reason]);
+end;
+
+// Wie TextCovers, die Stellen statt der uses-Eintraege - EINE Code-Sicht
+// fuer alle Stellen (je Stelle eine neue kostete auf einer grossen Datei
+// mit vielen Aufrufen spuerbar Zeit im IDE-Hauptthread).
+class function TRdxPlacesRunner.CoveringPlace(APlaces: TSourcePlaces;
+  const ALines, ACols: TArray<Integer>;
+  AAtLine, AAtEndLine: Integer): Integer;
+var
+  Lines   : TStringList;
+  Map     : TRdxCodeMap;
+  At, Fin : TArray<Int64>;
+  Place   : TArray<Int64>;
+  i       : Integer;
+begin
+  Result := -1;
+  if not Assigned(APlaces) or not APlaces.IsOpen
+     or (Length(ALines) = 0) or (Length(ACols) <> Length(ALines))
+     or (AAtLine < 1) or (AAtEndLine < AAtLine)
+     or (AAtEndLine > APlaces.LineCount) then
+    Exit;
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      At := LineStartKeys(Map, AAtLine);
+      Fin := BranchKeysAt(Map, AAtEndLine, MaxInt);
+      for i := 0 to High(ALines) do
+      begin
+        Place := BranchKeysAt(Map, ALines[i], ACols[i]);
+        if CoversBranches(Place, At) and CoversBranches(Place, Fin) then
+          Exit(i);
+      end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
 end;
 
 end.

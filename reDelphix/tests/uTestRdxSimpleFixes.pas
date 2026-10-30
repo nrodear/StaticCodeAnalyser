@@ -58,12 +58,30 @@ type
     [Test] procedure Sca139_DeclaresNonClassType;
   end;
 
+  // rwE33 Stufe 5 (SCA085, Sperre unnoetig, Dev-Cpp InstallWizards.pas:684):
+  // die Bausteine des Beweises "FreeAndNil ist an der Stelle schon bekannt"
+  // (uRdxFixRunner.FreeAndNilCalledLine) - welche Aufrufe zaehlen
+  // (TRdxSimpleFixes.UnqualifiedCalls, reiner Text) und ob ein Aufruf dort
+  // uebersetzt wird, wo die Stelle steht (TRdxPlacesRunner.CoveringPlace,
+  // auf dem Quellstellen-Dienst, nur dessen Zeilen). Den ganzen Laeufer mit
+  // dem echten Detektor prueft uTestRdxFreeGatesDetector
+  // (TTestRdxFreeKnownDetector, nur Delphi).
+  [TestFixture]
+  TTestRdxFreeAndNilKnown = class
+  public
+    [Test] procedure UnqualifiedCalls_OnlyPlainCodeCalls;
+    [Test] procedure UnqualifiedCalls_OwnDeclaration_None;
+    [Test] procedure CoveringPlace_Branches;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes,
   uRdxTypeProof,     // DeclaresProperty, DeclaresRoutine ... (Folgewelle A4)
+  uSourcePlaces,     // TSourcePlaces (CoveringPlace_Branches)
+  uRdxPlacesRunner,  // TRdxPlacesRunner.CoveringPlace (rwE33)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -1306,7 +1324,138 @@ begin
   end;
 end;
 
+{ ---- rwE33 Stufe 5: FreeAndNil schon bekannt ---- }
+
+// UnqualifiedCalls(AName) auf ASource.
+function CallsIn(const ASource, AName: string): TArray<TRdxToken>;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxSimpleFixes.UnqualifiedCalls(Map, AName);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Die Zahlen als dynamisches Array (ohne Array-Konstruktor - FPC 3.2.2).
+function Ints(const A: array of Integer): TArray<Integer>;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(A));
+  for i := 0 to High(A) do
+    Result[i] := A[i];
+end;
+
+procedure TTestRdxFreeAndNilKnown.UnqualifiedCalls_OnlyPlainCodeCalls;
+var
+  Calls : TArray<TRdxToken>;
+begin
+  // Es zaehlen nur Aufrufe, die sicher die Routine auf Unit-Ebene meinen
+  // (Zeile 9, 22, 23); ob sie dort uebersetzt werden, wo die Stelle steht
+  // ({$IFDEF RDX_D} in Zeile 22), entscheidet erst CoveringPlace. Rot ohne
+  // Fix: UnqualifiedCalls gab es nicht (Bau-Fehler).
+  Calls := CallsIn(Join(['unit u;', 'interface', 'implementation',
+    'procedure P(var A, B: TObject; Q: TFoo);', 'var', '  S: string;',
+    '  X: Pointer;', 'begin',
+    '  FreeAndNil(A);',                              //  9 ja
+    '  // FreeAndNil(B);',                           // 10 Kommentar
+    '  S := ''FreeAndNil(B)'';',                     // 11 String
+    '  Q.FreeAndNil(B);',                            // 12 qualifiziert
+    '  SysUtils.FreeAndNil(B);',                     // 13 qualifiziert
+    '  with Q do FreeAndNil(B);',                    // 14 with auf der Zeile
+    '  with Q do', '  begin', '    FreeAndNil(B);',  // 17 im with-Rumpf
+    '  end;',
+    '  inherited FreeAndNil(B);',                    // 19 geerbtes Member
+    '  { FreeAndNil(B); }',                          // 20 Kommentar
+    '  X := @FreeAndNil;',                           // 21 kein Aufruf
+    '  {$IFDEF RDX_D} FreeAndNil(B); {$ENDIF}',      // 22 ja (Code)
+    '  freeandnil (B);',                             // 23 ja
+    'end;', 'end.']), 'FreeAndNil');
+  Assert.AreEqual<Integer>(3, Length(Calls));
+  Assert.AreEqual<Integer>(9, Calls[0].Line);
+  Assert.AreEqual<Integer>(3, Calls[0].Col);
+  Assert.AreEqual<Integer>(22, Calls[1].Line);
+  Assert.AreEqual<Integer>(18, Calls[1].Col);
+  Assert.AreEqual<Integer>(23, Calls[2].Line);
+  Assert.AreEqual<Integer>(0, Length(CallsIn(Join(['unit u;', 'interface',
+    'implementation', 'end.']), 'FreeAndNil')), 'kein Aufruf');
+  Assert.AreEqual<Integer>(0, Length(CallsIn('FreeAndNil(A);', '')),
+    'kein Name');
+end;
+
+procedure TTestRdxFreeAndNilKnown.UnqualifiedCalls_OwnDeclaration_None;
+const
+  CALL = '  FreeAndNil(A);';
+begin
+  // Eine eigene Routine bzw. Methode FreeAndNil: der Aufruf bewiese nichts
+  // ueber die RTL - keine Aufrufe. Gegenprobe: ein anderer Name
+  // (FreeAndNilAll) aendert nichts.
+  Assert.AreEqual<Integer>(0, Length(CallsIn(Join(['unit u;', 'interface',
+    'implementation', 'procedure FreeAndNil(var O);', 'begin', 'end;',
+    'procedure P(var A: TObject);', 'begin', CALL, 'end;', 'end.']),
+    'FreeAndNil')), 'eigene Routine');
+  Assert.AreEqual<Integer>(0, Length(CallsIn(Join(['unit u;', 'interface',
+    'type', '  TFoo = class', '    procedure FreeAndNil(var O);', '  end;',
+    'implementation', 'procedure P(var A: TObject);', 'begin', CALL, 'end;',
+    'end.']), 'FreeAndNil')), 'eigene Methode');
+  Assert.AreEqual<Integer>(1, Length(CallsIn(Join(['unit u;', 'interface',
+    'implementation', 'procedure FreeAndNilAll(var O);', 'begin', 'end;',
+    'procedure P(var A: TObject);', 'begin', CALL, 'end;', 'end.']),
+    'FreeAndNil')), 'anderer Name');
+end;
+
+procedure TTestRdxFreeAndNilKnown.CoveringPlace_Branches;
+var
+  P : TSourcePlaces;
+begin
+  // Rot ohne Fix: CoveringPlace gab es nicht (Bau-Fehler). Die Stellen:
+  // FreeAndNil in Zeile 6 (unbedingt), 11 ({$IFDEF RDX_D}), 17 ({$IFNDEF
+  // RDX_Y}, mit der Stelle 18-19); die Stelle 24-25 steht ausserhalb, ihr
+  // Zeilenende in Zeile 25 hinter '{$IFDEF RDX_E}'.
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('u.pas', Join(['unit u;', 'interface',
+      'implementation', 'procedure A(var O: TObject);', 'begin',
+      '  FreeAndNil(O);', 'end;', '{$IFDEF RDX_D}',
+      'procedure B(var O: TObject);', 'begin', '  FreeAndNil(O);', 'end;',
+      '{$ENDIF}', '{$IFNDEF RDX_Y}', 'procedure C(var O: TObject);', 'begin',
+      '  FreeAndNil(O);', '  O.Free;', '  O := nil;', 'end;', '{$ENDIF}',
+      'procedure D(var O: TObject);', 'begin', '  O.Free;',
+      '  O := nil; {$IFDEF RDX_E}', '  Beep; {$ENDIF}', 'end;', 'end.'])),
+      'OpenSource');
+    Assert.AreEqual<Integer>(0, TRdxPlacesRunner.CoveringPlace(P, Ints([6]),
+      Ints([3]), 18, 19), 'unbedingt deckt den Zweig');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, Ints([11]),
+      Ints([3]), 18, 19), 'ein anderer Zweig');
+    Assert.AreEqual<Integer>(0, TRdxPlacesRunner.CoveringPlace(P, Ints([17]),
+      Ints([3]), 18, 19), 'derselbe Zweig');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, Ints([17]),
+      Ints([3]), 24, 24), 'Stelle ausserhalb des Zweigs');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, Ints([17]),
+      Ints([3]), 19, 22), 'Bereich ueber das {$ENDIF} hinaus');
+    Assert.AreEqual<Integer>(2, TRdxPlacesRunner.CoveringPlace(P,
+      Ints([11, 17, 6]), Ints([3, 3, 3]), 24, 25), 'der erste, der deckt');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, nil, nil,
+      24, 24), 'keine Stelle');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, Ints([6]),
+      Ints([3]), 0, 0), 'keine Zeile');
+    Assert.AreEqual<Integer>(-1, TRdxPlacesRunner.CoveringPlace(P, Ints([6]),
+      nil, 24, 24), 'Laengen ungleich');
+  finally
+    P.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixes);
+  TDUnitX.RegisterTestFixture(TTestRdxFreeAndNilKnown);
 
 end.

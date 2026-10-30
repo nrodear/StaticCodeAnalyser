@@ -64,7 +64,9 @@ type
     // Namenskonvention, kein Erbe einer Klasse des alten Open Tools API mit
     // eigenem Free (VirtIntf.TInterface), kein Kommentar an der Stelle, der
     // FreeAndNil nennt (Realwelt-Test rwE29). Fehlt SysUtils, kommt die
-    // uses-Einfuegung mit.
+    // uses-Einfuegung mit - ausser die Datei ruft FreeAndNil schon
+    // unqualifiziert dort auf, wo die Stelle uebersetzt wird (rwE33,
+    // FreeAndNilCalledLine): dann bleibt uses, wie es ist.
     class function FreeAndNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -94,7 +96,7 @@ type
     // mit FreeAndNil an der Stelle); dazu kein const-/constref-Parameter (Review FB,
     // R2-03: FPC und Delphi bis 10.3 uebersetzen das nicht, ab 10.4 wird
     // nur die lokale Kopie nil). Fehlt SysUtils, kommt die uses-
-    // Einfuegung mit.
+    // Einfuegung mit - ausser wie bei SCA085 (FreeAndNilCalledLine).
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -644,12 +646,54 @@ begin
     AOutcome);
 end;
 
+// SCA085/SCA139 (rwE33 Stufe 5, Dev-Cpp InstallWizards.pas:684 - SysUtils
+// nur in '{$IFDEF WIN32}' und '{$IFDEF LINUX}', FreeAndNil unqualifiziert
+// in Zeile 265/476/738): ruft die Datei FreeAndNil schon im Code auf
+// (TRdxSimpleFixes.UnqualifiedCalls), an einer Stelle, die ueberall
+// uebersetzt wird, wo die Ersetzungen AEdits landen (TRdxPlacesRunner.
+// CoveringPlace mit EditLines)? Dann loest 'FreeAndNil(X)' dort genauso
+// auf wie dieser Aufruf - dieselbe Unit, derselbe Name; die uses-Klausel
+// bleibt, wie sie ist (AppendSysUtils entfaellt). Der Beweis gilt dem
+// Namen, nicht der Unit: kaeme FreeAndNil aus einer anderen Unit, riefe
+// die Hilfe dieselbe Routine wie der Code daneben (GRENZE wie
+// UnqualifiedCalls: ein geerbtes Member FreeAndNil eines fremden Vorfahren
+// sieht der Text nicht). Die Zeile des Aufrufs, 0 ohne. Die beiden Zweige
+// allein (WIN32 und LINUX) beweisen nichts - es gibt weitere Ziele
+// (MACOS ...).
+function FreeAndNilCalledLine(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AEdits: TArray<TRdxEdit>): Integer;
+var
+  Calls       : TArray<TRdxToken>;
+  Ls, Cs      : TArray<Integer>;
+  First, Last : Integer;
+  i, k        : Integer;
+begin
+  Result := 0;
+  EditLines(AEdits, First, Last);
+  if First < 1 then
+    Exit;
+  Calls := TRdxSimpleFixes.UnqualifiedCalls(AMap, 'FreeAndNil');
+  if Length(Calls) = 0 then
+    Exit;
+  SetLength(Ls, Length(Calls));
+  SetLength(Cs, Length(Calls));
+  for i := 0 to High(Calls) do
+  begin
+    Ls[i] := Calls[i].Line;
+    Cs[i] := Calls[i].Col;
+  end;
+  k := TRdxPlacesRunner.CoveringPlace(APlaces, Ls, Cs, First, Last);
+  if k >= 0 then
+    Result := Calls[k].Line;
+end;
+
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   Map     : TRdxCodeMap;
-  TypeLow : string;   // der Typ von X aus VariableCheck
+  TypeLow : string;    // der Typ von X aus VariableCheck
+  Called  : Integer;   // FreeAndNilCalledLine: Zeile des Aufrufs, 0 ohne
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -657,6 +701,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
+  Called := 0;
   Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
@@ -666,6 +711,9 @@ begin
     // Dieselbe Typ-Sperre wie SCA139 (Review FB, R2-01/R3-01).
     if Result.Reason = '' then
       Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
+    if (Result.Reason = '')
+       and not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+      Called := FreeAndNilCalledLine(APlaces, Map, Result.Edits);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -675,7 +723,12 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  // FreeAndNil schon unqualifiziert aufgerufen, wo die Stelle uebersetzt
+  // wird (rwE33): keine uses-Ergaenzung.
+  if Called > 0 then
+    Result.Enabled := True
+  else
+    Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 class function TRdxFixRunner.AssertMessageFix(APlaces: TSourcePlaces;
@@ -860,7 +913,8 @@ class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   Map     : TRdxCodeMap;
-  TypeLow : string;   // der Typ von X aus VariableCheck
+  TypeLow : string;    // der Typ von X aus VariableCheck
+  Called  : Integer;   // FreeAndNilCalledLine: Zeile des Aufrufs, 0 ohne
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -872,6 +926,7 @@ begin
   // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
   Result.Name := FreeReceiverOf(AMessage);
   SetLength(Result.Edits, 1);
+  Called := 0;
   Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeOnly(Map, ALine, Result.Name,
@@ -885,6 +940,11 @@ begin
       Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
     if Result.Reason = '' then
       Result.Reason := ConstParamReason(Map, ALine, Result.Name);
+    // Wie SCA085 (rwE33): FreeAndNil schon aufgerufen, wo die Stelle
+    // uebersetzt wird - keine uses-Ergaenzung.
+    if (Result.Reason = '')
+       and not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+      Called := FreeAndNilCalledLine(APlaces, Map, Result.Edits);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -894,7 +954,10 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  if Called > 0 then
+    Result.Enabled := True
+  else
+    Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 // SCA066: die Namen um den Aufruf (TRdxCallEdit). Ein blosser Name mit

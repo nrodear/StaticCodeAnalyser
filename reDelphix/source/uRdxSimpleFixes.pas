@@ -155,6 +155,19 @@ type
     // kennt.
     class function DeclaresInlineVar(AMap: TRdxCodeMap; ALine: Integer;
       const AName: string): Boolean; static;
+    // SCA085/SCA139 (rwE33 Stufe 5, Dev-Cpp InstallWizards.pas:684): die
+    // Aufrufe von AName im Code, die sicher die Routine auf Unit-Ebene
+    // meinen, in Textreihenfolge - unqualifiziert (kein '.' und kein
+    // 'inherited' davor), mit '(' dahinter, nicht im Rumpf eines with und
+    // nicht auf einer Zeile mit 'with' (WithBefore: AName koennte dort ein
+    // Member sein). Kommentare, Strings und Direktiven tragen keine Token.
+    // Leer, wenn die Datei selbst eine Routine AName deklariert
+    // (DeclaresRoutine, auch als Methode): ein Aufruf bewiese dann nichts.
+    // Ob der Aufruf dort uebersetzt wird, wo er gebraucht wird, prueft der
+    // Aufrufer (TRdxPlacesRunner.CoveringPlace). GRENZE: ein Member AName
+    // eines fremden Vorfahren der Klasse um den Aufruf sieht der Text nicht.
+    class function UnqualifiedCalls(AMap: TRdxCodeMap;
+      const AName: string): TArray<TRdxToken>; static;
 
     // ---- Editorhilfen Stufe 2, Rest (Nico 2026-10-10: "baue weitere") ----
 
@@ -886,6 +899,30 @@ begin
     if (T.Low = 'with') and IsKeywordAfter(T, Before(AMap, T)) then
       Exit(True);
     T := After(AMap, T);
+  end;
+end;
+
+class function TRdxSimpleFixes.UnqualifiedCalls(AMap: TRdxCodeMap;
+  const AName: string): TArray<TRdxToken>;
+var
+  Low  : string;
+  T, P : TRdxToken;
+begin
+  Result := nil;
+  if (AName = '') or TRdxTypeProof.DeclaresRoutine(AMap, AName) then
+    Exit;
+  Low := LowerCase(AName);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), Low);
+  while T.Low <> '' do
+  begin
+    if T.Low = Low then
+    begin
+      P := Before(AMap, T);
+      if (After(AMap, T).Low = '(') and (P.Low <> '.')
+         and (P.Low <> 'inherited') and not WithBefore(AMap, T.Line) then
+        AddToken(Result, T);
+    end;
+    T := NextTokenOnLineWith(AMap, T, Low);
   end;
 end;
 
