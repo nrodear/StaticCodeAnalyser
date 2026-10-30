@@ -118,15 +118,50 @@ type
 
     // SCA007, Bezeichner-Beweis (rwE31 Stufe 3, Todo_SCA007 "nur-menue-
     // unnoetig": gexperts mPasLex.pas:80 UpperCase, vcl-styles-utils
-    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte
-    // der Units, die der Detektor nie meldet (IsAlwaysNeeded) und fuer die er
-    // darum keine Liste fuehrt - SysUtils und Types (auch System.-Namen),
-    // seit Fix-Runde 4 nach rwE32 auch Messages (WM_APP, TWMMove ...),
-    // klein; sonst leer. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC
-    // 3.2.2 im interface-Teil fuehren (gegen beide Quellen geprueft): steht
-    // die Unit in den uses, kommt der Name aus ihr, nicht aus der entfernten.
-    class function AlwaysNeededIdents(const AUnitLow: string): TArray<string>;
+    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte,
+    // die der Planer ueber die Listen des Detektors hinaus kennt, klein;
+    // sonst leer. Zum einen die Units, die der Detektor nie meldet und fuer
+    // die er darum keine Liste fuehrt - SysUtils und Types (auch System.-
+    // Namen), seit Fix-Runde 4 nach rwE32 Messages (WM_APP, TWMMove ...),
+    // seit Fix-Runde 5 nach rwE33 Windows (TPoint, TRect ..) und ComObj
+    // (IsAlwaysNeeded) und DBTables (keine Liste); zum anderen Point, Rect,
+    // Bounds, SmallPoint von Classes, die der Detektor aus Grundsatz nicht
+    // fuehrt. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC 3.2.2 im
+    // interface-Teil fuehren (gegen beide Quellen geprueft; DBTables gibt es
+    // nur unter Delphi): steht die Unit in den uses, kommt der Name aus ihr,
+    // nicht aus der entfernten. Bis Fix-Runde 5 AlwaysNeededIdents.
+    class function ExtraIdents(const AUnitLow: string): TArray<string>;
       static;
+
+    // SCA007 (Review e/HilfeFixY nach Fix-Runde 5): ExtraIdents der Eintraege
+    // AEntries (eine uses-Klausel) ausser denen mit dem letzten Glied von
+    // AUnit (der Zwilling der entfernten Unit) - fuer den Beweis
+    // (ForeignIdent). Die Listen seit Fix-Runde 5 (Windows, ComObj, DBTables,
+    // Classes) nur fuer einen Eintrag, der unbedingt steht oder dessen
+    // Bedingungsbloecke alle auch die Fundstelle (ASiteLine, ASiteCol)
+    // umfassen (ImpliedBySite); sonst nur die von SysUtils, Types, Messages
+    // (wie bis dahin). Lazarus fpguicrosshelpers.pas:8 'uses Classes,
+    // SysUtils, fpg_main {$IFDEF WINDOWS}, windows{$ENDIF}': TPoint hiesse
+    // sonst "aus windows" - unter Linux kommt es aus Classes.
+    class function ExtraIdentsOf(AMap: TRdxCodeMap;
+      const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+      ASiteLine, ASiteCol: Integer): TArray<string>; static;
+
+    // SCA007 (Fix-Runde 5 nach rwE33, CEF4Delphi MDIBrowser uChildForm.pas:10,
+    // SimpleServer uSimpleServer.pas:9, source\uCEFWindowDelegate.pas:16 ..):
+    // der Eintrag AIndex einer Klausel aus dem Text (TextUsesEntry) steht in
+    // einem Zweig von '{$IFDEF X} A, B, {$ELSE} A', B', {$ENDIF} C;' - genau
+    // diese drei Direktiven (auch IFNDEF/IF und IFEND) in der Klausel -, und
+    // jeder Eintrag des ANDEREN Zweigs hat in seinem einen Zwilling: gleicher
+    // Name oder bis auf ein Unit-Scope-Praefix ('Winapi.Windows' und
+    // 'Windows', UNIT_SCOPES). Dann ist jede Unit, der der Planer einen
+    // Bezeichner ueber den geparsten anderen Zweig zuordnet
+    // (uRdxFixRunner.OtherUnitsIdents), auch in diesem Zweig da - der Beweis
+    // gilt fuer ihn; Units nur dieses Zweigs fehlen ihm, das macht ihn nur
+    // strenger. Der Edit (RemoveUsesEntry) loescht nur in diesem Zweig, der
+    // andere bleibt Zeichen fuer Zeichen (sein Zwilling auch).
+    class function TwinBranches(AMap: TRdxCodeMap;
+      const AClause: TRdxUsesClause; AIndex: Integer): Boolean; static;
 
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
@@ -203,6 +238,7 @@ uses
   uRdxBlocks, // TypeHasBody (ForeignIdent: Typ mit Rumpf)
   uRdxRaiseFixes, // OldExceptionClassReason (SCA168 raise, rwE31 Stufe 3)
   uRdxTypeProof,  // Selektor-Typ, Units neben der Datei (SCA168.2, rwE32 E5)
+  uRdxCompilerTraces, // ConditionalDirectives, UnconditionalAt (SCA007)
   uRdxText;   // _() und die gemeinsamen Texte der Gruende (Entscheid E29)
 
 const
@@ -299,7 +335,7 @@ const
     'ansistring', 'widestring', 'unicodestring', 'shortstring', 'pointer',
     'pchar', 'pansichar', 'pwidechar', 'single', 'double', 'extended',
     'currency', 'variant', 'olevariant');
-  // Exporte von SysUtils bzw. Types (AlwaysNeededIdents): Routinen, Typen,
+  // Exporte von SysUtils bzw. Types (ExtraIdents): Routinen, Typen,
   // Exceptions und Aufzaehlungswerte im Stil, den ForeignIdent prueft - je in
   // System.SysUtils.pas/System.Types.pas von Delphi 13 und in sysutils
   // (objpas/sysutils/*h.inc, win/sysutils.pp)/types.pp von FPC 3.2.2.
@@ -351,7 +387,7 @@ const
     'tsmallpoint', 'tpointf', 'trectf', 'rect', 'point', 'bounds', 'ptinrect',
     'intersectrect', 'unionrect', 'offsetrect', 'isrectempty', 'equalrect',
     'centerpoint', 'tduplicates', 'dupignore', 'dupaccept', 'duperror');
-  // Exporte von Messages (AlwaysNeededIdents, Fix-Runde 4 nach rwE32:
+  // Exporte von Messages (ExtraIdents, Fix-Runde 4 nach rwE32:
   // CEF4Delphi TabbedBrowser uMainForm.pas:18, TabbedOSRBrowser
   // uChildForm.pas:20 'WM_APP + $100' - Messages steht in IsAlwaysNeeded,
   // der Detektor fuehrt keine Liste). Genau die Namen, die Winapi.Messages
@@ -487,6 +523,66 @@ const
     'wm_windowposchanged', 'wm_windowposchanging', 'wm_wininichange',
     'wm_wtssession_change', 'wm_xbuttondblclk', 'wm_xbuttondown',
     'wm_xbuttonup');
+  // Exporte von Windows, ComObj, DBTables und Classes (ExtraIdents, Fix-Runde
+  // 5 nach rwE33: jvcl JvCategCh.pas:44 'P: TPoint', Abbrevia_TLB.pas:57
+  // CreateRemoteComObject, JvDBIndex.pas:39 TTable - der Hinweis nannte sie
+  // als moegliche Herkunft der entfernten Unit). Windows und ComObj stehen
+  // in IsAlwaysNeeded, DBTables hat keine Liste - der Detektor meldet alle
+  // drei nie. WINDOWS_NAMES: die Rechteck-Typen und -Routinen, die
+  // Winapi.Windows von Delphi 13 (TPoint = System.Types.TPoint ..) UND
+  // windows von FPC 3.2.2 (struct.inc mit typshrdh.inc, func.inc) fuehren.
+  WINDOWS_NAMES: array[0..14] of string = ('tpoint', 'trect', 'tsize',
+    'tsmallpoint', 'ptinrect', 'intersectrect', 'unionrect', 'offsetrect',
+    'isrectempty', 'equalrect', 'inflaterect', 'setrect', 'copyrect',
+    'setrectempty', 'subtractrect');
+  // ComObj: das interface von System.Win.ComObj (Delphi 13) UND comobj von
+  // FPC 3.2.2 (packages/winunits-base) - Klassen, Exceptions, Routinen,
+  // TClassInstancing/TThreadingModel samt Werten. Der Detektor fuehrt
+  // CreateComObject und OleCheck in der Liste von ActiveX. NICHT tmBoth
+  // (Review e/HilfeFixY): TTickMark von ComCtrls (Vcl.ComCtrls Delphi 13,
+  // comctrls der LCL) fuehrt denselben Wert, und ComCtrls hat eine Liste im
+  // Detektor, kann also der Fund sein - 'uses ComObj, ComCtrls' mit
+  // 'TrackBar.TickMarks := tmBoth': ohne ComCtrls waere tmBoth der Wert von
+  // TThreadingModel (E2010). Ein Name hier darf in keiner Unit stehen, die
+  // der Detektor melden kann.
+  COMOBJ_NAMES: array[0..45] of string = ('eoleerror', 'eolesyserror',
+    'eoleexception', 'eoleregistrationerror', 'tcomserverobject',
+    'tcomobjectfactory', 'tcomclassmanager', 'tcomobject', 'tcomclass',
+    'tclassinstancing', 'ciinternal', 'cisingleinstance', 'cimultiinstance',
+    'tthreadingmodel', 'tmsingle', 'tmapartment', 'tmfree',
+    'tmneutral', 'ttypedcomobject', 'ttypedcomclass', 'ttypedcomobjectfactory',
+    'tautoobject', 'tautoclass', 'tautoobjectfactory', 'tautointfobject',
+    'createclassid', 'createcomobject', 'createremotecomobject',
+    'createoleobject', 'getactiveoleobject', 'olecheck', 'oleerror',
+    'progidtoclassid', 'classidtoprogid', 'stringtolpolestr',
+    'interfaceconnect', 'interfacedisconnect', 'dispatchinvoke',
+    'dispatchinvokeerror', 'handlesafecallexception', 'comclassmanager',
+    'createregkey', 'deleteregkey', 'getregstringvalue', 'tconnectevent',
+    'tfactoryproc');
+  // (Bde.)DBTables gibt es nur unter Delphi (BDE, FPC hat keine): die
+  // Datenmengen und Verbindungen der BDE, die jede Fassung seit Delphi 3
+  // fuehrt. Delphi 12/13 liefern weder Quelle noch dcu der BDE mit - die
+  // Namen sind nicht gegen eine Quelle geprueft (Review e/HilfeFixY). Sie
+  // stehen in keiner Unit mit Liste im Detektor (Delphi-13-Quellen, LCL;
+  // TDatabase/TDBDataSet von db gibt es nur unter FPC, ohne DBTables).
+  DBTABLES_NAMES: array[0..9] of string = ('ttable', 'tquery', 'tdatabase',
+    'tsession', 'tstoredproc', 'tbatchmove', 'tbdedataset', 'tdbdataset',
+    'tupdatesql', 'edbengineerror');
+  // Classes hat eine Liste im Detektor; Point, Rect, Bounds und SmallPoint
+  // nimmt er aus Grundsatz nicht auf (D007: sie stehen auch in Types bzw.
+  // einer IsAlwaysNeeded-Unit und bewiesen nichts fuer Classes). Fuer den
+  // Beweis des Planers sind sie Exporte von System.Classes (Delphi 13) und
+  // classes (FPC 3.2.2, classesh.inc).
+  CLASSES_EXTRA: array[0..3] of string = ('point', 'smallpoint', 'rect',
+    'bounds');
+  // Die Unit-Scope-Praefixe, unter denen Delphi einen Kurznamen in einer
+  // VCL-Anwendung aufloest ('ClipBrd' -> 'Vcl.ClipBrd'; die Vorgabe der
+  // Projektoptionen) - TwinBranches haelt so 'Vcl.ClipBrd' und 'ClipBrd'
+  // fuer dieselbe Unit. NICHT FMX: 'FMX.Forms' und 'Forms' sind zwei Units.
+  UNIT_SCOPES: array[0..18] of string = ('winapi', 'system.win', 'data.win',
+    'datasnap.win', 'web.win', 'soap.win', 'xml.win', 'bde', 'system', 'xml',
+    'data', 'datasnap', 'web', 'soap', 'vcl', 'vcl.imaging', 'vcl.touch',
+    'vcl.samples', 'vcl.shell');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -1074,29 +1170,123 @@ begin
   end;
 end;
 
-class function TRdxStructFixes.AlwaysNeededIdents(
-  const AUnitLow: string): TArray<string>;
+// Die Namen einer Liste als Ergebnis von ExtraIdents.
+function NamesOf(const ANames: array of string): TArray<string>;
 var
   i : Integer;
 begin
+  SetLength(Result, Length(ANames));
+  for i := 0 to High(ANames) do
+    Result[i] := ANames[i];
+end;
+
+class function TRdxStructFixes.ExtraIdents(
+  const AUnitLow: string): TArray<string>;
+begin
   Result := nil;
   if (AUnitLow = 'sysutils') or (AUnitLow = 'system.sysutils') then
-  begin
-    SetLength(Result, Length(SYSUTILS_NAMES));
-    for i := 0 to High(SYSUTILS_NAMES) do
-      Result[i] := SYSUTILS_NAMES[i];
-  end
+    Result := NamesOf(SYSUTILS_NAMES)
   else if (AUnitLow = 'types') or (AUnitLow = 'system.types') then
-  begin
-    SetLength(Result, Length(TYPES_NAMES));
-    for i := 0 to High(TYPES_NAMES) do
-      Result[i] := TYPES_NAMES[i];
-  end
+    Result := NamesOf(TYPES_NAMES)
   else if (AUnitLow = 'messages') or (AUnitLow = 'winapi.messages') then
+    Result := NamesOf(MESSAGES_NAMES)
+  else if (AUnitLow = 'windows') or (AUnitLow = 'winapi.windows') then
+    Result := NamesOf(WINDOWS_NAMES)
+  else if (AUnitLow = 'comobj') or (AUnitLow = 'system.win.comobj') then
+    Result := NamesOf(COMOBJ_NAMES)
+  else if (AUnitLow = 'dbtables') or (AUnitLow = 'bde.dbtables') then
+    Result := NamesOf(DBTABLES_NAMES)
+  else if (AUnitLow = 'classes') or (AUnitLow = 'system.classes') then
+    Result := NamesOf(CLASSES_EXTRA);
+end;
+
+// Die oeffnenden Direktiven (Index in ADirs) der Bedingungsbloecke, in
+// denen (ALine, ACol) steht, aussen zuerst.
+function OpenBlocksAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): TArray<Integer>;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(ADirs));
+  n := 0;
+  for i := 0 to High(ADirs) do
   begin
-    SetLength(Result, Length(MESSAGES_NAMES));
-    for i := 0 to High(MESSAGES_NAMES) do
-      Result[i] := MESSAGES_NAMES[i];
+    if (ADirs[i].Line > ALine)
+       or ((ADirs[i].Line = ALine) and (ADirs[i].Col >= ACol)) then
+      Break;
+    if InList(ADirs[i].Word, ['if', 'ifdef', 'ifndef', 'ifopt']) then
+    begin
+      Result[n] := i;
+      Inc(n);
+    end
+    else if InList(ADirs[i].Word, ['endif', 'ifend']) and (n > 0) then
+      Dec(n);
+  end;
+  SetLength(Result, n);
+end;
+
+// Gilt der Eintrag an (AEntryLine, AEntryCol) ueberall, wo die Fundstelle
+// (ASiteLine, ASiteCol) uebersetzt wird? Ja, wenn er unbedingt steht
+// (UnconditionalAt) oder jeder Bedingungsblock um ihn auch die Fundstelle
+// umfasst - derselbe Zweig, oder der andere Zweig einer Weiche, deren
+// Zwillinge TwinBranches bewiesen hat (nur dann fragt der Laeufer einen
+// Eintrag aus dem anderen Zweig).
+function ImpliedBySite(const ADirs: TRdxCondDirectives; AEntryLine,
+  AEntryCol, ASiteLine, ASiteCol: Integer): Boolean;
+var
+  E, S : TArray<Integer>;
+  i, j : Integer;
+  Hit  : Boolean;
+begin
+  if UnconditionalAt(ADirs, AEntryLine, AEntryCol) then
+    Exit(True);
+  E := OpenBlocksAt(ADirs, AEntryLine, AEntryCol);
+  S := OpenBlocksAt(ADirs, ASiteLine, ASiteCol);
+  for i := 0 to High(E) do
+  begin
+    Hit := False;
+    for j := 0 to High(S) do
+      if S[j] = E[i] then
+        Hit := True;
+    if not Hit then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+class function TRdxStructFixes.ExtraIdentsOf(AMap: TRdxCodeMap;
+  const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+  ASiteLine, ASiteCol: Integer): TArray<string>;
+var
+  Dirs      : TRdxCondDirectives;
+  k, n      : Integer;
+  Low, Last : string;
+  Id        : string;
+  Ids       : TArray<string>;
+begin
+  Result := nil;
+  n := 0;
+  Dirs := ConditionalDirectives(AMap);
+  Last := LowerCase(AUnit);
+  Last := Copy(Last, LastDelimiter('.', Last) + 1, MaxInt);
+  for k := 0 to High(AEntries) do
+  begin
+    Low := LowerCase(AEntries[k].Resolved);
+    if Copy(Low, LastDelimiter('.', Low) + 1, MaxInt) = Last then
+      Continue;
+    if ImpliedBySite(Dirs, AEntries[k].StartLine, AEntries[k].StartCol,
+         ASiteLine, ASiteCol)
+       or InList(Low, ['sysutils', 'system.sysutils', 'types', 'system.types',
+         'messages', 'winapi.messages']) then
+      Ids := ExtraIdents(Low)
+    else
+      Ids := nil;
+    SetLength(Result, n + Length(Ids));
+    for Id in Ids do
+    begin
+      Result[n] := Id;
+      Inc(n);
+    end;
   end;
 end;
 
@@ -1167,6 +1357,169 @@ begin
         end;
     T := NextTokenOnLineWith(AMap, T, 'uses');
   end;
+end;
+
+{ ---- SCA007: Zwillingszweige (TwinBranches) ---- }
+
+// Nennen A und B (klein) dieselbe Unit - gleich oder bis auf ein Unit-Scope-
+// Praefix (UNIT_SCOPES) vor dem Namen des anderen ('vcl.clipbrd' und
+// 'clipbrd', 'vcl.samples.spin' und 'spin')?
+function SameUnitInScope(const A, B: string): Boolean;
+var
+  Long, Short : string;
+begin
+  if A = B then
+    Exit(True);
+  if Length(A) > Length(B) then
+  begin
+    Long := A;
+    Short := B;
+  end
+  else
+  begin
+    Long := B;
+    Short := A;
+  end;
+  Result := (Length(Long) > Length(Short) + 1)
+    and (Copy(Long, Length(Long) - Length(Short), MaxInt) = '.' + Short)
+    and InList(Copy(Long, 1, Length(Long) - Length(Short) - 1), UNIT_SCOPES);
+end;
+
+// Liegt (ALine, ACol) vor (BLine, BCol)?
+function PosBefore(ALine, ACol, BLine, BCol: Integer): Boolean;
+begin
+  Result := (ALine < BLine) or ((ALine = BLine) and (ACol < BCol));
+end;
+
+// Die Weiche einer uses-Klausel aus dem Text (AEntries ab dem Schluesselwort
+// AUses, ReadTextClause): 0 ohne Direktive bis zum ';', 1 bei genau
+// '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (auch IFNDEF/IF und IFEND) - ASide je
+// Eintrag 1 im ersten, 2 im zweiten Zweig, sonst 0 -, -1 bei jeder anderen
+// Folge von Direktiven.
+function ClauseSides(AMap: TRdxCodeMap; const AUses: TRdxToken;
+  const AEntries: TArray<TRefactorSpan>; out ASide: TArray<Integer>): Integer;
+var
+  Semi      : TRdxToken;
+  DLine     : array[0..2] of Integer;
+  DCol      : array[0..2] of Integer;
+  Words     : array[0..2] of string;
+  Li, Co, n : Integer;
+  k, j      : Integer;
+  Arg       : Boolean;
+begin
+  Result := -1;
+  SetLength(ASide, Length(AEntries));
+  for k := 0 to High(ASide) do
+    ASide[k] := 0;
+  if Length(AEntries) = 0 then
+    Exit;
+  Semi := SeparatorAfter(AMap, AEntries[High(AEntries)]);
+  if Semi.Low <> ';' then
+    Exit;
+  n := 0;
+  Li := AUses.Line;
+  Co := AUses.EndCol;
+  while NextDirective(AMap, Li, Co)
+     and PosBefore(Li, Co, Semi.Line, Semi.Col) do
+  begin
+    if n > High(DLine) then
+      Exit;
+    DLine[n] := Li;
+    DCol[n] := Co;
+    Words[n] := DirectiveWord(AMap, Li, Co, Arg);
+    Inc(n);
+    Inc(Co);
+  end;
+  if n = 0 then
+    Exit(0);
+  if (n <> 3) or not InList(Words[0], ['ifdef', 'ifndef', 'if'])
+     or (Words[1] <> 'else') or not InList(Words[2], ['endif', 'ifend']) then
+    Exit;
+  for k := 0 to High(AEntries) do
+    for j := 0 to 1 do
+      if PosBefore(DLine[j], DCol[j], AEntries[k].StartLine,
+           AEntries[k].StartCol)
+         and PosBefore(AEntries[k].StartLine, AEntries[k].StartCol,
+           DLine[j + 1], DCol[j + 1]) then
+        ASide[k] := j + 1;
+  Result := 1;
+end;
+
+// Hat jeder Eintrag des Zweigs AFrom einen Zwilling (SameUnitInScope) im
+// Zweig ATo?
+function Covered(const AEntries: TArray<TRefactorSpan>;
+  const ASide: TArray<Integer>; AFrom, ATo: Integer): Boolean;
+var
+  k, j  : Integer;
+  Found : Boolean;
+begin
+  Result := True;
+  for k := 0 to High(AEntries) do
+    if ASide[k] = AFrom then
+    begin
+      Found := False;
+      for j := 0 to High(AEntries) do
+        if (ASide[j] = ATo) and SameUnitInScope(
+             LowerCase(AEntries[k].Resolved),
+             LowerCase(AEntries[j].Resolved)) then
+          Found := True;
+      if not Found then
+        Exit(False);
+    end;
+end;
+
+class function TRdxStructFixes.TwinBranches(AMap: TRdxCodeMap;
+  const AClause: TRdxUsesClause; AIndex: Integer): Boolean;
+var
+  E, Es   : TArray<TRefactorSpan>;
+  Side, S : TArray<Integer>;
+  U, T    : TRdxToken;
+  Own, k  : Integer;
+  Dirs    : TRdxCondDirectives;
+begin
+  Result := False;
+  E := AClause.Entries;
+  if (AIndex < 0) or (AIndex > High(E)) then
+    Exit;
+  // 'uses' auf AClause.UsesLine vor dem ersten Eintrag.
+  U := NextToken(AMap, AClause.UsesLine, 1);
+  while (U.Low <> '') and (U.Line = AClause.UsesLine) and (U.Low <> 'uses') do
+    U := After(AMap, U);
+  if (U.Low <> 'uses')
+     or not PosBefore(U.Line, U.Col, E[0].StartLine, E[0].StartCol)
+     or (ClauseSides(AMap, U, E, Side) <> 1) then
+    Exit;
+  Own := Side[AIndex];
+  if (Own = 0) or not Covered(E, Side, 3 - Own, Own) then
+    Exit;
+  // Die uebrigen Klauseln liefert der Dienst mit SEINER Sicht der Defines;
+  // im Zweig des Funds gilt eine andere (die Weiche oben). Ihre Units gelten
+  // nur, wenn sie in jeder Sicht dieselben sind: keine Klausel steht in
+  // einem bedingten Bereich (UnconditionalAt), und eine Weiche in ihr nennt
+  // in beiden Zweigen dieselben Units (bis auf Unit-Scope-Praefixe). Sonst
+  // ordnete der Beweis einen Bezeichner vielleicht einer Unit zu, die im
+  // Zweig des Funds fehlt.
+  Dirs := ConditionalDirectives(AMap);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      if not UnconditionalAt(Dirs, T.Line, T.Col) then
+        Exit;
+      if not SameTok(T, U) then
+      begin
+        if not ReadTextClause(AMap, After(AMap, T), Es) then
+          Exit;
+        k := ClauseSides(AMap, T, Es, S);
+        if (k < 0) or ((k = 1) and not (Covered(Es, S, 1, 2)
+           and Covered(Es, S, 2, 1))) then
+          Exit;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+  Result := True;
 end;
 
 { ---- SCA168 ---- }

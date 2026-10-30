@@ -83,7 +83,7 @@ type
     [Test] procedure Sca007_TextUsesEntry_AllBranches;
     // rwE31 Stufe 3 (gexperts mPasLex.pas:80 UpperCase, issrc BidiUtils.pas:15
     // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
-    // Exporte schliessen den Beweis (AlwaysNeededIdents).
+    // Exporte schliessen den Beweis (ExtraIdents).
     [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
     // rwE32 Stufe 4, Nico-Entscheid E5: SCA168.2 gesperrt, wenn das case
     // nicht nach einer Aufzaehlung waehlt (Selektor-Typ, Konstanten oder
@@ -109,6 +109,19 @@ type
     // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
     // WM_APP): auch Messages hat im Detektor keine Liste.
     [Test] procedure Sca007_ForeignIdent_Messages;
+    // Fix-Runde 5 nach rwE33 (jvcl JvCategCh.pas:44 TPoint, Abbrevia_TLB.pas:57
+    // CreateRemoteComObject, JvDBIndex.pas:39 TTable): Windows, ComObj und
+    // DBTables fuehren keine Liste im Detektor, Rect/Point fehlen in der von
+    // Classes - ihre Exporte schliessen den Beweis (ExtraIdents).
+    [Test] procedure Sca007_ForeignIdent_WindowsComObjDbTables;
+    // Fix-Runde 5 nach rwE33 (CEF4Delphi MDIBrowser uChildForm.pas:10 u. a.):
+    // der nicht geparste Zweig nennt dieselben Units wie der geparste, bis
+    // auf Unit-Scope-Praefixe - der Beweis gilt (TwinBranches).
+    [Test] procedure Sca007_TwinBranches;
+    // Review e/HilfeFixY (Lazarus fpguicrosshelpers.pas:8): die Listen seit
+    // Fix-Runde 5 gelten nur fuer Eintraege, die auch an der Fundstelle
+    // stehen - '{$IFDEF WINDOWS}, windows{$ENDIF}' beweist TPoint nicht.
+    [Test] procedure Sca007_ExtraIdents_OnlyWhereSiteCompiles;
   end;
 
 implementation
@@ -1088,19 +1101,20 @@ begin
     'begin', '  Result := UpperCase(S);', 'end;', 'end.']);
   Assert.AreEqual('UpperCase', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('sysutils'), Li), 'SysUtils');
+    TRdxStructFixes.ExtraIdents('sysutils'), Li), 'SysUtils');
   // BidiUtils.pas:15 (minimiert): TRect aus Types.
   Src := Join(['unit BidiUtils;', 'interface', 'uses Classes, Types;',
     'procedure FlipRect(var Rect: TRect);', 'implementation',
     'procedure FlipRect(var Rect: TRect);', 'begin', 'end;', 'end.']);
   Assert.AreEqual('TRect', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('system.types'), Li), 'Types');
-  // Nur die beiden Units: andere bleiben leer (die Listen des Detektors).
+    TRdxStructFixes.ExtraIdents('system.types'), Li), 'Types');
+  // Units mit Liste im Detektor bleiben leer (seit Fix-Runde 5 nach rwE33
+  // ausser Classes: Point, Rect, Bounds, SmallPoint).
   Assert.AreEqual<Integer>(0,
-    Length(TRdxStructFixes.AlwaysNeededIdents('classes')), 'Classes');
+    Length(TRdxStructFixes.ExtraIdents('controls')), 'Controls');
   Assert.AreEqual<Integer>(0,
-    Length(TRdxStructFixes.AlwaysNeededIdents('windows')), 'Windows');
+    Length(TRdxStructFixes.ExtraIdents('vcl.clipbrd')), 'Vcl.ClipBrd');
 end;
 
 // ---- SCA168.2, Nico-Entscheid E5 (rwE32 Stufe 4) ----
@@ -1507,15 +1521,256 @@ begin
   Assert.AreEqual('WM_APP', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual<Integer>(6, Li);
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'Messages');
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'Messages');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('winapi.messages'), Li),
+    TRdxStructFixes.ExtraIdents('winapi.messages'), Li),
     'Winapi.Messages');
   // Gegenprobe: eine eigene Botschaft einer anderen Unit (keine
   // Praefix-Regel WM_*) bleibt ohne Quelle.
   Src := StringReplace(Src, 'WM_APP + $101', 'WM_CEFDESTROY + 1', []);
   Assert.AreEqual('WM_CEFDESTROY', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'eigene Botschaft');
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'eigene Botschaft');
+end;
+
+// ---- SCA007, Fix-Runde 5 (rwE33) ----
+
+// Beide Listen hintereinander (die Units der uses-Klauseln).
+function Both(const A, B: TArray<string>): TArray<string>;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(A) + Length(B));
+  for i := 0 to High(A) do
+    Result[i] := A[i];
+  for i := 0 to High(B) do
+    Result[Length(A) + i] := B[i];
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_WindowsComObjDbTables;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // JvCategCh.pas:44/133 (minimiert): 'P: TPoint' - TPoint kommt aus
+  // Windows (dort in den uses). Bis dahin "kann aus Dialogs kommen" - rot
+  // ohne Fix: 'TPoint'.
+  Src := Join(['unit JvCategCh;', 'interface', 'uses',
+    '  Windows, Messages, SysUtils, Classes, Graphics, Controls, Dialogs;',
+    'type', '  TChooser = class(TObject)', '  protected',
+    '    procedure Paint;', '  end;', 'implementation',
+    'procedure TChooser.Paint;', 'var', '  P: TPoint;', '  R: TRect;',
+    'begin', '  P.X := 0;', '  R := Rect(0, 0, P.X, 1);', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(13, Li);
+  // Windows fuehrt die Typen, aber keine Funktion Rect - die steht in
+  // Classes (und Types).
+  Assert.AreEqual('Rect', Foreign(Src, TRdxStructFixes.ExtraIdents('windows'),
+    Li), 'Windows ohne Rect()');
+  Assert.AreEqual('', Foreign(Src, Both(TRdxStructFixes.ExtraIdents(
+    'winapi.windows'), TRdxStructFixes.ExtraIdents('classes')), Li),
+    'Windows und Classes');
+  // Abbrevia_TLB.pas:775-784 (minimiert): CreateRemoteComObject aus ComObj
+  // (uses im implementation-Teil). Bis dahin "kann aus Graphics kommen".
+  Src := Join(['unit Abbrevia_TLB;', 'interface',
+    'uses Windows, ActiveX, Classes, Graphics;', 'const',
+    '  CLASS_ZipItem: TGUID = ''{AF804E21-4043-499E-BB14-237B9F26F89F}'';',
+    'type', '  CoZipItem = class',
+    '    class function CreateRemote(const MachineName: string): IUnknown;',
+    '  end;', 'implementation', 'uses ComObj;',
+    'class function CoZipItem.CreateRemote(const MachineName: string): '
+    + 'IUnknown;', 'begin',
+    '  Result := CreateRemoteComObject(MachineName, CLASS_ZipItem);', 'end;',
+    'end.']);
+  Assert.AreEqual('CreateRemoteComObject', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(14, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('comobj'), Li),
+    'ComObj');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('system.win.comobj'), Li), 'System.Win.ComObj');
+  // JvDBIndex.pas:39/261 (minimiert): TTable aus DBTables. Bis dahin "kann
+  // aus Graphics kommen".
+  Src := Join(['unit JvDBIndex;', 'interface',
+    'uses SysUtils, Classes, Graphics, DB, DBTables;',
+    'function IsTable(ADataSet: TObject): Boolean;', 'implementation',
+    'function IsTable(ADataSet: TObject): Boolean;', 'begin',
+    '  Result := ADataSet.InheritsFrom(TTable);', 'end;', 'end.']);
+  Assert.AreEqual('TTable', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(8, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('dbtables'),
+    Li), 'DBTables');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('bde.dbtables'), Li), 'Bde.DBTables');
+  // Gegenprobe: ein Name, der aus der entfernten Unit kommen kann
+  // (CF_PICTURE aus ClipBrd), bleibt ohne Quelle - auch wenn Windows und
+  // Classes seine Nachbarn zuordnen.
+  Src := Join(['unit u;', 'interface', 'uses Windows, Classes, ClipBrd;',
+    'function Fmt: Word;', 'implementation', 'function Fmt: Word;', 'var',
+    '  P: TPoint;', 'begin', '  P := Point(0, 0);', '  Result := CF_PICTURE;',
+    'end;', 'end.']);
+  Assert.AreEqual('CF_PICTURE', Foreign(Src, Both(
+    TRdxStructFixes.ExtraIdents('windows'),
+    TRdxStructFixes.ExtraIdents('classes')), Li), 'ClipBrd-Konstante');
+  Assert.AreEqual<Integer>(11, Li);
+  // Gegenprobe (Review e/HilfeFixY): tmBoth fuehren ComObj (TThreadingModel)
+  // UND ComCtrls (TTickMark) - ComCtrls kann der Fund sein, ohne ihn waere
+  // es der Wert von TThreadingModel (E2010). ComObj ordnet ihn nicht zu -
+  // rot mit 'tmboth' in COMOBJ_NAMES: ''.
+  Src := Join(['unit u;', 'interface', 'uses ComObj, ComCtrls;',
+    'procedure Ticks(T: TObject);', 'implementation', 'uses Unit1;',
+    'procedure Ticks(T: TObject);', 'begin',
+    '  Form1.TrackBar1.TickMarks := tmBoth;', 'end;', 'end.']);
+  Assert.AreEqual('tmBoth', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('comobj'), Li), 'tmBoth aus ComCtrls');
+  Assert.AreEqual<Integer>(9, Li);
+end;
+
+// SCA007: der Eintrag AUnit auf ALine aus dem Text (genau einer) - steht er
+// in einem Zwillingszweig (TRdxStructFixes.TwinBranches)?
+function TwinOf(const ASource: string; ALine: Integer;
+  const AUnit: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.TwinBranches(Map, C, Ix);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_TwinBranches;
+var
+  Src, Alt : string;
+begin
+  // MDIBrowser uChildForm.pas:7-17 (minimiert): der Dienst parst den
+  // {$ELSE}-Zweig, der Fund steht im DELPHI16_UP-Zweig (cef.inc). Jede Unit
+  // des {$ELSE}-Zweigs hat ihren Zwilling mit Praefix; System.UITypes steht
+  // nur im Zweig des Funds - das macht den Beweis nur strenger.
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Winapi.Windows, System.Classes, Vcl.Forms, Vcl.ClipBrd, '
+    + 'Vcl.Samples.Spin,', '  System.UITypes,', '  {$ELSE}',
+    '  Windows, Classes, Forms, ClipBrd, Spin,', '  {$ENDIF}',
+    '  uCEFChromium;', 'implementation', 'end.']);
+  Assert.IsTrue(TwinOf(Src, 5, 'Vcl.ClipBrd'), 'Zwillinge');
+  // Umgekehrt nicht: im {$ELSE}-Zweig fehlt der Zwilling von System.UITypes.
+  Assert.IsFalse(TwinOf(Src, 8, 'ClipBrd'), 'UITypes ohne Zwilling');
+  // Ein Eintrag ausserhalb der Weiche steht in keinem Zweig.
+  Assert.IsFalse(TwinOf(Src, 10, 'uCEFChromium'), 'unbedingt');
+  // Gegenprobe: Classes steht nur im geparsten Zweig - ein TComponent hiesse
+  // dort "aus Classes", im Zweig des Funds kaeme er vielleicht aus der
+  // entfernten Unit.
+  Alt := StringReplace(Src, 'System.Classes, ', '', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Classes ohne Zwilling');
+  // Kein Unit-Scope: 'Jv.Spin' und 'Spin' sind zwei Units, 'FMX.Forms' und
+  // 'Forms' auch.
+  Alt := StringReplace(Src, 'Vcl.Samples.Spin', 'Jv.Spin', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'fremdes Praefix');
+  Alt := StringReplace(Src, 'Vcl.Forms', 'FMX.Forms', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'FMX');
+  // Eine weitere Direktive in der Klausel: nicht genau eine Weiche.
+  Alt := StringReplace(Src, '  System.UITypes,',
+    '  {$IFDEF X} System.UITypes, {$ENDIF}', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'verschachtelt');
+  // Ohne {$ELSE} gibt es keinen geparsten Zwilling.
+  Alt := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Vcl.ClipBrd,', '  {$ENDIF}', '  uCEFChromium;', 'implementation',
+    'end.']);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'ohne ELSE');
+  // {$IF ..} mit {$IFEND} gilt wie {$IFDEF} mit {$ENDIF}.
+  Alt := StringReplace(StringReplace(Src, '{$IFDEF DELPHI16_UP}',
+    '{$IF CompilerVersion >= 23}', []), '{$ENDIF}', '{$IFEND}', []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'IF/IFEND');
+  // Die uebrigen Klauseln liefert der Dienst in SEINER Sicht der Defines:
+  // eine Weiche dort zaehlt nur mit denselben Units in beiden Zweigen
+  // (TabbedOSRBrowser uChildForm.pas:105 'System.Math' / 'Math') ...
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, {$ENDIF}', '  uMain;']),
+    []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Zwillinge im implementation');
+  // ... Gegenprobe: im {$ELSE}-Zweig (geparst) steht Spin mehr - seine
+  // Bezeichner fehlen im Zweig des Funds vielleicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, Spin, {$ENDIF}',
+    '  uMain;']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Spin nur im ELSE');
+  // ... und eine Klausel in einem bedingten Bereich gilt nicht in jeder
+  // Sicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation',
+    '{$IFDEF MSWINDOWS}', 'uses Winapi.ShellAPI;', '{$ENDIF}']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Klausel im IFDEF');
+end;
+
+
+// SCA007: ExtraIdentsOf der Klausel mit dem Eintrag AUnit auf ALine (aus dem
+// Text), Fundstelle dieser Eintrag - wie uRdxFixRunner.OtherUnitsIdents.
+function ExtraOf(const ASource: string; ALine: Integer;
+  const AUnit: string): TArray<string>;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.ExtraIdentsOf(Map, C.Entries, AUnit,
+      C.Entries[Ix].StartLine, C.Entries[Ix].StartCol);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_ExtraIdents_OnlyWhereSiteCompiles;
+var
+  Li       : Integer;
+  Src, Alt : string;
+begin
+  // fpguicrosshelpers.pas:7-18 (minimiert): windows steht nur unter
+  // WINDOWS; unter Linux kommt TPoint aus Classes. Classes zu entfernen
+  // braeche dort den Bau - rot ohne Fix: '' (TPoint "aus windows").
+  Src := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  , fpg_main', '  {$IFDEF WINDOWS}', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, ExtraOf(Src, 4, 'Classes'), Li),
+    'windows nur unter WINDOWS');
+  Assert.AreEqual<Integer>(11, Li);
+  // Gegenproben: unbedingt beweist windows TPoint ...
+  Alt := StringReplace(StringReplace(Src, '  {$IFDEF WINDOWS}', '', []),
+    '  {$ENDIF}', '', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'windows unbedingt');
+  // ... ebenso, wenn die Fundstelle im selben Block steht (fpg_main wird
+  // nur unter WINDOWS entfernt).
+  Alt := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  {$IFDEF WINDOWS}', '  , fpg_main', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 7, 'fpg_main'), Li),
+    'derselbe Block');
+  // Die Listen bis Fix-Runde 5 (SysUtils, Types, Messages) bleiben wie sie
+  // waren - auch bedingt.
+  Alt := StringReplace(Src, '  , windows', '  , Types', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'Types bedingt wie bisher');
 end;
 
 initialization

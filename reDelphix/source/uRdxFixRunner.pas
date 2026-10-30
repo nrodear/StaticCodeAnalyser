@@ -123,9 +123,11 @@ type
     // Direktive beruehrt (seit rwE30 nicht mehr bei jeder Direktive in einer
     // uses-Klausel). Nur im Menue (MenuOnly), wenn die Datei einen
     // Bezeichner nutzt, den der Planer keiner anderen Unit zuordnen kann
-    // (TRdxStructFixes.ForeignIdent). Aendert evtl. das Verhalten: der
-    // initialization-Abschnitt der Unit laeuft nicht mehr (Kennzeichnung in
-    // uRdxFixTable).
+    // (TRdxStructFixes.ForeignIdent), oder wenn der Eintrag in einem Zweig
+    // steht, den der Dienst nicht geparst hat und dessen Units der Planer
+    // nicht ueber Zwillinge kennt (TwinBranches). Aendert evtl. das
+    // Verhalten: der initialization-Abschnitt der Unit laeuft nicht mehr
+    // (Kennzeichnung in uRdxFixTable).
     class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
 
@@ -1204,8 +1206,11 @@ end;
 // Ein Eintrag mit demselben letzten Glied zaehlt nicht mit: im anderen
 // Zweig steht oft der Zwilling ('{$IFDEF D16} Vcl.ClipBrd {$ELSE} ClipBrd
 // {$ENDIF}', rwE31 Stufe 3) - seine Bezeichner sind die der entfernten Unit.
-function OtherUnitsIdents(APlaces: TSourcePlaces;
-  const AUnit: string): TArray<string>;
+// Die Ergaenzungen des Planers (ExtraIdentsOf) gelten seit dem Review
+// e/HilfeFixY nur fuer Eintraege, die auch an der Fundstelle (ASiteLine,
+// ASiteCol: der entfernte Eintrag) stehen.
+function OtherUnitsIdents(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AUnit: string; ASiteLine, ASiteCol: Integer): TArray<string>;
 var
   Clauses : TArray<TArray<TRefactorSpan>>;
   c, k    : Integer;
@@ -1214,17 +1219,18 @@ begin
   Result := nil;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
+  begin
     for k := 0 to High(Clauses[c]) do
       if not SameText(LastPart(Clauses[c][k].Resolved), LastPart(AUnit)) then
-      begin
         for Id in TUnusedUsesDetector.IdentsFor(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
-        // SysUtils, Types: der Detektor fuehrt keine Liste (rwE31 Stufe 3).
-        for Id in TRdxStructFixes.AlwaysNeededIdents(
-            LowerCase(Clauses[c][k].Resolved)) do
-          AddText(Result, Id);
-      end;
+    // SysUtils, Types, Windows ..: der Detektor fuehrt keine Liste
+    // (rwE31 Stufe 3); Point/Rect von Classes nimmt er nicht auf.
+    for Id in TRdxStructFixes.ExtraIdentsOf(AMap, Clauses[c], AUnit,
+        ASiteLine, ASiteCol) do
+      AddText(Result, Id);
+  end;
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
@@ -1236,6 +1242,7 @@ var
   Foreign     : string;
   ForeignLine : Integer;
   FromText    : Boolean;
+  Twin        : Boolean;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
@@ -1243,6 +1250,7 @@ begin
   Foreign := '';
   ForeignLine := 0;
   FromText := False;
+  Twin := False;
   // Direktiven in den uses-Klauseln sperren nicht mehr die ganze Datei
   // (rwE30 Stufe 2: 19 unnoetige Sperren - Direktive in der anderen Klausel,
   // vor 'uses', um andere Eintraege, Eintrag mitten in einem Zweig). Was
@@ -1273,9 +1281,18 @@ begin
         Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
           Result.Edits[0], Result.Reason);
     end;
-    if Result.Enabled and not FromText then
-      Foreign := TRdxStructFixes.ForeignIdent(Map,
-        OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
+    // Aus dem Text: der Beweis ueber den geparsten anderen Zweig gilt, wenn
+    // jede seiner Units einen Zwilling in diesem Zweig hat (Fix-Runde 5 nach
+    // rwE33, TRdxStructFixes.TwinBranches).
+    if Result.Enabled then
+    begin
+      Twin := FromText and TRdxStructFixes.TwinBranches(Map, Clause, Index);
+      if Twin or not FromText then
+        Foreign := TRdxStructFixes.ForeignIdent(Map,
+          OtherUnitsIdents(APlaces, Map, Result.Name,
+            Clause.Entries[Index].StartLine, Clause.Entries[Index].StartCol),
+          ForeignLine);
+    end;
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -1286,23 +1303,22 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  if FromText then
+  if FromText and not Twin then
   begin
     // Der Eintrag kam aus dem Text (Zweig, den der Dienst nicht geparst
     // hat): die anderen Units fuer den Bezeichner-Beweis (OtherUnitsIdents)
-    // stammen aus dem ANDEREN Zweig - der Beweis ist nicht vollstaendig,
-    // nur im Menue (Nico-Entscheid SCA007, Nachzug Review e/HilfeFixM).
-    // Seit Fix-Runde 4 nach rwE32 VOR einem Bezeichner ohne Quelle
-    // (ForeignIdent fragt dann nicht mehr): CEF4Delphi MDIBrowser
-    // uChildForm.pas:10, SimpleServer uSimpleServer.pas:9 u. a. nannten
-    // "TChromium ... kann aus Vcl.ClipBrd kommen" - der Grund ist der
-    // nicht geparste Zweig, nicht diese eine Zuordnung.
+    // stammen aus dem ANDEREN Zweig - ohne Zwillinge (TwinBranches) ist der
+    // Beweis nicht vollstaendig, nur im Menue (Nico-Entscheid SCA007,
+    // Nachzug Review e/HilfeFixM). Bis Fix-Runde 5 nach rwE33 hiess es "die
+    // uebrigen Units dieses Zweigs sind unbekannt" - sie stehen aber im
+    // Text; unbekannt ist nur, ob die des geparsten Zweigs auch hier stehen.
     Result.MenuOnly := True;
     Result.Hint := _('not in the light bulb: %s stands in a branch of the '
-      + 'uses clause that the IDE did not parse - the other units of that '
-      + 'branch are unknown, the identifier proof is incomplete; compile '
-      + 'afterwards; if %s has an initialization section (registration), it '
-      + 'no longer runs', [Result.Name, Result.Name]);
+      + 'uses clause that the IDE did not parse - the quick fix cannot show '
+      + 'that the units of the parsed branch are in this branch too, the '
+      + 'identifier proof is incomplete; compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Result.Name, Result.Name]);
   end
   else if Foreign = '' then
     Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
@@ -1310,11 +1326,18 @@ begin
       [Result.Name])
   else
   begin
-    // Bezeichner-Beweis unvollstaendig (Nico 2026-10-29): nur im Menue.
+    // Bezeichner-Beweis unvollstaendig (Nico 2026-10-29): nur im Menue. Bis
+    // Fix-Runde 5 nach rwE33 hiess es "es kann aus <Unit> kommen" - falsch
+    // fuer TChromium aus uCEFChromium (CEF4Delphi uMediaRouterFrm.pas:9,
+    // "kann aus ClipBrd kommen") und jeden anderen Namen einer Projekt-
+    // oder Bibliotheks-Unit ohne Liste: der Planer weiss nur, dass er ihn
+    // nicht zuordnen kann, nicht woher er kommt.
     Result.MenuOnly := True;
     Result.Hint := _('not in the light bulb: the file uses %s (line %d), '
       + 'which the quick fix cannot assign to any other unit of the uses '
-      + 'clauses - it may come from %s; compile afterwards; if %s has an '
+      + 'clauses (it only knows the identifiers of common RTL, VCL and LCL '
+      + 'units, not those of project or library units) - so it cannot rule '
+      + 'out that %s is needed; compile afterwards; if %s has an '
       + 'initialization section (registration), it no longer runs',
       [Foreign, ForeignLine, Result.Name, Result.Name]);
   end;
