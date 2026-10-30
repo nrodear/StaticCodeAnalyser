@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7050 Zeilen, 333234 Bytes
-  CPoLines_de: array[0..7049] of string = (
+  // i18n\de.po - 7058 Zeilen, 333980 Bytes
+  CPoLines_de: array[0..7057] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7064,7 +7064,15 @@ const
     'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in Math erst ab Delphi 6"',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"',
-    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"'
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"',
+    '',
+    '# reDelphix HilfeFix S (uRdxFormatSettingsFix SCA128.2/SCA059.2: Anzeige-Ziel E6, Formateinstellungen der Klasse)',
+    '',
+    'msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"',
+    'msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"',
+    '',
+    'msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"',
+    'msgstr "die Klasse %s hat eigene Formateinstellungen %s (Zeile %d) - diese von Hand statt TFormatSettings.Invariant '#$00FC'bergeben, das ihre Einstellungen verw'#$00FC'rfe"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7339,8 +7347,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7046 Zeilen, 346644 Bytes
-  CPoLines_fr: array[0..7045] of string = (
+  // i18n\fr.po - 7054 Zeilen, 347431 Bytes
+  CPoLines_fr: array[0..7053] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14386,7 +14394,15 @@ const
     'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - %s n''existe dans Math que depuis Delphi 6"',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"',
-    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - les classes d''exception EArgumentException, EInvalidOpException et ENotImplemented n''existent qu'''#$00E0' partir de Delphi 2009"'
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - les classes d''exception EArgumentException, EInvalidOpException et ENotImplemented n''existent qu'''#$00E0' partir de Delphi 2009"',
+    '',
+    '# reDelphix HilfeFix S (uRdxFormatSettingsFix SCA128.2/SCA059.2: Anzeige-Ziel E6, Formateinstellungen der Klasse)',
+    '',
+    'msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"',
+    'msgstr "la ligne %d affiche le r'#$00E9'sultat '#$00E0' l'''#$00E9'cran (%s) - l'#$00E0', la locale de l''utilisateur est la bonne; TFormatSettings.Invariant afficherait le point d'#$00E9'cimal et MM/dd/yyyy"',
+    '',
+    'msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"',
+    'msgstr "la classe %s poss'#$00E8'de ses propres param'#$00E8'tres de format %s (ligne %d) - les passer '#$00E0' la main au lieu de TFormatSettings.Invariant, qui ignorerait ce qui y est r'#$00E9'gl'#$00E9'"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

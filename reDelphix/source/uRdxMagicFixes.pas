@@ -348,12 +348,14 @@ type
     // Weiche, fragt er die Platte nicht nach Compilern - fuer
     // lfFormatInvariant aber weiter nach Programmen, die die globale
     // FormatSettings selbst einstellen (SettingsWalkReason, Review
-    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3
-    // zuerst ein Kit-Include der Unit (KitIncludeReason; widerlegt nur durch
-    // ein Programm mit .dproj ab XE, das die Unit enthaelt, auch ohne
-    // Dateinamen geprueft) - FileReason und, mit AIncludes bzw. seit dem
-    // Nico-Entscheid M1b fuer lfFormatSettingsVar ohne Projekt der Unit ab
-    // XE, IncludeReason
+    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3,
+    // fuer lfFormatInvariant seit rwE32 Stufe 4 zuerst ein Kit-Include der
+    // Unit (KitIncludeReason; widerlegt nur durch ein Programm mit .dproj ab
+    // XE bzw. 10.3, das die Unit enthaelt, auch ohne Dateinamen geprueft) -
+    // FileReason und, mit AIncludes (fuer lfFormatInvariant mit einem
+    // solchen Projekt nur FPC-Weichen gelesener Includes, Review
+    // e/HilfeFixS) bzw. seit dem Nico-Entscheid M1b fuer
+    // lfFormatSettingsVar ohne Projekt der Unit ab XE, IncludeReason
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
     // Pakete nur ab 10.3 - PackageFloorProof).
@@ -706,6 +708,10 @@ const
   R_KIT_OLD_EXC = 'the file asks for old compilers (%s, line %d) - the '
     + 'exception classes EArgumentException, EInvalidOpException and '
     + 'ENotImplemented exist only from Delphi 2009 on';
+  // Alt-Weg SCA128.2/SCA059.2 (KitIncludeReason, rwE32 Stufe 4): derselbe
+  // Satz wie R_FS_OLD_INVARIANT in uRdxFormatSettingsFix (eine msgid).
+  R_KIT_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
+    + 'line %d) - TFormatSettings.Invariant is only checked from there on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -2266,7 +2272,8 @@ end;
 // (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
 // 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
 // der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
-// Seit rwE32 Stufe 4 (die Ausnahmeklassen fragen hier auch) zaehlt ein
+// Seit rwE32 Stufe 4 (die Ausnahmeklassen ab 2009 und der Alt-Weg
+// lfFormatInvariant ab 10.3 fragen hier auch) zaehlt ein
 // Programm nicht, das neben seiner .dproj eine .dof oder .bdsproj GLEICHEN
 // Namens traegt (OldOptionsOf) - es wird auch mit Delphi bis 2006 gebaut
 // (jvcl install\JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj, das
@@ -2315,17 +2322,19 @@ begin
   end;
 end;
 
-// Hauptweg SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc,
-// jvcl.inc .. - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft
-// seit rwE31 Stufe 3 nur die Bedingungen der Datei) sperrt, ausser ein
-// Projekt der Unit ab Delphi XE widerlegt es (AModern: ModernProjectProof).
-// Seit rwE32 Stufe 4 ebenso fuer die Ausnahmeklassen (lfExceptionClasses,
-// Projekt ab Delphi 2009): pyscripter Source\JvDockSupportControl.pas:885
-// war wegen '{$I jvcl.inc}' gesperrt, JvDockVIDStyle.pas:1603 daneben
-// (dasselbe Include, 'for var' beweist 10.3) angeboten - beide stehen in
-// PyScripter.dpr mit .dproj 20.3. '' oder der Grund.
-function KitIncludeReason(AMap: TRdxCodeMap; AModern: Boolean;
-  AFeature: TRdxLateFeature): string;
+// SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc, jvcl.inc ..
+// - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft fuer den
+// Hauptweg seit rwE31 Stufe 3, fuer den Alt-Weg (lfFormatInvariant) seit
+// rwE32 Stufe 4 nur die Bedingungen der Datei) sperrt, ausser ein Projekt
+// der Unit ab der Schwelle von AFeature widerlegt es (AModern:
+// ModernProjectProof - Delphi XE, 2009 bzw. 10.3). Seit rwE32 Stufe 4 ebenso
+// fuer die Ausnahmeklassen (lfExceptionClasses, Projekt ab Delphi 2009):
+// pyscripter Source\JvDockSupportControl.pas:885 war wegen '{$I jvcl.inc}'
+// gesperrt, JvDockVIDStyle.pas:1603 daneben (dasselbe Include, 'for var'
+// beweist 10.3) angeboten - beide stehen in PyScripter.dpr mit .dproj 20.3.
+// '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AFeature: TRdxLateFeature;
+  AModern: Boolean): string;
 var
   Kit : string;
   Li  : Integer;
@@ -2334,10 +2343,54 @@ begin
   Kit := OldCompilerTraceOf(AMap, FloorOf(AFeature), False, True, Li);
   if (Kit = '') or AModern then
     Exit;
-  if AFeature = lfExceptionClasses then
-    Result := _(R_KIT_OLD_EXC, [Kit, Li])
+  case AFeature of
+    lfExceptionClasses: Result := _(R_KIT_OLD_EXC, [Kit, Li]);
+    lfFormatInvariant: Result := _(R_KIT_OLD_INVARIANT, [Kit, Li]);
   else
     Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+  end;
+end;
+
+// Die Pruefung eines Includes fuer den Alt-Weg bei einem Projekt der Unit ab
+// 10.3 (TRdxIncludeTest, FpcIncludeReason): nur eine FPC-Weiche - '' oder
+// der Grund (derselbe wie in CompilerInInclude).
+function FpcInInclude(const AFile: string; ALines: TStrings;
+  AMap: TRdxCodeMap; const AArg: string): string;
+var
+  Li : Integer;
+begin
+  Result := '';
+  for Li := 0 to ALines.Count - 1 do
+    if LineLooksFpcAware(ALines[Li]) then
+      Exit(_(R_INC_FPC[lfFormatInvariant], [AFile, Li + 1]));
+end;
+
+// Alt-Weg SCA128.2/SCA059.2 mit einem Programm der Unit ab 10.3
+// (ModernProjectProof, Review e/HilfeFixS): das Projekt widerlegt die
+// Versionsweichen der Includes und ein nicht gefundenes Include, aber keine
+// FPC-Weiche in einem gelesenen - FPC 3.2 kennt TFormatSettings.Invariant in
+// keiner Version, und ein FPC-Projekt ausserhalb des Fensters (oder ohne
+// Projektdatei) sieht FileReason nicht. Die Weiche in der Datei selbst
+// sperrt der Planer ebenso ohne Blick aufs Projekt (R_FS_FPC). Bis zum
+// Review gab das Projekt eine Bibliotheks-Unit frei, deren '{$I lib.inc}'
+// '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}' traegt. Mit Cache (GDiskCache, Art
+// 'J').
+function FpcIncludeReason(const AFileName: string; AMap: TRdxCodeMap): string;
+var
+  Check : TRdxIncludeCheck;
+  Key   : string;
+begin
+  if GDiskCache <> nil then
+  begin
+    Key := DiskKey('J', lfFormatInvariant, AFileName, IntToStr(AMap.Serial));
+    if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  end;
+  Check.Test := FpcInInclude;
+  Check.Arg := '';
+  Check.MissingFmt := '';
+  Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
 end;
 
 
@@ -2508,14 +2561,19 @@ begin
       Result := SettingsWalkReason(AFileName);
     Exit;
   end;
-  // Hauptweg: ein Kit-Include der Unit (seit rwE31 Stufe 3 hier statt im
-  // Planer) - auch ohne Dateinamen (dann ohne Widerlegung). Seit rwE32
-  // Stufe 4 auch fuer die Ausnahmeklassen (Projekt der Unit ab 2009), dort
-  // auch auf einem Netzpfad (der Text der Datei ist der Beleg).
-  if AFeature in [lfFormatSettingsVar, lfExceptionClasses] then
+  // Ein Kit-Include der Unit (Hauptweg seit rwE31 Stufe 3, Alt-Weg und
+  // Ausnahmeklassen seit rwE32 Stufe 4 hier statt im Planer) - auch ohne
+  // Dateinamen (dann ohne Widerlegung). Die Ausnahmeklassen (Projekt der
+  // Unit ab 2009) auch auf einem Netzpfad (der Text der Datei ist der
+  // Beleg). Fuer den Alt-Weg widerlegt ein Projekt der Unit ab 10.3 auch die
+  // Includes (unten): mORMot2 dmvc-ai 01-basicdemo_server api.impl.pas:50 -
+  // Eintrag 1 galt per .dproj 20.3, Eintrag 2 sperrte mit 'bis Delphi 10.3
+  // (mormot.defines.inc)'.
+  if AFeature in [lfFormatSettingsVar, lfExceptionClasses,
+    lfFormatInvariant] then
   begin
     Modern := ModernProjectProof(AFileName, AFeature);
-    Result := KitIncludeReason(AMap, Modern, AFeature);
+    Result := KitIncludeReason(AMap, AFeature, Modern);
     if Result <> '' then Exit;
   end;
   // Sonst kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und
@@ -2532,10 +2590,20 @@ begin
   // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
   // erst ab XE.
   // Ebenso fuer die Ausnahmeklassen (rwE32 Stufe 4): ein Projekt der Unit
-  // ab 2009 widerlegt auch die Weichen der Includes.
+  // ab 2009 widerlegt auch die Weichen der Includes (FPC-Weichen sperren
+  // dort ohnehin nicht, FpcKnows - FPC 3.2.2 kennt die drei Klassen).
+  // Alt-Weg (rwE32 Stufe 4, gleiche Belegpruefung wie der Hauptweg): baut
+  // ein Programm mit .dproj ab 10.3 die Unit (Modern), liest er die Includes
+  // nur auf FPC-Weichen (unten) - ihre Versionsweichen gelten anderen
+  // Delphi-Compilern als diesem Projekt; ein
+  // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
+  // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
+  // (mormot.defines.inc liegt nicht neben api.impl.pas).
   if (Result = '')
-     and ((AIncludes and not ((AFeature = lfExceptionClasses) and Modern))
-       or ((AFeature = lfFormatSettingsVar) and not Modern)) then
+     and ((AIncludes
+           and not ((AFeature in [lfExceptionClasses, lfFormatInvariant])
+                    and Modern))
+          or ((AFeature = lfFormatSettingsVar) and not Modern)) then
   begin
     Result := IncludeReason(AFileName, AMap, AFeature);
     // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant
@@ -2550,6 +2618,16 @@ begin
     // Definition.Inc, nur in Packages\Delphi\Delphi 10.4+\PythonFmx.dpk).
     if (Result <> '') and (AFeature = lfFormatInvariant) and Proof.NoFpc
        and PackageFloorProof(AFileName, AFeature) then
+      Result := '';
+  end;
+  // ... eine FPC-Weiche in einem gelesenen Include aber schon (Review
+  // e/HilfeFixS, FpcIncludeReason) - ausser die Datei schliesst FPC aus
+  // (Proof.NoFpc) oder ein Paket der Unit nutzt Invariant (wie oben).
+  if (Result = '') and AIncludes and (AFeature = lfFormatInvariant)
+     and Modern and not Proof.NoFpc then
+  begin
+    Result := FpcIncludeReason(AFileName, AMap);
+    if (Result <> '') and PackageInvariantProof(AFileName) then
       Result := '';
   end;
 end;

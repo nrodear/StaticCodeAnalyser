@@ -7048,3 +7048,11 @@ msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in Math
 
 msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
 msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"
+
+# reDelphix HilfeFix S (uRdxFormatSettingsFix SCA128.2/SCA059.2: Anzeige-Ziel E6, Formateinstellungen der Klasse)
+
+msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
+msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"
+
+msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
+msgstr "die Klasse %s hat eigene Formateinstellungen %s (Zeile %d) - diese von Hand statt TFormatSettings.Invariant übergeben, das ihre Einstellungen verwürfe"

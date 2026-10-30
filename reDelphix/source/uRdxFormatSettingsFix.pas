@@ -109,11 +109,17 @@ unit uRdxFormatSettingsFix;
 // ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
 // das Gegenstueck (PairHint, PairBreakLine) - seit rwE30 Stufe 2 zuerst
 // eines in derselben Routine (HeidiSQL main.pas:14718), seit rwE31 Stufe 3
-// das naechste. AUSSER (Nico-Ergaenzung zu M2, rwE31 Stufe 3) das Ergebnis
+// das naechste, seit rwE32 Stufe 4 NUR eines derselben Routine und keines,
+// wenn die Aufrufe nur Literale lesen. AUSSER (Nico-Ergaenzung zu M2, rwE31
+// Stufe 3) das Ergebnis
 // wird in derselben Routine direkt mit dem Gegenstueck bzw. mit
 // FormatSettings gekoppelt ausgewertet ('Assert.AreEqual(s1, s2)',
 // 'Pos(FormatSettings.DecimalSeparator, S)'): das bricht Verhalten, die
 // Hilfe sperrt (CoupledReason; auch SCA059).
+// Geht das Ergebnis direkt oder per Verkettung in eine Anzeige ('.Text',
+// '.Caption', '.Hint', Items.Add, Lines.Add, ShowMessage ...), ist dort die
+// Locale des Benutzers richtig: der Alt-Weg sperrt (Nico-Entscheid E6 nach
+// rwE32 Stufe 4, DisplayReason; auch SCA059), der Hauptweg bleibt.
 // Was nur die Platte weiss (Projektdateien, Includes), prueft der Adapter
 // in uRdxFixTable (FormatSettingsDiskCheck, rwE29).
 // Der Bereich der Ersetzung beginnt hinter dem letzten Zeichen des letzten
@@ -203,6 +209,18 @@ const
   R_FS_COUPLED_CALL = 'line %d evaluates %s together with %s without '
     + 'TFormatSettings.Invariant - with only this call changed, the two no '
     + 'longer match';
+  // Alt-Weg (rwE32 Stufe 4, Nico-Entscheid E6): das Ergebnis geht in eine
+  // Anzeige (DisplayReason) - %d die Zeile des Ziels, %s das Ziel wie
+  // geschrieben ('StatusBar1.Panels[1].Text', 'ListBox1.Items.Add').
+  R_FS_DISPLAY = 'line %d shows the result on screen (%s) - there the user '
+    + 'locale is the right one; TFormatSettings.Invariant would show decimal '
+    + 'point and MM/dd/yyyy';
+  // Alt-Weg (rwE32 Stufe 4, ClassSettingsReason): die Klasse der Methode
+  // traegt ein eigenes TFormatSettings-Feld - %s die Klasse, %s das Feld,
+  // %d seine Zeile.
+  R_FS_CLASS_SETTINGS = 'the class %s carries its own format settings %s '
+    + '(line %d) - pass those by hand instead of TFormatSettings.Invariant, '
+    + 'which would drop what is set there';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -247,9 +265,10 @@ type
     // SCA128, Alt-Weg (Entscheid M2): ABaseHint, oder - ruft die Datei
     // ausser den Aufrufen der Liste auf ALine eine Routine derselben
     // Familie ohne Invariant bzw. eigene Einstellungen - R_FS_PAIR_HINT mit
-    // ABaseHint, Zeile und Name des naechsten solchen Aufrufs (erst in der
-    // Routine, dann in der Datei; bis rwE31 Stufe 3 des ersten). Liest die
-    // Zeile keinen Aufruf, ABaseHint.
+    // ABaseHint, Zeile und Name des naechsten solchen Aufrufs in der
+    // Routine (bis rwE32 Stufe 4 danach in der Datei, bis rwE31 Stufe 3 des
+    // ersten). Liest die Zeile keinen Aufruf oder lesen ihre Aufrufe nur
+    // Literale ('StrToTime(''00:00:01'')'), ABaseHint.
     class function PairHint(AMap: TRdxCodeMap; ALine: Integer;
       const ABaseHint: string): string; static;
   end;
@@ -817,6 +836,24 @@ begin
     Result := MISFIT_DATE;
 end;
 
+// Liest der Aufruf ASite (StrToFloat, StrToCurr, StrToDate, StrToTime,
+// StrToDateTime) nur ein Literal - das Argument besteht bis zur Klammer auf
+// derselben Zeile aus String-Literalen ('StrToTime(''00:00:01'')')? Dann
+// kommt der gelesene Text aus keinem geschriebenen Wert (PairHint, rwE32
+// Stufe 4: minesweeper uGameScore.pas:144).
+function ReadsOnlyLiteral(AMap: TRdxCodeMap; const ASite: TCallSite): Boolean;
+var
+  Lit    : string;
+  Li, Co : Integer;
+begin
+  Result := (InList(ASite.Name.Low, PARSE_NUMBER)
+      or (ASite.Name.Low = PARSE_DATE) or (ASite.Name.Low = PARSE_TIME)
+      or (ASite.Name.Low = PARSE_DATETIME))
+    and FirstCharAfter(AMap, ASite.Open, Li, Co)
+    and (Li = ASite.Close.Line) and (Co < ASite.Close.Col)
+    and LiteralFirstArg(AMap, Li, Co, ASite.Close.Col - 1, Lit);
+end;
+
 // Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
 // TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
 // Das Literal darf auf einer Folgezeile beginnen ('StrToDateTime(' am
@@ -852,9 +889,10 @@ end;
 // Seite auf Invariant gestellt, ist der Vergleich ausser in en-US immer
 // ungleich. Ebenso Schreiben und Lesen (CurrToStr ins Edit, TryStrToCurr
 // zurueck). Ob zwei Aufrufe zusammengehoeren, sieht der Planer nicht -
-// darum nennt der Hinweis (PairHint) den ersten weiteren Aufruf derselben
-// Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Datei, der kein Invariant
-// uebergibt. Bis zum Entscheid M2 (Review e/HilfeFixC) sperrte er.
+// darum nennt der Hinweis (PairHint) den naechsten weiteren Aufruf
+// derselben Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Routine, der kein
+// Invariant uebergibt (bis rwE32 Stufe 4 auch in der Datei). Bis zum
+// Entscheid M2 (Review e/HilfeFixC) sperrte er.
 
 // Steht T in einem der Aufrufe ASites (die die Hilfe aendert)?
 function IsEditedName(const T: TRdxToken; const ASites: TCallSites): Boolean;
@@ -1000,21 +1038,25 @@ begin
   end;
 end;
 
-// PairBreakIn erst im Rumpf der Routine um den ersten Aufruf, dann in der
-// ganzen Datei (rwE30 Stufe 2, HeidiSQL main.pas:14718: der Vergleich mit
-// 'DateToStr(Item.Time)' steht in derselben Routine, der Hinweis nannte
-// Zeile 1782 einer anderen).
+// PairBreakIn im Rumpf der Routine um den ersten Aufruf (rwE30 Stufe 2,
+// HeidiSQL main.pas:14718: der Vergleich mit 'DateToStr(Item.Time)' steht
+// in derselben Routine, der Hinweis nannte Zeile 1782 einer anderen). Seit
+// rwE32 Stufe 4 NUR dort (M2: Kopplung gibt es in derselben Anweisung bzw.
+// Routine): bis dahin suchte die Funktion ohne Treffer in der Routine die
+// ganze Datei ab und nannte Aufrufe anderer Routinen ohne Datenfluss -
+// TES5Edit wbInterface.pas:17009 (Meldungstext) die Zeile 17104 in
+// TwbFloatDef.ToSortKey, Alcinoe ALFmxControls Main.pas:1491 die Anzeige
+// des naechsten Buttons. Ohne gefundene Routine: 0.
 function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
   out AName: string): Integer;
 var
   R : TRdxRoutine;
 begin
   Result := 0;
+  AName := '';
   if (Length(ASites) > 0)
      and (BeginBodyAround(AMap, ASites[0].Name, R) = rbfFound) then
     Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
-  if Result = 0 then
-    Result := PairBreakIn(AMap, ASites, 1, AMap.LineCount, AName);
 end;
 
 // ---- Gekoppelte Auswertung (Alt-Weg, rwE31 Stufe 3) ----
@@ -1329,6 +1371,357 @@ begin
   end;
 end;
 
+// ---- Anzeige-Ziel (Alt-Weg, rwE32 Stufe 4, Nico-Entscheid E6) ----
+// Geht das Ergebnis eines Aufrufs direkt oder ueber Verkettung ('+') in
+// derselben Anweisung in eine Anzeige, ist dort die Locale des Benutzers
+// richtig - TFormatSettings.Invariant zeigte Punkt und MM/dd/yyyy; die Hilfe
+// sperrt (DisplayReason; Eintrag 1 bleibt). Anzeige heisst:
+//   * Zuweisung an '.Text', '.Caption', '.Hint' (auch 'StatusBar1.Panels[1].
+//     Text') - '.Text' nicht, wenn ein Glied der Kette nach Daten klingt
+//     (DATA_PARTS: 'Query.SQL.Text', 'Node.Text', 'Json.Text') oder der
+//     Besitzer eine Stringliste sein kann (TEXT_OWNERS: 'SL.Text');
+//   * Argument von 'Items.Add', 'Items.Insert', 'Lines.Add', 'Lines.Insert',
+//     'ShowMessage', 'MessageDlg', 'Application.MessageBox'.
+// Gelesen wird rueckwaerts ab dem Namen (samt 'SysUtils.'): Klammergruppen
+// werden uebersprungen, auf Tiefe 0 duerfen nur Woerter, Zahlen, '+', ',',
+// '.' stehen (Strings und Kommentare sind keine Token); die erste offene
+// Klammer entscheidet - eine Gruppierung ('(' hinter '+', ',', '(' oder
+// ':=') und eine Typumwandlung ('PChar(') lesen weiter, eine Routine
+// ausser den genannten ('Copy(', 'Trim(',
+// 'Format(' mit '[..]') beendet die Suche ohne Anzeige, ebenso ';', ein
+// Schluesselwort oder ein anderer Operator. Fundstellen: Alcinoe
+// ALCipher Unit1.pas:831, ALFmxControls Main.pas:1436/1444/1491,
+// ALStringBenchmark Unit1.pas:501 .., ALXmlDoc unit1.pas:307, RSS-1723
+// Unit1.pas:54, delphimvcframework async_client MainClientFormU.pas:329
+// ('lbPerson.Items.Add(''DOB:''.PadRight(15) + DateToStr(..))') und SCA059
+// :484. Was ueber Variablen, Rueckgabewerte oder anonyme Methoden in die
+// Anzeige laeuft (mvcasync MainFormU.pas:37 'Result := DateTimeToStr(Now)',
+// Value -> Edit1.Text), sieht die Hilfe nicht - dort bleibt Eintrag 2 wie
+// bisher angeboten (aendert Verhalten, nie per Taste).
+
+const
+  DISPLAY_PROPS: array[0..2] of string = ('text', 'caption', 'hint');
+  DISPLAY_LISTS: array[0..1] of string = ('items', 'lines');
+  DISPLAY_LIST_CALLS: array[0..1] of string = ('add', 'insert');
+  DISPLAY_DIALOGS: array[0..1] of string = ('showmessage', 'messagedlg');
+  NAME_TEXT = 'text';
+  NAME_APPLICATION = 'application';
+  NAME_MESSAGEBOX = 'messagebox';
+  NAME_DIALOGS = 'dialogs';
+  // Teile von Namen, die bei '.Text' nach Daten statt Anzeige klingen ...
+  DATA_PARTS: array[0..13] of string = ('sql', 'xml', 'json', 'node', 'query',
+    'param', 'field', 'attr', 'stream', 'request', 'response', 'body',
+    'writer', 'builder');
+  // ... und Besitzer von '.Text', die eine Stringliste sein koennen.
+  TEXT_OWNERS: array[0..4] of string = ('sl', 'list', 'strings', 'stringlist',
+    'result');
+  // Was auf Tiefe 0 zwischen Aufruf und Ziel stehen darf (dazu Woerter, die
+  // kein Schluesselwort sind, und Zahlen).
+  DISPLAY_GLUE: array[0..2] of string = ('+', ',', '.');
+  // Davor ist eine offene Klammer eine Gruppierung (kein Aufruf).
+  GROUP_BEFORE: array[0..3] of string = ('+', ',', '(', ':=');
+  // Typumwandlungen, durch die der Text unveraendert geht
+  // ('Application.MessageBox(PChar(..), ..)').
+  TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
+  MAX_DISPLAY_TOKENS = 2000;
+  // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
+  PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
+    'formatcurr', 'format');
+
+// Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
+function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
+var
+  T     : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := Default(TRdxToken);
+  Depth := 0;
+  Count := 0;
+  T := AClose;
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Depth := Depth - ParenDelta(T);
+    if Depth = 0 then
+      Exit(T);
+    Inc(Count);
+    T := Before(AMap, T);
+  end;
+end;
+
+// Der Anfang der Kette 'A.B[i].C' bis ALast (rueckwaerts ueber '.', Woerter
+// und Klammergruppen hinter einem Glied).
+function ChainStart(AMap: TRdxCodeMap; const ALast: TRdxToken): TRdxToken;
+var
+  P, T : TRdxToken;
+begin
+  Result := ALast;
+  P := Before(AMap, Result);
+  while P.Low = '.' do
+  begin
+    T := Before(AMap, P);
+    while (T.Low = ']') or (T.Low = ')') do
+    begin
+      T := OpenerOf(AMap, T);
+      if T.Low = '' then Exit;
+      T := Before(AMap, T);
+    end;
+    if not T.IsWord then Exit;
+    Result := T;
+    P := Before(AMap, Result);
+  end;
+end;
+
+// Die Kette von ChainStart bis ALast wie geschrieben (eine Zeile; sonst
+// nur ALast).
+function ChainText(AMap: TRdxCodeMap; const ALast: TRdxToken): string;
+var
+  S : TRdxToken;
+begin
+  S := ChainStart(AMap, ALast);
+  if S.Line <> ALast.Line then
+    Exit(TokText(AMap, ALast));
+  Result := Copy(AMap.Raw(S.Line), S.Col, ALast.EndCol - S.Col);
+end;
+
+// Nennt ein Glied der Kette vor ALast etwas, das nach Daten klingt, oder ist
+// der Besitzer von ALast eine moegliche Stringliste (s. Kopf des Abschnitts)?
+function ChainLooksLikeData(AMap: TRdxCodeMap; const ALast: TRdxToken): Boolean;
+var
+  S, T, Owner : TRdxToken;
+  i           : Integer;
+begin
+  S := ChainStart(AMap, ALast);
+  Owner := Default(TRdxToken);
+  T := S;
+  while (T.Low <> '') and TokBefore(T, ALast) do
+  begin
+    if T.IsWord then
+    begin
+      for i := Low(DATA_PARTS) to High(DATA_PARTS) do
+        if Pos(DATA_PARTS[i], T.Low) > 0 then
+          Exit(True);
+      Owner := T;
+    end;
+    T := After(AMap, T);
+  end;
+  Result := (Owner.Low <> '') and InList(Owner.Low, TEXT_OWNERS);
+end;
+
+// Ist AName (vor einer offenen Klammer) eine Anzeige-Routine (s. Kopf)?
+// True mit dem Ziel wie geschrieben und seiner Zeile.
+function DisplayCall(AMap: TRdxCodeMap; const AName: TRdxToken;
+  out AWhat: string; out ALine: Integer): Boolean;
+var
+  P, Q : TRdxToken;
+begin
+  AWhat := '';
+  ALine := 0;
+  P := Before(AMap, AName);
+  Q := Before(AMap, P);
+  if InList(AName.Low, DISPLAY_DIALOGS) then
+    Result := (P.Low <> '.') or (Q.Low = NAME_DIALOGS)
+  else if AName.Low = NAME_MESSAGEBOX then
+    Result := (P.Low = '.') and (Q.Low = NAME_APPLICATION)
+  else if InList(AName.Low, DISPLAY_LIST_CALLS) then
+    Result := (P.Low = '.') and InList(Q.Low, DISPLAY_LISTS)
+  else
+    Result := False;
+  if Result then
+  begin
+    AWhat := ChainText(AMap, AName);
+    ALine := AName.Line;
+  end;
+end;
+
+// Ist ATarget (das Token vor ':=') ein Anzeige-Ziel (s. Kopf)? True mit
+// dem Ziel wie geschrieben und seiner Zeile.
+function DisplayAssign(AMap: TRdxCodeMap; const ATarget: TRdxToken;
+  out AWhat: string; out ALine: Integer): Boolean;
+begin
+  AWhat := '';
+  ALine := 0;
+  Result := ATarget.IsWord and InList(ATarget.Low, DISPLAY_PROPS)
+    and (Before(AMap, ATarget).Low = '.')
+    and not ((ATarget.Low = NAME_TEXT) and ChainLooksLikeData(AMap, ATarget));
+  if Result then
+  begin
+    AWhat := ChainText(AMap, ATarget);
+    ALine := ATarget.Line;
+  end;
+end;
+
+// Geht das Ergebnis des Aufrufs ASite in eine Anzeige (s. Kopf)? True mit
+// dem Ziel und seiner Zeile.
+function DisplayTarget(AMap: TRdxCodeMap; const ASite: TCallSite;
+  out AWhat: string; out ALine: Integer): Boolean;
+var
+  T, P  : TRdxToken;
+  Depth : Integer;
+  Count : Integer;
+begin
+  Result := False;
+  AWhat := '';
+  ALine := 0;
+  Depth := 0;
+  Count := 0;
+  T := Before(AMap, ChainStart(AMap, ASite.Name));
+  while (T.Low <> '') and (Count < MAX_DISPLAY_TOKENS) do
+  begin
+    Inc(Count);
+    P := Before(AMap, T);
+    if (T.Low = ')') or (T.Low = ']') then
+      Inc(Depth)
+    else if (T.Low = '(') or (T.Low = '[') then
+    begin
+      if Depth > 0 then
+        Dec(Depth)
+      else if T.Low = '[' then
+        Exit
+      // Eine Typumwandlung liest weiter (ihr Wort gilt dann als Glied).
+      else if not InList(P.Low, TEXT_CASTS) then
+      begin
+        if P.IsWord and not (IsKeyword(P.Low)
+           and IsKeywordAfter(P, Before(AMap, P))) then
+          Exit(DisplayCall(AMap, P, AWhat, ALine));
+        if not InList(P.Low, GROUP_BEFORE) then
+          Exit;
+      end;
+    end
+    else if Depth = 0 then
+    begin
+      if T.Low = ':=' then
+        Exit(DisplayAssign(AMap, P, AWhat, ALine));
+      if T.IsWord then
+      begin
+        if IsKeyword(T.Low) and IsKeywordAfter(T, P) then
+          Exit;
+      end
+      else if not (InList(T.Low, DISPLAY_GLUE)
+                   or CharInSet(T.Low[1], ['0'..'9', '$', '#'])) then
+        Exit;
+    end;
+    T := P;
+  end;
+end;
+
+// ---- Eigene Einstellungen der Klasse (Alt-Weg, rwE32 Stufe 4) ----
+// delphimvcframework TemplatePro.pas:3163/3365: TTProCompiledTemplate traegt
+// das Feld 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
+// einstellbar; Geschwisteraufrufe uebergeben es). Invariant verwuerfe die
+// eingestellte Template-Locale (Monatsnamen bei 'mmmm'). Steht der Aufruf
+// in einer Methode, deren Klasse in der Datei GENAU EIN solches Feld
+// deklariert, sperrt der Alt-Weg mit Hinweis auf das Feld (die Hilfe
+// schreibt es nicht selbst ein - das waere eine andere Bedeutung). Ein Feld
+// heisst: 'Name: TFormatSettings;' auf Klammertiefe 0 im Klassenrumpf
+// (auch 'A, B: ..' und 'class var'), nicht Parameter, Rueckgabetyp oder
+// Property. Mehrere Felder, mehrere Klassenkoepfe gleichen Namens oder
+// eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
+// Literal festlegt ('FormatDateTime(''yyyy-mm-dd hh:nn:ss'', ..)',
+// TemplatePro.pas:3170 - dort schreibt Invariant das gewollte ISO-Format,
+// das Feld setzte dagegen einen eingestellten Zeittrenner ein; Stufe 4: ok).
+
+// Das eine TFormatSettings-Feld des Klassenrumpfs ab AClass ('class'); leer
+// ohne bzw. bei mehreren.
+function SettingsFieldIn(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
+var
+  T, Stop, C, N, B : TRdxToken;
+  Depth, Hits      : Integer;
+begin
+  Result := Default(TRdxToken);
+  Stop := ClassEnd(AMap, AClass);
+  if Stop.Low = '' then Exit;
+  Hits := 0;
+  Depth := 0;
+  T := After(AMap, AClass);
+  while (T.Low <> '') and TokBefore(T, Stop) do
+  begin
+    Depth := Depth + ParenDelta(T);
+    if (Depth = 0) and (T.Low = NAME_SETTINGS_TYPE)
+       and (After(AMap, T).Low = ';') then
+    begin
+      C := Before(AMap, T);
+      N := Before(AMap, C);
+      B := Before(AMap, N);
+      if (C.Low = ':') and N.IsWord and (B.Low <> 'function')
+         and (B.Low <> 'property') then
+      begin
+        // 'FA, FB: TFormatSettings' sind zwei Felder.
+        if B.Low = ',' then
+          Inc(Hits, 2)
+        else
+          Inc(Hits);
+        Result := N;
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+  if Hits <> 1 then
+    Result := Default(TRdxToken);
+end;
+
+// Legt der Aufruf ASite sein Muster als Literal fest (FormatDateTime,
+// FormatFloat, FormatCurr, Format mit Literal als erstem Argument)?
+function FixedPattern(AMap: TRdxCodeMap; const ASite: TCallSite): Boolean;
+var
+  Lit          : string;
+  Li, Co, Upto : Integer;
+begin
+  Result := InList(ASite.Name.Low, PATTERN_WRITERS)
+    and FirstCharAfter(AMap, ASite.Open, Li, Co)
+    and ((Li < ASite.Close.Line)
+         or ((Li = ASite.Close.Line) and (Co < ASite.Close.Col)));
+  if not Result then Exit;
+  Upto := Length(AMap.Raw(Li));
+  if Li = ASite.Close.Line then
+    Upto := ASite.Close.Col - 1;
+  Result := LiteralFirstArg(AMap, Li, Co, Upto, Lit);
+end;
+
+// Der Grund, wenn der erste Aufruf in einer Methode steht, deren Klasse
+// eigene Einstellungen traegt (s. Kopf des Abschnitts); '' sonst.
+function ClassSettingsReason(AMap: TRdxCodeMap;
+  const ASites: TCallSites): string;
+var
+  R      : TRdxRoutine;
+  Heads  : TArray<TRdxToken>;
+  Path   : string;
+  Field  : TRdxToken;
+  i      : Integer;
+  Fixed  : Boolean;
+begin
+  Result := '';
+  Fixed := True;
+  for i := 0 to High(ASites) do
+    Fixed := Fixed and FixedPattern(AMap, ASites[i]);
+  if Fixed
+     or (BeginBodyAround(AMap, ASites[0].Name, R) <> rbfFound)
+     or (Length(R.Parts) < 2) then
+    Exit;
+  // Die Klasse wie im Kopf: der Name ohne sein letztes Glied.
+  Path := Copy(R.Name, 1, LastDelimiter('.', R.Name) - 1);
+  if Path = '' then Exit;
+  Heads := TRdxBlocks.FindClassHeads(AMap, Path);
+  if Length(Heads) <> 1 then Exit;
+  Field := SettingsFieldIn(AMap, Heads[0]);
+  if Field.Low <> '' then
+    Result := _(R_FS_CLASS_SETTINGS, [Path, TokText(AMap, Field),
+      Field.Line]);
+end;
+
+// Der Grund, wenn einer der Aufrufe ASites in eine Anzeige schreibt; ''
+// sonst.
+function DisplayReason(AMap: TRdxCodeMap; const ASites: TCallSites): string;
+var
+  i, Li : Integer;
+  What  : string;
+begin
+  Result := '';
+  for i := 0 to High(ASites) do
+    if DisplayTarget(AMap, ASites[i], What, Li) then
+      Exit(_(R_FS_DISPLAY, [Li, What]));
+end;
+
 // Steht das Token T wie eine Deklaration da - 'T: Typ', 'T = Wert' oder
 // in einer Liste 'T, U: Typ'?
 function DeclaredHere(AMap: TRdxCodeMap; const T: TRdxToken): Boolean;
@@ -1569,11 +1962,18 @@ end;
 // Ueberladung ohne Settings liest). Der Gegenbeweis der Datei (ModernProof,
 // Invariant ohne Weiche) widerlegt Spuren alter Compiler und - fuer
 // Invariant - die FPC-Weiche; ebenso ein Aufruf in einem Zweig ohne FPC.
+// Fuer den Alt-Weg kommt das with seit rwE32 Stufe 4 ZULETZT: FPC, alte
+// Compiler, eigenes TFormatSettings und selbst eingestellte FormatSettings
+// tragen die Sperre und gelten auch dort, wo der Hauptweg das with per
+// Qualifizierung aufloest (jcl FileViewer.pas:601, PeDump.pas:674,
+// doublecmd SynUniDesigner.pas:2978, issrc ISPP.Funcs.pas:1599 - bis dahin
+// nannte die Sperre das with, Eintrag 1 den Altcompiler).
 function FileReason(AMap: TRdxCodeMap; const ANames: array of string;
   const ASites: TCallSites; AInvariant: Boolean;
   out ASettings: string): string;
 var
   i, Li, Member : Integer;
+  WithLine      : Integer;
   Trace, Spell  : string;
   Proof         : TRdxModernProof;
   Proven        : Boolean;
@@ -1594,19 +1994,17 @@ begin
   end;
   // Ein with um einen der Aufrufe (seit rwE31 Stufe 3 jeder Aufruf, nicht
   // nur der erste - die Aufrufe einer anonymen Methode der Anweisung koennen
-  // in einem eigenen with stehen): der Alt-Weg sperrt, der Hauptweg nimmt
-  // die globale Variable qualifiziert (s. Kopf).
+  // in einem eigenen with stehen): der Alt-Weg sperrt (als letzter Grund,
+  // s. oben), der Hauptweg nimmt die globale Variable qualifiziert (s. Kopf).
+  WithLine := 0;
   for i := 0 to High(ASites) do
   begin
-    Li := WithLineBefore(AMap, ASites[i].Name);
-    if Li > 0 then
-    begin
-      if AInvariant then
-        Exit(_(R_FS_WITH, [Li]));
-      ASettings := ', ' + Spell + '.FormatSettings';
+    WithLine := WithLineBefore(AMap, ASites[i].Name);
+    if WithLine > 0 then
       Break;
-    end;
   end;
+  if (WithLine > 0) and not AInvariant then
+    ASettings := ', ' + Spell + '.FormatSettings';
   Proof := ModernProof(AMap);
   if not AInvariant then
   begin
@@ -1632,7 +2030,13 @@ begin
     if (Li > 0)
        and not AllFpcExcluded(ConditionalDirectives(AMap), ASites) then
       Exit(_(R_FS_FPC, [Li]));
-    Trace := OldCompilerTrace(AMap, FLOOR_INLINE_DECL, Li);
+    // Nur die Bedingungen der Datei (seit rwE32 Stufe 4 wie der Hauptweg):
+    // ein Kit-Include (mormot.defines.inc, jvcl.inc ..) prueft der
+    // Plattenblick, und ein Projekt der Unit ab Delphi 10.3 widerlegt es
+    // (uRdxMagicFixes.ProjectReason, ModernProjectProof) - mORMot2 dmvc-ai
+    // api.impl.pas:50: Eintrag 1 galt per .dproj 20.3 (Delphi 12), Eintrag
+    // 2 sperrte mit 'bis Delphi 10.3 (mormot.defines.inc)'.
+    Trace := OldCompilerTraceOf(AMap, FLOOR_INLINE_DECL, True, False, Li);
     if Trace <> '' then
       Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
   end;
@@ -1645,6 +2049,19 @@ begin
   Li := GlobalSettingsWriteLine(AMap, Trace);
   if Li > 0 then
     Exit(_(R_FS_SETTINGS_SET, [Trace, Li]));
+  if WithLine > 0 then
+  begin
+    // Das with sperrt ohnehin (ohne Plattenblick): traegt die Datei ein
+    // Kit-Include, ist dessen Altcompiler der tragende Grund - Eintrag 1
+    // nennt ihn ebenso (jcl FileViewer.pas:601 'jcl.inc, Zeile 28').
+    if not Proven then
+    begin
+      Trace := OldCompilerTraceOf(AMap, FLOOR_INLINE_DECL, False, True, Li);
+      if Trace <> '' then
+        Exit(_(R_FS_OLD_INVARIANT, [Trace, Li]));
+    end;
+    Exit(_(R_FS_WITH, [WithLine]));
+  end;
   Result := '';
 end;
 
@@ -1944,6 +2361,13 @@ begin
   // Gekoppelte Auswertung in derselben Routine (rwE31 Stufe 3).
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Eigene Einstellungen der Klasse (rwE32 Stufe 4, TemplatePro.pas).
+  if (AReason = '') and AInvariant then
+    AReason := ClassSettingsReason(AMap, Sites);
+  // Anzeige-Ziel (rwE32 Stufe 4, E6): dort ist die Locale richtig - nach
+  // den Gruenden, an denen Verhalten bricht.
+  if (AReason = '') and AInvariant then
+    AReason := DisplayReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_128, AEdit);
@@ -2047,6 +2471,13 @@ begin
   // Argumente lesen selbst FormatSettings.TimeSeparator.
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Eigene Einstellungen der Klasse (rwE32 Stufe 4).
+  if (AReason = '') and AInvariant then
+    AReason := ClassSettingsReason(AMap, Sites);
+  // Anzeige-Ziel (rwE32 Stufe 4, E6): async_client MainClientFormU.pas:484
+  // 'ListBox1.Items.Add(Format(..))'.
+  if (AReason = '') and AInvariant then
+    AReason := DisplayReason(AMap, Sites);
   if AReason <> '' then
     Exit;
   BuildEdit(AMap, Sites, Settings, SPAN_059, AEdit);
@@ -2142,10 +2573,11 @@ end;
 class function TRdxFormatSettingsFix.PairHint(AMap: TRdxCodeMap;
   ALine: Integer; const ABaseHint: string): string;
 var
-  Hits  : TArray<TRdxToken>;
-  Sites : TCallSites;
-  i, Li : Integer;
-  Other : string;
+  Hits    : TArray<TRdxToken>;
+  Sites   : TCallSites;
+  i, Li   : Integer;
+  Other   : string;
+  Literal : Boolean;
 begin
   Result := ABaseHint;
   // Dieselben Aufrufe wie der Planer (auch auf Folgezeilen, rwE30 Stufe 2).
@@ -2153,10 +2585,20 @@ begin
   if Length(Hits) = 0 then
     Exit;
   SetLength(Sites, Length(Hits));
+  Literal := True;
   for i := 0 to High(Hits) do
+  begin
     if ReadCall(AMap, Hits[i], LOCALE_ARITY[LocaleIndex(Hits[i].Low)],
          Sites[i]) <> '' then
       Exit;
+    Literal := Literal and ReadsOnlyLiteral(AMap, Sites[i]);
+  end;
+  // Lesen alle Aufrufe nur Literale, gibt es keinen Datenfluss zu einem
+  // Gegenstueck (rwE32 Stufe 4, minesweeper uGameScore.pas:144:
+  // 'FTime := FTime + StrToTime(''00:00:01'')' - der Hinweis nannte
+  // 'ShowTime(FormatDateTime(..))' der Folgezeile).
+  if Literal then
+    Exit;
   Li := PairBreakLine(AMap, Sites, Other);
   if Li > 0 then
     Result := _(R_FS_PAIR_HINT, [ABaseHint, Li, Other]);

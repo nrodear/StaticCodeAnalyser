@@ -50,6 +50,8 @@ type
     [Test] procedure Sca059_Alt_InlineVarRefutesInclude;
     // ---- Realworld-Test rwE31 Stufe 3 ----
     [Test] procedure Sca059_Alt_ArgsReadFormatSettings_NoHelp;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Sca059_Alt_Display_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -458,10 +460,19 @@ begin
     UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
     ['  r := Format(''%.2f'', [x]);', '  for var i := 1 to 3 do Foo;']),
     BODY_LINE + 1, Msg('%.2f'), True);
-  // Gegenprobe: ohne Inline-Variable sperrt das Kit-Include.
-  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
-    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
-    _(R_FS_OLD_INVARIANT, ['mormot.defines.inc', 6]), True);
+  // Ohne Inline-Variable prueft das Kit-Include seit rwE32 Stufe 4 der
+  // Plattenblick (dort widerlegt es ein Projekt der Unit ab 10.3 - mORMot2
+  // dmvc-ai 19-basicdemo_vclclient MainFormU.pas:165; uTestRdxMagicGuards.
+  // Disk_KitIncludeModernProject_RefutesInvariant), nicht mehr der Planer.
+  AssertFixed(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x], TFormatSettings.Invariant);']),
+    UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'), True);
+  // Gegenprobe: eine Versionsfrage IN der Datei sperrt im Planer weiter.
+  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}',
+    '{$ifdef ISDELPHI2007ANDUP}', '{$endif}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 3, Msg('%.2f'),
+    _(R_FS_OLD_INVARIANT, ['ISDELPHI2007ANDUP', 7]), True);
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Alt_ArgsReadFormatSettings_NoHelp;
@@ -485,6 +496,39 @@ begin
     '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024], '
     + 'FormatSettings);']), Src, BODY_LINE,
     Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'));
+end;
+
+// ---- Realworld-Test rwE32 Stufe 4 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_Display_NoHelp;
+const
+  FMT = '%6s: %-34s %5.2f';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6: delphimvcframework samples\jsonrpc\async_client\
+  // MainClientFormU.pas:484 - die Preisliste geht in eine ListBox; dort ist
+  // die Locale des Benutzers richtig. Bis dahin bot der Alt-Weg Invariant
+  // an (sein eigener Hinweis sagt 'nicht fuer die Anzeige').
+  Src := InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c]));']);
+  AssertRefused(Src, BODY_LINE, Msg(FMT), _(R_FS_DISPLAY, [BODY_LINE,
+    'ListBox1.Items.Add']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c], FormatSettings));']), Src, BODY_LINE, Msg(FMT));
+  AssertRefused(InUnit(['  lblSum.Caption := ''Summe: '' + Format(''%.2f'', '
+    + '[x]);']), BODY_LINE, Msg('%.2f'), _(R_FS_DISPLAY, [BODY_LINE,
+    'lblSum.Caption']), True);
+  // Gegenprobe: Ziel ist eine Datei bzw. SQL - Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Writeln(F, Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant));']),
+    InUnit(['  Writeln(F, Format(''%.2f'', [x]));']), BODY_LINE, Msg('%.2f'),
+    True);
+  AssertFixed(InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x]);']), BODY_LINE,
+    Msg('%.2f'), True);
 end;
 
 {$IFNDEF FPC}
