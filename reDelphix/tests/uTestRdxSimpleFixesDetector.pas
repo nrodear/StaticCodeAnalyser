@@ -173,8 +173,10 @@ type
     // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
     [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
     // Fix-Runde 4: mehrzeilige Stelle (erste bis letzte Zeile) und das
-    // Zeilenende hinter einer Direktive.
+    // Zeilenende hinter einer Direktive; die raise-Variante von SCA168 gibt
+    // die Zeilen ihrer Ersetzungen mit.
     [Test] procedure PlanUses_RangeMustStayInBranch;
+    [Test] procedure Sca168_Raise_SysUtilsInSiteBranch_NoUses;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -220,6 +222,8 @@ type
     // Nachzug Review e/HilfeFixJ: alte Projektdatei neben der Datei sperrt
     // die raise-Varianten von SCA020 und SCA168 wie SCA127.
     [Test] procedure Raise_OldProjectOnDisk_NoHelp;
+    // Fix-Runde 4: SysUtils nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Sca020_Raise_SysUtilsInSiteBranch_NoUses;
   end;
 
   // Deklarationen (uRdxDeclFixes): SCA117, SCA197, SCA149.
@@ -1696,6 +1700,19 @@ begin
   Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
 end;
 
+// Fix-Runde 4 (Folge rwE31): die raise-Variante von SCA168 gab PlanUses
+// keine Zeile (AppendSysUtils ohne AAtLine) - ein nur bedingt eingebundenes
+// SysUtils sperrte auch dann, wenn derselbe Zweig die ganze Unit samt case
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Seitdem die Zeilen der
+// Ersetzungen (das 'end' des case, nicht die gemeldete case-Zeile).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils', Join(['procedure P(X: Integer);',
+    'begin', '  case X of', '    1: Exit;', '  end;', 'end;']),
+    fkDefaultCaseInCaseStatement, True, 1, Detect);
+end;
+
 procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;
@@ -2192,6 +2209,16 @@ begin
   O := PlanAltFix(Bad, fkEmptyMethod, Seen[0]);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual(Want, Apply(Bad, O.Edits));
+end;
+
+// Fix-Runde 4 (Folge rwE31): raise ENotImplemented gab PlanUses keine
+// Zeile - ein nur bedingt eingebundenes SysUtils sperrte auch dann, wenn
+// derselbe Zweig die ganze Unit samt Rumpf umschliesst (rot ohne Fix).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils',
+    Join(['procedure P;', 'begin', 'end;']), fkEmptyMethod, True, 1, Detect);
 end;
 
 procedure TTestRdxSimpleFixesDetector7.Sca120_RoundTrip_CatalogExample;

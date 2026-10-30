@@ -39,6 +39,8 @@ type
     [Test] procedure Sca196_TArray_RoundTrip;
     [Test] procedure Sca196_Variant_AddsUses;
     [Test] procedure Sca196_Outcome_MarkedWithCaption;
+    // Fix-Runde 4: Variants nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Sca196_VariantsInSiteBranch_NoUses;
   end;
 
 implementation
@@ -330,6 +332,21 @@ begin
   New := FixAll(Src, fkManagedResultUninit);
   Assert.IsTrue(Pos('System.SysUtils, System.Variants;', New) > 0, New);
   Assert.IsTrue(Pos('begin'#13#10'  VarClear(Result);'#13#10, New) > 0, New);
+end;
+
+// Fix-Runde 4 (Folge rwE31): VarClear gab PlanUses keine Zeile
+// (AppendUses ohne AAtLine) - ein nur bedingt eingebundenes Variants
+// sperrte auch dann, wenn derselbe Zweig die ganze Unit samt Routine
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Seitdem die Zeilen der
+// Ersetzung (VarClear hinter dem begin). Gegenprobe: der Zweig endet hinter
+// der Klausel - gesperrt.
+procedure TTestRdxResultFixesDetector.Sca196_VariantsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('Variants', 'System.Variants', Join([
+    'function Sum(const A: array of Integer): Variant;', 'var',
+    '  I: Integer;', 'begin', '  for I := 0 to High(A) do',
+    '    Result := Result + A[I];', 'end;']), fkManagedResultUninit, False, 1,
+    Detect);
 end;
 
 procedure TTestRdxResultFixesDetector.Sca196_Outcome_MarkedWithCaption;
