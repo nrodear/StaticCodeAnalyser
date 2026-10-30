@@ -77,6 +77,8 @@ type
     // ---- Realworld-Test rwE32 Stufe 4 ----
     [Test] procedure Sca128_Alt_Display_NoHelp;
     [Test] procedure Sca128_Alt_NotDisplay_Helps;
+    [Test] procedure Sca128_Alt_PairHint_OnlySameRoutine;
+    [Test] procedure Sca128_Alt_PairHint_LiteralReader_None;
   end;
 
 {$IFNDEF FPC}
@@ -1009,12 +1011,12 @@ begin
     ['  s := DateToStr(d);', '  if s <> DateToStr(Date) then', '    Foo;']);
   Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 5, 'DateToStr']),
     PairHintOf(Src, BODY_LINE + 4));
-  // Ohne Gegenstueck in der Routine: die Datei wie bisher.
+  // Ohne Gegenstueck in der Routine: seit rwE32 Stufe 4 kein Hinweis (bis
+  // dahin nannte er Zeile 8 der Routine Q - ohne Datenfluss dorthin).
   Src := UnitText(RTL_USES,
     ['procedure Q;', 'begin', '  r := DateTimeToStr(Now);', 'end;'],
     ['  s := DateToStr(d);']);
-  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', 8, 'DateTimeToStr']),
-    PairHintOf(Src, BODY_LINE + 4));
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE + 4));
 end;
 
 // ---- Realworld-Test rwE31 Stufe 3: gekoppelte Auswertung ----
@@ -1312,6 +1314,52 @@ begin
   AssertFixed(InUnit(['  Self.ShowMessage(FloatToStr(x' + INV + ');']),
     InUnit(['  Self.ShowMessage(FloatToStr(x));']), BODY_LINE,
     Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_OnlySameRoutine;
+var
+  Src : string;
+begin
+  // TES5Edit Core\wbInterface.pas:17009: 'lOrgValueStr := FloatToStr(
+  // lOrgValue)' fuer einen Meldungstext; der Hinweis nannte Zeile 17104
+  // ('FloatToStrF(lAbs, ..)' in TwbFloatDef.ToSortKey) - eine andere Routine
+  // ohne Datenfluss (M2: Kopplung nur in derselben Anweisung bzw. Routine).
+  Src := UnitText(RTL_USES, [], ['  try',
+    '    lOrgValueStr := FloatToStr(lOrgValue);', '  except',
+    '    on E: Exception do', '      lOrgValueStr := E.ClassName;', '  end;',
+    'end;', '', 'function ToSortKey(lAbs: Extended): string;', 'begin',
+    '  Result := FloatToStrF(lAbs, ffFixed, 40, 2);']);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE + 1));
+  // Gegenprobe: dasselbe Gegenstueck in derselben Routine bleibt genannt.
+  Src := InUnit(['  lOrgValueStr := FloatToStr(lOrgValue);',
+    '  Key := FloatToStrF(lAbs, ffFixed, 40, 2);']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FloatToStrF']),
+    PairHintOf(Src, BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_LiteralReader_None;
+var
+  Src : string;
+begin
+  // minesweeper-main uGameScore.pas:144: StrToTime liest ein Literal - es
+  // gibt keinen Datenfluss zu 'ShowTime(FormatDateTime(..))' der Folgezeile,
+  // der Hinweis nannte sie trotzdem als Gegenstueck.
+  Src := InUnit(['  FTime := FTime + StrToTime(''00:00:01'');',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE));
+  // Der Alt-Weg selbst bleibt angeboten (die Umstellung ist die Behebung).
+  AssertFixed(InUnit(['  FTime := FTime + StrToTime(''00:00:01'', '
+    + 'TFormatSettings.Invariant);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), Src, BODY_LINE,
+    Msg('strtotime'), True);
+  // Gegenproben: ein Leser mit Variable bzw. mit verkettetem Text nennt das
+  // Gegenstueck weiter.
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatDateTime']),
+    PairHintOf(InUnit(['  FTime := FTime + StrToTime(s);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), BODY_LINE));
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatDateTime']),
+    PairHintOf(InUnit(['  FTime := FTime + StrToTime(''00:00:'' + s);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), BODY_LINE));
 end;
 
 {$IFNDEF FPC}

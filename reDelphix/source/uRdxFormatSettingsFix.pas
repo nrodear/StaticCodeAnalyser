@@ -109,7 +109,9 @@ unit uRdxFormatSettingsFix;
 // ohnehin als aendernd gekennzeichnet und nie per Taste): der Hinweis nennt
 // das Gegenstueck (PairHint, PairBreakLine) - seit rwE30 Stufe 2 zuerst
 // eines in derselben Routine (HeidiSQL main.pas:14718), seit rwE31 Stufe 3
-// das naechste. AUSSER (Nico-Ergaenzung zu M2, rwE31 Stufe 3) das Ergebnis
+// das naechste, seit rwE32 Stufe 4 NUR eines derselben Routine und keines,
+// wenn die Aufrufe nur Literale lesen. AUSSER (Nico-Ergaenzung zu M2, rwE31
+// Stufe 3) das Ergebnis
 // wird in derselben Routine direkt mit dem Gegenstueck bzw. mit
 // FormatSettings gekoppelt ausgewertet ('Assert.AreEqual(s1, s2)',
 // 'Pos(FormatSettings.DecimalSeparator, S)'): das bricht Verhalten, die
@@ -257,9 +259,10 @@ type
     // SCA128, Alt-Weg (Entscheid M2): ABaseHint, oder - ruft die Datei
     // ausser den Aufrufen der Liste auf ALine eine Routine derselben
     // Familie ohne Invariant bzw. eigene Einstellungen - R_FS_PAIR_HINT mit
-    // ABaseHint, Zeile und Name des naechsten solchen Aufrufs (erst in der
-    // Routine, dann in der Datei; bis rwE31 Stufe 3 des ersten). Liest die
-    // Zeile keinen Aufruf, ABaseHint.
+    // ABaseHint, Zeile und Name des naechsten solchen Aufrufs in der
+    // Routine (bis rwE32 Stufe 4 danach in der Datei, bis rwE31 Stufe 3 des
+    // ersten). Liest die Zeile keinen Aufruf oder lesen ihre Aufrufe nur
+    // Literale ('StrToTime(''00:00:01'')'), ABaseHint.
     class function PairHint(AMap: TRdxCodeMap; ALine: Integer;
       const ABaseHint: string): string; static;
   end;
@@ -827,6 +830,24 @@ begin
     Result := MISFIT_DATE;
 end;
 
+// Liest der Aufruf ASite (StrToFloat, StrToCurr, StrToDate, StrToTime,
+// StrToDateTime) nur ein Literal - das Argument besteht bis zur Klammer auf
+// derselben Zeile aus String-Literalen ('StrToTime(''00:00:01'')')? Dann
+// kommt der gelesene Text aus keinem geschriebenen Wert (PairHint, rwE32
+// Stufe 4: minesweeper uGameScore.pas:144).
+function ReadsOnlyLiteral(AMap: TRdxCodeMap; const ASite: TCallSite): Boolean;
+var
+  Lit    : string;
+  Li, Co : Integer;
+begin
+  Result := (InList(ASite.Name.Low, PARSE_NUMBER)
+      or (ASite.Name.Low = PARSE_DATE) or (ASite.Name.Low = PARSE_TIME)
+      or (ASite.Name.Low = PARSE_DATETIME))
+    and FirstCharAfter(AMap, ASite.Open, Li, Co)
+    and (Li = ASite.Close.Line) and (Co < ASite.Close.Col)
+    and LiteralFirstArg(AMap, Li, Co, ASite.Close.Col - 1, Lit);
+end;
+
 // Der Grund, wenn der Aufruf ASite ein Literal liest, das nicht zu
 // TFormatSettings.Invariant passt; '' sonst (kein Literal, kein Leser).
 // Das Literal darf auf einer Folgezeile beginnen ('StrToDateTime(' am
@@ -862,9 +883,10 @@ end;
 // Seite auf Invariant gestellt, ist der Vergleich ausser in en-US immer
 // ungleich. Ebenso Schreiben und Lesen (CurrToStr ins Edit, TryStrToCurr
 // zurueck). Ob zwei Aufrufe zusammengehoeren, sieht der Planer nicht -
-// darum nennt der Hinweis (PairHint) den ersten weiteren Aufruf derselben
-// Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Datei, der kein Invariant
-// uebergibt. Bis zum Entscheid M2 (Review e/HilfeFixC) sperrte er.
+// darum nennt der Hinweis (PairHint) den naechsten weiteren Aufruf
+// derselben Familie (PAIR_DATE bzw. PAIR_NUMBER) in der Routine, der kein
+// Invariant uebergibt (bis rwE32 Stufe 4 auch in der Datei). Bis zum
+// Entscheid M2 (Review e/HilfeFixC) sperrte er.
 
 // Steht T in einem der Aufrufe ASites (die die Hilfe aendert)?
 function IsEditedName(const T: TRdxToken; const ASites: TCallSites): Boolean;
@@ -1010,21 +1032,25 @@ begin
   end;
 end;
 
-// PairBreakIn erst im Rumpf der Routine um den ersten Aufruf, dann in der
-// ganzen Datei (rwE30 Stufe 2, HeidiSQL main.pas:14718: der Vergleich mit
-// 'DateToStr(Item.Time)' steht in derselben Routine, der Hinweis nannte
-// Zeile 1782 einer anderen).
+// PairBreakIn im Rumpf der Routine um den ersten Aufruf (rwE30 Stufe 2,
+// HeidiSQL main.pas:14718: der Vergleich mit 'DateToStr(Item.Time)' steht
+// in derselben Routine, der Hinweis nannte Zeile 1782 einer anderen). Seit
+// rwE32 Stufe 4 NUR dort (M2: Kopplung gibt es in derselben Anweisung bzw.
+// Routine): bis dahin suchte die Funktion ohne Treffer in der Routine die
+// ganze Datei ab und nannte Aufrufe anderer Routinen ohne Datenfluss -
+// TES5Edit wbInterface.pas:17009 (Meldungstext) die Zeile 17104 in
+// TwbFloatDef.ToSortKey, Alcinoe ALFmxControls Main.pas:1491 die Anzeige
+// des naechsten Buttons. Ohne gefundene Routine: 0.
 function PairBreakLine(AMap: TRdxCodeMap; const ASites: TCallSites;
   out AName: string): Integer;
 var
   R : TRdxRoutine;
 begin
   Result := 0;
+  AName := '';
   if (Length(ASites) > 0)
      and (BeginBodyAround(AMap, ASites[0].Name, R) = rbfFound) then
     Result := PairBreakIn(AMap, ASites, R.Body.Line, R.EndTok.Line, AName);
-  if Result = 0 then
-    Result := PairBreakIn(AMap, ASites, 1, AMap.LineCount, AName);
 end;
 
 // ---- Gekoppelte Auswertung (Alt-Weg, rwE31 Stufe 3) ----
@@ -2404,10 +2430,11 @@ end;
 class function TRdxFormatSettingsFix.PairHint(AMap: TRdxCodeMap;
   ALine: Integer; const ABaseHint: string): string;
 var
-  Hits  : TArray<TRdxToken>;
-  Sites : TCallSites;
-  i, Li : Integer;
-  Other : string;
+  Hits    : TArray<TRdxToken>;
+  Sites   : TCallSites;
+  i, Li   : Integer;
+  Other   : string;
+  Literal : Boolean;
 begin
   Result := ABaseHint;
   // Dieselben Aufrufe wie der Planer (auch auf Folgezeilen, rwE30 Stufe 2).
@@ -2415,10 +2442,20 @@ begin
   if Length(Hits) = 0 then
     Exit;
   SetLength(Sites, Length(Hits));
+  Literal := True;
   for i := 0 to High(Hits) do
+  begin
     if ReadCall(AMap, Hits[i], LOCALE_ARITY[LocaleIndex(Hits[i].Low)],
          Sites[i]) <> '' then
       Exit;
+    Literal := Literal and ReadsOnlyLiteral(AMap, Sites[i]);
+  end;
+  // Lesen alle Aufrufe nur Literale, gibt es keinen Datenfluss zu einem
+  // Gegenstueck (rwE32 Stufe 4, minesweeper uGameScore.pas:144:
+  // 'FTime := FTime + StrToTime(''00:00:01'')' - der Hinweis nannte
+  // 'ShowTime(FormatDateTime(..))' der Folgezeile).
+  if Literal then
+    Exit;
   Li := PairBreakLine(AMap, Sites, Other);
   if Li > 0 then
     Result := _(R_FS_PAIR_HINT, [ABaseHint, Li, Other]);
