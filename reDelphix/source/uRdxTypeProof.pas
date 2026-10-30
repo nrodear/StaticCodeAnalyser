@@ -25,7 +25,9 @@ unit uRdxTypeProof;
 //     rwE31 (Fix-Runde 3): NeighbourVarType/NeighbourTypeBase lesen den
 //     interface-Teil der Units der uses-Klauseln, die NEBEN der Datei
 //     liegen (gleiches Verzeichnis bzw. 'in'-Pfad der Programmdatei) - nur
-//     auf Frage des Aufrufers, nie aus dem Netz, unter Deckeln.
+//     auf Frage des Aufrufers, nie aus dem Netz, unter Deckeln. Seit rwE32
+//     Stufe 4 gibt NeighbourInterfaces diese Teile als Text heraus (SCA168.2
+//     in uRdxStructFixes fragt selbst: Aufzaehlung oder Konstante?).
 //   * Die Antworten sind "lieber keine Hilfe als eine falsche" gerichtet:
 //     wer True/'' falsch deutet, bekommt eine Sperre, keine falsche Hilfe -
 //     die Richtung steht je Funktion.
@@ -319,6 +321,22 @@ type
     // String-Grenzen verrutschten (Nachzug Review e/HilfeFixL). Die Namen,
     // die der Beweis sucht, sind ASCII und bleiben in jeder Form gleich.
     class function NeighbourText(const ABytes: array of Byte): string; static;
+
+    // Die interface-Teile der Units der uses-Klauseln von AMap, die AName
+    // nennen (irgendwo im Text, Gross/klein egal), als Text in uses-
+    // Reihenfolge - fuer Fragen, die der Aufrufer selbst auf der Code-Sicht
+    // stellt (SCA168.2, rwE32 Stufe 4: ist eine case-Marke Wert einer
+    // Aufzaehlung oder eine Konstante? HeidiSQL table_editor.pas:1558
+    // 'cdtNothing' aus dbconnection.pas). Gesucht wird neben AUnitFile wie
+    // bei NeighbourVarType, und - nur hier - fuer eine Unit, die dort nicht
+    // liegt, bis zu AUpLevels Verzeichnisse darueber (doublecmd
+    // src\frames\foptionsfileoperations.pas -> src\uglobs.pas, src\
+    // filesources\shellfolder\ushellfilesourceutil.pas -> src\ulog.pas).
+    // Dieselben Deckel; leer ohne Datei, im Netz oder ohne Treffer. GRENZE
+    // wie NeighbourVarType.
+    class function NeighbourInterfaces(AMap: TRdxCodeMap;
+      const AUnitFile, AName: string; AUpLevels: Integer): TArray<string>;
+      static;
   end;
 
 implementation
@@ -1822,11 +1840,39 @@ begin
     Result := Copy(L, c + 1, e - c - 1);
 end;
 
+// Die Datei der Unit AName im Verzeichnis ADir (.pas, sonst .pp), bis zu
+// AUpLevels Verzeichnisse darueber, solange sie dort fehlt; sonst der Name
+// in ADir (den AddNeighbour verwirft).
+function UnitFileIn(const ADir, AName: string; AUpLevels: Integer): string;
+var
+  Dir, Up : string;
+  i       : Integer;
+begin
+  Result := ADir + AName + '.pas';
+  Dir := ADir;
+  for i := 0 to AUpLevels do
+  begin
+    if FileExists(Dir + AName + '.pas') then
+      Exit(Dir + AName + '.pas');
+    if FileExists(Dir + AName + '.pp') then
+      Exit(Dir + AName + '.pp');
+    // 'D:\' -> 'D:' -> 'D:' -> 'D:\': die Wurzel endet die Suche.
+    Up := ExtractFilePath(ExcludeTrailingPathDelimiter(Dir));
+    if Up = '' then
+      Exit;
+    Up := IncludeTrailingPathDelimiter(Up);
+    if SameText(Up, Dir) or IsNetworkPath(Up) then
+      Exit;
+    Dir := Up;
+  end;
+end;
+
 // Haengt die Datei der Unit AName (bzw. ihren 'in'-Pfad AInPath) an AFiles,
-// wenn sie neben der Datei liegt (Verzeichnis ADir) und keine schon
-// genannte oder die Datei selbst (AUnitFile) ist.
+// wenn sie neben der Datei liegt (Verzeichnis ADir; ohne 'in'-Pfad bis zu
+// AUpLevels Verzeichnisse darueber, UnitFileIn) und keine schon genannte
+// oder die Datei selbst (AUnitFile) ist.
 procedure AddNeighbour(var AFiles: TArray<string>; const ADir, AUnitFile,
-  AName, AInPath: string);
+  AName, AInPath: string; AUpLevels: Integer);
 var
   P : string;
   i : Integer;
@@ -1839,11 +1885,7 @@ begin
       P := ExpandFileName(ADir + AInPath);
   end
   else
-  begin
-    P := ADir + AName + '.pas';
-    if not FileExists(P) then
-      P := ADir + AName + '.pp';
-  end;
+    P := UnitFileIn(ADir, AName, AUpLevels);
   if IsNetworkPath(P) or not FileExists(P) or SameText(P, AUnitFile) then
     Exit;
   for i := 0 to High(AFiles) do
@@ -1854,10 +1896,11 @@ begin
 end;
 
 // Die Dateien der Units aus den uses-Klauseln von AMap (in deren
-// Reihenfolge: interface vor implementation), die neben AUnitFile liegen;
-// leer fuer eine Datei ohne Verzeichnis oder im Netz.
-function NeighbourFiles(AMap: TRdxCodeMap;
-  const AUnitFile: string): TArray<string>;
+// Reihenfolge: interface vor implementation), die neben AUnitFile liegen
+// (AUpLevels: AddNeighbour); leer fuer eine Datei ohne Verzeichnis oder im
+// Netz.
+function NeighbourFiles(AMap: TRdxCodeMap; const AUnitFile: string;
+  AUpLevels: Integer): TArray<string>;
 var
   T, N           : TRdxToken;
   Dir            : string;
@@ -1880,7 +1923,7 @@ begin
         if (N.Low = ',') or (N.Low = ';') then
         begin
           if Name <> '' then
-            AddNeighbour(Result, Dir, AUnitFile, Name, InPath);
+            AddNeighbour(Result, Dir, AUnitFile, Name, InPath, AUpLevels);
           Name := '';
           InPath := '';
           if N.Low = ';' then
@@ -2036,7 +2079,7 @@ begin
   NameLow := LowerCase(Trim(AName));
   if (NameLow = '') or (AUnitFile = '') then
     Exit;
-  Files := NeighbourFiles(AMap, AUnitFile);
+  Files := NeighbourFiles(AMap, AUnitFile, 0);
   Bytes := 0;
   for i := 0 to High(Files) do
   begin
@@ -2076,7 +2119,7 @@ begin
   TypeLow := LowerCase(Trim(ATypeName));
   if (TypeLow = '') or (AUnitFile = '') then
     Exit;
-  Files := NeighbourFiles(AMap, AUnitFile);
+  Files := NeighbourFiles(AMap, AUnitFile, 0);
   Bytes := 0;
   for i := 0 to High(Files) do
   begin
@@ -2090,6 +2133,45 @@ begin
         // benutzt (Parameter, Felder), nicht.
         if Length(DeclaredTypeKinds(M, TypeLow, True)) > 0 then
           Result := UniqueAliasBase(M, TypeLow);
+      finally
+        M.Free;
+      end;
+    finally
+      SL.Free;
+    end;
+  end;
+end;
+
+class function TRdxTypeProof.NeighbourInterfaces(AMap: TRdxCodeMap;
+  const AUnitFile, AName: string; AUpLevels: Integer): TArray<string>;
+var
+  Files   : TArray<string>;
+  NameLow : string;
+  Bytes   : Int64;
+  i       : Integer;
+  SL      : TStringList;
+  M       : TRdxCodeMap;
+begin
+  Result := nil;
+  NameLow := LowerCase(Trim(AName));
+  if (NameLow = '') or (AUnitFile = '') then
+    Exit;
+  Files := NeighbourFiles(AMap, AUnitFile, AUpLevels);
+  Bytes := 0;
+  for i := 0 to High(Files) do
+  begin
+    SL := TStringList.Create;
+    try
+      if not ReadNeighbour(Files[i], NameLow, Bytes, SL) then
+        Continue;
+      // InterfaceMap kuerzt SL auf den interface-Teil.
+      M := InterfaceMap(SL);
+      try
+        if NamesToken(M, NameLow) then
+        begin
+          SetLength(Result, Length(Result) + 1);
+          Result[High(Result)] := SL.Text;
+        end;
       finally
         M.Free;
       end;
