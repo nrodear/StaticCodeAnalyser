@@ -319,6 +319,11 @@ const
   CONDITION_WORDS: array[0..3] of string = ('ifdef', 'ifndef', 'if',
     'elseif');
   FIRST_DELPHI_YEAR = 2005;   // DELPHI2005: ab hier Jahreszahlen
+  // VERnnn von Delphi beginnt bei VER80 (Delphi 1); darunter sind es die
+  // Versionssymbole von FPC ('VER3_2_4' = FPC 3.2.4, rwE32 Stufe 4 - mORMot2
+  // test\test.core.base.pas zaehlte bis dahin als Delphi vor 2009). Sie
+  // zaehlen wie 'FPC_FULLVERSION < n' (FpcVerVersion, AFloor.FpcFull).
+  FIRST_DELPHI_VER = 80;
   // XeNames: Delphi XE bis XE8 (immer, alle vor 10.3) und 10 bis 11 mit
   // Namen (jedi.inc und andere) - diese mit ihrer CompilerVersion, sie
   // zaehlen bis AFloor.Version wie die Zahlen (Integration QFI2: bis dahin
@@ -454,6 +459,35 @@ begin
   Result := (V >= 0) and (V <= AFloor.Version);
 end;
 
+// Ein FPC-Versionssymbol ('VER3', 'VER2_6', 'VER3_2_4' - FPC definiert sie
+// mit einstelliger Hauptversion) als FPC_FULLVERSION (30204); -1 sonst.
+function FpcVerVersion(const AUpper: string): Integer;
+var
+  Rest     : string;
+  i, P, V  : Integer;
+begin
+  Result := -1;
+  if Copy(AUpper, 1, Length('VER')) <> 'VER' then Exit;
+  Rest := Copy(AUpper, Length('VER') + 1, MaxInt) + '_';
+  Result := 0;
+  // Haupt-, Unter-, Patchversion, je bis '_' (fehlende zaehlen 0).
+  for i := 1 to 3 do
+  begin
+    V := 0;
+    P := Pos('_', Rest);
+    if P > 0 then
+    begin
+      V := StrToIntDef(Copy(Rest, 1, P - 1), -1);
+      Delete(Rest, 1, P);
+    end;
+    if (V < 0) or (V > 99) then
+      Exit(-1);
+    Result := Result * 100 + V;
+  end;
+  if Rest <> '' then
+    Result := -1;
+end;
+
 // Ein Versionssymbol bis zur Schwelle AFloor (s. TRdxCompilerFloor):
 // VERnnn, DELPHIn, DELPHI2005.., COMPILERn, BCBn, RTLnnn, mit XeNames
 // dazu die Namen, seit rwE30 Stufe 2 die mORMot-Symbole - wer danach
@@ -469,7 +503,13 @@ begin
   Result := ((N >= 1) and (N <= AFloor.DelphiNumber))
     or ((N >= FIRST_DELPHI_YEAR) and (N <= AFloor.DelphiYear));
   N := NumberAfter(AUpper, 'VER');
-  Result := Result or ((N >= 0) and (N < AFloor.Ver));
+  if N >= FIRST_DELPHI_VER then
+    Result := Result or (N < AFloor.Ver)
+  else if N >= 0 then
+  begin
+    N := FpcVerVersion(AUpper);
+    Result := Result or ((N >= 0) and (N < AFloor.FpcFull));
+  end;
   N := NumberAfter(AUpper, 'COMPILER');
   Result := Result or ((N >= 0) and (N <= AFloor.Compiler));
   N := NumberAfter(AUpper, 'BCB');
@@ -777,8 +817,10 @@ begin
   if N >= 1 then
     Exit(N >= AFloor.DelphiNumber);
   N := NumberAfter(AUpper, 'VER');
-  if N >= 0 then
+  if N >= FIRST_DELPHI_VER then
     Exit(N >= AFloor.Ver);
+  if N >= 0 then
+    Exit(False);
   N := NumberAfter(AUpper, 'COMPILER');
   if N < 0 then
     N := NumberAfter(AUpper, 'BCB');

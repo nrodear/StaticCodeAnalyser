@@ -56,6 +56,7 @@ type
     [Test] procedure Disk_ExceptionClasses_FpcVersionNoEvidence;
     [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
     [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
+    [Test] procedure Traces_FpcVerSymbols;
   end;
 
 implementation
@@ -63,7 +64,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
-  uRdxCompilerTraces, // FLOOR_EXCEPTION_CLASSES, ModernProof (rwE32 Stufe 4)
+  uRdxCompilerTraces, // FLOOR_*, ModernProof, OldCompilerTrace (rwE32 Stufe 4)
   uRdxText,          // SetRdxLanguageOverride, MsgByHand
   uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
@@ -1200,6 +1201,50 @@ begin
   finally
     RemoveTree(T.Root);
   end;
+end;
+
+// OldCompilerTrace auf einer Datei mit ADirective vor 'implementation'.
+function TraceOf(const ADirective: string;
+  const AFloor: TRdxCompilerFloor): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  Li  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := 'unit u;' + #13#10 + 'interface' + #13#10 + ADirective
+      + '{$ENDIF}' + #13#10 + 'implementation' + #13#10 + 'end.';
+    Map := TRdxCodeMap.Create(SL);
+    Result := OldCompilerTrace(Map, AFloor, Li);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Traces_FpcVerSymbols;
+begin
+  // mORMot2 test\test.core.base.pas:5492 (SCA144-Nachpruefung der Fix-Runde
+  // 4): '{$IFDEF VER3_2_4}' ist das Versionssymbol von FPC 3.2.4, kein
+  // Delphi vor VER80 - bis dahin las OldVersionWord 'VER' + 3 als alte
+  // Delphi-Version (jede Schwelle). FPC-Symbole zaehlen jetzt wie
+  // 'FPC_FULLVERSION < FpcFull'.
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3_2_4}', FLOOR_MATH_TOLERANCE),
+    'FPC 3.2.4, Math');
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3_2_4}', FLOOR_EXCEPTION_CLASSES),
+    'FPC 3.2.4, Ausnahmeklassen');
+  Assert.AreEqual('', TraceOf('{$IFDEF VER3}', FLOOR_DEFAULT_FN),
+    'FPC 3.0 kennt Default()');
+  // Gegenproben: FPC vor 3.0 fuer Default(T), jedes FPC fuer die
+  // Inline-Konstante, und Delphi-Symbole wie bisher.
+  Assert.AreEqual('VER2_6', TraceOf('{$IFDEF VER2_6}', FLOOR_DEFAULT_FN));
+  Assert.AreEqual('VER3_2_4', TraceOf('{$IFDEF VER3_2_4}', FLOOR_INLINE_DECL));
+  Assert.AreEqual('VER130', TraceOf('{$IFDEF VER130}', FLOOR_MATH_TOLERANCE));
+  Assert.AreEqual('VER150', TraceOf('{$IFDEF VER150}', FLOOR_EXCEPTION_CLASSES));
+  Assert.AreEqual('', TraceOf('{$IFDEF VER140}', FLOOR_MATH_TOLERANCE),
+    'Delphi 6 kennt Math.IsZero');
 end;
 
 initialization
