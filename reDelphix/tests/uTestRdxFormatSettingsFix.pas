@@ -79,6 +79,7 @@ type
     [Test] procedure Sca128_Alt_NotDisplay_Helps;
     [Test] procedure Sca128_Alt_PairHint_OnlySameRoutine;
     [Test] procedure Sca128_Alt_PairHint_LiteralReader_None;
+    [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
   end;
 
 {$IFNDEF FPC}
@@ -1360,6 +1361,35 @@ begin
   Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatDateTime']),
     PairHintOf(InUnit(['  FTime := FTime + StrToTime(''00:00:'' + s);',
     '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_With_CarryingReasonFirst;
+const
+  WITH_BODY: array[0..1] of string = ('  with Obj do',
+    '    r := DateToStr(d);');
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4: der Hauptweg loest ein with per Qualifizierung auf; die
+  // Sperre des Alt-Wegs nannte trotzdem das with, obwohl FPC, ein alter
+  // Compiler bzw. die selbst eingestellte FormatSettings sie tragen - seit
+  // dem Fix kommt das with als letzter Grund.
+  // doublecmd SynUniDesigner.pas:2978: '{$IFNDEF FPC}' in der Datei.
+  Src := UnitText(RTL_USES, ['{$IFNDEF FPC}', '{$ENDIF}'], WITH_BODY);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetostr'), _(R_FS_FPC, [6]), True);
+  // jcl peviewer PeDump.pas:674: COMPILER5_UP (Delphi 5).
+  Src := UnitText('SysUtils', ['{$IFDEF COMPILER5_UP}', '{$ENDIF}'], WITH_BODY);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['COMPILER5_UP', 6]), True);
+  // issrc ISPP.Funcs.pas:1599: die Routine stellt DateSeparator selbst ein.
+  Src := InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    FormatSettings.DateSeparator := ''-'';',
+    '    MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age));', '  end;']);
+  AssertRefused(Src, BODY_LINE + 3, Msg('formatdatetime'),
+    _(R_FS_SETTINGS_SET, ['DateSeparator', BODY_LINE + 2]), True);
+  // Ohne weiteren Grund bleibt das with der Grund.
+  AssertRefused(InUnit(WITH_BODY), BODY_LINE + 1, Msg('datetostr'),
+    _(R_FS_WITH, [BODY_LINE]), True);
 end;
 
 {$IFNDEF FPC}

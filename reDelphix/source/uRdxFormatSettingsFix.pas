@@ -1849,11 +1849,18 @@ end;
 // Ueberladung ohne Settings liest). Der Gegenbeweis der Datei (ModernProof,
 // Invariant ohne Weiche) widerlegt Spuren alter Compiler und - fuer
 // Invariant - die FPC-Weiche; ebenso ein Aufruf in einem Zweig ohne FPC.
+// Fuer den Alt-Weg kommt das with seit rwE32 Stufe 4 ZULETZT: FPC, alte
+// Compiler, eigenes TFormatSettings und selbst eingestellte FormatSettings
+// tragen die Sperre und gelten auch dort, wo der Hauptweg das with per
+// Qualifizierung aufloest (jcl FileViewer.pas:601, PeDump.pas:674,
+// doublecmd SynUniDesigner.pas:2978, issrc ISPP.Funcs.pas:1599 - bis dahin
+// nannte die Sperre das with, Eintrag 1 den Altcompiler).
 function FileReason(AMap: TRdxCodeMap; const ANames: array of string;
   const ASites: TCallSites; AInvariant: Boolean;
   out ASettings: string): string;
 var
   i, Li, Member : Integer;
+  WithLine      : Integer;
   Trace, Spell  : string;
   Proof         : TRdxModernProof;
   Proven        : Boolean;
@@ -1874,19 +1881,17 @@ begin
   end;
   // Ein with um einen der Aufrufe (seit rwE31 Stufe 3 jeder Aufruf, nicht
   // nur der erste - die Aufrufe einer anonymen Methode der Anweisung koennen
-  // in einem eigenen with stehen): der Alt-Weg sperrt, der Hauptweg nimmt
-  // die globale Variable qualifiziert (s. Kopf).
+  // in einem eigenen with stehen): der Alt-Weg sperrt (als letzter Grund,
+  // s. oben), der Hauptweg nimmt die globale Variable qualifiziert (s. Kopf).
+  WithLine := 0;
   for i := 0 to High(ASites) do
   begin
-    Li := WithLineBefore(AMap, ASites[i].Name);
-    if Li > 0 then
-    begin
-      if AInvariant then
-        Exit(_(R_FS_WITH, [Li]));
-      ASettings := ', ' + Spell + '.FormatSettings';
+    WithLine := WithLineBefore(AMap, ASites[i].Name);
+    if WithLine > 0 then
       Break;
-    end;
   end;
+  if (WithLine > 0) and not AInvariant then
+    ASettings := ', ' + Spell + '.FormatSettings';
   Proof := ModernProof(AMap);
   if not AInvariant then
   begin
@@ -1925,6 +1930,8 @@ begin
   Li := GlobalSettingsWriteLine(AMap, Trace);
   if Li > 0 then
     Exit(_(R_FS_SETTINGS_SET, [Trace, Li]));
+  if WithLine > 0 then
+    Exit(_(R_FS_WITH, [WithLine]));
   Result := '';
 end;
 
