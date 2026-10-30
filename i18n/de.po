@@ -6994,8 +6994,29 @@ msgstr "Compiler-Direktive im case - welche Werte einen Zweig haben, ist nicht b
 msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
 msgstr "die Marken der Zweige sind nicht alle Namen einer Aufzählung - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
 
-msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"
-msgstr "die Aufzählung von %s ist nicht in dieser Datei deklariert - ob ihre Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"
+msgstr "%s ist weder in dieser Datei noch in einer Unit daneben deklariert - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+
+msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "der Selektor %s des case hat den Typ %s, keine Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the case selector %s converts a value to %s - a value outside the enumeration reaches the else, and raise would break that path"
+msgstr "der Selektor %s des case wandelt einen Wert in %s um - ein Wert außerhalb der Aufzählung erreicht das else, und raise bräche diesen Weg"
+
+msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"
+msgstr "die Marken der Zweige sind Zahlen - das case wählt nach einer ganzen Zahl, Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is a constant (line %d), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Konstante (Zeile %d), kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Konstante der Unit %s, kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Ganzzahl-Konstante der RTL (Nachrichten, Tasten, Dialog-Ergebnisse), kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"
+msgstr "%s bekommt vor dem case schon einen Wert (Zeile %d) - Werte ohne Zweig behalten ihn, das ist dort der normale Weg; raise bräche ihn"
 
 msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
 msgstr "Werte von %s ohne Zweig: %s - sie können hier Normalfall sein, und raise bräche diesen Weg"

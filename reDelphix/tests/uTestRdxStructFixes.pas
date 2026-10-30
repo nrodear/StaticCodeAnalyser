@@ -85,6 +85,20 @@ type
     // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
     // Exporte schliessen den Beweis (AlwaysNeededIdents).
     [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
+    // rwE32 Stufe 4, Nico-Entscheid E5: SCA168.2 gesperrt, wenn das case
+    // nicht nach einer Aufzaehlung waehlt (Selektor-Typ, Konstanten oder
+    // Zahlen als Marken) oder das Ergebnis vorbelegt ist ...
+    [Test] procedure Sca168_RaiseLock_SelectorNotEnum;
+    [Test] procedure Sca168_RaiseLock_ConstOrNumberLabels;
+    [Test] procedure Sca168_RaiseLock_PresetResult;
+    // ... die Aufzaehlung in einer Unit daneben (bis zwei Ebenen hoeher)
+    // beweist die volle Abdeckung, und ohne Beweis nennt der Hinweis die
+    // Marke nicht mehr "Aufzaehlung".
+    [Test] procedure Sca168_RaiseMenu_NeighbourUnits;
+    [Test] procedure Sca168_RaiseMenu_NeutralHint;
+    // Review e/HilfeFixR: der Selektor wandelt eine Zahl in die Aufzaehlung
+    // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
+    [Test] procedure Sca168_RaiseMenu_CastSelector;
   end;
 
 implementation
@@ -168,8 +182,10 @@ begin
 end;
 
 // SCA168, raise-Variante: der Grund fuer "nur im Menue" (CaseRaiseMenuReason)
-// am case auf ALine; '' heisst Gluehbirne.
-function CaseMenu(const ASource: string; ALine: Integer): string;
+// am case auf ALine; '' heisst Gluehbirne. ALock: der Grund der Sperre (E5,
+// rwE32 Stufe 4), '' ohne; AUnitFile: die Datei (Units daneben), '' ohne.
+function CaseMenuLock(const ASource: string; ALine: Integer;
+  const AUnitFile: string; out ALock: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -179,11 +195,25 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    Result := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine);
+    Result := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine, AUnitFile, ALock);
   finally
     Map.Free;
     SL.Free;
   end;
+end;
+
+function CaseMenu(const ASource: string; ALine: Integer): string;
+var
+  Lock : string;
+begin
+  Result := CaseMenuLock(ASource, ALine, '', Lock);
+end;
+
+// Der Grund der Sperre (E5) am case auf ALine; '' ohne Sperre.
+function CaseLock(const ASource: string; ALine: Integer;
+  const AUnitFile: string = ''): string;
+begin
+  CaseMenuLock(ASource, ALine, AUnitFile, Result);
 end;
 
 // Eine Unit mit den Typzeilen ATypes im interface und einer Routine, deren
@@ -1061,6 +1091,266 @@ begin
     Length(TRdxStructFixes.AlwaysNeededIdents('classes')), 'Classes');
   Assert.AreEqual<Integer>(0,
     Length(TRdxStructFixes.AlwaysNeededIdents('windows')), 'Windows');
+end;
+
+// ---- SCA168.2, Nico-Entscheid E5 (rwE32 Stufe 4) ----
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_SelectorNotEnum;
+var
+  R, Src : string;
+begin
+  // vcl-styles-utils Vcl.Styles.UxTheme.pas:2330 (minimiert): iStateId ist
+  // Integer, TUS_NORMAL eine Integer-Konstante aus Winapi.UxTheme - jeder
+  // andere Zustand faellt zum Trampolin durch. Bis rwE32 nur im Menue, der
+  // Hinweis nannte "die Aufzaehlung von TUS_NORMAL" (rot ohne Fix: keine
+  // Sperre).
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'function Hook(hTheme: THandle; iPartId, iStateId: Integer): HRESULT;',
+    'begin', '  case iStateId of', '    TUS_NORMAL:', '      Exit(S_OK);',
+    '  end;', '  Result := Trampoline(hTheme, iPartId, iStateId);', 'end;',
+    'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('iStateId', R) > 0, R);
+  Assert.IsTrue(Pos('integer', R) > 0, R);
+  // Das Ergebnis traegt denselben Grund (nie Gluehbirne).
+  Assert.AreEqual(R, CaseMenu(Src, 6));
+  // doublecmd ufileview.pas:997: 'var Key: Word', VK_BACK aus LCLType.
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'procedure TFileView.DoHandleKeyDownWhenLoading(var Key: Word; '
+    + 'Shift: TShiftState);', 'begin', '  case Key of', '    VK_BACK:',
+    '      begin', '        ChangePathToParent(True);', '        Key := 0;',
+    '      end;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('word', R) > 0, R);
+  // HeidiSQL Vcl.Styles.Hooks.pas:446: eine Umwandlung als Selektor.
+  R := CaseLock(InProc(['  case NativeUInt(lpIconName) of', '    78:',
+    '      DrawIcon(1);', '    81:', '      DrawIcon(2);', '  end;']), 5);
+  Assert.IsTrue(Pos('NativeUInt(lpIconName)', R) > 0, R);
+  // jvcl cbDSMixer.pas:1488: Msg.Msg in einer WndProc (Konstante nicht in
+  // der Datei).
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'procedure TC.WndProc(var Msg: TMessage);', 'begin', '  case Msg.Msg of',
+    '    WM_TRIGGER_X:', '      DoIt;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('Msg.Msg', R) > 0, R);
+  Assert.IsTrue(Pos('cardinal', R) > 0, R);
+  // Gegenprobe: ein Parameter mit Aufzaehlungstyp, jeder Wert hat einen
+  // Arm - keine Sperre, Gluehbirne.
+  Src := StringReplace(WithTypes(['  TKind = (kA, kB);'], ['  case K of',
+    '    kA: A;', '    kB: B;', '  end;']), 'procedure P;',
+    'procedure P(K: TKind);', []);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Aufzaehlung');
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Gluehbirne');
+  // Gegenprobe: ein Selektor ohne Typbeweis sperrt nicht.
+  Assert.AreEqual('', CaseLock(InProc(['  case Obj.Kind of', '    kA: A;',
+    '  end;']), 5), 'ohne Beweis');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_ConstOrNumberLabels;
+var
+  R, Src : string;
+begin
+  // jvcl cbDSMixer.pas:331/1488 (minimiert): die Marke ist eine Integer-
+  // Konstante der Datei ('WM_USER + 1') - bis rwE32 "die Aufzaehlung von
+  // conWMUSER_ENDPLAY" im Menue (rot ohne Fix).
+  Src := Join(['unit u;', 'interface', 'const',
+    '  conWMUSER_ENDPLAY = WM_USER + 1;', '  conWMUSER_ENDFADE = WM_USER + 2;',
+    'implementation', 'procedure P;', 'begin', '  case Ev.Code of',
+    '    conWMUSER_ENDPLAY: A;', '    conWMUSER_ENDFADE: B;', '  end;', 'end;',
+    'end.']);
+  R := CaseLock(Src, 9);
+  Assert.IsTrue(Pos('conWMUSER_ENDPLAY', R) > 0, R);
+  Assert.IsTrue(Pos('4', R) > 0, 'Zeile: ' + R);
+  // HeidiSQL main.pas:76/14530: Klassenkonstanten, qualifiziert.
+  Src := Join(['unit u;', 'interface', 'type', '  TQueryTab = class(TObject)',
+    '  public', '    const', '      HelperNodeColumns = 0;',
+    '      HelperNodeHistory = 1;', '  end;', 'implementation', 'procedure P;',
+    'begin', '  case Node.Index of', '    TQueryTab.HelperNodeColumns: A;',
+    '    TQueryTab.HelperNodeHistory: B;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 13);
+  Assert.IsTrue(Pos('HelperNodeColumns', R) > 0, R);
+  // CEF4Delphi uHelperProcessDom.pas:15/101: eine String-Konstante.
+  Src := Join(['unit u;', 'interface', 'const',
+    '  MSG_REQUEST_DOM = ''MSG_REQUEST_DOM'';', 'implementation', 'procedure P;',
+    'begin', '  case message.Name of', '    MSG_REQUEST_DOM: A;', '  end;',
+    'end;', 'end.']);
+  Assert.IsTrue(Pos('MSG_REQUEST_DOM', CaseLock(Src, 8)) > 0, 'String');
+  // Dev-Cpp main.pas:3822, HeidiSQL main.pas:14255: Zahlen als Marken.
+  R := CaseLock(InProc(['  case MessageControl.ActivePageIndex of',
+    '    2: LogOutput.SelectAll;', '    3: EvaluateInput.SelectAll;',
+    '  end;']), 5);
+  Assert.AreNotEqual('', R, 'Zahlen');
+  Assert.AreNotEqual('', CaseLock(InProc(['  case GetACP of',
+    '    437: R := ''cp850'';', '  end;']), 5), 'GetACP');
+  // Ganzzahl-Konstanten der RTL (Korpus: 'case MessageDlg(..) of mrYes').
+  R := CaseLock(InProc(['  case MessageDlg(S, mtConfirmation, mbYesNo, 0) of',
+    '    mrYes: Save;', '  end;']), 5);
+  Assert.IsTrue(Pos('mrYes', R) > 0, R);
+  // Gegenprobe: eine Konstante, die nur einen Namen nennt, kann ein
+  // Aufzaehlungswert sein - keine Sperre.
+  Src := Join(['unit u;', 'interface', 'const', '  cDefault = eA;',
+    'implementation', 'procedure P;', 'begin', '  case E of', '    cDefault: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Name als Wert');
+  // Gegenprobe: ein Typ 'T = 1' ist keine Konstante (Abschnitt type).
+  Src := Join(['unit u;', 'interface', 'type', '  TSmall = 1..5;',
+    'implementation', 'procedure P;', 'begin', '  case E of', '    TSmall: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Typ');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetResult;
+var
+  R, Src : string;
+begin
+  // issrc ISPP.IdentMan.pas:945/953 (minimiert): Result := TYPE_ERROR am
+  // Anfang, das case im else-Zweig eines Arms - jeder andere Typ behaelt
+  // den Fehlerwert. Bis rwE32 nur im Menue (rot ohne Fix).
+  Src := InProc(['  Result := TYPE_ERROR;', '  P := Find(Name);',
+    '  if P <> nil then', '    case P.IdentType of', '      itVariable:',
+    '        if P.Dim > 0 then', '          Result := TYPE_ARRAY', '        else',
+    '          case P.Typ of', '            evNull: Result := TYPE_NULL;',
+    '            evInt: Result := TYPE_INTEGER', '          end;',
+    '      itMacro: Result := TYPE_MACRO', '    end;']);
+  R := CaseLock(Src, LineOf(Src, 'case P.Typ'));
+  Assert.IsTrue(Pos('Result', R) > 0, R);
+  Assert.IsTrue(Pos('5', R) > 0, 'Zeile: ' + R);
+  // HeidiSQL main.pas:14676/14677: die Vorbelegung vor 'if .. then case'.
+  Src := InProc(['  ChildCount := 0;', '  if Obj <> nil then case Obj.NodeType of',
+    '    lntTable, lntView:', '      ChildCount := Columns.Count;', '  end;']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('ChildCount', R) > 0, R);
+  // Gegenprobe: die Zuweisung steht im then-Zweig daneben - sie erreicht
+  // das case nicht.
+  Src := InProc(['  if C then', '    Result := 0', '  else',
+    '    case E of', '      eA: Result := 1;', '    end;']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'then-Zweig');
+  // Gegenprobe: ein ganzer Block davor zaehlt nicht.
+  Src := InProc(['  if C then', '  begin', '    Result := 0;', '  end;',
+    '  case E of', '    eA: Result := 1;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 9), 'Block');
+  // Gegenprobe: die Laufvariable eines Arms ist keine Ergebnis-Variable.
+  Src := InProc(['  I := 0;', '  case E of',
+    '    eA: for I := 0 to 3 do A;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 6), 'for-Variable');
+  // Gegenprobe: jeder Wert der Aufzaehlung hat einen Arm - die Vorbelegung
+  // aendert nichts, Gluehbirne.
+  Src := WithTypes(['  TE = (eA, eB);'], ['  Result := 0;', '  case E of',
+    '    eA: Result := 1;', '    eB: Result := 2;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 9), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 9), 'Gluehbirne');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_NeighbourUnits;
+var
+  Root, Sub, Deep, U, R, Src : string;
+begin
+  // doublecmd src\frames\foptionsfileoperations.pas:126 (Aufzaehlung in
+  // src\uglobs.pas, eine Ebene hoeher), src\filesources\shellfolder\
+  // ushellfilesourceutil.pas:146 (src\ulog.pas, zwei Ebenen), HeidiSQL
+  // dbconnection.pas:1677 (dbstructures.pas daneben): jeder Wert hat einen
+  // Arm - raise ist unerreichbar. Bis rwE32 nur im Menue "nicht in dieser
+  // Datei deklariert" (rot ohne Fix).
+  Root := NewTempDir('rdx_sca168_');
+  try
+    Sub := Root + 'src' + PathDelim + 'frames' + PathDelim;
+    Deep := Root + 'src' + PathDelim + 'fs' + PathDelim + 'shell' + PathDelim;
+    ForceDirectories(Sub);
+    ForceDirectories(Deep);
+    WriteText(Root + 'src' + PathDelim + 'uglobs.pas', Join(['unit uGlobs;',
+      'interface', 'type', '  TProgressKind = (pkSeparate, pkPanel, pkBoth);',
+      '  TLogMsgType = (lmtInfo, lmtSuccess, lmtError);', 'const',
+      '  wpLicense = 2;', 'implementation', 'type',
+      '  THidden = (hA, hB);', 'end.']));
+    WriteText(Sub + 'ustructs.pas', Join(['unit uStructs;', 'interface',
+      'type', '  TNetGroup = (ngMySQL, ngMSSQL, ngPgSQL);', 'implementation',
+      'end.']));
+    // Eine Ebene hoeher, alle Werte.
+    U := Sub + 'fopts.pas';
+    Src := Join(['unit fOpts;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case gKind of', '    pkSeparate: A;',
+      '    pkPanel: B;', '    pkBoth: C;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, U, R), 'eine Ebene');
+    Assert.AreEqual('', R);
+    // Gegenprobe: ein Wert ohne Arm - Menue mit dem Wert.
+    Src := StringReplace(Src, '    pkBoth: C;'#13#10, '', []);
+    Assert.IsTrue(Pos('pkBoth', CaseMenuLock(Src, 7, U, R)) > 0, 'pkBoth');
+    Assert.AreEqual('', R);
+    // Daneben (gleiches Verzeichnis).
+    Src := Join(['unit fOpts;', 'interface', 'uses uStructs;', 'implementation',
+      'procedure P;', 'begin', '  case NetGroup of', '    ngMySQL: A;',
+      '    ngMSSQL, ngPgSQL: B;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, U, R), 'daneben');
+    // Zwei Ebenen hoeher.
+    Src := Join(['unit uShell;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case MsgType of', '    lmtInfo: A;',
+      '    lmtSuccess: B;', '    lmtError: C;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, Deep + 'ushell.pas', R),
+      'zwei Ebenen');
+    // Gegenprobe: ohne uses-Eintrag kein Beweis (neutraler Text).
+    Assert.AreNotEqual('', CaseMenuLock(StringReplace(Src, 'uses uGlobs;',
+      '', []), 7, Deep + 'ushell.pas', R), 'ohne uses');
+    // Gegenprobe: im implementation-Teil der Nachbar-Unit - nicht sichtbar.
+    Src := Join(['unit uX;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case H of', '    hA: A;', '    hB: B;',
+      '  end;', 'end;', 'end.']);
+    Assert.AreNotEqual('', CaseMenuLock(Src, 7, U, R), 'implementation-Teil');
+    // issrc Setup.WizardForm.pas:2534: die Marke ist eine Konstante der
+    // Unit daneben - gesperrt.
+    Src := Join(['unit uX;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case CurPageID of', '    wpLicense: A;',
+      '  end;', 'end;', 'end.']);
+    CaseMenuLock(Src, 7, U, R);
+    Assert.IsTrue(Pos('uGlobs', R) > 0, R);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_NeutralHint;
+var
+  R, Lock : string;
+begin
+  // HeidiSQL Vcl.Styles.UxTheme.pas:1181 (Rest ohne Typbeweis): eine Marke,
+  // die weder die Datei noch eine Unit daneben deklariert - der Hinweis
+  // nennt sie nicht mehr "Aufzaehlung" (bis rwE32 "die Aufzaehlung von
+  // MBI_NORMAL ist nicht in dieser Datei deklariert" - MBI_NORMAL ist eine
+  // Integer-Konstante der RTL). Nur im Menue, keine Sperre.
+  R := CaseMenuLock(InProc(['  case Details.State of', '    MBI_NORMAL: A;',
+    '  end;']), 5, '', Lock);
+  Assert.AreEqual('', Lock);
+  Assert.IsTrue(Pos('MBI_NORMAL', R) > 0, R);
+  Assert.AreEqual(_('%s is declared neither in this file nor in a unit next to '
+    + 'it - whether the values without an arm occur normally is not provable',
+    ['MBI_NORMAL']), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_CastSelector;
+var
+  R, Src : string;
+begin
+  // doublecmd foptionshotkeys.pas:759 (minimiert): 'case THotKeySortOrder(
+  // cbCommandSortOrder.ItemIndex) of' nennt jeden Wert - ItemIndex ist ohne
+  // Auswahl aber -1, das else ist dort ein gewoehnlicher Weg. Bis zum
+  // Review in der Gluehbirne (rot ohne Fix: '').
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TKind(Combo.ItemIndex) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  R := CaseMenu(Src, 8);
+  Assert.IsTrue(Pos('TKind(Combo.ItemIndex)', R) > 0, R);
+  Assert.AreEqual('', CaseLock(Src, 8), 'nur Menue, keine Sperre');
+  // Ein Alias der Datei vor der Klammer ist ebenso eine Umwandlung.
+  Src := WithTypes(['  TKind = (kA, kB);', '  TKindAlias = TKind;'],
+    ['  case TKindAlias(Tag) of', '    kA: A;', '    kB: B;', '  end;']);
+  Assert.IsTrue(Pos('TKindAlias(Tag)', CaseMenu(Src, 9)) > 0, 'Alias');
+  // Gegenprobe: ein Funktionsaufruf liefert einen Wert des Typs -
+  // Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case KindOf(Obj) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Funktion');
+  // Gegenprobe: die Umwandlung eines Objekts, danach ein Feld - Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TItem(P).Kind of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Feld nach Umwandlung');
 end;
 
 initialization

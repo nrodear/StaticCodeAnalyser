@@ -135,7 +135,9 @@ type
     // Verhalten; SysUtils kommt bei Bedarf mit (mit FPC-Weiche als
     // Kurzname - FPC kennt EInvalidOpException ebenfalls). Nur im Menue
     // (MenuOnly), wenn nicht bewiesen ist, dass jeder Wert einen Arm hat
-    // (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3).
+    // (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); gesperrt, wenn
+    // das case nicht nach einer Aufzaehlung waehlt oder das Ergebnis
+    // vorbelegt ist (Nico-Entscheid E5, rwE32 Stufe 4).
     class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -1261,12 +1263,14 @@ end;
 
 // SCA168: TRdxStructFixes.CaseElse mit AStatement ('' = leeres else).
 // AMenuReason: mit Anweisung der Grund, warum sie nur ins Menue kommt
-// (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); sonst ''.
+// (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); sonst ''. Sperrt
+// CaseRaiseMenuReason (E5, rwE32 Stufe 4), ist der Eintrag aus.
 function CaseElseOutcome(APlaces: TSourcePlaces; ALines: TStrings;
   ALine: Integer; const AStatement: string;
   out AMenuReason: string): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map  : TRdxCodeMap;
+  Lock : string;
 begin
   Result := Default(TRdxFixOutcome);
   AMenuReason := '';
@@ -1276,7 +1280,15 @@ begin
     Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
       Result.Edits, Result.Reason);
     if Result.Enabled and (AStatement <> '') then
-      AMenuReason := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine);
+    begin
+      AMenuReason := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine,
+        APlaces.FileName, Lock);
+      if Lock <> '' then
+      begin
+        Result.Enabled := False;
+        Result.Reason := Lock;
+      end;
+    end;
   finally
     TRdxCodeMap.Release(Map);
   end;
