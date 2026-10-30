@@ -310,6 +310,15 @@ type
     // GRENZE wie NeighbourVarType.
     class function NeighbourTypeBase(AMap: TRdxCodeMap;
       const AUnitFile, ATypeName: string): string; static;
+
+    // Der Text einer Unit neben der Datei aus ihren Bytes (NeighbourVarType,
+    // NeighbourTypeBase): mit BOM UTF-8 bzw. UTF-16 (LE/BE), ohne BOM jedes
+    // Byte genau ein Zeichen (Latin-1). Nicht die ANSI-Codepage: auf einem
+    // DBCS-System (Shift-JIS, GBK) nimmt ein Lead-Byte aus UTF-8 das
+    // naechste Byte mit - ein '}' oder '''' verschwaende, Kommentar- und
+    // String-Grenzen verrutschten (Nachzug Review e/HilfeFixL). Die Namen,
+    // die der Beweis sucht, sind ASCII und bleiben in jeder Form gleich.
+    class function NeighbourText(const ABytes: array of Byte): string; static;
   end;
 
 implementation
@@ -1888,10 +1897,55 @@ begin
   end;
 end;
 
+// Die Bytes ab AFrom als UTF-8 bzw. UTF-16 (AEncoding); ungueltige Bytes
+// (EEncodingError) byteweise wie ohne BOM.
+function DecodeFrom(const ABytes: array of Byte; AFrom: Integer;
+  AEncoding: TEncoding): string;
+var
+  Tail : TBytes;
+  i    : Integer;
+begin
+  if Length(ABytes) <= AFrom then
+    Exit('');
+  SetLength(Tail, Length(ABytes) - AFrom);
+  for i := 0 to High(Tail) do
+    Tail[i] := ABytes[AFrom + i];
+  try
+    Result := AEncoding.GetString(Tail);
+  except
+    on EEncodingError do
+    begin
+      SetLength(Result, Length(Tail));
+      for i := 0 to High(Tail) do
+        Result[i + 1] := Char(Tail[i]);
+    end;
+  end;
+end;
+
+class function TRdxTypeProof.NeighbourText(
+  const ABytes: array of Byte): string;
+var
+  n, i : Integer;
+begin
+  n := Length(ABytes);
+  if (n >= 3) and (ABytes[0] = $EF) and (ABytes[1] = $BB)
+     and (ABytes[2] = $BF) then
+    Exit(DecodeFrom(ABytes, 3, TEncoding.UTF8));
+  if (n >= 2) and (ABytes[0] = $FF) and (ABytes[1] = $FE) then
+    Exit(DecodeFrom(ABytes, 2, TEncoding.Unicode));
+  if (n >= 2) and (ABytes[0] = $FE) and (ABytes[1] = $FF) then
+    Exit(DecodeFrom(ABytes, 2, TEncoding.BigEndianUnicode));
+  SetLength(Result, n);
+  for i := 0 to n - 1 do
+    Result[i + 1] := Char(ABytes[i]);
+end;
+
 // Der Text der Datei APath nach ALines, wenn er ANameLow (klein, irgendwo)
 // enthaelt - unter den Deckeln (ABytes zaehlt ueber alle Dateien einer
-// Frage). Die Bytes als ANSI: die Namen sind ASCII. False, wenn die Datei
-// den Namen nicht enthaelt oder sich nicht lesen laesst.
+// Frage). Die Bytes ueber NeighbourText (BOM, sonst byteweise - bis zum
+// Nachzug Review e/HilfeFixL als ANSI, s. dort): die Namen sind ASCII.
+// False, wenn die Datei den Namen nicht enthaelt oder sich nicht lesen
+// laesst.
 function ReadNeighbour(const APath, ANameLow: string; var ABytes: Int64;
   ALines: TStringList): Boolean;
 var
@@ -1917,7 +1971,7 @@ begin
     on EStreamError do
       Exit;
   end;
-  Text := TEncoding.ANSI.GetString(Bytes);
+  Text := TRdxTypeProof.NeighbourText(Bytes);
   if Pos(ANameLow, LowerCase(Text)) = 0 then
     Exit;
   ALines.Text := Text;

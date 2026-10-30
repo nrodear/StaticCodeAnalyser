@@ -45,6 +45,8 @@ type
     [Test] procedure Sca085_OldCompilerBranch;
     // ---- SCA085, Realwelt-Test rwE31 (Fix-Runde 3) ----
     [Test] procedure Sca085_VariableProof_NeighbourGlobal;
+    // Nachzug Review e/HilfeFixL: Units daneben nicht als ANSI lesen.
+    [Test] procedure Sca085_NeighbourText_Encodings;
     // ---- Stufe 2, Rest: SCA074, SCA087, SCA139 ----
     [Test] procedure Sca074_Variants;
     [Test] procedure Sca074_Refusals;
@@ -802,6 +804,106 @@ begin
     P := ProofIn(StringReplace(Src, 'preferences;', 'preferences, other;', []),
       Main, '// A', 'frmPreferences');
     Assert.IsTrue(P.Kind = vpNone, 'spaetere Unit verdeckt mit einer Funktion');
+  finally
+    RemoveTree(Dir);
+  end;
+end;
+
+// ABytes als Datei APath (ohne jede Umkodierung).
+procedure WriteBytes(const APath: string; const ABytes: TBytes);
+var
+  FS : TFileStream;
+begin
+  FS := TFileStream.Create(APath, fmCreate);
+  try
+    if Length(ABytes) > 0 then
+      FS.WriteBuffer(ABytes[0], Length(ABytes));
+  finally
+    FS.Free;
+  end;
+end;
+
+// APrefix (ein BOM) vor ABytes.
+function WithBom(const APrefix: array of Byte; const ABytes: TBytes): TBytes;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(APrefix) + Length(ABytes));
+  for i := 0 to High(APrefix) do
+    Result[i] := APrefix[i];
+  for i := 0 to High(ABytes) do
+    Result[Length(APrefix) + i] := ABytes[i];
+end;
+
+// Nachzug Review e/HilfeFixL (MINOR mit Risiko falscher Typbeweis):
+// ReadNeighbour las die Units neben der Datei mit TEncoding.ANSI. Auf einem
+// DBCS-System (Shift-JIS, GBK) nimmt ein Lead-Byte aus UTF-8 das naechste
+// Byte mit - ein '}' oder '''' verschwindet, Kommentar und Deklaration
+// verschwimmen. Jetzt NeighbourText: BOM (UTF-8, UTF-16) oder byteweise.
+// Vertrag: ohne BOM jedes Byte genau ein Zeichen - mit der ANSI-Codepage
+// rot (unter 1252 wird $80 zu U+20AC, unter DBCS verschmelzen Bytes);
+// UTF-16 mit BOM fand der alte Weg nie (rot: '#0' zwischen den Zeichen).
+// Dazu die Fundstelle mit Umlaut im Kommentar vor der Deklaration in
+// UTF-8 ohne und mit BOM (unter 1252 auch vorher gruen - Schutz fuer DBCS).
+procedure TTestRdxSimpleFixes.Sca085_NeighbourText_Encodings;
+const
+  UTF8_BOM: array[0..2] of Byte = ($EF, $BB, $BF);
+  UTF16LE_BOM: array[0..1] of Byte = ($FF, $FE);
+  UTF16BE_BOM: array[0..1] of Byte = ($FE, $FF);
+var
+  All             : TBytes;
+  i               : Integer;
+  Decoded, Body   : string;
+  Dir             : string;
+  Src, Main       : string;
+  P               : TRdxVarProof;
+begin
+  // Vertrag ohne BOM: Byte i -> Zeichen #i (erstes Byte kein BOM-Anfang).
+  SetLength(All, 256);
+  for i := 0 to 255 do
+    All[i] := Byte(i);
+  Decoded := TRdxTypeProof.NeighbourText(All);
+  Assert.AreEqual<Integer>(256, Length(Decoded), 'ein Zeichen je Byte');
+  for i := 0 to 255 do
+    Assert.AreEqual<Integer>(i, Ord(Decoded[i + 1]), 'Byte ' + IntToStr(i));
+  // Mit BOM: der BOM faellt weg, der Rest in seiner Kodierung.
+  Body := '{ f' + #$FC + 'r } x';
+  Assert.AreEqual(Body, TRdxTypeProof.NeighbourText(WithBom(UTF8_BOM,
+    TEncoding.UTF8.GetBytes(Body))), 'UTF-8 mit BOM');
+  Assert.AreEqual(Body, TRdxTypeProof.NeighbourText(WithBom(UTF16LE_BOM,
+    TEncoding.Unicode.GetBytes(Body))), 'UTF-16 LE');
+  Assert.AreEqual(Body, TRdxTypeProof.NeighbourText(WithBom(UTF16BE_BOM,
+    TEncoding.BigEndianUnicode.GetBytes(Body))), 'UTF-16 BE');
+  Assert.AreEqual('', TRdxTypeProof.NeighbourText(WithBom(UTF8_BOM, nil)),
+    'nur BOM');
+  // Die Fundstelle (HeidiSQL main.pas:2778 wie NeighbourGlobal) mit
+  // preferences.pas in drei Kodierungen, ein Umlaut im Kommentar direkt
+  // vor der Deklaration.
+  Body := Join(['unit preferences;', 'interface', 'type',
+    '  TfrmPreferences = class(TForm)', '  end;', 'var',
+    '  { Einstellungen f' + #$FC + 'r den Dialog } frmPreferences: '
+    + 'TfrmPreferences;', 'implementation', 'end.']);
+  Src := Join(['unit main;', 'interface', 'uses', '  SysUtils, preferences;',
+    'type', '  TMainForm = class(TExtForm)', '    procedure Done;', '  end;',
+    'implementation', 'procedure TMainForm.Done;', 'begin',
+    '  frmPreferences.Free; // A', '  frmPreferences := nil;', 'end;',
+    'end.']);
+  Dir := NewTempDir('rdx_sca085e_');
+  try
+    Main := Dir + 'main.pas';
+    WriteBytes(Dir + 'preferences.pas', TEncoding.UTF8.GetBytes(Body));
+    P := ProofIn(Src, Main, '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpGlobal, 'UTF-8 ohne BOM');
+    Assert.AreEqual('tfrmpreferences', P.TypeLow);
+    WriteBytes(Dir + 'preferences.pas', WithBom(UTF8_BOM,
+      TEncoding.UTF8.GetBytes(Body)));
+    P := ProofIn(Src, Main, '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpGlobal, 'UTF-8 mit BOM');
+    WriteBytes(Dir + 'preferences.pas', WithBom(UTF16LE_BOM,
+      TEncoding.Unicode.GetBytes(Body)));
+    P := ProofIn(Src, Main, '// A', 'frmPreferences');
+    Assert.IsTrue(P.Kind = vpGlobal, 'UTF-16 LE mit BOM');
+    Assert.AreEqual('tfrmpreferences', P.TypeLow);
   finally
     RemoveTree(Dir);
   end;
