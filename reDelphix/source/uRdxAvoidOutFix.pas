@@ -129,12 +129,16 @@ type
   //            erste Anweisung (AssignedFirstReason, rwE30 Stufe 2): die
   //            Hilfe steht nur im Menue (TRdxFixOutcome.MenuOnly), Caution
   //            ist ihr Hinweis (uebersetzt)
+  //   ForeignType  Changes wegen eines Typs aus EINEM Wort, den die Datei
+  //            nicht deklariert (klein; sonst ''): der Adapter fragt die
+  //            Units daneben (NeighbourPlain, rwE32 Stufe 4)
   TRdxOutPlan = record
-    Name     : string;
-    Changes  : Boolean;
-    Edits    : TArray<TRdxEdit>;
-    MenuOnly : Boolean;
-    Caution  : string;
+    Name        : string;
+    Changes     : Boolean;
+    Edits       : TArray<TRdxEdit>;
+    MenuOnly    : Boolean;
+    Caution     : string;
+    ForeignType : string;
   end;
 
   TRdxAvoidOutFix = class
@@ -150,6 +154,17 @@ type
     // bekannten einfachen Typen (PLAIN_TYPES); Gross/klein und Leerraum
     // egal.
     class function IsManagedType(const ATypeText: string): Boolean; static;
+
+    // rwE32 Stufe 4 (jcl JclStringConversions.pas:407 'out Ch: UCS4', 'UCS4
+    // = Cardinal' in JclBase.pas daneben): fuehrt APlan.ForeignType ueber
+    // die Unit der uses-Klauseln neben AUnitFile, die ihn deklariert
+    // (TRdxTypeProof.NeighbourTypeBase, wie SCA144), auf einen einfachen Typ
+    // (PLAIN_TYPES)? Dann sind out und var gleich: Changes, MenuOnly und
+    // Caution werden zurueckgesetzt, True. Sonst bleibt APlan. GRENZE wie
+    // NeighbourTypeBase: eine spaetere Unit, die nicht daneben liegt (RTL,
+    // Suchpfad), koennte den Namen ebenfalls deklarieren.
+    class function NeighbourPlain(AMap: TRdxCodeMap; const AUnitFile: string;
+      var APlan: TRdxOutPlan): Boolean; static;
   end;
 
 implementation
@@ -160,6 +175,7 @@ uses
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
   uRdxBlocks,       // TRdxBlocks, HeadStart, HasDirective, EnclosingClass,
                     // InsideTypeBody, IncludesUpTo
+  uRdxTypeProof,    // DeclaredTypeKind, NeighbourTypeBase (rwE32 Stufe 4)
   uRdxRoutineFixes; // InterfaceMemberReason (wie SCA147)
 
 const
@@ -197,6 +213,11 @@ const
     'pwidechar', 'tdatetime', 'tdate', 'ttime', 'thandle', 'hwnd',
     'tobject', 'tclass', 'tpoint', 'trect', 'tsize', 'tguid');
   SYSTEM_PREFIX = 'system.';
+  // ForeignTypeWord: sicher verwaltet - die Units daneben fragt die Hilfe
+  // dafuer nicht (sie nennen 'string' fast alle).
+  MANAGED_BUILTINS: array[0..9] of string = ('string', 'ansistring',
+    'widestring', 'unicodestring', 'rawbytestring', 'utf8string', 'variant',
+    'olevariant', 'iinterface', 'iunknown');
   // So viele Koepfe liest OuterOf rueckwaerts hoechstens.
   MAX_OUTER_STEPS = 400;
   // AssignedFirstReason: Bloecke mit eigenem end bzw. until ...
@@ -1332,6 +1353,28 @@ begin
   end;
 end;
 
+// Der Typ der Parameter ab AOut, wenn er EIN Wort ist, das die Datei nicht
+// als Typ deklariert und das nicht sicher verwaltet ist (MANAGED_BUILTINS) -
+// klein; sonst '' (TRdxOutPlan.ForeignType).
+function ForeignTypeWord(AMap: TRdxCodeMap; const AOut: TRdxToken): string;
+var
+  T : string;
+  i : Integer;
+begin
+  Result := '';
+  T := ParamTypeText(AMap, AOut);
+  if (T = '') or not IsIdentStart(T[1]) then
+    Exit;
+  for i := 2 to Length(T) do
+    if not IsIdentChar(T[i]) then
+      Exit;
+  T := LowerCase(T);
+  if InList(T, MANAGED_BUILTINS)
+     or (TRdxTypeProof.DeclaredTypeKind(AMap, T) <> '') then
+    Exit;
+  Result := T;
+end;
+
 // Traegt einer der Koepfe AHeads keine Parameter (ParamCount = 0)?
 function HasParamlessHead(AMap: TRdxCodeMap;
   const AHeads: TRdxOutHeads): Boolean;
@@ -1449,11 +1492,29 @@ begin
     APlan.Caution := AssignedFirstReason(AMap, Impl, Names, APlan.Name,
       ParamTypeText(AMap, OutTok), Name);
     APlan.MenuOnly := APlan.Caution <> '';
+    APlan.ForeignType := ForeignTypeWord(AMap, OutTok);
   end;
   if HasDecl then
     AddEdit(APlan.Edits, OutEdit(AMap, DeclOut));
   if Found.Low <> '' then
     AddEdit(APlan.Edits, OutEdit(AMap, Found));
+  Result := True;
+end;
+
+class function TRdxAvoidOutFix.NeighbourPlain(AMap: TRdxCodeMap;
+  const AUnitFile: string; var APlan: TRdxOutPlan): Boolean;
+var
+  Base : string;
+begin
+  Result := False;
+  if not APlan.Changes or (APlan.ForeignType = '') or (AUnitFile = '') then
+    Exit;
+  Base := TRdxTypeProof.NeighbourTypeBase(AMap, AUnitFile, APlan.ForeignType);
+  if (Base = '') or IsManagedType(Base) then
+    Exit;
+  APlan.Changes := False;
+  APlan.MenuOnly := False;
+  APlan.Caution := '';
   Result := True;
 end;
 

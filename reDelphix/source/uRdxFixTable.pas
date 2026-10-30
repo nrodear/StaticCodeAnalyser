@@ -2021,10 +2021,24 @@ end;
 function PlanAvoidOut(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  P : TRdxOutPlan;
+  P   : TRdxOutPlan;
+  Map : TRdxCodeMap;
 begin
   Result := TRdxFixFrame.Run<TRdxOutPlan>(OutForm(TRdxAvoidOutFix.OutToVar),
     APlaces, ALines, AFinding, P);
+  // Ein Typ aus einer Unit neben der Datei kann einfach sein (rwE32 Stufe
+  // 4: jcl JclStringConversions.pas:407 'UCS4 = Cardinal' in JclBase.pas) -
+  // den Dateinamen kennt nur der Adapter (NeighbourPlain).
+  if Result.Enabled and (P.ForeignType <> '') and Assigned(APlaces)
+     and APlaces.IsOpen then
+  begin
+    Map := TRdxCodeMap.Acquire(ALines);
+    try
+      TRdxAvoidOutFix.NeighbourPlain(Map, APlaces.FileName, P);
+    finally
+      TRdxCodeMap.Release(Map);
+    end;
+  end;
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
   // Verwaltet und nicht zuerst gesetzt (rwE30 Stufe 2): nur im Menue, der

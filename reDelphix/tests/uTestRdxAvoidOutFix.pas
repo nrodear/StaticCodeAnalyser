@@ -78,6 +78,9 @@ type
     // ... nur-menue-unnoetig mormot.crypt.secure.pas:597 (Record derselben
     // Unit mit Methoden und Typkopf-Zwilling).
     [Test] procedure TwinRecordWithMethods_SameMeaning;
+    // ... nur-menue-unnoetig JclStringConversions.pas:407 (Alias in der
+    // Unit daneben).
+    [Test] procedure NeighbourAlias_SameMeaning;
   end;
 
 {$IFNDEF FPC}
@@ -906,6 +909,70 @@ begin
     'TSynHasher = object', 'TSynHasher = object(TBase)', []);
   Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
   Assert.IsTrue(P.Changes, 'object mit Vorfahr');
+end;
+
+procedure TTestRdxAvoidOutFix.NeighbourAlias_SameMeaning;
+const
+  // JclStringConversions.pas:407-414 (minimiert): '{$IFDEF}' um das Setzen
+  // - verwaltet hiesse das nur im Menue (DirectiveAroundSet_MenuOnly).
+  BODY: array[0..8] of string = ('procedure Flag(out Ch: UCS4);', 'begin',
+    '  {$IFDEF SILENT}', '  Ch := 0;', '  {$ELSE}', '  raise EOops.Create;',
+    '  {$ENDIF}', 'end;', 'end.');
+var
+  Dir, Main, Src, R : string;
+  Map               : TRdxCodeMap;
+  P                 : TRdxOutPlan;
+begin
+  Dir := NewTempDir('rdx_sca086n_');
+  try
+    WriteText(Dir + 'rdxbase.pas', Join(['unit rdxbase;', 'interface',
+      'type', '  PUCS4 = ^UCS4;', '  UCS4 = Cardinal;', '  TText = string;',
+      'implementation', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'implementation', 'uses',
+      '  rdxbase;']) + #13#10 + Join(BODY);
+    Map := NewMap(Src);
+    try
+      // Der Planer allein kennt UCS4 nicht: gekennzeichnet, nur im Menue,
+      // ForeignType fuer den Adapter.
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'Planer: unbekannt');
+      Assert.AreEqual('ucs4', P.ForeignType);
+      // UCS4 = Cardinal in der Unit daneben: bedeutungsgleich, Gluehbirne
+      // (rot ohne Fix: NeighbourPlain fehlte, die Hilfe blieb im Menue).
+      Assert.IsTrue(TRdxAvoidOutFix.NeighbourPlain(Map, Main, P), 'Alias');
+      Assert.IsFalse(P.Changes or P.MenuOnly, 'Cardinal: out wie var');
+      Assert.AreEqual('', P.Caution);
+      // Gegenproben: ohne Datei, ein verwalteter Alias daneben.
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, '', P), 'ohne Datei');
+      Assert.IsTrue(P.MenuOnly, 'ohne Datei: Menue');
+    finally
+      Map.Free;
+    end;
+    Src := StringReplace(Src, 'out Ch: UCS4', 'out Ch: TText', []);
+    Map := NewMap(Src);
+    try
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.AreEqual('ttext', P.ForeignType);
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, Main, P),
+        'TText = string');
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'verwaltet: wie bisher');
+    finally
+      Map.Free;
+    end;
+    // ... die Datei deklariert den Typ selbst: kein ForeignType.
+    Map := NewMap(StringReplace(Src, 'implementation', 'type TText = string;'
+      + #13#10'implementation', []));
+    try
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 7, MessageAt(16), P, R), R);
+      Assert.AreEqual('', P.ForeignType);
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
 end;
 
 {$IFNDEF FPC}
