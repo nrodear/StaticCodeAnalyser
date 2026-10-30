@@ -1984,6 +1984,7 @@ var
   TotalMatched   : Integer;
   BaselineActive : Boolean;
   BaselineHidden : Integer;
+  Covered        : TArray<Boolean>;
 begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
@@ -2009,13 +2010,20 @@ begin
   try
     FDisplayedFindings.Clear;
 
+    // Baseline-Abgleich EINMAL fuer die ganze Liste, nicht Contains je
+    // Fund: seit 2026-10-30 deckt jeder Baseline-Eintrag hoechstens EINEN
+    // Fund (TBaselineMatcher), und zaehlen kann nur, wer alle Funde
+    // zugleich sieht. Leer, solange der Filter aus ist.
+    if BaselineActive then
+      Covered := FBaselineSet.CoveredFlags(FAllFindings);
+
     // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
     for i := 0 to FAllFindings.Count - 1 do
     begin
       // Baseline-Filter zuerst: bereits akzeptierte Funde ausblenden.
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
-      if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      if (i < Length(Covered)) and Covered[i] then
       begin
         Inc(BaselineHidden);
         Continue;
