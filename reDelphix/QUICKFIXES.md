@@ -839,7 +839,7 @@ end;
 - das Literal auf der Zeile passt nicht zur Meldung (Zeile verschoben), der Aufruf ist qualifiziert (`string.Format`, `Self.Format`), hat nicht genau zwei Argumente oder schließt nicht auf der Zeile, steht erst auf einer Folgezeile, oder die Anweisung geht mit einem weiteren `Format` weiter
 - eine Direktive auf der Zeile, und dieselben Fragen an die Datei wie bei SCA128 (SysUtils, eigene Routine `Format`, `FormatSettings` deklariert oder als Member, `with`, Compiler vor Delphi XE)
 - Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
-- Eintrag 2: eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+- Eintrag 2: eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`
 
 **Beispiel (Eintrag 1)**
 
@@ -3039,7 +3039,7 @@ if X < 0 then
 - die Datei deklariert einen Bezeichner `FormatSettings` (Feld, Variable, Parameter, Property) oder nutzt ihn als Member (`X.FormatSettings`) - der bloße Name bände dort
 - die Datei fragt nach Compilern vor Delphi XE (die globale `FormatSettings` gibt es erst seit XE), etwa über `jedi.inc` oder `{$IFDEF VER210}`
 - Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
-- Eintrag 2: eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+- Eintrag 2: eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`
 
 **Beispiel (Eintrag 1)**
 

@@ -1751,7 +1751,7 @@
         "kennzeichnung": "unabhängig vom System: Punkt als Dezimaltrenner, Datum MM/dd/yyyy, englische Monats- und Tagesnamen - für Dateien, SQL und Protokolle, nicht für die Anzeige",
         "nichtAngeboten": [
           "dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`",
-          "eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`"
+          "eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`"
         ],
         "beispielNachher": [
           "  r := DateToStr(d, TFormatSettings.Invariant) + ' ' + TimeToStr(d, TFormatSettings.Invariant);"
@@ -1778,7 +1778,7 @@
         "kennzeichnung": "unabhängig vom System: Punkt als Dezimaltrenner, Komma als Tausendertrenner - für Dateien, SQL und Protokolle, nicht für die Anzeige",
         "nichtAngeboten": [
           "dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`",
-          "eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`"
+          "eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`"
         ],
         "beispielNachher": [
           "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
