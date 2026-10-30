@@ -7039,3 +7039,6 @@ msgstr "la ligne %d évalue %s avec %s sans TFormatSettings.Invariant - si seul 
 
 msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
 msgstr "la ligne %d affiche le résultat à l'écran (%s) - là, la locale de l'utilisateur est la bonne; TFormatSettings.Invariant afficherait le point décimal et MM/dd/yyyy"
+
+msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
+msgstr "la classe %s possède ses propres paramètres de format %s (ligne %d) - les passer à la main au lieu de TFormatSettings.Invariant, qui ignorerait ce qui y est réglé"

@@ -81,6 +81,7 @@ type
     [Test] procedure Sca128_Alt_PairHint_LiteralReader_None;
     [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
     [Test] procedure Sca128_Alt_KitInclude_DiskCheckOrWith;
+    [Test] procedure Sca128_Alt_ClassSettingsField_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -1420,6 +1421,61 @@ begin
   AssertRefused(UnitText('SysUtils', ['{$I jcl.inc}', '{$IFDEF COMPILER5_UP}',
     '{$ENDIF}'], ['  r := DateToStr(d);']), BODY_LINE + 3, Msg('datetostr'),
     _(R_FS_OLD_INVARIANT, ['COMPILER5_UP', 7]), True);
+end;
+
+// Eine Unit mit Klasse TTpl (Felder AFields im Rumpf) und der Methode
+// TTpl.Fmt, deren Rumpfzeile 'Result := FormatDateTime(S, Now);' in Zeile
+// 12 + Length(AFields) steht.
+function ClassUnit(const AFields: array of string): string;
+var
+  S : string;
+begin
+  Result := 'unit t;' + CRLF + 'interface' + CRLF + 'uses' + CRLF
+    + '  System.SysUtils;' + CRLF + 'type' + CRLF + '  TTpl = class' + CRLF
+    + '  private' + CRLF;
+  for S in AFields do
+    Result := Result + S + CRLF;
+  Result := Result
+    + '    function Fmt(const S: string; const AFS: TFormatSettings): string;'
+    + CRLF + '    property FS: TFormatSettings read FFS;' + CRLF + '  end;'
+    + CRLF + 'implementation' + CRLF
+    + 'function TTpl.Fmt(const S: string; const AFS: TFormatSettings): string;'
+    + CRLF + 'begin' + CRLF + '  Result := FormatDateTime(S, Now);' + CRLF
+    + 'end;' + CRLF + 'end.';
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsField_NoHelp;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4, delphimvcframework sources\TemplatePro.pas:3163 (und
+  // ...-master :3365, besserer-fix): TTProCompiledTemplate traegt
+  // 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
+  // einstellbar); Invariant verwuerfe die eingestellte Template-Locale. Der
+  // Alt-Weg sperrt mit Hinweis auf das Feld - Parameter, Rueckgabetyp und
+  // Property zaehlen nicht als Feld.
+  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;']);
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'fLocaleFormatSettings', 8]), True);
+  // Der Hauptweg bleibt (gleiche Bedeutung).
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, FormatSettings)', []), Src, 15,
+    Msg('formatdatetime'));
+  // Gegenproben: das Muster als Literal (TemplatePro.pas:3170, ISO-Vorgabe -
+  // Stufe 4: ok), kein Feld (nur Parameter/Property), zwei Felder
+  // (welches?) - Invariant bleibt angeboten.
+  Src := StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(''yyyy-mm-dd hh:nn:ss'', Now)', []);
+  AssertFixed(StringReplace(Src, ', Now)', ', Now, TFormatSettings.Invariant)',
+    []), Src, 15, Msg('formatdatetime'), True);
+  Src := ClassUnit(['    FFS: Integer;']);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 15,
+    Msg('formatdatetime'), True);
+  Src := ClassUnit(['    FA, FB: TFormatSettings;', '    FC: TFormatSettings;']);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 16,
+    Msg('formatdatetime'), True);
 end;
 
 {$IFNDEF FPC}

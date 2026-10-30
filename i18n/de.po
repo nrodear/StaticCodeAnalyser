@@ -7043,3 +7043,6 @@ msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - 
 
 msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
 msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"
+
+msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
+msgstr "die Klasse %s hat eigene Formateinstellungen %s (Zeile %d) - diese von Hand statt TFormatSettings.Invariant übergeben, das ihre Einstellungen verwürfe"

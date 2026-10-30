@@ -215,6 +215,12 @@ const
   R_FS_DISPLAY = 'line %d shows the result on screen (%s) - there the user '
     + 'locale is the right one; TFormatSettings.Invariant would show decimal '
     + 'point and MM/dd/yyyy';
+  // Alt-Weg (rwE32 Stufe 4, ClassSettingsReason): die Klasse der Methode
+  // traegt ein eigenes TFormatSettings-Feld - %s die Klasse, %s das Feld,
+  // %d seine Zeile.
+  R_FS_CLASS_SETTINGS = 'the class %s carries its own format settings %s '
+    + '(line %d) - pass those by hand instead of TFormatSettings.Invariant, '
+    + 'which would drop what is set there';
   R_FL_NO_SPEC = 'the message does not name the format string - analyse the '
     + 'file again';
   R_FL_NO_FORMAT = 'no Format call on the code columns of the reported line';
@@ -1418,6 +1424,9 @@ const
   // ('Application.MessageBox(PChar(..), ..)').
   TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
   MAX_DISPLAY_TOKENS = 2000;
+  // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
+  PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
+    'formatcurr', 'format');
 
 // Die oeffnende Klammer zur schliessenden AClose (rueckwaerts); leer ohne.
 function OpenerOf(AMap: TRdxCodeMap; const AClose: TRdxToken): TRdxToken;
@@ -1594,6 +1603,110 @@ begin
     end;
     T := P;
   end;
+end;
+
+// ---- Eigene Einstellungen der Klasse (Alt-Weg, rwE32 Stufe 4) ----
+// delphimvcframework TemplatePro.pas:3163/3365: TTProCompiledTemplate traegt
+// das Feld 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
+// einstellbar; Geschwisteraufrufe uebergeben es). Invariant verwuerfe die
+// eingestellte Template-Locale (Monatsnamen bei 'mmmm'). Steht der Aufruf
+// in einer Methode, deren Klasse in der Datei GENAU EIN solches Feld
+// deklariert, sperrt der Alt-Weg mit Hinweis auf das Feld (die Hilfe
+// schreibt es nicht selbst ein - das waere eine andere Bedeutung). Ein Feld
+// heisst: 'Name: TFormatSettings;' auf Klammertiefe 0 im Klassenrumpf
+// (auch 'A, B: ..' und 'class var'), nicht Parameter, Rueckgabetyp oder
+// Property. Mehrere Felder, mehrere Klassenkoepfe gleichen Namens oder
+// eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
+// Literal festlegt ('FormatDateTime(''yyyy-mm-dd hh:nn:ss'', ..)',
+// TemplatePro.pas:3170 - dort schreibt Invariant das gewollte ISO-Format,
+// das Feld setzte dagegen einen eingestellten Zeittrenner ein; Stufe 4: ok).
+
+// Das eine TFormatSettings-Feld des Klassenrumpfs ab AClass ('class'); leer
+// ohne bzw. bei mehreren.
+function SettingsFieldIn(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
+var
+  T, Stop, C, N, B : TRdxToken;
+  Depth, Hits      : Integer;
+begin
+  Result := Default(TRdxToken);
+  Stop := ClassEnd(AMap, AClass);
+  if Stop.Low = '' then Exit;
+  Hits := 0;
+  Depth := 0;
+  T := After(AMap, AClass);
+  while (T.Low <> '') and TokBefore(T, Stop) do
+  begin
+    Depth := Depth + ParenDelta(T);
+    if (Depth = 0) and (T.Low = NAME_SETTINGS_TYPE)
+       and (After(AMap, T).Low = ';') then
+    begin
+      C := Before(AMap, T);
+      N := Before(AMap, C);
+      B := Before(AMap, N);
+      if (C.Low = ':') and N.IsWord and (B.Low <> 'function')
+         and (B.Low <> 'property') then
+      begin
+        // 'FA, FB: TFormatSettings' sind zwei Felder.
+        if B.Low = ',' then
+          Inc(Hits, 2)
+        else
+          Inc(Hits);
+        Result := N;
+      end;
+    end;
+    T := After(AMap, T);
+  end;
+  if Hits <> 1 then
+    Result := Default(TRdxToken);
+end;
+
+// Legt der Aufruf ASite sein Muster als Literal fest (FormatDateTime,
+// FormatFloat, FormatCurr, Format mit Literal als erstem Argument)?
+function FixedPattern(AMap: TRdxCodeMap; const ASite: TCallSite): Boolean;
+var
+  Lit          : string;
+  Li, Co, Upto : Integer;
+begin
+  Result := InList(ASite.Name.Low, PATTERN_WRITERS)
+    and FirstCharAfter(AMap, ASite.Open, Li, Co)
+    and ((Li < ASite.Close.Line)
+         or ((Li = ASite.Close.Line) and (Co < ASite.Close.Col)));
+  if not Result then Exit;
+  Upto := Length(AMap.Raw(Li));
+  if Li = ASite.Close.Line then
+    Upto := ASite.Close.Col - 1;
+  Result := LiteralFirstArg(AMap, Li, Co, Upto, Lit);
+end;
+
+// Der Grund, wenn der erste Aufruf in einer Methode steht, deren Klasse
+// eigene Einstellungen traegt (s. Kopf des Abschnitts); '' sonst.
+function ClassSettingsReason(AMap: TRdxCodeMap;
+  const ASites: TCallSites): string;
+var
+  R      : TRdxRoutine;
+  Heads  : TArray<TRdxToken>;
+  Path   : string;
+  Field  : TRdxToken;
+  i      : Integer;
+  Fixed  : Boolean;
+begin
+  Result := '';
+  Fixed := True;
+  for i := 0 to High(ASites) do
+    Fixed := Fixed and FixedPattern(AMap, ASites[i]);
+  if Fixed
+     or (BeginBodyAround(AMap, ASites[0].Name, R) <> rbfFound)
+     or (Length(R.Parts) < 2) then
+    Exit;
+  // Die Klasse wie im Kopf: der Name ohne sein letztes Glied.
+  Path := Copy(R.Name, 1, LastDelimiter('.', R.Name) - 1);
+  if Path = '' then Exit;
+  Heads := TRdxBlocks.FindClassHeads(AMap, Path);
+  if Length(Heads) <> 1 then Exit;
+  Field := SettingsFieldIn(AMap, Heads[0]);
+  if Field.Low <> '' then
+    Result := _(R_FS_CLASS_SETTINGS, [Path, TokText(AMap, Field),
+      Field.Line]);
 end;
 
 // Der Grund, wenn einer der Aufrufe ASites in eine Anzeige schreibt; ''
@@ -2248,6 +2361,9 @@ begin
   // Gekoppelte Auswertung in derselben Routine (rwE31 Stufe 3).
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Eigene Einstellungen der Klasse (rwE32 Stufe 4, TemplatePro.pas).
+  if (AReason = '') and AInvariant then
+    AReason := ClassSettingsReason(AMap, Sites);
   // Anzeige-Ziel (rwE32 Stufe 4, E6): dort ist die Locale richtig - nach
   // den Gruenden, an denen Verhalten bricht.
   if (AReason = '') and AInvariant then
@@ -2355,6 +2471,9 @@ begin
   // Argumente lesen selbst FormatSettings.TimeSeparator.
   if (AReason = '') and AInvariant then
     AReason := CoupledReason(AMap, Sites);
+  // Eigene Einstellungen der Klasse (rwE32 Stufe 4).
+  if (AReason = '') and AInvariant then
+    AReason := ClassSettingsReason(AMap, Sites);
   // Anzeige-Ziel (rwE32 Stufe 4, E6): async_client MainClientFormU.pas:484
   // 'ListBox1.Items.Add(Format(..))'.
   if (AReason = '') and AInvariant then
