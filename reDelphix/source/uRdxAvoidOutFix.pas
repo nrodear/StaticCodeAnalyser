@@ -1248,6 +1248,18 @@ begin
   end;
 end;
 
+// Traegt einer der Koepfe AHeads keine Parameter (ParamCount = 0)?
+function HasParamlessHead(AMap: TRdxCodeMap;
+  const AHeads: TRdxOutHeads): Boolean;
+var
+  H : TRdxOutHead;
+begin
+  Result := False;
+  for H in AHeads do
+    if ParamCount(AMap, H) = 0 then
+      Exit(True);
+end;
+
 class function TRdxAvoidOutFix.OutToVar(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out APlan: TRdxOutPlan;
   out AReason: string): Boolean;
@@ -1317,11 +1329,18 @@ begin
   // Overloads einer freien Routine: nur die mit ihrer Zahl von Parametern
   // (SameCountHeads, rwE31 Stufe 3).
   OverloadOk := SameCountHeads(AMap, Own, Heads);
-  if UseLine > 0 then
-    AReason := _(R_OUT_REFERENCE, [Name, UseLine])
-  else
+  // Der Name ohne Klammern kann der Aufruf einer Ueberladung ohne
+  // Parameter sein (rwE32 Stufe 4: jvcl dpp_PascalParser.pas:80/417 'p :=
+  // GetToken;' ruft 'function GetToken: PTokenInfo; overload;') - dann
+  // nennt der Grund, was das Paar sperrt (Overload, Sichtbarkeit ...).
+  // Sperrt das Paar nicht, bleibt R_OUT_REFERENCE: ein Methodenzeiger auf
+  // die gemeldete Ueberladung ist nicht ausgeschlossen.
+  AReason := '';
+  if (UseLine = 0) or HasParamlessHead(AMap, Heads) then
     AReason := PairOf(AMap, Heads, Name, Outer, OverloadOk, Decl, Impl,
       HasDecl);
+  if (AReason = '') and (UseLine > 0) then
+    AReason := _(R_OUT_REFERENCE, [Name, UseLine]);
   if AReason <> '' then
     Exit;
   DeclOut := Default(TRdxToken);

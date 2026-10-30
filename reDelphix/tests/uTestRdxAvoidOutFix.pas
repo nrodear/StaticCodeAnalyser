@@ -69,6 +69,9 @@ type
     // der Hinweis nur im Menue nennt "verwaltet oder unbekannt", den Typ
     // und den Namen wie im Text.
     [Test] procedure UnknownType_HintNamesType;
+    // ... Sperrtext dpp_PascalParser.pas:80 (Aufruf der Ueberladung ohne
+    // Parameter ist kein Methodenzeiger).
+    [Test] procedure ParamlessOverloadCall_PairReason;
   end;
 
 {$IFNDEF FPC}
@@ -799,6 +802,26 @@ begin
   Assert.IsTrue(PlanOn(Src, 'procedure Load(', P, R), R);
   Assert.AreEqual(_(R_OUT_NOT_FIRST, ['Head', 'array of Byte', 'Load', 7]),
     P.Caution);
+end;
+
+procedure TTestRdxAvoidOutFix.ParamlessOverloadCall_PairReason;
+var
+  Src : string;
+begin
+  // jvcl dpp_PascalParser.pas:79/80/417 (minimiert): 'p := GetToken;' ruft
+  // die Ueberladung ohne Parameter. Bis dahin R_OUT_REFERENCE ("ohne
+  // Aufruf - Methodenzeiger?"), jetzt der Grund des Paars (vier Koepfe,
+  // Overload). Rot ohne Fix: R_OUT_REFERENCE fuer Zeile 16. Gegenprobe
+  // (LocalOverloads_OtherCount_Helps): sperrt das Paar nicht ('@Flag'),
+  // bleibt R_OUT_REFERENCE.
+  Src := Join(['unit t;', 'interface', 'type', '  TParser = class',
+    '  public', '    function GetToken: Pointer; overload;',
+    '    function GetToken(out p: Pointer): Boolean; overload;', '  end;',
+    'implementation', 'function TParser.GetToken: Pointer;', 'begin',
+    '  Result := nil;', 'end;',
+    'function TParser.GetToken(out p: Pointer): Boolean;', 'begin',
+    '  p := GetToken;', '  Result := p <> nil;', 'end;', 'end.']);
+  AssertRefused(Src, 'function GetToken(out', _(R_OUT_HEADS, [4, 'GetToken']));
 end;
 
 {$IFNDEF FPC}
