@@ -257,7 +257,9 @@ function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
 // interface ...)? Rueckwaerts bis zum Abschnitt interface bzw.
 // implementation der Unit; ohne ihn: ja (unsicher). Bis rwE30 Stufe 2 als
 // InsideType nur in uRdxAvoidOutFix (SCA086); seitdem fragt es auch SCA106
-// (freie Routinen, uRdxMethodNameFix).
+// (freie Routinen, uRdxMethodNameFix). Ein Typkopf doppelt in zwei Zweigen
+// ('{$ifdef X} TFoo = record {$else} TFoo = object {$endif}') zaehlt
+// einmal (TwinTypeHead, Fix-Runde 4 nach rwE32).
 function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
 
 type
@@ -1090,12 +1092,47 @@ begin
     Result := P;
 end;
 
+// Der Name vor der Art AKind eines Typkopfs ('TX = [packed] record');
+// Low = '' ohne.
+function TypeHeadNameOf(AMap: TRdxCodeMap; const AKind: TRdxToken): TRdxToken;
+var
+  E : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  E := Before(AMap, AKind);
+  if E.Low = 'packed' then
+    E := Before(AMap, E);
+  if E.Low <> '=' then
+    Exit;
+  Result := Before(AMap, E);
+  if not Result.IsWord then
+    Result := Default(TRdxToken);
+end;
+
+// Ist AKind die Art des ERSTEN von zwei Koepfen desselben Typs in zwei
+// Zweigen, deren zweiter die Art ANext traegt ('{$ifdef X} TFoo = record
+// {$else} TFoo = object {$endif}', mORMot USERECORDWITHMETHODS)? Direkt
+// hinter AKind beginnt der zweite Kopf mit demselben Namen, dazwischen
+// steht eine Direktive. Beide Arten teilen EIN end (InsideTypeBody).
+function TwinTypeHead(AMap: TRdxCodeMap;
+  const AKind, ANext: TRdxToken): Boolean;
+var
+  N, M : TRdxToken;
+begin
+  N := TypeHeadNameOf(AMap, ANext);
+  M := TypeHeadNameOf(AMap, AKind);
+  Result := (N.Low <> '') and (M.Low = N.Low)
+    and SameTok(After(AMap, AKind), N)
+    and DirectiveBetween(AMap, AKind, N.Line, N.Col);
+end;
+
 function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
 var
-  T, P  : TRdxToken;
-  Depth : Integer;
+  T, P, Closed : TRdxToken;
+  Depth        : Integer;
 begin
   Depth := 0;
+  Closed := Default(TRdxToken);
   T := Before(AMap, AHead);
   while T.Low <> '' do
   begin
@@ -1104,13 +1141,20 @@ begin
     begin
       if T.Low = KW_END then
         Inc(Depth)
-      else if (T.Low = 'record')
+      else if ((T.Low = 'record')
          or (InList(T.Low, CLASS_LIKE) and InList(P.Low, TYPE_HEAD_PREV)
-             and TypeHasBody(AMap, T)) then
+             and TypeHasBody(AMap, T)))
+         // Der erste Kopf eines Zwillings: sein end hat der zweite schon
+         // gezaehlt (rwE32 Stufe 4, SCA086: mORMot
+         // mormot.core.os.security.pas:1425, mormot.net.sock.pas:4744 -
+         // freie Funktionen hinter 'TAceBinaryTree = record {$else}
+         // TAceBinaryTree = object' galten als "in einem Typ").
+         and not ((Closed.Low <> '') and TwinTypeHead(AMap, T, Closed)) then
       begin
         if Depth = 0 then
           Exit(True);
         Dec(Depth);
+        Closed := T;
       end
       else if ((T.Low = 'interface') or (T.Low = 'implementation'))
          and not InList(P.Low, TYPE_HEAD_PREV) then

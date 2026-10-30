@@ -210,6 +210,7 @@ uses
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uRdxText,          // _, MsgNoFileOpen, MsgMovedSuffix, MsgStaleSuffix (E29, C1)
+  uRdxPlacesRunner,  // TRdxPlacesRunner.UsesReason (AppendUses, Fix-Runde 4)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -580,6 +581,9 @@ end;
 // kleinsten Start- bis zur groessten Endzeile; ein Bereich, der in Spalte 1
 // endet (eine Zeile samt Zeilenende, SCA085: die nil-Zeile), reicht nur
 // bis zur Zeile davor. 0 und 0 ohne Ersetzung (PlanUses: Stelle unbekannt).
+// Eine Ersetzung ohne Zeile (StartLine < 1, leerer Span) zaehlt nicht -
+// sie truege sonst 0 als kleinste Zeile ein, und PlanUses fragte ohne
+// Stelle (Review-MINOR Merge e/HilfeFixN, defensiv).
 procedure EditLines(const AEdits: TArray<TRdxEdit>; out AFirst,
   ALast: Integer);
 var
@@ -589,6 +593,8 @@ begin
   ALast := 0;
   for i := 0 to High(AEdits) do
   begin
+    if AEdits[i].Span.StartLine < 1 then
+      Continue;
     Last := AEdits[i].Span.EndLine;
     if (AEdits[i].Span.EndCol <= 1) and (Last > AEdits[i].Span.StartLine) then
       Dec(Last);
@@ -613,9 +619,10 @@ begin
     First, Last);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
-    // Dieselbe msgid wie uRdxRecipeRunner.FormatUsesReason (Format()).
-    AOutcome.Reason := _('%s is missing in uses: %s',
-      [AQualifiedName, Plan.Reason]);
+    // Derselbe Satz wie uRdxPlacesRunner.FormatUsesReason (Format()); nur
+    // bedingt eingebunden: "steht nur unter bedingter Uebersetzung" statt
+    // "fehlt" (Fix-Runde 4 nach rwE32, ClassBrowser.pas:507).
+    AOutcome.Reason := TRdxPlacesRunner.UsesReason(Plan, AQualifiedName);
     AOutcome.Edits := nil;
     Exit(False);
   end;
@@ -1202,7 +1209,7 @@ begin
         Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
           Result.Edits[0], Result.Reason);
     end;
-    if Result.Enabled then
+    if Result.Enabled and not FromText then
       Foreign := TRdxStructFixes.ForeignIdent(Map,
         OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
   finally
@@ -1215,12 +1222,17 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  if (Foreign = '') and FromText then
+  if FromText then
   begin
     // Der Eintrag kam aus dem Text (Zweig, den der Dienst nicht geparst
     // hat): die anderen Units fuer den Bezeichner-Beweis (OtherUnitsIdents)
     // stammen aus dem ANDEREN Zweig - der Beweis ist nicht vollstaendig,
     // nur im Menue (Nico-Entscheid SCA007, Nachzug Review e/HilfeFixM).
+    // Seit Fix-Runde 4 nach rwE32 VOR einem Bezeichner ohne Quelle
+    // (ForeignIdent fragt dann nicht mehr): CEF4Delphi MDIBrowser
+    // uChildForm.pas:10, SimpleServer uSimpleServer.pas:9 u. a. nannten
+    // "TChromium ... kann aus Vcl.ClipBrd kommen" - der Grund ist der
+    // nicht geparste Zweig, nicht diese eine Zuordnung.
     Result.MenuOnly := True;
     Result.Hint := _('not in the light bulb: %s stands in a branch of the '
       + 'uses clause that the IDE did not parse - the other units of that '

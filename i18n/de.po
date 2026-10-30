@@ -3718,8 +3718,8 @@ msgstr "die Meldung nennt keinen Abschnitt"
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
 msgstr "die Methode ist außerhalb der Unit sichtbar (nicht private, Klasse im interface-Teil) - andere Units können sie als Methodenzeiger nutzen"
 
-msgid "not in the light bulb - %s has a managed type and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
-msgstr "nicht in der Glühbirne - %s hat einen verwalteten Typ und wird nicht als erste Anweisung von %s gesetzt (Zeile %d): mit \"var\" kann der alte Wert des Aufrufers stehen bleiben, wo \"out\" ihn leerte"
+msgid "not in the light bulb - %s has a managed type or one the quick fix does not know (%s) and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
+msgstr "nicht in der Glühbirne - %s hat einen verwalteten oder der Hilfe unbekannten Typ (%s) und wird nicht als erste Anweisung von %s gesetzt (Zeile %d): mit \"var\" kann der alte Wert des Aufrufers stehen bleiben, wo \"out\" ihn leerte"
 
 msgid "the name \"%s\" already occurs in the code of the file"
 msgstr "der Name \"%s\" kommt im Code der Datei schon vor"
@@ -6912,6 +6912,9 @@ msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysU
 
 msgid "it stands there only under a compiler condition (line %d); %s"
 msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"
+
+msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"
+msgstr "%s steht in uses nur unter bedingter Übersetzung (Zeile %d), nicht in jedem Zweig um diese Stelle; %s"
 
 msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
 msgstr "Lazarus-/FPC-Datei (%s) - FPC 3.2 kennt kein TFormatSettings.Invariant"

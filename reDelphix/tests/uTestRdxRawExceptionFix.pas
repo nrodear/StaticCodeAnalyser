@@ -90,7 +90,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRaisingRawException,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.CaptionFor
-  uRdxPlacesRunner,      // R_USES_CONDITIONAL (PlanUses)
+  uRdxPlacesRunner,      // R_USES_ONLY_CONDITIONAL (PlanUses)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRawExceptionFix,
@@ -877,8 +877,8 @@ begin
     '  raise Exception.Create(''x'');', 'end;', 'end.']);
   O := PlanFirst(Src, False, S);
   Assert.IsFalse(O.Enabled, 'gesperrt');
-  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils',
-    _(R_USES_CONDITIONAL, [5, MsgByHand])]), O.Reason);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 

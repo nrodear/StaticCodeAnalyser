@@ -185,6 +185,12 @@ type
     // die Zeilen ihrer Ersetzungen mit.
     [Test] procedure PlanUses_RangeMustStayInBranch;
     [Test] procedure Sca168_Raise_SysUtilsInSiteBranch_NoUses;
+    // Fix-Runde 4 nach rwE32 (Dev-Cpp ClassBrowser.pas:507, CEF4Delphi-
+    // Muster): die Unit in JEDEM Zweig eines Blocks mit {$ELSE} ist da;
+    // zwei getrennte Bloecke ohne {$ELSE} beweisen das nicht (Satz "steht
+    // nur unter bedingter Uebersetzung").
+    [Test] procedure PlanUses_EntryInEachElseBranch_Present;
+    [Test] procedure PlanUses_TwoSeparateIfdefs_Refused;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -278,7 +284,7 @@ uses
   uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
   uRdxFixTable,   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
-  uRdxPlacesRunner,      // R_USES_CONDITIONAL (PlanUses)
+  uRdxPlacesRunner,      // R_USES_CONDITIONAL, UsesReason (PlanUses)
   uRdxText,              // _, MsgByHand
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
   uTestRdxTextKit;       // Join, Apply
@@ -1751,8 +1757,6 @@ begin
   Assert.AreEqual('Math', Plan.Name);
 end;
 
-// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
-// in einem bedingten Zweig: die neue Klausel galte nur dort.
 // Fix-Runde 4: eine Hilfe kann ueber mehrere Zeilen schreiben (SCA168.2:
 // das ';' des letzten Arms und das 'end'), und eine Direktive darf mitten
 // in einer Anweisung stehen - die Startzeile allein beweist nichts. Die
@@ -1802,6 +1806,73 @@ begin
     fkDefaultCaseInCaseStatement, True, 1, Detect);
 end;
 
+// Fix-Runde 4 nach rwE32 (Pruefung, kein Fix): SysUtils in beiden Zweigen
+// von '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (CEF4Delphi uChildForm.pas:
+// '{$IFDEF DELPHI16_UP} System.SysUtils, .. {$ELSE} SysUtils, .. {$ENDIF}
+// uCEF..;') - der Baum parst genau einen Zweig und sieht die Unit dort:
+// da, mit und ohne Zeile der Stelle (das hielt schon vor der Runde, der
+// Test haelt es fest). Gegenprobe: der {$ELSE}-Zweig ohne Eintrag -
+// gesperrt, CondLine ist die Zeile des Eintrags. GRENZE (bleibt
+// gesperrt): ein solcher Block in einem Zweig, den der Baum nicht parst.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_EntryInEachElseBranch_Present;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  {$IFDEF RDX_X}',
+    '  System.SysUtils, System.Classes,', '  {$ELSE}', '  SysUtils, Classes,',
+    '  {$ENDIF}', '  Foo;', 'implementation', 'procedure P;', 'begin', 'end;',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 12);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  // Gegenprobe: der {$ELSE}-Zweig traegt keinen Eintrag.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF RDX_X} System.SysUtils, {$ELSE} Classes, {$ENDIF}', '  Foo;',
+    'implementation', 'procedure P;', 'begin', 'end;', 'end.']), 'SysUtils',
+    'System.SysUtils', 8);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [4, MsgByHand]), Plan.Reason);
+  Assert.AreEqual<Integer>(4, Plan.CondLine);
+end;
+
+// rwE32 Stufe 4 (Dev-Cpp ClassBrowser.pas:26/30/507, minimiert; RDX_W/RDX_L
+// statt WIN32/LINUX, die die Ein-Zweig-Sicht nicht setzt): SysUtils unter
+// zwei Bloecken ohne {$ELSE} - es kann keiner gelten, gesperrt wie
+// bisher. Neu ist der Satz fuer den Benutzer: "steht nur unter bedingter
+// Uebersetzung" (R_USES_ONLY_CONDITIONAL) statt "fehlt in uses: ..."
+// (rot ohne Fix: UsesReason und CondLine gab es nicht - Bau-Fehler).
+// Gegenprobe: ohne CondLine bleibt '%s is missing in uses: %s'.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_TwoSeparateIfdefs_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses', '{$IFDEF RDX_W}',
+    '  Windows, Classes, SysUtils;', '{$ENDIF}', '{$IFDEF RDX_L}',
+    '  Classes, SysUtils;', '{$ENDIF}', 'type', '  TFoo = class', '  end;',
+    'implementation', 'procedure P;', 'begin', 'end;', 'end.']), 'SysUtils',
+    'System.SysUtils', 15);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
+  // Dieselben Eintraege in EINER Liste mit zwei Bloecken ohne {$ELSE}.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF RDX_W} Windows, SysUtils, {$ENDIF}',
+    '  {$IFDEF RDX_L} SysUtils, {$ENDIF}', '  Classes;', 'implementation',
+    'end.']), 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual<Integer>(4, Plan.CondLine);
+  // Gegenprobe: ein anderer Grund behaelt "fehlt in uses".
+  Plan.CondLine := 0;
+  Plan.Reason := 'x';
+  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils', 'x']),
+    TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
+end;
+
+// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
+// in einem bedingten Zweig: die neue Klausel galte nur dort.
 procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;

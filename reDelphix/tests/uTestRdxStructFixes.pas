@@ -99,6 +99,9 @@ type
     // Review e/HilfeFixR: der Selektor wandelt eine Zahl in die Aufzaehlung
     // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
     [Test] procedure Sca168_RaiseMenu_CastSelector;
+    // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
+    // WM_APP): auch Messages hat im Detektor keine Liste.
+    [Test] procedure Sca007_ForeignIdent_Messages;
   end;
 
 implementation
@@ -1351,6 +1354,37 @@ begin
   Src := WithTypes(['  TKind = (kA, kB);'], ['  case TItem(P).Kind of',
     '    kA: A;', '    kB: B;', '  end;']);
   Assert.AreEqual('', CaseMenu(Src, 8), 'Feld nach Umwandlung');
+end;
+
+// ---- SCA007, Fix-Runde 4 (rwE32) ----
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_Messages;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // TabbedBrowser uMainForm.pas:7-18/69 (minimiert): WM_APP und TWMMove
+  // kommen aus (Winapi.)Messages. Bis dahin nannte der Hinweis WM_APP
+  // ("kann aus System.Variants kommen") - rot ohne Fix: 'WM_APP'.
+  Src := Join(['unit uMainForm;', 'interface', 'uses',
+    '  Windows, Messages, SysUtils, Variants, Classes;', 'const',
+    '  CEFBROWSER_DESTROYTAB = WM_APP + $101;', 'type',
+    '  TMainForm = class(TObject)', '  private',
+    '    procedure WMMove(var aMessage: TWMMove); message WM_MOVE;', '  end;',
+    'implementation', 'procedure TMainForm.WMMove(var aMessage: TWMMove);',
+    'begin', '  if aMessage.Msg = WM_USER then Exit;', 'end;', 'end.']);
+  Assert.AreEqual('WM_APP', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(6, Li);
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'Messages');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('winapi.messages'), Li),
+    'Winapi.Messages');
+  // Gegenprobe: eine eigene Botschaft einer anderen Unit (keine
+  // Praefix-Regel WM_*) bleibt ohne Quelle.
+  Src := StringReplace(Src, 'WM_APP + $101', 'WM_CEFDESTROY + 1', []);
+  Assert.AreEqual('WM_CEFDESTROY', Foreign(Src,
+    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'eigene Botschaft');
 end;
 
 initialization

@@ -121,6 +121,7 @@ type
     // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte
     // der Units, die der Detektor nie meldet (IsAlwaysNeeded) und fuer die er
     // darum keine Liste fuehrt - SysUtils und Types (auch System.-Namen),
+    // seit Fix-Runde 4 nach rwE32 auch Messages (WM_APP, TWMMove ...),
     // klein; sonst leer. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC
     // 3.2.2 im interface-Teil fuehren (gegen beide Quellen geprueft): steht
     // die Unit in den uses, kommt der Name aus ihr, nicht aus der entfernten.
@@ -350,6 +351,142 @@ const
     'tsmallpoint', 'tpointf', 'trectf', 'rect', 'point', 'bounds', 'ptinrect',
     'intersectrect', 'unionrect', 'offsetrect', 'isrectempty', 'equalrect',
     'centerpoint', 'tduplicates', 'dupignore', 'dupaccept', 'duperror');
+  // Exporte von Messages (AlwaysNeededIdents, Fix-Runde 4 nach rwE32:
+  // CEF4Delphi TabbedBrowser uMainForm.pas:18, TabbedOSRBrowser
+  // uChildForm.pas:20 'WM_APP + $100' - Messages steht in IsAlwaysNeeded,
+  // der Detektor fuehrt keine Liste). Genau die Namen, die Winapi.Messages
+  // von Delphi 13 (Studio 37.0) UND messages von FPC 3.2.2 (rtl/win/wininc/
+  // messages.inc, Teil MESSAGESUNIT) im interface-Teil deklarieren und die
+  // ForeignIdent als Bibliotheks-Bezeichner prueft (LibraryStyle): WM_*,
+  // BM_/BN_/CB_/EM_/LB_.., TMessage, TWM*. Keine Praefix-Regel: ein WM_X
+  // der entfernten Unit (eigene Botschaft) bliebe sonst unbemerkt.
+  MESSAGES_NAMES: array[0..475] of string = (
+    'bm_click', 'bm_getcheck', 'bm_getimage', 'bm_getstate', 'bm_setcheck',
+    'bm_setdontclick', 'bm_setimage', 'bm_setstate', 'bm_setstyle',
+    'bn_clicked', 'bn_dblclk', 'bn_disable', 'bn_doubleclicked', 'bn_hilite',
+    'bn_killfocus', 'bn_paint', 'bn_pushed', 'bn_setfocus', 'bn_unhilite',
+    'bn_unpushed', 'cb_addstring', 'cb_deletestring', 'cb_dir',
+    'cb_findstring', 'cb_findstringexact', 'cb_getcount', 'cb_getcursel',
+    'cb_getdroppedcontrolrect', 'cb_getdroppedstate', 'cb_getdroppedwidth',
+    'cb_geteditsel', 'cb_getextendedui', 'cb_gethorizontalextent',
+    'cb_getitemdata', 'cb_getitemheight', 'cb_getlbtext', 'cb_getlbtextlen',
+    'cb_getlocale', 'cb_gettopindex', 'cb_initstorage', 'cb_insertstring',
+    'cb_limittext', 'cb_resetcontent', 'cb_selectstring', 'cb_setcursel',
+    'cb_setdroppedwidth', 'cb_seteditsel', 'cb_setextendedui',
+    'cb_sethorizontalextent', 'cb_setitemdata', 'cb_setitemheight',
+    'cb_setlocale', 'cb_settopindex', 'cb_showdropdown', 'cbn_closeup',
+    'cbn_dblclk', 'cbn_dropdown', 'cbn_editchange', 'cbn_editupdate',
+    'cbn_errspace', 'cbn_killfocus', 'cbn_selchange', 'cbn_selendcancel',
+    'cbn_selendok', 'cbn_setfocus', 'dm_getdefid', 'dm_reposition',
+    'dm_setdefid', 'em_canundo', 'em_charfrompos', 'em_emptyundobuffer',
+    'em_fmtlines', 'em_getfirstvisibleline', 'em_gethandle',
+    'em_getlimittext', 'em_getline', 'em_getlinecount', 'em_getmargins',
+    'em_getmodify', 'em_getpasswordchar', 'em_getrect', 'em_getsel',
+    'em_getthumb', 'em_getwordbreakproc', 'em_limittext', 'em_linefromchar',
+    'em_lineindex', 'em_linelength', 'em_linescroll', 'em_posfromchar',
+    'em_replacesel', 'em_scroll', 'em_scrollcaret', 'em_sethandle',
+    'em_setlimittext', 'em_setmargins', 'em_setmodify', 'em_setpasswordchar',
+    'em_setreadonly', 'em_setrect', 'em_setrectnp', 'em_setsel',
+    'em_settabstops', 'em_setwordbreakproc', 'em_undo', 'en_change',
+    'en_errspace', 'en_hscroll', 'en_killfocus', 'en_maxtext', 'en_setfocus',
+    'en_update', 'en_vscroll', 'lb_addfile', 'lb_addstring',
+    'lb_deletestring', 'lb_dir', 'lb_findstring', 'lb_findstringexact',
+    'lb_getanchorindex', 'lb_getcaretindex', 'lb_getcount', 'lb_getcursel',
+    'lb_gethorizontalextent', 'lb_getitemdata', 'lb_getitemheight',
+    'lb_getitemrect', 'lb_getlocale', 'lb_getsel', 'lb_getselcount',
+    'lb_getselitems', 'lb_gettext', 'lb_gettextlen', 'lb_gettopindex',
+    'lb_initstorage', 'lb_insertstring', 'lb_itemfrompoint',
+    'lb_resetcontent', 'lb_selectstring', 'lb_selitemrange',
+    'lb_selitemrangeex', 'lb_setanchorindex', 'lb_setcaretindex',
+    'lb_setcolumnwidth', 'lb_setcount', 'lb_setcursel',
+    'lb_sethorizontalextent', 'lb_setitemdata', 'lb_setitemheight',
+    'lb_setlocale', 'lb_setsel', 'lb_settabstops', 'lb_settopindex',
+    'lbn_dblclk', 'lbn_errspace', 'lbn_killfocus', 'lbn_selcancel',
+    'lbn_selchange', 'lbn_setfocus', 'sbm_enable_arrows', 'sbm_getpos',
+    'sbm_getrange', 'sbm_getscrollinfo', 'sbm_setpos', 'sbm_setrange',
+    'sbm_setrangeredraw', 'sbm_setscrollinfo', 'tmessage', 'twmactivate',
+    'twmactivateapp', 'twmcancelmode', 'twmchartoitem', 'twmclose',
+    'twmcommand', 'twmcompareitem', 'twmcontextmenu', 'twmcopy', 'twmcreate',
+    'twmctlcolor', 'twmcut', 'twmdeleteitem', 'twmdestroy',
+    'twmdisplaychange', 'twmdrawitem', 'twmdropfiles', 'twmenable',
+    'twmendsession', 'twmerasebkgnd', 'twmfontchange', 'twmgetdlgcode',
+    'twmgetfont', 'twmgetminmaxinfo', 'twmgettext', 'twmgettextlength',
+    'twmhelp', 'twmhscroll', 'twmiconerasebkgnd', 'twminitdialog',
+    'twminitmenupopup', 'twmkey', 'twmkillfocus', 'twmmdiactivate',
+    'twmmeasureitem', 'twmmenuchar', 'twmmenuselect', 'twmmouse',
+    'twmmouseactivate', 'twmmousewheel', 'twmmove', 'twmnccalcsize',
+    'twmnccreate', 'twmncdestroy', 'twmnchitmessage', 'twmnchittest',
+    'twmncpaint', 'twmnextdlgctl', 'twmnoparams', 'twmnotify', 'twmpaint',
+    'twmparentnotify', 'twmpaste', 'twmprint', 'twmquerydragicon',
+    'twmqueryendsession', 'twmqueryuistate', 'twmscroll', 'twmsetcursor',
+    'twmsetfocus', 'twmsetfont', 'twmsettext', 'twmsettingchange',
+    'twmshowwindow', 'twmsize', 'twmsizeclipboard', 'twmspoolerstatus',
+    'twmstylechange', 'twmsyscolorchange', 'twmsyscommand', 'twmsysdeadchar',
+    'twmsystemerror', 'twmtimechange', 'twmtimer', 'twmuistate', 'twmundo',
+    'twmvscroll', 'twmvscrollclipboard', 'twmwindowposchanged',
+    'twmwindowposchanging', 'twmwindowposmsg', 'twmwininichange',
+    'wm_activate', 'wm_activateapp', 'wm_app', 'wm_appcommand',
+    'wm_askcbformatname', 'wm_canceljournal', 'wm_cancelmode',
+    'wm_capturechanged', 'wm_changecbchain', 'wm_changeuistate', 'wm_char',
+    'wm_chartoitem', 'wm_childactivate', 'wm_clear', 'wm_clipboardupdate',
+    'wm_close', 'wm_command', 'wm_compacting', 'wm_compareitem',
+    'wm_contextmenu', 'wm_copy', 'wm_copydata', 'wm_create', 'wm_ctlcolorbtn',
+    'wm_ctlcolordlg', 'wm_ctlcoloredit', 'wm_ctlcolorlistbox',
+    'wm_ctlcolormsgbox', 'wm_ctlcolorscrollbar', 'wm_ctlcolorstatic',
+    'wm_cut', 'wm_deadchar', 'wm_deleteitem', 'wm_destroy',
+    'wm_destroyclipboard', 'wm_devicechange', 'wm_devmodechange',
+    'wm_displaychange', 'wm_dpichanged', 'wm_drawclipboard', 'wm_drawitem',
+    'wm_dropfiles', 'wm_dwmcolorizationcolorchanged',
+    'wm_dwmcompositionchanged', 'wm_dwmncrenderingchanged',
+    'wm_dwmsendiconiclivepreviewbitmap', 'wm_dwmsendiconicthumbnail',
+    'wm_dwmwindowmaximizedchange', 'wm_enable', 'wm_endsession',
+    'wm_enteridle', 'wm_entermenuloop', 'wm_entersizemove', 'wm_erasebkgnd',
+    'wm_exitmenuloop', 'wm_exitsizemove', 'wm_fontchange', 'wm_gesture',
+    'wm_gesturenotify', 'wm_getdlgcode', 'wm_getfont', 'wm_gethotkey',
+    'wm_geticon', 'wm_getminmaxinfo', 'wm_getobject', 'wm_gettext',
+    'wm_gettextlength', 'wm_gettitlebarinfoex', 'wm_help', 'wm_hotkey',
+    'wm_hscroll', 'wm_hscrollclipboard', 'wm_iconerasebkgnd', 'wm_ime_char',
+    'wm_ime_composition', 'wm_ime_compositionfull', 'wm_ime_control',
+    'wm_ime_endcomposition', 'wm_ime_keydown', 'wm_ime_keyup',
+    'wm_ime_notify', 'wm_ime_request', 'wm_ime_select', 'wm_ime_setcontext',
+    'wm_ime_startcomposition', 'wm_initdialog', 'wm_initmenu',
+    'wm_initmenupopup', 'wm_input', 'wm_input_device_change',
+    'wm_inputlangchange', 'wm_inputlangchangerequest', 'wm_keydown',
+    'wm_keyfirst', 'wm_keylast', 'wm_keyup', 'wm_killfocus',
+    'wm_lbuttondblclk', 'wm_lbuttondown', 'wm_lbuttonup', 'wm_mbuttondblclk',
+    'wm_mbuttondown', 'wm_mbuttonup', 'wm_mdiactivate', 'wm_mdicascade',
+    'wm_mdicreate', 'wm_mdidestroy', 'wm_mdigetactive', 'wm_mdiiconarrange',
+    'wm_mdimaximize', 'wm_mdinext', 'wm_mdirefreshmenu', 'wm_mdirestore',
+    'wm_mdisetmenu', 'wm_mditile', 'wm_measureitem', 'wm_menuchar',
+    'wm_menucommand', 'wm_menudrag', 'wm_menugetobject', 'wm_menurbuttonup',
+    'wm_menuselect', 'wm_mouseactivate', 'wm_mousefirst', 'wm_mousehover',
+    'wm_mousehwheel', 'wm_mouselast', 'wm_mouseleave', 'wm_mousemove',
+    'wm_mousewheel', 'wm_move', 'wm_moving', 'wm_ncactivate', 'wm_nccalcsize',
+    'wm_nccreate', 'wm_ncdestroy', 'wm_nchittest', 'wm_nclbuttondblclk',
+    'wm_nclbuttondown', 'wm_nclbuttonup', 'wm_ncmbuttondblclk',
+    'wm_ncmbuttondown', 'wm_ncmbuttonup', 'wm_ncmousehover',
+    'wm_ncmouseleave', 'wm_ncmousemove', 'wm_ncpaint', 'wm_ncrbuttondblclk',
+    'wm_ncrbuttondown', 'wm_ncrbuttonup', 'wm_ncxbuttondblclk',
+    'wm_ncxbuttondown', 'wm_ncxbuttonup', 'wm_nextdlgctl', 'wm_nextmenu',
+    'wm_notify', 'wm_notifyformat', 'wm_null', 'wm_paint',
+    'wm_paintclipboard', 'wm_painticon', 'wm_palettechanged',
+    'wm_paletteischanging', 'wm_parentnotify', 'wm_paste', 'wm_penwinfirst',
+    'wm_penwinlast', 'wm_power', 'wm_powerbroadcast', 'wm_print',
+    'wm_printclient', 'wm_querydragicon', 'wm_queryendsession',
+    'wm_querynewpalette', 'wm_queryopen', 'wm_queryuistate', 'wm_queuesync',
+    'wm_quit', 'wm_rbuttondblclk', 'wm_rbuttondown', 'wm_rbuttonup',
+    'wm_renderallformats', 'wm_renderformat', 'wm_setcursor', 'wm_setfocus',
+    'wm_setfont', 'wm_sethotkey', 'wm_seticon', 'wm_setredraw', 'wm_settext',
+    'wm_settingchange', 'wm_showwindow', 'wm_size', 'wm_sizeclipboard',
+    'wm_sizing', 'wm_spoolerstatus', 'wm_stylechanged', 'wm_stylechanging',
+    'wm_syschar', 'wm_syscolorchange', 'wm_syscommand', 'wm_sysdeadchar',
+    'wm_syskeydown', 'wm_syskeyup', 'wm_tablet_first', 'wm_tablet_last',
+    'wm_tcard', 'wm_themechanged', 'wm_timechange', 'wm_timer', 'wm_undo',
+    'wm_unichar', 'wm_uninitmenupopup', 'wm_updateuistate', 'wm_user',
+    'wm_userchanged', 'wm_vkeytoitem', 'wm_vscroll', 'wm_vscrollclipboard',
+    'wm_windowposchanged', 'wm_windowposchanging', 'wm_wininichange',
+    'wm_wtssession_change', 'wm_xbuttondblclk', 'wm_xbuttondown',
+    'wm_xbuttonup');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -954,6 +1091,12 @@ begin
     SetLength(Result, Length(TYPES_NAMES));
     for i := 0 to High(TYPES_NAMES) do
       Result[i] := TYPES_NAMES[i];
+  end
+  else if (AUnitLow = 'messages') or (AUnitLow = 'winapi.messages') then
+  begin
+    SetLength(Result, Length(MESSAGES_NAMES));
+    for i := 0 to High(MESSAGES_NAMES) do
+      Result[i] := MESSAGES_NAMES[i];
   end;
 end;
 

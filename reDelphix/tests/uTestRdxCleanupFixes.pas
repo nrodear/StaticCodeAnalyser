@@ -46,6 +46,8 @@ type
     [Test] procedure Sca070_WrappedProse_Refused;
     [Test] procedure Sca070_SeveralComments;
     [Test] procedure Sca070_LastLineOfFile;
+    // Fix-Runde 4 nach rwE32 (Fragwuerdig "leerzeilen-doppelt").
+    [Test] procedure Sca070_BlankLinesAround_OneGoes;
     [Test] procedure Sca070_KindRefusals;
     [Test] procedure Sca070_MarkerRefusals;
     [Test] procedure Sca070_StaleRefusals;
@@ -532,6 +534,44 @@ begin
     '']),
     Fix(ckComment, Join(['unit u;', 'interface', 'implementation', 'end.', '',
       '// X := 1;', '']), 6, OneMsg(1), R), R);
+end;
+
+// rwE32 Stufe 4 (Fragwuerdig "leerzeilen-doppelt", jcl JclStreams.pas:108,
+// x86Defs.pas:46, TestJclStrings.pas:2239/2249): ein Kommentar aus ganzen
+// Zeilen mit je einer Leerzeile davor und dahinter - bis dahin blieben
+// zwei Leerzeilen uebereinander (Gegenprobe: ohne WithBlankBelow liefert
+// der erste Fall den Text mit '', '' zwischen 'end;' und '//===').
+procedure TTestRdxCleanupFixes.Sca070_BlankLinesAround_OneGoes;
+var
+  R : string;
+begin
+  // Das Muster aus JclStreams.pas:106-119 (Fund auf dem 'end;' im '{ }').
+  Assert.AreEqual(InImpl(['type', '  TA = class(TObject)', '  end;', '',
+    '  //=== new stream ideas ===', '', '  TC = class(TA)', '  end;']),
+    Fix(ckComment, InImpl(['type', '  TA = class(TObject)', '  end;', '',
+      '  {', '  TB = class(TA)', '  end;', '  }', '',
+      '  //=== new stream ideas ===', '', '  TC = class(TA)', '  end;']), 10,
+      OneMsg(1), R), R);
+  // '//'-Zeile zwischen zwei Leerzeilen: eine bleibt.
+  Assert.AreEqual(InProc(['  Foo;', '', '  Bar;']),
+    Fix(ckComment, InProc(['  Foo;', '', '  // X := 1;', '', '  Bar;']), 8,
+      OneMsg(3), R), R);
+  // Gegenproben: nur davor bzw. nur dahinter eine Leerzeile - unveraendert.
+  Assert.AreEqual(InProc(['  Foo;', '', '  Bar;']),
+    Fix(ckComment, InProc(['  Foo;', '', '  // X := 1;', '  Bar;']), 8,
+      OneMsg(3), R), R);
+  Assert.AreEqual(InProc(['  Foo;', '', '  Bar;']),
+    Fix(ckComment, InProc(['  Foo;', '  // X := 1;', '', '  Bar;']), 7,
+      OneMsg(3), R), R);
+  // ... Code vor dem Kommentar auf seiner Zeile: nur der Kommentar geht.
+  Assert.AreEqual(InProc(['  Foo;', '', '  Bar;', '', '  Baz;']),
+    Fix(ckComment, InProc(['  Foo;', '', '  Bar; // X := 1;', '', '  Baz;']),
+      8, OneMsg(8), R), R);
+  // ... die Leerzeile dahinter ist die letzte der Datei: sie bleibt.
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'end.', '',
+    '', '']),
+    Fix(ckComment, Join(['unit u;', 'interface', 'implementation', 'end.', '',
+      '// X := 1;', '', '']), 6, OneMsg(1), R), R);
 end;
 
 procedure TTestRdxCleanupFixes.Sca070_KindRefusals;

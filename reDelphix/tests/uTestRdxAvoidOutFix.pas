@@ -65,6 +65,25 @@ type
     [Test] procedure DirectiveAroundSet_MenuOnly;
     [Test] procedure RecordMethod_Helps;
     [Test] procedure LocalOverloads_OtherCount_Helps;
+    // Fix-Runde 4 nach rwE32 (Fragwuerdig SCA086, Kastri DW.EXIF.Win.pas:102):
+    // der Hinweis nur im Menue nennt "verwaltet oder unbekannt", den Typ
+    // und den Namen wie im Text.
+    [Test] procedure UnknownType_HintNamesType;
+    // ... Sperrtext dpp_PascalParser.pas:80 (Aufruf der Ueberladung ohne
+    // Parameter ist kein Methodenzeiger).
+    [Test] procedure ParamlessOverloadCall_PairReason;
+    // ... Sperrtext mormot.core.os.security.pas:1425, mormot.net.sock.pas:
+    // 4744 (freie Funktion hinter einem Typkopf-Zwilling record/object).
+    [Test] procedure TwinTypeHead_FreeRoutineNotInType;
+    // ... nur-menue-unnoetig mormot.crypt.secure.pas:597 (Record derselben
+    // Unit mit Methoden und Typkopf-Zwilling).
+    [Test] procedure TwinRecordWithMethods_SameMeaning;
+    // ... nur-menue-unnoetig JclStringConversions.pas:407 (Alias in der
+    // Unit daneben).
+    [Test] procedure NeighbourAlias_SameMeaning;
+    // Review Gruppe T: ein Typparameter ('TBox<TKey, TValue>') ist kein
+    // gleichnamiger Typ der Datei oder der Unit daneben.
+    [Test] procedure TypeParam_NotPlain;
   end;
 
 {$IFNDEF FPC}
@@ -511,8 +530,8 @@ var
 begin
   Assert.IsTrue(PlanOn(ASource, 'procedure Get(', P, R), R);
   Assert.IsTrue(P.MenuOnly, 'nur im Menue');
-  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['s', 'Get', LineOf(ASource, AAt)]),
-    P.Caution);
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['S', 'string', 'Get',
+    LineOf(ASource, AAt)]), P.Caution);
   Assert.AreEqual(StringReplace(ASource, 'out S', 'var S', [rfReplaceAll]),
     Apply(ASource, P.Edits));
 end;
@@ -764,6 +783,256 @@ begin
     'procedure Flag(out Ch', _(R_OUT_HEADS, [2, 'Flag']));
   AssertRefused(StringReplace(Src, '  Flag(C);', '  Run(@Flag);', []),
     'procedure Flag(out Ch', _(R_OUT_REFERENCE, ['Flag', 23]));
+end;
+
+procedure TTestRdxAvoidOutFix.UnknownType_HintNamesType;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // Kastri DW.EXIF.Win.pas:43/102 (minimiert): PPropertyItem kommt aus einer
+  // anderen Unit (Winapi.GDIPAPI, ein Zeiger) - die Hilfe kennt den Typ
+  // nicht, sie steht gekennzeichnet nur im Menue. Bis dahin hiess der
+  // Hinweis "apropitem hat einen verwalteten Typ" (klein, und verwaltet
+  // ist er nicht); ohne den Fix rot (alte msgid, Name klein).
+  Src := Join(['unit t;', 'interface', 'implementation', 'type',
+    '  TGdip = record',
+    '    class function GetItem(const AId: Integer; out APropItem: '
+    + 'PPropertyItem): Boolean; static;', '  end;',
+    'class function TGdip.GetItem(const AId: Integer; out APropItem: '
+    + 'PPropertyItem): Boolean;', 'begin', '  Result := AId > 0;',
+    '  if Result then', '    APropItem := nil;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'class function GetItem(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'unbekannter Typ, nur im Menue');
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['APropItem', 'PPropertyItem', 'GetItem',
+    12]), P.Caution);
+  // Mehrere Namen und ein Typ aus mehreren Woertern: je Name wie im Text,
+  // der Typ mit Leerzeichen zwischen den Woertern.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'procedure Load(out Head, Body: array of Byte);', 'begin',
+    '  if Ready then', '    Head[0] := 1;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Load(', P, R), R);
+  Assert.AreEqual(_(R_OUT_NOT_FIRST, ['Head', 'array of Byte', 'Load', 7]),
+    P.Caution);
+end;
+
+procedure TTestRdxAvoidOutFix.ParamlessOverloadCall_PairReason;
+var
+  Src : string;
+begin
+  // jvcl dpp_PascalParser.pas:79/80/417 (minimiert): 'p := GetToken;' ruft
+  // die Ueberladung ohne Parameter. Bis dahin R_OUT_REFERENCE ("ohne
+  // Aufruf - Methodenzeiger?"), jetzt der Grund des Paars (vier Koepfe,
+  // Overload). Rot ohne Fix: R_OUT_REFERENCE fuer Zeile 16. Gegenprobe
+  // (LocalOverloads_OtherCount_Helps): sperrt das Paar nicht ('@Flag'),
+  // bleibt R_OUT_REFERENCE.
+  Src := Join(['unit t;', 'interface', 'type', '  TParser = class',
+    '  public', '    function GetToken: Pointer; overload;',
+    '    function GetToken(out p: Pointer): Boolean; overload;', '  end;',
+    'implementation', 'function TParser.GetToken: Pointer;', 'begin',
+    '  Result := nil;', 'end;',
+    'function TParser.GetToken(out p: Pointer): Boolean;', 'begin',
+    '  p := GetToken;', '  Result := p <> nil;', 'end;', 'end.']);
+  AssertRefused(Src, 'function GetToken(out', _(R_OUT_HEADS, [4, 'GetToken']));
+end;
+
+procedure TTestRdxAvoidOutFix.TwinTypeHead_FreeRoutineNotInType;
+var
+  Src : string;
+begin
+  // mORMot mormot.core.os.security.pas:1063/1425 (minimiert): der Typkopf
+  // steht doppelt im {$ifdef} (record bzw. object), beide teilen EIN end.
+  // InsideTypeBody (uRdxBlocks) zaehlte rueckwaerts beide Koepfe - die
+  // freie Funktion dahinter galt als "in einem Typ deklariert"
+  // (R_OUT_IN_TYPE, rot ohne Fix). Jetzt der richtige Grund: im
+  // interface-Teil deklariert.
+  Src := Join(['unit t;', 'interface', 'type', '  {$ifdef USERECORD}',
+    '  TTree = record', '  {$else}', '  TTree = object', '  {$endif}',
+    '  private', '    Count: Integer;', '  end;', '',
+    'function KnownRid(const S: string; out R: Integer): Boolean;',
+    'implementation',
+    'function KnownRid(const S: string; out R: Integer): Boolean;', 'begin',
+    '  R := 0;', '  Result := S <> '''';', 'end;', 'end.']);
+  AssertRefused(Src, 'function KnownRid(', _(R_OUT_INTERFACE, [13]));
+  // Gegenprobe: ein Kopf IM Zwilling (ohne Implementierung hier) steht
+  // weiter in einem Typ.
+  AssertRefused(Join(['unit t;', 'interface', 'implementation', 'type',
+    '  {$ifdef USERECORD}', '  TTree = record', '  {$else}',
+    '  TTree = object', '  {$endif}',
+    '    procedure Load(out R: Integer);', '  end;', 'end.']),
+    'procedure Load(', _(R_OUT_IN_TYPE, ['Load']));
+end;
+
+// Die Unit des Musters mormot.crypt.secure.pas:586-630/4285 (minimiert):
+// TSynHasher mit Typkopf-Zwilling record/object, privaten Feldern einfacher
+// Typen, Methoden, Direktiven und einer Property; AExtra steht als weiteres
+// Mitglied unter private.
+function HasherUnit(const AExtra: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type',
+    '  THashAlgo = (hfMD5, hfSHA1);', '  {$ifdef USERECORD}',
+    '  TSynHasher = record', '  {$else}', '  TSynHasher = object',
+    '  {$endif}', '  private', '    ctxt: array[1..64] of Byte;',
+    '    fAlgo: THashAlgo;', AExtra,
+    '    procedure CopyTo(out aHasher: TSynHasher); {$ifdef FPC} inline; '
+    + '{$endif}', '  public', '    function Init(aAlgo: THashAlgo): Boolean;',
+    '    function Full(aAlgo: THashAlgo; aBuffer: Pointer;',
+    '      aLen: Integer = 0): Integer; overload;',
+    '    property Algo: THashAlgo read fAlgo;', '  end;', 'implementation',
+    'procedure TSynHasher.CopyTo(out aHasher: TSynHasher);', 'begin',
+    '  if fAlgo = hfMD5 then', '    aHasher := Self;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxAvoidOutFix.TwinRecordWithMethods_SameMeaning;
+var
+  Src, R : string;
+  P      : TRdxOutPlan;
+begin
+  // Bis dahin "ahasher hat einen verwalteten Typ" und nur im Menue: der
+  // zweite Kopf zaehlte nicht, der Rumpf des ersten begann mit dem Namen
+  // des zweiten, Methoden und Abschnitte machten den Typ "unbekannt" (rot
+  // ohne Fix: Changes und MenuOnly). Jetzt bedeutungsgleich, Gluehbirne.
+  Src := HasherUnit('    fSize: Integer;');
+  Assert.AreEqual(StringReplace(Src, 'out aHasher', 'var aHasher',
+    [rfReplaceAll]), Fix(Src, 'procedure CopyTo(', P));
+  Assert.IsFalse(P.Changes, 'Felder einfach, Methoden ohne Daten');
+  Assert.IsFalse(P.MenuOnly, 'Gluehbirne');
+  // Gegenproben: ein string-Feld, ein class operator (Initialize macht
+  // den Record verwaltet), class var, ein Vorfahr des object.
+  Src := HasherUnit('    fName: string;');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'string-Feld');
+  Src := HasherUnit('    class operator Initialize(out Dest: TSynHasher);');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'class operator');
+  Src := HasherUnit('    class var Count: Integer;');
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'class var');
+  Src := StringReplace(HasherUnit('    fSize: Integer;'),
+    'TSynHasher = object', 'TSynHasher = object(TBase)', []);
+  Assert.IsTrue(PlanOn(Src, 'procedure CopyTo(', P, R), R);
+  Assert.IsTrue(P.Changes, 'object mit Vorfahr');
+end;
+
+procedure TTestRdxAvoidOutFix.NeighbourAlias_SameMeaning;
+const
+  // JclStringConversions.pas:407-414 (minimiert): '{$IFDEF}' um das Setzen
+  // - verwaltet hiesse das nur im Menue (DirectiveAroundSet_MenuOnly).
+  BODY: array[0..8] of string = ('procedure Flag(out Ch: UCS4);', 'begin',
+    '  {$IFDEF SILENT}', '  Ch := 0;', '  {$ELSE}', '  raise EOops.Create;',
+    '  {$ENDIF}', 'end;', 'end.');
+var
+  Dir, Main, Src, R : string;
+  Map               : TRdxCodeMap;
+  P                 : TRdxOutPlan;
+begin
+  Dir := NewTempDir('rdx_sca086n_');
+  try
+    WriteText(Dir + 'rdxbase.pas', Join(['unit rdxbase;', 'interface',
+      'type', '  PUCS4 = ^UCS4;', '  UCS4 = Cardinal;', '  TText = string;',
+      'implementation', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'implementation', 'uses',
+      '  rdxbase;']) + #13#10 + Join(BODY);
+    Map := NewMap(Src);
+    try
+      // Der Planer allein kennt UCS4 nicht: gekennzeichnet, nur im Menue,
+      // ForeignType fuer den Adapter.
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'Planer: unbekannt');
+      Assert.AreEqual('ucs4', P.ForeignType);
+      // UCS4 = Cardinal in der Unit daneben: bedeutungsgleich, Gluehbirne
+      // (rot ohne Fix: NeighbourPlain fehlte, die Hilfe blieb im Menue).
+      Assert.IsTrue(TRdxAvoidOutFix.NeighbourPlain(Map, Main, P), 'Alias');
+      Assert.IsFalse(P.Changes or P.MenuOnly, 'Cardinal: out wie var');
+      Assert.AreEqual('', P.Caution);
+      // Gegenproben: ohne Datei, ein verwalteter Alias daneben.
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, '', P), 'ohne Datei');
+      Assert.IsTrue(P.MenuOnly, 'ohne Datei: Menue');
+    finally
+      Map.Free;
+    end;
+    Src := StringReplace(Src, 'out Ch: UCS4', 'out Ch: TText', []);
+    Map := NewMap(Src);
+    try
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 6, MessageAt(16), P, R), R);
+      Assert.AreEqual('ttext', P.ForeignType);
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, Main, P),
+        'TText = string');
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'verwaltet: wie bisher');
+    finally
+      Map.Free;
+    end;
+    // ... die Datei deklariert den Typ selbst: kein ForeignType.
+    Map := NewMap(StringReplace(Src, 'implementation', 'type TText = string;'
+      + #13#10'implementation', []));
+    try
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, 7, MessageAt(16), P, R), R);
+      Assert.AreEqual('', P.ForeignType);
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
+end;
+
+// Die Unit mit der generischen Klasse TBox<TKey, TValue> (Methode TryGet
+// mit 'out V: TValue', V nicht zuerst gesetzt); ATypes steht vor ihr im
+// type-Abschnitt, AUses hinter 'implementation'.
+function BoxUnit(const AUses, ATypes: string): string;
+begin
+  Result := Join(['unit main;', 'interface', 'implementation', AUses, 'type',
+    ATypes, '  TBox<TKey, TValue> = class', '  private',
+    '    function TryGet(const K: TKey; out V: TValue): Boolean;', '  end;',
+    'function TBox<TKey, TValue>.TryGet(const K: TKey; out V: TValue): '
+    + 'Boolean;', 'begin', '  Result := False;', '  if Result then',
+    '    V := Default(TValue);', 'end;', 'end.']);
+end;
+
+procedure TTestRdxAvoidOutFix.TypeParam_NotPlain;
+var
+  Dir, Src, R : string;
+  Map         : TRdxCodeMap;
+  P           : TRdxOutPlan;
+  Li          : Integer;
+begin
+  // Review Gruppe T: V hat den Typparameter TValue - 'TBox<string,
+  // string>' macht ihn verwaltet. Ein gleichnamiger einfacher Typ der
+  // Datei (LocalPlainType) bzw. der Unit daneben (NeighbourPlain) gab ihn
+  // als "bedeutungsgleich" in die Gluehbirne (rot ohne TypeParamName:
+  // Changes False bzw. NeighbourPlain True).
+  Src := BoxUnit('', '  TValue = Double;');
+  Assert.IsTrue(PlanOn(Src, 'function TBox<TKey, TValue>.TryGet(', P, R), R);
+  Assert.IsTrue(P.Changes and P.MenuOnly, 'Typparameter, Datei');
+  // Gegenprobe: TValue nur benutzt ('TArray<TValue>'), kein Typparameter -
+  // der einfache Typ der Datei gilt wie bisher.
+  Src := Join(['unit main;', 'interface', 'implementation', 'type',
+    '  TValue = Double;', '  TList = TArray<TValue>;',
+    'procedure Get(out V: TValue);', 'begin', '  V := 0;', 'end;', 'end.']);
+  Assert.IsTrue(PlanOn(Src, 'procedure Get(', P, R), R);
+  Assert.IsFalse(P.Changes, 'benutzt, nicht Typparameter');
+  Dir := NewTempDir('rdx_sca086g_');
+  try
+    WriteText(Dir + 'rdxnb.pas', Join(['unit rdxnb;', 'interface', 'type',
+      '  TValue = Double;', 'implementation', 'end.']));
+    Src := BoxUnit('uses rdxnb;', '');
+    Map := NewMap(Src);
+    try
+      Li := LineOf(Src, 'function TBox<TKey, TValue>.TryGet(');
+      Assert.IsTrue(TRdxAvoidOutFix.OutToVar(Map, Li,
+        MessageAt(Pos('out ', LineText(Src, Li))), P, R), R);
+      Assert.AreEqual('', P.ForeignType, 'Typparameter, kein ForeignType');
+      Assert.IsFalse(TRdxAvoidOutFix.NeighbourPlain(Map, Dir + 'main.pas', P),
+        'Typparameter, Unit daneben');
+      Assert.IsTrue(P.Changes and P.MenuOnly, 'Typparameter: nur im Menue');
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
 end;
 
 {$IFNDEF FPC}

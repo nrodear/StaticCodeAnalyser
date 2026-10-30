@@ -456,8 +456,9 @@ end;
 // Baeume: der Delphi-Parser bricht die Klausel am Glied 'Foo.Abstract' ab
 // (rwE29), der Stub des FPC-Pruefstands sieht eine Klausel nur, wenn die
 // Zeile mit 'uses' beginnt. Gegenprobe: der Zweig endet hinter der
-// Klausel - kein Eintrag, die Fund-Hilfe nennt R_USES_CONDITIONAL mit der
-// Zeile des Eintrags (5).
+// Klausel - kein Eintrag, die Fund-Hilfe nennt R_USES_ONLY_CONDITIONAL mit
+// der Zeile des Eintrags (5; bis Fix-Runde 4 nach rwE32 '%s is missing in
+// uses: ' mit R_USES_CONDITIONAL).
 procedure TTestRdxContextFormat.SysUtilsInChainBranch_Offered;
 const
   BODY = 'procedure P(const Name: string);'#13#10'var'#13#10'  S: string;'
@@ -485,8 +486,8 @@ begin
   Outcome := FindingFormat(Marked);
   Assert.IsFalse(Outcome.Enabled, 'gesperrt');
   Assert.IsTrue(Outcome.FileWide, 'ganze Datei');
-  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils',
-    _(R_USES_CONDITIONAL, [5, MsgByHand])]), Outcome.Reason);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), Outcome.Reason);
 end;
 
 procedure TTestRdxContextFormat.NoPlaces_NoEntry;

@@ -65,6 +65,10 @@ type
     // der Ein-Zweig-Sicht der IDE (DefaultIfdefDefines) und liefert den
     // Eintrag nicht; die Hilfe liest ihn aus dem Text.
     [Test] procedure Sca007_EntryInIncludeBranch_Helps;
+    // Fix-Runde 4 nach rwE32 (CEF4Delphi MDIBrowser uChildForm.pas:10 u. a.):
+    // im nicht geparsten Zweig nennt der Hinweis den Zweig, nicht einen
+    // Bezeichner ohne Quelle ("kann aus Vcl.ClipBrd kommen").
+    [Test] procedure Sca007_IncludeBranch_BranchHint;
   end;
 
 implementation
@@ -995,6 +999,37 @@ begin
   Assert.IsFalse(E.Enabled, 'Bereich ueber die Direktive');
   Assert.IsTrue(Pos(_('comment or directive in the range to be deleted'),
     E.Hint) > 0, E.Hint);
+end;
+
+procedure TTestRdxActionCore.Sca007_IncludeBranch_BranchHint;
+var
+  Src : string;
+  E   : TRdxActionEntry;
+begin
+  // uChildForm.pas:7-24 (minimiert): TChromium (uCEFChromium, keine Liste,
+  // keine Unit daneben) hat keine Quelle. Bis dahin: "die Datei nutzt
+  // TChromium (Zeile 12) ... es kann aus Vcl.ClipBrd kommen" (rot ohne
+  // Fix). Jetzt der Grund des Zweigs - weiter nur im Menue.
+  Src := Join(['unit t;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  System.SysUtils, Vcl.ClipBrd, System.Classes,', '  {$ELSE}',
+    '  SysUtils, ClipBrd, Classes,', '  {$ENDIF}', '  uCEFChromium;', 'type',
+    '  TChildForm = class(TComponent)', '    Chromium1: TChromium;', '  end;',
+    'implementation', 'end.']);
+  E := SimpleEntryOf(Src, 'Vcl.ClipBrd', 5);
+  Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
+  Assert.IsTrue(E.Kind = fakRefactor, 'nur im Menue: ' + E.Hint);
+  Assert.IsTrue(Pos(_('not in the light bulb: %s stands in a branch of the '
+    + 'uses clause that the IDE did not parse - the other units of that '
+    + 'branch are unknown, the identifier proof is incomplete; compile '
+    + 'afterwards; if %s has an initialization section (registration), it '
+    + 'no longer runs', ['Vcl.ClipBrd', 'Vcl.ClipBrd']), E.Hint) > 0, E.Hint);
+  Assert.AreEqual<Integer>(0, Pos('TChromium', E.Hint), E.Hint);
+  // Gegenprobe: 'ClipBrd' im geparsten {$ELSE}-Zweig - der Bezeichner ohne
+  // Quelle haelt die Hilfe wie bisher im Menue und wird genannt.
+  E := SimpleEntryOf(Src, 'ClipBrd', 7);
+  Assert.IsTrue(E.Enabled and E.HasAction, E.Hint);
+  Assert.IsTrue(E.Kind = fakRefactor, 'nur im Menue: ' + E.Hint);
+  Assert.IsTrue(Pos('TChromium', E.Hint) > 0, E.Hint);
 end;
 
 initialization
