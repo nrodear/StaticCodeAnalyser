@@ -779,9 +779,21 @@ begin
     WriteDproj(T.B + 'demo.dproj', '18.0');
     Assert.IsTrue(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, True) <> '',
       'Projekt vor 10.3');
+    WriteDproj(T.B + 'demo.dproj', '20.3');
+    // Review e/HilfeFixS: das Projekt widerlegt eine Versionsweiche in einem
+    // gelesenen Include (Delphi 10.2 baut die Unit dort nicht) ...
+    WriteText(T.C + 'own.inc', '{$IFDEF VER320}{$DEFINE OLD}{$ENDIF}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, StringReplace(KIT_SRC,
+      'mormot.defines.inc', 'own.inc', []), lfFormatInvariant, True),
+      'Versionsweiche im Include');
+    // ... eine FPC-Weiche nicht (FPC 3.2 kennt kein Invariant; bis zum
+    // Review gab das Projekt sie frei).
+    WriteText(T.C + 'own.inc', '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}');
+    AssertNames(ProjectReasonOf(T.U, StringReplace(KIT_SRC,
+      'mormot.defines.inc', 'own.inc', []), lfFormatInvariant, True),
+      ['own.inc']);
     // ... und ein Lazarus-Projekt neben der Unit (FPC 3.2 kennt kein
     // Invariant) sperren weiter.
-    WriteDproj(T.B + 'demo.dproj', '20.3');
     WriteText(T.C + 'demo.lpi', '<CONFIG/>');
     AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfFormatInvariant, True),
       ['demo.lpi']);

@@ -352,8 +352,9 @@ type
     // fuer lfFormatInvariant seit rwE32 Stufe 4 zuerst ein Kit-Include der
     // Unit (KitIncludeReason; widerlegt nur durch ein Programm mit .dproj ab
     // XE bzw. 10.3, das die Unit enthaelt, auch ohne Dateinamen geprueft) -
-    // FileReason und, mit AIncludes (fuer lfFormatInvariant nur ohne ein
-    // solches Projekt) bzw. seit dem Nico-Entscheid M1b fuer
+    // FileReason und, mit AIncludes (fuer lfFormatInvariant mit einem
+    // solchen Projekt nur FPC-Weichen gelesener Includes, Review
+    // e/HilfeFixS) bzw. seit dem Nico-Entscheid M1b fuer
     // lfFormatSettingsVar ohne Projekt der Unit ab XE, IncludeReason
     // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
     // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
@@ -2258,6 +2259,48 @@ begin
     Result := _(R_KIT_OLD_VAR, [Kit, Li]);
 end;
 
+// Die Pruefung eines Includes fuer den Alt-Weg bei einem Projekt der Unit ab
+// 10.3 (TRdxIncludeTest, FpcIncludeReason): nur eine FPC-Weiche - '' oder
+// der Grund (derselbe wie in CompilerInInclude).
+function FpcInInclude(const AFile: string; ALines: TStrings;
+  AMap: TRdxCodeMap; const AArg: string): string;
+var
+  Li : Integer;
+begin
+  Result := '';
+  for Li := 0 to ALines.Count - 1 do
+    if LineLooksFpcAware(ALines[Li]) then
+      Exit(_(R_INC_FPC[lfFormatInvariant], [AFile, Li + 1]));
+end;
+
+// Alt-Weg SCA128.2/SCA059.2 mit einem Programm der Unit ab 10.3
+// (ModernProjectProof, Review e/HilfeFixS): das Projekt widerlegt die
+// Versionsweichen der Includes und ein nicht gefundenes Include, aber keine
+// FPC-Weiche in einem gelesenen - FPC 3.2 kennt TFormatSettings.Invariant in
+// keiner Version, und ein FPC-Projekt ausserhalb des Fensters (oder ohne
+// Projektdatei) sieht FileReason nicht. Die Weiche in der Datei selbst
+// sperrt der Planer ebenso ohne Blick aufs Projekt (R_FS_FPC). Bis zum
+// Review gab das Projekt eine Bibliotheks-Unit frei, deren '{$I lib.inc}'
+// '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}' traegt. Mit Cache (GDiskCache, Art
+// 'J').
+function FpcIncludeReason(const AFileName: string; AMap: TRdxCodeMap): string;
+var
+  Check : TRdxIncludeCheck;
+  Key   : string;
+begin
+  if GDiskCache <> nil then
+  begin
+    Key := DiskKey('J', lfFormatInvariant, AFileName, IntToStr(AMap.Serial));
+    if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  end;
+  Check.Test := FpcInInclude;
+  Check.Arg := '';
+  Check.MissingFmt := '';
+  Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
 
 // Der Ausgang von DirFloorVerdict: keine .dpk mit der Unit, nur solche ab
 // der Schwelle, mindestens eine alte bzw. unbekannte (oder der Deckel ist
@@ -2453,7 +2496,8 @@ begin
   // erst ab XE.
   // Alt-Weg (rwE32 Stufe 4, gleiche Belegpruefung wie der Hauptweg): baut
   // ein Programm mit .dproj ab 10.3 die Unit (Modern), liest er die Includes
-  // nicht - ihre Weichen gelten anderen Compilern als diesem Projekt; ein
+  // nur auf FPC-Weichen (unten) - ihre Versionsweichen gelten anderen
+  // Delphi-Compilern als diesem Projekt; ein
   // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
   // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
   // (mormot.defines.inc liegt nicht neben api.impl.pas).
@@ -2474,6 +2518,16 @@ begin
     // Definition.Inc, nur in Packages\Delphi\Delphi 10.4+\PythonFmx.dpk).
     if (Result <> '') and (AFeature = lfFormatInvariant) and Proof.NoFpc
        and PackageFloorProof(AFileName, AFeature) then
+      Result := '';
+  end;
+  // ... eine FPC-Weiche in einem gelesenen Include aber schon (Review
+  // e/HilfeFixS, FpcIncludeReason) - ausser die Datei schliesst FPC aus
+  // (Proof.NoFpc) oder ein Paket der Unit nutzt Invariant (wie oben).
+  if (Result = '') and AIncludes and (AFeature = lfFormatInvariant)
+     and Modern and not Proof.NoFpc then
+  begin
+    Result := FpcIncludeReason(AFileName, AMap);
+    if (Result <> '') and PackageInvariantProof(AFileName) then
       Result := '';
   end;
 end;
