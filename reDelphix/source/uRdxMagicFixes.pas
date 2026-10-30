@@ -448,6 +448,14 @@ const
   // nennt seine Dateien so ('<Filename Value="Zip.dpr"/>', klein) ...
   LPI_EXTENSION = '.lpi';
   LPI_FILE_TAG = '<filename value="';
+  // ... und der Unit-Suchpfad einer .lpi (LpiCoversDir, rwE33 Stufe 5;
+  // IncludeFiles, UnitOutputDirectory, ObjectPath, Libraries zaehlen nicht).
+  LPI_UNIT_PATH_TAG = '<otherunitfiles value="';
+  // Weitere Spuren von Delphi bzw. C++Builder im Fenster, die nur
+  // FpcOnlyProjectProof liest (Review e/HilfeFixX): Projektgruppen und
+  // C++Builder-Projekte bzw. -Pakete.
+  DELPHI_HINT_EXTENSIONS: array[0..3] of string = ('.groupproj', '.bdsgroup',
+    '.cbproj', '.bpk');
   // ... und Units, die nur FPC bzw. Lazarus mitbringen (klein).
   FPC_ONLY_UNITS: array[0..7] of string = ('fpcadds', 'cmem', 'cthreads',
     'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
@@ -1237,7 +1245,8 @@ type
   //            (FpcOnlyProgram: Hauptdatei einer .lpi, FPC-only-Units);
   //   Programs die .dpr des Verzeichnisses (SettingsProgramReason).
   // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein),
-  // LazProjects die .lpi (FpcOnlyProgram).
+  // LazProjects die .lpi (FpcOnlyProgram), DelphiHint die erste Datei aus
+  // DELPHI_HINT_EXTENSIONS (FpcOnlyProjectProof).
   TRdxProjectFiles = record
     Lazarus    : string;
     Legacy     : string;
@@ -1250,6 +1259,7 @@ type
     Opts       : TArray<string>;
     DprojBases : TArray<string>;
     LazProjects: TArray<string>;
+    DelphiHint : string;
   end;
 
 // Die ersten DPROJ_HEAD_BYTES der Datei APath als ANSI-Text; False, wenn
@@ -1322,6 +1332,8 @@ begin
     AddText(AFiles.DprojBases, LowerCase(ChangeFileExt(AName, '')));
   if Ext = LPI_EXTENSION then
     AddText(AFiles.LazProjects, AName);
+  if InList(Ext, DELPHI_HINT_EXTENSIONS) and (AFiles.DelphiHint = '') then
+    AFiles.DelphiHint := AName;
   if InList(Ext, LAZARUS_EXTENSIONS) then
   begin
     if AFiles.Lazarus = '' then
@@ -2324,16 +2336,54 @@ begin
   end;
 end;
 
-// Sucht die .lpi ALpi in ADir die Units im Verzeichnis AUnitDir? Ja, wenn es
-// ADir selbst ist (dort sucht Lazarus immer) oder der Weg von ADir dorthin
-// ('fparchive', mit '/' oder '\') als Eintrag einer Liste in der .lpi steht
-// - zwischen '"' bzw. ';' ('<OtherUnitFiles Value="fparchive;../sdk"/>').
-function LpiCoversDir(const ADir, ALpi, AUnitDir: string): Boolean;
-const
-  OPENERS: array[0..1] of string = ('"', ';');
-  CLOSERS: array[0..3] of string = ('"', ';', '/"', '/;');
+// Die Werte des Attributs hinter ATag in ALowText ('<otherunitfiles
+// value="a;b"' -> 'a;b'), je bis zum '"'.
+function TagValues(const ALowText, ATag: string): TArray<string>;
 var
-  Base, UnitBase, Rel, Text, O, C : string;
+  Rest : string;
+  P, Q : Integer;
+begin
+  Result := nil;
+  Rest := ALowText;
+  P := Pos(ATag, Rest);
+  while P > 0 do
+  begin
+    Rest := Copy(Rest, P + Length(ATag), MaxInt);
+    Q := Pos('"', Rest);
+    if Q = 0 then Break;
+    AddText(Result, Copy(Rest, 1, Q - 1));
+    Rest := Copy(Rest, Q + 1, MaxInt);
+    P := Pos(ATag, Rest);
+  end;
+end;
+
+// Ein Pfad aus einer .lpi (klein, '/') ohne fuehrendes './' bzw.
+// '$(projpath)/' und ohne '/' am Ende.
+function LpiPath(const AEntry: string): string;
+const
+  PROJ_PATH = '$(projpath)/';
+begin
+  Result := Trim(AEntry);
+  if Copy(Result, 1, Length(PROJ_PATH)) = PROJ_PATH then
+    Delete(Result, 1, Length(PROJ_PATH));
+  if Copy(Result, 1, 2) = './' then
+    Delete(Result, 1, 2);
+  while (Result <> '') and (Result[Length(Result)] = '/') do
+    Delete(Result, Length(Result), 1);
+end;
+
+// Sucht die .lpi ALpi in ADir die Units im Verzeichnis AUnitDir? Ja, wenn es
+// ADir selbst ist (dort sucht Lazarus immer), wenn ein Eintrag des
+// Unit-Suchpfads dorthin fuehrt ('<OtherUnitFiles Value="fparchive;../sdk"/>')
+// oder die Units-Liste eine Datei dort nennt ('<Filename
+// Value="fparchive/abzipprc.pas"/>'). Andere Pfade der .lpi - IncludeFiles,
+// UnitOutputDirectory, ObjectPath, Libraries - zaehlen nicht (Review
+// e/HilfeFixX: 'UnitOutputDirectory="lib"' macht eine Unit in lib\ nicht
+// zum Teil des Projekts).
+function LpiCoversDir(const ADir, ALpi, AUnitDir: string): Boolean;
+var
+  Base, UnitBase, Rel, Text, Value, Entry : string;
+  P                                       : Integer;
 begin
   Result := False;
   Base := IncludeTrailingPathDelimiter(ADir);
@@ -2346,18 +2396,35 @@ begin
   Rel := StringReplace(Rel, '\', '/', [rfReplaceAll]);
   if (Rel = '') or not HeadText(Base + ALpi, Text) then Exit;
   Text := StringReplace(LowerCase(Text), '\', '/', [rfReplaceAll]);
-  for O in OPENERS do
-    for C in CLOSERS do
-      if Pos(O + Rel + C, Text) > 0 then
+  for Value in TagValues(Text, LPI_UNIT_PATH_TAG) do
+  begin
+    Entry := Value + ';';
+    P := Pos(';', Entry);
+    while P > 0 do
+    begin
+      if LpiPath(Copy(Entry, 1, P - 1)) = Rel then
         Exit(True);
+      Entry := Copy(Entry, P + 1, MaxInt);
+      P := Pos(';', Entry);
+    end;
+  end;
+  for Value in TagValues(Text, LPI_FILE_TAG) do
+  begin
+    Entry := LpiPath(Value);
+    P := LastDelimiter('/', Entry);
+    if (P > 0) and (LpiPath(Copy(Entry, 1, P - 1)) = Rel) then
+      Exit(True);
+  end;
 end;
 
 // Ausnahmeklassen (lfExceptionClasses, rwE33 Stufe 5): baut nur FPC die
 // Unit? Im Fenster von ProjectWalkReason (Verzeichnis der Unit und bis
 // PROJECT_LEVELS darueber) sucht eine .lpi die Unit (LpiCoversDir), und
 // nichts deutet auf Delphi: keine .dproj, keine alte Projekt- oder
-// Optionsdatei (.dof/.bdsproj/.bpr/.bpg/.cfg), keine .dpk, kein Paketordner
-// (PACKAGE_DIRS, wie PackagesReason) und jede .dpr ist ein FPC-Programm
+// Optionsdatei (.dof/.bdsproj/.bpr/.bpg/.cfg), keine Projektgruppe oder
+// C++Builder-Datei (.groupproj/.bdsgroup/.cbproj/.bpk, Review
+// e/HilfeFixX), keine .dpk, kein Paketordner (PACKAGE_DIRS, wie
+// PackagesReason) und jede .dpr ist ein FPC-Programm
 // (FpcOnlyProgram). Dann belegt die Delphi-Weiche eines Includes keinen
 // Compiler, der die Unit baut (Nico-Entscheid: ein FPC-only-Projekt ist kein
 // Beleg fuer ein altes Delphi - und ein altes Delphi baut es nicht); FPC
@@ -2394,7 +2461,7 @@ begin
     Files := ProjectFilesIn(Dir, FloorOf(lfExceptionClasses).ProjectVersion);
     // Bases zaehlt jede .dpr und .dpk, Programs nur die .dpr.
     Delphi := (Files.Dproj <> '') or (Files.Legacy <> '')
-      or (Length(Files.Opts) > 0)
+      or (Files.DelphiHint <> '') or (Length(Files.Opts) > 0)
       or (Length(Files.Bases) > Length(Files.Programs));
     for i := 0 to High(PACKAGE_DIRS) do
       Delphi := Delphi

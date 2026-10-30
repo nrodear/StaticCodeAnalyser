@@ -60,6 +60,7 @@ type
     [Test] procedure Traces_FpcVerSymbols;
     // ---- Realworld-Test rwE33 Stufe 5 ----
     [Test] procedure Disk_ExceptionClasses_FpcOnlyProjectRefutes;
+    [Test] procedure Disk_FpcOnlyProject_UnitSearchPathOnly;
     [Test] procedure Traces_NameOldBranchFirst;
     [Test] procedure Traces_PrefixedCompilerSymbols;
   end;
@@ -1389,6 +1390,67 @@ begin
     // 7) - ausserhalb des Fensters. Bis dahin: '' (rot).
     AssertNames(ProjectReasonOf(T.U, SRC_KIT, lfExceptionClasses, True),
       ['cnpack.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_FpcOnlyProject_UnitSearchPathOnly;
+const
+  SRC = 'unit u;' + #13#10 + '{$I AbDefine.inc}' + #13#10 + 'interface'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  INC = '{$IF CompilerVersion < 15}' + #13#10 + '  {$DEFINE OLD}' + #13#10
+    + '{$IFEND}';
+  // Der Unit-Suchpfad (%s) und weitere Pfade bzw. Dateien der .lpi (%s).
+  LPI_FMT = '<CONFIG>' + #13#10 + '  <CompilerOptions>' + #13#10
+    + '    <SearchPaths>' + #13#10 + '      <OtherUnitFiles Value="%s"/>'
+    + #13#10 + '%s' + '    </SearchPaths>' + #13#10 + '  </CompilerOptions>'
+    + #13#10 + '  <Units>' + #13#10 + '    <Unit>' + #13#10
+    + '      <Filename Value="Zip.dpr"/>' + #13#10 + '    </Unit>' + #13#10
+    + '%s' + '  </Units>' + #13#10 + '</CONFIG>';
+  DPR_SRC = 'library Zip;' + #13#10 + 'uses' + #13#10 + '  FPCAdds,' + #13#10
+    + '  SysUtils;' + #13#10 + 'begin' + #13#10 + 'end.';
+var
+  T : TTree;
+begin
+  // Review e/HilfeFixX: LpiCoversDir las jeden Pfad der .lpi - auch
+  // UnitOutputDirectory="lib" bzw. IncludeFiles machten eine Unit in lib\
+  // bzw. inc\ zum Teil des FPC-Projekts. Nur der Unit-Suchpfad
+  // (OtherUnitFiles) und die Units-Liste zaehlen. Bis dahin: '' (rot).
+  T := NewTree;
+  try
+    WriteText(T.C + 'AbDefine.inc', INC);
+    WriteText(T.B + 'Zip.dpr', DPR_SRC);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk',
+      '      <UnitOutputDirectory Value="c"/>' + #13#10, '']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk',
+      '      <IncludeFiles Value="$(ProjOutDir);c"/>' + #13#10, '']));
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    // Die Units-Liste nennt eine Datei dort - die Unit gehoert dazu.
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk', '',
+      '    <Unit>' + #13#10 + '      <Filename Value="c/u.pas"/>' + #13#10
+      + '    </Unit>' + #13#10]));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Units-Liste');
+    WriteText(T.B + 'Zip.lpi', Format(LPI_FMT, ['../sdk;$(ProjPath)/c', '',
+      '']));
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'Suchpfad mit $(ProjPath)');
+    // Gegenproben: eine Projektgruppe bzw. ein C++Builder-Projekt im
+    // Fenster deutet auf Delphi (Review e/HilfeFixX).
+    WriteText(T.A + 'All.groupproj', '<Project/>');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.A + 'All.groupproj');
+    WriteText(T.C + 'Zip.cbproj', '<Project/>');
+    AssertNames(ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      ['AbDefine.inc']);
+    DeleteFile(T.C + 'Zip.cbproj');
+    Assert.AreEqual('', ProjectReasonOf(T.U, SRC, lfExceptionClasses, True),
+      'wieder nur FPC');
   finally
     RemoveTree(T.Root);
   end;
