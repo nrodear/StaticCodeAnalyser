@@ -1570,6 +1570,33 @@ begin
     + ' FFormatSettings);');
   AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
     ['TTpl', 'FFormatSettings', 8]), True);
+  // Review e/HilfeFixV: der Grund faellt nur mit Beweis weg - eine Kopie
+  // des Feldes, eine eigene Routine, ein with oder ein Member fuer
+  // Datum/Uhrzeit koennen dem Datum dienen; der Grund bleibt (bis dahin
+  // bot der Alt-Weg hier Invariant an).
+  Src := ClassUnit([FIELD], '  L := FFormatSettings;' + CRLF
+    + '  Result := DateToStr(d, L);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := MyDateText(d, FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  with FFormatSettings do' + CRLF
+    + '    Result := ShortDateFormat;');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  FFormatSettings.ShortDateFormat := '
+    + '''yyyy-mm-dd'';');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  // HeidiSQL main.pas:1420: die Property gibt das Feld nach aussen, die
+  // Datei selbst liest damit nur Zahlen - kein Grund der Klasse.
+  Src := ClassUnit([FIELD, '    property FormatSettings: TFormatSettings '
+    + 'read FFormatSettings;'], '  FFormatSettings := '
+    + 'TFormatSettings.Create(''en-US'');' + CRLF
+    + '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 16,
+    Msg('formatdatetime'), True);
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledViaList_NoHelp;

@@ -220,9 +220,9 @@ const
     + 'locale is the right one; TFormatSettings.Invariant would show decimal '
     + 'point and MM/dd/yyyy';
   // Alt-Weg (rwE32 Stufe 4, ClassSettingsReason): die Klasse der Methode
-  // traegt ein eigenes TFormatSettings-Feld, das sie fuer Aufrufe derselben
-  // Familie uebergibt (seit rwE33 Stufe 5) - %s die Klasse, %s das Feld, %d
-  // seine Zeile.
+  // traegt ein eigenes TFormatSettings-Feld, das Aufrufen derselben Familie
+  // dienen kann (seit rwE33 Stufe 5) - %s die Klasse, %s das Feld, %d seine
+  // Zeile.
   R_FS_CLASS_SETTINGS = 'the class %s carries its own format settings %s '
     + '(line %d) - pass those by hand instead of TFormatSettings.Invariant, '
     + 'which would drop what is set there';
@@ -1682,8 +1682,14 @@ const
   // Typumwandlungen, durch die der Text unveraendert geht
   // ('Application.MessageBox(PChar(..), ..)').
   TEXT_CASTS: array[0..2] of string = ('pchar', 'pwidechar', 'string');
-  // 'Self.FFS' als Argument (FieldUsedForFamily).
-  NAME_SELF = 'self';
+  // Was an einer Nennung des Feldes der Familie nichts traegt
+  // (FieldUsedForFamily): 'property P: TFormatSettings read F write F' ...
+  PROPERTY_ACCESS: array[0..1] of string = ('read', 'write');
+  // ... und bei Aufrufen nur der Familie Datum/Uhrzeit die Member fuer
+  // Zahlen ('F.DecimalSeparator', HeidiSQL main.pas:10686).
+  NUMBER_MEMBERS: array[0..5] of string = ('decimalseparator',
+    'thousandseparator', 'currencystring', 'currencyformat', 'negcurrformat',
+    'currencydecimals');
   // Was ein Muster als erstes Argument nimmt (ClassSettingsReason).
   PATTERN_WRITERS: array[0..3] of string = ('formatdatetime', 'formatfloat',
     'formatcurr', 'format');
@@ -1905,10 +1911,10 @@ end;
 // schreibt es nicht selbst ein - das waere eine andere Bedeutung). Ein Feld
 // heisst: 'Name: TFormatSettings;' auf Klammertiefe 0 im Klassenrumpf
 // (auch 'A, B: ..' und 'class var'), nicht Parameter, Rueckgabetyp oder
-// Property. Seit rwE33 Stufe 5 nur, wenn eine Methode der Klasse das Feld
-// an einen Aufruf derselben Familie uebergibt (FieldUsedForFamily; HeidiSQL
-// main.pas:4415 - ein Feld nur fuer Zahlen ist kein Rat fuer DateTimeToStr,
-// dort greift der naechste Grund). Mehrere Felder, mehrere Klassenkoepfe
+// Property. Seit rwE33 Stufe 5 nicht, wenn die Datei belegt, dass das Feld
+// nur der anderen Familie dient (FieldUsedForFamily; HeidiSQL main.pas:4415
+// - ein Feld nur fuer Zahlen ist kein Rat fuer DateTimeToStr, dort greift
+// der naechste Grund). Mehrere Felder, mehrere Klassenkoepfe
 // gleichen Namens oder eine freie Routine: wie bisher. Ebenso, wenn jeder Aufruf sein Muster als
 // Literal festlegt ('FormatDateTime(''yyyy-mm-dd hh:nn:ss'', ..)',
 // TemplatePro.pas:3170 - dort schreibt Invariant das gewollte ISO-Format,
@@ -2019,23 +2025,32 @@ begin
   end;
 end;
 
-// Uebergibt eine Methode der Klasse APath das Feld AField als ganzes
-// Argument an einen Aufruf derselben Familie wie die Aufrufe ASites
-// ('DateToStr(d, fLocaleFormatSettings)', auch 'Self.FFS')? Seit rwE33
-// Stufe 5 Bedingung des Grundes (HeidiSQL main.pas:4415/5674/11246/11252/
-// 14718: TMainForm.FFormatSettings = TFormatSettings.Create('en-US') liest
-// nur Zahlen - 'StrToFloat(.., FFormatSettings)' -, die Aufrufe dort
-// schreiben Datum/Uhrzeit; der Rat, das Feld zu uebergeben, braeche sie wie
-// Invariant).
+// Kann das Feld AField der Klasse APath Aufrufen derselben Familie wie die
+// Aufrufe ASites dienen? Seit rwE33 Stufe 5 Bedingung des Grundes (HeidiSQL
+// main.pas:4415/5674/11246/11252/14718: TMainForm.FFormatSettings =
+// TFormatSettings.Create('en-US') liest in der Datei nur Zahlen -
+// 'StrToFloat(.., FFormatSettings)', 'FFormatSettings.DecimalSeparator' -,
+// die Aufrufe dort schreiben Datum/Uhrzeit; der Rat, das Feld zu
+// uebergeben, braeche sie wie Invariant). Der Grund faellt nur mit Beweis
+// weg (Review e/HilfeFixV - bis dahin zaehlte nur 'DateToStr(d, F)' in
+// einer Methode der Klasse, und eine Kopie 'L := F', eine eigene Routine
+// 'Fmt(d, F)' oder eine eingebettete Routine gaben Invariant frei): JEDE
+// Nennung des Feldes in der Datei (auch 'Self.F', 'X.F') muss etwas sein,
+// das der Familie nichts traegt - eine Deklaration ('F: Typ'), Ziel einer
+// Zuweisung ('F := ..'), Klausel einer Property ('read F'), bei Aufrufen
+// nur der Familie Datum/Uhrzeit ein Member fuer Zahlen
+// ('F.DecimalSeparator') oder ganzes Argument einer RTL-Routine der
+// ANDEREN Familie ('StrToFloat(.., F)'). Nennungen in Methoden einer
+// anderen Klasse zaehlen nicht (dort ist es deren Feld).
 function FieldUsedForFamily(AMap: TRdxCodeMap; const AField: TRdxToken;
   const APath: string; const ASites: TCallSites): Boolean;
 var
   WantDate, WantNum : Boolean;
   Li, i             : Integer;
-  T, P, Call        : TRdxToken;
+  T, N, Call        : TRdxToken;
   R                 : TRdxRoutine;
 begin
-  Result := False;
+  Result := True;
   FamiliesOf(ASites, WantDate, WantNum);
   for i := 0 to High(ASites) do
     WantNum := WantNum or InList(ASites[i].Name.Low, FORMAT_FUNCS);
@@ -2046,23 +2061,33 @@ begin
     T := NextToken(AMap, Li, 1);
     while (T.Low <> '') and (T.Line = Li) do
     begin
-      P := Before(AMap, T);
-      if T.IsWord and (T.Low = AField.Low)
-         and ((P.Low <> '.') or (Before(AMap, P).Low = NAME_SELF)) then
+      if T.IsWord and (T.Low = AField.Low) and not SameTok(T, AField)
+         and not ((BeginBodyAround(AMap, T, R) = rbfFound)
+                  and (Length(R.Parts) >= 2)
+                  and not SameText(Copy(R.Name, 1,
+                    LastDelimiter('.', R.Name) - 1), APath)) then
       begin
-        if P.Low = '.' then
-          Call := CallAroundArg(AMap, Before(AMap, P), T)
-        else
-          Call := CallAroundArg(AMap, T, T);
-        if Call.IsWord and FamilyCall(Call.Low, WantDate, WantNum)
-           and (BeginBodyAround(AMap, Call, R) = rbfFound)
-           and SameText(Copy(R.Name, 1, LastDelimiter('.', R.Name) - 1),
-             APath) then
-          Exit(True);
+        N := After(AMap, T);
+        if N.Low = '.' then
+        begin
+          // Ein Member: nur einer fuer Zahlen bei Datum/Uhrzeit traegt nichts.
+          if not (WantDate and not WantNum
+                  and InList(After(AMap, N).Low, NUMBER_MEMBERS)) then
+            Exit;
+        end
+        else if not ((N.Low = ':') or (N.Low = ':=')
+                     or InList(Before(AMap, T).Low, PROPERTY_ACCESS)) then
+        begin
+          Call := CallAroundArg(AMap, ChainStart(AMap, T), T);
+          if not Call.IsWord or FamilyCall(Call.Low, WantDate, WantNum)
+             or not FamilyCall(Call.Low, True, True) then
+            Exit;
+        end;
       end;
       T := After(AMap, T);
     end;
   end;
+  Result := False;
 end;
 
 // Der Grund, wenn der erste Aufruf in einer Methode steht, deren Klasse
