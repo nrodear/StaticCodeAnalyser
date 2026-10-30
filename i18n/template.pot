@@ -311,7 +311,7 @@ msgstr ""
 msgid "%d / %d findings"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:585
+#: reDelphix/source/uRdxPlacesRunner.pas:586
 msgid "%d according to the compiler (%s)"
 msgstr ""
 
@@ -465,11 +465,11 @@ msgstr ""
 msgid "%d self-assignments of %s"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:590
+#: reDelphix/source/uRdxPlacesRunner.pas:591
 msgid "%d terms behind %s, %s"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:588
+#: reDelphix/source/uRdxPlacesRunner.pas:589
 msgid "%d terms, %s"
 msgstr ""
 
@@ -753,7 +753,7 @@ msgid "%s is in the published or default section of %s - a form file may bind it
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:615
-#: reDelphix/source/uRdxPlacesRunner.pas:672
+#: reDelphix/source/uRdxPlacesRunner.pas:673
 msgid "%s is missing in uses: %s"
 msgstr ""
 
@@ -937,7 +937,7 @@ msgstr ""
 msgid "%s() in the function %s - without parentheses the meaning depends on the dialect (recursion or result)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:592
+#: reDelphix/source/uRdxPlacesRunner.pas:593
 msgid "%s, %d numeric (%%d/%%u)"
 msgstr ""
 
@@ -4344,7 +4344,7 @@ msgstr ""
 msgid "all other values: do nothing (as before)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:583
+#: reDelphix/source/uRdxPlacesRunner.pas:584
 msgid "all proven"
 msgstr ""
 
@@ -4535,11 +4535,11 @@ msgstr ""
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:368
+#: reDelphix/source/uRdxPlacesRunner.pas:369
 msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:394
+#: reDelphix/source/uRdxPlacesRunner.pas:395
 msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
 msgstr ""
 
@@ -4688,7 +4688,7 @@ msgstr ""
 msgid "comment in the head of the if or beside its end"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:748
+#: reDelphix/source/uRdxPlacesRunner.pas:749
 msgid "comment in the range"
 msgstr ""
 
@@ -5322,7 +5322,7 @@ msgstr ""
 msgid "interface chain too long - boundaries not certain"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1543
+#: reDelphix/source/uRdxPlacesRunner.pas:1540
 msgid "it stands there only under a compiler condition (line %d); %s"
 msgstr ""
 
@@ -5380,7 +5380,7 @@ msgstr ""
 msgid "line %d carries %s - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:360
+#: reDelphix/source/uRdxPlacesRunner.pas:361
 msgid "line %d carries %s, the finding names %s"
 msgstr ""
 
@@ -5431,11 +5431,11 @@ msgstr ""
 msgid "line %d is ambiguous (%d statements with a nil comparison)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:323
+#: reDelphix/source/uRdxPlacesRunner.pas:324
 msgid "line %d is ambiguous (%d statements)"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1500
+#: reDelphix/source/uRdxPlacesRunner.pas:1497
 msgid "line %d of the section not readable"
 msgstr ""
 
@@ -5730,11 +5730,11 @@ msgstr ""
 msgid "no assignment \"%s :=\" at the start of a statement on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:610
+#: reDelphix/source/uRdxPlacesRunner.pas:611
 msgid "no assignment with a chain"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:612
+#: reDelphix/source/uRdxPlacesRunner.pas:613
 msgid "no assignment with a chain: %s"
 msgstr ""
 
@@ -5855,7 +5855,7 @@ msgstr ""
 msgid "no declaration that can carry the attribute follows the blank line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:602
+#: reDelphix/source/uRdxPlacesRunner.pas:603
 #: reDelphix/source/uRdxRecipeRunner.pas:493
 msgid "no description"
 msgstr ""
@@ -6148,7 +6148,7 @@ msgstr ""
 msgid "no statement \"%s := %s * %s;\" starts on the reported line"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:321
+#: reDelphix/source/uRdxPlacesRunner.pas:322
 msgid "no statement found on line %d"
 msgstr ""
 
@@ -6201,7 +6201,7 @@ msgstr ""
 msgid "no unit line found"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1470
+#: reDelphix/source/uRdxPlacesRunner.pas:1467
 msgid "no uses clause and no interface/implementation"
 msgstr ""
 
@@ -6728,7 +6728,7 @@ msgstr ""
 msgid "raise is in the handler of \"%s\", not of \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:730
+#: reDelphix/source/uRdxPlacesRunner.pas:731
 msgid "range not readable"
 msgstr ""
 
@@ -7035,7 +7035,7 @@ msgstr ""
 msgid "tabs become spaces - the same result for every tab width in question; tabs in strings stay"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:712
+#: reDelphix/source/uRdxPlacesRunner.pas:713
 msgid "target '%s' is %s - Format returns UnicodeString"
 msgstr ""
 
@@ -8800,7 +8800,7 @@ msgstr ""
 msgid "the second call goes away - the parent method runs only once; check order and side effects"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1492
+#: reDelphix/source/uRdxPlacesRunner.pas:1489
 msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
 msgstr ""
 
@@ -8820,7 +8820,7 @@ msgstr ""
 msgid "the statement before the line is not \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:405
+#: reDelphix/source/uRdxPlacesRunner.pas:406
 msgid "the statement cannot be described"
 msgstr ""
 
@@ -8996,7 +8996,7 @@ msgstr ""
 msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:1481
+#: reDelphix/source/uRdxPlacesRunner.pas:1478
 msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"
 msgstr ""
 
@@ -9012,7 +9012,7 @@ msgstr ""
 msgid "the word is already lower case"
 msgstr ""
 
-#: reDelphix/source/uRdxPlacesRunner.pas:645
+#: reDelphix/source/uRdxPlacesRunner.pas:646
 msgid "there are only literals behind %s"
 msgstr ""
 

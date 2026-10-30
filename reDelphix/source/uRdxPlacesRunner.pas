@@ -189,10 +189,10 @@ type
     // Klausel kein {$I} traegt (UnconditionalPlace; JvCalc.pas:487 'uses
     // {$IFNDEF WIN32} JvStr16, {$ENDIF} JvVCLUtils, .. JvToolEdit;' - der
     // neue Name gilt dann in jedem Zweig - als Kurzname, die Zweige
-    // koennen Compiler ohne Unit-Scopes bedienen; qualifiziert, wenn ein
-    // Eintrag mit Unit-Scope ausserhalb jedes Zweigs steht, rwE32
-    // ScopedEntryUnconditional). Ohne jede uses-Klausel
-    // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
+    // koennen Compiler ohne Unit-Scopes bedienen; qualifiziert, wenn die
+    // Datei ausserhalb jedes Zweigs Delphi ab XE2 beweist, rwE32
+    // UnitScopesProven - uRdxCompilerTraces.ModernProof). Ohne jede
+    // uses-Klausel wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
     // Reason 'keine uses-Klausel und kein interface/implementation'; steht
     // das Schluesselwort selbst in einem bedingten Zweig, sperrt PlanUses
@@ -263,6 +263,7 @@ uses
   System.SysUtils,
   System.Classes,    // TStringList (PlacesLines)
   uRdxCodeMap,       // TRdxCodeMap, Token, Direktiven (PlanUses)
+  uRdxCompilerTraces, // ModernProof (UnitScopesProven, rwE32)
   uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix, MsgByHand (E29)
 
 // Gegen Version 1 des Quellstellen-Vertrags geschrieben (uSourcePlaces,
@@ -942,8 +943,7 @@ end;
 function UnconditionalPlace(APlaces: TSourcePlaces;
   const AEntries: TArray<TRefactorSpan>; var AAnchor: TRefactorSpan;
   var AAppend: Boolean): Boolean; forward;
-function ScopedEntryUnconditional(APlaces: TSourcePlaces;
-  const AEntries: TArray<TRefactorSpan>): Boolean; forward;
+function UnitScopesProven(APlaces: TSourcePlaces): Boolean; forward;
 
 // Die Einfuegung in eine bestehende Klausel (PlanUses). APlan.Name steht.
 procedure PlanIntoClause(APlaces: TSourcePlaces;
@@ -964,13 +964,13 @@ begin
   // jedem Zweig, einen Unit-Scope-Namen kennen Compiler vor XE2 nicht.
   // Darum der Kurzname wie in einer Datei mit FPC-Weiche - Delphi loest
   // ihn ueber die Vorgabe-Scopes ebenso auf (Review e/HilfeFixL). Nicht,
-  // wenn ein Eintrag mit Unit-Scope ausserhalb jedes Zweigs steht
-  // (ScopedEntryUnconditional, rwE32 Kastri DW.Camera.pas:533: unbedingt
+  // wenn die Datei ausserhalb jedes Zweigs Delphi ab XE2 beweist
+  // (UnitScopesProven, rwE32 Kastri DW.Camera.pas:533: unbedingt
   // 'FMX.Platform', danach Zweige fuer ANDROID und IOS): dann kennt jeder
   // Compiler, der die Datei uebersetzt, Unit-Scopes - der Name bleibt im
   // Stil der Datei.
   if (Dir > 0) and TRdxRecipes.IsRtlScopedName(APlan.Name)
-     and not ScopedEntryUnconditional(APlaces, AEntries) then
+     and not UnitScopesProven(APlaces) then
     APlan.Name := Copy(APlan.Name, Pos('.', APlan.Name) + 1, MaxInt);
   SetLength(Names, Length(AEntries));
   for i := 0 to High(AEntries) do
@@ -1371,28 +1371,25 @@ begin
   end;
 end;
 
-// Steht in der Klausel AEntries ein Eintrag mit Delphi-Unit-Scope
-// ('System.Classes', 'FMX.Platform' - IsRtlScopedName, so wie er im Puffer
-// steht) ausserhalb jedes bedingten Zweigs (AnchorUnconditional)? Dann
-// uebersetzt die Datei nur ein Compiler mit Unit-Scopes (ab XE2) - auch
-// in einer Klausel mit Direktiven passt der qualifizierte Name (rwE32,
-// PlanIntoClause).
-function ScopedEntryUnconditional(APlaces: TSourcePlaces;
-  const AEntries: TArray<TRefactorSpan>): Boolean;
+// Beweist die Datei ausserhalb jedes Bedingungsblocks Delphi ab XE2 - ein
+// RTL-Unit-Name im uses ('System.Classes', 'FMX.Platform') oder eine
+// Inline-Variable (uRdxCompilerTraces.ModernProof, derselbe Gegenbeweis
+// wie bei SCA128/SCA059 und SCA120)? Dann uebersetzt die Datei nur ein
+// Compiler mit Unit-Scopes - auch in einer Klausel mit Direktiven passt
+// der qualifizierte Name (rwE32, PlanIntoClause). Bis zum Review e/
+// HilfeFixQ eine eigene Probe ueber die Eintraege der Klausel mit der
+// weiteren Praefix-Liste von IsRtlScopedName ('Data.', 'Xml.', 'Web.' ...
+// - ein eigener Unit-Name eines Delphi 2007 galte dort als Beweis).
+function UnitScopesProven(APlaces: TSourcePlaces): Boolean;
 var
   Lines : TStringList;
   Map   : TRdxCodeMap;
-  i     : Integer;
 begin
-  Result := False;
   Lines := PlacesLines(APlaces);
   try
     Map := TRdxCodeMap.Create(Lines);
     try
-      for i := 0 to High(AEntries) do
-        if TRdxRecipes.IsRtlScopedName(Trim(APlaces.TextOf(AEntries[i])))
-           and AnchorUnconditional(APlaces, Map, AEntries[i]) then
-          Exit(True);
+      Result := ModernProof(Map).Version >= PROOF_RTL_SCOPE;
     finally
       Map.Free;
     end;

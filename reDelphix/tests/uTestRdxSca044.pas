@@ -1492,7 +1492,7 @@ begin
   // Kurzname, wenn die Zweige Compiler ohne Scopes bedienen koennen (Review
   // e/HilfeFixL); steht wie hier 'System.Classes' ausserhalb jedes Zweigs,
   // uebersetzt die Datei nur ein Compiler mit Unit-Scopes - qualifiziert
-  // (rwE32, ScopedEntryUnconditional; bis dahin 'SysUtils, System.Classes').
+  // (rwE32, UnitScopesProven; bis dahin 'SysUtils, System.Classes').
   Assert.IsTrue(RunRecipe(WithUses(CHAIN,
     'uses Classes (*$IFDEF RDX_NEVER_DEFINED*), Windows (*$ENDIF*);'),
     'Text := Marker', O), O.Reason);
