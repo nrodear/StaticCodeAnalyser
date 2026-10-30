@@ -1672,8 +1672,6 @@ begin
   Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
 end;
 
-// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
-// in einem bedingten Zweig: die neue Klausel galte nur dort.
 // Fix-Runde 4: eine Hilfe kann ueber mehrere Zeilen schreiben (SCA168.2:
 // das ';' des letzten Arms und das 'end'), und eine Direktive darf mitten
 // in einer Anweisung stehen - die Startzeile allein beweist nichts. Die
@@ -1787,6 +1785,8 @@ begin
     TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
 end;
 
+// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
+// in einem bedingten Zweig: die neue Klausel galte nur dort.
 procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;

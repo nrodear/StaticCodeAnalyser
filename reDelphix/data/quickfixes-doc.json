@@ -120,7 +120,8 @@
         "was": "Setzt `raise ENotImplemented.Create('<Name>');` mit dem Namen aus dem Methodenkopf in den leeren Rumpf; fehlt `System.SysUtils`, kommt es in uses.",
         "kennzeichnung": "der Aufruf löst danach eine Exception aus, statt nichts zu tun",
         "nichtAngeboten": [
-          "in constructor und destructor und ohne den Namen auf der Kopfzeile"
+          "in constructor und destructor und ohne den Namen auf der Kopfzeile",
+          "`System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst"
         ],
         "beispielNachher": [
           "procedure TFoo.DoStuff;",
@@ -1071,7 +1072,8 @@
         "was": "Setzt `else raise EInvalidOpException.Create('Unhandled case');` vor das `end`, die raise-Zeile eingerückt wie die Arme; fehlt `System.SysUtils`, kommt es in uses (in Dateien mit FPC-Weiche oder FPC-Modus als `SysUtils` – FPC 3.2.2 kennt die Klasse ebenfalls).",
         "kennzeichnung": "ein nicht behandelter Wert löst danach eine Exception aus",
         "nichtAngeboten": [
-          "dieselben Sperren wie der erste Eintrag"
+          "dieselben Sperren wie der erste Eintrag",
+          "`System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst"
         ],
         "beispielNachher": [
           "  case X of",
@@ -1108,7 +1110,8 @@
       "nichtAngeboten": [
         "ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt (auch in einem Include ohne unit-Kopf)",
         "`absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result",
-        "Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)"
+        "Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)",
+        "`Variants` fehlt (für `VarClear`) und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `Variants` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Zeile der Ersetzung umfasst"
       ],
       "beispielVorher": [
         "function Join(const A: array of string): string;",
@@ -2344,7 +2347,8 @@
       "nichtAngeboten": [
         "kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)",
         "`raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor",
-        "die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)"
+        "die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)",
+        "`System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst"
       ],
       "beispielVorher": [
         "if X < 0 then",

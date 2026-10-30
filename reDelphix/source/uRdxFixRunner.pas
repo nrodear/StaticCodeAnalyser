@@ -579,6 +579,9 @@ end;
 // kleinsten Start- bis zur groessten Endzeile; ein Bereich, der in Spalte 1
 // endet (eine Zeile samt Zeilenende, SCA085: die nil-Zeile), reicht nur
 // bis zur Zeile davor. 0 und 0 ohne Ersetzung (PlanUses: Stelle unbekannt).
+// Eine Ersetzung ohne Zeile (StartLine < 1, leerer Span) zaehlt nicht -
+// sie truege sonst 0 als kleinste Zeile ein, und PlanUses fragte ohne
+// Stelle (Review-MINOR Merge e/HilfeFixN, defensiv).
 procedure EditLines(const AEdits: TArray<TRdxEdit>; out AFirst,
   ALast: Integer);
 var
@@ -588,6 +591,8 @@ begin
   ALast := 0;
   for i := 0 to High(AEdits) do
   begin
+    if AEdits[i].Span.StartLine < 1 then
+      Continue;
     Last := AEdits[i].Span.EndLine;
     if (AEdits[i].Span.EndCol <= 1) and (Last > AEdits[i].Span.StartLine) then
       Dec(Last);

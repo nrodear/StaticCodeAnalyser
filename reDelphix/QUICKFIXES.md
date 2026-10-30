@@ -553,6 +553,7 @@ end;
 - hinter dem `begin` steht noch Code, oder der Rumpf ist nicht wirklich leer (Code unter einer inaktiven Direktive, ein asm-Block)
 - ein Kommentar im Rumpf – er ist keine Absicht (sonst schwiege der Detektor), meist auskommentierter Code
 - Eintrag 2: in constructor und destructor und ohne den Namen auf der Kopfzeile
+- Eintrag 2: `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 
 **Beispiel (Eintrag 1)**
 
@@ -2979,6 +2980,7 @@ Nachher:
 - kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)
 - `raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor
 - die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)
+- `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 - Eintrag 2: dieselben Sperren wie der erste Eintrag
 
 **Beispiel (Eintrag 1)**
@@ -3870,6 +3872,7 @@ end.
 - ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)
 - eine offene `(` vor dem case mit einer Direktive dazwischen – ein Zweig kann sie offen lassen, die Lage ist unklar
 - Eintrag 2: dieselben Sperren wie der erste Eintrag
+- Eintrag 2: `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 
 **Beispiel (Eintrag 1)**
 
@@ -4369,6 +4372,7 @@ end;
 - ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt (auch in einem Include ohne unit-Kopf)
 - `absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result
 - Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)
+- `Variants` fehlt (für `VarClear`) und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `Variants` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Zeile der Ersetzung umfasst
 
 **Beispiel**
 
