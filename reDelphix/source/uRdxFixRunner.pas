@@ -1207,7 +1207,7 @@ begin
         Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
           Result.Edits[0], Result.Reason);
     end;
-    if Result.Enabled then
+    if Result.Enabled and not FromText then
       Foreign := TRdxStructFixes.ForeignIdent(Map,
         OtherUnitsIdents(APlaces, Result.Name), ForeignLine);
   finally
@@ -1220,12 +1220,17 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  if (Foreign = '') and FromText then
+  if FromText then
   begin
     // Der Eintrag kam aus dem Text (Zweig, den der Dienst nicht geparst
     // hat): die anderen Units fuer den Bezeichner-Beweis (OtherUnitsIdents)
     // stammen aus dem ANDEREN Zweig - der Beweis ist nicht vollstaendig,
     // nur im Menue (Nico-Entscheid SCA007, Nachzug Review e/HilfeFixM).
+    // Seit Fix-Runde 4 nach rwE32 VOR einem Bezeichner ohne Quelle
+    // (ForeignIdent fragt dann nicht mehr): CEF4Delphi MDIBrowser
+    // uChildForm.pas:10, SimpleServer uSimpleServer.pas:9 u. a. nannten
+    // "TChromium ... kann aus Vcl.ClipBrd kommen" - der Grund ist der
+    // nicht geparste Zweig, nicht diese eine Zuordnung.
     Result.MenuOnly := True;
     Result.Hint := _('not in the light bulb: %s stands in a branch of the '
       + 'uses clause that the IDE did not parse - the other units of that '
