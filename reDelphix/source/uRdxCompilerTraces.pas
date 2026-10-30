@@ -71,6 +71,11 @@ unit uRdxCompilerTraces;
 // FPC aus (NoFpc): FireMonkey gibt es nur in Delphi (python4delphi
 // Source\fmx\WrapFmxTypes.pas - die FPC-Weiche im gemeinsamen
 // Definition.Inc betrifft die Unit nicht).
+// Seit rwE32 Stufe 4 beweist auch 'Generics.Collections' bzw.
+// 'Generics.Defaults' ohne Namensraum im uses Delphi 2009 (PROOF_GENERICS;
+// FPC 3.2 hat sie auch) - genug fuer die Ausnahmeklassen ab 2009 (Dev-Cpp
+// SynHighlighterSQL.pas:2373: TDictionary, die VER140-Kylix-Frage im
+// generischen SynEditJedi.inc belegt dort kein altes Delphi).
 // Die Bedingungsbloecke liest ConditionalDirectives einmal je Frage
 // (UnconditionalAt, FpcExcludedAt, NewOnlyAt).
 
@@ -195,7 +200,8 @@ type
   TRdxCondDirectives = TArray<TRdxCondDirective>;
 
   // Der Gegenbeweis einer Datei (ModernProof, s. Kopf): die bewiesene
-  // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name; 0 ohne), ob FPC
+  // CompilerVersion (33 Inline-Variable, 23 RTL-Unit-Name, seit rwE32
+  // Stufe 4 20 Generics.Collections bzw. Generics.Defaults; 0 ohne), ob FPC
   // 3.2 die Datei uebersetzt (NoFpc: nein - die Inline-Variable und seit
   // rwE31 Stufe 3 ein FMX-Unit-Name), die Form wie im Text ('for var',
   // 'var X :=', 'System.SysUtils', 'FMX.Types') und ihre Zeile.
@@ -210,6 +216,7 @@ const
   // Die CompilerVersion, die ModernProof je Form beweist.
   PROOF_INLINE_VAR = 33;   // Delphi 10.3 Rio
   PROOF_RTL_SCOPE  = 23;   // Delphi XE2 (Unit-Namensraeume der RTL)
+  PROOF_GENERICS   = 20;   // Delphi 2009 (Generics.Collections, rwE32)
 
 // Die erste Spur alter Compiler (bis AFloor) in den Direktiven der Datei:
 // das Symbol, der Vergleich ('COMPILERVERSION >= 33') bzw. der Name der
@@ -352,6 +359,10 @@ const
   RTL_SCOPES: array[0..3] of string = ('system.', 'winapi.', 'vcl.', 'fmx.');
   // ... davon nur in Delphi (NoFpc; FireMonkey hat FPC nie).
   FMX_SCOPE = 'fmx.';
+  // Die Generics der RTL ohne Namensraum (ScopeProof, PROOF_GENERICS): ab
+  // Delphi 2009; FPC 3.2 hat sie auch (kein NoFpc).
+  GENERICS_UNITS: array[0..1] of string = ('generics.collections',
+    'generics.defaults');
   MAX_INLINE_DECL_TOKENS = 40;
   // Die globale Variable (GlobalSettingsWriteLine) und ihre Felder fuer
   // Datum und Uhrzeit - nur sie zaehlen: ein Programm, das
@@ -922,9 +933,18 @@ begin
       while (E.Low <> '') and (E.Low <> ';') do
       begin
         Name := UsesEntry(AMap, E, Stop);
+        // Generics.Collections ohne Namensraum (Delphi 2009 bis XE, rwE32
+        // Stufe 4: Dev-Cpp SynHighlighterSQL.pas - TDictionary).
+        if InList(Name, GENERICS_UNITS) and (AProof.Version < PROOF_GENERICS)
+           and UnconditionalAt(ADirs, E.Line, E.Col) then
+        begin
+          AProof.Version := PROOF_GENERICS;
+          AProof.What := Copy(AMap.Raw(E.Line), E.Col, Length(Name));
+          AProof.Line := E.Line;
+        end;
         for S in RTL_SCOPES do
           if (Copy(Name, 1, Length(S)) = S)
-             and ((AProof.Version = 0) or (S = FMX_SCOPE))
+             and ((AProof.Version < PROOF_RTL_SCOPE) or (S = FMX_SCOPE))
              and UnconditionalAt(ADirs, E.Line, E.Col) then
           begin
             AProof.Version := PROOF_RTL_SCOPE;

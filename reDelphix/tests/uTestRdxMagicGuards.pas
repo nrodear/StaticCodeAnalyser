@@ -55,6 +55,7 @@ type
     [Test] procedure Disk_FpcOnlyProgram_NoDelphiEvidence;
     [Test] procedure Disk_ExceptionClasses_FpcVersionNoEvidence;
     [Test] procedure Disk_ExceptionClasses_KitIncludeModernProject;
+    [Test] procedure Disk_GenericsProof_RefutesIncludeTrace;
   end;
 
 implementation
@@ -62,7 +63,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes,
-  uRdxCompilerTraces, // FLOOR_EXCEPTION_CLASSES (rwE32 Stufe 4)
+  uRdxCompilerTraces, // FLOOR_EXCEPTION_CLASSES, ModernProof (rwE32 Stufe 4)
   uRdxText,          // SetRdxLanguageOverride, MsgByHand
   uTestRdxTextKit;   // Join, LineOf, WriteText, NewTempDir, RemoveTree
 
@@ -1133,6 +1134,57 @@ begin
       + 'begin' + #13#10 + 'end.');
     AssertNames(ProjectReasonOf(T.U, KIT_SRC, lfExceptionClasses, True),
       ['jvcl.inc']);
+  finally
+    RemoveTree(T.Root);
+  end;
+end;
+
+procedure TTestRdxMagicGuards.Disk_GenericsProof_RefutesIncludeTrace;
+const
+  GEN_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses' + #13#10 + '  Classes, Generics.Collections, SysUtils;'
+    + #13#10 + 'implementation' + #13#10 + 'end.';
+  COND_SRC = 'unit u;' + #13#10 + '{$I defs.inc}' + #13#10 + 'interface'
+    + #13#10 + 'uses' + #13#10 + '  Classes {$IFDEF X}, Generics.Collections'
+    + '{$ENDIF};' + #13#10 + 'implementation' + #13#10 + 'end.';
+var
+  T     : TTree;
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Proof : TRdxModernProof;
+begin
+  // Dev-Cpp Source\VCL\SynEdit\Source\SynHighlighterSQL.pas:2373 (SCA168.2):
+  // SynEditJedi.inc fragt '{$IFDEF VER140}' (Kylix-Erkennung der generischen
+  // JEDI-Versionsdatei) - die Unit bindet aber Generics.Collections ohne
+  // Weiche ein (TDictionary, ab Delphi 2009). Bis dahin nannte die Sperre
+  // VER140 als Beleg.
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := GEN_SRC;
+    Map := TRdxCodeMap.Create(SL);
+    Proof := ModernProof(Map);
+    Assert.AreEqual<Integer>(PROOF_GENERICS, Proof.Version);
+    Assert.AreEqual('Generics.Collections', Proof.What);
+    Assert.IsFalse(Proof.NoFpc, 'FPC hat Generics');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  T := NewTree;
+  try
+    WriteText(T.C + 'defs.inc', '{$IFDEF LINUX}' + #13#10 + '{$IFDEF VER140}'
+      + #13#10 + '  {$DEFINE KYLIX}' + #13#10 + '{$ENDIF}' + #13#10
+      + '{$ENDIF}');
+    Assert.AreEqual('', ProjectReasonOf(T.U, GEN_SRC, lfExceptionClasses,
+      True), 'Generics.Collections');
+    // Gegenproben: unter einer Weiche beweist es nichts ...
+    AssertNames(ProjectReasonOf(T.U, COND_SRC, lfExceptionClasses, True),
+      ['defs.inc', 'VER140']);
+    // ... und Delphi 2009 deckt die globale FormatSettings (XE) nicht.
+    WriteText(T.C + 'Old.dof', '[Compiler]');
+    AssertNames(ProjectReasonOf(T.U, GEN_SRC, lfFormatSettingsVar, False),
+      ['Old.dof']);
   finally
     RemoveTree(T.Root);
   end;
