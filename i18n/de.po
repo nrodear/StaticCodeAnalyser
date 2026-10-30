@@ -3271,8 +3271,8 @@ msgstr "der Detektor stuft den Vergleich als gewollt ein (Wächter- oder Sentine
 msgid "the file already calls Randomize"
 msgstr "die Datei ruft Randomize schon auf"
 
-msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
-msgstr "die Datei fragt nach Compilern bis Delphi 10.3 (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab dort geprüft"
+msgid "the file asks for old compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 geprüft"
 
 msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
 msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE"
@@ -7030,8 +7030,8 @@ msgstr "nicht in der Glühbirne: %s; unbehandelte Werte lösen EInvalidOpExcepti
 msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
 
-msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"
-msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort gibt es keine globale Variable FormatSettings; %s"
+msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - the program is also meant for an older Delphi, and a Delphi before XE has no global variable FormatSettings; adjust the call %s"
+msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - das Programm ist auch für ein älteres Delphi gedacht, und ein Delphi vor XE hat keine globale Variable FormatSettings; den Aufruf %s anpassen"
 
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
 msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"

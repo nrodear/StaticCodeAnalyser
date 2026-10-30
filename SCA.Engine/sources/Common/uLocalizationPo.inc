@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7089 Zeilen, 337158 Bytes
+  // i18n\de.po - 7089 Zeilen, 337229 Bytes
   CPoLines_de: array[0..7088] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -3288,8 +3288,8 @@ const
     'msgid "the file already calls Randomize"',
     'msgstr "die Datei ruft Randomize schon auf"',
     '',
-    'msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"',
-    'msgstr "die Datei fragt nach Compilern bis Delphi 10.3 (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab dort gepr'#$00FC'ft"',
+    'msgid "the file asks for old compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on"',
+    'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 gepr'#$00FC'ft"',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"',
     'msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE"',
@@ -7047,8 +7047,8 @@ const
     'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"',
     'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - f'#$00FC'r FPC und ein '#$00E4'lteres Delphi geschrieben, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"',
     '',
-    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"',
-    'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - f'#$00FC'r FPC und ein '#$00E4'lteres Delphi geschrieben, und dort gibt es keine globale Variable FormatSettings; %s"',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - the program is also meant for an older Delphi, and a Delphi before XE has no global variable FormatSettings; adjust the call %s"',
+    'msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - das Programm ist auch f'#$00FC'r ein '#$00E4'lteres Delphi gedacht, und ein Delphi vor XE hat keine globale Variable FormatSettings; den Aufruf %s anpassen"',
     '',
     'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"',
     'msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"',
@@ -7378,7 +7378,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7085 Zeilen, 350731 Bytes
+  // i18n\fr.po - 7085 Zeilen, 350806 Bytes
   CPoLines_fr: array[0..7084] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -10649,8 +10649,8 @@ const
     'msgid "the file already calls Randomize"',
     'msgstr "le fichier appelle d'#$00E9'j'#$00E0' Randomize"',
     '',
-    'msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"',
-    'msgstr "le fichier teste des compilateurs jusqu'''#$00E0' Delphi 10.3 (%s, ligne %d) - TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de l'#$00E0'"',
+    'msgid "the file asks for old compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on"',
+    'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - TFormatSettings.Invariant n''est v'#$00E9'rifi'#$00E9' qu'''#$00E0' partir de Delphi 10.3"',
     '',
     'msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"',
     'msgstr "le fichier teste d''anciens compilateurs (%s, ligne %d) - la variable globale FormatSettings n''existe que depuis Delphi XE"',
@@ -14408,8 +14408,8 @@ const
     'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"',
     'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - '#$00E9'crit pour FPC et un Delphi plus ancien, qui n''a pas les classes d''exception EArgumentException, EInvalidOpException et ENotImplemented; %s"',
     '',
-    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which has no global variable FormatSettings; %s"',
-    'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - '#$00E9'crit pour FPC et un Delphi plus ancien, qui n''a pas de variable globale FormatSettings; %s"',
+    'msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - the program is also meant for an older Delphi, and a Delphi before XE has no global variable FormatSettings; adjust the call %s"',
+    'msgstr "programme Delphi %s sans .dproj '#$00E0' c'#$00F4't'#$00E9' du projet Lazarus %s dans le r'#$00E9'pertoire %s - le programme vise aussi un Delphi plus ancien, et un Delphi ant'#$00E9'rieur '#$00E0' XE n''a pas de variable globale FormatSettings; adapter l''appel %s"',
     '',
     'msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"',
     'msgstr "ancien fichier de projet %s dans le r'#$00E9'pertoire %s - l''unit'#$00E9' se compile sans doute aussi avec un Delphi ant'#$00E9'rieur '#$00E0' 2009, qui n''a pas les classes d''exception EArgumentException, EInvalidOpException et ENotImplemented; %s"',

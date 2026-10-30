@@ -86,7 +86,7 @@ unit uRdxFormatSettingsFix;
 //   * Alt-Weg: die Datei eine FPC-Weiche oder einen FPC-Modus traegt (FPC
 //     3.2.2 kennt kein TFormatSettings.Invariant) - ausser alle Aufrufe
 //     stehen in einem Zweig ohne FPC ('{$IF NOT DEFINED(FPC)}') -, nach
-//     Compilern bis Delphi 10.3 fragt (belegt ist Invariant in den Docwiki-
+//     Compilern vor Delphi 10.3 fragt (belegt ist Invariant in den Docwiki-
 //     Staenden ab Rio - dieselbe Schwelle wie SCA014, FLOOR_INLINE_DECL) -
 //     beides nicht, wenn die Datei eine Inline-Variable oder Invariant selbst
 //     ohne Weiche nutzt (rwE30 Stufe 2) -, ein eigenes TFormatSettings
@@ -165,8 +165,12 @@ const
     + 'variable FormatSettings exists from Delphi XE on';
   R_FS_FPC = 'the file is also written for FPC (line %d) - FPC 3.2 knows no '
     + 'TFormatSettings.Invariant';
-  R_FS_OLD_INVARIANT = 'the file asks for compilers up to Delphi 10.3 (%s, '
-    + 'line %d) - TFormatSettings.Invariant is only checked from there on';
+  // Bis rwE33 Stufe 5 'asks for compilers up to Delphi 10.3' - bei
+  // COMPILER6_UP (Frage nach Delphi 6 und neuer, CnTestDesignMenuWizard.pas:
+  // 303) falsch; jetzt wie R_FS_OLD_VAR (derselbe Satz als
+  // R_KIT_OLD_INVARIANT in uRdxMagicFixes, eine msgid).
+  R_FS_OLD_INVARIANT = 'the file asks for old compilers (%s, line %d) - '
+    + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on';
   R_FS_OWN_TYPE = 'the file declares its own TFormatSettings (line %d)';
   // Alt-Weg (rwE30 Stufe 2): die Datei stellt die globale FormatSettings
   // selbst ein - %s das Feld, %d die Zeile.

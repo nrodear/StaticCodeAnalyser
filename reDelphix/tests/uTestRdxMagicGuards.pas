@@ -633,7 +633,12 @@ begin
       'nur Lazarus');
     WriteText(T.C + 'RechnungDelphi.dpr', 'program RechnungDelphi;');
     AssertNames(TRdxMagicFixes.FileReason(T.U, lfFormatSettingsVar),
-      ['RechnungDelphi.dpr', 'Rechnung.lpi']);
+      ['RechnungDelphi.dpr', 'Rechnung.lpi', 'XE']);
+    // rwE33 Stufe 5 (rgInvoiceItemEdit.pas:217): der Satz behauptete, auch
+    // FPC fehle die globale FormatSettings - FPC 3.2.2 hat sie; er nennt
+    // nur noch das alte Delphi.
+    Assert.IsTrue(Pos('FPC', TRdxMagicFixes.FileReason(T.U,
+      lfFormatSettingsVar)) = 0, 'FPC im Satz');
     AssertNames(TRdxMagicFixes.FileReason(T.U, lfExceptionClasses),
       ['RechnungDelphi.dpr', 'Rechnung.lpi', 'ENotImplemented']);
     // Gegenprobe: mit eigener .dproj ist das Programm neu.
