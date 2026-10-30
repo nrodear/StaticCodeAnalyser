@@ -132,7 +132,7 @@ msgstr ""
 msgid "\"%s\" in the declaration section - end of the routine not certain"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2490
+#: reDelphix/source/uRdxStructFixes.pas:2622
 msgid "\"%s\" in the statement - structure, conditional expression, anonymous method or inline declaration"
 msgstr ""
 
@@ -477,7 +477,7 @@ msgstr ""
 msgid "%d times \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2423
+#: reDelphix/source/uRdxStructFixes.pas:2555
 msgid "%d times \"end else\""
 msgstr ""
 
@@ -566,7 +566,7 @@ msgstr ""
 msgid "%s ends in %s - not proven as a field in this unit: \"= nil\" would call a method without arguments, Assigned() would only check the method pointer"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2208
+#: reDelphix/source/uRdxStructFixes.pas:2174
 msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"
 msgstr ""
 
@@ -723,7 +723,7 @@ msgstr ""
 msgid "%s is declared inside a type - its signature is a contract"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2345
+#: reDelphix/source/uRdxStructFixes.pas:2477
 msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"
 msgstr ""
 
@@ -4870,7 +4870,7 @@ msgstr ""
 msgid "compiler directive in the case - a branch could shift the end count"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2337
+#: reDelphix/source/uRdxStructFixes.pas:2469
 msgid "compiler directive in the case - which values have an arm is not provable"
 msgstr ""
 
@@ -4897,7 +4897,7 @@ msgstr ""
 msgid "compiler directive in the line of the for header"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2730
+#: reDelphix/source/uRdxStructFixes.pas:2862
 msgid "compiler directive in the range - begin or end would be on the other side"
 msgstr ""
 
@@ -5088,7 +5088,7 @@ msgstr ""
 msgid "empty range"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2567
+#: reDelphix/source/uRdxStructFixes.pas:2699
 msgid "empty statement after the %s"
 msgstr ""
 
@@ -5102,7 +5102,7 @@ msgstr ""
 msgid "end is followed neither by \";\" nor by the end of the enclosing block"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2563
+#: reDelphix/source/uRdxStructFixes.pas:2695
 msgid "end of file after the %s"
 msgstr ""
 
@@ -5305,7 +5305,7 @@ msgstr ""
 msgid "inline declaration (%s) in line %d - its scope would shrink to the try block"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2533
+#: reDelphix/source/uRdxStructFixes.pas:2665
 msgid "inline declaration (%s) in the else branch - begin..end would narrow its scope"
 msgstr ""
 
@@ -5667,7 +5667,7 @@ msgstr ""
 msgid "no \"begin\" at the reported place"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2422
+#: reDelphix/source/uRdxStructFixes.pas:2554
 msgid "no \"end else\""
 msgstr ""
 
@@ -5901,7 +5901,7 @@ msgstr ""
 msgid "no end found for the case"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2547
+#: reDelphix/source/uRdxStructFixes.pas:2679
 msgid "no end found for the else branch"
 msgstr ""
 
@@ -6193,9 +6193,9 @@ msgstr ""
 msgid "no then branch before the else"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2388
-#: reDelphix/source/uRdxStructFixes.pas:2394
-#: reDelphix/source/uRdxStructFixes.pas:2724
+#: reDelphix/source/uRdxStructFixes.pas:2520
+#: reDelphix/source/uRdxStructFixes.pas:2526
+#: reDelphix/source/uRdxStructFixes.pas:2856
 msgid "no then/else/do at the reported place"
 msgstr ""
 
@@ -7099,7 +7099,7 @@ msgstr ""
 msgid "the \"with\" header spans several lines"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2436
+#: reDelphix/source/uRdxStructFixes.pas:2568
 msgid "the %s is in an expression (conditional expression, Delphi 13) - not a branch of a statement"
 msgstr ""
 
@@ -7174,16 +7174,16 @@ msgstr ""
 msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2326
+#: reDelphix/source/uRdxStructFixes.pas:2458
 msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2340
-#: reDelphix/source/uRdxStructFixes.pas:2353
+#: reDelphix/source/uRdxStructFixes.pas:2472
+#: reDelphix/source/uRdxStructFixes.pas:2485
 msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2285
+#: reDelphix/source/uRdxStructFixes.pas:2417
 msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"
 msgstr ""
 
@@ -8893,7 +8893,7 @@ msgstr ""
 msgid "the statement is a case branch or follows a label"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2565
+#: reDelphix/source/uRdxStructFixes.pas:2697
 msgid "the statement is already in begin..end"
 msgstr ""
 
@@ -8921,7 +8921,7 @@ msgstr ""
 msgid "the statement stands alone after %s without begin - it belongs to no statement list"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2572
+#: reDelphix/source/uRdxStructFixes.pas:2704
 msgid "the statement starts with a string"
 msgstr ""
 
@@ -9194,7 +9194,7 @@ msgstr ""
 msgid "uses: qualify entries"
 msgstr ""
 
-#: reDelphix/source/uRdxStructFixes.pas:2358
+#: reDelphix/source/uRdxStructFixes.pas:2490
 msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
 msgstr ""
 
