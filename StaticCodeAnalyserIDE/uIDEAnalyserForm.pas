@@ -1984,6 +1984,7 @@ var
   TotalMatched   : Integer;
   BaselineActive : Boolean;
   BaselineHidden : Integer;
+  Covered        : TArray<Boolean>;
 begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
@@ -2009,13 +2010,20 @@ begin
   try
     FDisplayedFindings.Clear;
 
+    // Baseline-Abgleich EINMAL fuer die ganze Liste, nicht Contains je
+    // Fund: seit 2026-10-30 deckt jeder Baseline-Eintrag hoechstens EINEN
+    // Fund (TBaselineMatcher), und zaehlen kann nur, wer alle Funde
+    // zugleich sieht. Leer, solange der Filter aus ist.
+    if BaselineActive then
+      Covered := FBaselineSet.CoveredFlags(FAllFindings);
+
     // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
     for i := 0 to FAllFindings.Count - 1 do
     begin
       // Baseline-Filter zuerst: bereits akzeptierte Funde ausblenden.
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
-      if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      if (i < Length(Covered)) and Covered[i] then
       begin
         Inc(BaselineHidden);
         Continue;
@@ -2285,7 +2293,8 @@ procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
 // Scans zu verlieren. Findings.OwnsObjects := False damit die TLeakFinding-
 // Instanzen an FAllFindings (hat eigene Ownership=True) wandern.
 var
-  i: Integer;
+  i        : Integer;
+  UnitBase : string;
 begin
   if GLiveAnalyserFrame <> Pointer(Self) then
   begin
@@ -2304,9 +2313,22 @@ begin
     // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
     FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
-    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
+    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
+    // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
+    // .pas liefert die DFM-Funde mit dem Pfad der Formdatei neu mit
+    // (TDfmAnalysisRunner); geloescht wurde bis 2026-10-30 nur nach der
+    // .pas, jeder Watch-Lauf haengte also eine weitere Kopie der DFM-Funde
+    // an. Unter dem zaehlenden Baseline-Abgleich (uBaseline.
+    // TBaselineMatcher) deckt ein Eintrag nur EINE Kopie - die zweite
+    // erschien als neu (Review d/MethodAttr). Die Generation oben reicht
+    // auch fuer die Formdatei: der Index-Stempel ist das Maximum aller
+    // Generationen (FindingsStampOf), FFileIndex baut also neu.
+    UnitBase := ChangeFileExt(FileName, '');
     for i := FAllFindings.Count - 1 downto 0 do
-      if SameText(FAllFindings[i].FileName, FileName) then
+      if SameText(FAllFindings[i].FileName, FileName)
+         or (TStaticFiles.IsFormFileNameAnyDialect(FAllFindings[i].FileName)
+             and SameText(ChangeFileExt(FAllFindings[i].FileName, ''),
+                          UnitBase)) then
         FAllFindings.Delete(i);
 
     // 2) Neue Findings einhaengen (Ownership-Transfer).

@@ -33,6 +33,7 @@ uses
   uTestBaselineSetContextHash in 'uTestBaselineSetContextHash.pas',
   uTestBaselineMetricFingerprint in 'uTestBaselineMetricFingerprint.pas',
   uTestBaselineJson in 'uTestBaselineJson.pas',
+  uTestBaselineCounting in 'uTestBaselineCounting.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestFileTextCache in 'uTestFileTextCache.pas',
   uTestRegExCache in 'uTestRegExCache.pas',

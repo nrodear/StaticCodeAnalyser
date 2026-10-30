@@ -1830,13 +1830,20 @@ begin
 
   FDisplayedFindings.Clear;
   BaselineHidden := 0;
+  // Baseline-Abgleich EINMAL fuer die ganze Liste, nicht Contains je Fund:
+  // seit 2026-10-30 deckt jeder Baseline-Eintrag hoechstens EINEN Fund
+  // (TBaselineMatcher), und zaehlen kann nur, wer alle Funde zugleich
+  // sieht. Leer, solange der Filter aus ist.
+  var Covered: TArray<Boolean>;
+  if BaselineActive then
+    Covered := FBaselineSet.CoveredFlags(FAllFindings);
   for i := 0 to FAllFindings.Count - 1 do
   begin
     f := FAllFindings[i];
     // Baseline zuerst: akzeptierte Funde ausblenden. FAllFindings bleibt
     // vollstaendig - Export und 'Baseline schreiben' sehen weiter alles
     // (Plugin-Semantik; fail-open bei fehlender/kaputter Datei).
-    if BaselineActive and FBaselineSet.Contains(f) then
+    if (i < Length(Covered)) and Covered[i] then
     begin
       Inc(BaselineHidden);
       Continue;

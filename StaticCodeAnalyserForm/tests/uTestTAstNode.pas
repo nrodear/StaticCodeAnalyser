@@ -28,6 +28,10 @@ type
     [Test] procedure NodeKindNameRecord_DelegatesToFunction;
     [Test] procedure AdoptChildrenFrom_TransfersAndEmpties;
     [Test] procedure FindAll_PreOrderTraversal;
+
+    // --- EndLine (24 Bit in den Fuellbytes hinter Kind) ---
+    [Test] procedure InstanceSize_EndLineKostetKeinByte;
+    [Test] procedure EndLine_RoundTripUndKappung;
   end;
 
 implementation
@@ -290,6 +294,69 @@ begin
     end;
   finally
     Root.Free;
+  end;
+end;
+
+type
+  // Feld fuer Feld TAstNode OHNE die EndLine-Speicherfelder - in derselben
+  // Reihenfolge und mit denselben Typen. Nur fuer den Groessenvergleich;
+  // es wird nie eine Instanz erzeugt.
+  TAstNodeLayoutOhneEndLine = class
+  public
+    Kind     : TNodeKind;
+    Name     : string;
+    TypeRef  : string;
+    Line     : Integer;
+    Col      : Integer;
+    Children : TObjectList<TAstNode>;
+    Cache    : TObjectDictionary<TNodeKind, TList<TAstNode>>;
+  end;
+
+procedure TTestAstNode.InstanceSize_EndLineKostetKeinByte;
+// AUF WIN32 OHNE DEN UMBAU ROT (Review d/MethodAttr 2026-10-30): ein
+// Integer-Feld EndLine hinter Kind schob Name von Offset 8 auf 12 -
+// 40 statt 36 Byte, FastMM-Block 40 -> 48, +20 % je AST-Knoten im
+// 32-bit-IDE-Plugin (TAstFileCache). Auf Win64 auch vorher gruen: dort
+// passte der Integer in die sieben Fuellbytes. Der Vergleich gegen eine
+// Feld-Kopie statt gegen eine feste Zahl haelt den Test unabhaengig vom
+// versteckten Monitor-Feld und von der Plattform.
+begin
+  Assert.AreEqual<Integer>(TAstNodeLayoutOhneEndLine.InstanceSize,
+    TAstNode.InstanceSize,
+    'EndLine darf TAstNode nicht vergroessern - es lebt in den ' +
+    'Fuellbytes hinter Kind');
+end;
+
+procedure TTestAstNode.EndLine_RoundTripUndKappung;
+// Die 24 Bit muessen jede reale Zeile unveraendert zurueckgeben - auch
+// ueber der Word-Grenze, wo die Aufteilung Byte + Word wirkt -, und ausser-
+// halb des Bereichs kappen statt umbrechen.
+var
+  Node : TAstNode;
+begin
+  Node := TAstNode.Create(nkMethod, 'M', 10);
+  try
+    Assert.AreEqual<Integer>(0, Node.EndLine, 'frisch erzeugt: keine Spanne');
+    Node.EndLine := 42;
+    Assert.AreEqual<Integer>(42, Node.EndLine);
+    Node.EndLine := 65535;
+    Assert.AreEqual<Integer>(65535, Node.EndLine, 'obere Word-Grenze');
+    Node.EndLine := 65536;
+    Assert.AreEqual<Integer>(65536, Node.EndLine, 'erste Zeile im Byte-Teil');
+    Node.EndLine := 123456;
+    Assert.AreEqual<Integer>(123456, Node.EndLine);
+    Node.EndLine := MAX_AST_END_LINE;
+    Assert.AreEqual<Integer>(MAX_AST_END_LINE, Node.EndLine, 'Obergrenze');
+    Node.EndLine := MAX_AST_END_LINE + 2;
+    Assert.AreEqual<Integer>(MAX_AST_END_LINE, Node.EndLine,
+      'ueber der Grenze wird gekappt, nicht auf Zeile 1 umgebrochen');
+    Node.EndLine := -5;
+    Assert.AreEqual<Integer>(0, Node.EndLine, 'negativ wird 0');
+    Assert.AreEqual(nkMethod, Node.Kind,
+      'das Byte neben Kind bleibt Kind ungestoert');
+    Assert.AreEqual('M', Node.Name, 'und Name dahinter ebenso');
+  finally
+    Node.Free;
   end;
 end;
 

@@ -3706,7 +3706,8 @@ begin
     SB.AppendLine('      if (rc) { rc.setAttribute("aria-live","polite"); rc.setAttribute("role","status"); }');
     SB.AppendLine('    })();');
     // #7 Baseline-Diff: speichern (Download aller data-fpid) + laden (FileReader
-    // -> Set -> Zeilen als neu/bestehend markieren + Summary + "nur NEU"-Filter).
+    // -> Zaehler je Fingerprint -> Zeilen als neu/bestehend markieren + Summary
+    // + "nur NEU"-Filter).
     // Rein client-seitig (Blob/FileReader/localStorage-frei) -> HTML deterministisch.
     SB.AppendLine('    (function(){');
     SB.AppendLine('      function collectFindings(){ var a=[]; document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){ a.push({ fingerprint: r.getAttribute("data-fpid"), file: r.getAttribute("data-file"), kind: r.getAttribute("data-rule") }); }); return a; }');
@@ -3743,14 +3744,21 @@ begin
     SB.AppendLine('            return;');
     SB.AppendLine('          }');
     SB.AppendLine('          var arr = (base && base.findings) ? base.findings.map(function(x){ return x.fingerprint; }) : (base && base.fpids) ? base.fpids : (Array.isArray(base) ? base : []);');
-    SB.AppendLine('          var set = {}; arr.forEach(function(id){ set[id] = 1; });');
-    SB.AppendLine('          var seenNow = {}, nNew = 0, nExist = 0;');
+    // ZAEHLEND seit 2026-10-30 (wie uBaseline.TBaselineMatcher, Entscheid
+    // "Apply zaehlt"): jeder Baseline-Eintrag deckt hoechstens EINE Zeile
+    // gleichen Fingerprints, in Dokument-Reihenfolge; "behoben" sind die
+    // Eintraege, die keine Zeile verbraucht hat. Bis dahin war die
+    // Baseline hier eine Menge - ein Eintrag deckte jede Zeile mit seinem
+    // Fingerprint, auch eine neu hinzugekommene. Die Seite kennt nur den
+    // Fingerprint (kein contextHash), also nur Stufe 3 des Matchers.
+    SB.AppendLine('          var cnt = Object.create(null); arr.forEach(function(id){ cnt[id] = (cnt[id] || 0) + 1; });');
+    SB.AppendLine('          var nNew = 0, nExist = 0;');
     SB.AppendLine('          document.querySelectorAll("tr.finding[data-fpid]").forEach(function(r){');
-    SB.AppendLine('            var id = r.getAttribute("data-fpid"); seenNow[id] = 1;');
-    SB.AppendLine('            if (set[id]) { r.setAttribute("data-bstatus","seen"); nExist++; }');
+    SB.AppendLine('            var id = r.getAttribute("data-fpid");');
+    SB.AppendLine('            if (cnt[id] > 0) { cnt[id]--; r.setAttribute("data-bstatus","seen"); nExist++; }');
     SB.AppendLine('            else { r.setAttribute("data-bstatus","new"); nNew++; }');
     SB.AppendLine('          });');
-    SB.AppendLine('          var nFixed = 0; arr.forEach(function(id){ if (!seenNow[id]) nFixed++; });');
+    SB.AppendLine('          var nFixed = 0; for (var k in cnt) { nFixed += cnt[k]; }');
     SB.AppendLine('          var bn = document.getElementById("baseNewFilter"); if (bn) bn.disabled = false;');
     SB.AppendLine('          var sm = document.getElementById("baseSummary");');
     SB.AppendLine('          if (sm) { var lang = document.documentElement.lang || "de"; var tpl = TPL[lang] || TPL.de;');
