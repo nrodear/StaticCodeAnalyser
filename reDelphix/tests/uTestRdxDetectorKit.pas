@@ -59,6 +59,12 @@ function DetectSource(const APrefix, ASource: string; AKind: TFindingKind;
 // TLeakFinding der Datei AFile, der Quellstellen-Dienst auf demselben Text.
 function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
+// Wie PlanFixIn, der Dienst aber in der Sicht der IDE (Ein-Zweig,
+// TScanRequest.DefaultIfdefDefines). PlanFixIn parst BEIDE Zweige: ein
+// Eintrag unter '{$IFDEF X}' steht dort im Baum und in den uses-Namen -
+// die IDE sieht ihn nicht (rwE33: SCA085 mit SysUtils nur in zwei Bloecken).
+function PlanFixInIdeView(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
 // Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund - der
 // Lauf wie PlanFixIn, ohne dessen Handles-Assert (eine Art ohne Zeile gibt
 // den leeren Ausgang, wie der Anbieter). Bis zur Review Woche G07-27 stand
@@ -111,7 +117,7 @@ uses
   System.SysUtils, System.Classes,
   DUnitX.TestFramework,
   uParser2,           // TParser2
-  uEngineApi,         // TSourcePlaces
+  uEngineApi,         // TSourcePlaces, TScanRequest
   uRdxFixTable,       // TRdxFixTable.FixFor
   uRdxPlacesRunner,   // R_USES_ONLY_CONDITIONAL (AssertBranchUses)
   uRdxText,           // _, MsgByHand (AssertBranchUses)
@@ -182,11 +188,12 @@ begin
 end;
 
 // Der Lauf beider Einstiege: der Fund als TLeakFinding der Datei AFile, der
-// Quellstellen-Dienst auf demselben Text; AAlt waehlt AlternativeFixFor.
+// Quellstellen-Dienst auf demselben Text; AAlt waehlt AlternativeFixFor,
+// AIdeView die Sicht der IDE (sonst Doppelzweig-Sicht).
 // Alle drei Objekte entstehen im try (Review Woche G01-17: scheitert ein
 // spaeteres Create, raeumt das finally die frueheren ab).
 function PlanEntry(const ASource, AFile: string; AKind: TFindingKind;
-  const ASeen: TSeen; AAlt: Boolean): TRdxFixOutcome;
+  const ASeen: TSeen; AAlt, AIdeView: Boolean): TRdxFixOutcome;
 var
   SL      : TStringList;
   Places  : TSourcePlaces;
@@ -201,6 +208,8 @@ begin
     Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
     Finding.LeakVariant := ASeen.Variant;
     SL.Text := ASource;
+    if AIdeView then
+      Places.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
     Assert.IsTrue(Places.OpenSource(AFile, ASource), 'OpenSource');
     if AAlt then
       Result := TRdxFixTable.AlternativeFixFor(Places, SL, Finding,
@@ -219,13 +228,20 @@ function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
 begin
   Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
-  Result := PlanEntry(ASource, AFile, AKind, ASeen, False);
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, False, False);
+end;
+
+function PlanFixInIdeView(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, False, True);
 end;
 
 function PlanAltFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
 begin
-  Result := PlanEntry(ASource, AFile, AKind, ASeen, True);
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, True, False);
 end;
 
 function PlanFix(const ASource: string; AKind: TFindingKind;

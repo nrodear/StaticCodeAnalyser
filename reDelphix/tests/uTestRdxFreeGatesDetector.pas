@@ -538,8 +538,10 @@ end;
 
 const
   // Dev-Cpp InstallWizards.pas (minimiert; RDX_W/RDX_L statt WIN32/LINUX,
-  // die die Ein-Zweig-Sicht nicht setzt - der Baum sieht keinen der
-  // Bloecke): System.SysUtils steht in uses nur unter zwei Bloecken ohne
+  // die die Ein-Zweig-Sicht der IDE nicht setzt - der Baum sieht keinen der
+  // Bloecke, darum PlanKnown mit PlanFixInIdeView; die Doppelzweig-Sicht
+  // von PlanFixIn saehe SysUtils und die uses-Frage fiele weg):
+  // System.SysUtils steht in uses nur unter zwei Bloecken ohne
   // {$ELSE}, der erste Eintrag in Zeile KNOWN_USES_LINE. %s: vor den
   // Methoden, Rumpf von TFoo.Drop, Rumpf von TFoo.Done (die Stelle), vor
   // 'end.'.
@@ -593,7 +595,7 @@ var
 begin
   Seen := Detect(ASource, AKind);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet: ' + ASource);
-  Result := PlanFixIn(ASource, 't.pas', AKind, Seen[0]);
+  Result := PlanFixInIdeView(ASource, 't.pas', AKind, Seen[0]);
 end;
 
 // Die Hilfe ist frei, schreibt AFrom -> ATo und fasst uses nicht an.
