@@ -83,7 +83,7 @@ type
     [Test] procedure Sca007_TextUsesEntry_AllBranches;
     // rwE31 Stufe 3 (gexperts mPasLex.pas:80 UpperCase, issrc BidiUtils.pas:15
     // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
-    // Exporte schliessen den Beweis (AlwaysNeededIdents).
+    // Exporte schliessen den Beweis (ExtraIdents).
     [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
     // rwE32 Stufe 4, Nico-Entscheid E5: SCA168.2 gesperrt, wenn das case
     // nicht nach einer Aufzaehlung waehlt (Selektor-Typ, Konstanten oder
@@ -102,6 +102,11 @@ type
     // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
     // WM_APP): auch Messages hat im Detektor keine Liste.
     [Test] procedure Sca007_ForeignIdent_Messages;
+    // Fix-Runde 5 nach rwE33 (jvcl JvCategCh.pas:44 TPoint, Abbrevia_TLB.pas:57
+    // CreateRemoteComObject, JvDBIndex.pas:39 TTable): Windows, ComObj und
+    // DBTables fuehren keine Liste im Detektor, Rect/Point fehlen in der von
+    // Classes - ihre Exporte schliessen den Beweis (ExtraIdents).
+    [Test] procedure Sca007_ForeignIdent_WindowsComObjDbTables;
   end;
 
 implementation
@@ -1081,19 +1086,20 @@ begin
     'begin', '  Result := UpperCase(S);', 'end;', 'end.']);
   Assert.AreEqual('UpperCase', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('sysutils'), Li), 'SysUtils');
+    TRdxStructFixes.ExtraIdents('sysutils'), Li), 'SysUtils');
   // BidiUtils.pas:15 (minimiert): TRect aus Types.
   Src := Join(['unit BidiUtils;', 'interface', 'uses Classes, Types;',
     'procedure FlipRect(var Rect: TRect);', 'implementation',
     'procedure FlipRect(var Rect: TRect);', 'begin', 'end;', 'end.']);
   Assert.AreEqual('TRect', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('system.types'), Li), 'Types');
-  // Nur die beiden Units: andere bleiben leer (die Listen des Detektors).
+    TRdxStructFixes.ExtraIdents('system.types'), Li), 'Types');
+  // Units mit Liste im Detektor bleiben leer (seit Fix-Runde 5 nach rwE33
+  // ausser Classes: Point, Rect, Bounds, SmallPoint).
   Assert.AreEqual<Integer>(0,
-    Length(TRdxStructFixes.AlwaysNeededIdents('classes')), 'Classes');
+    Length(TRdxStructFixes.ExtraIdents('controls')), 'Controls');
   Assert.AreEqual<Integer>(0,
-    Length(TRdxStructFixes.AlwaysNeededIdents('windows')), 'Windows');
+    Length(TRdxStructFixes.ExtraIdents('vcl.clipbrd')), 'Vcl.ClipBrd');
 end;
 
 // ---- SCA168.2, Nico-Entscheid E5 (rwE32 Stufe 4) ----
@@ -1376,15 +1382,96 @@ begin
   Assert.AreEqual('WM_APP', Foreign(Src, [], Li), 'ohne Liste');
   Assert.AreEqual<Integer>(6, Li);
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'Messages');
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'Messages');
   Assert.AreEqual('', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('winapi.messages'), Li),
+    TRdxStructFixes.ExtraIdents('winapi.messages'), Li),
     'Winapi.Messages');
   // Gegenprobe: eine eigene Botschaft einer anderen Unit (keine
   // Praefix-Regel WM_*) bleibt ohne Quelle.
   Src := StringReplace(Src, 'WM_APP + $101', 'WM_CEFDESTROY + 1', []);
   Assert.AreEqual('WM_CEFDESTROY', Foreign(Src,
-    TRdxStructFixes.AlwaysNeededIdents('messages'), Li), 'eigene Botschaft');
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'eigene Botschaft');
+end;
+
+// ---- SCA007, Fix-Runde 5 (rwE33) ----
+
+// Beide Listen hintereinander (die Units der uses-Klauseln).
+function Both(const A, B: TArray<string>): TArray<string>;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(A) + Length(B));
+  for i := 0 to High(A) do
+    Result[i] := A[i];
+  for i := 0 to High(B) do
+    Result[Length(A) + i] := B[i];
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_WindowsComObjDbTables;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // JvCategCh.pas:44/133 (minimiert): 'P: TPoint' - TPoint kommt aus
+  // Windows (dort in den uses). Bis dahin "kann aus Dialogs kommen" - rot
+  // ohne Fix: 'TPoint'.
+  Src := Join(['unit JvCategCh;', 'interface', 'uses',
+    '  Windows, Messages, SysUtils, Classes, Graphics, Controls, Dialogs;',
+    'type', '  TChooser = class(TObject)', '  protected',
+    '    procedure Paint;', '  end;', 'implementation',
+    'procedure TChooser.Paint;', 'var', '  P: TPoint;', '  R: TRect;',
+    'begin', '  P.X := 0;', '  R := Rect(0, 0, P.X, 1);', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(13, Li);
+  // Windows fuehrt die Typen, aber keine Funktion Rect - die steht in
+  // Classes (und Types).
+  Assert.AreEqual('Rect', Foreign(Src, TRdxStructFixes.ExtraIdents('windows'),
+    Li), 'Windows ohne Rect()');
+  Assert.AreEqual('', Foreign(Src, Both(TRdxStructFixes.ExtraIdents(
+    'winapi.windows'), TRdxStructFixes.ExtraIdents('classes')), Li),
+    'Windows und Classes');
+  // Abbrevia_TLB.pas:775-784 (minimiert): CreateRemoteComObject aus ComObj
+  // (uses im implementation-Teil). Bis dahin "kann aus Graphics kommen".
+  Src := Join(['unit Abbrevia_TLB;', 'interface',
+    'uses Windows, ActiveX, Classes, Graphics;', 'const',
+    '  CLASS_ZipItem: TGUID = ''{AF804E21-4043-499E-BB14-237B9F26F89F}'';',
+    'type', '  CoZipItem = class',
+    '    class function CreateRemote(const MachineName: string): IUnknown;',
+    '  end;', 'implementation', 'uses ComObj;',
+    'class function CoZipItem.CreateRemote(const MachineName: string): '
+    + 'IUnknown;', 'begin',
+    '  Result := CreateRemoteComObject(MachineName, CLASS_ZipItem);', 'end;',
+    'end.']);
+  Assert.AreEqual('CreateRemoteComObject', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(14, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('comobj'), Li),
+    'ComObj');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('system.win.comobj'), Li), 'System.Win.ComObj');
+  // JvDBIndex.pas:39/261 (minimiert): TTable aus DBTables. Bis dahin "kann
+  // aus Graphics kommen".
+  Src := Join(['unit JvDBIndex;', 'interface',
+    'uses SysUtils, Classes, Graphics, DB, DBTables;',
+    'function IsTable(ADataSet: TObject): Boolean;', 'implementation',
+    'function IsTable(ADataSet: TObject): Boolean;', 'begin',
+    '  Result := ADataSet.InheritsFrom(TTable);', 'end;', 'end.']);
+  Assert.AreEqual('TTable', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(8, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('dbtables'),
+    Li), 'DBTables');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('bde.dbtables'), Li), 'Bde.DBTables');
+  // Gegenprobe: ein Name, der aus der entfernten Unit kommen kann
+  // (CF_PICTURE aus ClipBrd), bleibt ohne Quelle - auch wenn Windows und
+  // Classes seine Nachbarn zuordnen.
+  Src := Join(['unit u;', 'interface', 'uses Windows, Classes, ClipBrd;',
+    'function Fmt: Word;', 'implementation', 'function Fmt: Word;', 'var',
+    '  P: TPoint;', 'begin', '  P := Point(0, 0);', '  Result := CF_PICTURE;',
+    'end;', 'end.']);
+  Assert.AreEqual('CF_PICTURE', Foreign(Src, Both(
+    TRdxStructFixes.ExtraIdents('windows'),
+    TRdxStructFixes.ExtraIdents('classes')), Li), 'ClipBrd-Konstante');
+  Assert.AreEqual<Integer>(11, Li);
 end;
 
 initialization

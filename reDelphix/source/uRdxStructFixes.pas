@@ -118,14 +118,19 @@ type
 
     // SCA007, Bezeichner-Beweis (rwE31 Stufe 3, Todo_SCA007 "nur-menue-
     // unnoetig": gexperts mPasLex.pas:80 UpperCase, vcl-styles-utils
-    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte
-    // der Units, die der Detektor nie meldet (IsAlwaysNeeded) und fuer die er
-    // darum keine Liste fuehrt - SysUtils und Types (auch System.-Namen),
-    // seit Fix-Runde 4 nach rwE32 auch Messages (WM_APP, TWMMove ...),
-    // klein; sonst leer. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC
-    // 3.2.2 im interface-Teil fuehren (gegen beide Quellen geprueft): steht
-    // die Unit in den uses, kommt der Name aus ihr, nicht aus der entfernten.
-    class function AlwaysNeededIdents(const AUnitLow: string): TArray<string>;
+    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte,
+    // die der Planer ueber die Listen des Detektors hinaus kennt, klein;
+    // sonst leer. Zum einen die Units, die der Detektor nie meldet und fuer
+    // die er darum keine Liste fuehrt - SysUtils und Types (auch System.-
+    // Namen), seit Fix-Runde 4 nach rwE32 Messages (WM_APP, TWMMove ...),
+    // seit Fix-Runde 5 nach rwE33 Windows (TPoint, TRect ..) und ComObj
+    // (IsAlwaysNeeded) und DBTables (keine Liste); zum anderen Point, Rect,
+    // Bounds, SmallPoint von Classes, die der Detektor aus Grundsatz nicht
+    // fuehrt. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC 3.2.2 im
+    // interface-Teil fuehren (gegen beide Quellen geprueft; DBTables gibt es
+    // nur unter Delphi): steht die Unit in den uses, kommt der Name aus ihr,
+    // nicht aus der entfernten. Bis Fix-Runde 5 AlwaysNeededIdents.
+    class function ExtraIdents(const AUnitLow: string): TArray<string>;
       static;
 
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
@@ -299,7 +304,7 @@ const
     'ansistring', 'widestring', 'unicodestring', 'shortstring', 'pointer',
     'pchar', 'pansichar', 'pwidechar', 'single', 'double', 'extended',
     'currency', 'variant', 'olevariant');
-  // Exporte von SysUtils bzw. Types (AlwaysNeededIdents): Routinen, Typen,
+  // Exporte von SysUtils bzw. Types (ExtraIdents): Routinen, Typen,
   // Exceptions und Aufzaehlungswerte im Stil, den ForeignIdent prueft - je in
   // System.SysUtils.pas/System.Types.pas von Delphi 13 und in sysutils
   // (objpas/sysutils/*h.inc, win/sysutils.pp)/types.pp von FPC 3.2.2.
@@ -351,7 +356,7 @@ const
     'tsmallpoint', 'tpointf', 'trectf', 'rect', 'point', 'bounds', 'ptinrect',
     'intersectrect', 'unionrect', 'offsetrect', 'isrectempty', 'equalrect',
     'centerpoint', 'tduplicates', 'dupignore', 'dupaccept', 'duperror');
-  // Exporte von Messages (AlwaysNeededIdents, Fix-Runde 4 nach rwE32:
+  // Exporte von Messages (ExtraIdents, Fix-Runde 4 nach rwE32:
   // CEF4Delphi TabbedBrowser uMainForm.pas:18, TabbedOSRBrowser
   // uChildForm.pas:20 'WM_APP + $100' - Messages steht in IsAlwaysNeeded,
   // der Detektor fuehrt keine Liste). Genau die Namen, die Winapi.Messages
@@ -487,6 +492,49 @@ const
     'wm_windowposchanged', 'wm_windowposchanging', 'wm_wininichange',
     'wm_wtssession_change', 'wm_xbuttondblclk', 'wm_xbuttondown',
     'wm_xbuttonup');
+  // Exporte von Windows, ComObj, DBTables und Classes (ExtraIdents, Fix-Runde
+  // 5 nach rwE33: jvcl JvCategCh.pas:44 'P: TPoint', Abbrevia_TLB.pas:57
+  // CreateRemoteComObject, JvDBIndex.pas:39 TTable - der Hinweis nannte sie
+  // als moegliche Herkunft der entfernten Unit). Windows und ComObj stehen
+  // in IsAlwaysNeeded, DBTables hat keine Liste - der Detektor meldet alle
+  // drei nie. WINDOWS_NAMES: die Rechteck-Typen und -Routinen, die
+  // Winapi.Windows von Delphi 13 (TPoint = System.Types.TPoint ..) UND
+  // windows von FPC 3.2.2 (struct.inc mit typshrdh.inc, func.inc) fuehren.
+  WINDOWS_NAMES: array[0..14] of string = ('tpoint', 'trect', 'tsize',
+    'tsmallpoint', 'ptinrect', 'intersectrect', 'unionrect', 'offsetrect',
+    'isrectempty', 'equalrect', 'inflaterect', 'setrect', 'copyrect',
+    'setrectempty', 'subtractrect');
+  // ComObj: das interface von System.Win.ComObj (Delphi 13) UND comobj von
+  // FPC 3.2.2 (packages/winunits-base) - Klassen, Exceptions, Routinen,
+  // TClassInstancing/TThreadingModel samt Werten. Der Detektor fuehrt
+  // CreateComObject und OleCheck in der Liste von ActiveX.
+  COMOBJ_NAMES: array[0..46] of string = ('eoleerror', 'eolesyserror',
+    'eoleexception', 'eoleregistrationerror', 'tcomserverobject',
+    'tcomobjectfactory', 'tcomclassmanager', 'tcomobject', 'tcomclass',
+    'tclassinstancing', 'ciinternal', 'cisingleinstance', 'cimultiinstance',
+    'tthreadingmodel', 'tmsingle', 'tmapartment', 'tmfree', 'tmboth',
+    'tmneutral', 'ttypedcomobject', 'ttypedcomclass', 'ttypedcomobjectfactory',
+    'tautoobject', 'tautoclass', 'tautoobjectfactory', 'tautointfobject',
+    'createclassid', 'createcomobject', 'createremotecomobject',
+    'createoleobject', 'getactiveoleobject', 'olecheck', 'oleerror',
+    'progidtoclassid', 'classidtoprogid', 'stringtolpolestr',
+    'interfaceconnect', 'interfacedisconnect', 'dispatchinvoke',
+    'dispatchinvokeerror', 'handlesafecallexception', 'comclassmanager',
+    'createregkey', 'deleteregkey', 'getregstringvalue', 'tconnectevent',
+    'tfactoryproc');
+  // (Bde.)DBTables gibt es nur unter Delphi (BDE, FPC hat keine): die
+  // Datenmengen und Verbindungen der BDE, die jede Fassung seit Delphi 3
+  // fuehrt.
+  DBTABLES_NAMES: array[0..9] of string = ('ttable', 'tquery', 'tdatabase',
+    'tsession', 'tstoredproc', 'tbatchmove', 'tbdedataset', 'tdbdataset',
+    'tupdatesql', 'edbengineerror');
+  // Classes hat eine Liste im Detektor; Point, Rect, Bounds und SmallPoint
+  // nimmt er aus Grundsatz nicht auf (D007: sie stehen auch in Types bzw.
+  // einer IsAlwaysNeeded-Unit und bewiesen nichts fuer Classes). Fuer den
+  // Beweis des Planers sind sie Exporte von System.Classes (Delphi 13) und
+  // classes (FPC 3.2.2, classesh.inc).
+  CLASSES_EXTRA: array[0..3] of string = ('point', 'smallpoint', 'rect',
+    'bounds');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -1074,30 +1122,34 @@ begin
   end;
 end;
 
-class function TRdxStructFixes.AlwaysNeededIdents(
-  const AUnitLow: string): TArray<string>;
+// Die Namen einer Liste als Ergebnis von ExtraIdents.
+function NamesOf(const ANames: array of string): TArray<string>;
 var
   i : Integer;
 begin
+  SetLength(Result, Length(ANames));
+  for i := 0 to High(ANames) do
+    Result[i] := ANames[i];
+end;
+
+class function TRdxStructFixes.ExtraIdents(
+  const AUnitLow: string): TArray<string>;
+begin
   Result := nil;
   if (AUnitLow = 'sysutils') or (AUnitLow = 'system.sysutils') then
-  begin
-    SetLength(Result, Length(SYSUTILS_NAMES));
-    for i := 0 to High(SYSUTILS_NAMES) do
-      Result[i] := SYSUTILS_NAMES[i];
-  end
+    Result := NamesOf(SYSUTILS_NAMES)
   else if (AUnitLow = 'types') or (AUnitLow = 'system.types') then
-  begin
-    SetLength(Result, Length(TYPES_NAMES));
-    for i := 0 to High(TYPES_NAMES) do
-      Result[i] := TYPES_NAMES[i];
-  end
+    Result := NamesOf(TYPES_NAMES)
   else if (AUnitLow = 'messages') or (AUnitLow = 'winapi.messages') then
-  begin
-    SetLength(Result, Length(MESSAGES_NAMES));
-    for i := 0 to High(MESSAGES_NAMES) do
-      Result[i] := MESSAGES_NAMES[i];
-  end;
+    Result := NamesOf(MESSAGES_NAMES)
+  else if (AUnitLow = 'windows') or (AUnitLow = 'winapi.windows') then
+    Result := NamesOf(WINDOWS_NAMES)
+  else if (AUnitLow = 'comobj') or (AUnitLow = 'system.win.comobj') then
+    Result := NamesOf(COMOBJ_NAMES)
+  else if (AUnitLow = 'dbtables') or (AUnitLow = 'bde.dbtables') then
+    Result := NamesOf(DBTABLES_NAMES)
+  else if (AUnitLow = 'classes') or (AUnitLow = 'system.classes') then
+    Result := NamesOf(CLASSES_EXTRA);
 end;
 
 // Die Eintraege einer uses-Klausel aus dem Text, ab dem ersten Token hinter

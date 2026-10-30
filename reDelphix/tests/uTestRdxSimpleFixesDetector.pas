@@ -172,6 +172,9 @@ type
     // TOleEnum (Winapi.ActiveX) und caFree (Vcl.Forms) haben eine Quelle.
     [Test] procedure Sca007_OleEnum_InBulb;
     [Test] procedure Sca007_CaFree_InBulb;
+    // Fix-Runde 5 nach rwE33 (Abbrevia_TLB.pas:57): CreateRemoteComObject aus
+    // System.Win.ComObj (keine Liste im Detektor) hat eine Quelle.
+    [Test] procedure Sca007_ComObjCall_InBulb;
     // rwE31 Stufe 3 (SCA144 Fehler, SCA085/SCA144 unnoetige Sperren):
     // PlanUses mit der Zeile der Stelle, eine Klausel im Text ohne Baum,
     // Direktiven in der Klausel neben einem unbedingten Eintrag.
@@ -2114,6 +2117,40 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.IsTrue(O.MenuOnly, 'nur im Menue');
   Assert.IsTrue(Pos('coFree', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_ComObjCall_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Abbrevia_TLB.pas:57/784 (minimiert): CoZipItem.CreateRemote ruft
+  // CreateRemoteComObject aus System.Win.ComObj (uses im implementation-
+  // Teil). Vorher nur im Menue - der Hinweis nannte es als moegliche
+  // Herkunft aus Vcl.Controls (rot ohne Fix: MenuOnly).
+  Src := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function Remote(const AHost: string; const AId: TGUID): IUnknown;',
+    '  end;', 'implementation', 'uses System.Win.ComObj;',
+    'function TFoo.Remote(const AHost: string; const AId: TGUID): IUnknown;',
+    'begin', '  Result := CreateRemoteComObject(AHost, AId);', 'end;',
+    'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne System.Win.ComObj in den uses hat der Aufruf keine
+  // Quelle - nur im Menue, der Hinweis nennt ihn.
+  Src := StringReplace(Src, 'uses System.Win.ComObj;', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('CreateRemoteComObject', O.Hint) > 0, O.Hint);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.

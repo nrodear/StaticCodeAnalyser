@@ -1156,8 +1156,9 @@ begin
         for Id in TUnusedUsesDetector.IdentsFor(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
-        // SysUtils, Types: der Detektor fuehrt keine Liste (rwE31 Stufe 3).
-        for Id in TRdxStructFixes.AlwaysNeededIdents(
+        // SysUtils, Types, Windows ..: der Detektor fuehrt keine Liste
+        // (rwE31 Stufe 3); Point/Rect von Classes nimmt er nicht auf.
+        for Id in TRdxStructFixes.ExtraIdents(
             LowerCase(Clauses[c][k].Resolved)) do
           AddText(Result, Id);
       end;
