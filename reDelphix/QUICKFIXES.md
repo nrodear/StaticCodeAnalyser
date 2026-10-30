@@ -1720,7 +1720,7 @@ Nachher:
 
 **Platzhalter:** `%s` = die Parameter hinter `out` (`Header, Payload`).
 
-**Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.
+**Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich – ebenso für eine Aufzählung, eine Menge, einen Zeiger und einen Record bzw. ein `object` der Unit nur mit Feldern solcher Typen (Abschnitte, Methoden und Properties zählen nicht, auch mit doppeltem Kopf `{$ifdef X} TFoo = record {$else} TFoo = object {$endif}`; nicht mit `class operator`, `class var` oder Variantenteil) und für einen Alias aus einer Unit der uses-Klauseln, die neben der Datei liegt (`UCS4 = Cardinal`).
 
 **Nicht angeboten**
 

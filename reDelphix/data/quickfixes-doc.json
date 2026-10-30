@@ -2309,7 +2309,7 @@
     },
     "AvoidOut": {
       "titel": "`out` durch `var` ersetzen",
-      "was": "Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.",
+      "was": "Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich – ebenso für eine Aufzählung, eine Menge, einen Zeiger und einen Record bzw. ein `object` der Unit nur mit Feldern solcher Typen (Abschnitte, Methoden und Properties zählen nicht, auch mit doppeltem Kopf `{$ifdef X} TFoo = record {$else} TFoo = object {$endif}`; nicht mit `class operator`, `class var` oder Variantenteil) und für einen Alias aus einer Unit der uses-Klauseln, die neben der Datei liegt (`UCS4 = Cardinal`).",
       "kennzeichnung": "nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert; setzt der Rumpf einen solchen Parameter nicht als erste Anweisung (bedingt, nach `Exit`, gelesen), steht die Hilfe nur im Menü, nicht in der Glühbirne",
       "platzhalter": "`%s` = die Parameter hinter `out` (`Header, Payload`).",
       "nichtAngeboten": [
