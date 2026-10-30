@@ -4636,7 +4636,7 @@ Rezepte des Anbieters (Kern `uRdxActionCore`), in der Reihenfolge des Menüs.
 - ein Zeiger am Kettenanfang (`P + N + '.txt'` mit `P: PChar` bzw. `PChar(S)` – Delphi rechnet zuerst Zeiger-Arithmetik); hinter `X +` beim Selbst-Anhängen nicht, dort ist X der Anfang
 - Nicht-Unicode-Strings als Ziel oder Operand (`AnsiString`, `RawByteString`, `UTF8String`, `ShortString`), ein `AnsiChar`-Operand
 - die Zeile trägt nicht mehr Ziel und `+`-Zahl des Funds (Zeile verschoben)
-- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses (in einem `$IFDEF`-Zweig), sperrt die Hilfe ebenfalls – sie prüft nicht, ob der Zweig die Stelle umfasst
+- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile des ersetzten Bereichs umfasst
 
 **Beispiel**
 

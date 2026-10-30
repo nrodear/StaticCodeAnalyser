@@ -172,6 +172,9 @@ type
     [Test] procedure PlanUses_DirectiveInClause_UnconditionalEntry;
     // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
     [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
+    // Fix-Runde 4: mehrzeilige Stelle (erste bis letzte Zeile) und das
+    // Zeilenende hinter einer Direktive.
+    [Test] procedure PlanUses_RangeMustStayInBranch;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -1531,9 +1534,9 @@ begin
 end;
 
 // PlanUses wie PlanUsesIn fuer die Unit AShort/AQual, gefragt fuer die
-// Stelle in Zeile AAtLine (0 = ohne).
+// Stelle in Zeile AAtLine (0 = ohne) bis AAtEndLine (0 = nur AAtLine).
 function PlanUsesAt(const ASource, AShort, AQual: string;
-  AAtLine: Integer): TRdxUsesPlan;
+  AAtLine: Integer; AAtEndLine: Integer = 0): TRdxUsesPlan;
 var
   P : TSourcePlaces;
 begin
@@ -1541,7 +1544,8 @@ begin
   try
     P.SetIfdefDefines(['MSWINDOWS']);
     Assert.IsTrue(P.OpenSource('t.pas', ASource));
-    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine);
+    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine,
+      AAtEndLine);
   finally
     P.Free;
   end;
@@ -1656,6 +1660,42 @@ end;
 
 // Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
 // in einem bedingten Zweig: die neue Klausel galte nur dort.
+// Fix-Runde 4: eine Hilfe kann ueber mehrere Zeilen schreiben (SCA168.2:
+// das ';' des letzten Arms und das 'end'), und eine Direktive darf mitten
+// in einer Anweisung stehen - die Startzeile allein beweist nichts. Die
+// Quelle wie PlanUses_EntryBranchCoversLine_Present (SysUtils in Zeile 5
+// unter '{$IFDEF RDX_X}', der Zweig bis Zeile 11 bzw. 10). Ohne Fix
+// (nur die Startzeile) waeren 9..12 und Zeile 10 der zweiten Quelle
+// eingebunden - rot. Gegenproben: 8..10 ganz im Zweig, Zeile 9 der
+// zweiten Quelle ohne Direktive.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_RangeMustStayInBranch;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end;', '{$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 8, 10);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  // Die letzte Zeile im {$ELSE}-Zweig.
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9, 12);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  // '{$ELSE}' hinter dem Code der letzten Zeile: was hinter ihr Ende
+  // kommt, laege im anderen Zweig.
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end; {$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 10);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+end;
+
 procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
 var
   Plan : TRdxUsesPlan;
