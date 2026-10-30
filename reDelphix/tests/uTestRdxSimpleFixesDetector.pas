@@ -148,6 +148,10 @@ type
     // rwE31 Stufe 3 (Todo_SCA168_2, vier Fehler): raise in der Gluehbirne
     // nur, wenn jeder Wert des Typs einen Arm hat - sonst nur im Menue.
     [Test] procedure Sca168_Raise_MenuOnlyWithoutProof;
+    // rwE32 Stufe 4 (Nico-Entscheid E5): kein Aufzaehlungs-Selektor oder ein
+    // vorbelegtes Ergebnis - der zweite Eintrag ist gesperrt, das leere else
+    // bleibt.
+    [Test] procedure Sca168_Raise_LockedNonEnumOrPreset;
     [Test] procedure PlanUses_UnitOnlyInConditionalBranch_Refused;
     [Test] procedure PlanUses_SectionInConditionalBranch_Refused;
     // rwE30 Stufe 2 (21 Fehler, Nico 2026-10-29): Bezeichner ohne Quelle -
@@ -1321,8 +1325,8 @@ var
   O          : TRdxFixOutcome;
 begin
   // Ohne SysUtils: die uses-Ergaenzung kommt mit (EInvalidOpException).
-  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: Integer);',
-    'begin', '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: TAlign);',
+    'begin', '  case X of', '    alLeft: Exit;', '  end;', 'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
@@ -1350,7 +1354,7 @@ begin
   // Kurznamen (FPC 3.2 kennt keine Unit-Scopes). Bis 2026-10-22 sperrte
   // EProgrammerError (gibt es in keiner RTL) die Variante hier.
   Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
-    'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
+    'procedure P(X: TAlign);', 'begin', '  case X of', '    alLeft: Exit;', '  end;',
     'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
@@ -1460,8 +1464,8 @@ var
 begin
   Src := Join(['unit t;', 'interface', 'uses', '  System.Classes,',
     '  Foo.Serializer.Abstract,', '  System.SysUtils;', 'implementation',
-    'uses', '  System.SysConst;', 'procedure P(X: Integer);', 'begin',
-    '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
+    'uses', '  System.SysConst;', 'procedure P(X: TAlign);', 'begin',
+    '  case X of', '    alLeft: Exit;', '  end;', 'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
@@ -1496,6 +1500,52 @@ begin
   Assert.IsTrue(Pos('aaFailed', O.Hint) > 0, O.Hint);
   // Gegenprobe: jeder Wert hat einen Arm - Gluehbirne.
   Src := StringReplace(Src, '    aaDelete: Exit;', '    aaDelete, aaFailed: Exit;',
+    []);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_LockedNonEnumOrPreset;
+var
+  Src    : string;
+  Seen   : TArray<TSeen>;
+  O      : TRdxFixOutcome;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Dev-Cpp main.pas:3822, Vcl.Styles.UxTheme.pas:2330 (minimiert): das case
+  // waehlt nach einer ganzen Zahl - jeder andere Wert ist dort gewoehnlich.
+  // Bis rwE32 im Menue angeboten (rot ohne Fix: Enabled).
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;',
+    'implementation', 'procedure P(X: Integer);', 'begin', '  case X of',
+    '    1: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsFalse(O.Enabled, 'gesperrt');
+  Assert.IsTrue(Pos('integer', O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Das leere else (SCA168) bleibt.
+  Assert.IsTrue(PlanFix(Src, fkDefaultCaseInCaseStatement, Seen[0], Edits,
+    Reason), Reason);
+  // issrc ISPP.IdentMan.pas:945/953 (minimiert): das Ergebnis ist vor dem
+  // case vorbelegt, eC hat keinen Arm - gesperrt.
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;', 'type',
+    '  TE = (eA, eB, eC);', 'implementation', 'function F(E: TE): Integer;',
+    'begin', '  Result := -1;', '  case E of', '    eA: Result := 1;',
+    '    eB: Result := 2;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'vorbelegt');
+  Assert.IsTrue(Pos('Result', O.Reason) > 0, O.Reason);
+  // Gegenprobe: jeder Wert hat einen Arm - die Vorbelegung aendert nichts,
+  // Gluehbirne.
+  Src := StringReplace(Src, '    eB: Result := 2;', '    eB, eC: Result := 2;',
     []);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
@@ -1712,8 +1762,8 @@ end;
 // Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
 procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_SysUtilsInSiteBranch_NoUses;
 begin
-  AssertBranchUses('SysUtils', 'System.SysUtils', Join(['procedure P(X: Integer);',
-    'begin', '  case X of', '    1: Exit;', '  end;', 'end;']),
+  AssertBranchUses('SysUtils', 'System.SysUtils', Join(['procedure P(X: TAlign);',
+    'begin', '  case X of', '    alLeft: Exit;', '  end;', 'end;']),
     fkDefaultCaseInCaseStatement, True, 1, Detect);
 end;
 

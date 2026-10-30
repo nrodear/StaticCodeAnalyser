@@ -6983,8 +6983,26 @@ msgstr "directive de compilation dans le case - on ne peut pas prouver quelles v
 msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
 msgstr "les étiquettes des branches ne sont pas toutes des noms d'une même énumération - on ne peut pas prouver si les valeurs sans branche surviennent normalement"
 
-msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"
-msgstr "l'énumération de %s n'est pas déclarée dans ce fichier - on ne peut pas prouver si ses valeurs sans branche surviennent normalement"
+msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"
+msgstr "%s n'est déclaré ni dans ce fichier ni dans une unité voisine - on ne peut pas prouver si les valeurs sans branche surviennent normalement"
+
+msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "le sélecteur %s du case est de type %s, pas une énumération - les valeurs sans branche y sont normales, et raise casserait ce chemin"
+
+msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"
+msgstr "les étiquettes des branches sont des nombres - le case porte sur un entier, les valeurs sans branche y sont normales, et raise casserait ce chemin"
+
+msgid "the arm label %s is a constant (line %d), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "l'étiquette %s est une constante (ligne %d), pas une valeur d'énumération - les valeurs sans branche y sont normales, et raise casserait ce chemin"
+
+msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "l'étiquette %s est une constante de l'unité %s, pas une valeur d'énumération - les valeurs sans branche y sont normales, et raise casserait ce chemin"
+
+msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "l'étiquette %s est une constante entière de la RTL (messages, touches, résultats de dialogue), pas une valeur d'énumération - les valeurs sans branche y sont normales, et raise casserait ce chemin"
+
+msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"
+msgstr "%s reçoit une valeur avant le case (ligne %d) - les valeurs sans branche la conservent, c'est le chemin normal ici ; raise le casserait"
 
 msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
 msgstr "valeurs de %s sans branche : %s - elles peuvent être normales ici, et raise casserait ce chemin"

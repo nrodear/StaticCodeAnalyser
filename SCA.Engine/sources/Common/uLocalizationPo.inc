@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7042 Zeilen, 332571 Bytes
-  CPoLines_de: array[0..7041] of string = (
+  // i18n\de.po - 7060 Zeilen, 334430 Bytes
+  CPoLines_de: array[0..7059] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7004,8 +7004,26 @@ const
     'msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"',
     'msgstr "die Marken der Zweige sind nicht alle Namen einer Aufz'#$00E4'hlung - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"',
     '',
-    'msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"',
-    'msgstr "die Aufz'#$00E4'hlung von %s ist nicht in dieser Datei deklariert - ob ihre Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"',
+    'msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"',
+    'msgstr "%s ist weder in dieser Datei noch in einer Unit daneben deklariert - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"',
+    '',
+    'msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "der Selektor %s des case hat den Typ %s, keine Aufz'#$00E4'hlung - Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"',
+    'msgstr "die Marken der Zweige sind Zahlen - das case w'#$00E4'hlt nach einer ganzen Zahl, Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "the arm label %s is a constant (line %d), not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "die Marke %s ist eine Konstante (Zeile %d), kein Wert einer Aufz'#$00E4'hlung - Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "die Marke %s ist eine Konstante der Unit %s, kein Wert einer Aufz'#$00E4'hlung - Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "die Marke %s ist eine Ganzzahl-Konstante der RTL (Nachrichten, Tasten, Dialog-Ergebnisse), kein Wert einer Aufz'#$00E4'hlung - Werte ohne Zweig sind dort normal, und raise br'#$00E4'che diesen Weg"',
+    '',
+    'msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"',
+    'msgstr "%s bekommt vor dem case schon einen Wert (Zeile %d) - Werte ohne Zweig behalten ihn, das ist dort der normale Weg; raise br'#$00E4'che ihn"',
     '',
     'msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"',
     'msgstr "Werte von %s ohne Zweig: %s - sie k'#$00F6'nnen hier Normalfall sein, und raise br'#$00E4'che diesen Weg"',
@@ -7331,8 +7349,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7038 Zeilen, 345955 Bytes
-  CPoLines_fr: array[0..7037] of string = (
+  // i18n\fr.po - 7056 Zeilen, 347881 Bytes
+  CPoLines_fr: array[0..7055] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14318,8 +14336,26 @@ const
     'msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"',
     'msgstr "les '#$00E9'tiquettes des branches ne sont pas toutes des noms d''une m'#$00EA'me '#$00E9'num'#$00E9'ration - on ne peut pas prouver si les valeurs sans branche surviennent normalement"',
     '',
-    'msgid "the enumeration of %s is not declared in this file - whether its values without an arm occur normally is not provable"',
-    'msgstr "l'''#$00E9'num'#$00E9'ration de %s n''est pas d'#$00E9'clar'#$00E9'e dans ce fichier - on ne peut pas prouver si ses valeurs sans branche surviennent normalement"',
+    'msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"',
+    'msgstr "%s n''est d'#$00E9'clar'#$00E9' ni dans ce fichier ni dans une unit'#$00E9' voisine - on ne peut pas prouver si les valeurs sans branche surviennent normalement"',
+    '',
+    'msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "le s'#$00E9'lecteur %s du case est de type %s, pas une '#$00E9'num'#$00E9'ration - les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"',
+    'msgstr "les '#$00E9'tiquettes des branches sont des nombres - le case porte sur un entier, les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "the arm label %s is a constant (line %d), not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "l'''#$00E9'tiquette %s est une constante (ligne %d), pas une valeur d'''#$00E9'num'#$00E9'ration - les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "l'''#$00E9'tiquette %s est une constante de l''unit'#$00E9' %s, pas une valeur d'''#$00E9'num'#$00E9'ration - les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"',
+    'msgstr "l'''#$00E9'tiquette %s est une constante enti'#$00E8're de la RTL (messages, touches, r'#$00E9'sultats de dialogue), pas une valeur d'''#$00E9'num'#$00E9'ration - les valeurs sans branche y sont normales, et raise casserait ce chemin"',
+    '',
+    'msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"',
+    'msgstr "%s re'#$00E7'oit une valeur avant le case (ligne %d) - les valeurs sans branche la conservent, c''est le chemin normal ici ; raise le casserait"',
     '',
     'msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"',
     'msgstr "valeurs de %s sans branche : %s - elles peuvent '#$00EA'tre normales ici, et raise casserait ce chemin"',
