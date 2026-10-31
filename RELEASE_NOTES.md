@@ -35,8 +35,9 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
 - **Sonar export that fits the server.** Every issue matches a file and
   a line SonarQube knows, capped findings are exported, and
   `sonar-scan.ps1` uses the rule set of the IDE (from the template
-  `ide-fast`, 21 rules: see the migration notes). Existing projects see
-  issues appear and move.
+  `ide-fast`, 21 rules: see the migration notes). The impact of a rule
+  follows the findings of the run. Existing projects see issues appear
+  and move.
 - **In the IDE:** new installations open the overlay below the finding
   line (an existing `analyser.ini` from the template still says
   `OverlayPosition=sameline`; change it to `below`), and the action menu

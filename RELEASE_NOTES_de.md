@@ -38,8 +38,9 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
 - **Ein Sonar-Export, der zum Server passt.** Jedes Issue passt zu einer
   Datei und einer Zeile, die SonarQube kennt, gedeckelte Funde werden
   exportiert, und `sonar-scan.ps1` nutzt den Regelsatz der IDE (aus der
-  Vorlage `ide-fast`, 21 Regeln: siehe Migration). Bestehende Projekte
-  sehen Issues auftauchen und wandern.
+  Vorlage `ide-fast`, 21 Regeln: siehe Migration). Der Impact einer Regel
+  folgt den Funden des Laufs. Bestehende Projekte sehen Issues auftauchen
+  und wandern.
 - **In der IDE:** Neue Installationen öffnen das Overlay unter der
   Fundzeile (eine bestehende `analyser.ini` aus der Vorlage sagt weiter
   `OverlayPosition=sameline`; dort auf `below` ändern), und das Aktionsmenü
