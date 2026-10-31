@@ -79,9 +79,22 @@ given in.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `File` | String | _(empty)_ | Baseline JSON. Relative paths resolve against the scan root; empty = `.sca` default location. |
+| `File` | String | _(empty)_ | Baseline JSON. A relative path resolves against the directory of the project or group, otherwise against the scan root; the CLI falls back to the working directory if the file exists only there, and says so. Empty = `.sca` default location. |
 | `OnlyNew` | Bool | `False` | Show only findings that are not in the baseline. |
 | `PathInFingerprint` | Bool | `False` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
+
+**A baseline counts.** The file holds one entry per finding, and each
+entry covers at most one finding: two entries with the same fingerprint
+cover two findings, a third one is new. Entries match in three passes,
+each entry used once: fingerprint and context hash, then the context hash
+alone, then the fingerprint alone. So where a file has more findings of
+one kind than the baseline has entries, the extra ones are reported as
+new.
+
+**Findings outside a routine** have an empty method, and the method is
+part of the fingerprint. A baseline written before v0.9.19 still matches
+them through its context hash as long as the lines around them are
+unchanged; a baseline without context hashes shows them once as new.
 
 ### Which thresholds you can re-tune without invalidating a baseline
 
@@ -129,8 +142,9 @@ which of them your baseline already *accepts*.
 
 The one case the exempt five cannot tell apart: for SCA012, SCA018,
 SCA022 and SCA176, two same-named methods in one file - overloads, or the
-same name in two classes of one unit - share a single baseline entry. On
-the 783,105-finding reference corpus that affects **183 to 185 of 37,990
+same name in two classes of one unit - share one fingerprint. Each keeps
+its own baseline entry, so the count stays right; the entries just cannot
+say which method is which. On the 783,105-finding reference corpus that affects **183 to 185 of 37,990
 findings (0.49 %) with `PathInFingerprint=1`**, and **about 1,450 (3.8 %)
 in the default mode**, where the file token is the bare file name and
 same-named files in different folders share it (the corpus has four

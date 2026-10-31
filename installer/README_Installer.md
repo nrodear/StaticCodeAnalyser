@@ -55,6 +55,11 @@ bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis.
 Drei separate BPLs in einem privaten Installationsordner sind daher nicht
 direkt ladbar.
 
+Das Setup liefert reDelphix nicht mit: das Paket linkt gegen `SCA.Engine`
+und lässt sich neben dem Monolithen nicht laden. Wer es nutzt, baut den
+Dev-Satz selbst (`HowTo_Build.md`, Abschnitt 5.3); ein Setup-Lauf ersetzt
+dessen Registrierung.
+
 ### Variante B — Dev-3-BPL-Satz (nur noch per Kommandozeile ohne SCA_MONOLITH)
 
 Der Dev-3-Package-Satz, in dieser Reihenfolge in der IDE bauen (Release/Win32):

@@ -6,7 +6,7 @@ Ce guide vous accompagne sur tout le chemin, de « je n'ai rien » à
 
 Vous obtiendrez à la fin :
 - l'**application Windows autonome** (`StaticCodeAnalyser.d12.exe`)
-- le **plugin IDE** (chargé dans Delphi 12 à chaque ouverture)
+- le **plugin IDE** (chargé dans Delphi à chaque ouverture)
 
 > **Compiler est facultatif.** Les releases GitHub livrent des zips EXE
 > prêts à l'emploi (Win32/Win64), un EXE d'installation pour le plugin
@@ -31,10 +31,12 @@ Vous obtiendrez à la fin :
 ## 1. Installer Delphi 12 (RAD Studio)
 
 Il vous faut **Delphi 12 Athens** (aussi appelé RAD Studio 12) — l'une
-des versions 12.0–12.3. Le plugin tourne dans l'IDE 32 bits (l'IDE
-64 bits de 12.3 n'est pas encore pris en charge) ; Delphi 13 est prévu
-mais pas encore pris en charge, Delphi 11 et antérieurs ne sont pas
-pris en charge. La **Community Edition gratuite** suffit.
+des versions 12.0–12.3 — ou **Delphi 13 Florence**. Delphi 12 n'a qu'un
+IDE 32 bits ; Delphi 13 a un IDE 32 bits et un IDE 64 bits, et le plugin
+tourne dans les deux. Delphi 11 et antérieurs ne sont pas pris en charge.
+Ce guide suit le chemin de Delphi 12 : sous Delphi 13, les chemins
+indiquent `37.0` au lieu de `23.0`, et le suffixe des paquets est `370`
+au lieu de `290`. La **Community Edition gratuite** suffit.
 
 1. Allez sur https://www.embarcadero.com/products/delphi/starter.
 2. Cliquez sur **« Download Free Trial »** ou **« Community Edition »**.
@@ -76,8 +78,11 @@ supposons `D:\projects\StaticCodeAnalyser`.
 
 ## 3. Ouvrir le groupe de projets dans Delphi
 
-Le projet est livré comme **groupe de projets** contenant 4
-sous-projets (moteur, UI partagée, application autonome, plugin IDE).
+Le projet est livré comme **groupe de projets** avec le moteur, l'UI
+partagée, l'application autonome et le plugin IDE, plus le paquet
+optionnel reDelphix, une démo CLI, les projets de test et deux sondes.
+Pour l'IDE 64 bits de Delphi 13, il existe
+`StaticCodeAnalyser.d13.64bit.groupproj`.
 
 1. Dans Delphi, cliquez sur le menu **File → Open Project**.
 2. Naviguez vers `D:\projects\StaticCodeAnalyser`.
@@ -85,13 +90,14 @@ sous-projets (moteur, UI partagée, application autonome, plugin IDE).
    **« Delphi project group (`*.groupproj`) »**.
 4. Choisissez `StaticCodeAnalyser.d12.groupproj` et cliquez sur **Open**.
 
-À droite, vous voyez maintenant la fenêtre **Project Manager** avec
-ces sous-projets :
+À droite, vous voyez maintenant la fenêtre **Project Manager**. Ces
+sous-projets comptent ici :
 
 - `SCA.Engine` — le moteur d'analyse.
 - `SCA.SharedUI` — composants UI communs à l'autonome et au plugin.
 - `StaticCodeAnalyser.d12` — l'EXE autonome.
 - `StaticCodeAnalyser.IDE.d12` — le plugin IDE (un paquet BPL).
+- `reDelphix.d12` — les actions de code optionnelles (section 5.3).
 
 Delphi affiche le sous-projet **actif** en **gras** vert. Vous
 changerez de projet actif au fil des étapes ci-dessous.
@@ -168,8 +174,9 @@ démarrage.
 
 ### 5.1 Compiler le plugin
 
-Le plugin tourne dans l'**IDE 32 bits** (l'IDE 64 bits de 12.3 n'est
-pas encore pris en charge). Le plugin doit donc être en 32 bits.
+Un plugin a la bitness de son IDE. Delphi 12 n'a qu'un **IDE 32 bits**,
+le plugin doit donc y être en 32 bits. Pour l'IDE 64 bits de Delphi 13,
+il est compilé en Win64.
 
 1. Dans le Project Manager, dépliez `StaticCodeAnalyser.IDE.d12`.
 2. Dépliez **Target Platforms**.
@@ -231,6 +238,28 @@ Si l'entrée de menu manque, le plugin n'a pas pu se charger. Regardez
 dans **View → Window List…** ou lisez attentivement les erreurs de
 l'écran de démarrage.
 
+### 5.3 Optionnel : installer reDelphix (actions de code)
+
+reDelphix ajoute au plugin des quick-fixes et des refactorisations (voir
+le [README](README_fr.md#actions-de-code--redelphix-paquet-ide-optionnel)).
+Le setup, GetIt et les ZIP ne le contiennent pas : c'est donc le seul
+moyen de l'obtenir. Il nécessite Delphi 12, Win32, et le jeu de
+développement de 5.1 et 5.2 : il est lié à `SCA.Engine`, et ce paquet ne
+peut pas être chargé à côté du monolithe du setup ou de GetIt. Retirez
+d'abord une telle installation ; relancer le setup plus tard remplace
+l'enregistrement de développement.
+
+1. Terminez 5.1 et 5.2, et vérifiez que `reDelphix.d12` est lui aussi
+   sur **Windows 32-bit**.
+2. **Clic droit** sur `reDelphix.d12` dans le Project Manager → **Build**,
+   puis → **Install**.
+3. Ouvrez une unité et analysez-la. Une ampoule apparaît sur la ligne du
+   curseur d'un résultat doté d'un quick-fix, et le menu contextuel d'un
+   résultat liste les actions après un séparateur.
+
+Après une modification de `reDelphix\data\unitscopes.txt`, nettoyez et
+recompilez le paquet : l'IDE ne remarque pas la table modifiée.
+
 ---
 
 ## 6. Lancer l'autonome — première analyse
@@ -279,8 +308,9 @@ par défaut).
 ### 6.5 Enregistrer le rapport
 
 Utilisez les boutons **Export** (en haut à droite) pour enregistrer en
-**HTML**, **JSON**, **SARIF** (pour SonarQube), ou copiez dans le
-presse-papiers pour Jira/Markdown.
+**HTML**, **JSON**, **CSV**, **SARIF** (pour GitHub Code Scanning), le
+rapport **Sonar** (pour SonarQube), ou copiez dans le presse-papiers pour
+Jira/Markdown.
 
 ---
 
@@ -319,10 +349,11 @@ la gouttière.
 
 ### 7.5 Masquer les faux positifs
 
-Clic droit sur un résultat → **Suppress avec `// noinspection`**. Le
-plugin écrit au-dessus de la ligne un commentaire qui masque
+Sélectionnez un résultat et appuyez sur **Ctrl+Alt+S**. Le plugin écrit
+au-dessus de la ligne un commentaire `// noinspection` qui masque
 exactement cette règle à cet endroit. Le résultat disparaît à la
-prochaine analyse.
+prochaine analyse. Avec reDelphix, le menu contextuel du résultat
+propose la même chose.
 
 ### 7.6 Conseil au survol
 
@@ -355,8 +386,9 @@ quoi ressemble la correction.
 - **Lancer depuis la ligne de commande / la CI :** voir la sortie
   `--help` de l'EXE autonome. Options utiles : `--profile`,
   `--report-sarif`, `--quiet`, `--time-detectors`.
-- **Essayer l'interface en allemand :** dans la fenêtre de
-  l'analyseur, passez la langue sur **Deutsch** dans la barre d'outils.
+- **Essayer l'interface en allemand ou en français :** dans
+  l'application autonome, menu hamburger → **Language** ; dans le plugin,
+  **Tools → Options → Third Party → Static Code Analyser**.
 
 ---
 

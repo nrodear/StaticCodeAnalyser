@@ -61,6 +61,9 @@ cd D:\git-demos\delphi\StaticCodeAnalyser\StaticCodeAnalyserForm\scripts
 # Single-file or branch-only scans
 .\sonar-scan.ps1 -ProjectPath D:\myrepo -Branch -Quiet
 
+# The report uses [Rules] IdeProfile and keeps test fixtures; override both
+.\sonar-scan.ps1 -ProjectPath D:\myrepo -RuleProfile default -HideTestFixtures
+
 # Verify the scanner command before pushing
 .\sonar-upload.ps1 -ProjectPath D:\myrepo -DryRun
 ```

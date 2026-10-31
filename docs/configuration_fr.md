@@ -81,9 +81,24 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `File` | String | _(vide)_ | JSON de référence. Les chemins relatifs se résolvent par rapport à la racine de l'analyse ; vide = emplacement standard `.sca`. |
+| `File` | String | _(vide)_ | JSON de référence. Un chemin relatif se résout par rapport au répertoire du projet ou du groupe, sinon par rapport à la racine de l'analyse ; la CLI se rabat sur le répertoire de travail si le fichier n'existe que là, et le signale. Vide = emplacement standard `.sca`. |
 | `OnlyNew` | Bool | `False` | N'afficher que les résultats absents de la base de référence. |
 | `PathInFingerprint` | Bool | `False` | Inclure le chemin relatif dans l'empreinte — distingue des fichiers homonymes dans des dossiers différents. |
+
+**Une base de référence compte.** Le fichier contient une entrée par
+résultat, et chaque entrée couvre au plus un résultat : deux entrées de
+même empreinte couvrent deux résultats, un troisième est nouveau. Les
+entrées s'appliquent en trois passes, chacune n'étant utilisée qu'une
+fois : empreinte et hachage de contexte, puis le hachage de contexte seul,
+puis l'empreinte seule. Là où un fichier a plus de résultats d'un type que
+la base n'a d'entrées, les résultats en plus sont donc signalés comme
+nouveaux.
+
+**Les résultats hors d'une routine** ont une méthode vide, et la méthode
+fait partie de l'empreinte. Une base écrite avant la v0.9.19 les reconnaît
+encore par son hachage de contexte tant que les lignes autour sont
+inchangées ; une base sans hachages de contexte les montre une fois comme
+nouveaux.
 
 ### Quels seuils se réajustent sans invalider une base de référence
 
@@ -135,8 +150,9 @@ l'empreinte. Changer `CyclomaticMax` change quels résultats sont
 Le seul cas que les cinq clés exemptées ne savent pas distinguer : pour
 SCA012, SCA018, SCA022 et SCA176, deux méthodes homonymes d'un même
 fichier — surcharges, ou le même nom dans deux classes d'une unité —
-partagent une seule entrée de référence. Sur le corpus de référence de
-783 105 résultats cela concerne **183 à 185 résultats sur 37 990
+partagent une même empreinte. Chacune garde sa propre entrée de référence,
+le compte reste donc juste ; seulement, les entrées ne disent pas quelle
+méthode est laquelle. Sur le corpus de référence de 783 105 résultats cela concerne **183 à 185 résultats sur 37 990
 (0,49 %) avec `PathInFingerprint=1`**, et **environ 1 450 (3,8 %) dans le
 mode par défaut**, où le jeton de fichier est le nom de fichier nu et où
 des fichiers homonymes dans des dossiers différents le partagent (le

@@ -6,7 +6,7 @@ die **neu in Delphi** sind.
 
 Am Ende hast du:
 - die **Standalone-Windows-App** (`StaticCodeAnalyser.d12.exe`)
-- das **IDE-Plugin** (laedt beim Start von Delphi 12)
+- das **IDE-Plugin** (lädt beim Start von Delphi)
 
 > **Bauen ist optional.** Die GitHub-Releases liefern fertige EXE-Zips
 > (Win32/Win64), eine Setup-EXE fuers IDE-Plugin und ein GetIt-Paket —
@@ -30,10 +30,12 @@ Am Ende hast du:
 ## 1. Delphi 12 installieren (RAD Studio)
 
 Du brauchst **Delphi 12 Athens** (auch RAD Studio 12 genannt) — eine
-der Versionen 12.0–12.3. Das Plugin laeuft in der 32-bit-IDE (die
-64-bit-IDE von 12.3 wird noch nicht unterstuetzt); Delphi 13 ist
-geplant, aber noch nicht unterstuetzt, Delphi 11 und aelter werden
-nicht unterstuetzt. Die **kostenlose Community Edition** reicht.
+der Versionen 12.0–12.3 — oder **Delphi 13 Florence**. Delphi 12 hat nur
+eine 32-bit-IDE; Delphi 13 hat eine 32-bit- und eine 64-bit-IDE, und das
+Plugin läuft in beiden. Delphi 11 und älter werden nicht unterstützt.
+Diese Anleitung geht den Weg mit Delphi 12: unter Delphi 13 steht in den
+Pfaden `37.0` statt `23.0`, und das Paket-Suffix ist `370` statt `290`.
+Die **kostenlose Community Edition** reicht.
 
 1. Geh auf https://www.embarcadero.com/products/delphi/starter.
 2. Klick auf **"Download Free Trial"** oder **"Community Edition"**.
@@ -73,8 +75,10 @@ Du kannst jeden Pfad nehmen. In dieser Anleitung nehmen wir
 
 ## 3. Die Projekt-Gruppe in Delphi oeffnen
 
-Das Projekt liefert eine **Project-Group** mit 4 Sub-Projekten
-(Engine, geteilte UI, Standalone, IDE-Plugin).
+Das Projekt liefert eine **Project-Group** mit Engine, geteilter UI,
+Standalone und IDE-Plugin, dazu dem optionalen Paket reDelphix, einer
+CLI-Demo, den Testprojekten und zwei Proben. Für die 64-bit-IDE von
+Delphi 13 gibt es `StaticCodeAnalyser.d13.64bit.groupproj`.
 
 1. In Delphi: Menue **File → Open Project**.
 2. Navigiere zu `D:\projects\StaticCodeAnalyser`.
@@ -82,12 +86,14 @@ Das Projekt liefert eine **Project-Group** mit 4 Sub-Projekten
    **"Delphi project group (`*.groupproj`)"** umstellen.
 4. `StaticCodeAnalyser.d12.groupproj` waehlen und **Open** klicken.
 
-Rechts in der IDE siehst du jetzt das **Project Manager**-Fenster mit:
+Rechts in der IDE siehst du jetzt das **Project Manager**-Fenster. Für
+diese Anleitung zählen diese Sub-Projekte:
 
 - `SCA.Engine` — die Scanner-Engine.
 - `SCA.SharedUI` — UI-Komponenten fuer Standalone + Plugin.
 - `StaticCodeAnalyser.d12` — die Standalone-EXE.
 - `StaticCodeAnalyser.IDE.d12` — das IDE-Plugin (ein BPL-Package).
+- `reDelphix.d12` — die optionalen Code-Aktionen (Abschnitt 5.3).
 
 Delphi zeigt das **aktive** Sub-Projekt in **fetter** grueuner Schrift.
 Wir wechseln das aktive Projekt unten je nach Bedarf.
@@ -161,8 +167,9 @@ Start ladet.
 
 ### 5.1 Das Plugin bauen
 
-Das Plugin laeuft in der **32-bit-IDE** (die 64-bit-IDE von 12.3 wird
-noch nicht unterstuetzt). Das Plugin muss also 32-bit sein.
+Ein Plugin hat die Bitness seiner IDE. Delphi 12 hat nur eine
+**32-bit-IDE**, das Plugin muss dort also 32-bit sein. Für die
+64-bit-IDE von Delphi 13 wird es als Win64 gebaut.
 
 1. Im Project Manager `StaticCodeAnalyser.IDE.d12` aufklappen.
 2. **Target Platforms** aufklappen.
@@ -221,6 +228,28 @@ Falls der Menue-Eintrag fehlt, ist das Plugin nicht geladen. Schau in
 **View → Window List…** oder lies die Splash-Screen-Fehler vorsichtig
 durch.
 
+### 5.3 Optional: reDelphix installieren (Code-Aktionen)
+
+reDelphix ergänzt das Plugin um Quick-Fixes und Refactorings (siehe
+[README](README_de.md#code-aktionen-redelphix-optionales-ide-paket)).
+Setup, GetIt und die ZIPs enthalten es nicht, dies ist also der einzige
+Weg dorthin. Es braucht Delphi 12, Win32, und den Dev-Satz aus 5.1 und
+5.2: es linkt gegen `SCA.Engine`, und dieses Paket lässt sich nicht
+neben dem Monolithen aus Setup oder GetIt laden. So eine Installation
+also zuerst entfernen; ein späterer Setup-Lauf ersetzt die
+Dev-Registrierung wieder.
+
+1. 5.1 und 5.2 abschließen und prüfen, dass auch `reDelphix.d12` auf
+   **Windows 32-bit** steht.
+2. **Rechtsklick** auf `reDelphix.d12` im Project Manager → **Build**,
+   danach → **Install**.
+3. Eine Unit öffnen und scannen. An der Caret-Zeile eines Funds mit
+   Quick-Fix erscheint eine Glühbirne, und das Kontextmenü eines Funds
+   führt die Aktionen hinter einem Trenner auf.
+
+Nach einer Änderung an `reDelphix\data\unitscopes.txt` das Paket
+bereinigen und neu bauen: die IDE bemerkt die geänderte Tabelle nicht.
+
 ---
 
 ## 6. Die Standalone benutzen — erster Scan
@@ -265,9 +294,9 @@ richtigen Zeile (Notepad oder dein Default-Pascal-Viewer).
 
 ### 6.5 Report speichern
 
-Die **Export**-Knoepfe (oben rechts) speichern als **HTML**, **JSON**,
-**SARIF** (fuer SonarQube), oder kopieren in die Zwischenablage fuer
-Jira/Markdown.
+Die **Export**-Knöpfe (oben rechts) speichern als **HTML**, **JSON**,
+**CSV**, **SARIF** (für GitHub Code Scanning), den **Sonar**-Report (für
+SonarQube), oder kopieren in die Zwischenablage für Jira/Markdown.
 
 ---
 
@@ -302,10 +331,10 @@ der Gutter-Spalte.
 
 ### 7.5 False-Positives ausblenden
 
-Rechtsklick auf einen Befund → **Suppress mit `// noinspection`**.
-Das Plugin schreibt einen Kommentar ueber der Zeile, der genau diese
-Regel an dieser Stelle ausblendet. Beim naechsten Scan ist der Befund
-weg.
+Einen Befund auswählen und **Strg+Alt+S** drücken. Das Plugin schreibt
+einen `// noinspection`-Kommentar über die Zeile, der genau diese Regel
+an dieser Stelle ausblendet. Beim nächsten Scan ist der Befund weg. Mit
+reDelphix bietet das Kontextmenü des Befunds dasselbe an.
 
 ### 7.6 Hover-Hint
 
@@ -338,8 +367,9 @@ der Fix aussieht.
 - **Aus Command-Line / CI:** schau in die `--help`-Ausgabe der
   Standalone. Nuetzliche Flags: `--profile`, `--report-sarif`,
   `--quiet`, `--time-detectors`.
-- **Deutsche UI:** im Analyzer-Fenster oben Sprache auf **Deutsch**
-  umstellen.
+- **Deutsche oder französische UI:** in der Standalone-App
+  Hamburger-Menü → **Language**, im Plugin **Tools → Options → Third
+  Party → Static Code Analyser**.
 
 ---
 
