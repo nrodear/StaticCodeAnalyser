@@ -38,6 +38,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Generics.Defaults,  // Perf Charge R3: einmal geholter Default-Comparer
   System.StrUtils,
   uFileTextCache;
 
@@ -57,6 +58,16 @@ type
     Line : Integer;
     Col  : Integer;
   end;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der Treffer-Liste in AnalyzeUnit EINMAL je Prozess (initialization) und
+  // jedem Create mitgegeben. TList<T>.Create ohne Comparer ruft fuer
+  // Record-T TComparer<T>._Default, und das fragt in der Delphi-12-RTL bei
+  // JEDEM Aufruf per TRttiContext die RTTI nach einem '='-Operator ab
+  // (Delphi 13 nicht mehr) - hier je Datei. VERHALTENSNEUTRAL: derselbe
+  // Default-Comparer, und die Liste ruft nie IndexOf/Contains/Remove/Sort.
+  GTokenHitComparer : IComparer<TTokenHit>;
 
 procedure ScanLineForKeywords(const Line: string; LineNumber: Integer;
   var InBlockComm: Boolean; var InParenStarComm: Boolean;
@@ -154,7 +165,7 @@ var
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
-  Hits := TList<TTokenHit>.Create;
+  Hits := TList<TTokenHit>.Create(GTokenHitComparer);
   try
     InBlk := False; InParen := False;
     for i := 0 to Lines.Count - 1 do
@@ -188,5 +199,9 @@ begin
     ReleaseLines(Lines, Cached);
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GTokenHitComparer.
+  GTokenHitComparer := TComparer<TTokenHit>.Default;
 
 end.

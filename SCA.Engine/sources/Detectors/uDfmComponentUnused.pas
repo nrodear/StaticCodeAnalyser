@@ -178,6 +178,42 @@ begin
   end;
 end;
 
+procedure CollectUsedUnits(UnitNode: TAstNode; const ARawSrc: string;
+  Target: THashSet<string>);
+// S4-Quelle: alle uses-Eintraege der Form-Unit (interface UND
+// implementation - der Feldtyp braucht zwar die interface-Sicht, beide
+// Klauseln zu nehmen ist die konservative Seite), klein geschrieben.
+// 'in'-Pfade schneidet der Parser schon ab. Test fuer die implementation-
+// Klausel: Test_ImplUsesClass_NotDetected.
+// Dazu (2026-10-27) die uses-Namen aus dem Quelltext ALLER bedingten
+// Zweige: der Parser verwirft inaktive {$IFDEF}-Zweige, und eine Form wie
+// jvcl examples/JvEdits/fEdits.pas hat ihre ganze uses-Klausel in
+// {$IFDEF VCL} - ohne den Textscan sah S4 dort keine einzige Unit.
+// Kommentare und Strings zaehlen dabei nie (TDetectorUtils.UsesNamesOfText).
+var
+  Items : TList<TAstNode>;
+  It    : TAstNode;
+  W     : string;
+begin
+  if UnitNode <> nil then
+  begin
+    Items := UnitNode.FindAll(nkUsesItem);
+    try
+      for It in Items do
+      begin
+        if It.Name = '' then Continue;
+        Target.Add(LowerCase(It.Name));
+      end;
+    finally
+      Items.Free;
+    end;
+  end;
+  for W in TDetectorUtils.UsesNamesOfText(ARawSrc) do
+  begin
+    Target.Add(W);
+  end;
+end;
+
 function HasEventProperty(C: TComponentNode): Boolean;
 // U1: mindestens eine belegte Event-Property (OnClick=..., OnChange=...).
 // Event-Definition identisch zum FormBinder (IsEventPropertyName), damit
@@ -296,10 +332,13 @@ class procedure TDfmComponentUnusedDetector.Analyze(Binding: TFormBinding;
   Graph: TComponentGraph; RepoIdx: TDfmRepoIndex; SymIdx: TSymbolReferenceIndex;
   const AOwnUnitPath, AFileName: string; Results: TObjectList<TLeakFinding>);
 var
+  RawSrc       : string;             // S4: Rohtext fuer den uses-Scan
   SrcText      : string;
   CodeTokens   : THashSet<string>;   // U3: Own-Unit-Code-Referenzen
   PropTokens   : THashSet<string>;   // U2: DFM-interne Referenzen
   StrLitTokens : THashSet<string>;   // S3: Namen in String-Literalen
+  UsedUnits    : THashSet<string>;   // S4: uses-Eintraege der Form-Unit
+  OwnUnitFull  : string;             // S4: normalisierter Pfad, je Form einmal
   Comps        : TList<TComponentNode>;
   C            : TComponentNode;
   NameLow      : string;
@@ -319,7 +358,8 @@ begin
   // AUSKOMMENTIERTER FindComponent(-Aufruf oder ein Komponentenname in einem
   // Kommentar-String die S3-Heuristik faelschlich stumm - Kommentare zaehlen
   // nie als Benutzung. String-Literale bleiben erhalten (S3 braucht sie).
-  SrcText := StripPasComments(ReadSourceText(AOwnUnitPath));
+  RawSrc  := ReadSourceText(AOwnUnitPath);
+  SrcText := StripPasComments(RawSrc);
   // S3 (file-global): benutzt die Unit FindComponent(, kann JEDE Komponente
   // zur Laufzeit per Name aufgeloest werden -> gar nicht melden.
   if ContainsText(SrcText, 'FindComponent(') then Exit;
@@ -327,11 +367,14 @@ begin
   CodeTokens   := THashSet<string>.Create;
   PropTokens   := THashSet<string>.Create;
   StrLitTokens := THashSet<string>.Create;
+  UsedUnits    := THashSet<string>.Create;
   Comps        := nil;
   try
     CollectCodeTokens(Binding.UnitNode, CodeTokens);
     CollectPropTokens(Graph, PropTokens);
     CollectStringLiteralTokens(SrcText, StrLitTokens);
+    CollectUsedUnits(Binding.UnitNode, RawSrc, UsedUnits);
+    OwnUnitFull := TDfmRepoIndex.NormalizeUnitPath(AOwnUnitPath);
 
     Comps := Graph.EnumerateAll;
     for C in Comps do
@@ -347,7 +390,10 @@ begin
       if EndsText('field', C.ClassRef) then Continue;
       // S4: projekteigene Frame-/Form-Klasse (visuelle Vererbung /
       // eingebettete Frames schwer entscheidbar) -> konservativ skip.
-      if (RepoIdx <> nil) and (RepoIdx.GetUnitForClass(C.ClassRef) <> '') then
+      // Seit 2026-10-26 nur SICHTBARE Deklarationen (eigene Unit/uses, kein
+      // Header-Stub) - s. TDfmRepoIndex.IsClassDeclaredInVisibleUnit.
+      if (RepoIdx <> nil) and
+         RepoIdx.IsClassDeclaredInVisibleUnit(C.ClassRef, OwnUnitFull, UsedUnits) then
         Continue;
       // inline/inherited-Subtrees: Laufzeit-Sub-Objekte bzw. in Parent-Form
       // deklarierte Member -> konservativ skip (analog SchemaMismatch).
@@ -380,6 +426,7 @@ begin
     end;
   finally
     Comps.Free;
+    UsedUnits.Free;
     StrLitTokens.Free;
     PropTokens.Free;
     CodeTokens.Free;

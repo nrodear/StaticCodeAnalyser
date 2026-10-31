@@ -59,27 +59,34 @@ end;
 // Hilfs-Funktion: parse `Assigned(<Id>)` ab Position p. Bei Erfolg:
 // gibt Position direkt nach dem `)` zurueck plus extrahierten Identifier.
 // Bei Misserfolg: 0.
+// Perf (Charge P 2026-10-25): die Wortgrenze wird VOR dem Copy geprueft,
+// und der Identifier wird erst beim Treffer kopiert - bei Misserfolg
+// interessiert IdName keinen Aufrufer (beide werten ihn nur bei
+// Result > 0 aus).
 function ParseAssignedCall(const Line: string; p: Integer; out IdName: string): Integer;
 var
-  n, q  : Integer;
+  n, q   : Integer;
+  Start  : Integer;
+  IdEnd  : Integer;
 begin
   Result := 0;
   IdName := '';
   n := Length(Line);
   if (p + 7 > n) then Exit;
-  if not SameText(Copy(Line, p, 8), 'Assigned') then Exit;
   if (p > 1) and IsIdent(Line[p - 1]) then Exit;
+  if not SameText(Copy(Line, p, 8), 'Assigned') then Exit;
   q := p + 8;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q > n) or (Line[q] <> '(') then Exit;
   Inc(q);
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q > n) or not IsIdentStart(Line[q]) then Exit;
-  var Start: Integer; Start := q;
+  Start := q;
   while (q <= n) and IsIdent(Line[q]) do Inc(q);
-  IdName := Copy(Line, Start, q - Start);
+  IdEnd := q;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q > n) or (Line[q] <> ')') then Exit;
+  IdName := Copy(Line, Start, IdEnd - Start);
   Result := q + 1;
 end;
 
@@ -88,12 +95,15 @@ end;
 // Position nach `nil` (bzw. nach `)`), der Identifier in IdName. Bei
 // Misserfolg: 0. Seit Voll-Review 2026-09-12 mit out-Id - der
 // Spiegel-Pfad `(X <> nil) and Assigned(X)` kennt die Id noch nicht,
-// wenn er hier ankommt.
+// wenn er hier ankommt. Perf (Charge P 2026-10-25): IdName wird erst
+// beim Treffer kopiert (wie in ParseAssignedCall).
 function ParseNotNilAnyId(const Line: string; p: Integer;
   out IdName: string): Integer;
 var
   n, q     : Integer;
   HadParen : Boolean;
+  Start    : Integer;
+  IdEnd    : Integer;
 begin
   Result := 0;
   IdName := '';
@@ -104,9 +114,9 @@ begin
   if (q <= n) and (Line[q] = '(') then begin HadParen := True; Inc(q); end;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q > n) or not IsIdentStart(Line[q]) then Exit;
-  var Start: Integer; Start := q;
+  Start := q;
   while (q <= n) and IsIdent(Line[q]) do Inc(q);
-  IdName := Copy(Line, Start, q - Start);
+  IdEnd := q;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q + 1 > n) then Exit;
   if (Line[q] <> '<') or (Line[q + 1] <> '>') then Exit;
@@ -122,6 +132,7 @@ begin
     if (q > n) or (Line[q] <> ')') then Exit;
     Inc(q);
   end;
+  IdName := Copy(Line, Start, IdEnd - Start);
   Result := q;
 end;
 
@@ -149,11 +160,18 @@ var
   Id2        : string;
   After      : Integer;
   AfterAnd   : Integer;
+  HasNotEq   : Boolean;
 begin
   Result := 0;
   InStr  := False;
   i := 1;
   n := Length(Line);
+  // Perf (Charge P 2026-10-25): beide Formen verlangen ein '<>' in der
+  // Zeile (ParseNotNilAnyId prueft es zeichengenau). Ohne '<>' laeuft nur
+  // die Kommentar-/String-Maschine - der Zustand fuer die Folgezeile
+  // bleibt derselbe, denn ein entfallener Assigned()-Sprung ueberquert
+  // nur Klammern, Leerraum und Bezeichnerzeichen (kein '(*').
+  HasNotEq := Pos('<>', Line) > 0;
   while i <= n do
   begin
     if InBlockComm then
@@ -196,7 +214,7 @@ begin
       i := pClose + 2; Continue;
     end;
     // Versuche `Assigned(...)` zu parsen
-    if CharInSet(c, ['A', 'a']) then
+    if HasNotEq and CharInSet(c, ['A', 'a']) then
     begin
       After := ParseAssignedCall(Line, i, Id1);
       if After > 0 then
@@ -224,7 +242,7 @@ begin
     // zum Voll-Review 2026-09-12 nur die Assigned-zuerst-Form (Major
     // 44). Einstieg an '(' oder Ident-Start; die Id kommt aus dem
     // NotNil-Teil und muss im Assigned() dahinter wiederkehren.
-    if (c = '(') or IsIdentStart(c) then
+    if HasNotEq and ((c = '(') or IsIdentStart(c)) then
     begin
       After := ParseNotNilAnyId(Line, i, Id1);
       if After > 0 then
@@ -249,6 +267,17 @@ begin
         // Kandidat ('<Id> <> nil' enthaelt weder Assigned noch eine
         // weitere Vergleichsform).
         i := After;
+        Continue;
+      end;
+      // Perf (Charge P 2026-10-25): seit dem Spiegel-Einstieg (2026-09-12,
+      // nach v0.9.18) lief ParseNotNilAnyId an JEDER Zeichenposition eines Bezeichners
+      // erneut. Ab einer inneren Position liest er denselben Rest des
+      // Bezeichners und denselben Schwanz - scheitert er am Anfang,
+      // scheitert er ueberall dahinter; der Assigned-Pfad scheitert dort
+      // ohnehin an der Wortgrenze. Darum hinter den Bezeichner springen.
+      if c <> '(' then
+      begin
+        while (i <= n) and IsIdent(Line[i]) do Inc(i);
         Continue;
       end;
     end;

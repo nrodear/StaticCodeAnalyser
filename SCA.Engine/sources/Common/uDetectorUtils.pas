@@ -78,6 +78,18 @@ type
   //                   IsTestFixturePath).
   TTestPathLevel = (tplFixture, tplSecret, tplFixtureDir);
 
+  // Ein Glied der Verschachtelungskette (TDetectorUtils.NestingChain*):
+  // das Konstrukt und der Index des aeusseren Glieds (-1 = keins).
+  // Bewusst OHNE string - der Record wandert durch die heissen
+  // Tiefen-Walks und muss unverwaltet bleiben.
+  TNestingChainLink = record
+    Kind   : TNodeKind;
+    Parent : Integer;
+  end;
+
+  // Wort fuer ein Konstrukt in der Kette ('if', 'for', ...).
+  TNestingKindName = function(AKind: TNodeKind): string;
+
   TDetectorUtils = class
      public
       // True, wenn Ch zu einem Identifier gehoert (a..z, 0..9, _).
@@ -188,6 +200,14 @@ type
     // Beide Argumente muessen bereits lower-case sein.
     class function FindTokenBoundedLower(const Needle, HaystackLower: string)
       : Integer; static;
+
+    // Kommt ALower (klein geschrieben, nicht leer) in S vor, ASCII-case-
+    // insensitiv? Gleichwertig zu Pos(ALower, LowerCase(S)) > 0 - LowerCase
+    // faltet ebenfalls nur A..Z -, aber ohne S zu kopieren (Perf Charge P4,
+    // dort als lokale Funktion EnthaeltKlein; seit dem Review Charge P hier,
+    // auch fuer die Vorpruefung von SCA-IntegerOverflow).
+    class function ContainsLowerAscii(const S, ALower: string): Boolean;
+      static;
 
     // ENTFERNT Pascal-String-Literale aus einem Ausdrucks-Text - die
     // Zeichen fallen WEG, alle Positionen dahinter VERSCHIEBEN sich.
@@ -343,6 +363,27 @@ type
     class function StripFileCommentsKeepStringsCached(Lines: TStrings;
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
       const FileName: string): string; static;
+
+    // Perf Charge P4 (2026-10-25): Lines.Text mit Ein-Datei-Slot im
+    // Context (TryGetFullText) - der Token-Vorfilter und SCA202 teilen sich
+    // so EINEN Ganztext je Datei. AContext=nil oder FileName='' -> direkt
+    // Lines.Text (Tests/Single-File).
+    class function LinesTextCached(Lines: TStrings; AContext: TAnalyzeContext;
+      const FileName: string): string; static;
+
+    // uses-Namen eines Quelltexts (klein, voller - ggf. gepunkteter -
+    // Name, Reihenfolge des Texts, Doppelte moeglich). Lexikalisch auf
+    // dem gestrippten Text (StripForUsesScan): Kommentare, Direktiven und
+    // Strings zaehlen NIE, beide Zweige einer {$IFDEF}-Weiche zaehlen, der
+    // 'in'-Pfad faellt weg. AExtraClauseWord (klein): ein zweites Wort, das
+    // wie 'uses' eine Liste eroeffnet - 'contains' fuer .dpk-Wurzeln.
+    // 2026-10-27 aus uNotIncludedInProject (SCA195) hierher gezogen, weil
+    // SCA184/S4 dieselbe Sicht braucht: der Parser verwirft inaktive
+    // Zweige, eine uses-Klausel in {$IFDEF VCL} war fuer S4 unsichtbar.
+    // GRENZE: ein Zweig, der die Liste mit ';' schliesst, beendet den
+    // Walk - 'uses {$IFDEF X} A; {$ELSE} B; {$ENDIF}' liefert nur A.
+    class function UsesNamesOfText(const ARaw: string;
+      const AExtraClauseWord: string = ''): TArray<string>; static;
 
     /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
     /// liegt.</summary>
@@ -740,6 +781,28 @@ type
     // Whitespace raus + lowercase - normalisiert eine
     // Zuweisungs-LHS fuer Vergleiche ('Result .X' -> 'result.x').
     class function NormalizeLhsLower(const S: string): string; static;
+
+    // ------- Verschachtelungskette (SCA018 / SCA176) ----------------
+    // Perf P3 (2026-10-25): die beiden Tiefen-Walks trugen die Kette
+    // als string IM Stapel-Record. Das machte den Record zu einem
+    // verwalteten Typ - jedes Push/Pop/Kopieren lief ueber die
+    // RTTI-Kopie (_CopyRecord/FinalizeRecord), auch im Normallauf, in
+    // dem die Kette leer bleibt. Jetzt traegt der Record nur einen
+    // INDEX in eine Glieder-Liste (Elternverweis, -1 = kein Glied);
+    // der Text entsteht erst am Ende, fuer die eine gemeldete Stelle.
+    //
+    // Haengt Glied AKind unter AParent an und gibt seinen Index
+    // zurueck. Die Liste waechst nur - ein einmal vergebener Index
+    // bezeichnet fuer immer denselben Pfad.
+    class function NestingChainPush(ALinks: TList<TNestingChainLink>;
+      AKind: TNodeKind; AParent: Integer): Integer; static;
+    // Text des Pfads bis Glied AIndex, von aussen nach innen, Glieder
+    // mit CHAIN_SEP getrennt - zeichengleich mit der frueheren
+    // Verkettung je Stapel-Frame. AIndex < 0 ergibt ''. Die Woerter
+    // liefert der Detektor (ANameOf): die Kind-AUSWAHL der beiden
+    // Regeln ist absichtlich verschieden, siehe uCognitiveComplexity.
+    class function NestingChainText(ALinks: TList<TNestingChainLink>;
+      AIndex: Integer; ANameOf: TNestingKindName): string; static;
   end;
 
 
@@ -752,7 +815,11 @@ uses
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils,               // PosEx
   System.Generics.Defaults,      // Default-Comparer fuer TArray.Sort<Integer>
-  System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
+  System.RegularExpressions,     // TRegEx fuer IsLikelyAttributePosition
+  // Nur fuer CHAIN_SEP (NestingChainText). Implementation-seitig wie
+  // umgekehrt dort (uMethodd12 nutzt diese Unit fuer NewAtPos) - ein
+  // Interface-Zyklus entsteht nicht.
+  uMethodd12;
 
 type
   // Match-Modus einer Regel der zentralen Test-Pfad-Liste (Fund 3,
@@ -1005,6 +1072,30 @@ class function TDetectorUtils.ContainsWholeWordLower(const Needle,
   HaystackLower: string): Boolean;
 begin
   Result := FindWholeWordLower(Needle, HaystackLower) > 0;
+end;
+
+class function TDetectorUtils.ContainsLowerAscii(const S,
+  ALower: string): Boolean;
+var
+  j, k, n, m : Integer;
+  c : Char;
+begin
+  n := Length(S);
+  m := Length(ALower);
+  if m = 0 then Exit(False);   // wie Pos('', ...) = 0
+  for j := 1 to n - m + 1 do
+  begin
+    k := 1;
+    while k <= m do
+    begin
+      c := S[j + k - 1];
+      if (c >= 'A') and (c <= 'Z') then c := Char(Ord(c) + 32);
+      if c <> ALower[k] then Break;
+      Inc(k);
+    end;
+    if k > m then Exit(True);
+  end;
+  Result := False;
 end;
 
 class function TDetectorUtils.FindTokenBoundedLower(const Needle,
@@ -1629,6 +1720,16 @@ begin
     AContext.PutKeepStringsText(FileName, Result, LineForChar);
 end;
 
+class function TDetectorUtils.LinesTextCached(Lines: TStrings;
+  AContext: TAnalyzeContext; const FileName: string): string;
+begin
+  if (AContext <> nil) and AContext.TryGetFullText(FileName, Result) then
+    Exit;
+  Result := Lines.Text;
+  if AContext <> nil then
+    AContext.PutFullText(FileName, Result);
+end;
+
 class function TDetectorUtils.InStringLiteral(const ACode: string;
   APos: Integer): Boolean;
 var
@@ -2077,8 +2178,15 @@ const
     // Field-Decl `Name[, Name2]: Type;`. Sehr breit - aber nach
     // attribute-Zeile ist es das uebliche Pattern. Mehrere Namen
     // mit Komma getrennt, dann `:`, danach Type-Name.
+    // Stack (Charge R4 2026-10-26): die Listengruppe ist POSSESSIV ('*+').
+    // PCRE 8.45 ohne JIT schachtelt je Wiederholung einer gierigen Gruppe
+    // match()-Rahmen (hier 4 je Listenelement) - eine Zeile mit ~1000
+    // Bezeichnern sprengt den 1-MB-Stack von bds.exe/TestProject. Die
+    // possessive Gruppe laeuft iterativ (Tiefe konstant 4). Gleiches
+    // Ergebnis: nach einem kuerzeren Listenende steht nie ':' (sondern
+    // Wortzeichen oder '\s*,'), Backtracking in die Liste traf also nie.
     if TRegEx.IsMatch(Tr,
-         '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*\s*:\s*[A-Za-z_<]',
+         '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*+\s*:\s*[A-Za-z_<]',
          [roIgnoreCase]) then Exit(True);
     // Weitere Attribute-Line direkt darunter -> zaehlt auch als
     // Attribute-Kontext (Member kommt erst danach).
@@ -2362,6 +2470,7 @@ var
   Z, Rest : string;
   pEq, i  : Integer;
   Name    : string;
+  Gecacht : TArray<string>;   // Perf Charge P4: Ein-Datei-Slot des Context
 
   // Typname LINKS vom '=', normalisiert - oder '' wenn dort kein
   // reiner Bezeichner steht (dann ist die Zeile keine Typdeklaration,
@@ -2404,20 +2513,45 @@ begin
   Result.Sorted        := True;      // IndexOf = Binaersuche
   if ALines = nil then Exit;
   try
-    Code := LowerCase(StripStringsAndCommentsCached(
-      ALines, LineFor, AContext, AFileName));
-    Zeilen := Code.Split([#10]);
-    for i := 0 to High(Zeilen) do
+    // Perf Charge P4: bis zu vier Strukturregeln fragen je Datei - das
+    // Ergebnis liegt im Ein-Datei-Slot des Context. Die Liste gehoert
+    // weiterhin dem Aufrufer, sie wird aus dem Slot frisch befuellt.
+    if (AContext <> nil) and
+       AContext.TryGetFpcBindingNames(AFileName, Gecacht) then
     begin
-      Z := Zeilen[i];
-      pEq := Pos('=', Z);
-      if pEq = 0 then Continue;
-      Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
-      // 'packed' ist vor record/class erlaubt und schadet hier nicht.
-      if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
-      if not BeginntMitArt(Rest) then Continue;
-      Name := TypNameLinks(Copy(Z, 1, pEq - 1));
-      if Name <> '' then Result.Add(Name);
+      for i := 0 to High(Gecacht) do
+        Result.Add(Gecacht[i]);
+      Exit;
+    end;
+    Code := StripStringsAndCommentsCached(ALines, LineFor, AContext, AFileName);
+    // Abkuerzung: alle vier Arten beginnen mit 'objc' oder lauten
+    // 'cppclass'. Fehlen beide im GESTRIPPTEN Text (nicht im Rohtext -
+    // entfernte Kommentare koennen Woerter zusammenfuegen), kann keine
+    // Zeile BeginntMitArt erfuellen: die Liste bleibt leer, ohne
+    // LowerCase und Split des Ganztexts.
+    if ContainsLowerAscii(Code, 'objc') or ContainsLowerAscii(Code, 'cppclass') then
+    begin
+      Code := LowerCase(Code);
+      Zeilen := Code.Split([#10]);
+      for i := 0 to High(Zeilen) do
+      begin
+        Z := Zeilen[i];
+        pEq := Pos('=', Z);
+        if pEq = 0 then Continue;
+        Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
+        // 'packed' ist vor record/class erlaubt und schadet hier nicht.
+        if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
+        if not BeginntMitArt(Rest) then Continue;
+        Name := TypNameLinks(Copy(Z, 1, pEq - 1));
+        if Name <> '' then Result.Add(Name);
+      end;
+    end;
+    if AContext <> nil then
+    begin
+      SetLength(Gecacht, Result.Count);
+      for i := 0 to Result.Count - 1 do
+        Gecacht[i] := Result[i];
+      AContext.PutFpcBindingNames(AFileName, Gecacht);
     end;
   except
     // Exception-Sicherheit: die Liste gehoert noch UNS, solange die
@@ -2505,6 +2639,50 @@ begin
     end;
     Inc(i);
   end;
+end;
+
+class function TDetectorUtils.NestingChainPush(
+  ALinks: TList<TNestingChainLink>; AKind: TNodeKind;
+  AParent: Integer): Integer;
+var
+  L : TNestingChainLink;
+begin
+  L.Kind   := AKind;
+  L.Parent := AParent;
+  Result   := ALinks.Add(L);
+end;
+
+class function TDetectorUtils.NestingChainText(
+  ALinks: TList<TNestingChainLink>; AIndex: Integer;
+  ANameOf: TNestingKindName): string;
+// Zwei Schritte, weil die Elternverweise von INNEN nach AUSSEN
+// zeigen, die Kette aber von aussen nach innen gelesen wird. Ein
+// Elternindex ist immer kleiner als der eigene (NestingChainPush
+// haengt an), die Schleifen enden also sicher.
+var
+  Kinds : TArray<TNodeKind>;
+  N, I, K : Integer;
+begin
+  Result := '';
+  N := 0;
+  I := AIndex;
+  while I >= 0 do
+  begin
+    Inc(N);
+    I := ALinks[I].Parent;
+  end;
+  SetLength(Kinds, N);
+  I := AIndex;
+  for K := N - 1 downto 0 do
+  begin
+    Kinds[K] := ALinks[I].Kind;
+    I := ALinks[I].Parent;
+  end;
+  for K := 0 to N - 1 do
+    if K = 0 then
+      Result := ANameOf(Kinds[K])
+    else
+      Result := Result + CHAIN_SEP + ANameOf(Kinds[K]);
 end;
 
 class function TDetectorUtils.IsEventHandlerSignature(
@@ -2615,6 +2793,203 @@ begin
     end;
   SetLength(Result, o);
   Result := LowerCase(Result);
+end;
+
+// --- uses-Scan (2026-10-27 aus uNotIncludedInProject, SCA195 + SCA184/S4) ---
+//
+// UsesNamesOfText: alle uses-Referenzen (lowercase, voller - ggf.
+// gepunkteter - Name) eines Quelltexts. Lexikalisch auf dem GESTRIPPTEN
+// Text: Kommentare und String-Literale sind geblankt, bevor irgendetwas zaehlt (Projektregel:
+// Kommentare sind NIE Code-Use; und der Pfad-String einer
+// "X in 'file.pas'"-Klausel kann so kein Phantom-'uses' liefern).
+// Danach reiner Wort-Lauf: ab jedem Wort 'uses' werden Ident-Folgen
+// (inklusive Punkten fuer dotted units) bis zum ';' eingesammelt; das
+// reservierte 'in' wird uebersprungen. 'uses' ist ein reserviertes Wort und
+// kann im gestrippten Code nirgendwo sonst als ganzes Wort auftauchen -
+// interface- und implementation-Klausel werden so automatisch beide erfasst.
+// Eigener Mini-Stripper NUR fuer den uses-Scan: Kommentare, Compiler-
+// Direktiven und String-Literale werden durch je EIN Leerzeichen ersetzt.
+//
+// Warum nicht TDetectorUtils.StripStringsAndComments: das entfernt
+// {..}-Bloecke ERSATZLOS - beim Cross-Platform-Idiom
+//   uses {$IFDEF FPC}fgl{$ELSE}Generics.Collections{$ENDIF};
+// verschmolzen die Nachbar-Idents zum Phantom-Token
+// 'fglgenerics.collections' und KEINER der beiden Namen wurde gesammelt
+// (Review 2026-07-29). Mit Leerzeichen-Ersatz zaehlen BEIDE Zweige - fuer
+// diese Regel die richtige Semantik: welcher Zweig aktiv ist, haengt von
+// Defines ab, und eine Unit, die in irgendeinem Zweig gezogen wird, ist
+// nicht tot.
+function StripForUsesScan(const Raw: string): string;
+var
+  SB   : TStringBuilder;
+  i, n : Integer;
+
+  // Delphi-12-Multiline-Literal (Review 2026-07-30): drei Apostrophe, nach
+  // denen bis zum Zeilenende nur Whitespace folgt, eroeffnen ein '''-Literal;
+  // es endet an der ersten Zeile, deren erster Nicht-Whitespace wieder '''
+  // ist. Ohne diese Behandlung liefen alle Folgezeilen des Literals als
+  // Code in den uses-Scan - eingebettetes 'uses uGhost;' haette eine tote
+  // Orphan-Datei auf 195 gekippt (String-Inhalte zaehlen NIE als Code).
+  // 5+-Quote-Varianten (Literal enthaelt selbst ''') fallen auf die
+  // Einzeiler-Logik zurueck - nicht schlechter als vorher, dokumentierte
+  // Restluecke.
+  function IsMultilineOpener(p: Integer): Boolean;
+  begin
+    if (p + 2 > n) or (Raw[p + 1] <> '''') or (Raw[p + 2] <> '''') then
+      Exit(False);
+    p := p + 3;
+    while (p <= n) and CharInSet(Raw[p], [' ', #9, #13]) do Inc(p);
+    Result := (p > n) or (Raw[p] = #10);
+  end;
+
+  procedure SkipMultilineLiteral;   // i steht auf dem ersten der drei Quotes
+  var
+    AtLineStart : Boolean;
+  begin
+    Inc(i, 3);
+    AtLineStart := False;           // Rest der Startzeile ist nur Whitespace
+    while i <= n do
+    begin
+      if Raw[i] = #10 then
+        AtLineStart := True
+      else if not CharInSet(Raw[i], [' ', #9, #13]) then
+      begin
+        if AtLineStart and (i + 2 <= n) and (Raw[i] = '''') and
+           (Raw[i + 1] = '''') and (Raw[i + 2] = '''') then
+        begin
+          Inc(i, 3);                // Abschluss-''' konsumieren
+          Exit;
+        end;
+        AtLineStart := False;
+      end;
+      Inc(i);
+    end;                            // unterminiert -> Rest der Datei geblankt
+  end;
+
+begin
+  SB := TStringBuilder.Create(Length(Raw));
+  try
+    i := 1;
+    n := Length(Raw);
+    while i <= n do
+    begin
+      case Raw[i] of
+        '''':
+          begin
+            if IsMultilineOpener(i) then
+              SkipMultilineLiteral
+            else
+            begin
+              Inc(i);
+              while i <= n do
+              begin
+                if Raw[i] = '''' then
+                begin
+                  if (i < n) and (Raw[i + 1] = '''') then
+                    Inc(i, 2)          // verdoppeltes Apostroph im Literal
+                  else
+                  begin
+                    Inc(i);
+                    Break;
+                  end;
+                end
+                else if Raw[i] = #10 then
+                  Break                // Delphi-Literal endet an der Zeile
+                else
+                  Inc(i);
+              end;
+            end;
+            SB.Append(' ');
+          end;
+        '{':
+          begin
+            while (i <= n) and (Raw[i] <> '}') do Inc(i);
+            if i <= n then Inc(i);   // '}' konsumieren
+            SB.Append(' ');
+          end;
+        '(':
+          if (i < n) and (Raw[i + 1] = '*') then
+          begin
+            Inc(i, 2);
+            while (i < n) and not ((Raw[i] = '*') and (Raw[i + 1] = ')')) do
+              Inc(i);
+            if i < n then Inc(i, 2) else i := n + 1;
+            SB.Append(' ');
+          end
+          else
+          begin
+            SB.Append(Raw[i]);
+            Inc(i);
+          end;
+        '/':
+          if (i < n) and (Raw[i + 1] = '/') then
+          begin
+            while (i <= n) and (Raw[i] <> #10) do Inc(i);
+            SB.Append(' ');          // das #10 bleibt fuer die naechste Runde
+          end
+          else
+          begin
+            SB.Append(Raw[i]);
+            Inc(i);
+          end;
+      else
+        SB.Append(Raw[i]);
+        Inc(i);
+      end;
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TDetectorUtils.UsesNamesOfText(const ARaw: string;
+  const AExtraClauseWord: string): TArray<string>;
+var
+  Names  : TList<string>;
+  Text   : string;
+  i, n   : Integer;
+  Start  : Integer;
+  W      : string;
+  InUses : Boolean;
+begin
+  Text := LowerCase(StripForUsesScan(ARaw));
+  Names := TList<string>.Create;
+  try
+    n := Length(Text);
+    i := 1;
+    InUses := False;
+    while i <= n do
+    begin
+      if IsIdentChar(Text[i]) then
+      begin
+        Start := i;
+        while (i <= n) and (IsIdentChar(Text[i]) or
+              (InUses and (Text[i] = '.'))) do
+          Inc(i);
+        W := Copy(Text, Start, i - Start);
+        if not InUses then
+        begin
+          // '&uses' waere ein escaped Ident, kein Schluesselwort.
+          // W ist nie leer - ein leeres AExtraClauseWord trifft nichts.
+          if ((W = 'uses') or (W = AExtraClauseWord)) and
+             ((Start = 1) or (Text[Start - 1] <> '&')) then
+            InUses := True;
+        end
+        else if (W <> 'in') and (W <> '') then
+          Names.Add(W);
+      end
+      else
+      begin
+        if InUses and (Text[i] = ';') then
+          InUses := False;
+        Inc(i);
+      end;
+    end;
+    Result := Names.ToArray;
+  finally
+    Names.Free;
+  end;
 end;
 
 end.

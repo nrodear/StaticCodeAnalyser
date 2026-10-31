@@ -41,7 +41,22 @@ unit uFreeWithoutNil;
 //     2 Parameter mit Modifier (const: jetzt lokal; out bleibt Befund - die
 //     Variable des Aufrufers haengt), 2 Inline-const, 1 BeforeDestruction
 //     (unten behoben), 1 sich selbst aushaengende Liste
-//     ('while FNext <> nil do FNext.Free', bekannte Grenze).
+//     ('while FNext <> nil do FNext.Free', seit U12 entlastet).
+//
+// U12 (2026-10-27), zwei weitere Restklassen, beide als letzte Gates vor
+// dem Melden: (W) Free im Rumpf von 'while X <> nil' / 'while
+// Assigned(X)' - FreeInNilTestedLoop; (A) X ist Local oder Parameter
+// einer anonymen Methode, deren Rumpf der Parser in die umgebende Methode
+// gekippt hatte. (A) war ein Quelltext-Gate; seit der Parser-Charge P2
+// (2026-10-27) bleibt der Rumpf einer anonymen Methode mit var-Sektion
+// RHS-Text wie jede andere anonyme Methode, das Gate griff danach auf
+// keinen Korpusfund mehr (rw 632 = 632 mit und ohne Gate) und ist entfernt.
+// BEWUSST NICHT entlastet: Neubelegung ueber einen Property-Setter
+// ('FX.Free; X := TFoo.Create'). Der Setter liest bzw. gibt das alte Feld
+// typischerweise selbst frei ('if FX = Value', 'FX.Assign(Value)',
+// 'FX.Free; FX := Value') - nach einem Free ohne nil-Out ist das UAF oder
+// Double Free. Einziger Referenzfall (Lazarus menuintf.pas
+// CreateNewMenuItem) ist nur dank eines OnDestroy-Handlers heil.
 //
 // Limitierung: einfache lexische Heuristik, keine Path-Analysis. False
 // Positives bei try/finally L.Free; end mit `Exit;`/`raise;` direkt
@@ -186,6 +201,107 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// U12 (2026-10-27) - zwei Restklassen der Stichprobe vom 22.10.
+// ---------------------------------------------------------------------------
+
+const
+  IDENT_LOW = ['a'..'z', '0'..'9', '_'];
+
+function IsIdentCharLow(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, IDENT_LOW);
+end;
+
+function ContainsBounded(const S, Pat: string;
+  const AStopAfter: TSysCharSet): Boolean;
+// Pat in S, davor kein Identzeichen ('.' davor ist erlaubt: 'self.x'),
+// dahinter keines aus AStopAfter. Fuer 'nil<>x' gehoert '.' dazu
+// ('nil<>x.next' prueft x.next, nicht x). Endet Pat selbst auf ein
+// Nicht-Identzeichen (')'), gibt es dahinter keine Wortgrenze zu pruefen:
+// der Parser klebt 'Assigned(X)and' ohne Leerzeichen an.
+var
+  P, E    : Integer;
+  CheckAt : Boolean;
+begin
+  Result := False;
+  CheckAt := (Pat <> '') and IsIdentCharLow(Pat[Length(Pat)]);
+  P := Pos(Pat, S);
+  while P > 0 do
+  begin
+    E := P + Length(Pat);
+    if ((P = 1) or not IsIdentCharLow(S[P - 1])) and
+       (not CheckAt or (E > Length(S)) or not CharInSet(S[E], AStopAfter)) then
+      Exit(True);
+    P := Pos(Pat, S, P + 1);
+  end;
+end;
+
+function CondTestsNil(const ACond, AIdentLow: string): Boolean;
+// U12-W: testet die while-Bedingung (nkWhileStmt.TypeRef) den Receiver auf
+// nil? Erkannt: 'x<>nil', 'nil<>x', 'Assigned(x)', 'Assigned(Self.x)',
+// kleingeschrieben. Leerzeichen muessen nicht weg: der Parser fuegt die
+// Bedingung per JoinTokInto zusammen und setzt ein Leerzeichen NUR
+// zwischen zwei Bezeichnern ('X <> nil' steht als 'X<>nil' im TypeRef,
+// 'X<>nil and Y' behaelt seine Wortgrenze). Bewusst NUR der Nil-Test:
+// 'while X.Count > 0 do X.Free' laeuft nach dem ersten Free auf
+// freigegebenem Speicher weiter und bleibt Befund.
+var
+  C : string;
+begin
+  Result := False;
+  if (ACond = '') or (AIdentLow = '') then Exit;
+  C := LowerCase(ACond);
+  Result := ContainsBounded(C, AIdentLow + '<>nil', IDENT_LOW)
+         or ContainsBounded(C, 'nil<>' + AIdentLow, IDENT_LOW + ['.'])
+         or ContainsBounded(C, 'assigned(' + AIdentLow + ')', IDENT_LOW)
+         or ContainsBounded(C, 'assigned(self.' + AIdentLow + ')', IDENT_LOW);
+end;
+
+function SubtreeContains(ARoot, ATarget: TAstNode): Boolean;
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(ARoot);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur = ATarget then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+function FreeInNilTestedLoop(MethodNode, FreeCall: TAstNode;
+  const IdentLow: string): Boolean;
+// U12-W - sich selbst aushaengende Liste (Lazarus-Baeume):
+//   while FFirstChild <> nil do FFirstChild.Free;
+// Die Schleife endet nur, weil der Destruktor den Knoten aushaengt und
+// FFirstChild weiterschaltet; danach IST das Feld nil. 'Free ohne nil-Out'
+// stimmt dort nicht (Referenz perfS184: 8 Funde, alle laz, alle so).
+// Der Parser haengt den Schleifenrumpf als Kind an den nkWhileStmt-Knoten
+// (ParseWhileStmt -> ParseStatement(WhileNode)), die Bedingung steht im
+// TypeRef - beides ohne Quelltext entscheidbar.
+var
+  Loops : TList<TAstNode>;
+  W     : TAstNode;
+begin
+  Result := False;
+  Loops := MethodNode.FindAllRef(nkWhileStmt);
+  for W in Loops do
+    if (W.Line <= FreeCall.Line) and CondTestsNil(W.TypeRef, IdentLow)
+       and SubtreeContains(W, FreeCall) then
+      Exit(True);
+end;
+
 function IsAssignLhs(const N: TAstNode; const IdentLow: string): Boolean;
 // True wenn N ein nkAssign ist, dessen LHS der Ident selbst
 // (`<ident> := ...`) oder eine Feld-Kette darauf (`<owner>.<ident> := ...`) ist.
@@ -323,6 +439,20 @@ var
     Raises := MethodNode.FindAllRef(nkRaise);
     for S in Raises do
       if S.Line >= FreeCall.Line then Exit(True);
+  end;
+
+  // Zeigt X nach dem Free nachweislich auf nichts Freigegebenes mehr?
+  //  * sicher neu belegt (HasSafeReassignAfter, Audit 2026-07-11)
+  //  * U12-W: 'while X <> nil do X.Free' - der Destruktor haengt X aus,
+  //    nach der Schleife ist X nil (FreeInNilTestedLoop)
+  // (Das U12-A-Gate fuer Locals anonymer Methoden ist seit der Parser-
+  // Charge P2 entfallen, s. Kopf.) Ein Aufruf statt zwei Gates im Rumpf
+  // von AnalyzeUnit: die Schleife dort ist schon tief verschachtelt.
+  function NoDanglingAfterFree(MethodNode, FreeCall: TAstNode;
+    const IdentLow: string): Boolean;
+  begin
+    Result := HasSafeReassignAfter(MethodNode, FreeCall, IdentLow)
+      or FreeInNilTestedLoop(MethodNode, FreeCall, IdentLow);
   end;
 
   // Ist der Parameter eine LOKALE Kopie der Referenz? Ohne Modifier, 'const'
@@ -479,8 +609,9 @@ begin
 
         if HasNilOutAfter(M, N, RecvLow) then Continue;
         // Reassigned-after-free (FPopUpBitmap.Free; FPopUpBitmap := TBitmap.Create):
-        // Feld vor jedem Read neu belegt -> kein Dangling-Pointer.
-        if HasSafeReassignAfter(M, N, RecvLow) then Continue;
+        // Feld vor jedem Read neu belegt -> kein Dangling-Pointer. Seit U12
+        // im selben Aufruf: Nil-Test-Schleife (NoDanglingAfterFree).
+        if NoDanglingAfterFree(M, N, RecvLow) then Continue;
         if IsFreeRoutine and IsLastStmtOfMethod(M, N)
            and not RaiseFollows(M, N) then Continue;
 

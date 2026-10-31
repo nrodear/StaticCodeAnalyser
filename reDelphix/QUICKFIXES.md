@@ -1,9 +1,9 @@
 ﻿# Quick-Fixes von reDelphix
 
-> **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxProvider.pas`](source/uRdxProvider.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
+> **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -112,6 +112,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 92 Qui
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
 | SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
+| SCA204 FunctionNameAsResult | `Result statt %s schreiben` | Quick-Fix | nein | [SCA204](#sca204) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
 | SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
@@ -246,14 +247,15 @@ Nachher:
 
 **Platzhalter:** `%s` = die Unit aus der Meldung.
 
-**Wirkung:** Löscht den Eintrag der Meldung aus seiner uses-Klausel: mit dem Komma bis zum nächsten Eintrag bzw. – beim letzten – ab dem Komma davor; steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar; der einzige Eintrag geht mit der ganzen Klausel. Ein `in`-Pfad geht mit. Vorher prüft die Hilfe den Fund am aktuellen Puffer nach (dieselben Spuren wie der Detektor).
+**Wirkung:** Löscht den Eintrag der Meldung aus seiner uses-Klausel: mit dem Komma bis zum nächsten Eintrag bzw. – beim letzten – ab dem Komma davor; steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar; der einzige Eintrag geht mit der ganzen Klausel. Ein `in`-Pfad geht mit. Vorher prüft die Hilfe den Fund am aktuellen Puffer nach (dieselben Spuren wie der Detektor). Nur im Menü, nicht in der Glühbirne, wenn die Datei einen Bezeichner im Stil einer Bibliothek nutzt (Typ `TFoo`/`IFoo`/`EFoo`, Aufzählungswert wie `mrOk`, Konstante wie `CM_ENTER`, Aufruf eines groß beginnenden Namens), den die Hilfe weder in der Datei noch in der Bezeichnerliste einer anderen uses-Unit noch in System findet – er kann aus der entfernten Unit kommen; der Hinweis nennt ihn. Ebenso nur im Menü, wenn der Eintrag in einem `{$IFDEF}`-Zweig steht, den die IDE nicht geparst hat (Define aus einem Include): die übrigen Units dieses Zweigs kennt der Beweis nicht.
 
 **Nicht angeboten**
 
 - der Puffer trägt den Fund nicht mehr (ein Fund aus einem älteren Scan)
 - ein Kommentar im gelöschten Bereich, auch `{Form1}` hinter einer Formular-Unit
-- Compiler-Direktiven in einer uses-Klausel
+- eine Compiler-Direktive im gelöschten Bereich (der Eintrag grenzt an einen `{$IFDEF}`-Zweig); eine Direktive anderswo in der Klausel oder der Datei sperrt nicht
 - im gelöschten Bereich steht mehr als dieser Eintrag
+- die Unit besteht nur aus uses-Klauseln – die Sammel-Unit eines Pakets übersetzt so die gelisteten Units
 
 **Beispiel**
 
@@ -390,7 +392,7 @@ end;
 - die Zahl der Meldung steht nicht oder mehrfach als Vergleichswert in den if-Bedingungen der Fundzeile (Zeile verschoben bzw. mehrdeutig), oder nur in einer Folgezeile der Bedingung
 - eine Zahl mit Zifferntrennern (`if X > 200_000`, auch `200_000.5`): der Detektor meldet nur ihren ersten Block (`200`) – ein Fehlalarm, der Grund sagt es
 - die Sperren der Code-Aktion „Lokale Konstante einführen“: `else if`, Zweig über mehrere Zeilen, Zeile darüber ohne Anweisungsende, Direktive davor, case-Zweig, asm, initialization, mehrzeilige Strings und Kommentare
-- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`)
+- Dateien, die FPC oder ein Compiler vor Delphi 10.3 übersetzt: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, ein Include, das nicht neben der Unit liegt, ein Lazarus-Projekt/-Paket in der Nähe, `.pp`/`.lpr`, ein altes Delphi-Projekt (`.dproj` vor 10.3, `.dof`, `.bdsproj`, `.bpr`, `.bpg`), ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d102`, `D10_2`, `Tokyo`, `DXE6`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 10.3 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64)
 - ein Netzpfad oder Netzlaufwerk, auch für ein Include der Unit (kein Plattenzugriff beim Menüaufbau im Hauptthread)
 - der Hauptblock eines Programms bzw. einer Bibliothek
 
@@ -551,6 +553,7 @@ end;
 - hinter dem `begin` steht noch Code, oder der Rumpf ist nicht wirklich leer (Code unter einer inaktiven Direktive, ein asm-Block)
 - ein Kommentar im Rumpf – er ist keine Absicht (sonst schwiege der Detektor), meist auskommentierter Code
 - Eintrag 2: in constructor und destructor und ohne den Namen auf der Kopfzeile
+- Eintrag 2: `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 
 **Beispiel (Eintrag 1)**
 
@@ -836,7 +839,7 @@ end;
 - das Literal auf der Zeile passt nicht zur Meldung (Zeile verschoben), der Aufruf ist qualifiziert (`string.Format`, `Self.Format`), hat nicht genau zwei Argumente oder schließt nicht auf der Zeile, steht erst auf einer Folgezeile, oder die Anweisung geht mit einem weiteren `Format` weiter
 - eine Direktive auf der Zeile, und dieselben Fragen an die Datei wie bei SCA128 (SysUtils, eigene Routine `Format`, `FormatSettings` deklariert oder als Member, `with`, Compiler vor Delphi XE)
 - Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
-- Eintrag 2: eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+- Eintrag 2: eine Währungs-Spec `%m` im Formatstring (Invariant schreibt das allgemeine Währungszeichen ¤), eine FPC-Weiche oder ein FPC-Modus, Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`
 
 **Beispiel (Eintrag 1)**
 
@@ -922,16 +925,17 @@ end;
 |---|---|---|
 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
 
-**Wirkung:** Ersetzt die Tabulatoren im Code der gemeldeten Zeile durch Leerzeichen bis zum nächsten Tabstopp (Tabweite 2, feste Annahme; Leerzeichen und Tab davor werden sauber zusammengezogen). Eine Ersetzung vom ersten bis zum letzten Code-Tab; Tabs in Strings und Kommentaren dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung:** Ersetzt die Tabulatoren der gemeldeten Zeile im Code und in Kommentaren durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen); Leerraum mit Tab am Zeilenende entfällt ganz, eine Zeile nur aus Leerraum wird leer. Die Tabweite (2, 4 oder 8; 3 nur, wenn die ganze Datei sie belegt) leitet die Hilfe zuerst aus den acht Zeilen darüber und darunter ab, und wenn die nicht entscheiden, aus der ganzen Datei: Einrückung (hinter `begin`, `then`, `do` … steht die Folgezeile tiefer, und zwar um die Stufe der Datei; hinter einer abgeschlossenen Anweisung nicht tiefer) und Ausrichtung (Textspalten hinter den Tabs gegen Nachbarn nur aus Leerzeichen bzw. gegen dieselben Zeichen wie `= `, `: `, `//` in Tabellen). Ergeben alle in Frage kommenden Weiten dieselbe Zeile, spielt die Weite keine Rolle; belegt nichts eine, gilt die Annahme 2. Der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten Tab bis zum letzten ersetzten Tab bzw. bis zum Zeilenende; Tabs in Strings und Compiler-Direktiven dazwischen bleiben. Nur die gemeldete Zeile.
 
 **Nicht angeboten**
 
-- der erste Tab der Zeile liegt in einem String, Kommentar oder mehrzeiligen String (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- der erste Tab der Zeile liegt in einem String, mehrzeiligen String oder einer Compiler-Direktive (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
+- die Nachbarzeilen passen zu zwei Tabweiten (etwa 4 und 8) gleich gut, die Datei entscheidet nicht, und die beiden ergeben verschiedene Zeilen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
 
-**Hinweis.** Bleibt hinter dem letzten Code-Tab ein Tab in einem String oder Kommentar, meldet der Detektor die Zeile nach der Hilfe weiter.
+**Hinweis.** Bleibt hinter dem ersten Tab ein Tab in einem String oder einer Direktive stehen, meldet der Detektor die Zeile nach der Hilfe weiter.
 
 <a id="sca063"></a>
 
@@ -1084,7 +1088,7 @@ Nachher:
 |---|---|---|
 | `Remove the trailing comma` | `Überzähliges Komma entfernen` | `Supprimer la virgule superflue` |
 
-**Wirkung:** Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Foo(A, B,)` wird `Foo(A, B)`. Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.
+**Wirkung:** Löscht das Komma vor der schließenden Klammer einer Argumentliste samt dem Leerraum bis zur `)`: `Excel.Workbooks.Open(FileName,)` wird `Excel.Workbooks.Open(FileName)`. Delphi übersetzt das Komma nur in einem spät gebundenen Aufruf auf einem Variant oder einer dispinterface (OLE-Automation); in einem normalen Aufruf hängt es ein leeres Argument an (E2034). Der Detektor meldet die Spalte des Kommas; die Hilfe sucht rückwärts die öffnende Klammer.
 
 **Nicht angeboten**
 
@@ -1097,18 +1101,18 @@ Nachher:
 Vorher:
 
 ```pascal
-  WriteLn('A', 'B', );
-  DoStuff(Param1, Param2,);
+  Excel.Workbooks.Open(FileName,);   // Excel: Variant
+  Excel.ActiveWorkbook.SaveAs(NewName, );
 ```
 
 Nachher:
 
 ```pascal
-  WriteLn('A', 'B');
-  DoStuff(Param1, Param2);
+  Excel.Workbooks.Open(FileName);   // Excel: Variant
+  Excel.ActiveWorkbook.SaveAs(NewName);
 ```
 
-**Hinweis.** Bedeutungsgleich: das Komma trug nichts.
+**Hinweis.** Für COM bedeutungsgleich: im spät gebundenen Aufruf ist das leere letzte Argument ein weggelassener optionaler Parameter (`varError`, `DISP_E_PARAMNOTFOUND`), nach der Hilfe wird es gar nicht übergeben. Ein COM-Server mit Typbibliothek (Excel, Word) sieht keinen Unterschied; nur ein eigener IDispatch, der seine Argumente zählt (`cArgs`), sieht eines weniger. Darum keine Kennzeichnung.
 
 <a id="sca069"></a>
 
@@ -1126,7 +1130,7 @@ Nachher:
 
 **Nicht angeboten**
 
-- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
+- die Datei baut wohl auch mit einem anderen Compiler: FPC-Weiche oder FPC-Modus in der Datei, Dateiart `.pp`/`.lpr`, Lazarus-Projekt oder alte Delphi-Projektdatei neben der Unit, ein Paket im Ordner `packages` bis zwei Ebenen über der Unit, das sie enthält und nach Ordnername (`d104`, `D10_4`, `Sydney`, `c6` …) oder `{$LIBSUFFIX}` für ein Delphi vor 11 ist, oder mehr `.dpk` in alten bzw. unbekannten Paketordnern, als die Hilfe liest (64), Spuren von Compilern vor Delphi 11 in der Datei oder ihren Includes (`{$IF CompilerVersion >= 35}`, `DELPHI27_UP`, `jedi.inc` …) – Zifferntrenner gibt es erst ab Delphi 11
 - ein Include oder eine Skript-Unit ohne implementation-Teil
 - ein Zeichencode (`#65279` – der Detektor meldet ihn mit), eine Sprungmarke (label-Abschnitt, `goto`), ein Literal in einem asm-Block
 - die Zeile ist verschoben, an der Spalte steht kein ungruppiertes Literal (Hex, Binär, Float, schon gruppiert, Teil eines Bezeichners, Kommentar, String), oder die Meldung nennt keine Spalte
@@ -1162,14 +1166,14 @@ const
 |---|---|---|
 | `Delete commented-out code` | `Auskommentierten Code löschen` | `Supprimer le code mis en commentaire` |
 
-**Wirkung:** Löscht genau die Region der Meldung ab Zeile und Spalte: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)`. Die Begrenzer gehen erst mit, wenn der Kommentar danach leer ist; Prosa vor oder hinter der Region bleibt. Bedeutungsgleich.
+**Wirkung:** Löscht den auskommentierten Code der Meldung ab Zeile und Spalte – immer ganze Kommentare: eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte, einen mehrzeiligen `{ }`/`(* *)` samt Begrenzern. Reicht er über die Region der Meldung hinaus, geht er nur, wenn auch der Rest leer oder eindeutig Code ist (endet auf `;`, trägt `:=`, ein Schlüsselwort allein wie `begin`, eine Steuerzeile `if … then`, ein case-Zweig `A:` unter `case … of` bzw. `A: begin`, ein Aufruf ohne `;` vor `else`, `end`, `until`, `finally` oder `except`, ein Typkopf `TName = class(TBase)`, eine Anweisung über mehrere Zeilen – umgebrochener Aufruf, Fortsetzung mit `and`/`or`, eine Aufzählung –, eine anonyme Methode als Argument, eine entschärfte Direktive `{$IFDEF X` ohne `}`); ein innerer Kommentar darin (eine `//`-Zeile, in `(* *)` ein `{ … }` allein auf der Zeile) zählt weder als Code noch als Prosa. Bedeutungsgleich.
 
 **Nicht angeboten**
 
-- eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz)
+- eine Direktive im Bereich, ein Doku-Kommentar (`///`, `{*`, `(**`, eine Zeile mit führendem `*` oder `<PRE>`), ein Kopfkommentar vor dem ersten Code der Datei (Lizenz) oder direkt hinter `unit X;` (Doku der Unit)
 - `noinspection` oder TODO/FIXME/HACK/XXX im gelöschten Text
 - der Text passt nicht mehr zur Meldung (Spalte, Code-Merkmal der ersten und letzten Zeile) – Zeile verschoben
-- mehrere Kommentare in der Region, von denen einer mit Text über sie hinausreicht
+- ein Kommentar reicht mit Prosa oder nicht eindeutigem Code über die Region hinaus – ein Teil davon ließe einen Torso stehen; ebenso, wenn ein innerer Kommentar dort Herkunft oder Absicht nennt (`// reference implementation`, `// Taken from …`, `// In case you …`)
 
 **Beispiel**
 
@@ -1206,6 +1210,27 @@ Nachher:
 ```pascal
   Foo;
   Bar;
+```
+
+**Beispiel: Die Meldung deckt nur einen Teil, der Rest ist Code – der ganze Kommentar geht**
+
+Vorher:
+
+```pascal
+  if A then begin
+    Foo;
+(*  end else if B then begin
+    Bar := 1;
+    Exit;*)
+  end;
+```
+
+Nachher:
+
+```pascal
+  if A then begin
+    Foo;
+  end;
 ```
 
 <a id="sca071"></a>
@@ -1657,12 +1682,14 @@ Nachher:
 
 **Nicht angeboten**
 
-- X ist nicht in der Unit deklariert (Property, geerbtes Feld) oder steht im `with`-Block
+- X ist weder vom Quellstellen-Dienst noch aus dem Text als Variable bewiesen (Property, geerbtes Feld, Variable einer Unit, die nicht neben der Datei liegt) oder ein `with`-Rumpf umfasst die Zeile; ein Parameter oder eine lokale Variable – auch einer verschachtelten Routine – verdeckt dabei eine gleichnamige Property der Unit, ein Feld der eigenen Klasse, eine Variable auf Unit-Ebene (auch `threadvar`, `X: T = nil`) und eine Variable im interface-Teil einer Unit der uses-Klauseln neben der Datei gelten als bewiesen
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger (`PFoo = ^TFoo`) oder ein eigener Typ (`= type ..`), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (`PEVP_PKEY`, auch hinter einem Alias der Unit) – `FreeAndNil` nimmt nur ein `TObject`
-- eine Direktive vor `X.Free;` (das nil würde bedingt)
+- eine Direktive vor `X.Free;`, wenn eine Konfiguration es dadurch allein hinter `then`/`else`/`do` stellt (das nil würde bedingt), oder ein Include davor
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 5 (`{$IFNDEF GX_VER130_up}`, `{$IFNDEF WIN32}`) – dort gibt es kein `FreeAndNil`
+- die nil-Zeile trägt einen `{..}`-Kommentar oder einen `//`-Kommentar, der `FreeAndNil` nennt, oder beide Zeilen tragen einen (ein anderer `//`-Kommentar wandert an die FreeAndNil-Zeile)
 - die Zeile trägt ein anderes Paar als die Meldung (Zeile verschoben)
 - ein Kommentar im Ausdruck (`X{owned}.Free;`, `X.{c}Free;`, `X.Free {c};`) – der Detektor meldet diese Formen wie `X.Free;`, der Grund nennt den Kommentar
-- `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Stelle umfasst
 
 **Beispiel**
 
@@ -1685,23 +1712,23 @@ Nachher:
 
 - **Regel:** SCA086 `AvoidOut` – Avoid out parameter modifier
 - **Art:** Quick-Fix
-- **Ändert Verhalten:** **je nach Fund** – gekennzeichnet nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert. Dann nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+- **Ändert Verhalten:** **je nach Fund** – gekennzeichnet nur bei einem verwalteten oder unbekannten Typ (string, Interface, dynamisches Array, Variant, Record, eigener Typ): `out` gab den Wert des Aufrufers beim Aufruf frei, `var` nicht – liest die Routine den Parameter vor dem Setzen, sieht sie danach den alten Wert; setzt der Rumpf einen solchen Parameter nicht als erste Anweisung (bedingt, nach `Exit`, gelesen), steht die Hilfe nur im Menü, nicht in der Glühbirne. Dann nur über Menü oder Glühbirne, nie über Strg+Alt+F.
 
 | en | de | fr |
 |---|---|---|
 | `Replace "out" with "var" for %s` | `"out" für %s durch "var" ersetzen` | `Remplacer « out » par « var » pour %s` |
 
-**Platzhalter:** `%s` = der Parameter (der erste Name hinter `out`).
+**Platzhalter:** `%s` = die Parameter hinter `out` (`Header, Payload`).
 
-**Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich.
+**Wirkung:** Macht aus dem gemeldeten `out`-Parameter einen `var`-Parameter – in Deklaration und Implementierung in einem Schritt (wiederholt die Implementierung die Parameterliste nicht, nur in der Deklaration). Für einfache Typen (Integer, Boolean, Double, Pointer, TObject …) behandelt Delphi `out` wie `var`: bedeutungsgleich – ebenso für eine Aufzählung, eine Menge, einen Zeiger und einen Record bzw. ein `object` der Unit nur mit Feldern solcher Typen (Abschnitte, Methoden und Properties zählen nicht, auch mit doppeltem Kopf `{$ifdef X} TFoo = record {$else} TFoo = object {$endif}`; nicht mit `class operator`, `class var` oder Variantenteil) und für einen Alias aus einer Unit der uses-Klauseln, die neben der Datei liegt (`UCS4 = Cardinal`).
 
 **Nicht angeboten**
 
 - untypisiertes `out` (`out Obj`), ein Prozedur- oder Methodentyp, eine anonyme Methode, `reference to`, ein Operator
-- die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include)
+- die Köpfe dieses Namens in der Datei sind nicht genau ein Paar Deklaration + Implementierung (Overload, gleichnamige Methode einer anderen Klasse, Deklaration oder Implementierung fehlt; nur ein Rumpf in einer Datei mit Include außerhalb des Kopfs der Unit); bei einer lokalen Routine zählt nur ihre umschließende Routine
 - der Name steht im Code ohne Aufruf (`@Load`, `OnX := Load`) – als Methodenzeiger änderte sich sein Typ
 - `virtual`, `dynamic`, `abstract`, `override`, `final`, `message`, `dispid`, `overload`, eine Aufrufkonvention oder `external`
-- die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert Interfaces, oder sie ist die Methode eines interface-Typs
+- die Methode steht unter `published` oder ohne Sichtbarkeitswort (eine Formdatei kann sie an ein Ereignis binden), ihre Klasse implementiert ein Interface aus einer anderen Unit (oder eine Wurzel mit diesem Member), oder sie ist die Methode eines interface-Typs
 - der andere Kopf trägt das `out` nicht genauso (`out A, B: T` gegen `out A: T; out B: T`), die Zeile ist verschoben, oder die Meldung nennt keine Spalte
 
 **Beispiel**
@@ -1978,12 +2005,12 @@ Vorher:
 type
   TFoo = class(TComponent)
   public
-    constructor Create(A: Integer); override;
+    constructor Create(AOwner: TComponent); override;
   end;
 implementation
-constructor TFoo.Create(A: Integer);
+constructor TFoo.Create(AOwner: TComponent);
 begin
-  Run(A);
+  Run(AOwner);
 end;
 ```
 
@@ -1993,13 +2020,13 @@ Nachher:
 type
   TFoo = class(TComponent)
   public
-    constructor Create(A: Integer); override;
+    constructor Create(AOwner: TComponent); override;
   end;
 implementation
-constructor TFoo.Create(A: Integer);
+constructor TFoo.Create(AOwner: TComponent);
 begin
   inherited;
-  Run(A);
+  Run(AOwner);
 end;
 ```
 
@@ -2209,13 +2236,14 @@ Nachher:
 
 **Platzhalter:** `%s` = der neue Name (etwa `DoWork`).
 
-**Wirkung:** Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt. Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).
+**Wirkung:** Schreibt den ersten Buchstaben der gemeldeten Methode groß (`doWork` → `DoWork`) – im Kopf der Deklaration im Klassenrumpf und im Kopf `TKlasse.doWork` der Implementierung derselben Datei, in einem Schritt; bei einer freien Routine in allen ihren Köpfen (Deklaration im interface-Teil bzw. `forward` und Rumpf). Bedeutungsgleich: Delphi unterscheidet Groß- und Kleinschreibung nicht. Aufrufe, Property-Accessoren und Kommentare bleiben, wie sie sind; eine published Methode bleibt an ihre Formdatei gebunden (`TObject.MethodAddress` vergleicht ohne Groß/klein).
 
 **Nicht angeboten**
 
-- die Methode steht nicht im Rumpf einer Klasse dieser Datei: freie Routine (auch das Katalogbeispiel `procedure doStuff;`), record, Interface, Klasse in einem Include oder eine gemeldete Implementierung ohne Deklaration davor
+- die Methode steht im Rumpf eines anderen Typs (record, Interface), die Klasse in einem Include, oder eine gemeldete Implementierung hat keine Deklaration davor
+- eine freie Routine, die ein Linker, eine Bibliothek oder C-Code beim genauen Namen bindet (`external`, `export`, `public`, `alias`, `cdecl`/`stdcall` …, `{$L}`, `exports`, eine Direktive mit dem Namen), mehr als ein Paar Köpfe oder ein Name im Stil einer C- oder Plattform-API (`_`, ohne Großbuchstaben, `kFoo`)
 - `overload`, mehr als eine Deklaration in Klassen dieses Namens (`{$IFDEF}`-Zwillinge), keine oder mehr als eine Implementierung in der Datei (abstract, external, Include)
-- ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`)
+- ein `{$I}`-Include im Klassenrumpf, ein String-Literal der Datei nennt den Namen (Aufruf per Name über RTTI oder `MethodAddress`) – nicht als letztes Glied eines reinen Punktpfads (`'Unit.TFoo.doWork'`, eine Log-Kennung)
 - kein oder mehr als ein Kopf der Methode auf der Zeile, die Zeile ist verschoben oder die Deklaration schon anders geschrieben
 
 **Beispiel**
@@ -2316,7 +2344,7 @@ Nachher:
 - der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Parameters` bei ADO), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
 - in der Schleife: `Q.SQL`, `Q.Params`, `Q.Prepare`/`Unprepare`/`Prepared`, `Q.Connection`, `Q.Command`, `Q.Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
 - die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
-- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, ein altes Paket im Ordner `packages`, das die Unit enthält, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
 - kein freier Name (`PrmX` bis `PrmX9` kommen in der Datei schon vor)
 
 **Beispiel**
@@ -2366,7 +2394,7 @@ Nachher:
 - der Empfänger ist kein einfacher Name (`Self.Q`, `DM.Q`, `Q.Fields`), ist in der Datei als Property oder Routine deklariert oder dem Quellstellen-Dienst nicht als Variable, Parameter oder Feld bekannt; das Argument ist kein einzelnes String-Literal auf der Zeile, oder ein Kommentar steht im Aufruf
 - in der Schleife: `Q.Open`, `Close`, `Active`, `SQL`, `Fields`, `FieldDefs`, `Refresh`, `Requery`, `ExecSQL`, `Prepare`/`Unprepare`, `NextRecordset`, `Connection`, `LoadFromFile`, `Free` u. a., `Q` wird zugewiesen, weitergereicht oder über ein anderes Objekt erreicht, oder eine anonyme Methode
 - die Schleife beginnt keine eigene Zeile und Anweisung in einem `begin..end` (nach `then`, `do`, `else`, im try-, except-, finally- oder case-Teil); `with`, `asm`, `goto` oder eine Direktive in der Routine; der Hauptblock eines Programms; eine Schleife davor, die die Hilfe nicht sicher liest
-- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
+- Dateien, die FPC oder ein Delphi vor 10.3 übersetzt (wie bei SCA014: FPC-Weiche oder Spuren alter Compiler in der Unit oder einem Include, Lazarus- oder alte Delphi-Projektdatei, ein altes Paket im Ordner `packages`, das die Unit enthält, `.pp`/`.lpr`), Skript-Units, ein Netzpfad
 - kein freier Name (`FldX` bis `FldX9` kommen in der Datei schon vor)
 
 **Beispiel**
@@ -2952,6 +2980,7 @@ Nachher:
 - kein oder mehr als ein `raise Exception` im Code der Zeile (Zeile verschoben, nur in Kommentar oder String, schon eine andere Klasse)
 - `raise Exception;` ohne Konstruktor, eine Compiler-Direktive zwischen `raise` und dem Konstruktor
 - die Datei deklariert selbst `Exception` oder die Zielklasse (Typ, Variable, Parameter, Routine)
+- `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 - Eintrag 2: dieselben Sperren wie der erste Eintrag
 
 **Beispiel (Eintrag 1)**
@@ -3010,7 +3039,7 @@ if X < 0 then
 - die Datei deklariert einen Bezeichner `FormatSettings` (Feld, Variable, Parameter, Property) oder nutzt ihn als Member (`X.FormatSettings`) - der bloße Name bände dort
 - die Datei fragt nach Compilern vor Delphi XE (die globale `FormatSettings` gibt es erst seit XE), etwa über `jedi.inc` oder `{$IFDEF VER210}`
 - Eintrag 2: dieselben Sperren wie der erste Eintrag, ohne die zu `FormatSettings`
-- Eintrag 2: eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren von Compilern bis Delphi 10.3, ein eigenes `TFormatSettings`
+- Eintrag 2: eine FPC-Weiche oder ein FPC-Modus in der Datei (FPC 3.2 kennt kein `TFormatSettings.Invariant`), Spuren alter Compiler (`TFormatSettings.Invariant` ist erst ab Delphi 10.3 geprüft), ein eigenes `TFormatSettings`
 
 **Beispiel (Eintrag 1)**
 
@@ -3066,13 +3095,13 @@ Nachher:
 Vorher:
 
 ```pascal
-  x := IfThen(b, A(), B());
+  x := IfThen(Cond, A(), B());
 ```
 
 Nachher:
 
 ```pascal
-  if b then
+  if Cond then
     x := A()
   else
     x := B();
@@ -3145,7 +3174,7 @@ begin
 
 **Nicht angeboten**
 
-- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht in der Unit deklariert; `with`-Block
+- X ist kein bloßer Bezeichner (`Self.X`, Pfad) oder nicht als Variable bewiesen (wie bei SCA085); ein `with`-Rumpf umfasst die Zeile
 - der Typ von X ist in der Unit – auch über einen Alias – ein `record`, `object`, `interface`, ein Zeiger oder ein eigener Typ (`= type ..`; `Free` ist dort eine eigene Methode bzw. die des Ziels), die Unit deklariert eine Routine `Free`, oder der Typ ist nach Konvention ein Zeiger einer anderen Unit (auch hinter einem Alias der Unit)
 - X ist ein `const`- bzw. `constref`-Parameter (FPC: Fehler, Delphi bis 10.3: E2197; ab 10.4 würde nur die lokale Kopie nil)
 - `Free` mit Klammern oder mehrfach auf der Zeile, `X.Destroy`
@@ -3183,11 +3212,12 @@ Nachher:
 **Nicht angeboten**
 
 - der Vergleich ist nicht der ganze Ausdruck einer Bedingung, Zuweisung oder eines Arguments: davor steht nicht `if`, `while`, `until`, `(`, `:=` oder `,`, dahinter nicht `then`, `do`, `)`, `;`, `,`, `else` oder `end` – der Operatorrang: `if A = B and C` heißt `A = (B and C)`, `not A = B` heißt `(not A) = B`, und bei `a + b = c` meldet der Detektor den Teil `b = c`
-- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (auch in einer verschachtelten Routine) oder ein eigener Alias wie `TFloat`; Single gegen etwas anderes als Single (die Überladungen von SameValue wären mehrdeutig)
-- das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft
-- eine `with`-Anweisung in der Routine, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- ein Operand ist nicht als Single, Double, Extended oder Real bewiesen – Currency vergleicht als Festkommatyp exakt; ein unbekannter Typ (ein Parameter oder eine lokale Variable einer verschachtelten Routine ist bewiesen, ein Alias wie `TFloat = single` der Datei oder einer Unit ihrer uses-Klauseln neben ihr auch – nicht, wenn `{$IFDEF}`-Zweige ihn verschieden deklarieren); Single gegen etwas anderes als Single oder eine ganze Zahl (die Überladungen von SameValue wären mehrdeutig)
+- das Wächter-Idiom `if X = 0 then X := ...` und jeder Fund, den der Detektor als gewollt herabstuft; ein Divisionsschutz (`if D <> 0 then R := R / D`, auch `if D = 0 then Exit; ... / D` und die Division im `else`-Zweig – jeder Wert außer genau 0 ist ein gültiger Teiler), ein Text für genau 0 (`if V = 0 then Result := '0'`) und `Result := F <> 1` in einer Funktion, die eine Property mit `stored` nennt
+- ein `with`-Rumpf um den Vergleich – außer jedes Ziel ist ein bloßer Name, dessen Typ ein Record dieser Unit nur mit Feldern ist (ein Operand, der ein Feld davon ist, hat dessen Typ) –, ein eigenes `SameValue` bzw. `IsZero` in der Datei
+- die Stelle liegt in einem Zweig nur für Compiler vor Delphi 6 (`{$IFNDEF COMPILER6_UP}`) – dort gibt es `Math.IsZero`/`SameValue` nicht
 - der Vergleich steht nicht oder mehrfach auf der Zeile, trägt einen Kommentar oder steht in einer Aufzählung `(A = 1, B = 2)`
-- `Math` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `Math` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest (eine zweite Klausel davor bräche die Unit); steht `Math` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Stelle umfasst
 
 **Beispiel**
 
@@ -3225,7 +3255,7 @@ Nachher:
 
 - nicht unter `private`/`strict private`; `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`, Konstruktor, Destruktor, Operator
 - mehr als eine Deklaration oder Implementierung, keine Implementierung in der Datei, Property-Accessor
-- der Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, ein Attribut an Methode oder Klasse
+- der Name als String-Literal (`MethodAddress`), `{$RTTI}` oder eine Direktive des JEDI-Präprozessors (`{$JPP…}`, Prototyp) in der Datei, ein Attribut an Methode oder Klasse
 - `{$I}` im Klassenrumpf oder im implementation-Teil, ein Include davor, das den Namen nennt (Property-Accessor einer Nachfahrenklasse), nicht neben der Unit oder auf einem Netzpfad liegt, ein Interface der Klasse aus einer anderen Unit
 - ein Marker-Kommentar (`noinspection`, TODO …) hinter der Deklaration oder dem `end;` der Implementierung – er gilt der Zeile dahinter –, oder ein `// noinspection` darüber, der auf sie zielt
 - eine `.dfm`/`.fmx`/`.lfm` neben der Unit nennt den Namen (Bindung an ein Ereignis)
@@ -3693,13 +3723,14 @@ Nachher:
 
 **Platzhalter:** `%s` = die Routine.
 
-**Wirkung:** Löscht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` – samt lokaler Abschnitte und Routinen, der `///`-Doku- und Attributzeilen darüber, der Kommentarzeilen darüber, die die Routine beim Namen nennen, einer Leerzeile und einer `forward`-Deklaration. Bedeutungsgleich: die Hilfe prüft am Puffer neu, dass der Name sonst nirgends steht – nicht als Code (auch nicht in inaktiven Zweigen), in keinem String-Literal und in keiner Direktive.
+**Wirkung:** Löscht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` – samt lokaler Abschnitte und Routinen, der `///`-Doku- und Attributzeilen darüber, der Kommentarzeilen darüber, die die Routine beim Namen nennen, einer Leerzeile und einer `forward`-Deklaration. Bedeutungsgleich: die Hilfe prüft am Puffer neu, dass der Name sonst nirgends steht – nicht als Code (auch nicht in inaktiven Zweigen), in keinem String-Literal mit genau dieser Schreibweise und in keiner Direktive.
 
 **Nicht angeboten**
 
 - Overloads, Methoden (das meldet SCA147), globale FPC-Operatoren
-- `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei
-- `{$I}` im implementation-Teil oder ein Include davor, das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau)
+- `export`/`public`/`alias`/`external`/`forward`/`interrupt`, `{$L}`/`{$LINK}` in der Datei, eine Direktive des JEDI-Präprozessors (`{$JPPEXPANDMACRO …}`, `(*$JPPLOOP …*)`) – die Datei ist ein Prototyp, Deklaration und Aufrufer erzeugen erst die Makros
+- ein Include (außer im Kopf der Unit), das die Routine nennt, nicht neben der Unit liegt oder – wie die Unit selbst – auf einem Netzpfad (kein Plattenzugriff beim Menüaufbau); mehr als 16 verschiedene Includes, wenn eines im implementation-Teil steht
+- die Unit heißt anders als ihre Datei (ein Skript oder eine Vorlage, etwa für den JvInterpreter)
 - eine Direktive im Bereich außer ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION`
 - ein Marker-Kommentar (`noinspection`, TODO …) hinter dem `end;` bzw. der `forward`-Deklaration – er gilt der Zeile dahinter –, `// noinspection-file` in der Routine oder ein `// noinspection` über dem Kopf bzw. der `forward`-Deklaration, der auf die Routine zielt
 - zwei Routinen auf einer Zeile, ein Kopf vor `implementation`, unsichere Grenzen (lokaler Klassentyp, `$IFDEF`-geteilter Rumpf)
@@ -3841,6 +3872,7 @@ end.
 - ein case, das keine Anweisung ist: der Variantenteil eines Records (ein verschobener Fund) oder ein case ohne umschließenden Block (Fragment)
 - eine offene `(` vor dem case mit einer Direktive dazwischen – ein Zweig kann sie offen lassen, die Lage ist unklar
 - Eintrag 2: dieselben Sperren wie der erste Eintrag
+- Eintrag 2: `System.SysUtils` fehlt und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile der Ersetzungen umfasst
 
 **Beispiel (Eintrag 1)**
 
@@ -4340,6 +4372,7 @@ end;
 - ein Typ, der nicht als String, dynamisches Array, Interface oder Variant bewiesen ist (ein fremdes `IFoo` kann ein Record sein); deklariert die Unit den Namen selbst, gilt nur ihre Definition auf Unit-Ebene – eine Definition in einer Routine oder einem Klassenrumpf sperrt (auch in einem Include ohne unit-Kopf)
 - `absolute Result`, asm, eine Direktive zwischen Kopf und `begin`, ein FPC-Modus ohne Result
 - Name oder Typ passen nicht zur Meldung, auf der Zeile steht kein `Result` (Zeile verschoben)
+- `Variants` fehlt (für `VarClear`) und lässt sich nicht einfügen (weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest); steht `Variants` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch die Zeile der Ersetzung umfasst
 
 **Beispiel**
 
@@ -4515,9 +4548,55 @@ Nachher:
     if S[i] = 'x' then Exit;
 ```
 
+<a id="sca204"></a>
+
+### SCA204 – Result statt Funktionsname schreiben
+
+- **Regel:** SCA204 `FunctionNameAsResult` – Result assigned through the function name
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write Result instead of %s` | `Result statt %s schreiben` | `Écrire Result au lieu de %s` |
+
+**Platzhalter:** `%s` = der Funktionsname aus der Meldung.
+
+**Wirkung:** Ersetzt die Zuweisung an den Funktionsnamen (`GetCount := FCount;`, die alte Pascal-Form) durch `Result := FCount;` – jede solche Zuweisung am Anweisungsanfang der gemeldeten Zeile (`if A then F := 1 else F := 2;` wird zu beiden `Result :=`, auch hinter einem case-Label). Links vom `:=` sind Funktionsname und Result dieselbe Variable: bedeutungsgleich. Liest die Zeile den Namen rechts (`Total := Total + I`), bleibt das stehen – dort ist der Name ein rekursiver Aufruf (SCA205, eigener Fund ohne Hilfe).
+
+**Nicht angeboten**
+
+- es gibt kein Result: `{$mode fpc}`, `tp`, `macpas`, `iso` (auch mit `{$modeswitch result}`), `{$X-}` bzw. `{$EXTENDEDSYNTAX OFF}`; oder die Unit wird auch mit Free Pascal übersetzt (`{$IFDEF FPC}`, `FPC_…`) und setzt selbst keinen Modus delphi/delphiunicode/objfpc – Result hinge dann am Modus des Projekts
+- die innerste Routine um die Zeile ist keine Funktion dieses Namens (in einer geschachtelten Routine wäre Result deren Ergebnis), eine Prozedur, oder ihre Grenzen sind nicht sicher lesbar
+- Kopf oder Deklarationsteil nennen den Namen noch einmal (Parameter, lokale Variable, geschachtelte Routine) oder deklarieren Result
+- vor der Zeile steht im Rumpf ein `with` oder eine anonyme Methode
+- keine Zuweisung an den Namen am Anweisungsanfang auf der Zeile (Zeile verschoben, schon korrigiert), ein Kommentar oder eine Direktive zwischen Name und `:=`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+function TList.GetCount: Integer;
+begin
+  GetCount := FCount;
+end;
+```
+
+Nachher:
+
+```pascal
+function TList.GetCount: Integer;
+begin
+  Result := FCount;
+end;
+```
+
+**Hinweis.** Die Regel SCA204 steht nur in den Profilen strict und style (Stil entscheidet das Team-Profil); das Lesen des Namens (SCA205) bekommt keine Hilfe – ob der Wert (`Result`) oder die Rekursion (`Name()`) gemeint war, weiß nur der Autor.
+
 ## Weitere Code-Aktionen
 
-Rezepte des Anbieters (`uRdxProvider`), in der Reihenfolge des Menüs.
+Rezepte des Anbieters (Kern `uRdxActionCore`), in der Reihenfolge des Menüs.
 
 <a id="rezept-showspan"></a>
 
@@ -4561,7 +4640,7 @@ Rezepte des Anbieters (`uRdxProvider`), in der Reihenfolge des Menüs.
 - ein Zeiger am Kettenanfang (`P + N + '.txt'` mit `P: PChar` bzw. `PChar(S)` – Delphi rechnet zuerst Zeiger-Arithmetik); hinter `X +` beim Selbst-Anhängen nicht, dort ist X der Anfang
 - Nicht-Unicode-Strings als Ziel oder Operand (`AnsiString`, `RawByteString`, `UTF8String`, `ShortString`), ein `AnsiChar`-Operand
 - die Zeile trägt nicht mehr Ziel und `+`-Zahl des Funds (Zeile verschoben)
-- `System.SysUtils` fehlt und die uses-Klausel trägt Direktiven oder liegt in einem `$IFDEF`-Zweig
+- `System.SysUtils` fehlt und weder `uses` noch ein Eintrag, neben den es käme, steht außerhalb jedes `$IFDEF`-Zweigs, oder die einzige uses-Klausel steht in einem Zweig, den der Quellstellen-Dienst nicht liest; steht `SysUtils` nur bedingt in uses, gilt es, wenn jeder Zweig um den Eintrag auch jede Zeile des ersetzten Bereichs umfasst
 
 **Beispiel**
 

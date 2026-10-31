@@ -21,6 +21,12 @@ type
     [Test] procedure KnownIdents_UnknownUnit_Empty;
     [Test] procedure IdentsFor_RtlNamespace_FallsBackToShortName;
     [Test] procedure IdentsFor_ForeignNamespace_NoFallback;
+    // D007 (2026-10-29): sichtbare Exporte statt Handauswahl
+    [Test] procedure KnownIdents_D007_ReExporte_SindSichtbareBezeichner;
+    [Test] procedure KnownIdents_D007_AuswahlRegel_HaeltGenerischeDraussen;
+    [Test] procedure KnownIdents_Eintraege_KleinOhneLeerzeichenOhneDoppel;
+    // D007b (2026-10-30): TCloseAction-Werte (Forms), OLE-Typen (ActiveX)
+    [Test] procedure KnownIdents_D007b_CloseActionUndOleTypen;
   end;
 
 implementation
@@ -77,6 +83,111 @@ begin
     'Vorbedingung: kein RTL-Namespace');
   Assert.AreEqual<Integer>(0, Length(TUnusedUsesDetector.IdentsFor('alcinoe.fmx.stdctrls')),
     'fremder Namespace: leer, kein Rueckfall');
+end;
+
+function Hat(const UnitLow, Id: string): Boolean;
+begin
+  Result := Pos(',' + Id + ',',
+    ',' + Joined(TUnusedUsesDetector.IdentsFor(UnitLow)) + ',') > 0;
+end;
+
+procedure TTestUnusedUsesIdents.KnownIdents_D007_ReExporte_SindSichtbareBezeichner;
+// Vor D007 rot: keiner dieser Bezeichner stand in der Liste. Sie sind
+// die Belege der KI-Realworld-FP (Vertrag d007) - fuer den Compiler
+// Bezeichner der jeweiligen Unit, auch wo die Unit sie nur als Alias
+// von System.UITypes neu fuehrt (mrOk, TModalResult, crHourGlass,
+// fsBold, clNone). Beide Schreibweisen des Unitnamens.
+const
+  FAELLE: array[0..15] of array[0..1] of string = (
+    ('controls', 'mrok'), ('vcl.controls', 'tmodalresult'),
+    ('controls', 'crhourglass'), ('vcl.controls', 'timagelist'),
+    ('controls', 'cm_mouseenter'), ('vcl.controls', 'cn_notify'),
+    ('graphics', 'fsbold'), ('vcl.graphics', 'clnone'),
+    ('graphics', 'psdot'), ('classes', 'tshortcut'),
+    ('system.classes', 'tshiftstate'), ('math', 'inrange'),
+    ('winapi.shlobj', 'csidl_personal'), ('shellapi', 'dragqueryfile'),
+    ('forms', 'validparentform'), ('actnlist', 'tcustomaction'));
+var
+  i : Integer;
+begin
+  for i := Low(FAELLE) to High(FAELLE) do
+    Assert.IsTrue(Hat(FAELLE[i][0], FAELLE[i][1]),
+      FAELLE[i][1] + ' fehlt in der Liste von ' + FAELLE[i][0]);
+end;
+
+procedure TTestUnusedUsesIdents.KnownIdents_D007_AuswahlRegel_HaeltGenerischeDraussen;
+// WAECHTER der Auswahlregel (vor und nach D007 gruen): diese Woerter
+// exportiert die Unit zwar, sie beweisen aber nichts - IsAlwaysNeeded-
+// Exporte (TRect, TPoint, INFINITE), Schluesselwoerter (Register),
+// Allerweltswoerter (ToString, Mask, Text). Ein spaeterer Voll-Import
+// der Exportliste wuerde hier rot.
+const
+  FAELLE: array[0..7] of array[0..1] of string = (
+    ('classes', 'trect'), ('classes', 'tpoint'), ('classes', 'tostring'),
+    ('classes', 'mask'), ('syncobjs', 'infinite'), ('controls', 'register'),
+    ('math', 'ifthen'), ('fmx.controls', 'text'));
+var
+  i : Integer;
+begin
+  for i := Low(FAELLE) to High(FAELLE) do
+    Assert.IsFalse(Hat(FAELLE[i][0], FAELLE[i][1]),
+      FAELLE[i][1] + ' darf nicht in der Liste von ' + FAELLE[i][0] + ' stehen');
+end;
+
+procedure TTestUnusedUsesIdents.KnownIdents_Eintraege_KleinOhneLeerzeichenOhneDoppel;
+// WAECHTER des Tabellenformats (PFLEGEHINWEIS an KnownIdents): H2
+// vergleicht gegen den lowercase-Suchtext - ein Eintrag mit Gross-
+// buchstaben oder Leerzeichen matcht nie und ist ein FP-Erzeuger.
+// Doppelte Eintraege sind harmlos, deuten aber auf Copy-Fehler.
+const
+  UNITS: array[0..17] of string = (
+    'classes', 'controls', 'graphics', 'forms', 'stdctrls', 'extctrls',
+    'comctrls', 'math', 'shlobj', 'shellapi', 'commctrl', 'actnlist',
+    'syncobjs', 'contnrs', 'fmx.controls', 'fmx.listbox', 'fmx.platform',
+    'activex');
+var
+  U, Id : string;
+  Seen  : TArray<string>;
+begin
+  for U in UNITS do
+  begin
+    Seen := [];
+    for Id in TUnusedUsesDetector.KnownIdents(U) do
+    begin
+      Assert.AreEqual(Id.ToLower, Id, U + ': nicht lowercase: ' + Id);
+      Assert.IsTrue((Id <> '') and (Pos(' ', Id) = 0),
+        U + ': leer oder mit Leerzeichen: "' + Id + '"');
+      Assert.IsFalse(Pos(',' + Id + ',', ',' + string.Join(',', Seen) + ',') > 0,
+        U + ': doppelt: ' + Id);
+      Seen := Seen + [Id];
+    end;
+  end;
+end;
+
+procedure TTestUnusedUsesIdents.KnownIdents_D007b_CloseActionUndOleTypen;
+// Vor D007b rot: die KI-Pruefung rwE31 Stufe 3 fand caFree (jvcl
+// childwin.pas, Dev-Cpp NewVarFrm.pas) und TOleEnum (Abbrevia_TLB.pas)
+// in keiner Liste - die SCA007-Editorhilfe konnte sie keiner Unit
+// zuordnen und stand nur im Menue. Quelle: interface von Vcl.Forms
+// (caNone..caMinimize als Konstanten) und Winapi.ActiveX (TOle*/POle*),
+// Delphi 12 und 13. ActiveX steht in IsAlwaysNeeded - den Fund aendert
+// die Liste dort nicht, nur die Zuordnung der Hilfe (IdentsFor).
+const
+  FAELLE: array[0..9] of array[0..1] of string = (
+    ('forms', 'cafree'), ('vcl.forms', 'cahide'), ('forms', 'caminimize'),
+    ('vcl.forms', 'canone'), ('activex', 'toleenum'),
+    ('winapi.activex', 'tolebool'), ('activex', 'toledate'),
+    ('winapi.activex', 'tolecolor'), ('activex', 'polestr'),
+    ('winapi.activex', 'toleverb'));
+var
+  i : Integer;
+begin
+  for i := Low(FAELLE) to High(FAELLE) do
+    Assert.IsTrue(Hat(FAELLE[i][0], FAELLE[i][1]),
+      FAELLE[i][1] + ' fehlt in der Liste von ' + FAELLE[i][0]);
+  // FMX.Forms deklariert die Werte NICHT (scoped: TCloseAction.caFree) -
+  // die eigene Liste bleibt ohne sie.
+  Assert.IsFalse(Hat('fmx.forms', 'cafree'), 'fmx.forms kennt kein caFree');
 end;
 
 initialization

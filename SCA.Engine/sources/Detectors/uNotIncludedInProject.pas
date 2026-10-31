@@ -111,7 +111,7 @@ implementation
 uses
   uStaticFiles,   // IsUnitLikeFile/IsFormFileName + .pp-Schluessel (Lazarus A4)
   System.IOUtils,
-  uDetectorUtils,    // IsIdentChar (uses-Scan, SCA195)
+  uDetectorUtils,    // UsesNamesOfText (uses-Scan, SCA195)
   uFileTextCache;    // AcquireLines/ReleaseLines - Projektdateien liegen nach
                      // dem Hauptscan im Cache (uses-Scan praktisch I/O-frei);
                      // Orphans/Testkontext laufen ueber den Fallback-Load
@@ -124,169 +124,29 @@ const
     ('.', '..', '__recovery', '__history', '.git', '.svn', 'node_modules');
   MAX_DEPTH     = 32;
   MAX_WALK_FILES = 20000;   // Cap analog TStaticAnalyzer2/uIDEAnalyseRunner
+  // Kompilat-Wurzel einer .dpk: zaehlt im uses-Scan wie 'uses'.
+  DPK_ROOT_CLAUSE = 'contains';
 
 // Sammelt alle uses-Referenzen (lowercase, voller - ggf. gepunkteter - Name)
-// der Datei in ANames. Lexikalisch auf dem GESTRIPPTEN Text: Kommentare und
-// String-Literale sind geblankt, bevor irgendetwas zaehlt (Projektregel:
-// Kommentare sind NIE Code-Use; und der Pfad-String einer
-// "X in 'file.pas'"-Klausel kann so kein Phantom-'uses' liefern).
-// Danach reiner Wort-Lauf: ab jedem Wort 'uses' werden Ident-Folgen
-// (inklusive Punkten fuer dotted units) bis zum ';' eingesammelt; das
-// reservierte 'in' wird uebersprungen. 'uses' ist ein reserviertes Wort und
-// kann im gestrippten Code nirgendwo sonst als ganzes Wort auftauchen -
-// interface- und implementation-Klausel werden so automatisch beide erfasst.
-// Eigener Mini-Stripper NUR fuer den uses-Scan: Kommentare, Compiler-
-// Direktiven und String-Literale werden durch je EIN Leerzeichen ersetzt.
-//
-// Warum nicht TDetectorUtils.StripStringsAndComments: das entfernt
-// {..}-Bloecke ERSATZLOS - beim Cross-Platform-Idiom
-//   uses {$IFDEF FPC}fgl{$ELSE}Generics.Collections{$ENDIF};
-// verschmolzen die Nachbar-Idents zum Phantom-Token
-// 'fglgenerics.collections' und KEINER der beiden Namen wurde gesammelt
-// (Review 2026-07-29). Mit Leerzeichen-Ersatz zaehlen BEIDE Zweige - fuer
-// diese Regel die richtige Semantik: welcher Zweig aktiv ist, haengt von
-// Defines ab, und eine Unit, die in irgendeinem Zweig gezogen wird, ist
-// nicht tot.
-function StripForUsesScan(const Raw: string): string;
-var
-  SB   : TStringBuilder;
-  i, n : Integer;
-
-  // Delphi-12-Multiline-Literal (Review 2026-07-30): drei Apostrophe, nach
-  // denen bis zum Zeilenende nur Whitespace folgt, eroeffnen ein '''-Literal;
-  // es endet an der ersten Zeile, deren erster Nicht-Whitespace wieder '''
-  // ist. Ohne diese Behandlung liefen alle Folgezeilen des Literals als
-  // Code in den uses-Scan - eingebettetes 'uses uGhost;' haette eine tote
-  // Orphan-Datei auf 195 gekippt (String-Inhalte zaehlen NIE als Code).
-  // 5+-Quote-Varianten (Literal enthaelt selbst ''') fallen auf die
-  // Einzeiler-Logik zurueck - nicht schlechter als vorher, dokumentierte
-  // Restluecke.
-  function IsMultilineOpener(p: Integer): Boolean;
-  begin
-    if (p + 2 > n) or (Raw[p + 1] <> '''') or (Raw[p + 2] <> '''') then
-      Exit(False);
-    p := p + 3;
-    while (p <= n) and CharInSet(Raw[p], [' ', #9, #13]) do Inc(p);
-    Result := (p > n) or (Raw[p] = #10);
-  end;
-
-  procedure SkipMultilineLiteral;   // i steht auf dem ersten der drei Quotes
-  var
-    AtLineStart : Boolean;
-  begin
-    Inc(i, 3);
-    AtLineStart := False;           // Rest der Startzeile ist nur Whitespace
-    while i <= n do
-    begin
-      if Raw[i] = #10 then
-        AtLineStart := True
-      else if not CharInSet(Raw[i], [' ', #9, #13]) then
-      begin
-        if AtLineStart and (i + 2 <= n) and (Raw[i] = '''') and
-           (Raw[i + 1] = '''') and (Raw[i + 2] = '''') then
-        begin
-          Inc(i, 3);                // Abschluss-''' konsumieren
-          Exit;
-        end;
-        AtLineStart := False;
-      end;
-      Inc(i);
-    end;                            // unterminiert -> Rest der Datei geblankt
-  end;
-
-begin
-  SB := TStringBuilder.Create(Length(Raw));
-  try
-    i := 1;
-    n := Length(Raw);
-    while i <= n do
-    begin
-      case Raw[i] of
-        '''':
-          begin
-            if IsMultilineOpener(i) then
-              SkipMultilineLiteral
-            else
-            begin
-              Inc(i);
-              while i <= n do
-              begin
-                if Raw[i] = '''' then
-                begin
-                  if (i < n) and (Raw[i + 1] = '''') then
-                    Inc(i, 2)          // verdoppeltes Apostroph im Literal
-                  else
-                  begin
-                    Inc(i);
-                    Break;
-                  end;
-                end
-                else if Raw[i] = #10 then
-                  Break                // Delphi-Literal endet an der Zeile
-                else
-                  Inc(i);
-              end;
-            end;
-            SB.Append(' ');
-          end;
-        '{':
-          begin
-            while (i <= n) and (Raw[i] <> '}') do Inc(i);
-            if i <= n then Inc(i);   // '}' konsumieren
-            SB.Append(' ');
-          end;
-        '(':
-          if (i < n) and (Raw[i + 1] = '*') then
-          begin
-            Inc(i, 2);
-            while (i < n) and not ((Raw[i] = '*') and (Raw[i + 1] = ')')) do
-              Inc(i);
-            if i < n then Inc(i, 2) else i := n + 1;
-            SB.Append(' ');
-          end
-          else
-          begin
-            SB.Append(Raw[i]);
-            Inc(i);
-          end;
-        '/':
-          if (i < n) and (Raw[i + 1] = '/') then
-          begin
-            while (i <= n) and (Raw[i] <> #10) do Inc(i);
-            SB.Append(' ');          // das #10 bleibt fuer die naechste Runde
-          end
-          else
-          begin
-            SB.Append(Raw[i]);
-            Inc(i);
-          end;
-      else
-        SB.Append(Raw[i]);
-        Inc(i);
-      end;
-    end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
+// der Datei in ANames. Der lexikalische Scan (Kommentare, Direktiven und
+// Strings geblankt, BEIDE Zweige einer {$IFDEF}-Weiche zaehlen, der
+// 'in'-Pfad faellt weg) steht seit 2026-10-27 unveraendert in
+// TDetectorUtils.UsesNamesOfText - SCA184/S4 braucht dieselbe Sicht.
+// Begruendungen und Grenzen stehen dort.
 procedure CollectUsesNames(const AFile: string;
   ANames: TDictionary<string, Boolean>;
-  AIncludeContains: Boolean = False);
-// AIncludeContains (Review 2026-07-30): .dpk-Packages haben keine uses-
-// Klausel - die Kompilat-Wurzel ist dort 'contains'. Der Wort-Walk
-// behandelt 'contains' dann wie 'uses' ('in'-Pfad-Skip greift identisch).
+  const AExtraClauseWord: string = '');
+// AExtraClauseWord = DPK_ROOT_CLAUSE (Review 2026-07-30): .dpk-Packages
+// haben keine uses-Klausel - die Kompilat-Wurzel ist dort 'contains'. Der
+// Wort-Walk behandelt 'contains' dann wie 'uses' ('in'-Pfad-Skip greift
+// identisch).
 // Bewusst OPT-IN nur fuer .dpk-Wurzeln: in .pas-Dateien ist 'contains'
 // kein reserviertes Wort und koennte als Bezeichner Phantom-Namen sammeln.
 var
   Lines  : TStringList;
   Owned  : Boolean;
   Text   : string;
-  i, n   : Integer;
-  Start  : Integer;
   W      : string;
-  InUses : Boolean;
 begin
   // AcquireLines statt gFileTextCache.GetLines direkt: das Global startet
   // nil (leere initialization-Sektion!) und wird erst vom Scan-Setup
@@ -296,38 +156,13 @@ begin
   Lines := AcquireLines(AFile, Owned);
   if Lines = nil then Exit;
   try
-    Text := LowerCase(StripForUsesScan(Lines.Text));
+    Text := Lines.Text;
   finally
     ReleaseLines(Lines, Owned);
   end;
-  n := Length(Text);
-  i := 1;
-  InUses := False;
-  while i <= n do
+  for W in TDetectorUtils.UsesNamesOfText(Text, AExtraClauseWord) do
   begin
-    if TDetectorUtils.IsIdentChar(Text[i]) then
-    begin
-      Start := i;
-      while (i <= n) and (TDetectorUtils.IsIdentChar(Text[i]) or
-            (InUses and (Text[i] = '.'))) do
-        Inc(i);
-      W := Copy(Text, Start, i - Start);
-      if not InUses then
-      begin
-        // '&uses' waere ein escaped Ident, kein Schluesselwort.
-        if ((W = 'uses') or (AIncludeContains and (W = 'contains'))) and
-           ((Start = 1) or (Text[Start - 1] <> '&')) then
-          InUses := True;
-      end
-      else if (W <> 'in') and (W <> '') then
-        ANames.AddOrSetValue(W, True);
-    end
-    else
-    begin
-      if InUses and (Text[i] = ';') then
-        InUses := False;
-      Inc(i);
-    end;
+    ANames.AddOrSetValue(W, True);
   end;
 end;
 
@@ -491,7 +326,7 @@ begin
       // .dpk: Kompilat-Wurzel ist die contains-Klausel (uses gibt es in
       // Packages nicht) - Review 2026-07-30, vorher garantierter No-Op.
       F := ChangeFileExt(AProjectFile, '.dpk');
-      if FileExists(F) then CollectUsesNames(F, UsedNames, True);
+      if FileExists(F) then CollectUsesNames(F, UsedNames, DPK_ROOT_CLAUSE);
       // .lpr (A6/C6, 2026-09-18): das Lazarus-Programm ist die
       // uses-Wurzel eines .lpi-Scans. ANDERS als die .dpr steht die
       // .lpr normalerweise SCHON in der Projektliste (FromLpi nimmt
@@ -514,7 +349,7 @@ begin
         F := ChangeFileExt(AMemberProjects[i], '.dpr');
         if FileExists(F) then CollectUsesNames(F, UsedNames);
         F := ChangeFileExt(AMemberProjects[i], '.dpk');
-        if FileExists(F) then CollectUsesNames(F, UsedNames, True);
+        if FileExists(F) then CollectUsesNames(F, UsedNames, DPK_ROOT_CLAUSE);
         // .lpg-Member sind .lpi/.lpk-Pfade (A6/C6) - gleiche
         // .lpr-Nachziehung wie oben, gleiche Idempotenz.
         F := ChangeFileExt(AMemberProjects[i], '.lpr');

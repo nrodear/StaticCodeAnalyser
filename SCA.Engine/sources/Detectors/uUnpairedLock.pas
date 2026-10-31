@@ -109,7 +109,8 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 // Position des LETZTEN Vorkommens von Needle als GANZES Wort in Hay (sonst 0).
 // Hay muss lower-case sein. Verhindert Teilwort-Treffer ('retry'/'entry' fuer
@@ -275,8 +276,11 @@ begin
     // Entfernt beim Voll-Review 2026-09-13. Ueber alle 18.800 Korpusdateien
     // sind nicht nur die Trefferzahlen, sondern die vollstaendigen
     // Trefferlisten (Position und Gruppe-1-Text) identisch.
-    RE := TRegEx.Create(
-      '(?i)\b((?:\w+\.)?(?:Lock|Acquire|EnterCriticalSection))\s*[\(;]');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx(
+      '(?i)\b((?:\w+\.)?(?:Lock|Acquire|EnterCriticalSection))\s*[\(;]', [roNotEmpty]);
     for M in RE.Matches(Code) do
     begin
       AfterPos := M.Index + M.Length;

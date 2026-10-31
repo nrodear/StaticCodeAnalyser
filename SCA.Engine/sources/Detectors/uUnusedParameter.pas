@@ -34,16 +34,19 @@
 //     modifier, den der Parser nicht kennt - er landet als eigener nkParam
 //     mit leerem Typ. Gemeldet wird also ein Parameter, der gar keiner ist.
 //
-// BEKANNTER REST (nicht behoben, damit er nicht verloren geht): 78 Funde
-// (0,56 % der Autopsie) behaupten 'never read', obwohl der Parametername
-// im ECHTEN Rumpf wortgebunden dasteht. Weder die AST-Zaehlung noch die
-// Quell-Rueckfrage sehen ihn - eine offene, echte FP-Klasse mit noch
-// unbekannter Ursache (Verdacht: Rumpf-Zeilenbereich BodyFrom..BodyTo zu
-// eng, s. BodyLineRangeFound). Eigenes Paket, eigene Messung.
+// EHEMALS BEKANNTER REST, Ursache gefunden (SCA054u, 2026-10-27): 78 Funde
+// der Autopsie behaupteten 'never read', obwohl der Parametername im
+// ECHTEN Rumpf wortgebunden dasteht. Der Verdacht stimmte - der Rumpf-
+// Zeilenbereich der Quell-Rueckfrage endete am LETZTEN KNOTEN statt am
+// 'end' der Routine. Hinter dem letzten Knoten lagen: inaktive IFDEF-
+// Zweige am Rumpfende, until-Bedingungen, Fortsetzungszeilen und vom Parser
+// verlorene Anweisungen. Seither aus der Quelle, s. RoutineEndLine
+// (Referenz perfU27: rw 227 / laz 50 Drops erwartet).
 //
 // Erkennung:
 //   * MethodNode.FindAll(nkParam) → Liste der Param-Knoten
-//   * Body-Tokens einsammeln (rekursiv Name+TypeRef aller Children)
+//   * Body-Tokens einsammeln (rekursiv Name+TypeRef aller Children),
+//     Inhalt von String-Literalen ausgeblendet (U11, s. CodeTextOf)
 //   * Pro Param: zaehle case-insensitive Wortgrenzen-Vorkommen im Body
 //   * Wenn 0 -> Finding
 //
@@ -738,12 +741,60 @@ begin
   end;
 end;
 
-procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
-// Seit Voll-Review 2026-09-12 (Posten 89) byte-identisch in
-// TDetectorUtils.CollectNameTypeTokens (dritte Kopie derselben
-// Routine). Wrapper bleibt fuer die Aufrufer dieser Unit.
+function CodeTextOf(const AText: string): string;
+// U11 (2026-10-27): ein Knotenstueck OHNE den Inhalt seiner String-
+// Literale. Der Parser legt Literale in QUELLFORM in Name/TypeRef ab
+// (QuoteStrLit, z. B. nkCall "RaiseUnimplemented('Add(Escape)')"). Ohne
+// diesen Schritt war ein Literal mit dem Parameternamen das zweite
+// Vorkommen neben der Deklaration - der Parameter galt als gelesen, der
+// Fund fehlte (Referenz perfS184: 12 Faelle, u. a. mORMot
+// TTextWriter.Add 'Escape', JvProps 'S' in Format('%s.%s', ...)). Die
+// Quell-Rueckfragen unten lesen die gestrippte Quelle und hielten die
+// Zusage 'Strings zaehlen nie' schon immer - jetzt auch die AST-Zaehlung.
+//
+// JE STUECK, nicht auf dem verketteten Text: ein unpaariges Apostroph
+// (Literalinhalt aus einem ROH abgelegten Pfad, s. u.) blendet so
+// hoechstens den Rest SEINES Stuecks aus, nie die Folgeknoten. Und auch
+// dann schuetzt die Quell-Rueckfrage (UsedInMethodSource): steht der
+// Name im Rumpf als Code, bleibt der Parameter benutzt.
+//
+// BEKANNTER REST (FN, nicht Teil von U11): Literale, die der Parser
+// ohne Quotes ablegt - Exit(...)-Argumente, for-Kopf, 'raise .. at ..',
+// Parameter-Defaults. Ihr Inhalt ist vom Code nicht zu unterscheiden
+// und zaehlt weiter als Nutzung.
 begin
-  TDetectorUtils.CollectNameTypeTokens(Root, SB);
+  if Pos('''', AText) = 0 then
+    Result := AText
+  else
+    Result := TDetectorUtils.BlankStringLiterals(AText);
+end;
+
+procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
+// Bis U11 ein Wrapper um TDetectorUtils.CollectNameTypeTokens; jetzt
+// derselbe Lauf (gleiche Reihenfolge, gleiche ' '-Trenner), aber jedes
+// Stueck durch CodeTextOf - String-Literale zaehlen nicht als Nutzung.
+// Bewusst eine eigene Schleife statt einer Aenderung am geteilten
+// Helfer: der hat weitere Aufrufer, deren Vertrag U11 nicht beruehrt.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  if Root = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Name    <> '' then SB.Append(' ').Append(CodeTextOf(Cur.Name));
+      if Cur.TypeRef <> '' then SB.Append(' ').Append(CodeTextOf(Cur.TypeRef));
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;
@@ -773,28 +824,217 @@ function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;
 //    echten Befund.
 //  * Gesucht wird im GESTRIPPTEN Text: ein Name in einem String oder
 //    Kommentar zaehlt nicht als Verwendung.
+//
+// Perf (Charge R2 2026-10-26): die drei Muster haengen vom Routinennamen
+// ab (dynamisch - kein Thread-Cache, der wuerde je Routine wachsen). Bis
+// dahin baute der Klassenaufruf TRegEx.IsMatch(Zeile, Muster) sie fuer
+// JEDE Zeile mit dem Namen neu (TPerlRegEx + pcre_maketables + Compile).
+// Jetzt entsteht jedes Muster hoechstens einmal je Aufruf, und erst wenn
+// es zum ersten Mal gebraucht wird - also nie oefter als vorher.
+// TRegEx.Create(Muster) traegt denselben Default [roNotEmpty] wie der
+// Zwei-Argument-Klassenaufruf; Match setzt Subject und Startposition je
+// Zeile neu, die Antwort haengt nicht von der Vorzeile ab.
 var
-  i     : Integer;
-  Zeile : string;
-  N     : string;
+  i      : Integer;
+  Zeile  : string;
+  N      : string;
+  ReArg  : TRegEx;
+  ReEvt  : TRegEx;
+  ReAdr  : TRegEx;
+  HatArg : Boolean;
+  HatEvt : Boolean;
+  HatAdr : Boolean;
 begin
   Result := False;
   N := LowerCase(Trim(ARoutineName));
   if Length(N) < 4 then Exit;
+  HatArg := False;
+  HatEvt := False;
+  HatAdr := False;
   for i := 0 to High(AStripped.Lines) do
   begin
     Zeile := LowerCase(AStripped.Lines[i]);
     if Pos(N, Zeile) = 0 then Continue;   // billiger Vorfilter
     // (1) als Argument:  Foo(..., Name, ...)  /  Foo(Name)
-    if TRegEx.IsMatch(Zeile, '[(,]\s*' + TRegEx.Escape(N)
-                      + '\s*[,)]') then Exit(True);
+    if not HatArg then
+    begin
+      ReArg := TRegEx.Create('[(,]\s*' + TRegEx.Escape(N) + '\s*[,)]');
+      HatArg := True;
+    end;
+    if ReArg.IsMatch(Zeile) then Exit(True);
     // (2) an ein Event gehaengt, Form  X.OnFoo := Name
-    if TRegEx.IsMatch(Zeile, ':=\s*' + TRegEx.Escape(N)
-                      + '\s*;') then Exit(True);
+    if not HatEvt then
+    begin
+      ReEvt := TRegEx.Create(':=\s*' + TRegEx.Escape(N) + '\s*;');
+      HatEvt := True;
+    end;
+    if ReEvt.IsMatch(Zeile) then Exit(True);
     // (3) Adresse:  @Name
-    if TRegEx.IsMatch(Zeile, '@\s*' + TRegEx.Escape(N)
-                      + '\b') then Exit(True);
+    if not HatAdr then
+    begin
+      ReAdr := TRegEx.Create('@\s*' + TRegEx.Escape(N) + '\b');
+      HatAdr := True;
+    end;
+    if ReAdr.IsMatch(Zeile) then Exit(True);
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// SCA054u (2026-10-27) - Rumpfende aus dem 'end' der Routine
+// ---------------------------------------------------------------------------
+
+function IsBodyOpenerWord(const AWordLow: string): Boolean;
+// Woerter, die im Rumpf ein eigenes 'end' verlangen. 'record' wegen des
+// anonymen inline-Typs ('var R: record .. end;'). Bewusst NICHT 'class'/
+// 'object' - die stehen auch als 'class function' bzw. 'procedure of
+// object' ohne end.
+begin
+  Result := (AWordLow = 'begin') or (AWordLow = 'try') or
+            (AWordLow = 'case') or (AWordLow = 'asm') or
+            (AWordLow = 'record');
+end;
+
+function IsBodyStopperWord(const AWordLow: string): Boolean;
+// Woerter, die in einem Anweisungsteil nie vorkommen. Trifft der Scan
+// darauf, ist die Bilanz aus dem Tritt (z. B. ein zweites 'begin' aus einem
+// IFDEF-Zweig) und er liefe in fremden Text - lieber kein Ergebnis.
+begin
+  Result := (AWordLow = 'type') or (AWordLow = 'resourcestring') or
+            (AWordLow = 'threadvar') or (AWordLow = 'exports') or
+            (AWordLow = 'implementation') or (AWordLow = 'initialization') or
+            (AWordLow = 'finalization');
+end;
+
+const
+  // RoutineEndLine: Rueckgabe von BodyWordDepthDelta fuer 'Scan abbrechen'.
+  BODY_SCAN_ABORT = MaxInt;
+  // ScanBodyLine: Zustand nach einer Zeile.
+  BODY_LINE_OPEN   = 0;   // Rumpf laeuft weiter (oder 'begin' noch nicht gesehen)
+  BODY_LINE_CLOSED = 1;   // das schliessende 'end' steht in dieser Zeile
+  BODY_LINE_ABORT  = 2;   // Bilanz unbrauchbar, Scan abbrechen
+
+function NextKeywordCandidate(const ALine: string; var APos: Integer): string;
+// Liest ab APos ein Token und setzt APos dahinter. Liefert das Wort klein
+// geschrieben, wenn es ein Schluesselwort sein KANN, sonst ''. Kein
+// Kandidat: Nicht-Bezeichnerzeichen (APos rueckt eins vor), Zahlen, Woerter
+// ausserhalb der Schluesselwortlaengen, und Woerter hinter '.', '&', '@',
+// '$', '#' - das sind Member, escapte Bezeichner, Labels oder Zahlen.
+const
+  MIN_KEYWORD_LEN = 3;    // 'end', 'try', 'asm'
+  MAX_KEYWORD_LEN = 14;   // 'initialization', 'resourcestring'
+var
+  Start : Integer;
+begin
+  Result := '';
+  if not IsIdentChar(ALine[APos]) then
+  begin
+    Inc(APos);
+    Exit;
+  end;
+  Start := APos;
+  while (APos <= Length(ALine)) and IsIdentChar(ALine[APos]) do Inc(APos);
+  if (APos - Start < MIN_KEYWORD_LEN) or (APos - Start > MAX_KEYWORD_LEN) then
+    Exit;
+  if not IsIdentStartChar(ALine[Start]) then Exit;
+  if (Start > 1) and CharInSet(ALine[Start - 1], ['.', '&', '@', '$', '#']) then
+    Exit;
+  Result := LowerCase(Copy(ALine, Start, APos - Start));
+end;
+
+function FollowedByDot(const ALine: string; AFrom: Integer): Boolean;
+// Steht ab AFrom (nach Leerzeichen) ein '.'? Fuer 'end.' = Unit-Ende.
+var
+  q : Integer;
+begin
+  q := AFrom;
+  while (q <= Length(ALine)) and (ALine[q] = ' ') do Inc(q);
+  Result := (q <= Length(ALine)) and (ALine[q] = '.');
+end;
+
+function BodyWordDepthDelta(const AWordLow, ALine: string;
+  AAfterWord, ADepth: Integer): Integer;
+// Tiefenaenderung durch ein Wort. ADepth = 0: das Rumpf-'begin' ist noch
+// nicht gesehen, nur 'begin' zaehlt. BODY_SCAN_ABORT bei 'end.' und bei
+// Stopper-Woertern.
+begin
+  Result := 0;
+  if ADepth = 0 then
+  begin
+    if AWordLow = 'begin' then Result := 1;
+    Exit;
+  end;
+  if IsBodyOpenerWord(AWordLow) then Exit(1);
+  if IsBodyStopperWord(AWordLow) then Exit(BODY_SCAN_ABORT);
+  if AWordLow <> 'end' then Exit;
+  if FollowedByDot(ALine, AAfterWord) then Exit(BODY_SCAN_ABORT);
+  Result := -1;
+end;
+
+function ScanBodyLine(const ALine: string; var ADepth: Integer): Integer;
+// Eine Zeile der Bilanz: ADepth fortschreiben, BODY_LINE_* liefern.
+var
+  p, Delta : Integer;
+  W        : string;
+begin
+  Result := BODY_LINE_OPEN;
+  p := 1;
+  while p <= Length(ALine) do
+  begin
+    W := NextKeywordCandidate(ALine, p);
+    if W = '' then Continue;
+    Delta := BodyWordDepthDelta(W, ALine, p, ADepth);
+    if Delta = BODY_SCAN_ABORT then Exit(BODY_LINE_ABORT);
+    Inc(ADepth, Delta);
+    if (Delta < 0) and (ADepth = 0) then Exit(BODY_LINE_CLOSED);
+  end;
+end;
+
+function RoutineEndLine(const ALines: TArray<string>;
+  ABeginLine, ALastLine: Integer): Integer;
+// Zeile des 'end', das den Rumpf ab dem ersten 'begin' auf ABeginLine
+// schliesst; 0 = nicht bestimmbar. Arbeitet auf der GESTRIPPTEN Quelle -
+// Woerter in Kommentaren und Strings zaehlen nicht.
+//
+// WARUM aus der Quelle: der AST traegt keine Endzeile, und max(Line) der
+// Knoten endet am letzten KNOTEN. Dahinter liegen ohne eigenen Knoten:
+// inaktive IFDEF-Zweige (der Lexer liefert nur den aktiven), die
+// until-Bedingung, Fortsetzungszeilen des letzten Ausdrucks und Anweisungen,
+// die der Parser verliert. Am Korpus perfU27 (rw/laz) 227/50 Fehlalarme.
+//
+// Jeder Abbruch liefert 0, und der Aufrufer behaelt dann das alte Ende -
+// die Funktion kann den Bereich nur VERLAENGERN, nie verkuerzen. Abbruch:
+// kein 'begin' auf ABeginLine, 'end.' (Unit-Ende), ein Stopper-Wort, oder
+// ALastLine erreicht (Kopf der naechsten Routine - dahinter steht fremder
+// Text, etwa deren Parameterliste).
+var
+  li, Depth, LastLine, State : Integer;
+begin
+  Result   := 0;
+  Depth    := 0;   // 0 = Rumpf-'begin' noch nicht gesehen
+  LastLine := ALastLine;
+  if LastLine > Length(ALines) then LastLine := Length(ALines);
+  for li := ABeginLine to LastLine do
+  begin
+    if li < 1 then Exit;
+    State := ScanBodyLine(ALines[li - 1], Depth);
+    if State = BODY_LINE_CLOSED then Exit(li);
+    // Depth 0 nach der ersten Zeile: dort stand kein 'begin'.
+    if (State = BODY_LINE_ABORT) or (Depth = 0) then Exit;
+  end;
+end;
+
+function NextRoutineLine(UnitNode, MethodNode: TAstNode): Integer;
+// Kleinste Kopfzeile einer nkMethod HINTER MethodNode (MaxInt, wenn keine).
+// Obergrenze fuer RoutineEndLine. FindAllRef ist die gecachte, nicht
+// besitzende Sicht - nicht freigeben.
+var
+  M : TAstNode;
+begin
+  Result := MaxInt;
+  if UnitNode = nil then Exit;
+  for M in UnitNode.FindAllRef(nkMethod) do
+    if (M.Line > MethodNode.Line) and (M.Line < Result) then
+      Result := M.Line;
 end;
 
 class procedure TUnusedParameterDetector.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
@@ -834,23 +1074,28 @@ var
   BodyTo        : Integer;
 
   function BodyLineRangeFound: Boolean;
-  // Von 'begin' bis zur groessten Zeilennummer im Teilbaum.
+  // Von 'begin' bis zum 'end' der Routine.
   //
   // ANFANG bewusst am nkBlock und nicht am Methodenkopf: in der SIGNATUR
   // steht der Parametername ja - von dort zu scannen hiesse, jeden
   // Parameter als benutzt zu sehen und die Regel abzuschalten.
   //
-  // ENDE ueber max(Line) des Teilbaums. Das traegt, weil die Luecke im
-  // INHALT der Knoten liegt, nicht in ihrer Existenz: jede Anweisung ist
-  // ein Knoten mit Zeilennummer, auch wenn ihr Text unvollstaendig
-  // abgelegt wurde. Genau das ist der Fall bei den beiden gemessenen
-  // Formen (Index-Ausdruck links einer Zuweisung, Argumente hinter einem
-  // as-Cast).
+  // ENDE: max(Line) des Teilbaums, VERLAENGERT bis zum schliessenden 'end'
+  // aus der Quelle (RoutineEndLine). Bis SCA054u endete der Bereich am
+  // letzten Knoten, mit der Annahme "jede Anweisung ist ein Knoten mit
+  // Zeilennummer". Die traegt nur VOR dem letzten Knoten (dort genuegte sie
+  // fuer die gemessenen Formen Index-Ausdruck links einer Zuweisung und
+  // Argumente hinter einem as-Cast). Dahinter liegt Rumpf ohne Knoten:
+  // until-Bedingung, inaktiver IFDEF-Zweig, Fortsetzungszeilen, vom
+  // Parser verlorene Anweisungen (Korpus perfU27: rw 227 / laz 50 Funde).
+  // Liefert der Quellscan nichts, bleibt es beim Knotenende - der Fix
+  // verlaengert nur, er kuerzt nie.
   var
-    Blk   : TAstNode;
-    Stack : TStack<TAstNode>;
-    Cur   : TAstNode;
-    I     : Integer;
+    Blk    : TAstNode;
+    Stack  : TStack<TAstNode>;
+    Cur    : TAstNode;
+    I      : Integer;
+    SrcEnd : Integer;
   begin
     Result := False;
     Blk := MethodNode.FindFirstChild(nkBlock);
@@ -870,7 +1115,12 @@ var
     finally
       Stack.Free;
     end;
-    Result := (BodyFrom > 0) and (BodyTo >= BodyFrom);
+    if (BodyFrom <= 0) or (BodyTo < BodyFrom) then Exit;
+    EnsureUnitStripped(AStripped, FileName);
+    SrcEnd := RoutineEndLine(AStripped.Lines, BodyFrom,
+                NextRoutineLine(UnitNode, MethodNode) - 1);
+    if SrcEnd > BodyTo then BodyTo := SrcEnd;
+    Result := True;
   end;
 
   function UsedInMethodSource(const NameLow: string): Boolean;

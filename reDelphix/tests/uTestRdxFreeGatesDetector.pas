@@ -28,6 +28,12 @@ unit uTestRdxFreeGatesDetector;
 //   * Gegenpruefung V-B2S-3 (Charge B2S-a): SCA147 auf einem Netzlaufwerk,
 //     auch lang geschrieben - der Grund nennt das Laufwerk (Naht
 //     SetRdxRemoteDriveTest statt GetDriveType).
+//   * Realwelt-Test rwE29 (SCA085, drei Fehler): Erben des alten Open
+//     Tools API (VirtIntf.TInterface: Free ruft Release) - in der Unit
+//     ueber die Vorfahrenkette und als fremder Typ - und ein Kommentar,
+//     der FreeAndNil an der Stelle verbietet. Die drei Sperrtests waren
+//     gegen 7d5de210 rot (angeboten); die Gegenprobe
+//     Sca085_PlainHeritageAndComment_Helps war dort schon gruen.
 // Jeder Test ausser den beiden Hilfe-Gegenproben (Sca139_VarParam_Helps,
 // Sca072_*) und dem Netzlaufwerk-Test (die Naht gibt es erst seit Charge
 // B2S-a) war gegen den Stand 4358b769 rot: dort bot der Laeufer die
@@ -46,6 +52,11 @@ type
     [Test] procedure Sca085_PointerToObjectWithFree_NoHelp;
     [Test] procedure Sca085_OwnFreeMethod_NoHelp;
     [Test] procedure Sca085_ForeignPointerName_NoHelp;
+    // ---- SCA085, Realwelt-Test rwE29 ----
+    [Test] procedure Sca085_OtaAncestorInUnit_NoHelp;
+    [Test] procedure Sca085_OtaForeignType_NoHelp;
+    [Test] procedure Sca085_CommentNamesFreeAndNil_NoHelp;
+    [Test] procedure Sca085_PlainHeritageAndComment_Helps;
     // ---- SCA139 ----
     [Test] procedure Sca139_PointerAlias_NoHelp;
     [Test] procedure Sca139_ForeignPointerName_NoHelp;
@@ -64,6 +75,27 @@ type
     [Test] procedure Sca147_RemoteDrive_NoHelp;
   end;
 
+  // rwE33 Stufe 5 (Sperre unnoetig, Dev-Cpp InstallWizards.pas:684): System.
+  // SysUtils nur in zwei getrennten Bloecken ohne {$ELSE}, FreeAndNil aber
+  // schon unqualifiziert im Code - die Hilfe kommt ohne uses-Ergaenzung
+  // (uRdxFixRunner.FreeAndNilCalledLine). Eigene Fixture: die erste waere
+  // sonst ueber 20 Tests (SCA138).
+  [TestFixture]
+  TTestRdxFreeKnownDetector = class
+  public
+    // Das Muster der Fundstelle: frei, uses bleibt.
+    [Test] procedure Sca085_FreeAndNilCalled_Helps;
+    // Aufruf und Stelle im selben Zweig: frei.
+    [Test] procedure Sca085_FreeAndNilCalledInSiteBranch_Helps;
+    // Gegenproben: nur in einem anderen Zweig, nur im Kommentar, nur
+    // qualifiziert, eigene FreeAndNil der Unit - gesperrt wie bisher; seit
+    // dem Review-Nachzug auch: nur in einer anderen Klasse, Variable
+    // FreeAndNil.
+    [Test] procedure Sca085_FreeAndNilNotProven_Locked;
+    // SCA139 nimmt denselben Beweis.
+    [Test] procedure Sca139_FreeAndNilCalled_Helps;
+  end;
+
 implementation
 
 uses
@@ -73,6 +105,8 @@ uses
   uRedundantBoolean,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
+  uRdxPlacesRunner,      // R_USES_ONLY_CONDITIONAL (TTestRdxFreeKnownDetector)
+  uRdxText,              // _, MsgByHand (TTestRdxFreeKnownDetector)
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
   uTestRdxTextKit;       // Join, Apply, TempName
 
@@ -249,6 +283,69 @@ begin
     '    procedure Clear;', '  end;', 'implementation', 'procedure TCert.Clear;',
     'begin', '  fPrivKey.Free;', '  fPrivKey := nil;', 'end;', 'end.']),
     fkFreeAndNilHint, 'Zeiger');
+end;
+
+{ ---- SCA085, Realwelt-Test rwE29 ---- }
+
+// Eine Unit mit der Klasse TOwner, deren Feld AField in Done freigegeben
+// wird: davor die Zeilen AAbove, ADecls vor TOwner.
+function OwnerUnit(const AUses, ADecls, AField: string;
+  const AAbove: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses ' + AUses + ';', 'type',
+    ADecls, '  TOwner = class', '  private', '    ' + AField + ';', '  public',
+    '    procedure Done;', '  end;', 'implementation', 'procedure TOwner.Done;',
+    'begin', '  Assert(True);']) + #13#10 + Join(AAbove) + #13#10
+    + Join(['  FX.Free;', '  FX := nil;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_OtaAncestorInUnit_NoHelp;
+begin
+  // GExperts GX_PriorityBoost.pas:187 (rwE29, Fehler): 'TGxBoostNotifier =
+  // class(TIAddInNotifier)' - TIAddInNotifier (ToolIntf) erbt von
+  // VirtIntf.TInterface, dessen nicht-virtuelles Free Release ruft.
+  // FreeAndNil(FCompileNotifier) riefe TObject.Free und zerstoerte sofort.
+  // Ohne Fix gruen angeboten (keine eigene Free IN der Unit, kein P-Typ).
+  AssertNoHelp(OwnerUnit('System.SysUtils, ToolIntf',
+    '  TGxBoostNotifier = class(TIAddInNotifier)' + #13#10 + '  end;',
+    'FX: TGxBoostNotifier', []), fkFreeAndNilHint, 'Open Tools API');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_OtaForeignType_NoHelp;
+begin
+  // GExperts GX_Search.pas:315 (rwE29, Fehler): 'FModuleIntf:
+  // TIModuleInterface' aus EditIntf direkt - ToolServices liefert ein
+  // referenzgezaehltes Modul-Interface, Free ist dort Release.
+  AssertNoHelp(OwnerUnit('System.SysUtils, EditIntf', '',
+    'FX: TIModuleInterface', []), fkFreeAndNilHint, 'Open Tools API');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_CommentNamesFreeAndNil_NoHelp;
+begin
+  // HeidiSQL SynEdit.pas:1592 (rwE29, Fehler): der Kommentar direkt ueber
+  // der Freigabe verbietet FreeAndNil - Code liest das Feld waehrend der
+  // Zerstoerung. Ohne Fix angeboten (der Kommentar zaehlt nie als Code).
+  AssertNoHelp(OwnerUnit('System.SysUtils, System.Classes', '',
+    'FX: TList', ['', '  // do not use FreeAndNil, it first nils and then '
+    + 'frees causing problems with', '  // code accessing FX while '
+    + 'destruction']), fkFreeAndNilHint, 'Kommentar in Zeile');
+end;
+
+procedure TTestRdxFreeGatesDetector.Sca085_PlainHeritageAndComment_Helps;
+var
+  Src : string;
+  O   : TRdxFixOutcome;
+begin
+  // Gegenprobe zu den drei Sperren: eine Vorfahrenkette DIESER Unit ohne
+  // Open-Tools-Klasse (TB = class(TA), TA = class) und ein Kommentar ohne
+  // FreeAndNil darueber - die Hilfe bleibt.
+  Src := OwnerUnit('System.SysUtils', '  TA = class' + #13#10 + '  end;'
+    + #13#10 + '  TB = class(TA)' + #13#10 + '  end;', 'FX: TB',
+    ['  // free the helper']);
+  O := PlanAt(Src, 't.pas', fkFreeAndNilHint, LineOfOrFail(Src, '  FX.Free;'));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(StringReplace(Src, '  FX.Free;' + #13#10 + '  FX := nil;',
+    '  FreeAndNil(FX);', []), Apply(Src, O.Edits));
 end;
 
 { ---- SCA139 ---- }
@@ -437,7 +534,151 @@ begin
   end;
 end;
 
+{ ---- rwE33 Stufe 5: FreeAndNil schon im Code ---- }
+
+const
+  // Dev-Cpp InstallWizards.pas (minimiert; RDX_W/RDX_L statt WIN32/LINUX,
+  // die die Ein-Zweig-Sicht der IDE nicht setzt - der Baum sieht keinen der
+  // Bloecke, darum PlanKnown mit PlanFixInIdeView; die Doppelzweig-Sicht
+  // von PlanFixIn saehe SysUtils und die uses-Frage fiele weg):
+  // System.SysUtils steht in uses nur unter zwei Bloecken ohne
+  // {$ELSE}, der erste Eintrag in Zeile KNOWN_USES_LINE. %s: vor den
+  // Methoden, Rumpf von TFoo.Drop, Rumpf von TFoo.Done (die Stelle), vor
+  // 'end.'.
+  UNIT_KNOWN =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses'#13#10 +
+    '  System.Classes'#13#10 +
+    '{$IFDEF RDX_W}'#13#10 +
+    '  , Winapi.Windows, System.SysUtils'#13#10 +
+    '{$ENDIF}'#13#10 +
+    '{$IFDEF RDX_L}'#13#10 +
+    '  , System.SysUtils'#13#10 +
+    '{$ENDIF}'#13#10 +
+    '  ;'#13#10 +
+    'type'#13#10 +
+    '  TFoo = class'#13#10 +
+    '  private'#13#10 +
+    '    FList: TList;'#13#10 +
+    '  public'#13#10 +
+    '    procedure Done;'#13#10 +
+    '    procedure Drop(var AObj: TObject);'#13#10 +
+    '    procedure Changed;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    '%s'#13#10 +
+    'procedure TFoo.Drop(var AObj: TObject);'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'procedure TFoo.Done;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'procedure TFoo.Changed;'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    '%s'#13#10 +
+    'end.';
+  KNOWN_USES_LINE = 6;
+  // Der Rumpf von TFoo.Done fuer SCA085 bzw. SCA139.
+  DONE_085 = '  FList.Free;'#13#10'  FList := nil;';
+  DONE_139 = '  FList.Free;'#13#10'  Changed;';
+  // Ein unqualifizierter Aufruf im Rumpf von TFoo.Drop.
+  DROP_CALL = '  FreeAndNil(AObj);';
+
+// Die Hilfe zum ersten Fund der Art AKind in ASource.
+function PlanKnown(const ASource: string; AKind: TFindingKind): TRdxFixOutcome;
+var
+  Seen : TArray<TSeen>;
+begin
+  Seen := Detect(ASource, AKind);
+  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet: ' + ASource);
+  Result := PlanFixInIdeView(ASource, 't.pas', AKind, Seen[0]);
+end;
+
+// Die Hilfe ist frei, schreibt AFrom -> ATo und fasst uses nicht an.
+procedure AssertKnownHelps(const ASource: string; AKind: TFindingKind;
+  const AFrom, ATo: string);
+var
+  O : TRdxFixOutcome;
+begin
+  O := PlanKnown(ASource, AKind);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  Assert.AreEqual(StringReplace(ASource, AFrom, ATo, []), Apply(ASource,
+    O.Edits));
+end;
+
+// Gesperrt wie vor rwE33: "steht nur unter bedingter Uebersetzung".
+procedure AssertKnownLocked(const ASource: string; const AWhy: string);
+var
+  O : TRdxFixOutcome;
+begin
+  O := PlanKnown(ASource, fkFreeAndNilHint);
+  Assert.IsFalse(O.Enabled, AWhy);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils',
+    KNOWN_USES_LINE, MsgByHand]), O.Reason, AWhy);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), AWhy);
+end;
+
+procedure TTestRdxFreeKnownDetector.Sca085_FreeAndNilCalled_Helps;
+begin
+  // Vor dem Fix gesperrt: "System.SysUtils steht in uses nur unter
+  // bedingter Uebersetzung (Zeile 6), nicht in jedem Zweig um diese
+  // Stelle" - obwohl TFoo.Drop FreeAndNil schon aufruft (im Korpus
+  // cleanup, Zeile 265, und Zeile 476/738).
+  AssertKnownHelps(Format(UNIT_KNOWN, ['', DROP_CALL, DONE_085, '']),
+    fkFreeAndNilHint, DONE_085, '  FreeAndNil(FList);');
+end;
+
+procedure TTestRdxFreeKnownDetector.Sca085_FreeAndNilCalledInSiteBranch_Helps;
+begin
+  // Aufruf und Stelle im selben Zweig ('{$IFNDEF RDX_Y}' um alle Methoden
+  // - die Ein-Zweig-Sicht liest ihn, der Detektor meldet): wo die Stelle
+  // uebersetzt wird, auch der Aufruf. Vor dem Fix gesperrt wie oben.
+  AssertKnownHelps(Format(UNIT_KNOWN, ['{$IFNDEF RDX_Y}', DROP_CALL, DONE_085,
+    '{$ENDIF}']), fkFreeAndNilHint, DONE_085, '  FreeAndNil(FList);');
+end;
+
+procedure TTestRdxFreeKnownDetector.Sca085_FreeAndNilNotProven_Locked;
+begin
+  // Gegenproben (auch vor dem Fix gesperrt, mit demselben Grund): kein
+  // Aufruf, der dort uebersetzt wird, wo die Stelle steht, bzw. keiner,
+  // der sicher die Routine auf Unit-Ebene meint.
+  AssertKnownLocked(Format(UNIT_KNOWN, ['', '', DONE_085, '']),
+    'kein Aufruf');
+  AssertKnownLocked(Format(UNIT_KNOWN, ['', '{$IFDEF RDX_D}'#13#10 + DROP_CALL
+    + #13#10'{$ENDIF}', DONE_085, '']), 'Aufruf nur in einem anderen Zweig');
+  AssertKnownLocked(Format(UNIT_KNOWN, ['', '  // FreeAndNil(AObj);'#13#10
+    + '  { FreeAndNil(AObj); }', DONE_085, '']), 'Aufruf nur im Kommentar');
+  AssertKnownLocked(Format(UNIT_KNOWN, ['', '  Self.FreeAndNil(AObj);',
+    DONE_085, '']), 'Aufruf nur qualifiziert');
+  AssertKnownLocked(Format(UNIT_KNOWN, ['procedure FreeAndNil(var AObj);'
+    + #13#10'begin'#13#10'end;', DROP_CALL, DONE_085, '']),
+    'eigene FreeAndNil der Unit');
+  // Review e/HilfeFixU (MINOR 1/2): der Aufruf nur in einer Methode einer
+  // ANDEREN Klasse (TOther koennte ein geerbtes Member FreeAndNil haben)
+  // bzw. eine Variable FreeAndNil in der Unit - vor dem Nachzug frei.
+  AssertKnownLocked(Format(UNIT_KNOWN, [Join(['type', '  TOther = class',
+    '    procedure Run(var AObj: TObject);', '  end;',
+    'procedure TOther.Run(var AObj: TObject);', 'begin', DROP_CALL, 'end;']),
+    '', DONE_085, '']), 'Aufruf nur in einer anderen Klasse');
+  AssertKnownLocked(Format(UNIT_KNOWN, [Join(['var',
+    '  FreeAndNil: procedure(var AObj);']), DROP_CALL, DONE_085, '']),
+    'Variable FreeAndNil der Unit');
+end;
+
+procedure TTestRdxFreeKnownDetector.Sca139_FreeAndNilCalled_Helps;
+begin
+  // Vor dem Fix gesperrt wie SCA085 (dieselbe uses-Ergaenzung).
+  AssertKnownHelps(Format(UNIT_KNOWN, ['', DROP_CALL, DONE_139, '']),
+    fkFreeWithoutNil, '  FList.Free;', '  FreeAndNil(FList);');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxFreeGatesDetector);
+  TDUnitX.RegisterTestFixture(TTestRdxFreeKnownDetector);
 
 end.

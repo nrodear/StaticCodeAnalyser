@@ -246,6 +246,15 @@ function MsgNoHeader(const AWhose: string): string;
 // (ein '%' darin warf EConvertError).
 function MsgHeadersFmt: string;
 
+// 'Line too long for the editor selection (the editor reaches at most
+// column <AMaxColumn>)' - die Editor-Markierung rechnet in SmallInt-
+// Spalten (uRdxBufferMath.EDITOR_MAX_COLUMN, Review Nit 8). Der Editor
+// (uRdxEditor.SelectSpan) meldet es als Fehler, der Kern ('Stelle zeigen',
+// uRdxActionCore) als Grund des gesperrten Eintrags. Bis zur Probe-Charge
+// E3 (2026-10-28) die Konstante S_TOO_LONG in uRdxEditor - der Kern ist
+// ToolsAPI-frei und darf uRdxEditor nicht einbinden.
+function MsgTooLongForEditor(AMaxColumn: Integer): string;
+
 implementation
 
 uses
@@ -295,6 +304,8 @@ const
   MSG_NOT_AT_PLACE   = '%s is no longer at the reported place';
   MSG_NO_HEADER      = 'no header %s';
   MSG_HEADERS_FMT    = '%d headers %s';
+  MSG_TOO_LONG       = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
 
   // Die Vorlage - Aufbau und Ton wie DEFAULT_INI_CONTENT in uRepoSettings
   // (englisch, je Option ein Erklaerblock, die Vorgabe aktiv, Beispiele
@@ -825,6 +836,11 @@ begin
   // _() ohne Argumente formatiert nicht: %d und %s bleiben fuer
   // OneTokenReason stehen.
   Result := uRdxText._(MSG_HEADERS_FMT);
+end;
+
+function MsgTooLongForEditor(AMaxColumn: Integer): string;
+begin
+  Result := uRdxText._(MSG_TOO_LONG, [AMaxColumn]);
 end;
 
 initialization

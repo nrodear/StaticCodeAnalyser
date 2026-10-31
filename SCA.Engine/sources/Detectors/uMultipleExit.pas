@@ -32,7 +32,10 @@ unit uMultipleExit;
 //     180). Sie werden von den RHS-/Argument-Scannern als Flachtext
 //     konsumiert, genau wie nested routines verworfen werden.
 //
-// PARSER-ARTEFAKT, Paket 9015 (2026-09-14, beim Vermessen von Posten
+// PARSER-ARTEFAKT, Paket 9015 - BEHOBEN in der Parser-Charge P2
+// (2026-10-27): der RHS-Scan laeuft jetzt ueber den Kopf der anonymen
+// Methode hinweg, beide Faelle unten liefern keinen Fund. Der Befund von
+// damals (2026-09-14, beim Vermessen von Posten
 // 180 gefunden): eine ZUGEWIESENE anonyme Methode mit EIGENER
 // var-/const-Sektion schiebt ihren Rumpf in den Wirt. Der RHS-Scan von
 // uParser2 (ParseCallOrAssign, ~Z.3440) endet am ersten ';' auf

@@ -195,11 +195,17 @@
         <DCCReference Include="source\uRdxLookupHoistFix.pas"/>
         <DCCReference Include="source\uRdxLoopBoundFix.pas"/>
         <DCCReference Include="source\uRdxInheritedEmptyFix.pas"/>
+        <DCCReference Include="source\uRdxPlacesRunner.pas"/>
+        <DCCReference Include="source\uRdxFuncNameFix.pas"/>
+        <DCCReference Include="source\uRdxCondExpr.pas"/>
+        <DCCReference Include="source\uRdxIfFixes.pas"/>
+        <DCCReference Include="source\uRdxCondFixes.pas"/>
         <DCCReference Include="source\uRdxContextRunner.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
         <DCCReference Include="source\uRdxFixTable.pas"/>
         <DCCReference Include="source\uRdxLog.pas"/>
+        <DCCReference Include="source\uRdxActionCore.pas"/>
         <DCCReference Include="source\uRdxEditor.pas"/>
         <DCCReference Include="source\uRdxProvider.pas"/>
         <DCCReference Include="source\uRdxRegister.pas"/>

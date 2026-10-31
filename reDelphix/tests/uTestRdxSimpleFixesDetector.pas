@@ -113,6 +113,12 @@ type
     // Katalogfeld editorHelp (Beschluss 2026-10-10, HTML-QF-Badge) =
     // die Regeln mit einer Hilfe dieses Moduls.
     [Test] procedure Catalog_EditorHelpMatchesHelps;
+    // Katalogfeld editorHelps (SARIF properties.editorHelp, 2026-10-28):
+    // je Zeile von FIX_ROWS ein Eintrag, mit zweitem Eintrag (Alt) zwei,
+    // ids 'SCAnnn'/'SCAnnn.2', Changes der Zeile = Wirkung 'changes'. Den
+    // vollen Abgleich (Wirkung je nach Planer, Kurzname) macht
+    // tools/gen-quickfix-doc.py --check.
+    [Test] procedure Catalog_EditorHelpsMatchRows;
   end;
 
   // Stufe 3 (uRdxStructFixes): SCA007 uses-Eintrag, SCA168 case-else.
@@ -136,6 +142,58 @@ type
     [Test] procedure Alternative_OtherKinds_None;
     // Wochen-Review 2026-10-21
     [Test] procedure Sca007_NamespaceSibling_NotAUse;
+    // rwE29: die uses-Ergaenzung der raise-Variante liest auch den Text
+    // (der Baum verlor Eintraege hinter 'X.Abstract', ein Zweig fehlte).
+    [Test] procedure Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
+    // rwE31 Stufe 3 (Todo_SCA168_2, vier Fehler): raise in der Gluehbirne
+    // nur, wenn jeder Wert des Typs einen Arm hat - sonst nur im Menue.
+    [Test] procedure Sca168_Raise_MenuOnlyWithoutProof;
+    // rwE32 Stufe 4 (Nico-Entscheid E5): kein Aufzaehlungs-Selektor oder ein
+    // vorbelegtes Ergebnis - der zweite Eintrag ist gesperrt, das leere else
+    // bleibt.
+    [Test] procedure Sca168_Raise_LockedNonEnumOrPreset;
+    [Test] procedure PlanUses_UnitOnlyInConditionalBranch_Refused;
+    [Test] procedure PlanUses_SectionInConditionalBranch_Refused;
+    // rwE30 Stufe 2 (21 Fehler, Nico 2026-10-29): Bezeichner ohne Quelle -
+    // die Hilfe nur im Menue; Gegenprobe ohne solchen Bezeichner.
+    [Test] procedure Sca007_UnknownIdent_MenuOnly;
+    [Test] procedure Sca007_CleanFile_InBulb;
+    // rwE30 Stufe 2 (19 unnoetige Sperren): eine Direktive in der anderen
+    // Klausel sperrt nicht mehr; Gegenprobe: der Bereich beruehrt eine.
+    [Test] procedure Sca007_DirectiveInOtherClause_Helps;
+    [Test] procedure Sca007_RangeTouchesDirective_NoHelp;
+    // rwE30 Stufe 2 (Fragwuerdig Indy indyprotocolsfpc.pas:189).
+    [Test] procedure Sca007_PackageUnit_NoHelp;
+    // rwE31 Stufe 3 (gexperts mPasLex.pas:80, vcl-styles-utils Main.pas:6):
+    // ein Aufruf aus SysUtils (keine Liste im Detektor) haelt die Hilfe
+    // nicht mehr aus der Gluehbirne.
+    [Test] procedure Sca007_SysUtilsCall_InBulb;
+    // d/SCA007Known2 (rwE31 Stufe 3, Abbrevia_TLB.pas:57, jvcl childwin.pas:31):
+    // TOleEnum (Winapi.ActiveX) und caFree (Vcl.Forms) haben eine Quelle.
+    [Test] procedure Sca007_OleEnum_InBulb;
+    [Test] procedure Sca007_CaFree_InBulb;
+    // Fix-Runde 5 nach rwE33 (Abbrevia_TLB.pas:57): CreateRemoteComObject aus
+    // System.Win.ComObj (keine Liste im Detektor) hat eine Quelle.
+    [Test] procedure Sca007_ComObjCall_InBulb;
+    // rwE31 Stufe 3 (SCA144 Fehler, SCA085/SCA144 unnoetige Sperren):
+    // PlanUses mit der Zeile der Stelle, eine Klausel im Text ohne Baum,
+    // Direktiven in der Klausel neben einem unbedingten Eintrag.
+    [Test] procedure PlanUses_TextClauseInBranch_NoNewClause;
+    [Test] procedure PlanUses_EntryBranchCoversLine_Present;
+    [Test] procedure PlanUses_DirectiveInClause_UnconditionalEntry;
+    // Review e/HilfeFixL: in eine Klausel mit Direktiven der Kurzname.
+    [Test] procedure PlanUses_DirectiveInClause_ScopedNameShort;
+    // Fix-Runde 4: mehrzeilige Stelle (erste bis letzte Zeile) und das
+    // Zeilenende hinter einer Direktive; die raise-Variante von SCA168 gibt
+    // die Zeilen ihrer Ersetzungen mit.
+    [Test] procedure PlanUses_RangeMustStayInBranch;
+    [Test] procedure Sca168_Raise_SysUtilsInSiteBranch_NoUses;
+    // Fix-Runde 4 nach rwE32 (Dev-Cpp ClassBrowser.pas:507, CEF4Delphi-
+    // Muster): die Unit in JEDEM Zweig eines Blocks mit {$ELSE} ist da;
+    // zwei getrennte Bloecke ohne {$ELSE} beweisen das nicht (Satz "steht
+    // nur unter bedingter Uebersetzung").
+    [Test] procedure PlanUses_EntryInEachElseBranch_Present;
+    [Test] procedure PlanUses_TwoSeparateIfdefs_Refused;
   end;
 
   // Stufe 3: SCA101 und SCA099, Zweig als Block (Entscheid E7).
@@ -178,6 +236,11 @@ type
     [Test] procedure Sca120_RoundTrip_CatalogExample;
     [Test] procedure Sca122_RoundTrip_CatalogExample;
     [Test] procedure Sca122_InnerTry_NoHelp;
+    // Nachzug Review e/HilfeFixJ: alte Projektdatei neben der Datei sperrt
+    // die raise-Varianten von SCA020 und SCA168 wie SCA127.
+    [Test] procedure Raise_OldProjectOnDisk_NoHelp;
+    // Fix-Runde 4: SysUtils nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Sca020_Raise_SysUtilsInSiteBranch_NoUses;
   end;
 
   // Deklarationen (uRdxDeclFixes): SCA117, SCA197, SCA149.
@@ -224,6 +287,8 @@ uses
   uRedundantConditional, uRedundantJump, uSelfAssignment,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner,
   uRdxFixTable,   // der Einstieg des Anbieters (Charge R8: Tabelle statt Ketten)
+  uRdxPlacesRunner,      // R_USES_CONDITIONAL, UsesReason (PlanUses)
+  uRdxText,              // _, MsgByHand
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
   uTestRdxTextKit;       // Join, Apply
 
@@ -1176,6 +1241,31 @@ begin
   end;
 end;
 
+procedure TTestRdxSimpleFixesDetector3.Catalog_EditorHelpsMatchRows;
+var
+  i    : Integer;
+  Row  : TRdxFixRow;
+  Meta : TRuleMeta;
+  Soll : Integer;
+begin
+  for i := 0 to TRdxFixTable.RowCount - 1 do
+  begin
+    Row  := TRdxFixTable.Row(i);
+    Meta := TRuleCatalog.GetRuleCanonical(Row.Kind);
+    Soll := 1;
+    if Assigned(Row.Alt) then
+      Soll := 2;
+    Assert.AreEqual<Integer>(Soll, Length(Meta.EditorHelps),
+      'editorHelps in rules/sca-rules.json: ' + Meta.ID);
+    Assert.AreEqual(Meta.ID, Meta.EditorHelps[0].Id, 'erster Eintrag');
+    if Soll = 2 then
+      Assert.AreEqual(Meta.ID + '.2', Meta.EditorHelps[1].Id, 'zweiter Eintrag');
+    if Row.Changes then
+      Assert.AreEqual('changes', Meta.EditorHelps[0].Effect,
+        'Zeile kennzeichnet: ' + Meta.ID);
+  end;
+end;
+
 { ---- SCA007 ---- }
 
 const
@@ -1244,8 +1334,8 @@ var
   O          : TRdxFixOutcome;
 begin
   // Ohne SysUtils: die uses-Ergaenzung kommt mit (EInvalidOpException).
-  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: Integer);',
-    'begin', '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: TAlign);',
+    'begin', '  case X of', '    alLeft: Exit;', '  end;', 'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
   O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
@@ -1273,7 +1363,7 @@ begin
   // Kurznamen (FPC 3.2 kennt keine Unit-Scopes). Bis 2026-10-22 sperrte
   // EProgrammerError (gibt es in keiner RTL) die Variante hier.
   Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
-    'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
+    'procedure P(X: TAlign);', 'begin', '  case X of', '    alLeft: Exit;', '  end;',
     'end;', 'end.']);
   Seen := Detect(Src, fkDefaultCaseInCaseStatement);
   Assert.AreEqual<Integer>(1, Length(Seen));
@@ -1368,6 +1458,441 @@ begin
   Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
 end;
 
+// rwE29 (delphimvcframework MVCFramework.Serializer.JsonDataObjects.pas:
+// 1502, minimiert): hinter dem Eintrag 'MVCFramework.Serializer.Abstract'
+// verliert der Baum alle weiteren Eintraege der Klausel (Parser, SCA.Engine
+// - dort notiert, nicht hier behoben); 'System.SysUtils' fehlte damit in
+// UsesNamesOf, und die raise-Variante fuegte es in die implementation-
+// Klausel ein zweites Mal ein (E2004). Seitdem liest PlanUses auch den
+// Text. Gegenprobe ohne die Zeile: ohne Fix 2 x SysUtils, rot.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_UsesAfterAbstractEntry_NotAddedTwice;
+var
+  Src, After : string;
+  Seen       : TArray<TSeen>;
+  O          : TRdxFixOutcome;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  System.Classes,',
+    '  Foo.Serializer.Abstract,', '  System.SysUtils;', 'implementation',
+    'uses', '  System.SysConst;', 'procedure P(X: TAlign);', 'begin',
+    '  case X of', '    alLeft: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur das else, keine uses-Ersetzung');
+  After := Apply(Src, O.Edits);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+end;
+
+// rwE31 Stufe 3 (doublecmd abziptyp.pas:2343, minimiert): aaFailed hat
+// keinen Arm und ist ein erwarteter Wert - raise braeche das Speichern des
+// Archivs. Bis dahin stand die Variante in der Gluehbirne (MenuOnly False,
+// rot ohne Fix). Gegenprobe: jeder Wert hat einen Arm.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_MenuOnlyWithoutProof;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;', 'type',
+    '  TAbArchiveAction = (aaFailed, aaNone, aaDelete);', 'implementation',
+    'procedure P(A: TAbArchiveAction);', 'begin', '  case A of',
+    '    aaNone: Exit;', '    aaDelete: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('aaFailed', O.Hint) > 0, O.Hint);
+  // Gegenprobe: jeder Wert hat einen Arm - Gluehbirne.
+  Src := StringReplace(Src, '    aaDelete: Exit;', '    aaDelete, aaFailed: Exit;',
+    []);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_LockedNonEnumOrPreset;
+var
+  Src    : string;
+  Seen   : TArray<TSeen>;
+  O      : TRdxFixOutcome;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Dev-Cpp main.pas:3822, Vcl.Styles.UxTheme.pas:2330 (minimiert): das case
+  // waehlt nach einer ganzen Zahl - jeder andere Wert ist dort gewoehnlich.
+  // Bis rwE32 im Menue angeboten (rot ohne Fix: Enabled).
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;',
+    'implementation', 'procedure P(X: Integer);', 'begin', '  case X of',
+    '    1: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsFalse(O.Enabled, 'gesperrt');
+  Assert.IsTrue(Pos('integer', O.Reason) > 0, O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+  // Das leere else (SCA168) bleibt.
+  Assert.IsTrue(PlanFix(Src, fkDefaultCaseInCaseStatement, Seen[0], Edits,
+    Reason), Reason);
+  // issrc ISPP.IdentMan.pas:945/953 (minimiert): das Ergebnis ist vor dem
+  // case vorbelegt, eC hat keinen Arm - gesperrt.
+  Src := Join(['unit t;', 'interface', 'uses', '  System.SysUtils;', 'type',
+    '  TE = (eA, eB, eC);', 'implementation', 'function F(E: TE): Integer;',
+    'begin', '  Result := -1;', '  case E of', '    eA: Result := 1;',
+    '    eB: Result := 2;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsFalse(O.Enabled, 'vorbelegt');
+  Assert.IsTrue(Pos('Result', O.Reason) > 0, O.Reason);
+  // Gegenprobe: jeder Wert hat einen Arm - die Vorbelegung aendert nichts,
+  // Gluehbirne.
+  Src := StringReplace(Src, '    eB: Result := 2;', '    eB, eC: Result := 2;',
+    []);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+end;
+
+// PlanUses auf einer Quelle in der Ein-Zweig-Sicht mit MSWINDOWS (RDX_X
+// fehlt, sein Zweig ist fuer den Baum leer).
+function PlanUsesIn(const ASource: string): TRdxUsesPlan;
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    P.SetIfdefDefines(['MSWINDOWS']);
+    Assert.IsTrue(P.OpenSource('t.pas', ASource));
+    Result := TRdxRecipeRunner.PlanUses(P, 'SysUtils', 'System.SysUtils');
+  finally
+    P.Free;
+  end;
+end;
+
+// rwE29 (mORMot2 mormot.crypt.openssl.pas:3239, minimiert): 'sysutils'
+// steht nur im {$IFDEF}-Zweig, den der Baum nicht sieht; bis dahin legte
+// PlanUses hinter das 'implementation' des {$ELSE}-Zweigs eine neue
+// Klausel an. Jetzt: von Hand (die Zeile des Eintrags im Grund,
+// R_USES_CONDITIONAL - derselbe Satz wie Table_SysUtilsOnlyUnderCondition_
+// NoHelp in uTestRdxRawExceptionFix).
+procedure TTestRdxSimpleFixesDetector4.PlanUses_UnitOnlyInConditionalBranch_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', '{$IFDEF RDX_X}', 'uses',
+    '  sysutils;', 'implementation', '{$ELSE}', 'implementation', '{$ENDIF}',
+    'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  // Gegenprobe: ausserhalb jedes Zweigs gilt die Unit als vorhanden.
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'end.']));
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+end;
+
+// PlanUses wie PlanUsesIn fuer die Unit AShort/AQual, gefragt fuer die
+// Stelle in Zeile AAtLine (0 = ohne) bis AAtEndLine (0 = nur AAtLine).
+function PlanUsesAt(const ASource, AShort, AQual: string;
+  AAtLine: Integer; AAtEndLine: Integer = 0): TRdxUsesPlan;
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    P.SetIfdefDefines(['MSWINDOWS']);
+    Assert.IsTrue(P.OpenSource('t.pas', ASource));
+    Result := TRdxRecipeRunner.PlanUses(P, AShort, AQual, AAtLine,
+      AAtEndLine);
+  finally
+    P.Free;
+  end;
+end;
+
+// rwE31 (cnwizards CnAICoderConfig.pas:649, minimiert): beide uses-
+// Klauseln stehen in '{$IFDEF CNWIZARDS_CNAICODERWIZARD}', der Baum sieht
+// keine. Bis dahin legte PlanUses hinter 'implementation' eine neue an -
+// vor dem Zweig, der dann eine zweite Klausel brachte (E2029, SCA144 mit
+// 'uses Math'). Jetzt: von Hand, mit der Zeile der Klausel im Text.
+// Gegenprobe ohne Klausel im Text: die neue Klausel wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_TextClauseInBranch_NoNewClause;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', '{$IFDEF RDX_X}', 'uses',
+    '  SysUtils;', '{$ENDIF RDX_X}', 'implementation', '{$IFDEF RDX_X}',
+    'uses', '  Classes;', 'procedure P(V: Double);', 'begin', 'end;',
+    '{$ENDIF RDX_X}', 'end.']), 'Math', 'System.Math', 11);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_('the uses clause in line %d is not read here (it lies '
+    + 'in a conditional branch) - add the unit by hand', [4]), Plan.Reason);
+  Assert.AreEqual('', Plan.Edit.NewText, 'keine neue Klausel');
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'procedure P(V: Double);', 'begin', 'end;', 'end.']), 'Math',
+    'System.Math', 4);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.IsTrue(Pos('uses', Plan.Edit.NewText) > 0, Plan.Edit.NewText);
+end;
+
+// rwE31 (gexperts GX_Toolbar.pas:167/440/443, GX_ProjOptionSets.pas,
+// GX_EditorEnhancements.pas, minimiert): '{$IFDEF GX_EII}' umschliesst die
+// ganze Unit samt uses-Klausel und Stelle - wo die Stelle uebersetzt wird,
+// ist SysUtils eingebunden. Bis dahin sperrte PlanUses jeden bedingten
+// Eintrag (R_USES_CONDITIONAL). Gegenproben: ohne Zeile (AAtLine = 0) und
+// mit einer Zeile im {$ELSE}-Zweig gesperrt wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_EntryBranchCoversLine_Present;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end;', '{$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 13);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+end;
+
+// rwE31 (jvcl JvCalc.pas:487 'uses {$IFNDEF WIN32} JvStr16, {$ENDIF}
+// JvVCLUtils, .. JvToolEdit;', minimiert): Direktiven in der Klausel
+// sperrten jede Einfuegung. Der Name kaeme vor Foo16 (unsortiert: vorn),
+// das in einem Zweig steht - eingefuegt wird hinter Baz, das wie 'uses'
+// ausserhalb jedes Zweigs steht. Gegenproben: jeder Eintrag in einem Zweig
+// bzw. ein {$I} in der Klausel - gesperrt wie bisher.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_DirectiveInClause_UnconditionalEntry;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFNDEF WIN32} Foo16, {$ENDIF} Bar, Baz;', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, Math', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFDEF RDX_X}Foo{$ELSE}Bar{$ENDIF};', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.IsTrue(Pos('4', Plan.Reason) > 0, Plan.Reason);
+  Assert.AreEqual('', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses Bar, {$I extra.inc} Baz;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Edit.NewText, Plan.Reason);
+end;
+
+// Review e/HilfeFixL: Direktiven in der Klausel koennen Compiler-Zweige
+// trennen ('{$IFDEF D16} Vcl.Forms, .. {$ELSE} Forms, .. {$ENDIF} uCEF;',
+// uChildForm.pas; '{$IF CompilerVersion >= 23} System.SysUtils ..'). Der
+// Name kommt unbedingt hinein (hinter Baz) und gilt in jedem Zweig - als
+// 'Math', nicht 'System.Math', das Compiler vor XE2 nicht kennen. Ohne
+// den Fix 'Baz, System.Math' (die Datei schreibt Unit-Scopes).
+// Gegenprobe: ohne Direktive bleibt der qualifizierte Name.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_DirectiveInClause_ScopedNameShort;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses {$IFDEF MSWINDOWS} System.Classes, {$ELSE} Classes, {$ENDIF} Baz;',
+    'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Math', Plan.Name);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, Math', Plan.Edit.NewText);
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes, Baz;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('System.Math, System.Classes', Plan.Edit.NewText);
+  // rwE32 (Kastri DW.Camera.pas:533, minimiert): 'FMX.Platform' steht
+  // ausserhalb jedes Zweigs, die Zweige trennen nur Plattformen - die Datei
+  // uebersetzt nur ein Compiler mit Unit-Scopes, der Name bleibt
+  // qualifiziert (UnitScopesProven). Bis dahin 'Math,
+  // FMX.Platform'. Die Liste ist unsortiert: vorn eingefuegt.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses', '  FMX.Platform,', '{$IFDEF ANDROID}', '  DW.Camera.Android,',
+    '{$ENDIF}', '  DW.OSLog;', 'end.']), 'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('FMX.Platform', Plan.Edit.Expected);
+  Assert.AreEqual('System.Math, FMX.Platform', Plan.Edit.NewText);
+  // Review e/HilfeFixQ: der Beweis gilt fuer die ganze Datei
+  // (uRdxCompilerTraces.ModernProof) - 'System.Classes' unbedingt im
+  // interface-uses genuegt auch fuer die Klausel des implementation-
+  // Abschnitts (mit der eigenen Probe der Klausel: 'Math, Baz').
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'implementation', 'uses {$IFNDEF WIN32} Foo16, {$ENDIF} Baz;', 'end.']),
+    'Math', 'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('System.Math', Plan.Name);
+  Assert.AreEqual('Baz', Plan.Edit.Expected);
+  Assert.AreEqual('Baz, System.Math', Plan.Edit.NewText);
+  // Gegenprobe: 'Data.Main' ist fuer IsRtlScopedName ein Scope-Name, kann
+  // aber eine eigene Unit eines Delphi vor XE2 sein - ModernProof zaehlt
+  // nur System./Winapi./Vcl./FMX.: Kurzname (mit der eigenen Probe der
+  // Klausel bis dahin 'System.Math, Data.Main').
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'implementation',
+    'uses Data.Main, {$IFDEF RDX_X} Foo, {$ENDIF} Baz;', 'end.']), 'Math',
+    'System.Math', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.AreEqual('Math', Plan.Name);
+end;
+
+// Fix-Runde 4: eine Hilfe kann ueber mehrere Zeilen schreiben (SCA168.2:
+// das ';' des letzten Arms und das 'end'), und eine Direktive darf mitten
+// in einer Anweisung stehen - die Startzeile allein beweist nichts. Die
+// Quelle wie PlanUses_EntryBranchCoversLine_Present (SysUtils in Zeile 5
+// unter '{$IFDEF RDX_X}', der Zweig bis Zeile 11 bzw. 10). Ohne Fix
+// (nur die Startzeile) waeren 9..12 und Zeile 10 der zweiten Quelle
+// eingebunden - rot. Gegenproben: 8..10 ganz im Zweig, Zeile 9 der
+// zweiten Quelle ohne Direktive.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_RangeMustStayInBranch;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end;', '{$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 8, 10);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  // Die letzte Zeile im {$ELSE}-Zweig.
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9, 12);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  // '{$ELSE}' hinter dem Code der letzten Zeile: was hinter ihr Ende
+  // kommt, laege im anderen Zweig.
+  Src := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses', '  SysUtils;',
+    'implementation', 'procedure P(X: TObject);', 'begin', '  X.Free;',
+    'end; {$ELSE RDX_X}', 'interface', 'implementation', '{$ENDIF RDX_X}',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 9);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 10);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+end;
+
+// Fix-Runde 4 (Folge rwE31): die raise-Variante von SCA168 gab PlanUses
+// keine Zeile (AppendSysUtils ohne AAtLine) - ein nur bedingt eingebundenes
+// SysUtils sperrte auch dann, wenn derselbe Zweig die ganze Unit samt case
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Seitdem die Zeilen der
+// Ersetzungen (das 'end' des case, nicht die gemeldete case-Zeile).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils', Join(['procedure P(X: TAlign);',
+    'begin', '  case X of', '    alLeft: Exit;', '  end;', 'end;']),
+    fkDefaultCaseInCaseStatement, True, 1, Detect);
+end;
+
+// Fix-Runde 4 nach rwE32 (Pruefung, kein Fix): SysUtils in beiden Zweigen
+// von '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (CEF4Delphi uChildForm.pas:
+// '{$IFDEF DELPHI16_UP} System.SysUtils, .. {$ELSE} SysUtils, .. {$ENDIF}
+// uCEF..;') - der Baum parst genau einen Zweig und sieht die Unit dort:
+// da, mit und ohne Zeile der Stelle (das hielt schon vor der Runde, der
+// Test haelt es fest). Gegenprobe: der {$ELSE}-Zweig ohne Eintrag -
+// gesperrt, CondLine ist die Zeile des Eintrags. GRENZE (bleibt
+// gesperrt): ein solcher Block in einem Zweig, den der Baum nicht parst.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_EntryInEachElseBranch_Present;
+var
+  Src  : string;
+  Plan : TRdxUsesPlan;
+begin
+  Src := Join(['unit t;', 'interface', 'uses', '  {$IFDEF RDX_X}',
+    '  System.SysUtils, System.Classes,', '  {$ELSE}', '  SysUtils, Classes,',
+    '  {$ENDIF}', '  Foo;', 'implementation', 'procedure P;', 'begin', 'end;',
+    'end.']);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 12);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  Plan := PlanUsesAt(Src, 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsFalse(Plan.Needed, Plan.Reason);
+  // Gegenprobe: der {$ELSE}-Zweig traegt keinen Eintrag.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF RDX_X} System.SysUtils, {$ELSE} Classes, {$ENDIF}', '  Foo;',
+    'implementation', 'procedure P;', 'begin', 'end;', 'end.']), 'SysUtils',
+    'System.SysUtils', 8);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [4, MsgByHand]), Plan.Reason);
+  Assert.AreEqual<Integer>(4, Plan.CondLine);
+end;
+
+// rwE32 Stufe 4 (Dev-Cpp ClassBrowser.pas:26/30/507, minimiert; RDX_W/RDX_L
+// statt WIN32/LINUX, die die Ein-Zweig-Sicht nicht setzt): SysUtils unter
+// zwei Bloecken ohne {$ELSE} - es kann keiner gelten, gesperrt wie
+// bisher. Neu ist der Satz fuer den Benutzer: "steht nur unter bedingter
+// Uebersetzung" (R_USES_ONLY_CONDITIONAL) statt "fehlt in uses: ..."
+// (rot ohne Fix: UsesReason und CondLine gab es nicht - Bau-Fehler).
+// Gegenprobe: ohne CondLine bleibt '%s is missing in uses: %s'.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_TwoSeparateIfdefs_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses', '{$IFDEF RDX_W}',
+    '  Windows, Classes, SysUtils;', '{$ENDIF}', '{$IFDEF RDX_L}',
+    '  Classes, SysUtils;', '{$ENDIF}', 'type', '  TFoo = class', '  end;',
+    'implementation', 'procedure P;', 'begin', 'end;', 'end.']), 'SysUtils',
+    'System.SysUtils', 15);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual(_(R_USES_CONDITIONAL, [5, MsgByHand]), Plan.Reason);
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
+  // Dieselben Eintraege in EINER Liste mit zwei Bloecken ohne {$ELSE}.
+  Plan := PlanUsesAt(Join(['unit t;', 'interface', 'uses',
+    '  {$IFDEF RDX_W} Windows, SysUtils, {$ENDIF}',
+    '  {$IFDEF RDX_L} SysUtils, {$ENDIF}', '  Classes;', 'implementation',
+    'end.']), 'SysUtils', 'System.SysUtils', 0);
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual<Integer>(4, Plan.CondLine);
+  // Gegenprobe: ein anderer Grund behaelt "fehlt in uses".
+  Plan.CondLine := 0;
+  Plan.Reason := 'x';
+  Assert.AreEqual(_('%s is missing in uses: %s', ['System.SysUtils', 'x']),
+    TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
+end;
+
+// Ohne die Unit im Text, aber mit dem einzigen sichtbaren 'implementation'
+// in einem bedingten Zweig: die neue Klausel galte nur dort.
+procedure TTestRdxSimpleFixesDetector4.PlanUses_SectionInConditionalBranch_Refused;
+var
+  Plan : TRdxUsesPlan;
+begin
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', '{$IFDEF RDX_X}',
+    'implementation', 'procedure P; begin end;', '{$ELSE}', 'implementation',
+    '{$ENDIF}', 'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.IsTrue(Pos('Zeile 7', Plan.Reason) > 0, Plan.Reason);
+  Assert.IsTrue(Pos('bedingten Zweig', Plan.Reason) > 0, Plan.Reason);
+  // Gegenprobe: ohne Direktive die neue Klausel hinter 'implementation'.
+  Plan := PlanUsesIn(Join(['unit t;', 'interface', 'implementation', 'end.']));
+  Assert.IsTrue(Plan.Needed);
+  Assert.AreEqual('', Plan.Reason);
+  Assert.IsTrue(Pos('uses', Plan.Edit.NewText) > 0, Plan.Edit.NewText);
+end;
+
 procedure TTestRdxSimpleFixesDetector4.Alternative_OtherKinds_None;
 var
   Seen : TSeen;
@@ -1377,6 +1902,255 @@ begin
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
     'nur SCA168 und SCA020 haben einen zweiten Eintrag');
+end;
+
+// rwE30 Stufe 2, Muster CnSelectMaskFrm.pas:39/106 (minimiert): die Unit
+// nutzt einen Bezeichner, der nur aus (Vcl.)Controls kommt; die Liste des
+// Detektors kennt ihn nicht und meldet Vcl.Controls ungenutzt. ABody ist der
+// Rumpf von TFoo.IsOk (Zeile 12). Im Korpus war es mrOk - das nimmt der
+// Zweig d/SCA007Export (3f162348) in die Liste von Controls auf, danach
+// meldete der Detektor nichts mehr; die Tests nehmen darum FindVCLWindow
+// (Vcl.Controls, in keiner Liste - Review e/HilfeFixH).
+function ModalUnit(const ABody: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin', '  ' + ABody,
+    'end;', 'end.']);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_UnknownIdent_MenuOnly;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  Src := ModalUnit('Result := FindVCLWindow(Point(AResult, 0)) <> nil;');
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  // Die Hilfe bleibt (Menue), aber nicht in der Gluehbirne; der Hinweis
+  // nennt den Bezeichner. Vorher: MenuOnly gab es nicht - inBirne=ja, der
+  // Klick brach den Bau (E2003 mrOk im Korpus).
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('FindVCLWindow', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('12', O.Hint) > 0, 'Zeile: ' + O.Hint);
+  Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung bleibt');
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_CleanFile_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Gegenprobe: dieselbe Unit ohne FindVCLWindow - jeder Bezeichner hat
+  // eine Quelle (TComponent aus der Liste von System.Classes), die Hilfe
+  // bleibt in der Gluehbirne.
+  Src := ModalUnit('Result := AResult = 1;');
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin',
+    '  Result := AResult = 1;', 'end;', 'end.']), Apply(Src, O.Edits));
+end;
+
+// rwE30 Stufe 2, Muster PackageGenerator.pas:8 / Kastri Unit1.pas:6
+// (minimiert): die Direktive steht nur in der uses-Klausel des
+// implementation-Teils. Bis dahin sperrte jede Direktive in irgendeiner
+// uses-Klausel die ganze Datei ("Direktive in einer uses-Klausel").
+procedure TTestRdxSimpleFixesDetector4.Sca007_DirectiveInOtherClause_Helps;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Src := Join(['unit t;', 'interface', 'uses System.Classes, System.Math;',
+    'type', '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF}', '  System.SysUtils;',
+    'end.']);
+  Seen.Line := 3;
+  Seen.Msg := 'System.Math';
+  Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason), Reason);
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses System.Classes;',
+    'type', '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF}', '  System.SysUtils;',
+    'end.']), Apply(Src, Edits));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_RangeTouchesDirective_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Gegenprobe: System.Math ist der letzte Eintrag hinter einem bedingten -
+  // geloescht wuerde ab dem Komma vor {$ENDIF}; das bleibt gesperrt.
+  Src := Join(['unit t;', 'interface', 'uses System.Classes;', 'type',
+    '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
+    '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF} System.Math;', 'end.']);
+  Seen.Line := 9;
+  Seen.Msg := 'System.Math';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('Direktive', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_PackageUnit_NoHelp;
+var
+  Src    : string;
+  Seen   : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  // Die Sammel-Unit eines Lazarus-Pakets: die uses-Liste ist ihr Zweck -
+  // ohne den Eintrag faellt die Unit aus dem Paketbau (vorher angeboten, in
+  // der Gluehbirne).
+  Src := Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  System.Classes,', '  System.Math;', 'implementation', '{$hints off}',
+    'end.']);
+  Seen.Line := 5;
+  Seen.Msg := 'System.Math';
+  Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
+  Assert.IsTrue(Pos('System.Math', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_SysUtilsCall_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Wie ModalUnit, der Rumpf ruft IntToStr (System.SysUtils). Vorher nur im
+  // Menue: der Hinweis nannte IntToStr ("kann aus Vcl.Controls kommen").
+  Src := Join(['unit t;', 'interface',
+    'uses System.SysUtils, System.Classes, Vcl.Controls;', 'type',
+    '  TFoo = class(TComponent)', '  public',
+    '    function IsOk(AResult: Integer): Boolean;', '  end;', 'implementation',
+    'function TFoo.IsOk(AResult: Integer): Boolean;', 'begin',
+    '  Result := IntToStr(AResult) = ''1'';', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne System.SysUtils in den uses beweist nichts IntToStr -
+  // nur im Menue.
+  Src := StringReplace(Src, 'System.SysUtils, ', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('IntToStr', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_OleEnum_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Abbrevia_TLB.pas (minimiert): eine TLB-Unit nutzt TOleEnum aus
+  // Winapi.ActiveX. Vorher nur im Menue - TOleEnum stand in keiner Liste,
+  // der Hinweis nannte es als moegliche Herkunft aus Vcl.Controls.
+  Src := Join(['unit t;', 'interface',
+    'uses Winapi.ActiveX, System.Classes, Vcl.Controls;', 'type',
+    '  TFoo = class(TComponent)', '  public',
+    '    function Kind(AValue: Integer): TOleEnum;', '  end;',
+    'implementation', 'function TFoo.Kind(AValue: Integer): TOleEnum;',
+    'begin', '  Result := AValue;', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne Winapi.ActiveX in den uses hat TOleEnum keine Quelle -
+  // nur im Menue.
+  Src := StringReplace(Src, 'Winapi.ActiveX, ', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('TOleEnum', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_CaFree_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // jvcl JvInterpreterMDI childwin.pas (minimiert): FormClose setzt caFree
+  // aus Vcl.Forms. Vorher nur im Menue - der Hinweis nannte caFree als
+  // moegliche Herkunft aus Vcl.Controls.
+  Src := Join(['unit t;', 'interface', 'uses Vcl.Forms, Vcl.Controls;',
+    'type', '  TKind = class(TForm)', '  public',
+    '    procedure Zu(Sender: TObject; var Action: TCloseAction);', '  end;',
+    'implementation',
+    'procedure TKind.Zu(Sender: TObject; var Action: TCloseAction);',
+    'begin', '  Action := caFree;', 'end;', 'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ein Aufzaehlungswert ohne Quelle (coFree) haelt die Hilfe
+  // weiter im Menue.
+  Src := StringReplace(Src, 'caFree', 'coFree', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('coFree', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_ComObjCall_InBulb;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Abbrevia_TLB.pas:57/784 (minimiert): CoZipItem.CreateRemote ruft
+  // CreateRemoteComObject aus System.Win.ComObj (uses im implementation-
+  // Teil). Vorher nur im Menue - der Hinweis nannte es als moegliche
+  // Herkunft aus Vcl.Controls (rot ohne Fix: MenuOnly).
+  Src := Join(['unit t;', 'interface', 'uses System.Classes, Vcl.Controls;',
+    'type', '  TFoo = class(TComponent)', '  public',
+    '    function Remote(const AHost: string; const AId: TGUID): IUnknown;',
+    '  end;', 'implementation', 'uses System.Win.ComObj;',
+    'function TFoo.Remote(const AHost: string; const AId: TGUID): IUnknown;',
+    'begin', '  Result := CreateRemoteComObject(AHost, AId);', 'end;',
+    'end.']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls');
+  Assert.AreEqual('Vcl.Controls', Seen[0].Msg);
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsFalse(O.MenuOnly, 'Gluehbirne: ' + O.Hint);
+  // Gegenprobe: ohne System.Win.ComObj in den uses hat der Aufruf keine
+  // Quelle - nur im Menue, der Hinweis nennt ihn.
+  Src := StringReplace(Src, 'uses System.Win.ComObj;', '', []);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur Vcl.Controls (Gegenprobe)');
+  O := PlanMain(Src, fkUnusedUses, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.MenuOnly, 'nur im Menue');
+  Assert.IsTrue(Pos('CreateRemoteComObject', O.Hint) > 0, O.Hint);
 end;
 
 // Die Klasse hinter 'raise ' bis zum ersten Punkt; '' ohne beides.
@@ -1698,6 +2472,16 @@ begin
   Assert.AreEqual(Want, Apply(Bad, O.Edits));
 end;
 
+// Fix-Runde 4 (Folge rwE31): raise ENotImplemented gab PlanUses keine
+// Zeile - ein nur bedingt eingebundenes SysUtils sperrte auch dann, wenn
+// derselbe Zweig die ganze Unit samt Rumpf umschliesst (rot ohne Fix).
+// Gegenprobe: der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxSimpleFixesDetector7.Sca020_Raise_SysUtilsInSiteBranch_NoUses;
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils',
+    Join(['procedure P;', 'begin', 'end;']), fkEmptyMethod, True, 1, Detect);
+end;
+
 procedure TTestRdxSimpleFixesDetector7.Sca120_RoundTrip_CatalogExample;
 var
   Meta : TRuleMeta;
@@ -1739,6 +2523,65 @@ begin
   AssertNoHelp(InRoutine(Join(['try', '  Obj.Free;', 'except',
     '  on E: Exception do', '    try', '      Obj := nil;', '    except',
     '      raise E;', '    end;', 'end;'])), fkReRaiseException, 'inneren try');
+end;
+
+// Nachzug Review e/HilfeFixJ (Nico-Entscheid "Altcompiler: Sperre nur bei
+// Beleg", wie SCA127 Table_OldProjectNearby_NoHelp): die Datei fragt nach
+// keinem Compiler, aber eine alte Projektdatei (.dof, Delphi 1-7) neben ihr
+// baut sie mit einem Delphi vor 2009 - dort gibt es weder ENotImplemented
+// (SCA020.2) noch EInvalidOpException (SCA168.2). Bis dahin fragten die
+// Adapter nur die Spuren IN der Datei (OldExceptionClassReason) - beide
+// Eintraege waren angeboten (rot ohne den Fix). Gegenprobe: dieselbe Datei
+// neben einer .dproj ab Delphi 2009 (ProjectVersion 19.5) - frei.
+procedure TTestRdxSimpleFixesDetector7.Raise_OldProjectOnDisk_NoHelp;
+var
+  Root, Dir, U, Dof     : string;
+  Src020, Src168        : string;
+  Seen020, Seen168      : TArray<TSeen>;
+  O                     : TRdxFixOutcome;
+begin
+  Src020 := InImplementation(Join(['procedure P;', 'begin', 'end;']));
+  Seen020 := Detect(Src020, fkEmptyMethod);
+  Assert.AreEqual<Integer>(1, Length(Seen020), 'SCA020 meldet');
+  // Jeder Wert hat einen Arm - die raise-Variante stuende in der Gluehbirne.
+  Src168 := Join(['unit t;', 'interface', 'uses', '  SysUtils;', 'type',
+    '  TAbArchiveAction = (aaFailed, aaNone, aaDelete);', 'implementation',
+    'procedure P(A: TAbArchiveAction);', 'begin', '  case A of',
+    '    aaNone: Exit;', '    aaDelete, aaFailed: Exit;', '  end;', 'end;',
+    'end.']);
+  Seen168 := Detect(Src168, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen168), 'SCA168 meldet');
+  Root := NewTempDir('rdx_raise_old_');
+  try
+    Dir := Root + 'tool' + PathDelim + 'src' + PathDelim;
+    ForceDirectories(Dir);
+    U := Dir + 't.pas';
+    Dof := Dir + 'Tool.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanAltFixIn(Src020, U, fkEmptyMethod, Seen020[0]);
+    Assert.AreEqual<Integer>(1, O.Variant, 'SCA020: zweiter Eintrag');
+    Assert.IsFalse(O.Enabled, 'SCA020.2 gesperrt');
+    Assert.IsTrue(Pos('Tool.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('ENotImplemented', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'SCA020: keine Ersetzung');
+    O := PlanAltFixIn(Src168, U, fkDefaultCaseInCaseStatement, Seen168[0]);
+    Assert.AreEqual<Integer>(1, O.Variant, 'SCA168: zweiter Eintrag');
+    Assert.IsFalse(O.Enabled, 'SCA168.2 gesperrt');
+    Assert.IsTrue(Pos('Tool.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('EInvalidOpException', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'SCA168: keine Ersetzung');
+    // Gegenprobe: das Projekt ist ab Delphi 2009 (.dproj, keine .dof).
+    DeleteFile(Dof);
+    WriteText(Dir + 'Tool.dproj', '<Project><PropertyGroup>'
+      + '<ProjectVersion>19.5</ProjectVersion></PropertyGroup></Project>');
+    O := PlanAltFixIn(Src020, U, fkEmptyMethod, Seen020[0]);
+    Assert.IsTrue(O.Enabled, 'SCA020.2 frei: ' + O.Reason);
+    O := PlanAltFixIn(Src168, U, fkDefaultCaseInCaseStatement, Seen168[0]);
+    Assert.IsTrue(O.Enabled, 'SCA168.2 frei: ' + O.Reason);
+    Assert.IsFalse(O.MenuOnly, 'SCA168.2 Gluehbirne: ' + O.Hint);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 { ---- SCA117 / SCA197 / SCA149 ---- }

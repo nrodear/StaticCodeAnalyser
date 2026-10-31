@@ -2,8 +2,17 @@ unit uRdxTrailingCommaFix;
 
 // reDelphix - Editorhilfe fuer SCA068 TrailingCommaArgList, OHNE ToolsAPI und
 // ohne Parser: das ueberzaehlige Komma vor der schliessenden Klammer faellt
-// weg ('Foo(A, B,)' -> 'Foo(A, B)'), samt dem Leerraum zwischen Komma und
-// ')'. Bedeutungsgleich: das Komma trug nichts.
+// weg ('V.Open(A, B,)' -> 'V.Open(A, B)'), samt dem Leerraum zwischen Komma
+// und ')'.
+// WAS DAS KOMMA BEDEUTET: in einem normalen Aufruf uebersetzt Delphi es
+// nicht (leeres Zusatzargument, E2034) - echter Code mit dem Fund ist ein
+// spaet gebundener Aufruf auf einem Variant oder einer dispinterface. Dort
+// ist das leere letzte Argument ein weggelassener optionaler Parameter
+// (varError -> DISP_E_PARAMNOTFOUND); nach der Hilfe wird es gar nicht
+// uebergeben. Fuer einen COM-Server mit Typbibliothek ist das dasselbe,
+// nur ein IDispatch, der seine Argumente zaehlt (cArgs), sieht eines
+// weniger - darum KEINE Kennzeichnung "aendert Verhalten", der Hinweis
+// nennt den Rest.
 //
 // DER FUND: uTrailingCommaArgList scannt zeilenweise (Kommentar- und
 // String-Zustand wie im Quelltext) auf ',' + Leerraum (Blank, Tab) + ')' und

@@ -59,6 +59,12 @@ function DetectSource(const APrefix, ASource: string; AKind: TFindingKind;
 // TLeakFinding der Datei AFile, der Quellstellen-Dienst auf demselben Text.
 function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
+// Wie PlanFixIn, der Dienst aber in der Sicht der IDE (Ein-Zweig,
+// TScanRequest.DefaultIfdefDefines). PlanFixIn parst BEIDE Zweige: ein
+// Eintrag unter '{$IFDEF X}' steht dort im Baum und in den uses-Namen -
+// die IDE sieht ihn nicht (rwE33: SCA085 mit SysUtils nur in zwei Bloecken).
+function PlanFixInIdeView(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
 // Der zweite Eintrag (TRdxFixTable.AlternativeFixFor) fuer EINEN Fund - der
 // Lauf wie PlanFixIn, ohne dessen Handles-Assert (eine Art ohne Zeile gibt
 // den leeren Ausgang, wie der Anbieter). Bis zur Review Woche G07-27 stand
@@ -84,14 +90,37 @@ procedure AssertNoHelpWith(const ASource: string; AKind: TFindingKind;
 procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
   ALine: Integer; const AReasonPart: string; ADetect: TDetectFunc);
 
+const
+  // Die Zeile des Eintrags AUnit in BranchUsesUnit (beide Formen).
+  BRANCH_USES_LINE = 6;
+
+// Fix-Runde 4 (AppendUses mit den Zeilen der Ersetzungen): eine Unit,
+// deren interface-uses AUnit nur unter '{$IFDEF RDX_X}' traegt, hinter
+// 'Foo.Abstract' - der Baum verliert den Eintrag (der Parser bricht die
+// Klausel an diesem Glied ab, rwE29), der Text sieht ihn bedingt in Zeile
+// BRANCH_USES_LINE. AInBranch: der Zweig umschliesst auch den
+// implementation-Teil AImpl (wie gexperts '{$IFDEF GX_EII}' um die ganze
+// Unit, rwE31); sonst endet er direkt hinter der Klausel.
+function BranchUsesUnit(const AUnit, AImpl: string;
+  AInBranch: Boolean): string;
+// Die Hilfe (AAlt: der zweite Eintrag) fuer den ersten Fund der Art AKind
+// in BranchUsesUnit(AUnit, AImpl, ..): im Zweig frei mit AEdits
+// Ersetzungen, keine fuer uses (kein ' + uses' im Hinweis); ausserhalb
+// gesperrt mit R_USES_ONLY_CONDITIONAL fuer die Zeile des Eintrags
+// (AQualified im Grund), ohne Ersetzung.
+procedure AssertBranchUses(const AUnit, AQualified, AImpl: string;
+  AKind: TFindingKind; AAlt: Boolean; AEdits: Integer; ADetect: TDetectFunc);
+
 implementation
 
 uses
   System.SysUtils, System.Classes,
   DUnitX.TestFramework,
   uParser2,           // TParser2
-  uEngineApi,         // TSourcePlaces
+  uEngineApi,         // TSourcePlaces, TScanRequest
   uRdxFixTable,       // TRdxFixTable.FixFor
+  uRdxPlacesRunner,   // R_USES_ONLY_CONDITIONAL (AssertBranchUses)
+  uRdxText,           // _, MsgByHand (AssertBranchUses)
   uTestRdxTextKit;    // TempName, WriteText, Apply (Review R6-08)
 
 function CatalogText(const AExample: string): string;
@@ -159,11 +188,12 @@ begin
 end;
 
 // Der Lauf beider Einstiege: der Fund als TLeakFinding der Datei AFile, der
-// Quellstellen-Dienst auf demselben Text; AAlt waehlt AlternativeFixFor.
+// Quellstellen-Dienst auf demselben Text; AAlt waehlt AlternativeFixFor,
+// AIdeView die Sicht der IDE (sonst Doppelzweig-Sicht).
 // Alle drei Objekte entstehen im try (Review Woche G01-17: scheitert ein
 // spaeteres Create, raeumt das finally die frueheren ab).
 function PlanEntry(const ASource, AFile: string; AKind: TFindingKind;
-  const ASeen: TSeen; AAlt: Boolean): TRdxFixOutcome;
+  const ASeen: TSeen; AAlt, AIdeView: Boolean): TRdxFixOutcome;
 var
   SL      : TStringList;
   Places  : TSourcePlaces;
@@ -178,6 +208,8 @@ begin
     Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
     Finding.LeakVariant := ASeen.Variant;
     SL.Text := ASource;
+    if AIdeView then
+      Places.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
     Assert.IsTrue(Places.OpenSource(AFile, ASource), 'OpenSource');
     if AAlt then
       Result := TRdxFixTable.AlternativeFixFor(Places, SL, Finding,
@@ -196,13 +228,20 @@ function PlanFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
 begin
   Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
-  Result := PlanEntry(ASource, AFile, AKind, ASeen, False);
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, False, False);
+end;
+
+function PlanFixInIdeView(const ASource, AFile: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+begin
+  Assert.IsTrue(TRdxFixTable.Handles(AKind), 'FixFor kennt die Art');
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, False, True);
 end;
 
 function PlanAltFixIn(const ASource, AFile: string; AKind: TFindingKind;
   const ASeen: TSeen): TRdxFixOutcome;
 begin
-  Result := PlanEntry(ASource, AFile, AKind, ASeen, True);
+  Result := PlanEntry(ASource, AFile, AKind, ASeen, True, False);
 end;
 
 function PlanFix(const ASource: string; AKind: TFindingKind;
@@ -277,6 +316,49 @@ begin
       Exit;
     end;
   Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
+end;
+
+function BranchUsesUnit(const AUnit, AImpl: string;
+  AInBranch: Boolean): string;
+begin
+  if AInBranch then
+    Result := Join(['unit t;', '{$IFDEF RDX_X}', 'interface', 'uses',
+      '  Foo.Abstract,', '  ' + AUnit + ';', 'implementation', AImpl,
+      '{$ENDIF RDX_X}', 'end.'])
+  else
+    Result := Join(['unit t;', 'interface', '{$IFDEF RDX_X}', 'uses',
+      '  Foo.Abstract,', '  ' + AUnit + ';', '{$ENDIF RDX_X}',
+      'implementation', AImpl, 'end.']);
+end;
+
+// Die Hilfe fuer den ersten Fund in ASource (AAlt: der zweite Eintrag).
+function PlanFirstIn(const ASource: string; AKind: TFindingKind;
+  AAlt: Boolean; ADetect: TDetectFunc): TRdxFixOutcome;
+var
+  Seen : TArray<TSeen>;
+begin
+  Seen := ADetect(ASource, AKind);
+  Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet: ' + ASource);
+  if AAlt then
+    Result := PlanAltFixIn(ASource, 't.pas', AKind, Seen[0])
+  else
+    Result := PlanFixIn(ASource, 't.pas', AKind, Seen[0]);
+end;
+
+procedure AssertBranchUses(const AUnit, AQualified, AImpl: string;
+  AKind: TFindingKind; AAlt: Boolean; AEdits: Integer; ADetect: TDetectFunc);
+var
+  O : TRdxFixOutcome;
+begin
+  O := PlanFirstIn(BranchUsesUnit(AUnit, AImpl, True), AKind, AAlt, ADetect);
+  Assert.IsTrue(O.Enabled, 'Stelle im Zweig des Eintrags: ' + O.Reason);
+  Assert.AreEqual<Integer>(AEdits, Length(O.Edits), 'keine uses-Ersetzung');
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  O := PlanFirstIn(BranchUsesUnit(AUnit, AImpl, False), AKind, AAlt, ADetect);
+  Assert.IsFalse(O.Enabled, 'Stelle ausserhalb des Zweigs');
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, [AQualified, BRANCH_USES_LINE,
+    MsgByHand]), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
 end;
 
 end.

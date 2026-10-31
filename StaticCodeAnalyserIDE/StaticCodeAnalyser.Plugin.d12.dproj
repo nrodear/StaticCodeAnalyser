@@ -206,6 +206,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uLoopBoundScan.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uLoopPastHighBound.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFuncNameResultScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFunctionNameResult.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>
@@ -372,6 +374,7 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingSourcePick.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingFileIndex.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFuzzyComboSearch.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uHintTextLayout.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uHitCacheRepair.pas"/>

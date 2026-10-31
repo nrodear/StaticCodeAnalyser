@@ -56,7 +56,9 @@ type
     // SCA007: den Eintrag AIndex der Klausel loeschen. Vor dem letzten
     // Eintrag: bis zum Anfang des naechsten (Name, 'in'-Pfad, Komma,
     // Leerraum) - steht er allein auf seiner Zeile, die ganze Zeile samt
-    // '//'-Kommentar; der letzte: ab dem Komma davor bis vor das ';'; der
+    // '//'-Kommentar; steht er als letzter seiner Zeile hinter einem
+    // anderen, ab dem Komma davor bis zum Zeilenende (rwE29: sonst kaeme
+    // die Folgezeile herauf); der letzte: ab dem Komma davor bis vor das ';'; der
     // einzige: die ganze Klausel ab 'uses' bis hinter ';' - ganze Zeilen,
     // wenn sie allein stehen. Kein Kommentar und keine Direktive im
     // Bereich, und darin steht genau dieser Eintrag mit einem Trenner (ein
@@ -64,6 +66,102 @@ type
     class function RemoveUsesEntry(AMap: TRdxCodeMap;
       const AClause: TRdxUsesClause; AIndex: Integer; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
+
+    // SCA007, Bezeichner-Beweis (Nico 2026-10-29, Realworld-Test rwE30
+    // Stufe 2: 21 Fehler, alle auf Funden, deren Unit doch gebraucht wurde -
+    // mrOk, crHourGlass, fsBold, TShortCut, CN_NOTIFY ... stehen in keiner
+    // Bezeichnerliste des Detektors): der erste Bezeichner der Datei im Stil
+    // einer Bibliothek, den der Planer keiner Quelle zuordnen kann - '' heisst
+    // "Beweis vollstaendig", sonst steht die Hilfe nur im Menue
+    // (TRdxFixOutcome.MenuOnly). Im Stil einer Bibliothek: ein Typ (T, I oder
+    // E, dann ein Grossbuchstabe: TShortCut, ITaskbarList), ein
+    // Aufzaehlungswert (zwei oder drei Kleinbuchstaben, dann ein
+    // Grossbuchstabe: mrOk, clNone, akLeft), eine Konstante (GROSS_..:
+    // CM_MOUSEENTER, CSIDL_PERSONAL) oder ein Aufruf eines gross beginnenden
+    // Namens (InRange(..), ValidParentForm(..)). Zugeordnet ist er, wenn die
+    // Datei ihn deklariert (Typ, Konstante, Variable, Feld, Parameter,
+    // Routine, Property, Aufzaehlungswert - eine Textregel, s. ScanDecls), ihn
+    // AKnown nennt (die bekannten Bezeichner der UEBRIGEN uses-Eintraege,
+    // klein; der Aufrufer fragt den Detektor) oder er aus System kommt
+    // (SYSTEM_NAMES). Nicht gefragt: Member hinter '.', die uses-Klauseln,
+    // Kommentare und Strings. GRENZE: Namen ohne diesen Stil (Screen, Mouse,
+    // Application) prueft die Regel nicht - sie stehen meist in den Listen
+    // des Detektors. ALine: die Zeile des Bezeichners.
+    class function ForeignIdent(AMap: TRdxCodeMap;
+      const AKnown: TArray<string>; out ALine: Integer): string; static;
+
+    // SCA007 (rwE30 Stufe 2, Fragwuerdig Indy indyprotocolsfpc.pas:189):
+    // besteht die Unit nur aus ihrem Kopf und uses-Klauseln - kein Typ,
+    // keine Routine, kein Code? Dann ist die uses-Liste ihr Zweck (die
+    // Sammel-Unit eines Lazarus-Pakets uebersetzt so die gelisteten Units);
+    // ein Eintrag weniger nimmt die Unit aus dem Bau.
+    class function UsesOnlyUnit(AMap: TRdxCodeMap): Boolean; static;
+
+    // SCA007 (rwE31 Stufe 3, CEF4Delphi uChildForm.pas:10,
+    // uCEFWindowDelegate.pas:16 ...): der Eintrag AUnit auf ALine aus dem
+    // TEXT der uses-Klauseln - fuer einen Eintrag, den
+    // TSourcePlaces.UsesEntries nicht liefert. Der Dienst parst mit der
+    // Ein-Zweig-Sicht der IDE-Funde (MSWINDOWS, WIN64 ...) ohne die Defines
+    // aus Include-Dateien: '{$I cef.inc}' definiert DELPHI16_UP, der Dienst
+    // nimmt den {$ELSE}-Zweig, der Fund steht im {$IFDEF}-Zweig - bis dahin
+    // "steht nicht mehr auf Zeile 10" (falsch). Der Token-Leser sieht keine
+    // Direktiven: eine Klausel ist hier die Folge ALLER Zweige (wie die
+    // Doppelzweig-Sicht). RemoveUsesEntry braucht davon nur die Nachbarn des
+    // Eintrags; ein Bereich ueber eine Direktive sperrt RangeReason weiter.
+    // Eine Klausel, deren Folge nicht 'Name [in], Name [in] .. ;' ist (Zweige
+    // mit eigener Kommafolge: '{$IFDEF X} A, B {$ELSE} C {$ENDIF};'), zaehlt
+    // nicht. Ergebnis: die Zahl der Treffer (Name gleich, erstes Zeichen auf
+    // ALine); bei genau einem die Klausel und der Index.
+    class function TextUsesEntry(AMap: TRdxCodeMap; ALine: Integer;
+      const AUnit: string; out AClause: TRdxUsesClause;
+      out AIndex: Integer): Integer; static;
+
+    // SCA007, Bezeichner-Beweis (rwE31 Stufe 3, Todo_SCA007 "nur-menue-
+    // unnoetig": gexperts mPasLex.pas:80 UpperCase, vcl-styles-utils
+    // Main.pas:6 IntToStr, issrc BidiUtils.pas:15 TRect): bekannte Exporte,
+    // die der Planer ueber die Listen des Detektors hinaus kennt, klein;
+    // sonst leer. Zum einen die Units, die der Detektor nie meldet und fuer
+    // die er darum keine Liste fuehrt - SysUtils und Types (auch System.-
+    // Namen), seit Fix-Runde 4 nach rwE32 Messages (WM_APP, TWMMove ...),
+    // seit Fix-Runde 5 nach rwE33 Windows (TPoint, TRect ..) und ComObj
+    // (IsAlwaysNeeded) und DBTables (keine Liste); zum anderen Point, Rect,
+    // Bounds, SmallPoint von Classes, die der Detektor aus Grundsatz nicht
+    // fuehrt. Nur Namen, die Delphi 13 (Studio 37.0) UND FPC 3.2.2 im
+    // interface-Teil fuehren (gegen beide Quellen geprueft; DBTables gibt es
+    // nur unter Delphi): steht die Unit in den uses, kommt der Name aus ihr,
+    // nicht aus der entfernten. Bis Fix-Runde 5 AlwaysNeededIdents.
+    class function ExtraIdents(const AUnitLow: string): TArray<string>;
+      static;
+
+    // SCA007 (Review e/HilfeFixY nach Fix-Runde 5): ExtraIdents der Eintraege
+    // AEntries (eine uses-Klausel) ausser denen mit dem letzten Glied von
+    // AUnit (der Zwilling der entfernten Unit) - fuer den Beweis
+    // (ForeignIdent). Die Listen seit Fix-Runde 5 (Windows, ComObj, DBTables,
+    // Classes) nur fuer einen Eintrag, der unbedingt steht oder dessen
+    // Bedingungsbloecke alle auch die Fundstelle (ASiteLine, ASiteCol)
+    // umfassen (ImpliedBySite); sonst nur die von SysUtils, Types, Messages
+    // (wie bis dahin). Lazarus fpguicrosshelpers.pas:8 'uses Classes,
+    // SysUtils, fpg_main {$IFDEF WINDOWS}, windows{$ENDIF}': TPoint hiesse
+    // sonst "aus windows" - unter Linux kommt es aus Classes.
+    class function ExtraIdentsOf(AMap: TRdxCodeMap;
+      const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+      ASiteLine, ASiteCol: Integer): TArray<string>; static;
+
+    // SCA007 (Fix-Runde 5 nach rwE33, CEF4Delphi MDIBrowser uChildForm.pas:10,
+    // SimpleServer uSimpleServer.pas:9, source\uCEFWindowDelegate.pas:16 ..):
+    // der Eintrag AIndex einer Klausel aus dem Text (TextUsesEntry) steht in
+    // einem Zweig von '{$IFDEF X} A, B, {$ELSE} A', B', {$ENDIF} C;' - genau
+    // diese drei Direktiven (auch IFNDEF/IF und IFEND) in der Klausel -, und
+    // jeder Eintrag des ANDEREN Zweigs hat in seinem einen Zwilling: gleicher
+    // Name oder bis auf ein Unit-Scope-Praefix ('Winapi.Windows' und
+    // 'Windows', UNIT_SCOPES). Dann ist jede Unit, der der Planer einen
+    // Bezeichner ueber den geparsten anderen Zweig zuordnet
+    // (uRdxFixRunner.OtherUnitsIdents), auch in diesem Zweig da - der Beweis
+    // gilt fuer ihn; Units nur dieses Zweigs fehlen ihm, das macht ihn nur
+    // strenger. Der Edit (RemoveUsesEntry) loescht nur in diesem Zweig, der
+    // andere bleibt Zeichen fuer Zeichen (sein Zwilling auch).
+    class function TwinBranches(AMap: TRdxCodeMap;
+      const AClause: TRdxUsesClause; AIndex: Integer): Boolean; static;
 
     // SCA168: ein else vor das end des case-Statements auf Zeile ALine
     // (genau ein 'case' im Code der Zeile). AStatement = '': leer ('else'
@@ -79,6 +177,29 @@ type
     class function CaseElse(AMap: TRdxCodeMap; ALine: Integer;
       const AStatement: string; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
+
+    // SCA168, raise-Variante (rwE31 Stufe 3: vier Fehler - das raise traf
+    // Werte ohne Arm, die dort Normalfall sind: aaFailed in abziptyp.pas,
+    // mDELETE in mormot.orm.mongodb.pas, oftID im aeusseren Arm von
+    // mormot.orm.core.pas): in die Gluehbirne nur, wenn die Arme des case
+    // auf ALine JEDEN Wert eines Aufzaehlungstyps nennen, den diese Datei
+    // oder - seit rwE32 Stufe 4 - eine Unit ihrer uses-Klauseln neben ihr
+    // (AUnitFile, TRdxTypeProof.NeighbourInterfaces) deklariert ('T = (a, b,
+    // c)', ohne eigene Zahlen, genau einmal), oder False und True. Dann
+    // erreicht das else nur ein Wert ausserhalb des Typs, und raise sichert
+    // nur ab. Sonst - eine andere Marke als Namen, der Typ nicht gefunden,
+    // ein Wert ohne Arm, eine Direktive im case oder in der Werteliste, ein
+    // Selektor, der eine Zahl in den Typ umwandelt ('TKind(Combo.ItemIndex)',
+    // Review e/HilfeFixR) - der Grund, warum die Variante nur im Menue steht (TRdxFixOutcome.MenuOnly,
+    // uRdxFixRunner.CaseRaiseFix). Nico-Entscheid E5 (rwE32 Stufe 4):
+    // ALockReason <> '' sperrt die Variante ganz (das Ergebnis traegt dann
+    // denselben Grund) - der Selektor ist keine Aufzaehlung (sein Typ eine
+    // Zahl, ein Zeichen oder String; Zahlen oder Konstanten der Datei bzw.
+    // einer Unit daneben als Marken), oder das Ergebnis ist vor dem case
+    // vorbelegt und nicht jeder Wert hat einen Arm. Ruft der Aufrufer nach
+    // einem erfolgreichen CaseElse.
+    class function CaseRaiseMenuReason(AMap: TRdxCodeMap; ALine: Integer;
+      const AUnitFile: string; out ALockReason: string): string; static;
 
     // SCA101: das then, else oder do, das an (ALine, ACol) beginnt - die
     // Spalte aus der Meldung.
@@ -112,12 +233,20 @@ implementation
 
 uses
   System.SysUtils,
+  System.Classes,                // TStringList (Units neben der Datei, SCA168.2)
+  System.Generics.Collections,   // TDictionary (ForeignIdent)
+  uRdxBlocks, // TypeHasBody (ForeignIdent: Typ mit Rumpf)
+  uRdxRaiseFixes, // OldExceptionClassReason (SCA168 raise, rwE31 Stufe 3)
+  uRdxTypeProof,  // Selektor-Typ, Units neben der Datei (SCA168.2, rwE32 E5)
+  uRdxCompilerTraces, // ConditionalDirectives, UnconditionalAt (SCA007)
   uRdxText;   // _() und die gemeinsamen Texte der Gruende (Entscheid E29)
 
 const
   SPAN_007 = 'sca007';
   SPAN_168 = 'sca168';
   SPAN_101 = 'sca101';
+  // Die Klasse in RAISE_UNHANDLED (OldExceptionClassReason).
+  CLASS_UNHANDLED = 'EInvalidOpException';
   // Die Zweigwoerter (BRANCH_WORDS) und die Token, vor denen eine
   // Anweisung ohne ';' endet (STATEMENT_STOPS), stehen in uRdxCodeMap - bis
   // zur Folgewelle des Wochen-Reviews hier als BRANCH_KEYWORDS und
@@ -158,6 +287,302 @@ const
     + 'the case - a branch can leave the parenthesis open, so it is unclear '
     + 'whether the case is a statement';
   R_BRANCH = 'no then/else/do at the reported place';
+  // SCA007, Bezeichner-Beweis (ForeignIdent, ScanDecls). Davor steht ein
+  // Name, den die Datei deklariert ...
+  NAMING_WORDS: array[0..5] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'property', 'operator');
+  UNIT_HEADS: array[0..3] of string = ('unit', 'program', 'library',
+    'package');
+  // ... davor beginnt im Anweisungsteil eine Liste 'A, B: T' (Inline-
+  // Variable, 'on E: Exception') ...
+  INLINE_DECL_PREV: array[0..4] of string = ('var', 'const', 'out', 'on',
+    'threadvar');
+  // ... davor beginnt im Deklarationsteil 'Name = ..' (Typ, Konstante).
+  EQ_DECL_PREV: array[0..9] of string = (';', 'type', 'const',
+    'resourcestring', ']', 'private', 'protected', 'public', 'published',
+    'strict');
+  // Typen mit Rumpf und end, wenn davor '=' bzw. 'packed' steht.
+  BODY_TYPES: array[0..3] of string = ('class', 'object', 'interface',
+    'dispinterface');
+  BODY_TYPE_PREV: array[0..1] of string = ('=', 'packed');
+  STMT_OPENERS: array[0..2] of string = ('begin', 'try', 'asm');
+  // Der Stapel der offenen Bloecke (ScanDecls): Anweisungsteil, record, Typ.
+  BLOCK_STMT   = 's';
+  BLOCK_RECORD = 'r';
+  BLOCK_TYPE   = 'd';
+  // Aus System (und Compiler-Magie), klein: was die Stil-Regeln von
+  // ForeignIdent trifft und nie aus einer uses-Unit kommt - Typen, Routinen,
+  // die eingebauten Typen als Umwandlung ('Integer(X)').
+  SYSTEM_NAMES: array[0..136] of string = ('tobject', 'tclass', 'tguid',
+    'tdatetime', 'tdate', 'ttime', 'tvarrec', 'tarray', 'tmethod',
+    'tinterfacedobject', 'iinterface', 'iunknown', 'iinvokable', 'idispatch',
+    'tinterfacedclass', 'tvardata', 'tcustomattribute', 'tmonitor', 'tbytes',
+    'tfilerec', 'ttextrec', 'tthreadid', 'ioresult', 'tboundarray',
+    'tptrwrapper', 'ienumerable', 'ienumerator', 'assigned', 'length',
+    'setlength', 'high', 'low', 'inc', 'dec', 'ord', 'chr', 'succ', 'pred',
+    'sizeof', 'typeinfo', 'copy', 'delete', 'insert', 'pos', 'trunc',
+    'round', 'abs', 'sqr', 'sqrt', 'exit', 'halt', 'new', 'dispose', 'getmem',
+    'freemem', 'reallocmem', 'fillchar', 'move', 'include', 'exclude', 'odd',
+    'swap', 'lo', 'hi', 'ptr', 'addr', 'val', 'str', 'random', 'randomize',
+    'assert', 'concat', 'upcase', 'writeln', 'write', 'readln', 'read',
+    'assign', 'assignfile', 'reset', 'rewrite', 'append', 'closefile', 'eof',
+    'eoln', 'blockread', 'blockwrite', 'seek', 'filepos', 'filesize',
+    'finalize', 'initialize', 'default', 'typeof', 'paramstr', 'paramcount',
+    'int', 'frac', 'exp', 'ln', 'sin', 'cos', 'arctan', 'uniquestring',
+    'stringofchar', 'setstring', 'slice', 'integer', 'cardinal', 'byte',
+    'word', 'longint', 'longword', 'shortint', 'smallint', 'int64', 'uint64',
+    'nativeint', 'nativeuint', 'boolean', 'char', 'ansichar', 'widechar',
+    'ansistring', 'widestring', 'unicodestring', 'shortstring', 'pointer',
+    'pchar', 'pansichar', 'pwidechar', 'single', 'double', 'extended',
+    'currency', 'variant', 'olevariant');
+  // Exporte von SysUtils bzw. Types (ExtraIdents): Routinen, Typen,
+  // Exceptions und Aufzaehlungswerte im Stil, den ForeignIdent prueft - je in
+  // System.SysUtils.pas/System.Types.pas von Delphi 13 und in sysutils
+  // (objpas/sysutils/*h.inc, win/sysutils.pp)/types.pp von FPC 3.2.2.
+  SYSUTILS_NAMES: array[0..190] of string = ('inttostr', 'strtoint',
+    'strtointdef', 'trystrtoint', 'strtoint64', 'strtoint64def', 'inttohex',
+    'format', 'formatfloat', 'floattostr', 'strtofloat', 'strtofloatdef',
+    'trystrtofloat', 'floattostrf', 'currtostr', 'strtocurr', 'booltostr',
+    'strtobool', 'trim', 'trimleft', 'trimright', 'uppercase', 'lowercase',
+    'comparetext', 'comparestr', 'sametext', 'samestr', 'quotedstr',
+    'ansiquotedstr', 'ansiuppercase', 'ansilowercase', 'ansicomparetext',
+    'ansicomparestr', 'ansisametext', 'ansisamestr', 'ansipos',
+    'stringreplace', 'wraptext', 'adjustlinebreaks', 'lastdelimiter',
+    'isdelimiter', 'ispathdelimiter', 'extractfilepath', 'extractfilename',
+    'extractfileext', 'extractfiledir', 'extractfiledrive', 'changefileext',
+    'expandfilename', 'extractrelativepath', 'includetrailingpathdelimiter',
+    'excludetrailingpathdelimiter', 'includetrailingbackslash',
+    'excludetrailingbackslash', 'fileexists', 'directoryexists',
+    'forcedirectories', 'createdir', 'removedir', 'deletefile', 'renamefile',
+    'fileage', 'filegetattr', 'filesetattr', 'getcurrentdir', 'setcurrentdir',
+    'fileopen', 'filecreate', 'fileread', 'filewrite', 'fileclose', 'fileseek',
+    'findfirst', 'findnext', 'findclose', 'filesearch', 'diskfree', 'disksize',
+    'now', 'date', 'time', 'datetostr', 'timetostr', 'datetimetostr',
+    'strtodate', 'strtotime', 'strtodatetime', 'formatdatetime', 'encodedate',
+    'decodedate', 'encodetime', 'decodetime', 'dayofweek', 'isleapyear',
+    'incmonth', 'tryencodedate', 'tryencodetime', 'datetimetofiledate',
+    'filedatetodatetime', 'abort', 'freeandnil', 'supports', 'strpas',
+    'strpcopy', 'strlen', 'strcopy', 'strcomp', 'strlcomp', 'stricomp',
+    'strend', 'strscan', 'strpos', 'stralloc', 'strdispose', 'strlcopy',
+    'strcat', 'strnew', 'comparemem', 'syserrormessage', 'raiselastoserror',
+    'beep', 'sleep', 'showexception', 'outofmemoryerror', 'charinset',
+    'exceptionerrormessage', 'tformatsettings', 'tsearchrec', 'tsyscharset',
+    'tfilename', 'treplaceflags', 'tfloatformat', 'ttimestamp', 'eabort',
+    'eaccessviolation', 'econverterror', 'eoutofmemory', 'einouterror',
+    'einterror', 'edivbyzero', 'erangeerror', 'eintoverflow', 'ematherror',
+    'einvalidop', 'ezerodivide', 'eoverflow', 'eunderflow', 'einvalidpointer',
+    'einvalidcast', 'evarianterror', 'eexternal', 'eexternalexception',
+    'eoserror', 'estackoverflow', 'eprivilege', 'eintfcasterror',
+    'eheapexception', 'eassertionfailed', 'epropreadonly', 'epropwriteonly',
+    'eabstracterror', 'esafecallexception', 'eargumentexception',
+    'eargumentoutofrangeexception', 'enotimplemented',
+    'enotsupportedexception', 'einvalidopexception', 'efilenotfoundexception',
+    'edirectorynotfoundexception', 'epathtoolongexception',
+    'eargumentnilexception', 'fmopenread', 'fmopenwrite', 'fmopenreadwrite',
+    'fmsharedenynone', 'fmsharedenywrite', 'fmshareexclusive',
+    'fmsharedenyread', 'faanyfile', 'fadirectory', 'fareadonly', 'fahidden',
+    'fasysfile', 'faarchive', 'rfreplaceall', 'rfignorecase', 'ffgeneral',
+    'fffixed', 'ffnumber', 'ffexponent', 'ffcurrency');
+  TYPES_NAMES: array[0..19] of string = ('trect', 'tpoint', 'tsize',
+    'tsmallpoint', 'tpointf', 'trectf', 'rect', 'point', 'bounds', 'ptinrect',
+    'intersectrect', 'unionrect', 'offsetrect', 'isrectempty', 'equalrect',
+    'centerpoint', 'tduplicates', 'dupignore', 'dupaccept', 'duperror');
+  // Exporte von Messages (ExtraIdents, Fix-Runde 4 nach rwE32:
+  // CEF4Delphi TabbedBrowser uMainForm.pas:18, TabbedOSRBrowser
+  // uChildForm.pas:20 'WM_APP + $100' - Messages steht in IsAlwaysNeeded,
+  // der Detektor fuehrt keine Liste). Genau die Namen, die Winapi.Messages
+  // von Delphi 13 (Studio 37.0) UND messages von FPC 3.2.2 (rtl/win/wininc/
+  // messages.inc, Teil MESSAGESUNIT) im interface-Teil deklarieren und die
+  // ForeignIdent als Bibliotheks-Bezeichner prueft (LibraryStyle): WM_*,
+  // BM_/BN_/CB_/EM_/LB_.., TMessage, TWM*. Keine Praefix-Regel: ein WM_X
+  // der entfernten Unit (eigene Botschaft) bliebe sonst unbemerkt.
+  MESSAGES_NAMES: array[0..475] of string = (
+    'bm_click', 'bm_getcheck', 'bm_getimage', 'bm_getstate', 'bm_setcheck',
+    'bm_setdontclick', 'bm_setimage', 'bm_setstate', 'bm_setstyle',
+    'bn_clicked', 'bn_dblclk', 'bn_disable', 'bn_doubleclicked', 'bn_hilite',
+    'bn_killfocus', 'bn_paint', 'bn_pushed', 'bn_setfocus', 'bn_unhilite',
+    'bn_unpushed', 'cb_addstring', 'cb_deletestring', 'cb_dir',
+    'cb_findstring', 'cb_findstringexact', 'cb_getcount', 'cb_getcursel',
+    'cb_getdroppedcontrolrect', 'cb_getdroppedstate', 'cb_getdroppedwidth',
+    'cb_geteditsel', 'cb_getextendedui', 'cb_gethorizontalextent',
+    'cb_getitemdata', 'cb_getitemheight', 'cb_getlbtext', 'cb_getlbtextlen',
+    'cb_getlocale', 'cb_gettopindex', 'cb_initstorage', 'cb_insertstring',
+    'cb_limittext', 'cb_resetcontent', 'cb_selectstring', 'cb_setcursel',
+    'cb_setdroppedwidth', 'cb_seteditsel', 'cb_setextendedui',
+    'cb_sethorizontalextent', 'cb_setitemdata', 'cb_setitemheight',
+    'cb_setlocale', 'cb_settopindex', 'cb_showdropdown', 'cbn_closeup',
+    'cbn_dblclk', 'cbn_dropdown', 'cbn_editchange', 'cbn_editupdate',
+    'cbn_errspace', 'cbn_killfocus', 'cbn_selchange', 'cbn_selendcancel',
+    'cbn_selendok', 'cbn_setfocus', 'dm_getdefid', 'dm_reposition',
+    'dm_setdefid', 'em_canundo', 'em_charfrompos', 'em_emptyundobuffer',
+    'em_fmtlines', 'em_getfirstvisibleline', 'em_gethandle',
+    'em_getlimittext', 'em_getline', 'em_getlinecount', 'em_getmargins',
+    'em_getmodify', 'em_getpasswordchar', 'em_getrect', 'em_getsel',
+    'em_getthumb', 'em_getwordbreakproc', 'em_limittext', 'em_linefromchar',
+    'em_lineindex', 'em_linelength', 'em_linescroll', 'em_posfromchar',
+    'em_replacesel', 'em_scroll', 'em_scrollcaret', 'em_sethandle',
+    'em_setlimittext', 'em_setmargins', 'em_setmodify', 'em_setpasswordchar',
+    'em_setreadonly', 'em_setrect', 'em_setrectnp', 'em_setsel',
+    'em_settabstops', 'em_setwordbreakproc', 'em_undo', 'en_change',
+    'en_errspace', 'en_hscroll', 'en_killfocus', 'en_maxtext', 'en_setfocus',
+    'en_update', 'en_vscroll', 'lb_addfile', 'lb_addstring',
+    'lb_deletestring', 'lb_dir', 'lb_findstring', 'lb_findstringexact',
+    'lb_getanchorindex', 'lb_getcaretindex', 'lb_getcount', 'lb_getcursel',
+    'lb_gethorizontalextent', 'lb_getitemdata', 'lb_getitemheight',
+    'lb_getitemrect', 'lb_getlocale', 'lb_getsel', 'lb_getselcount',
+    'lb_getselitems', 'lb_gettext', 'lb_gettextlen', 'lb_gettopindex',
+    'lb_initstorage', 'lb_insertstring', 'lb_itemfrompoint',
+    'lb_resetcontent', 'lb_selectstring', 'lb_selitemrange',
+    'lb_selitemrangeex', 'lb_setanchorindex', 'lb_setcaretindex',
+    'lb_setcolumnwidth', 'lb_setcount', 'lb_setcursel',
+    'lb_sethorizontalextent', 'lb_setitemdata', 'lb_setitemheight',
+    'lb_setlocale', 'lb_setsel', 'lb_settabstops', 'lb_settopindex',
+    'lbn_dblclk', 'lbn_errspace', 'lbn_killfocus', 'lbn_selcancel',
+    'lbn_selchange', 'lbn_setfocus', 'sbm_enable_arrows', 'sbm_getpos',
+    'sbm_getrange', 'sbm_getscrollinfo', 'sbm_setpos', 'sbm_setrange',
+    'sbm_setrangeredraw', 'sbm_setscrollinfo', 'tmessage', 'twmactivate',
+    'twmactivateapp', 'twmcancelmode', 'twmchartoitem', 'twmclose',
+    'twmcommand', 'twmcompareitem', 'twmcontextmenu', 'twmcopy', 'twmcreate',
+    'twmctlcolor', 'twmcut', 'twmdeleteitem', 'twmdestroy',
+    'twmdisplaychange', 'twmdrawitem', 'twmdropfiles', 'twmenable',
+    'twmendsession', 'twmerasebkgnd', 'twmfontchange', 'twmgetdlgcode',
+    'twmgetfont', 'twmgetminmaxinfo', 'twmgettext', 'twmgettextlength',
+    'twmhelp', 'twmhscroll', 'twmiconerasebkgnd', 'twminitdialog',
+    'twminitmenupopup', 'twmkey', 'twmkillfocus', 'twmmdiactivate',
+    'twmmeasureitem', 'twmmenuchar', 'twmmenuselect', 'twmmouse',
+    'twmmouseactivate', 'twmmousewheel', 'twmmove', 'twmnccalcsize',
+    'twmnccreate', 'twmncdestroy', 'twmnchitmessage', 'twmnchittest',
+    'twmncpaint', 'twmnextdlgctl', 'twmnoparams', 'twmnotify', 'twmpaint',
+    'twmparentnotify', 'twmpaste', 'twmprint', 'twmquerydragicon',
+    'twmqueryendsession', 'twmqueryuistate', 'twmscroll', 'twmsetcursor',
+    'twmsetfocus', 'twmsetfont', 'twmsettext', 'twmsettingchange',
+    'twmshowwindow', 'twmsize', 'twmsizeclipboard', 'twmspoolerstatus',
+    'twmstylechange', 'twmsyscolorchange', 'twmsyscommand', 'twmsysdeadchar',
+    'twmsystemerror', 'twmtimechange', 'twmtimer', 'twmuistate', 'twmundo',
+    'twmvscroll', 'twmvscrollclipboard', 'twmwindowposchanged',
+    'twmwindowposchanging', 'twmwindowposmsg', 'twmwininichange',
+    'wm_activate', 'wm_activateapp', 'wm_app', 'wm_appcommand',
+    'wm_askcbformatname', 'wm_canceljournal', 'wm_cancelmode',
+    'wm_capturechanged', 'wm_changecbchain', 'wm_changeuistate', 'wm_char',
+    'wm_chartoitem', 'wm_childactivate', 'wm_clear', 'wm_clipboardupdate',
+    'wm_close', 'wm_command', 'wm_compacting', 'wm_compareitem',
+    'wm_contextmenu', 'wm_copy', 'wm_copydata', 'wm_create', 'wm_ctlcolorbtn',
+    'wm_ctlcolordlg', 'wm_ctlcoloredit', 'wm_ctlcolorlistbox',
+    'wm_ctlcolormsgbox', 'wm_ctlcolorscrollbar', 'wm_ctlcolorstatic',
+    'wm_cut', 'wm_deadchar', 'wm_deleteitem', 'wm_destroy',
+    'wm_destroyclipboard', 'wm_devicechange', 'wm_devmodechange',
+    'wm_displaychange', 'wm_dpichanged', 'wm_drawclipboard', 'wm_drawitem',
+    'wm_dropfiles', 'wm_dwmcolorizationcolorchanged',
+    'wm_dwmcompositionchanged', 'wm_dwmncrenderingchanged',
+    'wm_dwmsendiconiclivepreviewbitmap', 'wm_dwmsendiconicthumbnail',
+    'wm_dwmwindowmaximizedchange', 'wm_enable', 'wm_endsession',
+    'wm_enteridle', 'wm_entermenuloop', 'wm_entersizemove', 'wm_erasebkgnd',
+    'wm_exitmenuloop', 'wm_exitsizemove', 'wm_fontchange', 'wm_gesture',
+    'wm_gesturenotify', 'wm_getdlgcode', 'wm_getfont', 'wm_gethotkey',
+    'wm_geticon', 'wm_getminmaxinfo', 'wm_getobject', 'wm_gettext',
+    'wm_gettextlength', 'wm_gettitlebarinfoex', 'wm_help', 'wm_hotkey',
+    'wm_hscroll', 'wm_hscrollclipboard', 'wm_iconerasebkgnd', 'wm_ime_char',
+    'wm_ime_composition', 'wm_ime_compositionfull', 'wm_ime_control',
+    'wm_ime_endcomposition', 'wm_ime_keydown', 'wm_ime_keyup',
+    'wm_ime_notify', 'wm_ime_request', 'wm_ime_select', 'wm_ime_setcontext',
+    'wm_ime_startcomposition', 'wm_initdialog', 'wm_initmenu',
+    'wm_initmenupopup', 'wm_input', 'wm_input_device_change',
+    'wm_inputlangchange', 'wm_inputlangchangerequest', 'wm_keydown',
+    'wm_keyfirst', 'wm_keylast', 'wm_keyup', 'wm_killfocus',
+    'wm_lbuttondblclk', 'wm_lbuttondown', 'wm_lbuttonup', 'wm_mbuttondblclk',
+    'wm_mbuttondown', 'wm_mbuttonup', 'wm_mdiactivate', 'wm_mdicascade',
+    'wm_mdicreate', 'wm_mdidestroy', 'wm_mdigetactive', 'wm_mdiiconarrange',
+    'wm_mdimaximize', 'wm_mdinext', 'wm_mdirefreshmenu', 'wm_mdirestore',
+    'wm_mdisetmenu', 'wm_mditile', 'wm_measureitem', 'wm_menuchar',
+    'wm_menucommand', 'wm_menudrag', 'wm_menugetobject', 'wm_menurbuttonup',
+    'wm_menuselect', 'wm_mouseactivate', 'wm_mousefirst', 'wm_mousehover',
+    'wm_mousehwheel', 'wm_mouselast', 'wm_mouseleave', 'wm_mousemove',
+    'wm_mousewheel', 'wm_move', 'wm_moving', 'wm_ncactivate', 'wm_nccalcsize',
+    'wm_nccreate', 'wm_ncdestroy', 'wm_nchittest', 'wm_nclbuttondblclk',
+    'wm_nclbuttondown', 'wm_nclbuttonup', 'wm_ncmbuttondblclk',
+    'wm_ncmbuttondown', 'wm_ncmbuttonup', 'wm_ncmousehover',
+    'wm_ncmouseleave', 'wm_ncmousemove', 'wm_ncpaint', 'wm_ncrbuttondblclk',
+    'wm_ncrbuttondown', 'wm_ncrbuttonup', 'wm_ncxbuttondblclk',
+    'wm_ncxbuttondown', 'wm_ncxbuttonup', 'wm_nextdlgctl', 'wm_nextmenu',
+    'wm_notify', 'wm_notifyformat', 'wm_null', 'wm_paint',
+    'wm_paintclipboard', 'wm_painticon', 'wm_palettechanged',
+    'wm_paletteischanging', 'wm_parentnotify', 'wm_paste', 'wm_penwinfirst',
+    'wm_penwinlast', 'wm_power', 'wm_powerbroadcast', 'wm_print',
+    'wm_printclient', 'wm_querydragicon', 'wm_queryendsession',
+    'wm_querynewpalette', 'wm_queryopen', 'wm_queryuistate', 'wm_queuesync',
+    'wm_quit', 'wm_rbuttondblclk', 'wm_rbuttondown', 'wm_rbuttonup',
+    'wm_renderallformats', 'wm_renderformat', 'wm_setcursor', 'wm_setfocus',
+    'wm_setfont', 'wm_sethotkey', 'wm_seticon', 'wm_setredraw', 'wm_settext',
+    'wm_settingchange', 'wm_showwindow', 'wm_size', 'wm_sizeclipboard',
+    'wm_sizing', 'wm_spoolerstatus', 'wm_stylechanged', 'wm_stylechanging',
+    'wm_syschar', 'wm_syscolorchange', 'wm_syscommand', 'wm_sysdeadchar',
+    'wm_syskeydown', 'wm_syskeyup', 'wm_tablet_first', 'wm_tablet_last',
+    'wm_tcard', 'wm_themechanged', 'wm_timechange', 'wm_timer', 'wm_undo',
+    'wm_unichar', 'wm_uninitmenupopup', 'wm_updateuistate', 'wm_user',
+    'wm_userchanged', 'wm_vkeytoitem', 'wm_vscroll', 'wm_vscrollclipboard',
+    'wm_windowposchanged', 'wm_windowposchanging', 'wm_wininichange',
+    'wm_wtssession_change', 'wm_xbuttondblclk', 'wm_xbuttondown',
+    'wm_xbuttonup');
+  // Exporte von Windows, ComObj, DBTables und Classes (ExtraIdents, Fix-Runde
+  // 5 nach rwE33: jvcl JvCategCh.pas:44 'P: TPoint', Abbrevia_TLB.pas:57
+  // CreateRemoteComObject, JvDBIndex.pas:39 TTable - der Hinweis nannte sie
+  // als moegliche Herkunft der entfernten Unit). Windows und ComObj stehen
+  // in IsAlwaysNeeded, DBTables hat keine Liste - der Detektor meldet alle
+  // drei nie. WINDOWS_NAMES: die Rechteck-Typen und -Routinen, die
+  // Winapi.Windows von Delphi 13 (TPoint = System.Types.TPoint ..) UND
+  // windows von FPC 3.2.2 (struct.inc mit typshrdh.inc, func.inc) fuehren.
+  WINDOWS_NAMES: array[0..14] of string = ('tpoint', 'trect', 'tsize',
+    'tsmallpoint', 'ptinrect', 'intersectrect', 'unionrect', 'offsetrect',
+    'isrectempty', 'equalrect', 'inflaterect', 'setrect', 'copyrect',
+    'setrectempty', 'subtractrect');
+  // ComObj: das interface von System.Win.ComObj (Delphi 13) UND comobj von
+  // FPC 3.2.2 (packages/winunits-base) - Klassen, Exceptions, Routinen,
+  // TClassInstancing/TThreadingModel samt Werten. Der Detektor fuehrt
+  // CreateComObject und OleCheck in der Liste von ActiveX. NICHT tmBoth
+  // (Review e/HilfeFixY): TTickMark von ComCtrls (Vcl.ComCtrls Delphi 13,
+  // comctrls der LCL) fuehrt denselben Wert, und ComCtrls hat eine Liste im
+  // Detektor, kann also der Fund sein - 'uses ComObj, ComCtrls' mit
+  // 'TrackBar.TickMarks := tmBoth': ohne ComCtrls waere tmBoth der Wert von
+  // TThreadingModel (E2010). Ein Name hier darf in keiner Unit stehen, die
+  // der Detektor melden kann.
+  COMOBJ_NAMES: array[0..45] of string = ('eoleerror', 'eolesyserror',
+    'eoleexception', 'eoleregistrationerror', 'tcomserverobject',
+    'tcomobjectfactory', 'tcomclassmanager', 'tcomobject', 'tcomclass',
+    'tclassinstancing', 'ciinternal', 'cisingleinstance', 'cimultiinstance',
+    'tthreadingmodel', 'tmsingle', 'tmapartment', 'tmfree',
+    'tmneutral', 'ttypedcomobject', 'ttypedcomclass', 'ttypedcomobjectfactory',
+    'tautoobject', 'tautoclass', 'tautoobjectfactory', 'tautointfobject',
+    'createclassid', 'createcomobject', 'createremotecomobject',
+    'createoleobject', 'getactiveoleobject', 'olecheck', 'oleerror',
+    'progidtoclassid', 'classidtoprogid', 'stringtolpolestr',
+    'interfaceconnect', 'interfacedisconnect', 'dispatchinvoke',
+    'dispatchinvokeerror', 'handlesafecallexception', 'comclassmanager',
+    'createregkey', 'deleteregkey', 'getregstringvalue', 'tconnectevent',
+    'tfactoryproc');
+  // (Bde.)DBTables gibt es nur unter Delphi (BDE, FPC hat keine): die
+  // Datenmengen und Verbindungen der BDE, die jede Fassung seit Delphi 3
+  // fuehrt. Delphi 12/13 liefern weder Quelle noch dcu der BDE mit - die
+  // Namen sind nicht gegen eine Quelle geprueft (Review e/HilfeFixY). Sie
+  // stehen in keiner Unit mit Liste im Detektor (Delphi-13-Quellen, LCL;
+  // TDatabase/TDBDataSet von db gibt es nur unter FPC, ohne DBTables).
+  DBTABLES_NAMES: array[0..9] of string = ('ttable', 'tquery', 'tdatabase',
+    'tsession', 'tstoredproc', 'tbatchmove', 'tbdedataset', 'tdbdataset',
+    'tupdatesql', 'edbengineerror');
+  // Classes hat eine Liste im Detektor; Point, Rect, Bounds und SmallPoint
+  // nimmt er aus Grundsatz nicht auf (D007: sie stehen auch in Types bzw.
+  // einer IsAlwaysNeeded-Unit und bewiesen nichts fuer Classes). Fuer den
+  // Beweis des Planers sind sie Exporte von System.Classes (Delphi 13) und
+  // classes (FPC 3.2.2, classesh.inc).
+  CLASSES_EXTRA: array[0..3] of string = ('point', 'smallpoint', 'rect',
+    'bounds');
+  // Die Unit-Scope-Praefixe, unter denen Delphi einen Kurznamen in einer
+  // VCL-Anwendung aufloest ('ClipBrd' -> 'Vcl.ClipBrd'; die Vorgabe der
+  // Projektoptionen) - TwinBranches haelt so 'Vcl.ClipBrd' und 'ClipBrd'
+  // fuer dieselbe Unit. NICHT FMX: 'FMX.Forms' und 'Forms' sind zwei Units.
+  UNIT_SCOPES: array[0..18] of string = ('winapi', 'system.win', 'data.win',
+    'datasnap.win', 'web.win', 'soap.win', 'xml.win', 'bde', 'system', 'xml',
+    'data', 'datasnap', 'web', 'soap', 'vcl', 'vcl.imaging', 'vcl.touch',
+    'vcl.samples', 'vcl.shell');
 
 type
   // Code-Token eines Bereichs nach Art (CountRangeTokens).
@@ -307,6 +732,37 @@ begin
     and ((Rest > Length(L)) or (Rest = AMap.LineCommentCol(AEntry.StartLine)));
 end;
 
+// Steht der Eintrag AIndex (weder der erste noch der letzte der Klausel)
+// als letzter auf seiner Zeile hinter einem anderen - davor auf derselben
+// Zeile das ',' des vorigen Eintrags, dahinter sein ',' und nur Leerraum,
+// der naechste Eintrag auf einer spaeteren Zeile (Stil 'A, B,' / '  C;')?
+// Dann geht er ab dem Komma des vorigen bis zum Zeilenende ('A, B,' ->
+// 'A,'). Der Schnitt bis vor den naechsten Eintrag zoege sonst die
+// Folgezeile samt Einrueckung herauf (rwE29, delphimvcframework
+// MainFormU.pas:30: 'System.Classes, Vcl.Graphics,' + '  Vcl.Controls, ...'
+// wurde eine Zeile von ~150 Zeichen).
+function LineEndSpan(AMap: TRdxCodeMap; const AClause: TRdxUsesClause;
+  AIndex: Integer; const ASep: TRdxToken; out ASpan: TRefactorSpan): Boolean;
+var
+  E    : TArray<TRefactorSpan>;
+  Prev : TRdxToken;
+  L    : string;
+begin
+  Result := False;
+  ASpan := Default(TRefactorSpan);
+  E := AClause.Entries;
+  if (AIndex < 1) or (AIndex >= High(E)) then Exit;
+  if (ASep.Low <> ',') or (ASep.Line <> E[AIndex].StartLine)
+     or (E[AIndex + 1].StartLine <= ASep.Line) then Exit;
+  L := AMap.Raw(ASep.Line);
+  if SkipBlanks(L, ASep.EndCol) <= Length(L) then Exit;
+  Prev := SeparatorAfter(AMap, E[AIndex - 1]);
+  if (Prev.Low <> ',') or (Prev.Line <> ASep.Line) then Exit;
+  ASpan := TRefactorSpan.Make(SPAN_007, Prev.Line, Prev.EndCol, ASep.Line,
+    Length(L) + 1);
+  Result := True;
+end;
+
 // Die Code-Token im Bereich nach Art gezaehlt (Strings und Kommentare
 // sieht der Token-Leser nicht).
 function CountRangeTokens(AMap: TRdxCodeMap;
@@ -363,6 +819,8 @@ var
   E           : TRefactorSpan;
   Sep         : TRdxToken;
   Span, Check : TRefactorSpan;
+  LineEnd     : TRefactorSpan;   // eigene Variable: LineEndSpan setzt sein
+                                 // out-Argument auch bei False zurueck
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -380,12 +838,687 @@ begin
     Span := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine + 1, 1);
     Check := TRefactorSpan.Make(SPAN_007, E.StartLine, 1, E.StartLine,
       Sep.EndCol);
+  end
+  else if LineEndSpan(AMap, AClause, AIndex, Sep, LineEnd) then
+  begin
+    Span := LineEnd;
+    Check := LineEnd;
   end;
   AReason := RangeReason(AMap, Span, Check, E.Resolved);
   if AReason <> '' then Exit;
   AEdit.Span := Span;
   AEdit.Expected := RangeText(AMap, Span);
   AEdit.NewText := '';
+  Result := True;
+end;
+
+{ ---- SCA007: Bezeichner-Beweis (ForeignIdent) ---- }
+
+// Alle Code-Token der Datei der Reihe nach (Strings und Kommentare sieht der
+// Token-Leser nicht).
+function AllCodeTokens(AMap: TRdxCodeMap): TArray<TRdxToken>;
+var
+  T : TRdxToken;
+  n : Integer;
+begin
+  SetLength(Result, 256);
+  n := 0;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if n = Length(Result) then
+      SetLength(Result, 2 * n);
+    Result[n] := T;
+    Inc(n);
+    T := After(AMap, T);
+  end;
+  SetLength(Result, n);
+end;
+
+// Low des Tokens Nummer AIndex; '' ausserhalb.
+function LowOf(const AToks: TArray<TRdxToken>; AIndex: Integer): string;
+begin
+  if (AIndex < 0) or (AIndex > High(AToks)) then
+    Result := ''
+  else
+    Result := AToks[AIndex].Low;
+end;
+
+// Ein Wort, das die Datei als Schluesselwort liest: reserviert und nicht
+// hinter '&', '@' oder '.'.
+function ReservedAt(const AToks: TArray<TRdxToken>; AIndex: Integer): Boolean;
+begin
+  Result := AToks[AIndex].IsWord and InList(AToks[AIndex].Low, RESERVED)
+    and not InList(LowOf(AToks, AIndex - 1), IDENT_PREFIXES);
+end;
+
+// Die Aufzaehlungswerte '(a, b, c)' ab der '(' Nummer AOpen als deklariert.
+procedure AddEnumValues(const AToks: TArray<TRdxToken>; AOpen: Integer;
+  ADecl: TDictionary<string, Boolean>);
+var
+  j, Depth : Integer;
+begin
+  Depth := 1;
+  j := AOpen + 1;
+  while (j <= High(AToks)) and (Depth > 0) do
+  begin
+    if AToks[j].Low = '(' then
+      Inc(Depth)
+    else if AToks[j].Low = ')' then
+      Dec(Depth)
+    else if (Depth = 1) and AToks[j].IsWord
+       and ((LowOf(AToks, j - 1) = '(') or (LowOf(AToks, j - 1) = ',')) then
+      ADecl.AddOrSetValue(AToks[j].Low, True);
+    Inc(j);
+  end;
+end;
+
+// Eine Liste 'A, B: T' ab dem Wort Nummer k: True, wenn hinter dem letzten
+// Namen ein ':' steht (kein ':=' - das ist ein eigenes Token); AEnd ist das
+// letzte Wort.
+function ColonList(const AToks: TArray<TRdxToken>; k: Integer;
+  out AEnd: Integer): Boolean;
+begin
+  AEnd := k;
+  while (LowOf(AToks, AEnd + 1) = ',') and (AEnd + 2 <= High(AToks))
+     and AToks[AEnd + 2].IsWord do
+    Inc(AEnd, 2);
+  Result := LowOf(AToks, AEnd + 1) = ':';
+end;
+
+// Ein Schritt des Blockstapels (ScanDecls) am Schluesselwort Nummer k:
+// begin/try/asm und ein case ausserhalb eines records oeffnen einen
+// Anweisungsteil, record und ein Typ mit Rumpf einen Deklarationsblock,
+// end schliesst den innersten.
+procedure StepBlocks(AMap: TRdxCodeMap; const AToks: TArray<TRdxToken>;
+  k: Integer; var AStack: string);
+var
+  W : string;
+begin
+  W := AToks[k].Low;
+  if InList(W, STMT_OPENERS) then
+    AStack := AStack + BLOCK_STMT
+  else if W = 'case' then
+  begin
+    // 'case' im record ist der Variantenteil - er endet mit dem record.
+    if Copy(AStack, Length(AStack), 1) <> BLOCK_RECORD then
+      AStack := AStack + BLOCK_STMT;
+  end
+  else if W = 'record' then
+    AStack := AStack + BLOCK_RECORD
+  else if InList(W, BODY_TYPES) and InList(LowOf(AToks, k - 1), BODY_TYPE_PREV)
+     and TypeHasBody(AMap, AToks[k]) then
+    AStack := AStack + BLOCK_TYPE
+  else if (W = 'end') and (AStack <> '') then
+    SetLength(AStack, Length(AStack) - 1);
+end;
+
+// Die Namen, die die Datei deklariert (klein, nach ADecl) - eine Textregel:
+//   - hinter procedure/function/constructor/destructor/property/operator und
+//     unit/program/library/package (bei 'TFoo.Bar' beide Glieder),
+//   - eine Liste 'A, B: T' in Klammern (Parameter), im Deklarationsteil
+//     (Variable, Feld, Konstante mit Typ) oder hinter var/const/out/on/
+//     threadvar (Inline-Variable, 'on E: Exception'); im Anweisungsteil
+//     sonst nicht - 'mrOk:' ist dort die Marke eines case-Zweigs,
+//   - 'Name =' bzw. 'Name<' im Deklarationsteil hinter ';', type, const,
+//     resourcestring, ']' oder einem Abschnittswort (Typ, Konstante) samt
+//     der Aufzaehlungswerte '= (a, b)',
+//   - im Anweisungsteil das Wort hinter var/const (Inline 'var X := ..').
+// Ein Wort zu viel hiesse hier "deklariert", also eine Gluehbirne zu viel -
+// darum die Strenge im Anweisungsteil. "In Klammern" zaehlt ab dem
+// innersten offenen Block (Bases): eine anonyme Methode als Argument
+// ('MessageDialog(.., procedure(const R: TModalResult) begin case R of
+// mrYes: ..') steht zwar in der Klammer des Aufrufs, ihr 'mrYes:' ist aber
+// eine case-Marke ihres Anweisungsteils, ihre Parameterliste dagegen eine
+// eigene Klammer (Review e/HilfeFixH).
+procedure ScanDecls(AMap: TRdxCodeMap; const AToks: TArray<TRdxToken>;
+  ADecl: TDictionary<string, Boolean>);
+var
+  k, q, Last, Paren : Integer;
+  Opened            : Integer;
+  Bases             : TArray<Integer>;   // Paren beim Oeffnen je Block
+  Stack, P, N       : string;
+  InUses, Stmt      : Boolean;
+  InParen           : Boolean;
+begin
+  Stack := '';
+  Paren := 0;
+  Bases := nil;
+  InUses := False;
+  for k := 0 to High(AToks) do
+  begin
+    P := LowOf(AToks, k - 1);
+    N := LowOf(AToks, k + 1);
+    if InUses then
+    begin
+      InUses := AToks[k].Low <> ';';
+      Continue;
+    end;
+    if (AToks[k].Low = '(') or (AToks[k].Low = '[') then
+      Inc(Paren)
+    else if ((AToks[k].Low = ')') or (AToks[k].Low = ']')) and (Paren > 0) then
+      Dec(Paren);
+    Stmt := Pos(BLOCK_STMT, Stack) > 0;
+    if ReservedAt(AToks, k) then
+    begin
+      InUses := AToks[k].Low = 'uses';
+      Opened := Length(Stack);
+      StepBlocks(AMap, AToks, k, Stack);
+      SetLength(Bases, Length(Stack));
+      if Length(Stack) > Opened then
+        Bases[High(Bases)] := Paren;
+      Continue;
+    end;
+    if Length(Bases) > 0 then
+      InParen := Paren > Bases[High(Bases)]
+    else
+      InParen := Paren > 0;
+    if not AToks[k].IsWord or InList(P, IDENT_PREFIXES) then Continue;
+    if InList(P, NAMING_WORDS) or InList(P, UNIT_HEADS) then
+    begin
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+      if (N = '.') and (k + 2 <= High(AToks)) then
+        ADecl.AddOrSetValue(AToks[k + 2].Low, True);
+      Continue;
+    end;
+    if Stmt and ((P = 'var') or (P = 'const')) then
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+    if ((N = ',') or (N = ':')) and (P <> ',') and ColonList(AToks, k, Last)
+       and (InParen or not Stmt or InList(P, INLINE_DECL_PREV)) then
+    begin
+      q := k;
+      while q <= Last do
+      begin
+        ADecl.AddOrSetValue(AToks[q].Low, True);
+        Inc(q, 2);
+      end;
+    end;
+    if ((N = '=') or (N = '<')) and (Paren = 0) and not Stmt
+       and InList(P, EQ_DECL_PREV) then
+    begin
+      ADecl.AddOrSetValue(AToks[k].Low, True);
+      if (N = '=') and (LowOf(AToks, k + 2) = '(') then
+        AddEnumValues(AToks, k + 2, ADecl);
+    end;
+  end;
+end;
+
+function IsUpperAZ(C: Char): Boolean;
+begin
+  Result := (C >= 'A') and (C <= 'Z');
+end;
+
+function IsLowerAZ(C: Char): Boolean;
+begin
+  Result := (C >= 'a') and (C <= 'z');
+end;
+
+// Traegt S den Stil eines Bibliotheks-Bezeichners (s. ForeignIdent)?
+// ACall: dahinter steht '('.
+function LibraryStyle(const S: string; ACall: Boolean): Boolean;
+var
+  i, n, Bar : Integer;
+  Prefix    : Boolean;
+begin
+  Result := False;
+  n := Length(S);
+  if n < 2 then Exit;
+  // Typ: T/I/E, Grossbuchstabe, irgendwo ein Kleinbuchstabe (nicht 'TRUE').
+  if (n >= 3) and CharInSet(S[1], ['T', 'I', 'E']) and IsUpperAZ(S[2]) then
+    for i := 3 to n do
+      if IsLowerAZ(S[i]) then
+        Exit(True);
+  // Aufzaehlungswert: zwei oder drei Kleinbuchstaben, ein Grossbuchstabe,
+  // mindestens ein Zeichen dahinter.
+  i := 1;
+  while (i <= n) and IsLowerAZ(S[i]) do
+    Inc(i);
+  if (i >= 3) and (i <= 4) and (i < n) and IsUpperAZ(S[i]) then
+    Exit(True);
+  // Konstante: mindestens zwei Grossbuchstaben/Ziffern vor dem ersten '_'.
+  Bar := Pos('_', S);
+  if (Bar >= 3) and (Bar < n) and IsUpperAZ(S[1]) then
+  begin
+    Prefix := True;
+    for i := 1 to Bar - 1 do
+      if not (IsUpperAZ(S[i]) or CharInSet(S[i], ['0'..'9'])) then
+        Prefix := False;
+    if Prefix then
+      Exit(True);
+  end;
+  Result := ACall and IsUpperAZ(S[1]);
+end;
+
+class function TRdxStructFixes.ForeignIdent(AMap: TRdxCodeMap;
+  const AKnown: TArray<string>; out ALine: Integer): string;
+var
+  Toks   : TArray<TRdxToken>;
+  Decl   : TDictionary<string, Boolean>;
+  k      : Integer;
+  P, S   : string;
+  InUses : Boolean;
+begin
+  Result := '';
+  ALine := 0;
+  Toks := AllCodeTokens(AMap);
+  Decl := TDictionary<string, Boolean>.Create;
+  try
+    for S in SYSTEM_NAMES do
+      Decl.AddOrSetValue(S, True);
+    for S in AKnown do
+      Decl.AddOrSetValue(LowerCase(S), True);
+    ScanDecls(AMap, Toks, Decl);
+    InUses := False;
+    for k := 0 to High(Toks) do
+    begin
+      if InUses then
+      begin
+        InUses := Toks[k].Low <> ';';
+        Continue;
+      end;
+      if ReservedAt(Toks, k) then
+      begin
+        InUses := Toks[k].Low = 'uses';
+        Continue;
+      end;
+      P := LowOf(Toks, k - 1);
+      if not Toks[k].IsWord or (P = '.') or (P = '&') or (P = 'inherited')
+         or Decl.ContainsKey(Toks[k].Low) then
+        Continue;
+      S := TokText(AMap, Toks[k]);
+      if LibraryStyle(S, LowOf(Toks, k + 1) = '(') then
+      begin
+        ALine := Toks[k].Line;
+        Exit(S);
+      end;
+    end;
+  finally
+    Decl.Free;
+  end;
+end;
+
+class function TRdxStructFixes.UsesOnlyUnit(AMap: TRdxCodeMap): Boolean;
+var
+  Toks   : TArray<TRdxToken>;
+  k      : Integer;
+  InHead : Boolean;
+  InUses : Boolean;
+begin
+  Toks := AllCodeTokens(AMap);
+  Result := (Length(Toks) > 0) and (Toks[0].Low = 'unit');
+  if not Result then Exit;
+  InHead := False;
+  InUses := False;
+  for k := 0 to High(Toks) do
+  begin
+    if InHead or InUses then
+    begin
+      if Toks[k].Low = ';' then
+      begin
+        InHead := False;
+        InUses := False;
+      end;
+      Continue;
+    end;
+    if Toks[k].Low = 'unit' then
+      InHead := True
+    else if Toks[k].Low = 'uses' then
+      InUses := True
+    else if not InList(Toks[k].Low, ['interface', 'implementation', 'end',
+       '.']) then
+      Exit(False);
+  end;
+end;
+
+// Die Namen einer Liste als Ergebnis von ExtraIdents.
+function NamesOf(const ANames: array of string): TArray<string>;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(ANames));
+  for i := 0 to High(ANames) do
+    Result[i] := ANames[i];
+end;
+
+class function TRdxStructFixes.ExtraIdents(
+  const AUnitLow: string): TArray<string>;
+begin
+  Result := nil;
+  if (AUnitLow = 'sysutils') or (AUnitLow = 'system.sysutils') then
+    Result := NamesOf(SYSUTILS_NAMES)
+  else if (AUnitLow = 'types') or (AUnitLow = 'system.types') then
+    Result := NamesOf(TYPES_NAMES)
+  else if (AUnitLow = 'messages') or (AUnitLow = 'winapi.messages') then
+    Result := NamesOf(MESSAGES_NAMES)
+  else if (AUnitLow = 'windows') or (AUnitLow = 'winapi.windows') then
+    Result := NamesOf(WINDOWS_NAMES)
+  else if (AUnitLow = 'comobj') or (AUnitLow = 'system.win.comobj') then
+    Result := NamesOf(COMOBJ_NAMES)
+  else if (AUnitLow = 'dbtables') or (AUnitLow = 'bde.dbtables') then
+    Result := NamesOf(DBTABLES_NAMES)
+  else if (AUnitLow = 'classes') or (AUnitLow = 'system.classes') then
+    Result := NamesOf(CLASSES_EXTRA);
+end;
+
+// Die oeffnenden Direktiven (Index in ADirs) der Bedingungsbloecke, in
+// denen (ALine, ACol) steht, aussen zuerst.
+function OpenBlocksAt(const ADirs: TRdxCondDirectives;
+  ALine, ACol: Integer): TArray<Integer>;
+var
+  i, n : Integer;
+begin
+  SetLength(Result, Length(ADirs));
+  n := 0;
+  for i := 0 to High(ADirs) do
+  begin
+    if (ADirs[i].Line > ALine)
+       or ((ADirs[i].Line = ALine) and (ADirs[i].Col >= ACol)) then
+      Break;
+    if InList(ADirs[i].Word, ['if', 'ifdef', 'ifndef', 'ifopt']) then
+    begin
+      Result[n] := i;
+      Inc(n);
+    end
+    else if InList(ADirs[i].Word, ['endif', 'ifend']) and (n > 0) then
+      Dec(n);
+  end;
+  SetLength(Result, n);
+end;
+
+// Gilt der Eintrag an (AEntryLine, AEntryCol) ueberall, wo die Fundstelle
+// (ASiteLine, ASiteCol) uebersetzt wird? Ja, wenn er unbedingt steht
+// (UnconditionalAt) oder jeder Bedingungsblock um ihn auch die Fundstelle
+// umfasst - derselbe Zweig, oder der andere Zweig einer Weiche, deren
+// Zwillinge TwinBranches bewiesen hat (nur dann fragt der Laeufer einen
+// Eintrag aus dem anderen Zweig).
+function ImpliedBySite(const ADirs: TRdxCondDirectives; AEntryLine,
+  AEntryCol, ASiteLine, ASiteCol: Integer): Boolean;
+var
+  E, S : TArray<Integer>;
+  i, j : Integer;
+  Hit  : Boolean;
+begin
+  if UnconditionalAt(ADirs, AEntryLine, AEntryCol) then
+    Exit(True);
+  E := OpenBlocksAt(ADirs, AEntryLine, AEntryCol);
+  S := OpenBlocksAt(ADirs, ASiteLine, ASiteCol);
+  for i := 0 to High(E) do
+  begin
+    Hit := False;
+    for j := 0 to High(S) do
+      if S[j] = E[i] then
+        Hit := True;
+    if not Hit then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+class function TRdxStructFixes.ExtraIdentsOf(AMap: TRdxCodeMap;
+  const AEntries: TArray<TRefactorSpan>; const AUnit: string;
+  ASiteLine, ASiteCol: Integer): TArray<string>;
+var
+  Dirs      : TRdxCondDirectives;
+  k, n      : Integer;
+  Low, Last : string;
+  Id        : string;
+  Ids       : TArray<string>;
+begin
+  Result := nil;
+  n := 0;
+  Dirs := ConditionalDirectives(AMap);
+  Last := LowerCase(AUnit);
+  Last := Copy(Last, LastDelimiter('.', Last) + 1, MaxInt);
+  for k := 0 to High(AEntries) do
+  begin
+    Low := LowerCase(AEntries[k].Resolved);
+    if Copy(Low, LastDelimiter('.', Low) + 1, MaxInt) = Last then
+      Continue;
+    if ImpliedBySite(Dirs, AEntries[k].StartLine, AEntries[k].StartCol,
+         ASiteLine, ASiteCol)
+       or InList(Low, ['sysutils', 'system.sysutils', 'types', 'system.types',
+         'messages', 'winapi.messages']) then
+      Ids := ExtraIdents(Low)
+    else
+      Ids := nil;
+    SetLength(Result, n + Length(Ids));
+    for Id in Ids do
+    begin
+      Result[n] := Id;
+      Inc(n);
+    end;
+  end;
+end;
+
+// Die Eintraege einer uses-Klausel aus dem Text, ab dem ersten Token hinter
+// 'uses' (T): je Eintrag die Namensteile ohne Luecke auf einer Zeile (wie
+// TSourcePlaces.UsesEntries), ein 'in'-Pfad (der String ist kein Code-
+// Token), dann ',' oder ';'. False bei jeder anderen Folge.
+function ReadTextClause(AMap: TRdxCodeMap; T: TRdxToken;
+  out AEntries: TArray<TRefactorSpan>): Boolean;
+var
+  Last, N : TRdxToken;
+  E       : TRefactorSpan;
+begin
+  Result := False;
+  AEntries := nil;
+  while T.IsWord do
+  begin
+    E := TRefactorSpan.Make(ROLE_UNIT, T.Line, T.Col, T.Line, T.EndCol);
+    E.Resolved := TokText(AMap, T);
+    Last := T;
+    T := After(AMap, T);
+    while (T.Low = '.') and (T.Line = Last.Line) and (T.Col = Last.EndCol) do
+    begin
+      N := After(AMap, T);
+      if not N.IsWord or (N.Line <> T.Line) or (N.Col <> T.EndCol) then
+        Exit;
+      E.Resolved := E.Resolved + '.' + TokText(AMap, N);
+      E.EndCol := N.EndCol;
+      Last := N;
+      T := After(AMap, N);
+    end;
+    SetLength(AEntries, Length(AEntries) + 1);
+    AEntries[High(AEntries)] := E;
+    if T.Low = 'in' then
+      T := After(AMap, T);
+    if T.Low = ';' then
+      Exit(True);
+    if T.Low <> ',' then
+      Exit;
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxStructFixes.TextUsesEntry(AMap: TRdxCodeMap;
+  ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
+  out AIndex: Integer): Integer;
+var
+  T       : TRdxToken;
+  Entries : TArray<TRefactorSpan>;
+  k       : Integer;
+begin
+  Result := 0;
+  AClause := Default(TRdxUsesClause);
+  AIndex := -1;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T))
+       and ReadTextClause(AMap, After(AMap, T), Entries) then
+      for k := 0 to High(Entries) do
+        if (Entries[k].StartLine = ALine)
+           and SameText(Entries[k].Resolved, AUnit) then
+        begin
+          Inc(Result);
+          AClause.Entries := Entries;
+          AClause.UsesLine := T.Line;
+          AIndex := k;
+        end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+end;
+
+{ ---- SCA007: Zwillingszweige (TwinBranches) ---- }
+
+// Nennen A und B (klein) dieselbe Unit - gleich oder bis auf ein Unit-Scope-
+// Praefix (UNIT_SCOPES) vor dem Namen des anderen ('vcl.clipbrd' und
+// 'clipbrd', 'vcl.samples.spin' und 'spin')?
+function SameUnitInScope(const A, B: string): Boolean;
+var
+  Long, Short : string;
+begin
+  if A = B then
+    Exit(True);
+  if Length(A) > Length(B) then
+  begin
+    Long := A;
+    Short := B;
+  end
+  else
+  begin
+    Long := B;
+    Short := A;
+  end;
+  Result := (Length(Long) > Length(Short) + 1)
+    and (Copy(Long, Length(Long) - Length(Short), MaxInt) = '.' + Short)
+    and InList(Copy(Long, 1, Length(Long) - Length(Short) - 1), UNIT_SCOPES);
+end;
+
+// Liegt (ALine, ACol) vor (BLine, BCol)?
+function PosBefore(ALine, ACol, BLine, BCol: Integer): Boolean;
+begin
+  Result := (ALine < BLine) or ((ALine = BLine) and (ACol < BCol));
+end;
+
+// Die Weiche einer uses-Klausel aus dem Text (AEntries ab dem Schluesselwort
+// AUses, ReadTextClause): 0 ohne Direktive bis zum ';', 1 bei genau
+// '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (auch IFNDEF/IF und IFEND) - ASide je
+// Eintrag 1 im ersten, 2 im zweiten Zweig, sonst 0 -, -1 bei jeder anderen
+// Folge von Direktiven.
+function ClauseSides(AMap: TRdxCodeMap; const AUses: TRdxToken;
+  const AEntries: TArray<TRefactorSpan>; out ASide: TArray<Integer>): Integer;
+var
+  Semi      : TRdxToken;
+  DLine     : array[0..2] of Integer;
+  DCol      : array[0..2] of Integer;
+  Words     : array[0..2] of string;
+  Li, Co, n : Integer;
+  k, j      : Integer;
+  Arg       : Boolean;
+begin
+  Result := -1;
+  SetLength(ASide, Length(AEntries));
+  for k := 0 to High(ASide) do
+    ASide[k] := 0;
+  if Length(AEntries) = 0 then
+    Exit;
+  Semi := SeparatorAfter(AMap, AEntries[High(AEntries)]);
+  if Semi.Low <> ';' then
+    Exit;
+  n := 0;
+  Li := AUses.Line;
+  Co := AUses.EndCol;
+  while NextDirective(AMap, Li, Co)
+     and PosBefore(Li, Co, Semi.Line, Semi.Col) do
+  begin
+    if n > High(DLine) then
+      Exit;
+    DLine[n] := Li;
+    DCol[n] := Co;
+    Words[n] := DirectiveWord(AMap, Li, Co, Arg);
+    Inc(n);
+    Inc(Co);
+  end;
+  if n = 0 then
+    Exit(0);
+  if (n <> 3) or not InList(Words[0], ['ifdef', 'ifndef', 'if'])
+     or (Words[1] <> 'else') or not InList(Words[2], ['endif', 'ifend']) then
+    Exit;
+  for k := 0 to High(AEntries) do
+    for j := 0 to 1 do
+      if PosBefore(DLine[j], DCol[j], AEntries[k].StartLine,
+           AEntries[k].StartCol)
+         and PosBefore(AEntries[k].StartLine, AEntries[k].StartCol,
+           DLine[j + 1], DCol[j + 1]) then
+        ASide[k] := j + 1;
+  Result := 1;
+end;
+
+// Hat jeder Eintrag des Zweigs AFrom einen Zwilling (SameUnitInScope) im
+// Zweig ATo?
+function Covered(const AEntries: TArray<TRefactorSpan>;
+  const ASide: TArray<Integer>; AFrom, ATo: Integer): Boolean;
+var
+  k, j  : Integer;
+  Found : Boolean;
+begin
+  Result := True;
+  for k := 0 to High(AEntries) do
+    if ASide[k] = AFrom then
+    begin
+      Found := False;
+      for j := 0 to High(AEntries) do
+        if (ASide[j] = ATo) and SameUnitInScope(
+             LowerCase(AEntries[k].Resolved),
+             LowerCase(AEntries[j].Resolved)) then
+          Found := True;
+      if not Found then
+        Exit(False);
+    end;
+end;
+
+class function TRdxStructFixes.TwinBranches(AMap: TRdxCodeMap;
+  const AClause: TRdxUsesClause; AIndex: Integer): Boolean;
+var
+  E, Es   : TArray<TRefactorSpan>;
+  Side, S : TArray<Integer>;
+  U, T    : TRdxToken;
+  Own, k  : Integer;
+  Dirs    : TRdxCondDirectives;
+begin
+  Result := False;
+  E := AClause.Entries;
+  if (AIndex < 0) or (AIndex > High(E)) then
+    Exit;
+  // 'uses' auf AClause.UsesLine vor dem ersten Eintrag.
+  U := NextToken(AMap, AClause.UsesLine, 1);
+  while (U.Low <> '') and (U.Line = AClause.UsesLine) and (U.Low <> 'uses') do
+    U := After(AMap, U);
+  if (U.Low <> 'uses')
+     or not PosBefore(U.Line, U.Col, E[0].StartLine, E[0].StartCol)
+     or (ClauseSides(AMap, U, E, Side) <> 1) then
+    Exit;
+  Own := Side[AIndex];
+  if (Own = 0) or not Covered(E, Side, 3 - Own, Own) then
+    Exit;
+  // Die uebrigen Klauseln liefert der Dienst mit SEINER Sicht der Defines;
+  // im Zweig des Funds gilt eine andere (die Weiche oben). Ihre Units gelten
+  // nur, wenn sie in jeder Sicht dieselben sind: keine Klausel steht in
+  // einem bedingten Bereich (UnconditionalAt), und eine Weiche in ihr nennt
+  // in beiden Zweigen dieselben Units (bis auf Unit-Scope-Praefixe). Sonst
+  // ordnete der Beweis einen Bezeichner vielleicht einer Unit zu, die im
+  // Zweig des Funds fehlt.
+  Dirs := ConditionalDirectives(AMap);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      if not UnconditionalAt(Dirs, T.Line, T.Col) then
+        Exit;
+      if not SameTok(T, U) then
+      begin
+        if not ReadTextClause(AMap, After(AMap, T), Es) then
+          Exit;
+        k := ClauseSides(AMap, T, Es, S);
+        if (k < 0) or ((k = 1) and not (Covered(Es, S, 1, 2)
+           and Covered(Es, S, 2, 1))) then
+          Exit;
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
   Result := True;
 end;
 
@@ -491,6 +1624,168 @@ begin
   if AStatement <> '' then
     Result := Result + Indent + IndentStep(Indent, AArmLine) + AStatement + #10;
   Result := Result + Indent + EndText;
+end;
+
+// Die Zeile, nach der sich die Stufe der Anweisung im else richtet
+// (ElseText): die des ersten Arms - das Token hinter dem 'of' des case
+// ACase -, wenn er seine Zeile beginnt; sonst AFallback (die Zeile des
+// letzten Tokens vor dem end). Bis rwE29 galt immer die letzte Zeile -
+// endet der letzte Arm tief in einem begin..end, rueckte das raise mit
+// ein (skia4delphi Vcl.Styles.UxTheme.pas:1098: Spalte 57 statt 33).
+// Das erste Zeichen aus Code oder String hinter dem 'of' des case ACase
+// (die erste Arm-Marke): False ohne 'of' oder am Dateiende. Ein String ist
+// kein Token der Code-Sicht - bis rwE30 nahm ArmLineOf das erste TOKEN
+// hinter dem 'of' und sah bei einem Zeichen-Arm ("'.':") nur den ':'
+// mitten auf der Zeile.
+function FirstArmChar(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  out ALine, ACol: Integer): Boolean;
+var
+  T : TRdxToken;
+begin
+  ALine := 0;
+  ACol := 0;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and (T.Low <> 'of') do
+    T := After(AMap, T);
+  Result := (T.Low <> '') and FirstCharAfter(AMap, T, ALine, ACol);
+end;
+
+function ArmLineOf(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const AFallback: string): string;
+var
+  Li, Co : Integer;
+begin
+  Result := AFallback;
+  // Das erste Zeichen der ersten Arm-Marke - auch ein String ("'.':",
+  // rwE30 cnwizards mwBCBTokenList.pas:1518: das raise stand vier statt
+  // zwei Spalten unter dem else, nach der Fortsetzungszeile des letzten
+  // Arms).
+  if FirstArmChar(AMap, ACase, Li, Co)
+     and (SkipBlanks(AMap.Raw(Li), 1) = Co) then
+    Result := AMap.Raw(Li);
+end;
+
+// Steht an (ALine, ACol) ein Zeichen- oder String-Literal ("'.'", '#13')?
+function LiteralCharAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+begin
+  Result := CharInSet(CharAt(AMap.Raw(ALine), ACol), ['''', '#']);
+end;
+
+// SCA168, raise-Variante: waehlt das case nach Zeichen oder Strings - die
+// erste Arm-Marke ist ein Literal ("'.':", '#13:') oder eine Umwandlung
+// eines Zeichens (CHAR_WRAPPERS: "Ord('-'):" auf einem Byte-Zeiger, 'Chr(13):')?
+// Dann ist jeder andere Wert gewoehnliche Eingabe (ein Lexer, ein
+// Highlighter, ein Parser), und raise braeche ihn (rwE30: cnwizards
+// mwBCBTokenList.pas:1518, Dev-Cpp SynHighlighterCpp.pas:1051 - jede Ziffer
+// bzw. jedes Zeichen loeste die Exception aus; rwE31 Stufe 3:
+// JsonDataObjects.pas:7695 'case P^ of Ord('-'): .. Ord('+'): ..' - jeder
+// Exponent ohne Vorzeichen loeste sie aus, bis dahin sah die Sperre nur
+// das Literal am Anfang der Marke). '' oder der Grund.
+function CharSelectorReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+const
+  CHAR_WRAPPERS: array[0..6] of string = ('ord', 'chr', 'byte', 'word',
+    'char', 'ansichar', 'widechar');
+var
+  Li, Co : Integer;
+  W, P   : TRdxToken;
+  IsChar : Boolean;
+begin
+  Result := '';
+  if not FirstArmChar(AMap, ACase, Li, Co) then Exit;
+  IsChar := LiteralCharAt(AMap, Li, Co);
+  if not IsChar and AMap.IsCode(Li, Co) and IsIdentStart(CharAt(AMap.Raw(Li), Co))
+  then
+  begin
+    W := TokenAt(AMap, Li, Co);
+    P := After(AMap, W);
+    // 'Chr(..)' ist immer ein Zeichen, die anderen nur um ein Literal.
+    if InList(W.Low, CHAR_WRAPPERS) and (P.Low = '(') then
+      IsChar := (W.Low = 'chr')
+        or (FirstCharAfter(AMap, P, Li, Co) and LiteralCharAt(AMap, Li, Co));
+  end;
+  if IsChar then
+    Result := _('the case selects on characters or strings - every other '
+      + 'value is normal input there (a lexer, a parser); raise would break '
+      + 'it');
+end;
+
+// Bedingte Direktiven im case (CaseElse): harmlos, wenn jeder bedingte
+// Bereich ({$IF..}..{$ENDIF}) zwischen case und end vollstaendig darin
+// liegt, kein Wort enthaelt, das die end-Bilanz verschiebt (begin, end,
+// case, try, asm, record, repeat, until, class, object), kein Include
+// ({$I ..}) im case steht, und der letzte Arm nicht in einem Bereich endet,
+// es sei denn, er und das Token vor dem Bereich enden auf ';' (sonst
+// traefe das neue else je Zweig ein anderes Ende - 'if A then B
+// {$IFDEF X};{$ENDIF}' + 'else'). Dann sieht jede Variante dieselbe
+// Bilanz, und das else vor dem end passt in jeder (rwE30, Todo_SCA168
+// "verpasst-direktive": mormot.core.rtti.pas:7170 - ein ganzer Arm unter
+// {$ifdef HASVARUSTRING}, mormot.db.rad.pas:1074 - je eine Zuweisung in
+// {$ifdef UNICODE}..{$else}..{$endif}, JvRegAuto.pas:615 - ein Label in
+// der Liste). Andere Direktiven ({$R-}, {$REGION}) aendern den Code nicht.
+function CaseDirectivesHarmless(AMap: TRdxCodeMap;
+  const ACase, AEnd, ALast: TRdxToken): Boolean;
+const
+  COND_OPEN: array[0..3] of string = ('if', 'ifdef', 'ifndef', 'ifopt');
+  COND_MID: array[0..1] of string = ('else', 'elseif');
+  COND_CLOSE: array[0..1] of string = ('endif', 'ifend');
+  BALANCE_WORDS: array[0..9] of string = ('begin', 'end', 'case', 'try',
+    'asm', 'record', 'repeat', 'until', 'class', 'object');
+var
+  T, Prev, RegionPrev, LastRegionPrev : TRdxToken;
+  Li, Co, Depth                       : Integer;
+  HaveDir, Arg, LastInRegion          : Boolean;
+  W                                   : string;
+begin
+  Result := False;
+  Li := ACase.Line;
+  Co := 1;
+  HaveDir := NextDirective(AMap, Li, Co);
+  Depth := 0;
+  Prev := Before(AMap, ACase);
+  RegionPrev := Default(TRdxToken);
+  LastRegionPrev := Default(TRdxToken);
+  LastInRegion := False;
+  T := ACase;
+  while True do
+  begin
+    // Die Direktiven vor T (bzw. vor dem end).
+    while HaveDir and ((Li < T.Line) or ((Li = T.Line) and (Co < T.Col))) do
+    begin
+      if IncludeFileAt(AMap, Li, Co) <> '' then Exit;
+      W := DirectiveWord(AMap, Li, Co, Arg);
+      if InList(W, COND_OPEN) then
+      begin
+        if Depth = 0 then
+          RegionPrev := Prev;
+        Inc(Depth);
+      end
+      else if InList(W, COND_CLOSE) then
+      begin
+        Dec(Depth);
+        if Depth < 0 then Exit;
+      end
+      else if InList(W, COND_MID) and (Depth = 0) then
+        Exit;
+      Inc(Co);
+      HaveDir := NextDirective(AMap, Li, Co);
+    end;
+    if SameTok(T, AEnd) then Break;
+    if (Depth > 0) and IsKeywordAfter(T, Prev)
+       and InList(T.Low, BALANCE_WORDS) then
+      Exit;
+    if SameTok(T, ALast) then
+    begin
+      LastInRegion := Depth > 0;
+      LastRegionPrev := RegionPrev;
+    end;
+    Prev := T;
+    T := After(AMap, T);
+    if T.Low = '' then Exit;
+  end;
+  if Depth <> 0 then Exit;
+  if LastInRegion and ((ALast.Low <> ';') or (LastRegionPrev.Low <> ';')) then
+    Exit;
+  Result := True;
 end;
 
 // Endet der letzte Arm vor AEnd nicht auf ';' (im Code), ein ';' hinter
@@ -604,18 +1899,961 @@ begin
     AReason := _('the case has no branches');
   if AReason = '' then
     AReason := CaseContextReason(AMap, CaseTok);
-  if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok) then
+  if (AReason = '') and DirectiveBefore(AMap, CaseTok.Line, EndTok)
+     and not CaseDirectivesHarmless(AMap, CaseTok, EndTok, LastTok) then
     AReason := _('compiler directive in the case - a branch could shift the '
       + 'end count');
+  if (AReason = '') and (AStatement <> '') then
+    AReason := CharSelectorReason(AMap, CaseTok);
+  // Alte Compiler kennen EInvalidOpException nicht (rwE31 Stufe 3, wie
+  // SCA020 mit ENotImplemented).
+  if (AReason = '') and (AStatement <> '') then
+    AReason := OldExceptionClassReason(AMap, CLASS_UNHANDLED);
   if AReason <> '' then Exit;
   L := AMap.Raw(EndTok.Line);
   SetLength(AEdits, 1);
   AEdits[0].Span := TRefactorSpan.Make(SPAN_168, EndTok.Line, EndTok.Col,
     EndTok.Line, EndTok.EndCol);
   AEdits[0].Expected := Copy(L, EndTok.Col, EndTok.Len);
-  AEdits[0].NewText := ElseText(L, EndTok, AStatement, AMap.Raw(LastTok.Line));
+  AEdits[0].NewText := ElseText(L, EndTok, AStatement,
+    ArmLineOf(AMap, CaseTok, AMap.Raw(LastTok.Line)));
   AppendSemicolon(AMap, EndTok, AEdits);
   Result := True;
+end;
+
+// CaseRaiseMenuReason: die Marken der Arme des case ACase bis AEnd, wie
+// geschrieben - Namen ('aaNone'), qualifizierte Namen ('TFoo.A') und
+// Bereiche ('a..c'),
+// je Marke ein Eintrag. False, sobald eine Marke etwas anderes ist (Zahl,
+// Ausdruck, Schluesselwort); ein Zeichen oder String hinterlaesst eine
+// leere Marke (die Code-Sicht liest sie nicht als Token) - ebenso False.
+// ANumber: die Marke, an der das scheiterte, beginnt mit einer Zahl ('2:',
+// '-1:', '$10:', '34560..34562:' - rwE32 Stufe 4: Dev-Cpp main.pas:3822,
+// HeidiSQL main.pas:14255 'case GetACP of 437:'); dann waehlt das case
+// nach einer Zahl, nicht nach einer Aufzaehlung (Nico-Entscheid E5).
+// Eine Marke beginnt hinter dem 'of' und hinter jedem ';' auf oberster Ebene
+// (Bloecke begin/case/try/asm/record..end und repeat..until, Klammern
+// zaehlen) und endet am ':'.
+function CaseLabels(AMap: TRdxCodeMap; const ACase, AEnd: TRdxToken;
+  out ALabels: TArray<string>; out ANumber: Boolean): Boolean;
+var
+  T, P          : TRdxToken;
+  Depth, Paren  : Integer;
+  AtLabel       : Boolean;
+  Item          : string;
+begin
+  Result := False;
+  ALabels := nil;
+  ANumber := False;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and (T.Low <> 'of') do
+    T := After(AMap, T);
+  if T.Low = '' then Exit;
+  T := After(AMap, T);
+  Depth := 0;
+  Paren := 0;
+  AtLabel := True;
+  Item := '';
+  while (T.Low <> '') and not SameTok(T, AEnd) do
+  begin
+    P := Before(AMap, T);
+    if AtLabel then
+    begin
+      if (T.Low = ':') or (T.Low = ',') then
+      begin
+        if (Item = '') or (Item[1] = '.') or (Item[Length(Item)] = '.') then
+          Exit;
+        AddText(ALabels, Item);
+        Item := '';
+        AtLabel := T.Low = ',';
+      end
+      else if (T.Low = '.') or (T.Low = '..') then
+        Item := Item + T.Low
+      // Zwei Woerter ohne Punkt dazwischen sind kein Name.
+      else if T.IsWord and not IsKeyword(T.Low)
+         and ((Item = '') or (Item[Length(Item)] = '.')) then
+        Item := Item + TokText(AMap, T)
+      else
+      begin
+        // '$10' sind zwei Token ('$', '10'), '-1' auch.
+        ANumber := (Item = '') and (CharInSet(T.Low[1], ['0'..'9'])
+          or InList(T.Low, ['$', '-', '+']));
+        Exit;
+      end;
+    end
+    else if IsKeywordAfter(T, P) and (IsEndOpener(T.Low) or (T.Low = 'repeat'))
+    then
+      Inc(Depth)
+    else if IsKeywordAfter(T, P) and ((T.Low = 'end') or (T.Low = 'until')) then
+      Dec(Depth)
+    else if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if (T.Low = ')') or (T.Low = ']') then
+      Dec(Paren)
+    else if (T.Low = ';') and (Depth = 0) and (Paren = 0) then
+      AtLabel := True;
+    T := After(AMap, T);
+  end;
+  Result := (T.Low <> '') and (Item = '') and (Length(ALabels) > 0);
+end;
+
+// Die Werteliste ab der '(' AOpen eines Aufzaehlungstyps, wie geschrieben:
+// nur Namen mit Kommas, mindestens zwei, keine eigene Zahl ('a = 1' - die
+// Werte dazwischen gehoerten zum Typ, haetten aber keinen Namen) und keine
+// Direktive in der Liste. False sonst.
+function ReadEnumValues(AMap: TRdxCodeMap; const AOpen: TRdxToken;
+  out AValues: TArray<string>): Boolean;
+var
+  T, N : TRdxToken;
+begin
+  Result := False;
+  AValues := nil;
+  T := After(AMap, AOpen);
+  while T.IsWord do
+  begin
+    AddText(AValues, TokText(AMap, T));
+    N := After(AMap, T);
+    if N.Low = ')' then
+      Exit((Length(AValues) >= 2)
+        and not DirectiveBetween(AMap, AOpen, N.Line, N.Col));
+    if N.Low <> ',' then Exit;
+    T := After(AMap, N);
+  end;
+end;
+
+// Der eine Aufzaehlungstyp der Datei ('Name = (a, b, ..)' hinter ';',
+// 'type' oder ']' - nicht 'X: array[..] of T = (..)', eine Konstante), dessen
+// Werte AValue nennen (Gross/klein egal): sein Name und seine Werte wie
+// geschrieben. False ohne Treffer und bei mehr als einem (zwei
+// Deklarationen in $IFDEF-Zweigen koennen verschiedene Werte haben).
+function EnumOf(AMap: TRdxCodeMap; const AValue: string; out ATypeName: string;
+  out AValues: TArray<string>): Boolean;
+var
+  T, Name : TRdxToken;
+  Vals    : TArray<string>;
+  V       : string;
+  Count   : Integer;
+begin
+  ATypeName := '';
+  AValues := nil;
+  Count := 0;
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = '(') and (Before(AMap, T).Low = '=') then
+    begin
+      Name := Before(AMap, Before(AMap, T));
+      if Name.IsWord and InList(Before(AMap, Name).Low, [';', 'type', ']'])
+         and ReadEnumValues(AMap, T, Vals) then
+        for V in Vals do
+          if SameText(V, AValue) then
+          begin
+            Inc(Count);
+            ATypeName := TokText(AMap, Name);
+            AValues := Vals;
+            Break;
+          end;
+    end;
+    T := After(AMap, T);
+  end;
+  Result := Count = 1;
+end;
+
+// Der Wert einer Marke ohne den Typnamen davor ('TFoo.A' -> 'A', wenn
+// der Typ ATypeName heisst, Gross/klein egal); '' bei einem anderen
+// Praefix.
+function LabelValue(const AItem, ATypeName: string): string;
+var
+  p : Integer;
+begin
+  p := Pos('.', AItem);
+  if p = 0 then
+    Result := AItem
+  else if SameText(Copy(AItem, 1, p - 1), ATypeName) then
+    Result := Copy(AItem, p + 1, MaxInt)
+  else
+    Result := '';
+  if Pos('.', Result) > 0 then
+    Result := '';
+end;
+
+// Der Index von AName in AValues (Gross/klein egal); -1 ohne.
+function ValueIndex(const AValues: TArray<string>; const AName: string): Integer;
+var
+  i : Integer;
+begin
+  Result := -1;
+  if AName = '' then Exit;
+  for i := 0 to High(AValues) do
+    if SameText(AValues[i], AName) then
+      Exit(i);
+end;
+
+// Markiert in AHit die Werte der Marke AItem (ein Wert oder ein Bereich
+// 'a..c'). False, wenn ein Glied kein Wert des Typs ist.
+function MarkLabel(const AItem, ATypeName: string;
+  const AValues: TArray<string>; var AHit: TArray<Boolean>): Boolean;
+var
+  p, Lo, Hi, i : Integer;
+begin
+  p := Pos('..', AItem);
+  if p = 0 then
+  begin
+    Lo := ValueIndex(AValues, LabelValue(AItem, ATypeName));
+    Hi := Lo;
+  end
+  else
+  begin
+    Lo := ValueIndex(AValues, LabelValue(Copy(AItem, 1, p - 1), ATypeName));
+    Hi := ValueIndex(AValues, LabelValue(Copy(AItem, p + 2, MaxInt),
+      ATypeName));
+  end;
+  Result := (Lo >= 0) and (Hi >= Lo);
+  if Result then
+    for i := Lo to Hi do
+      AHit[i] := True;
+end;
+
+// Die Werte ohne Arm, hoechstens drei, dahinter ' ...'.
+function MissingValues(const AValues: TArray<string>;
+  const AHit: TArray<Boolean>): string;
+var
+  i, n : Integer;
+begin
+  Result := '';
+  n := 0;
+  for i := 0 to High(AValues) do
+    if not AHit[i] then
+    begin
+      Inc(n);
+      if n > 3 then
+        Exit(Result + ' ...');
+      if Result <> '' then
+        Result := Result + ', ';
+      Result := Result + AValues[i];
+    end;
+end;
+
+// ---- SCA168.2, Nico-Entscheid E5 (rwE32 Stufe 4) ----
+// Waehlt das case nicht nach einer Aufzaehlung - der Selektor ist eine Zahl,
+// ein Zeichen oder String (Integer-, Word-, Char-, String-Konstanten als
+// Marken: MBI_NORMAL, VK_BACK bei 'Key: Word', Msg.Msg in einer WndProc,
+// GetACP-Codepages, NativeUInt(..)) -, oder hat das Ergebnis vor dem case
+// schon seinen Wert (Result := TYPE_ERROR, ChildCount := 0), dann sind die
+// Werte ohne Arm dort gewoehnlich, und raise braeche diesen Weg: SCA168.2
+// gesperrt, SCA168 (leeres else) bleibt. Bis rwE32 standen solche case nur
+// im Menue, der Hinweis nannte die Konstante "Aufzaehlung".
+
+const
+  // Selektor-Typen, die keine Aufzaehlung sind (klein): ganze Zahlen,
+  // Zeichen, Strings; 'ord' als Umwandlung 'Ord(..)'.
+  NON_ENUM_TYPES: array[0..44] of string = ('integer', 'cardinal', 'word',
+    'byte', 'shortint', 'smallint', 'longint', 'longword', 'int64', 'uint64',
+    'nativeint', 'nativeuint', 'dword', 'qword', 'uint', 'uint8', 'uint16',
+    'uint32', 'int8', 'int16', 'int32', 'ptrint', 'ptruint', 'sizeint',
+    'sizeuint', 'wparam', 'lparam', 'lresult', 'hresult', 'uint_ptr',
+    'dword_ptr', 'ord', 'char', 'ansichar', 'widechar', 'utf8char',
+    'string', 'ansistring', 'widestring', 'unicodestring', 'shortstring',
+    'rawbytestring', 'utf8string', 'longbool', 'wordbool');
+  // Davor beginnt die Deklaration einer Konstante 'Name = Wert'.
+  CONST_DECL_PREV: array[0..3] of string = (';', 'const', 'resourcestring',
+    ']');
+  // Rueckwaerts vor einer Deklaration: der Abschnitt ist ein const-Teil ...
+  CONST_SECTIONS: array[0..1] of string = ('const', 'resourcestring');
+  // ... oder etwas anderes (Typ, Variable, Rumpf, Routine, Klassenteil).
+  OTHER_SECTIONS: array[0..20] of string = ('type', 'var', 'threadvar',
+    'begin', 'end', 'procedure', 'function', 'constructor', 'destructor',
+    'operator', 'property', 'implementation', 'interface', 'uses', 'label',
+    'private', 'protected', 'public', 'published', 'record', 'class');
+  // Rechenzeichen im Wert: 'WM_USER + 1' ist eine Zahl, kein
+  // Aufzaehlungswert (mit Aufzaehlungen rechnet Delphi nicht).
+  CONST_OPERATORS: array[0..11] of string = ('+', '-', '*', '/', 'div',
+    'mod', 'shl', 'shr', 'or', 'and', 'xor', 'not');
+  // Hier beginnt eine Anweisung (PresetLockReason) - ausser hinter ';'.
+  STATEMENT_OPENERS: array[0..5] of string = ('begin', 'try', 'repeat',
+    'finally', 'except', 'initialization');
+  // Rueckwaerts bis zum Kopf der Routine (PresetLockReason).
+  PRESET_STOPS: array[0..7] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'operator', 'implementation', 'interface',
+    'type');
+  // So viele Token liest PresetLockReason bzw. ConstDeclLine rueckwaerts.
+  MAX_PRESET_BACK = 100000;
+  MAX_SECTION_BACK = 20000;
+  // Units der uses-Klauseln bis zu so vielen Verzeichnissen ueber der
+  // Datei (TRdxTypeProof.NeighbourInterfaces): doublecmd src\filesources\
+  // shellfolder\ushellfilesourceutil.pas -> src\ulog.pas.
+  NEIGHBOUR_UP_LEVELS = 2;
+  // Ganzzahl-Konstanten der RTL, die als case-Marken vorkommen (rwE32,
+  // Korpus: 'WM_KEYUP', 'mrYes' (TModalResult = Integer), 'IDOK'): die
+  // Nachrichten- und Tastenkonstanten nach ihrem Praefix (Winapi.Messages,
+  // Vcl.Controls, LCL LMessages, Winapi.Windows) ...
+  RTL_CONST_PREFIXES: array[0..4] of string = ('wm_', 'cm_', 'cn_', 'lm_',
+    'vk_');
+  // ... und die Rueckgabewerte von MessageDlg/MessageBox.
+  RTL_CONST_NAMES: array[0..24] of string = ('mrnone', 'mrok', 'mrcancel',
+    'mrabort', 'mrretry', 'mrignore', 'mryes', 'mrno', 'mrall', 'mrnotoall',
+    'mryestoall', 'mrclose', 'mrhelp', 'mrtryagain', 'mrcontinue', 'idok',
+    'idcancel', 'idabort', 'idretry', 'idignore', 'idyes', 'idno', 'idclose',
+    'idhelp', 'idtryagain');
+
+// Das erste Glied einer Marke ohne Typnamen ('TFoo.A' -> 'A', 'a..c' ->
+// 'a').
+function LabelHead(const AItem: string): string;
+begin
+  Result := AItem;
+  if Pos('..', Result) > 0 then
+    Result := Copy(Result, 1, Pos('..', Result) - 1);
+  while Pos('.', Result) > 0 do
+    Result := Copy(Result, Pos('.', Result) + 1, MaxInt);
+end;
+
+// Steht die Deklaration an ATok (dem Namen) in einem const-Abschnitt?
+// Rueckwaerts bis zum ersten Abschnittswort (Schluesselwort, nicht hinter
+// '.'): const/resourcestring ja, alles andere nein.
+function InConstSection(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
+var
+  T, P  : TRdxToken;
+  Steps : Integer;
+begin
+  Result := False;
+  T := Before(AMap, ATok);
+  Steps := 0;
+  while (T.Low <> '') and (Steps < MAX_SECTION_BACK) do
+  begin
+    P := Before(AMap, T);
+    if T.IsWord and IsKeywordAfter(T, P) then
+    begin
+      if InList(T.Low, CONST_SECTIONS) then
+        Exit(True);
+      if InList(T.Low, OTHER_SECTIONS) then
+        Exit;
+    end;
+    T := P;
+    Inc(Steps);
+  end;
+end;
+
+// Ist der Wert hinter dem '=' AEq eine Zahl, ein Zeichen oder String
+// ('2', '$10', '-1', '''MSG_REQUEST_DOM''', '#13') oder ein Ausdruck mit
+// einem Rechenzeichen bis zum ';' ('WM_USER + 1')? Ein blosser Name
+// ('cDefault = eA') nicht - er kann ein Aufzaehlungswert sein.
+function NumberOrStringValue(AMap: TRdxCodeMap; const AEq: TRdxToken): Boolean;
+var
+  Li, Co, Paren : Integer;
+  T, P          : TRdxToken;
+begin
+  Result := False;
+  if not FirstCharAfter(AMap, AEq, Li, Co) then Exit;
+  if CharInSet(CharAt(AMap.Raw(Li), Co), ['0'..'9', '$', '''', '#', '-', '+',
+    '%']) then
+    Exit(True);
+  Paren := 0;
+  P := AEq;
+  T := After(AMap, AEq);
+  while (T.Low <> '') and not ((T.Low = ';') and (Paren = 0)) do
+  begin
+    if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if (T.Low = ')') or (T.Low = ']') then
+      Dec(Paren)
+    else if InList(T.Low, CONST_OPERATORS)
+       and (not T.IsWord or IsKeywordAfter(T, P)) then
+      Exit(True)
+    else if T.IsWord and IsKeywordAfter(T, P) and IsKeyword(T.Low) then
+      Exit;   // ein Abschnittswort: kein Wert mehr
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Die Zeile, auf der AMap AName als Konstante mit Zahl-, Zeichen- oder
+// String-Wert deklariert ('const X = 2;', auch in einer Klasse: 'const
+// HelperNodeColumns = 0;' - HeidiSQL main.pas:76); 0 ohne.
+function ConstDeclLine(AMap: TRdxCodeMap; const AName: string): Integer;
+var
+  T, V    : TRdxToken;
+  NameLow : string;
+begin
+  Result := 0;
+  NameLow := LowerCase(AName);
+  if NameLow = '' then Exit;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), NameLow);
+  while T.Low <> '' do
+  begin
+    if T.Low = NameLow then
+    begin
+      V := After(AMap, T);
+      if (V.Low = '=') and InList(Before(AMap, T).Low, CONST_DECL_PREV)
+         and InConstSection(AMap, T) and NumberOrStringValue(AMap, V) then
+        Exit(T.Line);
+    end;
+    T := NextTokenOnLineWith(AMap, T, NameLow);
+  end;
+end;
+
+// Der Name der Unit ('unit Name;' am Anfang der Code-Sicht), '' ohne.
+function UnitNameOf(AMap: TRdxCodeMap): string;
+var
+  T : TRdxToken;
+begin
+  Result := '';
+  T := NextToken(AMap, 1, 1);
+  if T.Low <> 'unit' then Exit;
+  T := After(AMap, T);
+  while T.IsWord or (T.Low = '.') do
+  begin
+    Result := Result + TokText(AMap, T);
+    T := After(AMap, T);
+  end;
+end;
+
+// Ist AName (klein) eine Ganzzahl-Konstante der RTL (RTL_CONST_PREFIXES,
+// RTL_CONST_NAMES)?
+function IsRtlIntConst(const ALow: string): Boolean;
+var
+  Prefix : string;
+begin
+  Result := InList(ALow, RTL_CONST_NAMES);
+  for Prefix in RTL_CONST_PREFIXES do
+    if Copy(ALow, 1, Length(Prefix)) = Prefix then
+      Exit(Length(ALow) > Length(Prefix));
+end;
+
+// Gehoert ATypeLow zu den Nachrichten-Records (TMessage, TWMKey, TCMHitTest,
+// LCL TLMessage ...)? Deren Feld Msg ist die Nachrichtennummer (Cardinal).
+function IsMessageRecord(const ATypeLow: string): Boolean;
+begin
+  Result := (Copy(ATypeLow, 1, 3) = 'twm') or (Copy(ATypeLow, 1, 3) = 'tcm')
+    or (Copy(ATypeLow, 1, 3) = 'tlm')
+    or ((Length(ATypeLow) >= 7)
+      and (Copy(ATypeLow, Length(ATypeLow) - 6, 7) = 'message'));
+end;
+
+// Der Typ des Namens ANameTok an der Stelle ACase (klein), '' ohne Beweis:
+// Parameter oder lokale Variable einer umschliessenden Routine, sonst ein
+// Feld der Klasse der Methode (OwnFieldType) oder eine Variable auf Unit-
+// Ebene der Datei - die nicht, wenn die Datei eine Property dieses Namens
+// deklariert; Aliasse der Datei aufgeloest ('TFoo = Integer').
+function NameTypeAt(AMap: TRdxCodeMap; const ACase, ANameTok: TRdxToken): string;
+var
+  Bind       : TRdxLocalFind;
+  Base, Name : string;
+  p          : Integer;
+begin
+  Result := '';
+  Name := TokText(AMap, ANameTok);
+  Bind := TRdxTypeProof.LocalBinding(AMap, ACase, Name);
+  if Bind.Kind = lkVar then
+    Result := Bind.TypeLow
+  // uRdxCodeMap kennt ein anderes lkNone (TRdxLiteralKind).
+  else if Bind.Kind = uRdxTypeProof.lkNone then
+  begin
+    p := LastDelimiter('.', Bind.OuterName);
+    if p > 0 then
+      Result := TRdxTypeProof.OwnFieldType(AMap, Copy(Bind.OuterName, 1,
+        p - 1), Name);
+    if (Result = '') and not TRdxTypeProof.DeclaresProperty(AMap, Name) then
+      Result := TRdxTypeProof.UnitVarType(AMap, Name);
+  end;
+  if Result = '' then Exit;
+  Base := TRdxTypeProof.UniqueAliasBase(AMap, Result);
+  if Base <> '' then
+    Result := Base;
+end;
+
+// Die Token des Selektors zwischen case und of (hoechstens 64); False ohne
+// 'of' oder ohne Selektor.
+function SelectorTokens(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  out AToks: TArray<TRdxToken>): Boolean;
+var
+  T     : TRdxToken;
+  Paren : Integer;
+begin
+  Result := False;
+  AToks := nil;
+  Paren := 0;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and not ((T.Low = 'of') and (Paren = 0)) do
+  begin
+    if T.Low = '(' then
+      Inc(Paren)
+    else if T.Low = ')' then
+      Dec(Paren);
+    AddToken(AToks, T);
+    if Length(AToks) > 64 then Exit;
+    T := After(AMap, T);
+  end;
+  Result := (T.Low <> '') and (Length(AToks) > 0);
+end;
+
+// Ist der Selektor ein Name mit einer Klammer, die bis zum Ende reicht
+// ('NativeUInt(lpIconName)', 'TKind(Combo.ItemIndex)')? Die ')' am Ende
+// schliesst die '(' hinter dem Namen: dazwischen kehrt die Klammertiefe
+// nicht auf 0 zurueck.
+function IsWholeCall(const AToks: TArray<TRdxToken>): Boolean;
+var
+  Paren, n, i : Integer;
+begin
+  Result := False;
+  n := Length(AToks);
+  if (n < 3) or not AToks[0].IsWord or (AToks[1].Low <> '(')
+     or (AToks[n - 1].Low <> ')') then
+    Exit;
+  Paren := 0;
+  for i := 1 to n - 2 do
+  begin
+    if AToks[i].Low = '(' then
+      Inc(Paren)
+    else if AToks[i].Low = ')' then
+      Dec(Paren);
+    if Paren = 0 then Exit;
+  end;
+  Result := True;
+end;
+
+// Der Selektor wie geschrieben (mit Strings: 'Integer(X.V[''Type''])'),
+// ueber Zeilen die Token.
+function SelectorText(AMap: TRdxCodeMap;
+  const AToks: TArray<TRdxToken>): string;
+var
+  T : TRdxToken;
+  n : Integer;
+begin
+  n := Length(AToks);
+  if AToks[0].Line = AToks[n - 1].Line then
+    Exit(Copy(AMap.Raw(AToks[0].Line), AToks[0].Col,
+      AToks[n - 1].EndCol - AToks[0].Col));
+  Result := '';
+  for T in AToks do
+    Result := Result + TokText(AMap, T);
+end;
+
+// E5 a, nach dem Selektor: der Typ des Ausdrucks zwischen case und of, wenn
+// er beweisbar keine Aufzaehlung ist - ein Name mit solchem Typ ('iStateId:
+// Integer', 'var Key: Word'), eine Umwandlung ('NativeUInt(lpIconName)',
+// 'Ord(..)') oder das Feld Msg eines Nachrichten-Records ('Msg.Msg' mit
+// 'var Msg: TMessage'). '' oder der Grund.
+function SelectorLockReason(AMap: TRdxCodeMap; const ACase: TRdxToken): string;
+var
+  Toks : TArray<TRdxToken>;
+  n    : Integer;
+  Ty   : string;
+begin
+  Result := '';
+  if not SelectorTokens(AMap, ACase, Toks) or not Toks[0].IsWord then Exit;
+  n := Length(Toks);
+  Ty := '';
+  if n = 1 then
+    Ty := NameTypeAt(AMap, ACase, Toks[0])
+  else if IsWholeCall(Toks) and InList(Toks[0].Low, NON_ENUM_TYPES) then
+    Ty := Toks[0].Low
+  else if (n = 3) and (Toks[1].Low = '.') and (Toks[2].Low = 'msg')
+     and IsMessageRecord(NameTypeAt(AMap, ACase, Toks[0])) then
+    Ty := 'cardinal';
+  if (Ty = '') or not InList(Ty, NON_ENUM_TYPES) then Exit;
+  Result := _('the case selector %s is of type %s, not an enumeration - '
+    + 'values without an arm are normal there, and raise would break that '
+    + 'path', [SelectorText(AMap, Toks), Ty]);
+end;
+
+// Review e/HilfeFixR: wandelt der Selektor einen Wert in den Aufzaehlungstyp
+// ATypeName um ('THotKeySortOrder(cbCommandSortOrder.ItemIndex)' - doublecmd
+// foptionshotkeys.pas:759, ItemIndex -1 ohne Auswahl; 'TViewerPaintTool(
+// btnPenMode.Tag)' - fviewer.pas:1399), erreicht ein Wert ausserhalb der
+// Aufzaehlung das else auf gewoehnlichem Weg - auch wenn jeder Wert des
+// Typs einen Arm hat. Der Name vor der Klammer ist der Typ selbst oder ein
+// Typ, den die Datei deklariert (ein Alias: dann ist es eine Umwandlung,
+// kein Funktionsaufruf). '' oder der Grund (nur im Menue).
+function CastSelectorReason(AMap: TRdxCodeMap; const ACase: TRdxToken;
+  const ATypeName: string): string;
+var
+  Toks : TArray<TRdxToken>;
+begin
+  Result := '';
+  if (ATypeName = '') or not SelectorTokens(AMap, ACase, Toks)
+     or not IsWholeCall(Toks) then
+    Exit;
+  if not SameText(Toks[0].Low, ATypeName)
+     and (TRdxTypeProof.UniqueAliasBase(AMap, TokText(AMap, Toks[0])) = '')
+  then
+    Exit;
+  Result := _('the case selector %s converts a value to %s - a value outside '
+    + 'the enumeration reaches the else, and raise would break that path',
+    [SelectorText(AMap, Toks), ATypeName]);
+end;
+
+// E5 a, nach den Marken: AName ist in der Datei (AUnit = '') bzw. in der
+// Unit AUnit als Konstante mit Zahl- oder String-Wert deklariert (Zeile
+// ALine).
+function ConstLockReason(const AName, AUnit: string; ALine: Integer): string;
+begin
+  if AUnit = '' then
+    Result := _('the arm label %s is a constant (line %d), not a value of an '
+      + 'enumeration - values without an arm are normal there, and raise '
+      + 'would break that path', [AName, ALine])
+  else
+    Result := _('the arm label %s is a constant in the unit %s, not a value '
+      + 'of an enumeration - values without an arm are normal there, and '
+      + 'raise would break that path', [AName, AUnit]);
+end;
+
+// Die Namen, denen die Arme des case ACase bis AEnd etwas zuweisen ('X :='
+// am Anfang einer Anweisung, auch geschachtelt; nicht 'A.X :=', 'X[i] :='),
+// klein.
+function AssignedInCase(AMap: TRdxCodeMap;
+  const ACase, AEnd: TRdxToken): TArray<string>;
+var
+  T, P : TRdxToken;
+begin
+  Result := nil;
+  P := ACase;
+  T := After(AMap, ACase);
+  while (T.Low <> '') and not SameTok(T, AEnd) do
+  begin
+    // Nicht die Laufvariable ('for I :=') und keine Inline-Variable.
+    if T.IsWord and not IsKeyword(T.Low) and (After(AMap, T).Low = ':=')
+       and not InList(P.Low, ['.', '^', '@', '&', 'for', 'var', 'const'])
+       and not InList(T.Low, Result) then
+      AddText(Result, T.Low);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Grund von PresetLockReason: ANameTok bekommt auf seiner Zeile den
+// Wert.
+function PresetReason(AMap: TRdxCodeMap; const ANameTok: TRdxToken): string;
+begin
+  Result := _('%s gets a value before the case (line %d) - values without '
+    + 'an arm keep it, that is the normal path there; raise would break it',
+    [TokText(AMap, ANameTok), ANameTok.Line]);
+end;
+
+// Traegt die Deklaration ab dem Namen ANameTok einen Anfangswert - AOp
+// ('=' im var-Abschnitt, ':=' bei einer Inline-Variablen) auf
+// Klammertiefe 0 vor dem ';' ('X: T = 0', 'var X: T := 0', 'var X := 0')?
+// Nur ein einzelner Name (eine Liste 'A, B: T' traegt keinen); ein Typ mit
+// Rumpf (record, object, class, interface) bleibt offen (False).
+function DeclInitialized(AMap: TRdxCodeMap; const ANameTok: TRdxToken;
+  const AOp: string): Boolean;
+const
+  MAX_DECL_SCAN = 200;
+var
+  T, P         : TRdxToken;
+  Paren, Steps : Integer;
+begin
+  Result := False;
+  T := After(AMap, ANameTok);
+  if T.Low = AOp then
+    Exit(True);
+  if T.Low <> ':' then Exit;
+  Paren := 0;
+  Steps := 0;
+  P := T;
+  T := After(AMap, T);
+  while (T.Low <> '') and (Steps < MAX_DECL_SCAN) do
+  begin
+    Inc(Steps);
+    if (T.Low = '(') or (T.Low = '[') then
+      Inc(Paren)
+    else if (T.Low = ')') or (T.Low = ']') then
+    begin
+      // Die Klammer schliesst vor dem Namen auf (ein Parameter 'var X: T'
+      // in einem Prozedurtyp): keine Variable.
+      Dec(Paren);
+      if Paren < 0 then Exit;
+    end
+    else if Paren = 0 then
+    begin
+      if T.Low = ';' then Exit;
+      if T.Low = AOp then Exit(True);
+      if IsKeywordAfter(T, P) and (InList(T.Low, ['record', 'class',
+         'interface', 'begin', 'end']) or ((T.Low = 'object')
+         and (P.Low <> 'of'))) then
+        Exit;
+    end;
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// Der Name aus ANames, den der var-Abschnitt der Routine R (zwischen dem
+// ';' ihres Kopfs und ihrem Rumpf; lokale Routinen uebersprungen) mit
+// Anfangswert deklariert: sein Token, Low = '' ohne. Lokale Routinen mit
+// unsicheren Grenzen und Typen mit Rumpf beenden die Suche ohne Treffer.
+function InitializedLocal(AMap: TRdxCodeMap; const R: TRdxRoutine;
+  const ANames: TArray<string>): TRdxToken;
+var
+  T, P : TRdxToken;
+  Sub  : TRdxRoutine;
+  InVar : Boolean;
+begin
+  Result := Default(TRdxToken);
+  InVar := False;
+  P := R.HeaderEnd;
+  T := After(AMap, P);
+  while (T.Low <> '') and TokBefore(T, R.Body) do
+  begin
+    // Klammern ueberspringen: 'var' als Parametermodus eines Prozedurtyps
+    // ('TCb = procedure(var X: Integer);') oeffnet keinen var-Abschnitt.
+    if (T.Low = '(') or (T.Low = '[') then
+    begin
+      P := MatchClose(AMap, T);
+      if P.Low = '' then
+        Exit;
+      T := After(AMap, P);
+      Continue;
+    end;
+    if IsKeywordAfter(T, P) and InList(T.Low, ['var', 'threadvar']) then
+      InVar := True
+    else if IsKeywordAfter(T, P) and InList(T.Low, ['const', 'type',
+       'label', 'resourcestring']) then
+      InVar := False
+    else if IsKeywordAfter(T, P) and (InList(T.Low, ['record', 'class',
+       'interface']) or ((T.Low = 'object') and (P.Low <> 'of'))) then
+      Exit
+    else if (P.Low = ';') and IsRoutineHeadAfter(T, P) then
+    begin
+      if TRdxBlocks.ReadRoutine(AMap, T, Sub) <> '' then
+        Exit;
+      InVar := False;
+      P := Sub.Last;
+      T := After(AMap, P);
+      Continue;
+    end
+    else if InVar and T.IsWord and InList(T.Low, ANames)
+       and InList(P.Low, [';', 'var', 'threadvar'])
+       and DeclInitialized(AMap, T, '=') then
+      Exit(T);
+    P := T;
+    T := After(AMap, T);
+  end;
+end;
+
+// E5 b: bekommt ein Name, dem ein Arm des case etwas zuweist, VOR dem case
+// schon seinen Wert - als eigene Anweisung im selben oder einem
+// umschliessenden Anweisungsteil, so dass sie das case immer erreicht
+// (ISPP.IdentMan.pas:945 'Result := TYPE_ERROR;' am Anfang der Routine,
+// HeidiSQL main.pas:14676 'ChildCount := 0;' vor 'if .. then case')? Dann
+// behalten die Werte ohne Arm diesen Wert, das ist dort der normale Weg.
+// Rueckwaerts bis zum Kopf der Routine; ganze Bloecke davor (begin..end,
+// auch die Zweige eines if) zaehlen nicht, ebenso eine Zuweisung im then-
+// oder else-Zweig ohne begin (sie steht nicht hinter ';' bzw. einem
+// Blockanfang). Fix-Runde 5 nach rwE33 (doublecmd fFindDlg.pas:1907/1913):
+// auch der Anfangswert der Deklaration - im var-Abschnitt der Routine um
+// das case ('sActionWithFilters: string = (Leerstring);', FPC) bzw. als Inline-
+// Variable davor ('var X: T := 0;'). '' oder der Grund.
+function PresetLockReason(AMap: TRdxCodeMap;
+  const ACase, AEnd: TRdxToken): string;
+var
+  Names : TArray<string>;
+  W     : TRdxBackBalance;
+  N     : TRdxToken;
+  R     : TRdxRoutine;
+  Own   : Boolean;
+  Steps : Integer;
+begin
+  Result := '';
+  Names := AssignedInCase(AMap, ACase, AEnd);
+  if Names = nil then Exit;
+  // Die Routine, in deren Rumpf das case steht (ihr var-Abschnitt).
+  Own := BeginBodyAround(AMap, ACase, R) = rbfFound;
+  Steps := 0;
+  W.Start(AMap, ACase);
+  while W.Next do
+  begin
+    Inc(Steps);
+    if Steps > MAX_PRESET_BACK then Exit;
+    if W.Depth = 0 then
+    begin
+      if W.Tok.IsWord and IsKeywordAfter(W.Tok, W.Prev)
+         and InList(W.Tok.Low, PRESET_STOPS) then
+        Exit;
+      if (W.Tok.Low = ';') or (W.Tok.IsWord and IsKeywordAfter(W.Tok, W.Prev)
+         and InList(W.Tok.Low, STATEMENT_OPENERS)) then
+      begin
+        N := After(AMap, W.Tok);
+        if N.IsWord and InList(N.Low, Names) and (After(AMap, N).Low = ':=')
+        then
+          Exit(PresetReason(AMap, N));
+        // Eine Inline-Variable mit Anfangswert ('var X: T := 0;').
+        if (N.Low = 'var') and IsKeywordAfter(N, W.Tok) then
+        begin
+          N := After(AMap, N);
+          if N.IsWord and InList(N.Low, Names)
+             and DeclInitialized(AMap, N, ':=') then
+            Exit(PresetReason(AMap, N));
+        end;
+      end;
+      // Am begin der Routine um das case: ihr var-Abschnitt davor. Der Lauf
+      // erreicht es auf Tiefe 0 nur, wenn das case in ihrem eigenen
+      // Anweisungsteil steht (nicht in einer anonymen Methode).
+      if Own and SameTok(W.Tok, R.Body) then
+      begin
+        N := InitializedLocal(AMap, R, Names);
+        if N.Low <> '' then
+          Exit(PresetReason(AMap, N));
+      end;
+    end;
+    W.Balance;
+  end;
+end;
+
+// Der Aufzaehlungstyp der Marke AFirst aus den Units neben AUnitFile
+// (TRdxTypeProof.NeighbourInterfaces): genau eine Deklaration ueber alle
+// (EnumOf je Unit). AConstUnit: die Unit, die AFirst stattdessen als
+// Konstante deklariert ('' ohne). False ohne Aufzaehlung.
+function NeighbourEnumOf(AMap: TRdxCodeMap; const AUnitFile, AFirst: string;
+  out ATypeName: string; out AValues: TArray<string>;
+  out AConstUnit: string): Boolean;
+var
+  Texts    : TArray<string>;
+  Body, Tn : string;
+  Vals     : TArray<string>;
+  SL       : TStringList;
+  M        : TRdxCodeMap;
+  Hits     : Integer;
+begin
+  ATypeName := '';
+  AValues := nil;
+  AConstUnit := '';
+  Hits := 0;
+  Texts := TRdxTypeProof.NeighbourInterfaces(AMap, AUnitFile, AFirst,
+    NEIGHBOUR_UP_LEVELS);
+  for Body in Texts do
+  begin
+    SL := TStringList.Create;
+    M := nil;
+    try
+      SL.Text := Body;
+      M := TRdxCodeMap.Create(SL);
+      if EnumOf(M, AFirst, Tn, Vals) then
+      begin
+        Inc(Hits);
+        ATypeName := Tn;
+        AValues := Vals;
+      end
+      else if ConstDeclLine(M, AFirst) > 0 then
+        AConstUnit := UnitNameOf(M);
+    finally
+      M.Free;
+      SL.Free;
+    end;
+  end;
+  Result := (Hits = 1) and (AConstUnit = '');
+  if Hits > 0 then
+    AConstUnit := '';
+end;
+
+class function TRdxStructFixes.CaseRaiseMenuReason(AMap: TRdxCodeMap;
+  ALine: Integer; const AUnitFile: string; out ALockReason: string): string;
+var
+  CaseTok, EndTok, LastTok : TRdxToken;
+  Labels, Values           : TArray<string>;
+  Hit                      : TArray<Boolean>;
+  TypeName, First, Item    : string;
+  Missing, ConstUnit       : string;
+  Number, Known            : Boolean;
+  Li                       : Integer;
+begin
+  ALockReason := '';
+  Result := CaseTokenOn(AMap, ALine, CaseTok);
+  if Result = '' then
+    Result := MatchingEnd(AMap, CaseTok, EndTok, LastTok);
+  if Result <> '' then Exit;
+  // E5 a: der Selektor ist keine Aufzaehlung.
+  ALockReason := SelectorLockReason(AMap, CaseTok);
+  if ALockReason <> '' then Exit(ALockReason);
+  Known := CaseLabels(AMap, CaseTok, EndTok, Labels, Number);
+  if not Known and Number then
+  begin
+    ALockReason := _('the arm labels are numbers - the case selects on an '
+      + 'integer, values without an arm are normal there, and raise would '
+      + 'break that path');
+    Exit(ALockReason);
+  end;
+  // E5 a: eine Marke ist eine Konstante der Datei.
+  if Known then
+    for Item in Labels do
+    begin
+      Li := ConstDeclLine(AMap, LabelHead(Item));
+      if Li > 0 then
+      begin
+        ALockReason := ConstLockReason(LabelHead(Item), '', Li);
+        Exit(ALockReason);
+      end;
+    end;
+  // Die Aufzaehlung nach der ersten Marke: in der Datei, sonst in einer
+  // Unit daneben (rwE32 Stufe 4, "nur-Menue unnoetig": HeidiSQL
+  // dbconnection.pas:1677 'ngMySQL' aus dbstructures.pas).
+  Values := nil;
+  if Known then
+  begin
+    First := LabelHead(Labels[0]);
+    if SameText(First, 'False') or SameText(First, 'True') then
+    begin
+      TypeName := 'Boolean';
+      AddText(Values, 'False');
+      AddText(Values, 'True');
+    end
+    else if not EnumOf(AMap, First, TypeName, Values)
+       and not NeighbourEnumOf(AMap, AUnitFile, First, TypeName, Values,
+         ConstUnit) then
+    begin
+      TypeName := '';
+      if ConstUnit <> '' then
+      begin
+        ALockReason := ConstLockReason(First, ConstUnit, 0);
+        Exit(ALockReason);
+      end;
+      if IsRtlIntConst(LowerCase(First)) then
+      begin
+        ALockReason := _('the arm label %s is an integer constant of the RTL '
+          + '(messages, keys, dialog results), not a value of an enumeration '
+          + '- values without an arm are normal there, and raise would break '
+          + 'that path', [First]);
+        Exit(ALockReason);
+      end;
+    end;
+  end;
+  // Ein bedingter Arm oder eine bedingte Marke: welche Werte einen Arm
+  // haben, haengt vom Zweig ab.
+  if DirectiveBefore(AMap, CaseTok.Line, EndTok) then
+    Result := _('compiler directive in the case - which values have an arm '
+      + 'is not provable')
+  else if not Known then
+    Result := _('the arm labels are not all names of one enumeration - '
+      + 'whether the values without an arm occur normally is not provable')
+  else if TypeName = '' then
+    // Kein Beweis, weder Aufzaehlung noch Konstante: neutral (bis rwE32
+    // "die Aufzaehlung von MBI_NORMAL" - eine Integer-Konstante der RTL).
+    Result := _('%s is declared neither in this file nor in a unit next to '
+      + 'it - whether the values without an arm occur normally is not '
+      + 'provable', [First])
+  else
+  begin
+    SetLength(Hit, Length(Values));
+    for Item in Labels do
+      if not MarkLabel(Item, TypeName, Values, Hit) then
+        Result := _('the arm labels are not all names of one enumeration - '
+          + 'whether the values without an arm occur normally is not '
+          + 'provable');
+    Missing := MissingValues(Values, Hit);
+    if (Result = '') and (Missing <> '') then
+      Result := _('values of %s without an arm: %s - they may be normal here, '
+        + 'and raise would break that path', [TypeName, Missing]);
+    // Jeder Wert hat einen Arm, aber der Selektor wandelt eine Zahl um
+    // (Review e/HilfeFixR): Werte ausserhalb des Typs sind dort gewoehnlich.
+    if Result = '' then
+      Result := CastSelectorReason(AMap, CaseTok, TypeName);
+  end;
+  // E5 b: nicht jeder Wert hat einen Arm, und das Ergebnis ist vorbelegt.
+  if Result <> '' then
+  begin
+    ALockReason := PresetLockReason(AMap, CaseTok, EndTok);
+    if ALockReason <> '' then
+      Result := ALockReason;
+  end;
 end;
 
 { ---- SCA101 / SCA099 ---- }

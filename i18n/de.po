@@ -1559,6 +1559,12 @@ msgstr "not/and/or/xor binden stärker als Vergleiche - den Vergleich klammern"
 msgid "for loop runs one index past the end - the upper bound is Count - 1 or High()"
 msgstr "for-Schleife läuft einen Index über das Ende hinaus - die Obergrenze ist Count - 1 oder High()"
 
+msgid "Result set through the function name - write Result := instead"
+msgstr "Ergebnis über den Funktionsnamen gesetzt - stattdessen Result := schreiben"
+
+msgid "The function name on the right side is a recursive call, not the current result"
+msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"
+
 msgid "File not found:"
 msgstr "Datei nicht gefunden:"
 
@@ -2035,16 +2041,16 @@ msgstr "Fix-Hinweis"
 msgid "Text only, transparent (no window)"
 msgstr "Nur Text, transparent (kein Fenster)"
 
-msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by clicking its text. Takes effect on save."
-msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gekürzt, ein Fund lässt sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."
+msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by double-clicking its text. Takes effect on save."
+msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gekürzt, ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
 
 # Combo-Umbau Nur-Text-Variante 2026-08-13.
 
 msgid "Text (one-line hint, no window)"
 msgstr "Text (einzeiliger Hinweis, kein Fenster)"
 
-msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
-msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund lässt sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by double-clicking its text. Takes effect on save."
+msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
 
 # i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-
 # Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.
@@ -2840,6 +2846,26 @@ msgstr "\"%s\" steht nicht am Anfang einer eigenen Zeile"
 msgid "\"%s\" guards a default value (if X = 0 then X := ...) - the exact comparison is intended there"
 msgstr "\"%s\" sichert einen Vorgabewert (if X = 0 then X := ...) - der exakte Vergleich ist dort gewollt"
 
+msgid "\"%s\" guards a tolerance check of the same value (line %d) - the exact comparison is intended there"
+msgstr "\"%s\" sichert eine Toleranzprüfung desselben Werts (Zeile %d) - der exakte Vergleich ist dort gewollt"
+
+# reDelphix rwE31 Gruppe L (uRdxFloatEqualityFix: Divisionsschutz, Text-Schnellpfad, stored-Funktion)
+msgid "\"%s\" guards a division by %s (line %d) - every value other than exactly 0 is a valid divisor, a tolerance would reject small ones"
+msgstr "\"%s\" schützt eine Division durch %s (Zeile %d) - jeder Wert außer genau 0 ist ein gültiger Teiler, eine Toleranz wiese kleine ab"
+
+msgid "\"%s\" writes text for exactly 0 (line %d) - with a tolerance small values would silently become that text"
+msgstr "\"%s\" schreibt für genau 0 einen Text (Zeile %d) - mit Toleranz würden kleine Werte still zu diesem Text"
+
+msgid "\"%s\" decides whether a property is stored (stored %s) - with a tolerance values close to the default would not be saved"
+msgstr "\"%s\" entscheidet, ob eine Property gespeichert wird (stored %s) - mit Toleranz würden Werte nahe am Vorgabewert nicht gespeichert"
+
+# reDelphix rwE32 Gruppe Q (uRdxFloatEqualityFix: Default-Wert-Auslassung, redundanter Sonderfall)
+msgid "\"%s\" leaves out the default value - only another value is passed to %s (line %d), with a tolerance values close to it would silently not be written"
+msgstr "\"%s\" lässt den Vorgabewert aus - nur ein anderer Wert geht an %s (Zeile %d), mit Toleranz würden Werte nahe daran still nicht geschrieben"
+
+msgid "\"%s\" is already decided by the exact comparison in line %d of the same if-else chain - a tolerance would change the result here for values close to it"
+msgstr "\"%s\" ist schon durch den exakten Vergleich in Zeile %d derselben if-else-Kette entschieden - eine Toleranz änderte hier das Ergebnis für Werte nahe daran"
+
 msgid "\"%s\" is not declared in the body of a class of this file (free routine, record, interface, or the class sits in an include)"
 msgstr "\"%s\" ist nicht im Rumpf einer Klasse dieser Datei deklariert (freie Routine, record, Interface oder die Klasse steht in einem Include)"
 
@@ -2851,6 +2877,33 @@ msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" dahinter) - umgeschri
 
 msgid "\"%s\" is part of a larger expression (\"%s\" before it) - only a whole condition or assignment is rewritten"
 msgstr "\"%s\" ist Teil eines größeren Ausdrucks (\"%s\" davor) - umgeschrieben wird nur eine ganze Bedingung oder Zuweisung"
+
+msgid "\"%s\" is published - its name is in the method table, code that looks it up by name (RTTI, MethodName, a command list) may compare case-sensitively"
+msgstr "\"%s\" ist published - der Name steht in der Methodentabelle, Code, der ihn per Name sucht (RTTI, MethodName, eine Kommandoliste), kann Groß- und Kleinschreibung unterscheiden"
+
+msgid "%d headers of a free routine \"%s\" - overload or conditional twin?"
+msgstr "%d Köpfe einer freien Routine \"%s\" - Overload oder bedingter Zwilling?"
+
+msgid "the headers of \"%s\" are not one declaration (interface or forward) and one implementation"
+msgstr "die Köpfe von \"%s\" sind nicht eine Deklaration (interface oder forward) und eine Implementierung"
+
+msgid "the header of \"%s\" in line %d cannot be read safely"
+msgstr "der Kopf von \"%s\" in Zeile %d ist nicht sicher zu lesen"
+
+msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
+msgstr "\"%s\" ist \"%s\" - ein Linker, eine Bibliothek oder C-Code bindet die Routine beim genauen Namen"
+
+msgid "the unit links an object file ({$L} in line %d) - C code may call \"%s\" by its exact name"
+msgstr "die Unit linkt eine Objektdatei ({$L} in Zeile %d) - C-Code kann \"%s\" beim genauen Namen rufen"
+
+msgid "the exports clause names \"%s\" (line %d) - the exported name keeps the spelling"
+msgstr "die exports-Klausel nennt \"%s\" (Zeile %d) - der exportierte Name behält die Schreibweise"
+
+msgid "a compiler directive names \"%s\" (line %d)"
+msgstr "eine Compiler-Direktive nennt \"%s\" (Zeile %d)"
+
+msgid "\"%s\" is written like a C or platform API name (underscore, no capital letter or a k constant) - a capital first letter does not make it PascalCase; rename it by hand or suppress the finding"
+msgstr "\"%s\" ist wie ein Name einer C- oder Plattform-API geschrieben (Unterstrich, kein Großbuchstabe oder k-Konstante) - ein großer Anfangsbuchstabe macht daraus kein PascalCase; von Hand umbenennen oder den Fund unterdrücken"
 
 msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"
 msgstr "\"%s\" steht hinter \"%s\" - es ist bedingt, der Code danach läuft"
@@ -3218,8 +3271,8 @@ msgstr "der Detektor stuft den Vergleich als gewollt ein (Wächter- oder Sentine
 msgid "the file already calls Randomize"
 msgstr "die Datei ruft Randomize schon auf"
 
-msgid "the file asks for compilers up to Delphi 10.3 (%s, line %d) - TFormatSettings.Invariant is only checked from there on"
-msgstr "die Datei fragt nach Compilern bis Delphi 10.3 (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab dort geprüft"
+msgid "the file asks for old compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 geprüft"
 
 msgid "the file asks for old compilers (%s, line %d) - the global variable FormatSettings exists from Delphi XE on"
 msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE"
@@ -3664,6 +3717,9 @@ msgstr "die Meldung nennt keinen Abschnitt"
 
 msgid "the method is visible outside the unit (not private, class in the interface section) - other units can use it as a method pointer"
 msgstr "die Methode ist außerhalb der Unit sichtbar (nicht private, Klasse im interface-Teil) - andere Units können sie als Methodenzeiger nutzen"
+
+msgid "not in the light bulb - %s has a managed type or one the quick fix does not know (%s) and is not set as the first statement of %s (line %d): with \"var\" the caller's old value can stay where \"out\" cleared it"
+msgstr "nicht in der Glühbirne - %s hat einen verwalteten oder der Hilfe unbekannten Typ (%s) und wird nicht als erste Anweisung von %s gesetzt (Zeile %d): mit \"var\" kann der alte Wert des Aufrufers stehen bleiben, wo \"out\" ihn leerte"
 
 msgid "the name \"%s\" already occurs in the code of the file"
 msgstr "der Name \"%s\" kommt im Code der Datei schon vor"
@@ -4721,8 +4777,14 @@ msgstr "Doku-Kommentar (///, {* bzw. (**, Zeile %d) - sein Beispielcode bleibt"
 msgid "comment without an end up to the end of the file"
 msgstr "Kommentar ohne Ende bis zum Dateiende"
 
+msgid "documentation comment (leading \"*\" or <PRE> in line %d) - its sample code stays"
+msgstr "Doku-Kommentar (führender \"*\" oder <PRE> in Zeile %d) - sein Beispielcode bleibt"
+
 msgid "comment before the first code of the file (license or header comment) - %s"
 msgstr "Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar) - %s"
+
+msgid "comment directly after the unit header (documentation of the unit) - %s"
+msgstr "Kommentar direkt hinter dem Unit-Kopf (Doku der Unit) - %s"
 
 msgid "line %d does not look like code (no \";\" at the end, no \":=\", no begin/procedure/function)"
 msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kein begin/procedure/function)"
@@ -4730,8 +4792,8 @@ msgstr "Zeile %d sieht nicht nach Code aus (kein \";\" am Ende, kein \":=\", kei
 msgid "no comment at the reported place"
 msgstr "kein Kommentar an der gemeldeten Stelle"
 
-msgid "several comments, and one reaches beyond the finding with text - the cut would not be contiguous; %s"
-msgstr "mehrere Kommentare, und einer reicht mit Text über den Fund hinaus - der Schnitt wäre nicht zusammenhängend; %s"
+msgid "the finding covers only part of the comment (lines %d to %d), and its line %d is not plainly code - the rest would stay behind as a torso; %s"
+msgstr "der Fund deckt nur einen Teil des Kommentars (Zeilen %d bis %d), und dessen Zeile %d ist nicht eindeutig Code - der Rest bliebe als Torso stehen; %s"
 
 msgid "the message has no column or line count"
 msgstr "Spalte oder Zeilenzahl fehlt in der Meldung"
@@ -4949,8 +5011,11 @@ msgstr "{$I}-Include im implementation-Teil (Zeile %d) - dort kann ein Aufrufer 
 msgid "the routine ends on the last line of the file"
 msgstr "die Routine endet auf der letzten Zeile der Datei"
 
-msgid "include %s before implementation %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
-msgstr "Include %s vor implementation %s - es kann den Namen deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht es nicht"
+msgid "jpp directive in line %d - the file is a JEDI preprocessor prototype; the unit generated from it declares and calls routines through macros that the quick fix does not see"
+msgstr "jpp-Direktive in Zeile %d - die Datei ist ein Prototyp des JEDI-Präprozessors; die daraus erzeugte Unit deklariert und ruft Routinen über Makros, die die Hilfe nicht sieht"
+
+msgid "include %s %s - it can declare the name, call it or name it as a property accessor, and the quick fix does not see it"
+msgstr "Include %s %s - es kann den Namen deklarieren, rufen oder als Property-Accessor nennen, die Hilfe sieht es nicht"
 
 msgid "\"// noinspection-file\" in line %d - the marker applies to the whole file and would be lost with it; %s"
 msgstr "\"// noinspection-file\" in Zeile %d - der Marker gilt der ganzen Datei und ginge mit verloren; %s"
@@ -5014,6 +5079,9 @@ msgstr "Direktive %s - die Routine ist von außen erreichbar oder hat keinen Rum
 
 msgid "the unit links an object file ({$L} in line %d) - the C code calls routines by name"
 msgstr "die Unit linkt eine Objektdatei ({$L} in Zeile %d) - der C-Code ruft Routinen per Name"
+
+msgid "the unit is named %s, its file %s - the compiler does not take the file as this unit (script or template?)"
+msgstr "die Unit heißt %s, ihre Datei %s - der Compiler nimmt die Datei nicht als diese Unit (Skript oder Vorlage?)"
 
 msgid "forward declaration: %s"
 msgstr "forward-Deklaration: %s"
@@ -5228,6 +5296,12 @@ msgstr "%s ist kein Objekt (%s: record, object, interface, Zeiger oder eigener T
 msgid "the unit declares its own method Free - FreeAndNil would not call it"
 msgstr "die Unit deklariert eine eigene Methode Free - FreeAndNil riefe sie nicht auf"
 
+msgid "the comment in line %d mentions FreeAndNil - free first, then nil is probably intended there"
+msgstr "der Kommentar in Zeile %d nennt FreeAndNil - erst freigeben, dann nil ist dort vermutlich Absicht"
+
+msgid "%s descends from %s (old Open Tools API, VirtIntf.TInterface) - its own Free calls Release, FreeAndNil would destroy the object"
+msgstr "%s stammt von %s ab (altes Open Tools API, VirtIntf.TInterface) - sein eigenes Free ruft Release, FreeAndNil zerstörte das Objekt"
+
 msgid "%s has the type %s - by Delphi convention a pointer from another unit (Free is then the one of the target, FreeAndNil takes only a TObject)"
 msgstr "%s hat den Typ %s - nach Delphi-Konvention ein Zeiger aus einer anderen Unit (Free ist dann die des Ziels, FreeAndNil nimmt nur ein TObject)"
 
@@ -5288,14 +5362,20 @@ msgstr "%s steht nicht mehr auf Zeile %d einer uses-Klausel"
 msgid "%s appears more than once on line %d"
 msgstr "%s steht mehrmals auf Zeile %d"
 
-msgid "directive in a uses clause - an entry may apply only in one branch"
-msgstr "Direktive in einer uses-Klausel - ein Eintrag gilt evtl. nur in einem Zweig"
-
 msgid "%s is used in the text"
 msgstr "%s wird im Text benutzt"
 
 msgid "heuristic finding - compile afterwards; if %s has an initialization section (registration), it no longer runs"
 msgstr "heuristischer Fund - danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
+
+msgid "the unit consists of uses clauses only - they are its purpose (a package unit compiles the listed units); without %s the build drops it"
+msgstr "die Unit besteht nur aus uses-Klauseln - sie sind ihr Zweck (eine Paket-Unit übersetzt die gelisteten Units); ohne %s fällt sie aus dem Bau"
+
+msgid "not in the light bulb: the file uses %s (line %d), which the quick fix cannot assign to any other unit of the uses clauses (it only knows the identifiers of common RTL, VCL and LCL units, not those of project or library units) - so it cannot rule out that %s is needed; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "nicht in der Glühbirne: die Datei nutzt %s (Zeile %d), das die Hilfe keiner anderen Unit der uses-Klauseln zuordnen kann (sie kennt nur die Bezeichner gängiger RTL-, VCL- und LCL-Units, nicht die von Projekt- oder Bibliotheks-Units) - darum kann sie nicht ausschließen, dass %s gebraucht wird; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
+
+msgid "not in the light bulb: %s stands in a branch of the uses clause that the IDE did not parse - the quick fix cannot show that the units of the parsed branch are in this branch too, the identifier proof is incomplete; compile afterwards; if %s has an initialization section (registration), it no longer runs"
+msgstr "nicht in der Glühbirne: %s steht in einem Zweig der uses-Klausel, den die IDE nicht geparst hat - die Hilfe kann nicht zeigen, dass die Units des geparsten Zweigs auch in diesem stehen, der Bezeichner-Beweis ist unvollständig; danach kompilieren; hat %s einen initialization-Abschnitt (Registrierung), läuft er nicht mehr"
 
 msgid "the target is a Variant - behind 'X +' Delphi computes Variant arithmetic instead of concatenating, the compiler vouches for no operand"
 msgstr "Ziel ist ein Variant - hinter 'X +' rechnet Delphi Variant-Arithmetik statt zu verketten, das Kompilat bürgt für keinen Operanden"
@@ -5683,6 +5763,36 @@ msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit ein
 
 msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, which has no inline variables; %s"
 msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline constants; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Konstante; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 11 (%s), which has no digit separators; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 11 (%s), und dort gibt es keine Zifferntrenner; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), which has no inline variables; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und dort gibt es keine Inline-Variable; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline constants; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und dort gibt es keine Inline-Konstante; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 11, which has no digit separators; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 11, und dort gibt es keine Zifferntrenner; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, which has no inline variables; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und dort gibt es keine Inline-Variable; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 10.3 (%s), and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 10.3 (%s), und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before XE (%s), which has no global variable FormatSettings; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor XE (%s), und dort gibt es keine globale Variable FormatSettings; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "package files in %s remain unread (the quick fix reads at most %d) - one of them may build the unit with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "Paketdateien in %s bleiben ungelesen (die Hilfe liest höchstens %d) - eine davon baut die Unit vielleicht mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"
 
 msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - there are no inline constants there; %s"
 msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - dort gibt es keine Inline-Konstante; %s"
@@ -6227,8 +6337,17 @@ msgstr "die Schleife lief bisher nie und zählt danach abwärts; war sie absicht
 msgid "the loop never ran so far and then counts up; if it was switched off on purpose, this is an intervention"
 msgstr "die Schleife lief bisher nie und zählt danach aufwärts; war sie absichtlich abgeschaltet, ist das ein Eingriff"
 
-msgid "tabs in code become spaces - tab width 2 (assumption); tabs in strings and comments stay"
-msgstr "Tabs im Code werden zu Leerzeichen - Tabweite 2 (Annahme); Tabs in Strings und Kommentaren bleiben"
+msgid "tabs become spaces - tab width %d, as the alignment elsewhere in the file shows; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung an anderer Stelle der Datei zeigt; Tabs in Strings bleiben"
+
+msgid "tabs become spaces - tab width %d, as the alignment of the neighbouring lines shows; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d, wie die Ausrichtung der Nachbarzeilen zeigt; Tabs in Strings bleiben"
+
+msgid "tabs become spaces - the same result for every tab width in question; tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - dasselbe Ergebnis für jede in Frage kommende Tabweite; Tabs in Strings bleiben"
+
+msgid "tabs become spaces - tab width %d (assumption, the file does not show one); tabs in strings stay"
+msgstr "Tabs werden zu Leerzeichen - Tabweite %d (Annahme, die Datei zeigt keine); Tabs in Strings bleiben"
 
 msgid "whitespace at the end of the line only"
 msgstr "nur Leerraum am Zeilenende"
@@ -6248,8 +6367,8 @@ msgstr "gleiche Bedeutung - der Aufruf bleibt als Anweisung und läuft wie vorhe
 msgid "the marker now stands above the line and suppresses all rules of the line (so far NOSONAR suppressed nothing); critical kinds (HardcodedSecret, SQLInjection etc.) stay visible"
 msgstr "der Marker steht jetzt über der Zeile und unterdrückt alle Regeln der Zeile (bisher unterdrückte NOSONAR nichts); kritische Arten (HardcodedSecret, SQLInjection u. a.) bleiben sichtbar"
 
-msgid "same meaning - only the superfluous comma goes away"
-msgstr "gleiche Bedeutung - nur das überzählige Komma entfällt"
+msgid "same meaning for COM - the empty last argument of the late-bound call (an omitted optional parameter) is now not passed at all; only a server that counts its arguments sees one fewer"
+msgstr "gleiche Bedeutung für COM - das leere letzte Argument des spät gebundenen Aufrufs (ein weggelassener optionaler Parameter) wird jetzt gar nicht übergeben; nur ein Server, der seine Argumente zählt, sieht eines weniger"
 
 msgid "same meaning - each name keeps its type; with \"var\" each new line carries the \"var\" again"
 msgstr "gleiche Bedeutung - jeder Name behält seinen Typ; bei \"var\" trägt jede neue Zeile das \"var\" wieder"
@@ -6524,8 +6643,17 @@ msgstr "der Leerraum steht in einem mehrzeiligen oder offenen String - er ist In
 msgid "no tab at the reported place"
 msgstr "kein Tab an der gemeldeten Stelle"
 
-msgid "the first tab of the line is inside a string or comment - it stays untouched, the help would leave the finding in place"
-msgstr "der erste Tab der Zeile steht in einem String oder Kommentar - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+msgid "the place lies in a branch only old compilers translate (%s, line %d) - the help would not compile there, and current compilers never see the code"
+msgstr "die Stelle liegt in einem Zweig, den nur alte Compiler übersetzen (%s, Zeile %d) - dort übersetzte die Hilfe nicht, und aktuelle Compiler sehen den Code nie"
+
+msgid "the tabs at the end of the line are removed; nothing else changes"
+msgstr "die Tabs am Zeilenende entfallen; sonst ändert sich nichts"
+
+msgid "the first tab of the line is inside a string or a compiler directive - it stays untouched, the help would leave the finding in place"
+msgstr "der erste Tab der Zeile steht in einem String oder einer Compiler-Direktive - der bleibt unangetastet, die Hilfe ließe den Fund stehen"
+
+msgid "the neighbouring lines fit tab width %d as well as %d, and the rest of the file does not decide between them; %s"
+msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d, und der Rest der Datei entscheidet nicht zwischen ihnen; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
 msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"
@@ -6619,3 +6747,343 @@ msgstr "bedeutungsgleich - ohne das Override ruft die virtuelle Bindung die Meth
 
 msgid "Remove the empty override %s"
 msgstr "Leeres Override %s entfernen"
+
+msgid "Write Result instead of %s"
+msgstr "Result statt %s schreiben"
+
+msgid "a \"with\" or an anonymous method in %s before the line - \"%s\" may mean something else there"
+msgstr "ein \"with\" oder eine anonyme Methode in %s vor der Zeile - \"%s\" kann dort etwas anderes meinen"
+
+msgid "a comment or directive stands between \"%s\" and \":=\""
+msgstr "zwischen \"%s\" und \":=\" steht ein Kommentar oder eine Direktive"
+
+msgid "no assignment \"%s :=\" at the start of a statement on the reported line"
+msgstr "keine Zuweisung \"%s :=\" am Anfang einer Anweisung auf der gemeldeten Zeile"
+
+msgid "no routine with a begin..end body around the line"
+msgstr "keine Routine mit begin..end-Rumpf um die Zeile"
+
+msgid "same meaning - on the left of \":=\" Result and the function name are the same variable; the name in an expression stays (a recursive call, SCA205)"
+msgstr "bedeutungsgleich - links vom \":=\" sind Result und der Funktionsname dieselbe Variable; der Name in einem Ausdruck bleibt (ein rekursiver Aufruf, SCA205)"
+
+msgid "the bounds of the routine around the line are not safe to read"
+msgstr "die Grenzen der Routine um die Zeile sind nicht sicher lesbar"
+
+msgid "the head or the declarations of %s declare \"Result\""
+msgstr "Kopf oder Deklarationen von %s deklarieren \"Result\""
+
+msgid "the head or the declarations of %s name \"%s\" again (parameter, local, nested routine) - it may not be the result"
+msgstr "Kopf oder Deklarationen von %s nennen \"%s\" noch einmal (Parameter, lokal, geschachtelte Routine) - es ist vielleicht nicht das Ergebnis"
+
+msgid "the line belongs to %s, not to the function %s - there \"Result\" would be another result"
+msgstr "die Zeile gehört zu %s, nicht zur Funktion %s - dort wäre \"Result\" ein anderes Ergebnis"
+
+msgid "the message names no function (\"Name :=\")"
+msgstr "die Meldung nennt keine Funktion (\"Name :=\")"
+
+msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"
+msgstr "die Unit wird auch mit Free Pascal übersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, hängt am Modus des Projekts"
+
+# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen
+
+msgid "compiler directive in the if statement - conditional code could change its branches"
+msgstr "Compiler-Direktive in der if-Anweisung - bedingter Code könnte ihre Zweige ändern"
+
+msgid "comment in the condition - it would be lost or swallow the new parenthesis"
+msgstr "Kommentar in der Bedingung - er ginge verloren oder schluckte die neue Klammer"
+
+msgid "the condition is not readable (multi-line string or comment)"
+msgstr "die Bedingung ist nicht lesbar (mehrzeiliger String oder Kommentar)"
+
+msgid "empty then or else branch"
+msgstr "leerer then- oder else-Zweig"
+
+msgid "the else branch is another if (else-if chain) - after the swap it would take the new else"
+msgstr "der else-Zweig ist wieder ein if (else-if-Kette) - nach dem Tausch nähme es das neue else"
+
+msgid "the else branch ends with an if without else - after the swap that if would take the new else"
+msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch nähme dieses if das neue else"
+
+msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
+msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"
+
+msgid "the if has an else - it would have to stand twice"
+msgstr "das if hat ein else - es müsste doppelt stehen"
+
+msgid "complete boolean evaluation is switched on (line %d) - with it \"A and B\" always evaluates B"
+msgstr "vollständige boolesche Auswertung ist eingeschaltet (Zeile %d) - damit wertet \"A and B\" B immer aus"
+
+msgid "line %d starts inside a block comment or multi-line string - indenting it would change it"
+msgstr "Zeile %d beginnt in einem Block-Kommentar oder mehrzeiligen String - Einrücken änderte ihn"
+
+msgid "the outer if has an else"
+msgstr "das äußere if hat ein else"
+
+msgid "the inner if has an else"
+msgstr "das innere if hat ein else"
+
+msgid "comment between the two if heads or around begin/end - it would be lost"
+msgstr "Kommentar zwischen den beiden if-Köpfen oder um begin/end - er ginge verloren"
+
+msgid "the end of the block does not stand first on its own line"
+msgstr "das end des Blocks steht nicht als erstes auf seiner Zeile"
+
+msgid "comment or directive in the expression - it would be lost"
+msgstr "Kommentar oder Direktive im Ausdruck - er ginge verloren"
+
+msgid "the chain mixes \"%s\" and \"%s\" - De Morgan needs one operator"
+msgstr "die Kette mischt \"%s\" und \"%s\" - De Morgan braucht einen Operator"
+
+msgid "a side calls %s - swapping the sides would change the order of evaluation"
+msgstr "eine Seite ruft %s auf - das Tauschen änderte die Reihenfolge der Auswertung"
+
+msgid "Invert the if (swap then and else)"
+msgstr "if umkehren (then und else tauschen)"
+
+msgid "Apply De Morgan to \"%s\""
+msgstr "De Morgan auf \"%s\" anwenden"
+
+msgid "Swap the sides of \"%s\""
+msgstr "Seiten von \"%s\" tauschen"
+
+msgid "Split the if at \"and\""
+msgstr "if am \"and\" teilen"
+
+msgid "Merge with the inner if (and)"
+msgstr "Mit dem inneren if zusammenfügen (and)"
+
+msgid "same meaning - the condition is negated once, then and else swap places"
+msgstr "gleiche Bedeutung - die Bedingung wird einmal verneint, then und else tauschen die Plätze"
+
+msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
+msgstr "gleiche Bedeutung - dieselben Glieder in derselben Reihenfolge, je verneint; die Auswertung endet am selben Glied"
+
+msgid "same meaning - the comparison is mirrored; neither side calls a routine"
+msgstr "gleiche Bedeutung - der Vergleich wird gespiegelt; keine Seite ruft eine Routine auf"
+
+msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
+msgstr "gleiche Bedeutung bei Kurzschlussauswertung ({$B-}): die zweite Bedingung wird wie vorher nur ausgewertet, wenn die erste wahr ist"
+
+# reDelphix rwE29 Gruppe E (uRdxPlacesRunner: PlanNewClause - Abschnitts-Schluesselwort im bedingten Zweig)
+msgid "the section keyword in line %d is inside a conditional branch (line %d) - add the uses clause by hand"
+msgstr "das Abschnitts-Schlüsselwort in Zeile %d steht in einem bedingten Zweig (Zeile %d) - uses-Klausel von Hand anlegen"
+
+# reDelphix rwE31 Gruppe L (uRdxPlacesRunner: PlanNewClause - uses-Klausel im Text, die der Baum nicht sah)
+msgid "the uses clause in line %d is not read here (it lies in a conditional branch) - add the unit by hand"
+msgstr "die uses-Klausel in Zeile %d wird hier nicht gelesen (sie steht in einem bedingten Zweig) - Unit von Hand ergänzen"
+
+msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
+msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise bräche sie"
+
+msgid "the routine is passed as a callback (@%s) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (@%s) - raise bräche ihren Aufrufer"
+
+msgid "the difference goes into a 32-bit cast again (%s(...)) - NativeInt would change nothing"
+msgstr "die Differenz geht wieder in einen 32-Bit-Cast (%s(...)) - NativeInt änderte nichts"
+
+msgid "the difference goes into Result: %s - cut back to 32 bit, NativeInt would change nothing (a compare function should compare, not subtract)"
+msgstr "die Differenz geht in Result: %s - wieder auf 32 Bit gekappt, NativeInt änderte nichts (eine Vergleichsfunktion sollte vergleichen, nicht subtrahieren)"
+
+msgid "the line is inside {$%s %s} (line %d) - the code already separates 32 and 64 bit"
+msgstr "die Zeile steht in {$%s %s} (Zeile %d) - der Code trennt 32 und 64 Bit schon selbst"
+
+msgid "after the try..except, %s (line %d) undoes %s from before the try - \"raise;\" would skip it (no finally)"
+msgstr "hinter dem try..except hebt %s (Zeile %d) das %s vor dem try auf - \"raise;\" überspränge es (kein finally)"
+
+msgid "a comment on or above the line mentions raise - the author knows the missing raise and left it; decide by hand (raising here can break callers)"
+msgstr "ein Kommentar auf oder über der Zeile nennt raise - der Autor kennt das fehlende raise und hat es gelassen; von Hand entscheiden (ein raise hier kann Aufrufer brechen)"
+
+msgid "the file is in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "die Datei liegt im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
+
+msgid "the test project \"%s\" lies beside the file or above it in the test folder \"%s\" - a test may compare this address literally (also from another file); decide by hand"
+msgstr "das Testprojekt \"%s\" liegt neben der Datei oder darüber im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
+
+msgid "the unit is test code (\"%s\") in the test folder \"%s\" - a test may compare this address literally; decide by hand"
+msgstr "die Unit ist Testcode (\"%s\") im Testordner \"%s\" - ein Test kann diese Adresse wörtlich vergleichen; von Hand entscheiden"
+
+msgid "the name \"%s\" in the test folder \"%s\" marks test code - a test may compare this address literally (also from another file); decide by hand"
+msgstr "der Name \"%s\" im Testordner \"%s\" kennzeichnet Testcode - ein Test kann diese Adresse wörtlich vergleichen (auch aus einer anderen Datei); von Hand entscheiden"
+
+# reDelphix HilfeFix C (rwE29: uRdxRawExceptionFix, uRdxFormatSettingsFix, uRdxMagicFixes, uRdxPlacesRunner)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in SysUtils only from Delphi 2009 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in SysUtils erst ab Delphi 2009"
+
+msgid "it stands there only under a compiler condition (line %d); %s"
+msgstr "sie steht dort nur unter einer Compiler-Bedingung (Zeile %d); %s"
+
+msgid "%s stands in uses only under a compiler condition (line %d), not in every branch around this place; %s"
+msgstr "%s steht in uses nur unter bedingter Übersetzung (Zeile %d), nicht in jedem Zweig um diese Stelle; %s"
+
+msgid "Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "Lazarus-/FPC-Datei (%s) - FPC 3.2 kennt kein TFormatSettings.Invariant"
+
+msgid "Lazarus project/package %s in the directory %s - the unit probably also builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "Lazarus-Projekt/-Paket %s im Verzeichnis %s - die Unit baut wohl auch mit FPC, und FPC 3.2 kennt kein TFormatSettings.Invariant"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 = %s) - TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 10.3 = %s) - TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi XE = %s) - there is no global variable FormatSettings there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi XE = %s) - dort gibt es keine globale Variable FormatSettings; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 10.3, and TFormatSettings.Invariant is only checked from there on; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 10.3, und TFormatSettings.Invariant ist erst ab dort geprüft; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before XE, which has no global variable FormatSettings; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor XE, und dort gibt es keine globale Variable FormatSettings; %s"
+
+msgid "the include %s carries an FPC switch (line %d) - FPC 3.2 has no TFormatSettings.Invariant"
+msgstr "das Include %s trägt eine FPC-Weiche (Zeile %d) - FPC 3.2 kennt kein TFormatSettings.Invariant"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - TFormatSettings.Invariant ist erst ab Delphi 10.3 geprüft; %s"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - the global variable FormatSettings exists only from Delphi XE on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - die globale Variable FormatSettings gibt es erst ab Delphi XE; %s"
+
+msgid "the literal %s does not fit the date and time format of TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s would raise EConvertError"
+msgstr "das Literal %s passt nicht zum Datums- und Zeitformat von TFormatSettings.Invariant (MM/dd/yyyy hh:nn:ss) - %s würfe EConvertError"
+
+msgid "the literal %s does not fit the number format of TFormatSettings.Invariant (decimal point, no thousands separator) - %s would raise EConvertError"
+msgstr "das Literal %s passt nicht zum Zahlenformat von TFormatSettings.Invariant (Dezimalpunkt, kein Tausendertrenner) - %s würfe EConvertError"
+
+msgid "%s; line %d calls %s of the same family without TFormatSettings.Invariant - change it along with this one, otherwise values written there and read or compared here (or the other way round) no longer match"
+msgstr "%s; Zeile %d ruft %s derselben Familie ohne TFormatSettings.Invariant auf - mit umstellen, sonst passen dort geschriebene und hier gelesene oder verglichene Werte (oder umgekehrt) nicht mehr zusammen"
+
+msgid "the body holds an empty comment - a mark for \"nothing to do here\"; raise would contradict it"
+msgstr "der Rumpf enthält einen leeren Kommentar - eine Marke für \"hier ist nichts zu tun\"; raise widerspräche ihr"
+
+msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "eine Methodenzuordnung der Klasse leitet eine Interface-Methode auf %s um - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the method implements %s.%s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Methode implementiert %s.%s - Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the class implements %s, declared outside this file - the method may implement it, and callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr "die Klasse implementiert %s, deklariert außerhalb dieser Datei - die Methode kann dazugehören, und Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
+
+msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
+msgstr "die Routine ist %s - ein Callback für fremden Code; eine Exception darf sie nicht verlassen"
+
+msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
+msgstr "die Routine wird als Callback übergeben (%s in Zeile %d) - raise bräche ihren Aufrufer"
+
+msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
+msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"
+
+msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"
+msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, Freigaben) und ließe eine Exception aus dem Destruktor"
+
+msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
+msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"
+
+msgid "the function reports the failure through its result (Result := False in line %d before the try, Result := True in line %d in the try part) - \"raise;\" would break callers that only check the result"
+msgstr "die Funktion meldet den Fehler über ihr Ergebnis (Result := False in Zeile %d vor dem try, Result := True in Zeile %d im try-Teil) - \"raise;\" bräche Aufrufer, die nur das Ergebnis prüfen"
+
+msgid "the case selects on characters or strings - every other value is normal input there (a lexer, a parser); raise would break it"
+msgstr "das case wählt nach Zeichen oder Strings - jeder andere Wert ist dort gewöhnliche Eingabe (ein Lexer, ein Parser); raise bräche ihn"
+
+msgid "compiler directive in the case - which values have an arm is not provable"
+msgstr "Compiler-Direktive im case - welche Werte einen Zweig haben, ist nicht beweisbar"
+
+msgid "the arm labels are not all names of one enumeration - whether the values without an arm occur normally is not provable"
+msgstr "die Marken der Zweige sind nicht alle Namen einer Aufzählung - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+
+msgid "%s is declared neither in this file nor in a unit next to it - whether the values without an arm occur normally is not provable"
+msgstr "%s ist weder in dieser Datei noch in einer Unit daneben deklariert - ob die Werte ohne Zweig im normalen Ablauf vorkommen, ist nicht beweisbar"
+
+msgid "the case selector %s is of type %s, not an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "der Selektor %s des case hat den Typ %s, keine Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the case selector %s converts a value to %s - a value outside the enumeration reaches the else, and raise would break that path"
+msgstr "der Selektor %s des case wandelt einen Wert in %s um - ein Wert außerhalb der Aufzählung erreicht das else, und raise bräche diesen Weg"
+
+msgid "the arm labels are numbers - the case selects on an integer, values without an arm are normal there, and raise would break that path"
+msgstr "die Marken der Zweige sind Zahlen - das case wählt nach einer ganzen Zahl, Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is a constant (line %d), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Konstante (Zeile %d), kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is a constant in the unit %s, not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Konstante der Unit %s, kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "the arm label %s is an integer constant of the RTL (messages, keys, dialog results), not a value of an enumeration - values without an arm are normal there, and raise would break that path"
+msgstr "die Marke %s ist eine Ganzzahl-Konstante der RTL (Nachrichten, Tasten, Dialog-Ergebnisse), kein Wert einer Aufzählung - Werte ohne Zweig sind dort normal, und raise bräche diesen Weg"
+
+msgid "%s gets a value before the case (line %d) - values without an arm keep it, that is the normal path there; raise would break it"
+msgstr "%s bekommt vor dem case schon einen Wert (Zeile %d) - Werte ohne Zweig behalten ihn, das ist dort der normale Weg; raise bräche ihn"
+
+msgid "values of %s without an arm: %s - they may be normal here, and raise would break that path"
+msgstr "Werte von %s ohne Zweig: %s - sie können hier Normalfall sein, und raise bräche diesen Weg"
+
+msgid "not in the light bulb: %s; unhandled values raise EInvalidOpException"
+msgstr "nicht in der Glühbirne: %s; unbehandelte Werte lösen EInvalidOpException aus"
+
+msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - written for FPC and an older Delphi, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - für FPC und ein älteres Delphi geschrieben, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
+
+msgid "Delphi program %s without .dproj next to the Lazarus project %s in the directory %s - the program is also meant for an older Delphi, and a Delphi before XE has no global variable FormatSettings; adjust the call %s"
+msgstr "Delphi-Programm %s ohne .dproj neben dem Lazarus-Projekt %s im Verzeichnis %s - das Programm ist auch für ein älteres Delphi gedacht, und ein Delphi vor XE hat keine globale Variable FormatSettings; den Aufruf %s anpassen"
+
+msgid "old project file %s in the directory %s - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "alte Projektdatei %s im Verzeichnis %s - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
+
+msgid "package %s in the directory %s contains the unit and is meant for a Delphi before 2009 (%s), which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Paket %s im Verzeichnis %s enthält die Unit und ist für ein Delphi vor 2009 (%s), und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
+
+msgid "project %s in the directory %s with ProjectVersion %s (before Delphi 2009 = %s) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented do not exist there; %s"
+msgstr "Projekt %s im Verzeichnis %s mit ProjectVersion %s (vor Delphi 2009 = %s) - dort gibt es die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented nicht; %s"
+
+msgid "project %s in the directory %s without a readable ProjectVersion (Delphi 2007 wrote none) - the unit probably also builds with a Delphi before 2009, which lacks the exception classes EArgumentException, EInvalidOpException and ENotImplemented; %s"
+msgstr "Projekt %s im Verzeichnis %s ohne lesbare ProjectVersion (Delphi 2007 schrieb keine) - die Unit baut wohl auch mit einem Delphi vor 2009, und dort fehlen die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented; %s"
+
+msgid "the call of %s does not close within %d lines"
+msgstr "der Aufruf von %s schließt nicht innerhalb von %d Zeilen"
+
+msgid "the call of %s runs from line %d to line %d across a compiler directive or a comment or string spanning lines"
+msgstr "der Aufruf von %s läuft von Zeile %d bis Zeile %d über eine Compiler-Direktive oder einen zeilenübergreifenden Kommentar bzw. String"
+
+msgid "the file sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings"
+msgstr "die Datei stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei"
+
+msgid "the include %s shows traces of older compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on; %s"
+msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009; %s"
+
+msgid "the program %s in the directory %s contains the unit and sets the global FormatSettings itself (%s, line %d) - TFormatSettings.Invariant would bypass these settings; %s"
+msgstr "das Programm %s im Verzeichnis %s enthält die Unit und stellt die globale FormatSettings selbst ein (%s, Zeile %d) - TFormatSettings.Invariant liefe an diesen Einstellungen vorbei; %s"
+
+msgid "the statement also carries the literal %s - with TFormatSettings.Invariant %s writes another format (decimal point, MM/dd/yyyy), a comparison with the literal would fail"
+msgstr "die Anweisung trägt auch das Literal %s - mit TFormatSettings.Invariant schreibt %s ein anderes Format (Dezimalpunkt, MM/dd/yyyy), ein Vergleich mit dem Literal schlüge fehl"
+
+msgid "line %d evaluates %s together with %s - with TFormatSettings.Invariant here alone, the two would no longer fit together (decimal separator, date format)"
+msgstr "Zeile %d wertet %s zusammen mit %s aus - mit TFormatSettings.Invariant nur hier passten beide nicht mehr zusammen (Dezimaltrenner, Datumsformat)"
+
+msgid "line %d evaluates %s together with %s, which line %d writes with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "Zeile %d wertet %s zusammen mit %s aus, das Zeile %d mit %s ohne TFormatSettings.Invariant schreibt - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
+
+msgid "line %d evaluates %s together with %s without TFormatSettings.Invariant - with only this call changed, the two no longer match"
+msgstr "Zeile %d wertet %s zusammen mit %s ohne TFormatSettings.Invariant aus - wird nur dieser Aufruf umgestellt, passen beide nicht mehr zusammen"
+
+# reDelphix HilfeFix P (rwE32 Stufe 4: uRdxFloatEqualityFix SCA144 Delphi 6, uRdxMagicFixes Kit-Include der Ausnahmeklassen)
+
+msgid "the file asks for old compilers (%s, line %d) - %s exists in Math only from Delphi 6 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - %s gibt es in Math erst ab Delphi 6"
+
+msgid "the file asks for old compilers (%s, line %d) - the exception classes EArgumentException, EInvalidOpException and ENotImplemented exist only from Delphi 2009 on"
+msgstr "die Datei fragt nach alten Compilern (%s, Zeile %d) - die Ausnahmeklassen EArgumentException, EInvalidOpException und ENotImplemented gibt es erst ab Delphi 2009"
+
+# reDelphix HilfeFix S (uRdxFormatSettingsFix SCA128.2/SCA059.2: Anzeige-Ziel E6, Formateinstellungen der Klasse)
+
+msgid "line %d shows the result on screen (%s) - there the user locale is the right one; TFormatSettings.Invariant would show decimal point and MM/dd/yyyy"
+msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers richtig; TFormatSettings.Invariant zeigte Dezimalpunkt und MM/dd/yyyy"
+
+msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
+msgstr "die Klasse %s hat eigene Formateinstellungen %s (Zeile %d) - diese von Hand statt TFormatSettings.Invariant übergeben, das ihre Einstellungen verwürfe"

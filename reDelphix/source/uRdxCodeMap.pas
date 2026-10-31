@@ -128,10 +128,21 @@ type
   // werden; sonst passen Klassen und Text nicht mehr zusammen, und die
   // Planer lesen Code, wo ein Kommentar steht. Die Aufrufer (uRdxFixRunner,
   // uRdxFixTable, uRdxRecipeRunner und uRdxSuppress mit den Zeilen aus
-  // uRdxProvider, uRdxBlocks fuer Include-Dateien, die Tests) bauen die Map
-  // je Lauf neu.
+  // uRdxProvider, uRdxBlocks fuer Include-Dateien, die Tests) holen die Map
+  // ueber Acquire und geben sie ueber Release zurueck (GETEILTE SICHT unten).
+  //
+  // GETEILTE SICHT (Charge P5, Performance): bis dahin baute jeder Aufrufer
+  // seine eigene Map - je Fund eines Menues Zeilen-Marker, Datei-Marker und
+  // Planer je eine (3,1 Aufbauten je Fund, 10,3 von 16 s im Messgeruest
+  // ueber den Selbstscan). Traegt ALines eine Map (TRdxMappedLines, die
+  // Zeilen des Anbieters), liefert Acquire DIESE - gebaut beim ersten
+  // Acquire, verworfen bei jeder Aenderung der Zeilen (Changing); sonst eine
+  // neue wie bisher. Die Klassen haengen nur vom Text der Zeilen ab: eine
+  // geteilte Map ist dieselbe, die Create in diesem Moment baute.
   TRdxCodeMap = class
   private
+    FHeld    : Boolean;   // gehoert TRdxMappedLines - Release gibt sie nicht frei
+    FSerial  : Int64;     // s. Serial
     FLines   : TStrings;
     FClass   : TArray<string>;
     FSlash   : TArray<Integer>;   // je Zeile: Spalte des '//'-Kommentars, 0 = keiner
@@ -162,6 +173,20 @@ type
     // Liest ALines einmal und klassifiziert jedes Zeichen; ALines bleibt im
     // Besitz des Aufrufers (s. LEBENSDAUER oben).
     constructor Create(ALines: TStrings);
+    // Die Map zu ALines (s. GETEILTE SICHT oben): die von ALines getragene,
+    // wenn ALines ein TRdxMappedLines ist, sonst eine neue (Create). Immer
+    // ueber Release zurueckgeben - nie Free.
+    class function Acquire(ALines: TStrings): TRdxCodeMap; static;
+    // Gibt eine Map aus Acquire zurueck: frei, wenn sie neu gebaut war; die
+    // von TRdxMappedLines getragene bleibt stehen. AMap ist danach nil; nil
+    // ist erlaubt (wie Free).
+    class procedure Release(var AMap: TRdxCodeMap); static;
+    // Laufende Nummer dieser Map, je Create eine neue (ab 1) - anders als
+    // die Adresse nie wiederverwendet. Eine Map aendert sich nach Create
+    // nicht: gleiche Nummer, gleiche Sicht (Schluessel des Plattenblick-
+    // Caches in uRdxMagicFixes.IncludeReason, Charge P5). Gezaehlt wird
+    // ohne Sperre - reDelphix baut Maps nur im Hauptthread.
+    property Serial: Int64 read FSerial;
     // Zahl der Zeilen der Datei (live aus ALines).
     function LineCount: Integer;
     // Rohzeile ALine (1-basiert, live aus ALines), '' ausserhalb.
@@ -188,6 +213,36 @@ type
     // '(* {$IFDEF VER150} *)' fuer eine Direktive). Grundlage von
     // DirectiveAt.
     function DirectiveStartsAt(ALine, ACol: Integer): Boolean;
+  end;
+
+  // Zeilen, die ihre Code-Sicht tragen (Charge P5, s. GETEILTE SICHT bei
+  // TRdxCodeMap): TRdxCodeMap.Acquire liefert allen Aufrufern - Unterdrueck-
+  // Hilfen, Planer, Kontext-Laeufer - dieselbe Map, gebaut beim ersten
+  // Acquire. Jede Aenderung der Zeilen (Changing: Put, Add, Insert, Delete,
+  // Clear, Text, Sortieren, auch in BeginUpdate) verwirft sie; das naechste
+  // Acquire baut neu. Eine Map darf darum nicht ueber eine Aenderung der
+  // Zeilen hinweg gehalten werden (wie bisher: LEBENSDAUER). Die Zeilen
+  // besitzen ihre Map und geben sie mit sich frei. Changes zaehlt jede
+  // dieser Aenderungen mit: wer Zeilen nach ihrem Ausgangstext
+  // wiederverwendet (TRdxProvider.SharedLines), erkennt daran, dass ein
+  // Verbraucher sie seither veraendert hat, und baut sie neu.
+  TRdxMappedLines = class(TStringList)
+  private
+    FMap     : TRdxCodeMap;
+    FBuilds  : Integer;
+    FChanges : Integer;
+    procedure DropMap;
+  protected
+    procedure Changing; override;
+  public
+    destructor Destroy; override;
+    // Die Map der Zeilen, bei Bedarf jetzt gebaut (Acquire nimmt sie).
+    function Map: TRdxCodeMap;
+    // Wie oft eine Map gebaut wurde - fuer Tests und das Messgeruest.
+    property Builds: Integer read FBuilds;
+    // Wie oft die Zeilen geaendert wurden (je Changing eins, auch in
+    // BeginUpdate) - gleich bleibt er nur, solange niemand schreibt.
+    property Changes: Integer read FChanges;
   end;
 
   // Ein Schritt einer Token-Suche der Planer: weiter, gefunden, abbrechen.
@@ -939,11 +994,20 @@ end;
 
 { TRdxCodeMap }
 
+var
+  // Die letzte vergebene Serial. Ohne Sperre: reDelphix baut Maps nur im
+  // IDE-Hauptthread (Gluehbirne, Menueaufbau, Code-Aktionen; das Paket
+  // startet keine Threads). Wer eine Map aus einem anderen Thread baut,
+  // muss diesen Zaehler zuerst absichern (TInterlocked.Increment).
+  GMapSerial : Int64 = 0;
+
 constructor TRdxCodeMap.Create(ALines: TStrings);
 var
   i, j : Integer;
 begin
   inherited Create;
+  Inc(GMapSerial);
+  FSerial := GMapSerial;
   FLines := ALines;
   SetLength(FClass, ALines.Count);
   SetLength(FSlash, ALines.Count);
@@ -976,6 +1040,54 @@ begin
   FText  := '';
   FKinds := '';
   FDirKinds := '';
+end;
+
+class function TRdxCodeMap.Acquire(ALines: TStrings): TRdxCodeMap;
+begin
+  if ALines is TRdxMappedLines then
+    Result := TRdxMappedLines(ALines).Map
+  else
+    Result := TRdxCodeMap.Create(ALines);
+end;
+
+class procedure TRdxCodeMap.Release(var AMap: TRdxCodeMap);
+begin
+  if (AMap <> nil) and not AMap.FHeld then
+    AMap.Free;
+  AMap := nil;
+end;
+
+{ TRdxMappedLines }
+
+destructor TRdxMappedLines.Destroy;
+begin
+  DropMap;
+  inherited;
+end;
+
+procedure TRdxMappedLines.DropMap;
+begin
+  FreeAndNil(FMap);
+end;
+
+procedure TRdxMappedLines.Changing;
+begin
+  // VOR der Aenderung: auch eine in BeginUpdate (Changed kaeme erst mit
+  // EndUpdate) laesst keine alte Map stehen.
+  DropMap;
+  Inc(FChanges);
+  inherited;
+end;
+
+function TRdxMappedLines.Map: TRdxCodeMap;
+begin
+  if FMap = nil then
+  begin
+    FMap := TRdxCodeMap.Create(Self);
+    FMap.FHeld := True;
+    Inc(FBuilds);
+  end;
+  Result := FMap;
 end;
 
 procedure TRdxCodeMap.NoteDirective(j: Integer);

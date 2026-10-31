@@ -61,7 +61,12 @@ type
     // beides keine Hilfe. Dazu dieselbe Typ-Sperre wie SCA139 (seit Review
     // FB, R2-01/R3-01): kein record/object/interface/Zeiger dieser Unit,
     // keine eigene Methode Free in der Unit, kein fremder Zeigertyp nach
-    // Namenskonvention. Fehlt SysUtils, kommt die uses-Einfuegung mit.
+    // Namenskonvention, kein Erbe einer Klasse des alten Open Tools API mit
+    // eigenem Free (VirtIntf.TInterface), kein Kommentar an der Stelle, der
+    // FreeAndNil nennt (Realwelt-Test rwE29). Fehlt SysUtils, kommt die
+    // uses-Einfuegung mit - ausser die Datei ruft FreeAndNil schon
+    // unqualifiziert dort auf, wo die Stelle uebersetzt wird (rwE33,
+    // FreeAndNilCalledLine): dann bleibt uses, wie es ist.
     class function FreeAndNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -87,10 +92,11 @@ type
     // Variablen- und Typ-Pruefung wie SCA085 (kein record/object/interface/
     // Zeiger dieser Unit, keine eigene Methode Free in der Unit - 'X.Free'
     // riefe sie, FreeAndNil nicht -, kein fremder Zeigertyp nach
-    // Namenskonvention); dazu kein const-/constref-Parameter (Review FB,
+    // Namenskonvention, kein Erbe von VirtIntf.TInterface, kein Kommentar
+    // mit FreeAndNil an der Stelle); dazu kein const-/constref-Parameter (Review FB,
     // R2-03: FPC und Delphi bis 10.3 uebersetzen das nicht, ab 10.4 wird
     // nur die lokale Kopie nil). Fehlt SysUtils, kommt die uses-
-    // Einfuegung mit.
+    // Einfuegung mit - ausser wie bei SCA085 (FreeAndNilCalledLine).
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -113,9 +119,15 @@ type
       const AMessage: string): TRdxFixOutcome; static;
 
     // SCA007: den uses-Eintrag AUnit (die Meldung) auf ALine loeschen
-    // (TRdxStructFixes.RemoveUsesEntry). Gesperrt bei Direktiven in einer
-    // uses-Klausel. Aendert evtl. das Verhalten: der initialization-
-    // Abschnitt der Unit laeuft nicht mehr (Kennzeichnung in uRdxFixTable).
+    // (TRdxStructFixes.RemoveUsesEntry). Gesperrt, wenn der Bereich eine
+    // Direktive beruehrt (seit rwE30 nicht mehr bei jeder Direktive in einer
+    // uses-Klausel). Nur im Menue (MenuOnly), wenn die Datei einen
+    // Bezeichner nutzt, den der Planer keiner anderen Unit zuordnen kann
+    // (TRdxStructFixes.ForeignIdent), oder wenn der Eintrag in einem Zweig
+    // steht, den der Dienst nicht geparst hat und dessen Units der Planer
+    // nicht ueber Zwillinge kennt (TwinBranches). Aendert evtl. das
+    // Verhalten: der initialization-Abschnitt der Unit laeuft nicht mehr
+    // (Kennzeichnung in uRdxFixTable).
     class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
 
@@ -125,7 +137,11 @@ type
       ALine: Integer): TRdxFixOutcome; static;
     // SCA168, zweiter Eintrag: else mit RAISE_UNHANDLED - aendert das
     // Verhalten; SysUtils kommt bei Bedarf mit (mit FPC-Weiche als
-    // Kurzname - FPC kennt EInvalidOpException ebenfalls).
+    // Kurzname - FPC kennt EInvalidOpException ebenfalls). Nur im Menue
+    // (MenuOnly), wenn nicht bewiesen ist, dass jeder Wert einen Arm hat
+    // (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); gesperrt, wenn
+    // das case nicht nach einer Aufzaehlung waehlt oder das Ergebnis
+    // vorbelegt ist (Nico-Entscheid E5, rwE32 Stufe 4).
     class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
@@ -172,7 +188,13 @@ function SelfAssignReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
 // ' + uses <Name>' an den Hinweis. False (Edits geleert, Grund gesetzt),
 // wenn sie nicht planbar ist. Bis Charge H5 nur fuer SysUtils
 // (AppendSysUtils: FreeAndNil, raise ...); seitdem auch fuer Variants
-// (SCA196: VarClear(Result)).
+// (SCA196: VarClear(Result)). Die Stelle, die die Unit braucht, sind die
+// Ersetzungen, die schon in AOutcome.Edits stehen (EditLines: erste bis
+// letzte Zeile) - PlanUses laesst eine nur bedingt eingebundene Unit
+// gelten, wenn jeder Zweig um ihren Eintrag diese Zeilen umfasst (rwE31).
+// Bis Fix-Runde 4 gab der Aufrufer eine Zeile mit, SCA020.2, SCA168.2,
+// SCA127 und SCA196 keine (gesperrt); SCA168.2 schreibt auch nicht auf die
+// Zeile des Funds ('case'), sondern auf die des 'end'.
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
   const AShortName, AQualifiedName: string;
   var AOutcome: TRdxFixOutcome): Boolean;
@@ -181,9 +203,10 @@ implementation
 
 uses
   System.SysUtils,
-  System.StrUtils,   // IndexText (UnitStillUsed)
+  System.Generics.Collections,   // TDictionary (UnitStillUsed)
   uRefactorInfo,     // TRefactorSpan (FindUsesEntry)
   uRdxRecipes,       // TRdxRecipes (IsPlainIdent, HasUnit)
+  uRdxBlocks,        // TRdxBlocks.FindClassHeads/HeritageOf (OtaFreeAncestor)
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxTypeProof,     // Typbeweis auf dem Text (bis Folgewelle A4 in uRdxSimpleFixes)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
@@ -191,6 +214,7 @@ uses
   uRdxRaiseFixes,    // Planer SCA020 mit raise (EmptyRaiseFix)
   uRdxRtlTypes,      // IsRtlClassOrInterface: Klasse 'PDFDocument' ist kein Zeiger
   uRdxText,          // _, MsgNoFileOpen, MsgMovedSuffix, MsgStaleSuffix (E29, C1)
+  uRdxPlacesRunner,  // TRdxPlacesRunner.UsesReason (AppendUses, Fix-Runde 4)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -234,6 +258,29 @@ const
   R_POINTER_NAME = '%s has the type %s - by Delphi convention a pointer from '
     + 'another unit (Free is then the one of the target, FreeAndNil takes '
     + 'only a TObject)';
+  // Realwelt-Test rwE29 (SCA085, GExperts GX_PriorityBoost/GX_Search).
+  R_OTA_FREE = '%s descends from %s (old Open Tools API, VirtIntf.'
+    + 'TInterface) - its own Free calls Release, FreeAndNil would destroy '
+    + 'the object';
+  // Realwelt-Test rwE29 (SCA085, HeidiSQL SynEdit.pas).
+  R_FREE_COMMENT = 'the comment in line %d mentions FreeAndNil - free first, '
+    + 'then nil is probably intended there';
+  // Die Klassen des alten Open Tools API (ToolIntf, EditIntf, ExptIntf,
+  // FileIntf) mit VirtIntf.TInterface als Vorfahr: TInterface deklariert
+  // 'procedure Free' NICHT virtuell neu (ruft Release, Referenzzaehlung).
+  // 'X.Free' ruft diese Methode, FreeAndNil(X) dagegen TObject.Free und
+  // damit sofort Destroy. Erhoben aus den Quellen von Delphi 12 und 13
+  // (source\ToolsAPI\*.pas, transitiv ueber 'class(..)'), 2026-10-29.
+  OTA_FREE_CLASSES: array[0..20] of string = ('TInterface',
+    'TIAddInNotifier', 'TIComponentInterface', 'TIEditorInterface',
+    'TIEditReader', 'TIEditView', 'TIEditWriter', 'TIExpert',
+    'TIFormInterface', 'TIMainMenuIntf', 'TIMenuItemIntf', 'TIModuleCreator',
+    'TIModuleCreatorEx', 'TIModuleInterface', 'TIModuleNotifier',
+    'TIProjectCreator', 'TIProjectCreatorEx', 'TIResourceEntry',
+    'TIResourceFile', 'TIToolServices', 'TIVirtualFileSystem');
+  // So viele Vorfahren dieser Unit verfolgt OtaFreeAncestor.
+  MAX_HERITAGE = 16;
+  FREEANDNIL_LOW = 'freeandnil';
   R_CONST_PARAM = '%s is a const parameter - FreeAndNil does not reach the '
     + 'caller''s variable (FPC: error, Delphi up to 10.3: E2197)';
   R_WITH_MEMBER  = 'with statement in the routine - %s could be a member';
@@ -270,11 +317,11 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := APlan(Map, ALine, AMessage, Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -288,23 +335,49 @@ end;
 
 // SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
 // eine Property uebersetzt als Argument nicht (vor 10.4) bzw. umgeht ihren
-// Setter (const [ref]). Gesperrt: irgendwo in der Unit als Property
-// deklariert, ein 'with' davor in der Routine oder ein with-Block um die
-// Zeile (auch 'with X do Y.Free;' auf EINER Zeile - InWithBlock; dort
-// bindet der Name evtl. an ein Member), weder deklariert (DeclaredTypeOf:
-// Parameter, lokal, Result, Feld oder Global der Unit) noch Inline-
-// Variable ohne Typ. '' oder der Grund.
+// Setter (const [ref]). Gesperrt: ein with-Rumpf um die Zeile (auch 'with
+// X do Y.Free;' auf EINER Zeile - InWithBlock; dort bindet der Name evtl.
+// an ein Member), irgendwo in der Unit als Property deklariert (ausser ein
+// Parameter oder eine lokale Variable verdeckt sie), weder deklariert
+// (DeclaredTypeOf: Parameter, lokal, Result, Feld oder Global der Unit)
+// noch Inline-Variable ohne Typ. '' oder der Grund. Seit dem Realwelt-Test rwE30
+// zuerst with (nur ein with-RUMPF um die Zeile, WithBefore), dann - wenn
+// der Quellstellen-Dienst nichts beweist oder die Unit eine gleichnamige
+// Property traegt - der Beweis aus dem Text (TRdxSimpleFixes.
+// VariableProof): ein Parameter bzw. eine lokale Variable einer
+// umschliessenden, auch verschachtelten Routine verdeckt die Property;
+// ein Feld der eigenen Klasse bzw. eine Variable auf Unit-Ebene beweist
+// die Variable, wo DeclaredTypeOf schweigt. ATypeLow: der Typ fuer die
+// Typ-Sperren (FreeMethodReason).
 function VariableCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): string;
+  ALine: Integer; const AName: string; out ATypeLow: string): string;
+var
+  Prop  : Boolean;
+  Proof : TRdxVarProof;
 begin
   Result := '';
-  if TRdxTypeProof.DeclaresProperty(AMap, AName) then
-    Exit(_('%s is declared as a property in this unit - FreeAndNil needs a '
-      + 'variable', [AName]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
     Exit(_(R_WITH_MEMBER, [AName]));
-  if (APlaces.DeclaredTypeOf(ALine, AName) = '')
-     and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
+  Prop := TRdxTypeProof.DeclaresProperty(AMap, AName);
+  ATypeLow := APlaces.DeclaredTypeOf(ALine, AName);
+  if (ATypeLow <> '') and not Prop then
+    Exit;
+  // Mit der Datei: ein Global aus einer Unit neben ihr (rwE31).
+  Proof := TRdxSimpleFixes.VariableProof(AMap, ALine, AName,
+    APlaces.FileName);
+  if Proof.Kind = vpLocal then
+  begin
+    ATypeLow := Proof.TypeLow;
+    Exit;
+  end;
+  if Prop then
+    Exit(_('%s is declared as a property in this unit - FreeAndNil needs a '
+      + 'variable', [AName]));
+  if TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
+    Exit;
+  if Proof.Kind in [vpField, vpGlobal] then
+    ATypeLow := Proof.TypeLow
+  else
     Result := _(R_NOT_A_VARIABLE, [AName]);
 end;
 
@@ -365,6 +438,93 @@ begin
     Result := '';
 end;
 
+// Ist ATypeLow eine Klasse des alten Open Tools API mit eigenem Free
+// (OTA_FREE_CLASSES) oder erbt sie von einer? Verfolgt wird der erste
+// Vorfahr der Klassenkoepfe DIESER Unit ('TGxBoostNotifier =
+// class(TIAddInNotifier)'), hoechstens MAX_HERITAGE Stufen; ein Alias, der
+// die Unit verlaesst, ueber ForeignTypeName ('TMyIntf = TIModuleInterface').
+// Die Zuordnung geht ueber den NAMEN wie in uRdxRtlTypes (E27). Ein
+// Kundenerbe von TInterface in einer ANDEREN Unit sieht das nicht.
+// AAncestor: der Name aus der Liste, wie er dort steht.
+function OtaFreeAncestor(AMap: TRdxCodeMap; const ATypeLow: string;
+  out AAncestor: string): Boolean;
+var
+  T, Known : string;
+  Heads    : TArray<TRdxToken>;
+  Parents  : TArray<string>;
+  i        : Integer;
+begin
+  Result := False;
+  AAncestor := '';
+  T := ForeignTypeName(AMap, ATypeLow);
+  if T = '' then
+    T := ATypeLow;
+  for i := 1 to MAX_HERITAGE do
+  begin
+    for Known in OTA_FREE_CLASSES do
+      if SameText(T, Known) then
+      begin
+        AAncestor := Known;
+        Exit(True);
+      end;
+    Heads := TRdxBlocks.FindClassHeads(AMap, T);
+    if Length(Heads) <> 1 then
+      Exit;
+    Parents := TRdxBlocks.HeritageOf(AMap, Heads[0]);
+    if Length(Parents) = 0 then
+      Exit;
+    T := LowerCase(Parents[0]);
+  end;
+end;
+
+// Nennt ein Kommentar an der Freigabe auf ALine FreeAndNil? Gelesen wird
+// der Nicht-Code der Zeile selbst (ein Kommentar dahinter) und die Zeilen
+// ohne Code direkt darueber (Kommentare, Leerzeilen) bis zur ersten
+// Code-Zeile. HeidiSQL SynEdit.pas:1592 (rwE29): '// do not use
+// FreeAndNil, it first nils and then frees causing problems with code
+// accessing FHookedCommandHandlers while destruction' - die Reihenfolge
+// Free, dann nil ist dort Absicht. Die Zeile des Treffers, 0 ohne.
+function FreeAndNilCommentLine(AMap: TRdxCodeMap; ALine: Integer): Integer;
+
+  // Steht 'freeandnil' auf Li ausserhalb des Codes?
+  function MentionsOutsideCode(Li: Integer): Boolean;
+  var
+    L    : string;
+    P, k : Integer;
+  begin
+    Result := False;
+    L := LowerCase(AMap.Raw(Li));
+    P := Pos(FREEANDNIL_LOW, L);
+    while P > 0 do
+    begin
+      if not AMap.IsCode(Li, P) then
+        Exit(True);
+      k := P + Length(FREEANDNIL_LOW);
+      P := Pos(FREEANDNIL_LOW, Copy(L, k, MaxInt));
+      if P > 0 then
+        P := P + k - 1;
+    end;
+  end;
+
+var
+  Li : Integer;
+begin
+  Result := 0;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  if MentionsOutsideCode(ALine) then
+    Exit(ALine);
+  Li := ALine - 1;
+  // NextToken ab Spaltenanfang: liegt das naechste Code-Token auf einer
+  // spaeteren Zeile, traegt Li keinen Code.
+  while (Li >= 1) and (NextToken(AMap, Li, 1).Line <> Li) do
+  begin
+    if MentionsOutsideCode(Li) then
+      Exit(Li);
+    Dec(Li);
+  end;
+end;
+
 // SCA085/SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht
 // eine eigene Methode Free und nimmt X als TObject. Gesperrt (ATypeLow = der
 // deklarierte Typ von X):
@@ -378,7 +538,9 @@ end;
 //     ab8: 1 SCA085-Angebot weniger, Alcinoe dwsUtils);
 //   * ein Typ einer anderen Unit, der nach Konvention ein Zeiger ist
 //     (PointerNamedType: 'PEVP_PKEY'), auch hinter einem Alias der Unit
-//     (ForeignTypeName: 'PMyKey = PEVP_PKEY').
+//     (ForeignTypeName: 'PMyKey = PEVP_PKEY');
+//   * ein Erbe einer Klasse des alten Open Tools API mit eigenem Free
+//     (OtaFreeAncestor, Realwelt-Test rwE29).
 // Bis Review FB (R2-01/R3-01) pruefte das nur SCA139; SCA085 bot
 // 'FreeAndNil(result)' fuer 'result: PX509_CRL' an - Delphi 12: E2010, FPC
 // und Delphi bis 10.3: TObject.Free auf einer OpenSSL-Struktur. Typen
@@ -390,35 +552,81 @@ var
   Spelling : string;
 begin
   Result := '';
-  if TRdxTypeProof.DeclaresNonClassType(AMap, ATypeLow) then
+  // Ein ausformulierter Typ aus dem Text-Beweis ('R: record .. end',
+  // 'P: ^TFoo', rwE30) ist nie die Klasse, die FreeAndNil braucht.
+  if InList(ATypeLow, OWN_TYPE_WORDS) or (ATypeLow = '^')
+     or TRdxTypeProof.DeclaresNonClassType(AMap, ATypeLow) then
     Result := _(R_NOT_AN_OBJECT, [AName, ATypeLow])
   else if TRdxTypeProof.DeclaresRoutine(AMap, 'Free') then
     Result := _(R_OWN_FREE)
   else if PointerNamedType(AMap, ForeignTypeName(AMap, ATypeLow),
        Spelling) then
-    Result := _(R_POINTER_NAME, [AName, Spelling]);
+    Result := _(R_POINTER_NAME, [AName, Spelling])
+  else if OtaFreeAncestor(AMap, ATypeLow, Spelling) then
+    Result := _(R_OTA_FREE, [AName, Spelling]);
 end;
 
-function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
-  ALine: Integer; const AName: string): string;
+// SCA085/SCA139: der Kommentar an der Stelle (FreeAndNilCommentLine), dann
+// der Typ ATypeLow aus VariableCheck (FreeTypeReason; bis rwE30 hier noch
+// einmal DeclaredTypeOf - der Typ aus dem Text-Beweis fehlte). '' oder der
+// Grund.
+function FreeMethodReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AName, ATypeLow: string): string;
+var
+  Li : Integer;
 begin
-  Result := FreeTypeReason(AMap, AName, APlaces.DeclaredTypeOf(ALine, AName));
+  Li := FreeAndNilCommentLine(AMap, ALine);
+  if Li > 0 then
+    Exit(_(R_FREE_COMMENT, [Li]));
+  Result := FreeTypeReason(AMap, AName, ATypeLow);
+end;
+
+// Die Zeilen, auf denen die Ersetzungen AEdits landen (AppendUses): von der
+// kleinsten Start- bis zur groessten Endzeile; ein Bereich, der in Spalte 1
+// endet (eine Zeile samt Zeilenende, SCA085: die nil-Zeile), reicht nur
+// bis zur Zeile davor. 0 und 0 ohne Ersetzung (PlanUses: Stelle unbekannt).
+// Eine Ersetzung ohne Zeile (StartLine < 1, leerer Span) zaehlt nicht -
+// sie truege sonst 0 als kleinste Zeile ein, und PlanUses fragte ohne
+// Stelle (Review-MINOR Merge e/HilfeFixN, defensiv).
+procedure EditLines(const AEdits: TArray<TRdxEdit>; out AFirst,
+  ALast: Integer);
+var
+  i, Last : Integer;
+begin
+  AFirst := 0;
+  ALast := 0;
+  for i := 0 to High(AEdits) do
+  begin
+    if AEdits[i].Span.StartLine < 1 then
+      Continue;
+    Last := AEdits[i].Span.EndLine;
+    if (AEdits[i].Span.EndCol <= 1) and (Last > AEdits[i].Span.StartLine) then
+      Dec(Last);
+    if (AFirst = 0) or (AEdits[i].Span.StartLine < AFirst) then
+      AFirst := AEdits[i].Span.StartLine;
+    if Last > ALast then
+      ALast := Last;
+  end;
 end;
 
 function AppendUses(APlaces: TSourcePlaces; const AUsesNames: TArray<string>;
   const AShortName, AQualifiedName: string;
   var AOutcome: TRdxFixOutcome): Boolean;
 var
-  Plan : TRdxUsesPlan;
+  Plan        : TRdxUsesPlan;
+  First, Last : Integer;
 begin
   Result := True;
   if TRdxRecipes.HasUnit(AUsesNames, AShortName) then Exit;
-  Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName);
+  EditLines(AOutcome.Edits, First, Last);
+  Plan := TRdxRecipeRunner.PlanUses(APlaces, AShortName, AQualifiedName,
+    First, Last);
   if Plan.Needed and (Plan.Reason <> '') then
   begin
-    // Dieselbe msgid wie uRdxRecipeRunner.FormatUsesReason (Format()).
-    AOutcome.Reason := _('%s is missing in uses: %s',
-      [AQualifiedName, Plan.Reason]);
+    // Derselbe Satz wie uRdxPlacesRunner.FormatUsesReason (Format()); nur
+    // bedingt eingebunden: "steht nur unter bedingter Uebersetzung" statt
+    // "fehlt" (Fix-Runde 4 nach rwE32, ClassBrowser.pas:507).
+    AOutcome.Reason := TRdxPlacesRunner.UsesReason(Plan, AQualifiedName);
     AOutcome.Edits := nil;
     Exit(False);
   end;
@@ -440,11 +648,55 @@ begin
     AOutcome);
 end;
 
+// SCA085/SCA139 (rwE33 Stufe 5, Dev-Cpp InstallWizards.pas:684 - SysUtils
+// nur in '{$IFDEF WIN32}' und '{$IFDEF LINUX}', FreeAndNil unqualifiziert
+// in Zeile 265/476/738): ruft die Datei FreeAndNil schon im Code auf
+// (TRdxSimpleFixes.CallsBindingAt: in einer freien Routine oder einer
+// Methode derselben Klasse wie die Stelle), an einer Stelle, die ueberall
+// uebersetzt wird, wo die Ersetzungen AEdits landen (TRdxPlacesRunner.
+// CoveringPlace mit EditLines)? Dann loest 'FreeAndNil(X)' dort genauso
+// auf wie dieser Aufruf - dieselbe Unit, derselbe Name; die uses-Klausel
+// bleibt, wie sie ist (AppendSysUtils entfaellt). Der Beweis gilt dem
+// Namen, nicht der Unit: kaeme FreeAndNil aus einer anderen Unit, riefe
+// die Hilfe dieselbe Routine wie der Code daneben (GRENZE wie
+// CallsBindingAt: ein fremdes Member FreeAndNil der Klasse der Stelle
+// sieht der Text nicht). Die Zeile des Aufrufs, 0 ohne. Die beiden Zweige
+// allein (WIN32 und LINUX) beweisen nichts - es gibt weitere Ziele
+// (MACOS ...).
+function FreeAndNilCalledLine(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AEdits: TArray<TRdxEdit>): Integer;
+var
+  Calls       : TArray<TRdxToken>;
+  Ls, Cs      : TArray<Integer>;
+  First, Last : Integer;
+  i, k        : Integer;
+begin
+  Result := 0;
+  EditLines(AEdits, First, Last);
+  if First < 1 then
+    Exit;
+  Calls := TRdxSimpleFixes.CallsBindingAt(AMap, 'FreeAndNil', First);
+  if Length(Calls) = 0 then
+    Exit;
+  SetLength(Ls, Length(Calls));
+  SetLength(Cs, Length(Calls));
+  for i := 0 to High(Calls) do
+  begin
+    Ls[i] := Calls[i].Line;
+    Cs[i] := Calls[i].Col;
+  end;
+  k := TRdxPlacesRunner.CoveringPlace(APlaces, Ls, Cs, First, Last);
+  if k >= 0 then
+    Result := Calls[k].Line;
+end;
+
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map     : TRdxCodeMap;
+  TypeLow : string;    // der Typ von X aus VariableCheck
+  Called  : Integer;   // FreeAndNilCalledLine: Zeile des Aufrufs, 0 ohne
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -452,17 +704,21 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Called := 0;
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
          Result.Name, Result.Reason) then
       Exit;
-    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name, TypeLow);
     // Dieselbe Typ-Sperre wie SCA139 (Review FB, R2-01/R3-01).
     if Result.Reason = '' then
-      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
+      Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
+    if (Result.Reason = '')
+       and not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+      Called := FreeAndNilCalledLine(APlaces, Map, Result.Edits);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then
   begin
@@ -470,7 +726,12 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  // FreeAndNil schon unqualifiziert aufgerufen, wo die Stelle uebersetzt
+  // wird (rwE33): keine uses-Ergaenzung.
+  if Called > 0 then
+    Result.Enabled := True
+  else
+    Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 class function TRdxFixRunner.AssertMessageFix(APlaces: TSourcePlaces;
@@ -485,7 +746,7 @@ begin
     Exit;
   end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Eine eigene Routine Assert (Methode oder global) bindet vor
     // System.Assert - ihre Parameter kennt hier niemand. Der with-Grund
@@ -500,7 +761,7 @@ begin
       Result.Enabled := TRdxSimpleFixes.AssertMessage(Map, ALine, AMessage,
         Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -654,7 +915,9 @@ class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AMessage: string;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map     : TRdxCodeMap;
+  TypeLow : string;    // der Typ von X aus VariableCheck
+  Called  : Integer;   // FreeAndNilCalledLine: Zeile des Aufrufs, 0 ohne
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
@@ -666,7 +929,8 @@ begin
   // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
   Result.Name := FreeReceiverOf(AMessage);
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Called := 0;
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if not TRdxSimpleFixes.FreeOnly(Map, ALine, Result.Name,
          Result.Edits[0], Result.Reason) then
@@ -674,13 +938,18 @@ begin
       Result.Edits := nil;
       Exit;
     end;
-    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name, TypeLow);
     if Result.Reason = '' then
-      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
+      Result.Reason := FreeMethodReason(Map, ALine, Result.Name, TypeLow);
     if Result.Reason = '' then
       Result.Reason := ConstParamReason(Map, ALine, Result.Name);
+    // Wie SCA085 (rwE33): FreeAndNil schon aufgerufen, wo die Stelle
+    // uebersetzt wird - keine uses-Ergaenzung.
+    if (Result.Reason = '')
+       and not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+      Called := FreeAndNilCalledLine(APlaces, Map, Result.Edits);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then
   begin
@@ -688,7 +957,10 @@ begin
     Exit;
   end;
   Result.Hint := _(R_FREENIL_HINT, [Result.Name]);
-  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+  if Called > 0 then
+    Result.Enabled := True
+  else
+    Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
 // SCA066: die Namen um den Aufruf (TRdxCallEdit). Ein blosser Name mit
@@ -733,14 +1005,14 @@ begin
     Result.Reason := _('file with an FPC switch or FPC mode - in objfpc only '
       + 'Foo() calls a procedure variable');
   if Result.Reason <> '' then Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if TRdxExprFixes.EmptyArgs(Map, ALine, AMessage, Plan, Result.Reason) then
       Result.Reason := CallReason(APlaces, Map, ALine, Plan)
     else if Result.Reason = '' then
       Result.Reason := _(R_NO_HELP);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   SetLength(Result.Edits, 1);
@@ -812,7 +1084,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if AKind = fkRedundantBoolean then
       Ok := TRdxExprFixes.RedundantBool(Map, ALine, AMessage, Plan,
@@ -825,7 +1097,7 @@ begin
     else if Result.Reason = '' then
       Result.Reason := _(R_NO_HELP);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   Result.Name := Plan.Name;
@@ -843,10 +1115,15 @@ end;
 // selbst zaehlen nicht: 'uses mormot.core.os, mormot.core.os.security;'
 // las das 'os' '.' des Geschwister-Eintrags als Bezug und sperrte die
 // Hilfe mit "wird im Text benutzt" (Wochen-Review 2026-10-21).
+// Die Bezeichner stehen einmal in einem TDictionary (Schluessel klein wie
+// T.Low): bis 2026-10-29 suchte IndexText je Token linear in der Liste -
+// seit d/SCA007Export hat eine Unit bis ueber 500 Eintraege.
 function UnitStillUsed(AMap: TRdxCodeMap; const AUnit: string): Boolean;
 var
   Low, Short : string;
   Idents     : TArray<string>;
+  Known      : TDictionary<string, Boolean>;
+  Id         : string;
   T, N, P    : TRdxToken;
   InUses     : Boolean;
 begin
@@ -856,28 +1133,40 @@ begin
   Idents := TUnusedUsesDetector.KnownIdents(Low);
   if (Length(Idents) = 0) and TUnusedUsesDetector.IstRtlNamespace(Low) then
     Idents := TUnusedUsesDetector.KnownIdents(Short);
-  P := Default(TRdxToken);
-  InUses := False;
-  T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
-  begin
-    N := After(AMap, T);
-    if InUses then
-      InUses := T.Low <> ';'
-    else if (T.Low = 'uses') and IsKeywordAfter(T, P) then
-      InUses := True
-    else if ((T.Low = Short) and (N.Low = '.'))
-       or (IndexText(T.Low, Idents) >= 0) then
-      Exit(True);
-    P := T;
-    T := N;
+  Known := TDictionary<string, Boolean>.Create(Length(Idents));
+  try
+    for Id in Idents do
+      Known.AddOrSetValue(LowerCase(Id), True);
+    P := Default(TRdxToken);
+    InUses := False;
+    T := NextToken(AMap, 1, 1);
+    while T.Low <> '' do
+    begin
+      N := After(AMap, T);
+      if InUses then
+        InUses := T.Low <> ';'
+      else if (T.Low = 'uses') and IsKeywordAfter(T, P) then
+        InUses := True
+      else if ((T.Low = Short) and (N.Low = '.'))
+         or Known.ContainsKey(T.Low) then
+        Exit(True);
+      P := T;
+      T := N;
+    end;
+  finally
+    Known.Free;
   end;
 end;
 
 // SCA007: die Klausel und der Eintrag zum Unit-Namen AUnit auf ALine.
-// '' oder der Grund.
-function FindUsesEntry(APlaces: TSourcePlaces; ALine: Integer;
-  const AUnit: string; out AClause: TRdxUsesClause; out AIndex: Integer): string;
+// Liefert der Dienst ihn nicht, liest ihn der Text (rwE31 Stufe 3: ein
+// Eintrag im Zweig eines Defines aus einer Include-Datei,
+// TRdxStructFixes.TextUsesEntry). '' oder der Grund. AFromText: der Eintrag
+// kam aus dem Text - der Dienst hat seinen Zweig nicht geparst
+// (UnusedUsesFix: Beweis unvollstaendig, nur im Menue).
+function FindUsesEntry(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AUnit: string; out AClause: TRdxUsesClause;
+  out AIndex: Integer; out AFromText: Boolean): string;
 var
   Clauses : TArray<TArray<TRefactorSpan>>;
   c, k, n : Integer;
@@ -885,6 +1174,7 @@ begin
   Result := '';
   AClause := Default(TRdxUsesClause);
   AIndex := -1;
+  AFromText := False;
   n := 0;
   Clauses := ClausesOf(APlaces);
   for c := 0 to High(Clauses) do
@@ -898,41 +1188,113 @@ begin
         AIndex := k;
       end;
   if n = 0 then
+  begin
+    n := TRdxStructFixes.TextUsesEntry(AMap, ALine, AUnit, AClause, AIndex);
+    AFromText := n > 0;
+  end;
+  if n = 0 then
     Result := MsgMovedSuffix(_('%s is no longer on line %d of a uses clause',
       [AUnit, ALine]))
   else if n > 1 then
     Result := _('%s appears more than once on line %d', [AUnit, ALine]);
 end;
 
+// SCA007: die bekannten Bezeichner (klein) aller uses-Eintraege der Datei
+// ausser AUnit - wem der Planer einen Bezeichner der Datei zuordnen kann
+// (TRdxStructFixes.ForeignIdent). Dieselbe Kette wie der Detektor
+// (TUnusedUsesDetector.IdentsFor: Liste, Kurzname fuer RTL-Namespaces).
+// Ein Eintrag mit demselben letzten Glied zaehlt nicht mit: im anderen
+// Zweig steht oft der Zwilling ('{$IFDEF D16} Vcl.ClipBrd {$ELSE} ClipBrd
+// {$ENDIF}', rwE31 Stufe 3) - seine Bezeichner sind die der entfernten Unit.
+// Die Ergaenzungen des Planers (ExtraIdentsOf) gelten seit dem Review
+// e/HilfeFixY nur fuer Eintraege, die auch an der Fundstelle (ASiteLine,
+// ASiteCol: der entfernte Eintrag) stehen.
+function OtherUnitsIdents(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AUnit: string; ASiteLine, ASiteCol: Integer): TArray<string>;
+var
+  Clauses : TArray<TArray<TRefactorSpan>>;
+  c, k    : Integer;
+  Id      : string;
+begin
+  Result := nil;
+  Clauses := ClausesOf(APlaces);
+  for c := 0 to High(Clauses) do
+  begin
+    for k := 0 to High(Clauses[c]) do
+      if not SameText(LastPart(Clauses[c][k].Resolved), LastPart(AUnit)) then
+        for Id in TUnusedUsesDetector.IdentsFor(
+            LowerCase(Clauses[c][k].Resolved)) do
+          AddText(Result, Id);
+    // SysUtils, Types, Windows ..: der Detektor fuehrt keine Liste
+    // (rwE31 Stufe 3); Point/Rect von Classes nimmt er nicht auf.
+    for Id in TRdxStructFixes.ExtraIdentsOf(AMap, Clauses[c], AUnit,
+        ASiteLine, ASiteCol) do
+      AddText(Result, Id);
+  end;
+end;
+
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AUnit: string): TRdxFixOutcome;
 var
-  Map    : TRdxCodeMap;
-  Clause : TRdxUsesClause;
-  Index  : Integer;
+  Map         : TRdxCodeMap;
+  Clause      : TRdxUsesClause;
+  Index       : Integer;
+  Foreign     : string;
+  ForeignLine : Integer;
+  FromText    : Boolean;
+  Twin        : Boolean;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := Trim(AUnit);
   Index := -1;
+  Foreign := '';
+  ForeignLine := 0;
+  FromText := False;
+  Twin := False;
+  // Direktiven in den uses-Klauseln sperren nicht mehr die ganze Datei
+  // (rwE30 Stufe 2: 19 unnoetige Sperren - Direktive in der anderen Klausel,
+  // vor 'uses', um andere Eintraege, Eintrag mitten in einem Zweig). Was
+  // geloescht wird, darf keine Direktive beruehren (RemoveUsesEntry,
+  // RangeReason): der Eintrag samt EINEM Trenner liegt dann ganz in einem
+  // Zweig, der andere Zweig bleibt Zeichen fuer Zeichen, und in diesem
+  // bleibt die Kommafolge gueltig.
   if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
-    Result.Reason := MsgNoFileOpen
-  else if TRdxRecipeRunner.UsesDirectiveLine(APlaces) > 0 then
-    Result.Reason := _('directive in a uses clause - an entry may apply only '
-      + 'in one branch')
-  else
-    Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
-  if Result.Reason <> '' then Exit;
+  begin
+    Result.Reason := MsgNoFileOpen;
+    Exit;
+  end;
   SetLength(Result.Edits, 1);
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
-    if UnitStillUsed(Map, Result.Name) then
-      Result.Reason := MsgStaleSuffix(_('%s is used in the text',
-        [Result.Name]))
-    else
-      Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
-        Result.Edits[0], Result.Reason);
+    Result.Reason := FindUsesEntry(APlaces, Map, ALine, Result.Name, Clause,
+      Index, FromText);
+    if Result.Reason = '' then
+    begin
+      if UnitStillUsed(Map, Result.Name) then
+        Result.Reason := MsgStaleSuffix(_('%s is used in the text',
+          [Result.Name]))
+      else if TRdxStructFixes.UsesOnlyUnit(Map) then
+        Result.Reason := _('the unit consists of uses clauses only - they '
+          + 'are its purpose (a package unit compiles the listed units); '
+          + 'without %s the build drops it', [Result.Name])
+      else
+        Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
+          Result.Edits[0], Result.Reason);
+    end;
+    // Aus dem Text: der Beweis ueber den geparsten anderen Zweig gilt, wenn
+    // jede seiner Units einen Zwilling in diesem Zweig hat (Fix-Runde 5 nach
+    // rwE33, TRdxStructFixes.TwinBranches).
+    if Result.Enabled then
+    begin
+      Twin := FromText and TRdxStructFixes.TwinBranches(Map, Clause, Index);
+      if Twin or not FromText then
+        Foreign := TRdxStructFixes.ForeignIdent(Map,
+          OtherUnitsIdents(APlaces, Map, Result.Name,
+            Clause.Entries[Index].StartLine, Clause.Entries[Index].StartCol),
+          ForeignLine);
+    end;
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
   begin
@@ -941,14 +1303,50 @@ begin
   end;
   // Der Detektor ist heuristisch (Bezeichnerliste je Unit): ein Typ, den
   // er nicht kennt (TDataModule, TStream ...), macht den Fund falsch.
-  Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
-    + 'initialization section (registration), it no longer runs',
-    [Result.Name]);
+  if FromText and not Twin then
+  begin
+    // Der Eintrag kam aus dem Text (Zweig, den der Dienst nicht geparst
+    // hat): die anderen Units fuer den Bezeichner-Beweis (OtherUnitsIdents)
+    // stammen aus dem ANDEREN Zweig - ohne Zwillinge (TwinBranches) ist der
+    // Beweis nicht vollstaendig, nur im Menue (Nico-Entscheid SCA007,
+    // Nachzug Review e/HilfeFixM). Bis Fix-Runde 5 nach rwE33 hiess es "die
+    // uebrigen Units dieses Zweigs sind unbekannt" - sie stehen aber im
+    // Text; unbekannt ist nur, ob die des geparsten Zweigs auch hier stehen.
+    Result.MenuOnly := True;
+    Result.Hint := _('not in the light bulb: %s stands in a branch of the '
+      + 'uses clause that the IDE did not parse - the quick fix cannot show '
+      + 'that the units of the parsed branch are in this branch too, the '
+      + 'identifier proof is incomplete; compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Result.Name, Result.Name]);
+  end
+  else if Foreign = '' then
+    Result.Hint := _('heuristic finding - compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Result.Name])
+  else
+  begin
+    // Bezeichner-Beweis unvollstaendig (Nico 2026-10-29): nur im Menue. Bis
+    // Fix-Runde 5 nach rwE33 hiess es "es kann aus <Unit> kommen" - falsch
+    // fuer TChromium aus uCEFChromium (CEF4Delphi uMediaRouterFrm.pas:9,
+    // "kann aus ClipBrd kommen") und jeden anderen Namen einer Projekt-
+    // oder Bibliotheks-Unit ohne Liste: der Planer weiss nur, dass er ihn
+    // nicht zuordnen kann, nicht woher er kommt.
+    Result.MenuOnly := True;
+    Result.Hint := _('not in the light bulb: the file uses %s (line %d), '
+      + 'which the quick fix cannot assign to any other unit of the uses '
+      + 'clauses (it only knows the identifiers of common RTL, VCL and LCL '
+      + 'units, not those of project or library units) - so it cannot rule '
+      + 'out that %s is needed; compile afterwards; if %s has an '
+      + 'initialization section (registration), it no longer runs',
+      [Foreign, ForeignLine, Result.Name, Result.Name]);
+  end;
 end;
 
 // Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil
-// und MsgNoFileOpen in AOutcome.Reason; sonst die Code-Sicht (der Aufrufer
-// gibt sie frei) und Platz fuer eine Ersetzung in AOutcome.Edits.
+// und MsgNoFileOpen in AOutcome.Reason; sonst die Code-Sicht (Acquire - der
+// Aufrufer gibt sie ueber TRdxCodeMap.Release zurueck) und Platz fuer eine
+// Ersetzung in AOutcome.Edits.
 function OpenMapFor(APlaces: TSourcePlaces; ALines: TStrings;
   var AOutcome: TRdxFixOutcome): TRdxCodeMap;
 begin
@@ -959,23 +1357,39 @@ begin
     Exit;
   end;
   SetLength(AOutcome.Edits, 1);
-  Result := TRdxCodeMap.Create(ALines);
+  Result := TRdxCodeMap.Acquire(ALines);
 end;
 
 // SCA168: TRdxStructFixes.CaseElse mit AStatement ('' = leeres else).
+// AMenuReason: mit Anweisung der Grund, warum sie nur ins Menue kommt
+// (TRdxStructFixes.CaseRaiseMenuReason, rwE31 Stufe 3); sonst ''. Sperrt
+// CaseRaiseMenuReason (E5, rwE32 Stufe 4), ist der Eintrag aus.
 function CaseElseOutcome(APlaces: TSourcePlaces; ALines: TStrings;
-  ALine: Integer; const AStatement: string): TRdxFixOutcome;
+  ALine: Integer; const AStatement: string;
+  out AMenuReason: string): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map  : TRdxCodeMap;
+  Lock : string;
 begin
   Result := Default(TRdxFixOutcome);
+  AMenuReason := '';
   Map := OpenMapFor(APlaces, ALines, Result);
   if Map = nil then Exit;
   try
     Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
       Result.Edits, Result.Reason);
+    if Result.Enabled and (AStatement <> '') then
+    begin
+      AMenuReason := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine,
+        APlaces.FileName, Lock);
+      if Lock <> '' then
+      begin
+        Result.Enabled := False;
+        Result.Reason := Lock;
+      end;
+    end;
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -983,23 +1397,34 @@ end;
 
 class function TRdxFixRunner.CaseElseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer): TRdxFixOutcome;
+var
+  Unused : string;   // ohne Anweisung immer ''
 begin
-  Result := CaseElseOutcome(APlaces, ALines, ALine, '');
+  Result := CaseElseOutcome(APlaces, ALines, ALine, '', Unused);
 end;
 
 class function TRdxFixRunner.CaseRaiseFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Menu : string;
 begin
   // Keine FPC-Sperre mehr: EInvalidOpException steht auch in SysUtils von
   // FPC 3.2.2, und AppendUses schreibt dort den Kurznamen (bis
   // 2026-10-22 sperrte die nie existierende Klasse EProgrammerError
   // die Variante in FPC-Dateien).
-  Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
+  Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED, Menu);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
   if not Result.Enabled then Exit;
-  Result.Hint := _(R_CASE_RAISE_HINT);
+  // Ohne Beweis, dass jeder Wert einen Arm hat, nur im Menue (rwE31
+  // Stufe 3, Todo_SCA168_2: vier Fehler in der Gluehbirne).
+  Result.MenuOnly := Menu <> '';
+  if Result.MenuOnly then
+    Result.Hint := _('not in the light bulb: %s; unhandled values raise '
+      + 'EInvalidOpException', [Menu])
+  else
+    Result.Hint := _(R_CASE_RAISE_HINT);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
@@ -1015,7 +1440,7 @@ begin
     Result.Reason := MsgNoFileOpen;
     Exit;
   end;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     if AKind = fkIfElseBegin then
       Result.Enabled := TRdxStructFixes.ElseAfterEndOn(Map, ALine, Kw,
@@ -1027,7 +1452,7 @@ begin
       Result.Enabled := TRdxStructFixes.WrapInBlock(Map, Kw, Result.Edits,
         Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if not Result.Enabled then
     Result.Edits := nil;
@@ -1088,7 +1513,7 @@ begin
       Result.Reason := CastTypeReason(APlaces, Map, ALine,
         Result.Edits[0].NewText, Result.Name);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if Result.Enabled then
@@ -1112,7 +1537,7 @@ begin
     Result.Enabled := TRdxRaiseFixes.EmptyBody(Map, ALine,
       RAISE_NOT_IMPLEMENTED, Result.Edits[0], Result.Reason);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -1304,7 +1729,7 @@ begin
   end;
   Result.Reason := PickNilSite(APlaces, ALine, Site);
   if Result.Reason <> '' then Exit;
-  Map := TRdxCodeMap.Create(ALines);
+  Map := TRdxCodeMap.Acquire(ALines);
   try
     // Im with-Block kann ein Operand an ein Member des with-Ausdrucks
     // binden (ein Funktionszeiger: '= nil' ruft ihn auf) - der deklarierte
@@ -1323,7 +1748,7 @@ begin
     end;
     Result.Reason := NilOperandsReason(APlaces, Map, Site.Line, Plan);
   finally
-    Map.Free;
+    TRdxCodeMap.Release(Map);
   end;
   if Result.Reason <> '' then Exit;
   Result.Hint    := NilHintOf(Plan);

@@ -242,7 +242,7 @@ end;
 type
   // Eine generische Klassenmethode statt einer Prozedur je Elementtyp
   // (Review 2026-10-13: fuenf gleiche Rumpfe fuer TIpHit, string,
-  // TCodeIpHit, TIniIpHit und TLiteral). FPC 3.2.2 uebersetzt sie im
+  // TCodeIpHit, TIniIpHit und - bis Charge Q5 - TLiteral). FPC 3.2.2 uebersetzt sie im
   // Pruefstand (Probe gen2.pas). Record, kein class: die Unit fuehrt
   // sonst zwei Klassen.
   TGrow = record
@@ -1137,8 +1137,8 @@ begin
 end;
 
 type
-  // Ein beurteilter Treffer einer Zeile; Source nummeriert die Quelle in
-  // der Zeile (Pascal: das Literal, INI: 0).
+  // Ein beurteilter Treffer einer Zeile; Source bezeichnet die Quelle in
+  // der Zeile (Pascal: Position des oeffnenden Quotes, INI: 0).
   TJudgedHit = record
     Hit    : TIpHit;
     Reason : string;
@@ -1184,17 +1184,6 @@ begin
   end;
 end;
 
-// Alle Adressen in AText beurteilt in die Zeilenliste gemischt.
-procedure JudgeInto(const AText: string; const ACtx: TGateContext;
-  ASource: Integer; var A: TArray<TJudgedHit>; var N: Integer);
-var
-  Hits : TArray<TIpHit>;
-begin
-  Hits := TIpAddressScan.FindAll(AText);
-  if Hits <> nil then
-    JudgeHitsInto(AText, Hits, ACtx, ASource, A, N);
-end;
-
 { ---- Pascal-Literale ---- }
 
 // Ende eines Literals, das bei AQuote beginnt ('' ist ein Zeichen);
@@ -1219,30 +1208,14 @@ begin
   end;
 end;
 
-type
-  // Ein Literal einer Zeile: Position des oeffnenden Quotes und Inhalt.
-  TLiteral = record
-    Quote : Integer;
-    Body  : string;
-  end;
-
-// Literale der Zeile S[ALineStart..ALineEnd-1]; ACode = die Zeile mit
-// Leerzeichen statt Literalen (fuer die Kontextwoerter).
-function LiteralsOfLine(const S: string; ALineStart, ALineEnd: Integer;
-  out ACode: string): TArray<TLiteral>;
+// Die Zeile S[ALineStart..ALineEnd-1] mit Leerzeichen statt Literalen
+// (fuer die Kontextwoerter): jedes geschlossene Literal samt Quotes
+// geblankt, ab einem offenen (bis Zeilenende) bleibt der Rest stehen.
+function CodeOfLine(const S: string; ALineStart, ALineEnd: Integer): string;
 var
-  j, E, N, k : Integer;
-  L          : TLiteral;
+  j, E, k : Integer;
 begin
-  Result := nil;
-  N := 0;
-  ACode := '';
-  // Die meisten Zeilen tragen kein Literal - dann keine Zeilenkopie.
-  j := ALineStart;
-  while (j < ALineEnd) and (S[j] <> '''') do
-    Inc(j);
-  if j >= ALineEnd then Exit;
-  ACode := Copy(S, ALineStart, ALineEnd - ALineStart);
+  Result := Copy(S, ALineStart, ALineEnd - ALineStart);
   j := ALineStart;
   while j < ALineEnd do
   begin
@@ -1253,22 +1226,41 @@ begin
     end;
     E := LiteralEnd(S, j, ALineEnd);
     if E = 0 then Break;                       // offen bis Zeilenende
-    L.Quote := j;
-    L.Body := StringReplace(Copy(S, j + 1, E - j - 1), '''''', '''', [rfReplaceAll]);
-    TGrow.Add<TLiteral>(Result, N, L);
     for k := j to E do
-      ACode[k - ALineStart + 1] := ' ';
+      Result[k - ALineStart + 1] := ' ';
     j := E + 1;
   end;
-  SetLength(Result, N);
 end;
 
+// Steht in S[AFrom..ATo-1] ein '.' oder ':'? Ohne beides findet FindAll
+// nichts (dort die erste Abkuerzung); das ''-Escape aendert daran nichts.
+function HasDotOrColon(const S: string; AFrom, ATo: Integer): Boolean;
+var
+  k : Integer;
+begin
+  for k := AFrom to ATo - 1 do
+    if (S[k] = '.') or (S[k] = ':') then
+      Exit(True);
+  Result := False;
+end;
+
+// Perf Charge Q5 (2026-10-25): bis dahin kopierte der Scan jede Zeile mit
+// Literal, baute jedes Literal mit StringReplace nach und rechnete fuer
+// die Zeile den Gate-Kontext (WordParts, HasVersionHead - Kopie und
+// LowerCase je Wort), bevor FindAll in fast allen Faellen nichts fand
+// (laz: 182.397 Literal-Zeilen, 221.743 Literale, 29.516 mit '.'/':'; der
+// Kontext kostete rund 73 % der Scanzeit). Jetzt: Literalinhalt nur mit
+// '.'/':', Zeilensicht und Kontext erst beim ersten Treffer der Zeile -
+// beide sind reine Funktionen der Zeile, die Reihenfolge der Beurteilung
+// bleibt gleich. Source traegt die Quote-Position statt des
+// Literalindex.
 class function TIpAddressScan.ScanPascalCode(const ACode: string): TArray<TCodeIpHit>;
 var
-  LineStart, LineEnd, N, NJ, k : Integer;
-  Lits   : TArray<TLiteral>;
-  Code   : string;
+  LineStart, LineEnd, N, NJ, k, j, E : Integer;
+  Body   : string;
+  Hits   : TArray<TIpHit>;
   Ctx    : TGateContext;
+  CtxDa  : Boolean;
   Line   : TArray<TJudgedHit>;   // Treffer der aktuellen Zeile, wiederverwendet
   CH     : TCodeIpHit;
 begin
@@ -1281,20 +1273,41 @@ begin
     LineEnd := LineStart;
     while (LineEnd <= Length(ACode)) and (ACode[LineEnd] <> #10) do
       Inc(LineEnd);
-    Lits := LiteralsOfLine(ACode, LineStart, LineEnd, Code);
-    if Length(Lits) > 0 then
+    NJ := 0;
+    CtxDa := False;
+    j := LineStart;
+    while j < LineEnd do
     begin
-      Ctx := PascalContext(Code);
-      NJ := 0;
-      for k := 0 to High(Lits) do
-        JudgeInto(Lits[k].Body, Ctx, k, Line, NJ);
-      for k := 0 to NJ - 1 do
+      if ACode[j] <> '''' then
       begin
-        CH.Pos := Lits[Line[k].Source].Quote;
-        CH.Hit := Line[k].Hit;
-        CH.Reason := Line[k].Reason;
-        TGrow.Add<TCodeIpHit>(Result, N, CH);
+        Inc(j);
+        Continue;
       end;
+      E := LiteralEnd(ACode, j, LineEnd);
+      if E = 0 then Break;                     // offen bis Zeilenende
+      if HasDotOrColon(ACode, j + 1, E) then
+      begin
+        Body := StringReplace(Copy(ACode, j + 1, E - j - 1), '''''', '''',
+          [rfReplaceAll]);
+        Hits := TIpAddressScan.FindAll(Body);
+        if Hits <> nil then
+        begin
+          if not CtxDa then
+          begin
+            Ctx := PascalContext(CodeOfLine(ACode, LineStart, LineEnd));
+            CtxDa := True;
+          end;
+          JudgeHitsInto(Body, Hits, Ctx, j, Line, NJ);
+        end;
+      end;
+      j := E + 1;
+    end;
+    for k := 0 to NJ - 1 do
+    begin
+      CH.Pos := Line[k].Source;
+      CH.Hit := Line[k].Hit;
+      CH.Reason := Line[k].Reason;
+      TGrow.Add<TCodeIpHit>(Result, N, CH);
     end;
     LineStart := LineEnd + 1;
   end;

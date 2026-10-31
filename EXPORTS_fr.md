@@ -38,7 +38,7 @@ uniquement » ne signifie donc jamais « programme différent », mais
 | **Markup wiki Jira** | — | ✅ | coller un résultat dans un ticket |
 | **Texte brut (presse-papiers)** | — | ✅ | les résultats d'un fichier avec avant/après, à coller |
 | **Sonar : résultat unique** | — | ✅ | un résultat choisi comme fichier external-issue sous `.sonar\external\` |
-| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 203 règles — pas un export de résultats |
+| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 205 règles — pas un export de résultats |
 | **Prompt IA (presse-papiers)** | — | ✅ | confier un résultat isolé à un assistant, avec son contexte de code |
 | **Télémétrie de suppression** | `--telemetry-csv <fichier>` | — | quelles règles sont le plus souvent supprimées (classement du bruit) |
 | **Durées des détecteurs** | `--time-detectors` (stdout) / `--time-detectors-out <fichier>` | — | repérer les détecteurs lents |
@@ -73,6 +73,32 @@ lignes affichées.
 `profile` : le nom du profil de règles utilisé. Une valeur vide
 signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
 et n'équivaut pas au profil curé `default`.
+
+**Aides d'édition dans les deux rapports HTML.** Pour une règle dotée d'une
+**aide d'édition** (une action de code du module IDE reDelphix :
+ampoule, Ctrl+Alt+F), la page de `--report-html` nomme les aides —
+activé par défaut ; `--html-no-editor-help` les omet, et la page est
+alors exactement celle sans elles. Le rapport par règle reçoit une
+colonne *Aides d'édition* avec la liste de chaque règle, une entrée par
+entrée de menu : l'id (`SCA017`, `SCA017.2` pour une deuxième entrée),
+le texte de menu lu depuis son slug (`put-debug-output-in-ifdef-debug`
+devient « Put debug output in ifdef debug » : les tirets deviennent
+des espaces, la première lettre une majuscule — la CLI ne lie pas
+reDelphix et ne connaît pas le texte de menu lui-même) et l'effet,
+traduit par le sélecteur de langue de la page (comportement inchangé /
+modifie le comportement / selon l'occurrence / modèle, n'écrit rien).
+Le détail d'un résultat montre la même liste sur une ligne, « Aides
+d'édition : … ». La liste figure **une fois par règle** ; un résultat
+ne porte qu'une référence d'environ 40 octets, le rapport ne grossit
+donc pas de la liste avec le nombre de résultats. La liste vient du
+catalogue de règles (`editorHelps`), comme le champ SARIF plus bas. La
+**page d'atelier** de l'interface et de l'IDE montre la même liste,
+dans la langue de la page, comme première ligne de la documentation de
+règle dans le panneau — une fois par règle, sans un octet de plus par
+résultat (le menu d'export l'inclut toujours ; dans le code
+`AEditorHelp` de `TFindingsWorkbenchExport.BuildHtml`/`Run`, activé
+par défaut). Les autres exports (CSV, JSON, Sonar) ne portent aucune
+aide d'édition ; SARIF ne les nomme qu'avec `--sarif-editor-help`.
 
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de
@@ -259,6 +285,52 @@ exécution qui n'a produit *que* des erreurs de lecture exporte donc
 ligne console, pas le tableau de bord, pour savoir si un scan était
 complet.
 
+### Ce qui change pour les utilisateurs existants (correctif d'export, octobre 2026)
+
+Si vous importez déjà les constats SCA dans SonarQube, la première analyse
+après la mise à jour déplace des issues — une seule fois. Sonar associe
+les issues par règle, fichier et ligne ; chaque changement ci-dessous
+apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
+
+- **De nouvelles issues apparaissent.**
+  - Les fichiers de fiche dont l'extension s'écrit autrement sur le
+    disque (`ABOUT.DFM` au lieu de `ABOUT.dfm`) étaient écartés
+    silencieusement par Sonar comme fichiers inconnus. L'export reprend
+    désormais l'orthographe du disque (corpus de référence : 960 issues).
+  - Les règles personnalisées avec `severity: hint` manquaient
+    entièrement ; elles sont désormais exportées.
+  - Les constats plafonnés par la politique de preuve (confiance *medium*
+    → au plus Warning) ne comptent plus comme rétrogradés. SCA001, SCA003,
+    SCA004 et d'autres arrivent maintenant dans Sonar (corpus de
+    référence : +726 issues). Seule une rétrogradation que vous avez
+    configurée vous-même (`[PathOverrides]`) reste dehors ;
+    `--sonar-keep-downgraded` la ramène toujours.
+- **Les règles plafonnées portent la sévérité plafonnée.** Une règle dont
+  la politique plafonne les constats reçoit la sévérité plafonnée comme
+  impact — SCA004 arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA001 en
+  RELIABILITY/MEDIUM. Avec `[Rules] EvidenceTiering=0`, les impacts du
+  catalogue restent.
+- **Fiches binaires au niveau fichier.** Les issues dans des fichiers
+  `.dfm` binaires, et celles sur une ligne au-delà de la fin du fichier,
+  n'ont plus de ligne. Auparavant, une telle ligne pouvait faire échouer
+  le scanner (*« N is not a valid line for pointer »*). Sonar ferme les
+  anciennes issues liées à une ligne et en ouvre au niveau fichier.
+- **Nom et impact des règles personnalisées.** Chaque règle personnalisée
+  a désormais son propre nom (`User-defined custom rule PROJ001`) et un
+  impact qui suit sa sévérité YAML (error → HIGH, warning → MEDIUM,
+  hint → LOW) au lieu de l'espace réservé commun MAINTAINABILITY/MEDIUM.
+- **`engineId` uniquement sur la règle.** L'`engineId` au niveau de
+  l'issue — un champ de l'ancien format — disparaît. Les scripts qui lisent
+  le JSON directement prennent le moteur dans `rules[].engineId`.
+- **Version minimale du serveur.** Les sévérités d'impact BLOCKER et INFO
+  exigent SonarQube 10.8 ou plus récent (Server 2025.x, Community Build).
+  Sur 10.3–10.7, un rapport qui les contient est invalide ; SCA026 porte
+  toujours BLOCKER.
+
+Sonar résout `filePath` par rapport à `sonar.projectBaseDir` (le dossier
+du `sonar-project.properties`), et non par rapport à `sonar.sources` —
+donnez ce dossier à `--base-dir`.
+
 ## Workflow 4 — Code scanning GitHub / Azure
 
 ```bash
@@ -279,6 +351,29 @@ de résultats : basculer l'ini entre le scan et l'export ne peut pas
 mélanger niveaux et confiances de deux mondes différents. Avec
 `EvidenceTiering=0`, le SARIF est identique octet pour octet à la
 sortie d'avant 0.9.18.
+
+Avec **`--sarif-editor-help`** (désactivé par défaut ; sans lui le
+SARIF reste inchangé), un résultat d'une règle dotée d'une **aide
+d'édition** (une action de code du module IDE reDelphix : ampoule,
+Ctrl+Alt+F) porte `properties.editorHelp`, une entrée `id:effect:slug`
+par entrée de menu, sur une seule ligne :
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` est l'ID de la règle, `<ID de règle>.2` pour une deuxième entrée ;
+`effect` vaut `same` (comportement inchangé), `changes` (change le
+comportement — jamais via Ctrl+Alt+F), `depends` (selon le résultat)
+ou `template` (n'écrit rien dans le source : SCA003 copie un modèle SQL
+paramétré dans le presse-papiers) ; `slug` nomme le texte du menu. La
+liste vient du catalogue de règles (`editorHelps` dans
+`rules/sca-rules.json` ; la CLI ne lie pas reDelphix) : elle dit ce que
+la règle propose — si l'aide s'applique à ce résultat précis, c'est
+l'IDE qui en décide. Les résultats des règles sans aide ne portent pas
+ce champ ; `tool.driver.rules[]` porte la même liste dans les
+`properties` de chaque règle. Le menu d'export de l'interface et l'IDE
+n'écrivent jamais ce champ.
 
 Deux points à surveiller : un SARIF écrit par la **v0.9.14 ou une version
 antérieure** porte un BOM UTF-8 qui fait trébucher les uploaders basés sur

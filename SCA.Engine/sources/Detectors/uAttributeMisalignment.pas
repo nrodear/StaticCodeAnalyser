@@ -35,7 +35,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 const
   ATTR_LINE_RE = '^\s*\[\s*[A-Za-z_]\w*';
@@ -59,7 +60,10 @@ begin
   if Lines = nil then Exit;
   try
     State := Default(TCommentScanState);
-    RE := TRegEx.Create(ATTR_LINE_RE, [roIgnoreCase]);
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). Gleiches Muster, gleiche Optionen.
+    RE := TRegExMatches.CachedEx(ATTR_LINE_RE, [roIgnoreCase]);
     for i := 0 to Lines.Count - 2 do
     begin
       Code := TDetectorUtils.ScanCodeLine(Lines[i], State, Dummy);

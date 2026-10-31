@@ -79,8 +79,13 @@ begin
   if TRegEx.IsMatch(Tr,
        '^[A-Za-z_]\w*\s*=\s*(class|interface|record|object)\b',
        [roIgnoreCase]) then Exit(True);
+  // Stack (Charge R4 2026-10-26): Listengruppe possessiv ('*+') - wie in
+  // uDetectorUtils.LooksLikeMemberDecl. Die gierige Gruppe kostete in
+  // PCRE 8.45 4 match()-Rahmen je Listenelement (Stack-Ueberlauf ab ~1000
+  // Bezeichnern in einer Zeile bei 1 MB Stack); gleiches Ergebnis, weil
+  // nach einem kuerzeren Listenende nie ':' folgt.
   if TRegEx.IsMatch(Tr,
-       '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*\s*:\s*[A-Za-z_<]',
+       '^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*+\s*:\s*[A-Za-z_<]',
        [roIgnoreCase]) then Exit(True);
   Result := False;
 end;

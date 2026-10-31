@@ -513,7 +513,7 @@ begin
       'default severity colors. Light/Dark variants are automatic. ' +
       '"Text" replaces the overlay window with a transparent one-line ' +
       'hint (badge + rule name, no description/fix block - see the ' +
-      'findings panel); dismiss a finding by clicking its text. ' +
+      'findings panel); dismiss a finding by double-clicking its text. ' +
       'Takes effect on save.');
 
   // GroupBox-Hoehe an die echten Children anpassen.

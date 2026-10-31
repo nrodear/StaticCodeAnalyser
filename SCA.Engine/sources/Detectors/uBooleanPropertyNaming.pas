@@ -45,7 +45,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 const
   PROP_RE = '\bproperty\s+(\w+)\s*:\s*(\w+)\b';
@@ -103,7 +104,10 @@ begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    RE := TRegEx.Create(PROP_RE, [roIgnoreCase]);
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). Gleiches Muster, gleiche Optionen.
+    RE := TRegExMatches.CachedEx(PROP_RE, [roIgnoreCase]);
     State := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin

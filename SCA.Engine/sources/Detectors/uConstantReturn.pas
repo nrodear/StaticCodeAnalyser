@@ -277,13 +277,38 @@ end;
 
 function ExtractExitArg(N: TAstNode): string;
 // `Exit(<arg>)` legt den Argumenttext in nkExit.TypeRef ab - aber mit einem
-// BLANKO-Leerzeichen zwischen JEDEN zwei Tokens (uParser2.pas:2163), nicht
+// BLANKO-Leerzeichen zwischen JEDEN zwei Tokens (uParser2, tkKwExit), nicht
 // mit dem wortgrenzen-bewussten JoinTokInto des RHS-Scanners. `Exit(-1)`
 // kommt darum als '- 1' an, waehrend dieselbe Rueckgabe als `Result := -1`
 // '-1' liefert. Ohne die Normalisierung waere das erstens kein Literal und
 // zweitens ungleich zum Assign-Zwilling - beides Fund-Verlust ohne Grund.
+// Seit der Parser-Charge P3 stehen String-Literale dort in Quellform
+// ('a b'). Leerzeichen fallen deshalb nur AUSSERHALB von '..' weg - sonst
+// waere Exit(' ') gleich Exit('') und Exit('a b') ungleich Result := 'a b'
+// (Review P3, m2). '' im Literal schaltet zweimal um und bleibt drin.
+var
+  Src   : string;
+  C     : Char;
+  N2    : Integer;
+  InLit : Boolean;
 begin
-  Result := StringReplace(Trim(N.TypeRef), ' ', '', [rfReplaceAll]);
+  Src := Trim(N.TypeRef);
+  SetLength(Result, Length(Src));
+  N2 := 0;
+  InLit := False;
+  for C in Src do
+  begin
+    if C = '''' then
+    begin
+      InLit := not InLit;
+    end;
+    if InLit or (C <> ' ') then
+    begin
+      Inc(N2);
+      Result[N2] := C;
+    end;
+  end;
+  SetLength(Result, N2);
 end;
 
 class procedure TConstantReturnDetector.AnalyzeUnit(UnitNode: TAstNode;

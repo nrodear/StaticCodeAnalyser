@@ -41,6 +41,87 @@ type
     // Review R3-04 (Charge FC): ein verschobener Fund auf dem Variantenteil
     // eines Records bekommt kein else.
     [Test] procedure Sca168_VariantRecord_Refused;
+    // rwE29 (delphimvcframework MainFormU.pas:30): ein Eintrag am
+    // Zeilenende zog beim Loeschen die Folgezeile herauf.
+    [Test] procedure Sca007_LastOnLine_KeepsLineBreak;
+    // rwE29 (skia4delphi Vcl.Styles.UxTheme.pas:1098): die raise-Zeile
+    // rueckte wie die letzte Zeile des letzten Arms ein.
+    [Test] procedure Sca168_RaiseIndent_FollowsArms;
+    // rwE30 (cnwizards mwBCBTokenList.pas:1518, SynHighlighter*): case ueber
+    // Zeichen - kein raise fuer jedes andere Zeichen.
+    [Test] procedure Sca168_CharSelector_RaiseRefused;
+    // rwE30 (Todo_SCA168 "verpasst-direktive"): bedingte Bereiche ohne
+    // Blockwort im case sperren nicht mehr.
+    [Test] procedure Sca168_HarmlessDirective_Helps;
+    // rwE31 Stufe 3 (JsonDataObjects.pas:7695): Marken 'Ord('-'):' auf einem
+    // Byte-Zeiger sind Zeichen - kein raise.
+    [Test] procedure Sca168_OrdCharLabels_RaiseRefused;
+    // rwE31 Stufe 3 (vier Fehler): raise nur in die Gluehbirne, wenn jeder
+    // Wert eines Aufzaehlungstyps der Datei einen Arm hat.
+    [Test] procedure Sca168_RaiseMenuReason_ValuesWithoutArm;
+    [Test] procedure Sca168_RaiseMenuReason_AllValuesCovered;
+    // rwE31 Stufe 3: EInvalidOpException gibt es vor Delphi 2009 nicht.
+    [Test] procedure Sca168_RaiseOldCompiler_Refused;
+    // rwE30 Stufe 2 (21 Fehler): der Bezeichner-Beweis (ForeignIdent) -
+    // Aufzaehlungswert, Typ, Konstante, Aufruf ohne Quelle ...
+    [Test] procedure Sca007_ForeignIdent_Found;
+    // ... und was die Datei selbst deklariert oder eine andere Unit kennt.
+    [Test] procedure Sca007_ForeignIdent_DeclaredOrKnown;
+    // ... eine case-Marke im Anweisungsteil ist keine Deklaration.
+    [Test] procedure Sca007_ForeignIdent_CaseLabelNotADecl;
+    // rwE30 Stufe 2: Eintrag mitten in einem $IFDEF-Zweig (CEF4Delphi
+    // uChildForm.pas:10) - der Zweig behaelt seine Kommafolge, der andere
+    // bleibt unberuehrt; am Zweigrand lehnt RangeReason ab.
+    [Test] procedure Sca007_EntryInBranch_CommaLogic;
+    // rwE30 Stufe 2 (Indy indyprotocolsfpc.pas:189): die Sammel-Unit eines
+    // Pakets besteht nur aus uses-Klauseln.
+    [Test] procedure Sca007_UsesOnlyUnit;
+    // rwE31 Stufe 3 (CEF4Delphi uChildForm.pas:10, uSimpleServer.pas:9 ...):
+    // den Eintrag im Zweig eines Defines aus einer Include-Datei liefert der
+    // Quellstellen-Dienst nicht - die Klausel kommt aus dem Text, alle
+    // Zweige in Folge.
+    [Test] procedure Sca007_TextUsesEntry_AllBranches;
+    // rwE31 Stufe 3 (gexperts mPasLex.pas:80 UpperCase, issrc BidiUtils.pas:15
+    // TRect): SysUtils und Types haben keine Liste im Detektor - ihre
+    // Exporte schliessen den Beweis (ExtraIdents).
+    [Test] procedure Sca007_ForeignIdent_SysUtilsAndTypes;
+    // rwE32 Stufe 4, Nico-Entscheid E5: SCA168.2 gesperrt, wenn das case
+    // nicht nach einer Aufzaehlung waehlt (Selektor-Typ, Konstanten oder
+    // Zahlen als Marken) oder das Ergebnis vorbelegt ist ...
+    [Test] procedure Sca168_RaiseLock_SelectorNotEnum;
+    [Test] procedure Sca168_RaiseLock_ConstOrNumberLabels;
+    [Test] procedure Sca168_RaiseLock_PresetResult;
+    // ... die Aufzaehlung in einer Unit daneben (bis zwei Ebenen hoeher)
+    // beweist die volle Abdeckung, und ohne Beweis nennt der Hinweis die
+    // Marke nicht mehr "Aufzaehlung".
+    [Test] procedure Sca168_RaiseMenu_NeighbourUnits;
+    [Test] procedure Sca168_RaiseMenu_NeutralHint;
+    // Review e/HilfeFixR: der Selektor wandelt eine Zahl in die Aufzaehlung
+    // um - nur im Menue, auch wenn jeder Wert einen Arm hat.
+    [Test] procedure Sca168_RaiseMenu_CastSelector;
+    // Fix-Runde 5 nach rwE33 (doublecmd fFindDlg.pas:1913): der Anfangswert
+    // der Deklaration ist eine Vorbelegung (E5) ...
+    [Test] procedure Sca168_RaiseLock_PresetDeclInit;
+    // ... und eine Zuweisung vor einem umschliessenden if (fmultirename.pas
+    // :1061/1067) - die Gegenproben im anderen Zweig, nach dem case, in
+    // einer Schleife nach dem case, in einer lokalen Routine.
+    [Test] procedure Sca168_RaiseLock_PresetEnclosingIf;
+    // Fix-Runde 4 nach rwE32 (CEF4Delphi TabbedBrowser uMainForm.pas:18
+    // WM_APP): auch Messages hat im Detektor keine Liste.
+    [Test] procedure Sca007_ForeignIdent_Messages;
+    // Fix-Runde 5 nach rwE33 (jvcl JvCategCh.pas:44 TPoint, Abbrevia_TLB.pas:57
+    // CreateRemoteComObject, JvDBIndex.pas:39 TTable): Windows, ComObj und
+    // DBTables fuehren keine Liste im Detektor, Rect/Point fehlen in der von
+    // Classes - ihre Exporte schliessen den Beweis (ExtraIdents).
+    [Test] procedure Sca007_ForeignIdent_WindowsComObjDbTables;
+    // Fix-Runde 5 nach rwE33 (CEF4Delphi MDIBrowser uChildForm.pas:10 u. a.):
+    // der nicht geparste Zweig nennt dieselben Units wie der geparste, bis
+    // auf Unit-Scope-Praefixe - der Beweis gilt (TwinBranches).
+    [Test] procedure Sca007_TwinBranches;
+    // Review e/HilfeFixY (Lazarus fpguicrosshelpers.pas:8): die Listen seit
+    // Fix-Runde 5 gelten nur fuer Eintraege, die auch an der Fundstelle
+    // stehen - '{$IFDEF WINDOWS}, windows{$ENDIF}' beweist TPoint nicht.
+    [Test] procedure Sca007_ExtraIdents_OnlyWhereSiteCompiles;
   end;
 
 implementation
@@ -48,6 +129,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRefactorInfo, uRdxBufferMath, uRdxCodeMap, uRdxStructFixes,
+  uRdxText,          // _() (Gruende in der Sprache des Laufs)
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -120,6 +202,51 @@ function InProc(const ALines: array of string): string;
 begin
   Result := Join(['unit u;', 'implementation', 'procedure P;']) + #13#10
     + 'begin' + #13#10 + Join(ALines) + #13#10 + Join(['end;', 'end.']);
+end;
+
+// SCA168, raise-Variante: der Grund fuer "nur im Menue" (CaseRaiseMenuReason)
+// am case auf ALine; '' heisst Gluehbirne. ALock: der Grund der Sperre (E5,
+// rwE32 Stufe 4), '' ohne; AUnitFile: die Datei (Units daneben), '' ohne.
+function CaseMenuLock(const ASource: string; ALine: Integer;
+  const AUnitFile: string; out ALock: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.CaseRaiseMenuReason(Map, ALine, AUnitFile, ALock);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+function CaseMenu(const ASource: string; ALine: Integer): string;
+var
+  Lock : string;
+begin
+  Result := CaseMenuLock(ASource, ALine, '', Lock);
+end;
+
+// Der Grund der Sperre (E5) am case auf ALine; '' ohne Sperre.
+function CaseLock(const ASource: string; ALine: Integer;
+  const AUnitFile: string = ''): string;
+begin
+  CaseMenuLock(ASource, ALine, AUnitFile, Result);
+end;
+
+// Eine Unit mit den Typzeilen ATypes im interface und einer Routine, deren
+// Rumpf AStmts traegt; das erste Statement steht auf Zeile
+// 7 + Length(ATypes).
+function WithTypes(const ATypes, AStmts: array of string): string;
+begin
+  Result := Join(['unit u;', 'interface', 'type']) + #13#10 + Join(ATypes)
+    + #13#10 + Join(['implementation', 'procedure P;', 'begin']) + #13#10
+    + Join(AStmts) + #13#10 + Join(['end;', 'end.']);
 end;
 
 // ---- SCA007 ----
@@ -444,6 +571,1206 @@ begin
     '  case X of', '    1: ;', '  end;']), 6, '', R), 'Direktive vor dem case');
   Assert.IsTrue(Pos('offenen ( und dem case', R) > 0, R);
   Assert.IsTrue(Pos('Variantenteil', R) = 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca007_LastOnLine_KeepsLineBreak;
+var
+  R, Src : string;
+  C      : TRdxUsesClause;
+begin
+  // Muster der Fundstelle (minimiert): 'Vcl.Graphics,' steht als letzter
+  // Eintrag am Ende von Zeile 4, die Klausel geht auf Zeile 5 weiter. Bis
+  // rwE29 reichte der Schnitt bis vor 'Vcl.Controls' und frass Umbruch und
+  // Einrueckung: 'uses' / '  System.Classes, Vcl.Controls, Vcl.Forms;'.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  C := Clause(3, [Entry(4, 3, 'System.Classes'), Entry(4, 19, 'Vcl.Graphics'),
+    Entry(5, 3, 'Vcl.Controls'), Entry(5, 17, 'Vcl.Forms')]);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  System.Classes,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'Zeilenende: ' + R);
+  // Leerraum hinter dem Komma geht mit (keine Leerzeichen am Zeilenende).
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,   ', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  System.Classes,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'Zeilenende mit Leerraum: ' + R);
+  // Gegenproben: der erste Eintrag der Folgezeile und der erste der
+  // Klausel bleiben beim Schnitt bis vor den naechsten Eintrag.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics,', '  Vcl.Forms;', 'implementation',
+    'end.']), FixUses(Src, C, 2, R), 'Zeilenanfang: ' + R);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  Vcl.Graphics,',
+    '  Vcl.Controls, Vcl.Forms;', 'implementation', 'end.']),
+    FixUses(Src, C, 0, R), 'erster der Klausel: ' + R);
+  // Ein Kommentar hinter dem Komma: der neue Schnitt greift nicht, der
+  // alte bis vor den naechsten Eintrag sperrt wie bisher.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  System.Classes, Vcl.Graphics, // TBitmap', '  Vcl.Controls, Vcl.Forms;',
+    'implementation', 'end.']);
+  Assert.AreEqual('', FixUses(Src, C, 1, R), 'Kommentar dahinter');
+  Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseIndent_FollowsArms;
+var
+  R : string;
+begin
+  // Muster der Fundstelle (minimiert): der letzte Arm endet tief in einem
+  // begin..end. Bis rwE29 nahm die raise-Zeile die Einrueckung der Zeile
+  // vor dem end ('         end;' -> sieben Stufen statt einer).
+  Assert.AreEqual(InProc(['  case X of', '    1:', '       begin',
+      '         if A then', '           Exit(1);', '       end;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of', '    1:', '       begin',
+      '         if A then', '           Exit(1);', '       end;', '  end;']),
+      5, RAISE_UNHANDLED, R), R);
+  // Leerzeile und Kommentar vor dem ersten Arm zaehlen nicht.
+  Assert.AreEqual(InProc(['  case X of', '', '    // erster', '    1: A;',
+      '    2: begin', '          B;', '       end;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of', '', '    // erster', '    1: A;',
+      '    2: begin', '          B;', '       end;', '  end;']), 5,
+      RAISE_UNHANDLED, R), R);
+  // Gegenprobe: erster Arm auf der case-Zeile - wie bisher die Zeile vor
+  // dem end.
+  Assert.AreEqual(InProc(['  case X of 1: A;', '    2: B;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case X of 1: A;', '    2: B;', '  end;']), 5,
+      RAISE_UNHANDLED, R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_CharSelector_RaiseRefused;
+var
+  R, Src : string;
+begin
+  // cnwizards mwBCBTokenList.pas:1518 (minimiert): die Schleife liest
+  // Ziffern und '.', jedes andere Zeichen ist Normalfall - mit raise waere
+  // der Tokenizer kaputt. Bis rwE30 angeboten, dazu vier Spalten unter dem
+  // else statt zwei (rot ohne Fix).
+  Src := InProc(['        case FOrigin[Running] of', '          ''.'':',
+    '            if FOrigin[Running + 1] <> ''.'' then Result := ctkfloat '
+    + 'else break;', '        end;']);
+  Assert.AreEqual('', FixCase(Src, 5, RAISE_UNHANDLED, R), 'Zeichen-Arm');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Das leere else bleibt (bedeutungsgleich).
+  Assert.AreEqual(InProc(['        case FOrigin[Running] of', '          ''.'':',
+      '            if FOrigin[Running + 1] <> ''.'' then Result := ctkfloat '
+      + 'else break;', '        else', '        end;']),
+    FixCase(Src, 5, '', R), R);
+  // '#13'-Marken ebenso.
+  Assert.AreEqual('', FixCase(InProc(['  case S[i] of', '    #13, #10: Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), '#13');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Gegenprobe: Zahl-Marken - raise bleibt.
+  Assert.AreEqual(InProc(['  case K of', '    1: A;', '  else',
+      '    ' + RAISE_UNHANDLED, '  end;']),
+    FixCase(InProc(['  case K of', '    1: A;', '  end;']), 5, RAISE_UNHANDLED,
+      R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_HarmlessDirective_Helps;
+var
+  R, Src : string;
+begin
+  // delphimvcframework dmustache mormot.core.rtti.pas:7170 (minimiert): ein
+  // ganzer Arm unter {$ifdef} - bis rwE30 gesperrt (rot ohne Fix).
+  Src := InProc(['  case Value.Kind of', '    rkLString:', '      A;',
+    '    {$ifdef HASVARUSTRING}', '    rkUString:', '      B;',
+    '    {$endif HASVARUSTRING}', '    rkVariant:', '      begin', '        C;',
+    '      end;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      end;'#13#10'  end;',
+    '      end;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // mORMot2 mormot.db.rad.pas:1074: je eine Zuweisung in {$ifdef}..{$else}
+  // ..{$endif}, auch in einem begin..end-Arm.
+  Src := InProc(['  case aParam.VType of', '    ftInt64:', '      {$ifdef UNICODE}',
+    '      V := par.AsLargeInt;', '      {$else}', '      V := trunc(par.AsFloat);',
+    '      {$endif UNICODE}', '    ftBlob:', '      begin', '        {$ifdef UNICODE}',
+    '        tmp := par.AsBlob;', '        {$else}', '        D := par.AsString;',
+    '        {$endif UNICODE}', '      end;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      end;'#13#10'  end;',
+    '      end;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // jvcl JvRegAuto.pas:615: ein Label in der Liste.
+  Src := InProc(['  case PropTyp of', '    tkFloat:', '      LoadFloatPrp;',
+    '    tkString, tkLString {$IFDEF COMPILER3_UP}, tkWString {$ENDIF}:',
+    '      LoadStrPrp;', '  end;']);
+  Assert.AreEqual(StringReplace(Src, '      LoadStrPrp;'#13#10'  end;',
+    '      LoadStrPrp;'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R),
+    R);
+  // Gegenproben - gesperrt bleiben: ein Blockwort im Bereich, ein Bereich
+  // ueber das case hinaus, ein Include, ein letzter Arm, dessen ';' nur in
+  // einem Zweig steht (das else binde sonst an das if).
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '    {$IFDEF Y}',
+    '    2: begin B; end;', '    {$ENDIF}', '  end;']), 5, '', R), 'begin');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;', '    {$IFDEF Y}',
+    '    2: B;', '  end;', '  {$ENDIF}']), 5, '', R), 'offen');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: A;',
+    '    {$I arms.inc}', '  end;']), 5, '', R), 'Include');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+  Assert.AreEqual('', FixCase(InProc(['  case X of', '    1: if A then B',
+    '    {$IFDEF Y};{$ENDIF}', '  end;']), 5, '', R), 'Semikolon im Zweig');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+// SCA007, Bezeichner-Beweis: der erste Bezeichner ohne Quelle und seine
+// Zeile; '' = vollstaendig.
+function Foreign(const ASource: string; const AKnown: array of string;
+  out ALine: Integer): string;
+var
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Known : TArray<string>;
+  i     : Integer;
+begin
+  SetLength(Known, Length(AKnown));
+  for i := 0 to High(AKnown) do
+    Known[i] := AKnown[i];
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.ForeignIdent(Map, Known, ALine);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// Eine Formular-Unit wie CnSelectMaskFrm.pas (rwE30, minimiert): AUses als
+// uses-Klausel, AField als Feld, ABody im Rumpf von TForm1.Check.
+function FormUnit(const AUses, AField, ABody: string): string;
+begin
+  Result := Join(['unit Form1U;', 'interface', 'uses ' + AUses + ';', 'type',
+    '  TForm1 = class(TForm)', '    ' + AField, '  public',
+    '    function Check: Boolean;', '  end;', 'implementation',
+    'function TForm1.Check: Boolean;', 'begin', '  ' + ABody, 'end;',
+    'end.']);
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_Found;
+var
+  Li : Integer;
+begin
+  // CnSelectMaskFrm.pas:106 - mrOk kam aus Controls, der Fund nannte
+  // Controls ungenutzt; ohne Beweis nur im Menue.
+  Assert.AreEqual('mrOk', Foreign(FormUnit('Classes, Forms, Controls',
+    'Edit1: TEdit;', 'Result := ModalResult = mrOk;'), ['tform', 'tedit'],
+    Li));
+  Assert.AreEqual<Integer>(13, Li, 'Zeile');
+  // CnTestNtaCurrLineWizard.pas:66 - TShortCut (Classes) als Ergebnistyp.
+  Assert.AreEqual('TShortCut', Foreign(Join(['unit W;', 'interface',
+    'uses Classes, Menus;', 'type', '  TWiz = class(TComponent)',
+    '    function GetDefShortCut: TShortCut;', '  end;', 'implementation',
+    'end.']), ['tcomponent', 'tmenu'], Li));
+  // dlgAboutPyScripter.pas:31 - Konstante einer message-Direktive.
+  Assert.AreEqual('CN_NOTIFY', Foreign(FormUnit('Vcl.Forms, Vcl.Controls',
+    'procedure CNNotify(var Message: TWMNotify); message CN_NOTIFY;',
+    'Result := True;'), ['tform', 'twmnotify'], Li));
+  // Vcl.Styles.DbGrid.pas:239 - eine freie Funktion (Vcl.Forms).
+  Assert.AreEqual('ValidParentForm', Foreign(FormUnit('Vcl.Forms',
+    'Edit1: TEdit;', 'Result := ValidParentForm(Self) <> nil;'),
+    ['tform', 'tedit'], Li));
+  // JvToolBar.pas:70 - Mengenwert im Ausdruck.
+  Assert.AreEqual('csAcceptsControls', Foreign(FormUnit('Forms, Controls',
+    'Edit1: TEdit;', 'Result := csAcceptsControls in ControlStyle;'),
+    ['tform', 'tedit'], Li));
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_DeclaredOrKnown;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // Gegenprobe zu Found: was die Datei deklariert oder eine andere Unit
+  // kennt, beweist nichts gegen die entfernte Unit - '' (Gluehbirne).
+  Assert.AreEqual('', Foreign(FormUnit('Classes, Forms, Variants',
+    'btnOK: TButton;', 'Result := btnOK.Caption = '''';'),
+    ['tform', 'tbutton'], Li), 'Feld im Ungarn-Stil, Typ bekannt');
+  Src := Join(['unit U;', 'interface', 'uses Classes, Math;', 'type',
+    '  TMode = (mdFast, mdSlow);', '  EMyError = class(Exception);',
+    'const', '  MAX_ITEMS = 10;', '  cDefault: TMode = mdFast;',
+    'function Twice(A: Integer): Integer;', 'implementation',
+    'function Twice(A: Integer): Integer;', 'var', '  lCount: Integer;',
+    'begin', '  lCount := MAX_ITEMS;', '  if cDefault = mdSlow then',
+    '    Result := Integer(A) * 2', '  else', '    Result := Length(''x'');',
+    '  try', '    Exit;', '  except', '    on E: EMyError do', '      Exit;',
+    '  end;', '  var lValue := Round(1.5);', 'end;', 'end.']);
+  Assert.AreEqual('', Foreign(Src, ['tcomponent'], Li),
+    'Aufzaehlung, Klasse, Konstanten, Inline-Variable, System');
+  // Member hinter '.' und die uses-Klausel zaehlen nicht.
+  Assert.AreEqual('', Foreign(FormUnit('Vcl.Forms, System.UITypes',
+    'Edit1: TEdit;', 'Result := Self.ModalResult = Self.ModalResult;'),
+    ['tform', 'tedit'], Li), 'Member und uses');
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_CaseLabelNotADecl;
+var
+  Li : Integer;
+begin
+  // 'mrOk:' als Marke eines case-Zweigs deklariert nichts - im
+  // Deklarationsteil hiesse 'X: T' ein Feld bzw. eine Variable.
+  Assert.AreEqual('mrOk', Foreign(FormUnit('Forms, Controls',
+    'Edit1: TEdit;', 'case ModalResult of mrOk: Result := True; else '
+    + 'Result := False; end;'), ['tform', 'tedit'], Li));
+  // Review e/HilfeFixH: dieselbe Marke in einer anonymen Methode als
+  // Argument (FMX-Muster TDialogService.MessageDialog) - die Klammer des
+  // Aufrufs macht sie nicht zur Parameterliste; der Parameter der anonymen
+  // Methode (im Stil eines Typs: EResult) ist dagegen deklariert. Vorher ''
+  // (mrYes galt als deklariert, die Hilfe stand in der Gluehbirne).
+  Assert.AreEqual('mrYes', Foreign(FormUnit('FMX.Forms, FMX.DialogService',
+    'Edit1: TEdit;', 'TDialogService.MessageDialog(''?'', '
+    + 'TMsgDlgType.mtConfirmation, [TMsgDlgBtn.mbYes], TMsgDlgBtn.mbNo, 0, '
+    + 'procedure(const EResult: TModalResult) begin case EResult of mrYes: '
+    + 'Close; end; end); Result := True;'), ['tform', 'tedit',
+    'tdialogservice', 'tmsgdlgtype', 'tmsgdlgbtn', 'tmodalresult'], Li),
+    'anonyme Methode als Argument');
+  Assert.AreEqual<Integer>(13, Li, 'Zeile');
+  // Der Variantenteil eines records ist kein Anweisungsteil: 'fkA:' ist dort
+  // ein Feld.
+  Assert.AreEqual('', Foreign(Join(['unit U;', 'interface', 'type',
+    '  TRec = record', '    case Integer of', '      0: (vxAlpha: Integer);',
+    '      1: (vxBeta: Byte);', '  end;', 'implementation',
+    'procedure P(var R: TRec);', 'begin', '  R.vxAlpha := vxBeta;', 'end;',
+    'end.']), [], Li), 'Variantenteil');
+end;
+
+procedure TTestRdxStructFixes.Sca007_EntryInBranch_CommaLogic;
+var
+  R, Src, L : string;
+  C         : TRdxUsesClause;
+begin
+  // uChildForm.pas:10 (minimiert): Vcl.ClipBrd mitten im Zweig - nur er
+  // und sein Komma gehen, der {$ELSE}-Zweig bleibt Zeichen fuer Zeichen.
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.ClipBrd, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']);
+  C := Clause(3, [Entry(5, 3, 'Vcl.Forms'), Entry(5, 14, 'Vcl.ClipBrd'),
+    Entry(5, 27, 'Vcl.Menus'), Entry(9, 3, 'uCEF')]);
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.Menus,', '  {$ELSE}', '  Forms, ClipBrd, Menus,',
+    '  {$ENDIF}', '  uCEF;', 'implementation', 'end.']),
+    FixUses(Src, C, 1, R), 'mitten im Zweig: ' + R);
+  // Der letzte des Zweigs am Zeilenende: ab dem Komma davor - das Komma
+  // vor {$ELSE} bleibt, der Zweig endet weiter mit einem.
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses', '  {$IFDEF D16}',
+    '  Vcl.Forms, Vcl.ClipBrd,', '  {$ELSE}', '  Forms, ClipBrd, Menus,',
+    '  {$ENDIF}', '  uCEF;', 'implementation', 'end.']),
+    FixUses(Src, C, 2, R), 'Zeilenende im Zweig: ' + R);
+  // Gegenprobe: der Bereich bis zum naechsten Eintrag reichte ueber
+  // {$ELSE}..{$ENDIF} - gesperrt.
+  L := '  {$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF} uCEF;';
+  Src := Join(['unit u;', 'interface', 'uses', L, 'implementation', 'end.']);
+  C := Clause(3, [Entry(4, Pos('Vcl.Forms', L), 'Vcl.Forms'),
+    Entry(4, Pos('uCEF', L), 'uCEF')]);
+  Assert.AreEqual('', FixUses(Src, C, 0, R), 'Bereich ueber die Direktive');
+  Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_OrdCharLabels_RaiseRefused;
+var
+  R, Src : string;
+begin
+  // JsonDataObjects.pas:7695 (minimiert): der Exponent einer Zahl, P ist ein
+  // PByte - jedes Zeichen ohne Vorzeichen ('1e5') ist Normalfall. Bis rwE31
+  // sah die Zeichen-Sperre nur ein Literal am Anfang der Marke: raise
+  // angeboten (rot ohne Fix).
+  Src := InProc(['  case P^ of', '    Ord(''-''):', '      begin',
+    '        {$IFNDEF KEEP_BIGDECIMAL_PRECISION}', '        NegE := True;',
+    '        {$ENDIF ~KEEP_BIGDECIMAL_PRECISION}', '        Inc(P);', '      end;',
+    '    Ord(''+''):', '      Inc(P);', '  end;']);
+  Assert.AreEqual('', FixCase(Src, 5, RAISE_UNHANDLED, R), 'Ord-Zeichen');
+  Assert.IsTrue(Pos('Zeichen', R) > 0, R);
+  // Das leere else bleibt (bedeutungsgleich).
+  Assert.AreEqual(StringReplace(Src, '      Inc(P);'#13#10'  end;',
+    '      Inc(P);'#13#10'  else'#13#10'  end;', []), FixCase(Src, 5, '', R), R);
+  // 'Chr(13):' ist immer ein Zeichen, 'Byte(#10):' ebenso.
+  Assert.AreEqual('', FixCase(InProc(['  case C of', '    Chr(13): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Chr');
+  Assert.AreEqual('', FixCase(InProc(['  case B of', '    Byte(#10): Inc(L);',
+    '  end;']), 5, RAISE_UNHANDLED, R), 'Byte(#10)');
+  // Gegenprobe: Ord um einen Namen ist kein Zeichen - die Sperre greift
+  // nicht (ob raise in die Gluehbirne kommt, sagt CaseRaiseMenuReason).
+  Assert.AreNotEqual('', FixCase(InProc(['  case K of', '    Ord(kA): A;',
+    '  end;']), 5, RAISE_UNHANDLED, R), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenuReason_ValuesWithoutArm;
+var
+  R : string;
+begin
+  // abziptyp.pas:2343 (minimiert): aaFailed hat keinen Arm und ist in der
+  // Routine ein erwarteter Wert. Der Typ steht hier in der Datei - der Grund
+  // nennt den Wert. Bis rwE31 gab es keinen Grund: raise in der Gluehbirne
+  // (rot ohne Fix).
+  R := CaseMenu(WithTypes(['  TAbArchiveAction = (aaFailed, aaNone, aaAdd, '
+    + 'aaDelete, aaFreshen, aaMove, aaReplace, aaStreamAdd);'],
+    ['  case CurrItem.Action of', '    aaNone, aaMove: CopyIt;',
+    '    aaDelete: begin', '      end;',
+    '    aaAdd, aaFreshen, aaReplace, aaStreamAdd: AddIt;', '  end;']), 8);
+  Assert.IsTrue(Pos('aaFailed', R) > 0, R);
+  Assert.IsTrue(Pos('TAbArchiveAction', R) > 0, R);
+  // Im Korpus steht TAbArchiveAction in abutils.pas - der Typ ist hier
+  // unbekannt.
+  R := CaseMenu(InProc(['  case CurrItem.Action of', '    aaNone, aaMove: CopyIt;',
+    '    aaAdd, aaFreshen: AddIt;', '  end;']), 5);
+  Assert.IsTrue(Pos('aaNone', R) > 0, R);
+  // mormot.orm.mongodb.pas:1596 (minimiert): ein Arm, mDELETE kommt
+  // regulaer vor; TUriMethod steht in einer anderen Unit.
+  Assert.AreNotEqual('', CaseMenu(InProc(['  case fBatchMethod of',
+    '    mPOST:', '      begin', '        fBatchWriter := TBsonWriter.Create(S);',
+    '      end;', '  end;']), 5));
+  // mormot.orm.core.pas:5897 (minimiert, Typ in der Datei): der aeussere
+  // Arm laesst oftID und oftSet durch, der innere case nennt sie nicht.
+  R := CaseMenu(WithTypes(['  TOrmFieldType = (oftUnknown, oftEnumerate, '
+    + 'oftSet, oftID, oftTimeLog);'], ['  case result of',
+    '    oftEnumerate, oftSet, oftID, oftTimeLog:', '      begin',
+    '        if err <> 0 then', '          result := oftUnknown', '        else',
+    '          case result of', '            oftEnumerate: Exit;',
+    '            oftTimeLog: goto dt;', '          end;', '      end;', '  end;']),
+    14);
+  Assert.IsTrue(Pos('oftUnknown, oftSet, oftID', R) > 0, R);
+  // Zahlen als Marken: nicht beweisbar.
+  Assert.AreNotEqual('', CaseMenu(InProc(['  case X of', '    1: A;', '  end;']),
+    5));
+  // Ein Typ mit eigenen Zahlen hat Werte ohne Namen; zwei Deklarationen in
+  // Zweigen; eine Direktive im case - je nicht beweisbar.
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['  TE = (eA = 1, eB = 5);'],
+    ['  case E of', '    eA: A;', '    eB: B;', '  end;']), 8), 'eigene Zahlen');
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['{$IFDEF X}', '  TE = (eA, eB);',
+    '{$ELSE}', '  TE = (eA, eB, eC);', '{$ENDIF}'], ['  case E of', '    eA: A;',
+    '    eB: B;', '  end;']), 12), 'zwei Deklarationen');
+  Assert.AreNotEqual('', CaseMenu(WithTypes(['  TE = (eA, eB);'], ['  case E of',
+    '    eA: A;', '    {$IFDEF X}', '    eB: B;', '    {$ENDIF}', '  end;']), 8),
+    'Direktive');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenuReason_AllValuesCovered;
+begin
+  // Jeder Wert hat einen Arm (auch ueber einen Bereich, qualifiziert, mit
+  // einem verschachtelten case im Arm): das else erreicht nur ein Wert
+  // ausserhalb des Typs - raise sichert ab, die Gluehbirne bleibt.
+  Assert.AreEqual('', CaseMenu(WithTypes(['  TE = (eA, eB, eC, eD);'],
+    ['  case E of', '    eA: begin', '        case F of 1: X; end;', '      end;',
+    '    eB..eC: Y;', '    TE.eD: if Z then Exit else Y;', '  end;']), 8));
+  // False und True.
+  Assert.AreEqual('', CaseMenu(InProc(['  case Ok of', '    False: A;',
+    '    True: B;', '  end;']), 5));
+  // Gegenprobe: der Bereich laesst eD aus.
+  Assert.IsTrue(Pos('eD', CaseMenu(WithTypes(['  TE = (eA, eB, eC, eD);'],
+    ['  case E of', '    eA..eC: Y;', '  end;']), 8)) > 0);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseOldCompiler_Refused;
+var
+  R, Src : string;
+begin
+  // Eine Unit, die nach Delphi 7 fragt (VER150): EInvalidOpException steht
+  // in SysUtils erst ab Delphi 2009 - der Klick braeche dort den Bau. Bis
+  // rwE31 angeboten (rot ohne Fix).
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'procedure P;', 'begin', '  case X of', '    1: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', FixCase(Src, 8, RAISE_UNHANDLED, R), 'Delphi 7');
+  Assert.IsTrue(Pos('VER150', R) > 0, R);
+  Assert.IsTrue(Pos('EInvalidOpException', R) > 0, R);
+  // Das leere else bleibt.
+  Assert.AreNotEqual('', FixCase(Src, 8, '', R), R);
+  // Gegenprobe: ein RTL-Namensraum ausserhalb der Weiche beweist Delphi
+  // ab XE2.
+  Src := Join(['unit u;', '{$IFDEF VER150}', '{$DEFINE OLD}', '{$ENDIF}',
+    'implementation', 'uses System.SysUtils;', 'procedure P;', 'begin',
+    '  case X of', '    1: A;', '  end;', 'end;', 'end.']);
+  Assert.AreNotEqual('', FixCase(Src, 9, RAISE_UNHANDLED, R), R);
+end;
+
+function UsesOnly(const ASource: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.UsesOnlyUnit(Map);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_UsesOnlyUnit;
+begin
+  // indyprotocolsfpc.pas (minimiert): uses, leeres implementation mit
+  // Kommentar und {$hints off}.
+  Assert.IsTrue(UsesOnly(Join(['unit indyprotocolsfpc;', 'interface', 'uses',
+    '  IdSMTP,', '  IdPOP3;', 'implementation', '{ compile the units }',
+    '{$hints off}', 'end.'])), 'Paket-Unit');
+  // Gegenproben: ein Typ, eine Routine, ein Programm.
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;', 'type',
+    '  TFoo = class end;', 'implementation', 'end.'])), 'Typ');
+  Assert.IsFalse(UsesOnly(Join(['unit u;', 'interface', 'uses A;',
+    'implementation', 'procedure P; begin end;', 'end.'])), 'Routine');
+  Assert.IsFalse(UsesOnly(Join(['program p;', 'uses A;', 'begin', 'end.'])),
+    'Programm');
+end;
+
+// SCA007: TRdxStructFixes.TextUsesEntry auf ASource - die Zahl der Treffer.
+function TextEntry(const ASource: string; ALine: Integer; const AUnit: string;
+  out AClause: TRdxUsesClause; out AIndex: Integer): Integer;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxStructFixes.TextUsesEntry(Map, ALine, AUnit, AClause,
+      AIndex);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_TextUsesEntry_AllBranches;
+var
+  Src, R, L : string;
+  C         : TRdxUsesClause;
+  Ix        : Integer;
+begin
+  // uChildForm.pas:10 (minimiert): DELPHI16_UP kommt aus cef.inc, der Dienst
+  // liefert nur den {$ELSE}-Zweig - Vcl.ClipBrd fehlte, der Grund war
+  // "steht nicht mehr auf Zeile 5".
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Vcl.Forms, Vcl.ClipBrd, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']);
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 5, 'Vcl.ClipBrd', C, Ix));
+  Assert.AreEqual<Integer>(3, C.UsesLine, 'Zeile von uses');
+  Assert.AreEqual<Integer>(7, Length(C.Entries), 'beide Zweige und uCEF');
+  Assert.AreEqual<Integer>(1, Ix, 'Index');
+  Assert.AreEqual('ClipBrd', C.Entries[4].Resolved, 'Zwilling im ELSE');
+  Assert.AreEqual<Integer>(14, C.Entries[1].StartCol, 'Spalte');
+  Assert.AreEqual<Integer>(25, C.Entries[1].EndCol, 'hinter dem Namen');
+  Assert.AreEqual(Join(['unit u;', 'interface', 'uses',
+    '  {$IFDEF DELPHI16_UP}', '  Vcl.Forms, Vcl.Menus,', '  {$ELSE}',
+    '  Forms, ClipBrd, Menus,', '  {$ENDIF}', '  uCEF;', 'implementation',
+    'end.']), FixUses(Src, C, Ix, R), 'mitten im Zweig: ' + R);
+  // Der Zwilling im {$ELSE}-Zweig ist ein eigener Eintrag; ein anderer
+  // Name oder eine andere Zeile trifft nichts.
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 7, 'ClipBrd', C, Ix), 'ELSE');
+  Assert.AreEqual<Integer>(0, TextEntry(Src, 7, 'Vcl.ClipBrd', C, Ix),
+    'andere Zeile');
+  // Gegenprobe: am Zweigrand reicht der Bereich ueber {$ELSE} - gesperrt.
+  L := '  {$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF} uCEF;';
+  Src := Join(['unit u;', 'interface', 'uses', L, 'implementation', 'end.']);
+  Assert.AreEqual<Integer>(1, TextEntry(Src, 4, 'Vcl.Forms', C, Ix));
+  Assert.AreEqual('', FixUses(Src, C, Ix, R), 'Bereich ueber die Direktive');
+  Assert.IsTrue(Pos(_('comment or directive in the range to be deleted'),
+    R) > 0, R);
+  // Zweige mit eigener Kommafolge ergeben keine Folge 'Name, Name ;' - der
+  // Text liefert nichts.
+  Src := Join(['unit u;', 'interface', 'uses',
+    '  {$IFDEF X} A, B {$ELSE} C {$ENDIF};', 'implementation', 'end.']);
+  Assert.AreEqual<Integer>(0, TextEntry(Src, 4, 'B', C, Ix), 'Kommafolge');
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_SysUtilsAndTypes;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // mPasLex.pas (minimiert): UpperCase kommt aus SysUtils, Controls ist
+  // ungenutzt. Vorher nannte der Hinweis UpperCase - nur im Menue.
+  Src := Join(['unit mPasLex;', 'interface', 'uses',
+    '  SysUtils, Windows, Classes, Controls;', 'function Up(const S: string): '
+    + 'string;', 'implementation', 'function Up(const S: string): string;',
+    'begin', '  Result := UpperCase(S);', 'end;', 'end.']);
+  Assert.AreEqual('UpperCase', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('sysutils'), Li), 'SysUtils');
+  // BidiUtils.pas:15 (minimiert): TRect aus Types.
+  Src := Join(['unit BidiUtils;', 'interface', 'uses Classes, Types;',
+    'procedure FlipRect(var Rect: TRect);', 'implementation',
+    'procedure FlipRect(var Rect: TRect);', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('TRect', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('system.types'), Li), 'Types');
+  // Units mit Liste im Detektor bleiben leer (seit Fix-Runde 5 nach rwE33
+  // ausser Classes: Point, Rect, Bounds, SmallPoint).
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.ExtraIdents('controls')), 'Controls');
+  Assert.AreEqual<Integer>(0,
+    Length(TRdxStructFixes.ExtraIdents('vcl.clipbrd')), 'Vcl.ClipBrd');
+end;
+
+// ---- SCA168.2, Nico-Entscheid E5 (rwE32 Stufe 4) ----
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_SelectorNotEnum;
+var
+  R, Src : string;
+begin
+  // vcl-styles-utils Vcl.Styles.UxTheme.pas:2330 (minimiert): iStateId ist
+  // Integer, TUS_NORMAL eine Integer-Konstante aus Winapi.UxTheme - jeder
+  // andere Zustand faellt zum Trampolin durch. Bis rwE32 nur im Menue, der
+  // Hinweis nannte "die Aufzaehlung von TUS_NORMAL" (rot ohne Fix: keine
+  // Sperre).
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'function Hook(hTheme: THandle; iPartId, iStateId: Integer): HRESULT;',
+    'begin', '  case iStateId of', '    TUS_NORMAL:', '      Exit(S_OK);',
+    '  end;', '  Result := Trampoline(hTheme, iPartId, iStateId);', 'end;',
+    'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('iStateId', R) > 0, R);
+  Assert.IsTrue(Pos('integer', R) > 0, R);
+  // Das Ergebnis traegt denselben Grund (nie Gluehbirne).
+  Assert.AreEqual(R, CaseMenu(Src, 6));
+  // doublecmd ufileview.pas:997: 'var Key: Word', VK_BACK aus LCLType.
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'procedure TFileView.DoHandleKeyDownWhenLoading(var Key: Word; '
+    + 'Shift: TShiftState);', 'begin', '  case Key of', '    VK_BACK:',
+    '      begin', '        ChangePathToParent(True);', '        Key := 0;',
+    '      end;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('word', R) > 0, R);
+  // HeidiSQL Vcl.Styles.Hooks.pas:446: eine Umwandlung als Selektor.
+  R := CaseLock(InProc(['  case NativeUInt(lpIconName) of', '    78:',
+    '      DrawIcon(1);', '    81:', '      DrawIcon(2);', '  end;']), 5);
+  Assert.IsTrue(Pos('NativeUInt(lpIconName)', R) > 0, R);
+  // jvcl cbDSMixer.pas:1488: Msg.Msg in einer WndProc (Konstante nicht in
+  // der Datei).
+  Src := Join(['unit u;', 'interface', 'implementation',
+    'procedure TC.WndProc(var Msg: TMessage);', 'begin', '  case Msg.Msg of',
+    '    WM_TRIGGER_X:', '      DoIt;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('Msg.Msg', R) > 0, R);
+  Assert.IsTrue(Pos('cardinal', R) > 0, R);
+  // Gegenprobe: ein Parameter mit Aufzaehlungstyp, jeder Wert hat einen
+  // Arm - keine Sperre, Gluehbirne.
+  Src := StringReplace(WithTypes(['  TKind = (kA, kB);'], ['  case K of',
+    '    kA: A;', '    kB: B;', '  end;']), 'procedure P;',
+    'procedure P(K: TKind);', []);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Aufzaehlung');
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Gluehbirne');
+  // Gegenprobe: ein Selektor ohne Typbeweis sperrt nicht.
+  Assert.AreEqual('', CaseLock(InProc(['  case Obj.Kind of', '    kA: A;',
+    '  end;']), 5), 'ohne Beweis');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_ConstOrNumberLabels;
+var
+  R, Src : string;
+begin
+  // jvcl cbDSMixer.pas:331/1488 (minimiert): die Marke ist eine Integer-
+  // Konstante der Datei ('WM_USER + 1') - bis rwE32 "die Aufzaehlung von
+  // conWMUSER_ENDPLAY" im Menue (rot ohne Fix).
+  Src := Join(['unit u;', 'interface', 'const',
+    '  conWMUSER_ENDPLAY = WM_USER + 1;', '  conWMUSER_ENDFADE = WM_USER + 2;',
+    'implementation', 'procedure P;', 'begin', '  case Ev.Code of',
+    '    conWMUSER_ENDPLAY: A;', '    conWMUSER_ENDFADE: B;', '  end;', 'end;',
+    'end.']);
+  R := CaseLock(Src, 9);
+  Assert.IsTrue(Pos('conWMUSER_ENDPLAY', R) > 0, R);
+  Assert.IsTrue(Pos('4', R) > 0, 'Zeile: ' + R);
+  // HeidiSQL main.pas:76/14530: Klassenkonstanten, qualifiziert.
+  Src := Join(['unit u;', 'interface', 'type', '  TQueryTab = class(TObject)',
+    '  public', '    const', '      HelperNodeColumns = 0;',
+    '      HelperNodeHistory = 1;', '  end;', 'implementation', 'procedure P;',
+    'begin', '  case Node.Index of', '    TQueryTab.HelperNodeColumns: A;',
+    '    TQueryTab.HelperNodeHistory: B;', '  end;', 'end;', 'end.']);
+  R := CaseLock(Src, 13);
+  Assert.IsTrue(Pos('HelperNodeColumns', R) > 0, R);
+  // CEF4Delphi uHelperProcessDom.pas:15/101: eine String-Konstante.
+  Src := Join(['unit u;', 'interface', 'const',
+    '  MSG_REQUEST_DOM = ''MSG_REQUEST_DOM'';', 'implementation', 'procedure P;',
+    'begin', '  case message.Name of', '    MSG_REQUEST_DOM: A;', '  end;',
+    'end;', 'end.']);
+  Assert.IsTrue(Pos('MSG_REQUEST_DOM', CaseLock(Src, 8)) > 0, 'String');
+  // Dev-Cpp main.pas:3822, HeidiSQL main.pas:14255: Zahlen als Marken.
+  R := CaseLock(InProc(['  case MessageControl.ActivePageIndex of',
+    '    2: LogOutput.SelectAll;', '    3: EvaluateInput.SelectAll;',
+    '  end;']), 5);
+  Assert.AreNotEqual('', R, 'Zahlen');
+  Assert.AreNotEqual('', CaseLock(InProc(['  case GetACP of',
+    '    437: R := ''cp850'';', '  end;']), 5), 'GetACP');
+  // Ganzzahl-Konstanten der RTL (Korpus: 'case MessageDlg(..) of mrYes').
+  R := CaseLock(InProc(['  case MessageDlg(S, mtConfirmation, mbYesNo, 0) of',
+    '    mrYes: Save;', '  end;']), 5);
+  Assert.IsTrue(Pos('mrYes', R) > 0, R);
+  // Gegenprobe: eine Konstante, die nur einen Namen nennt, kann ein
+  // Aufzaehlungswert sein - keine Sperre.
+  Src := Join(['unit u;', 'interface', 'const', '  cDefault = eA;',
+    'implementation', 'procedure P;', 'begin', '  case E of', '    cDefault: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Name als Wert');
+  // Gegenprobe: ein Typ 'T = 1' ist keine Konstante (Abschnitt type).
+  Src := Join(['unit u;', 'interface', 'type', '  TSmall = 1..5;',
+    'implementation', 'procedure P;', 'begin', '  case E of', '    TSmall: A;',
+    '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'Typ');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetResult;
+var
+  R, Src : string;
+begin
+  // issrc ISPP.IdentMan.pas:945/953 (minimiert): Result := TYPE_ERROR am
+  // Anfang, das case im else-Zweig eines Arms - jeder andere Typ behaelt
+  // den Fehlerwert. Bis rwE32 nur im Menue (rot ohne Fix).
+  Src := InProc(['  Result := TYPE_ERROR;', '  P := Find(Name);',
+    '  if P <> nil then', '    case P.IdentType of', '      itVariable:',
+    '        if P.Dim > 0 then', '          Result := TYPE_ARRAY', '        else',
+    '          case P.Typ of', '            evNull: Result := TYPE_NULL;',
+    '            evInt: Result := TYPE_INTEGER', '          end;',
+    '      itMacro: Result := TYPE_MACRO', '    end;']);
+  R := CaseLock(Src, LineOf(Src, 'case P.Typ'));
+  Assert.IsTrue(Pos('Result', R) > 0, R);
+  Assert.IsTrue(Pos('5', R) > 0, 'Zeile: ' + R);
+  // HeidiSQL main.pas:14676/14677: die Vorbelegung vor 'if .. then case'.
+  Src := InProc(['  ChildCount := 0;', '  if Obj <> nil then case Obj.NodeType of',
+    '    lntTable, lntView:', '      ChildCount := Columns.Count;', '  end;']);
+  R := CaseLock(Src, 6);
+  Assert.IsTrue(Pos('ChildCount', R) > 0, R);
+  // Gegenprobe: die Zuweisung steht im then-Zweig daneben - sie erreicht
+  // das case nicht.
+  Src := InProc(['  if C then', '    Result := 0', '  else',
+    '    case E of', '      eA: Result := 1;', '    end;']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'then-Zweig');
+  // Gegenprobe: ein ganzer Block davor zaehlt nicht.
+  Src := InProc(['  if C then', '  begin', '    Result := 0;', '  end;',
+    '  case E of', '    eA: Result := 1;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 9), 'Block');
+  // Gegenprobe: die Laufvariable eines Arms ist keine Ergebnis-Variable.
+  Src := InProc(['  I := 0;', '  case E of',
+    '    eA: for I := 0 to 3 do A;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 6), 'for-Variable');
+  // Gegenprobe: jeder Wert der Aufzaehlung hat einen Arm - die Vorbelegung
+  // aendert nichts, Gluehbirne.
+  Src := WithTypes(['  TE = (eA, eB);'], ['  Result := 0;', '  case E of',
+    '    eA: Result := 1;', '    eB: Result := 2;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 9), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 9), 'Gluehbirne');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_NeighbourUnits;
+var
+  Root, Sub, Deep, U, R, Src : string;
+begin
+  // doublecmd src\frames\foptionsfileoperations.pas:126 (Aufzaehlung in
+  // src\uglobs.pas, eine Ebene hoeher), src\filesources\shellfolder\
+  // ushellfilesourceutil.pas:146 (src\ulog.pas, zwei Ebenen), HeidiSQL
+  // dbconnection.pas:1677 (dbstructures.pas daneben): jeder Wert hat einen
+  // Arm - raise ist unerreichbar. Bis rwE32 nur im Menue "nicht in dieser
+  // Datei deklariert" (rot ohne Fix).
+  Root := NewTempDir('rdx_sca168_');
+  try
+    Sub := Root + 'src' + PathDelim + 'frames' + PathDelim;
+    Deep := Root + 'src' + PathDelim + 'fs' + PathDelim + 'shell' + PathDelim;
+    ForceDirectories(Sub);
+    ForceDirectories(Deep);
+    WriteText(Root + 'src' + PathDelim + 'uglobs.pas', Join(['unit uGlobs;',
+      'interface', 'type', '  TProgressKind = (pkSeparate, pkPanel, pkBoth);',
+      '  TLogMsgType = (lmtInfo, lmtSuccess, lmtError);', 'const',
+      '  wpLicense = 2;', 'implementation', 'type',
+      '  THidden = (hA, hB);', 'end.']));
+    WriteText(Sub + 'ustructs.pas', Join(['unit uStructs;', 'interface',
+      'type', '  TNetGroup = (ngMySQL, ngMSSQL, ngPgSQL);', 'implementation',
+      'end.']));
+    // Eine Ebene hoeher, alle Werte.
+    U := Sub + 'fopts.pas';
+    Src := Join(['unit fOpts;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case gKind of', '    pkSeparate: A;',
+      '    pkPanel: B;', '    pkBoth: C;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, U, R), 'eine Ebene');
+    Assert.AreEqual('', R);
+    // Gegenprobe: ein Wert ohne Arm - Menue mit dem Wert.
+    Src := StringReplace(Src, '    pkBoth: C;'#13#10, '', []);
+    Assert.IsTrue(Pos('pkBoth', CaseMenuLock(Src, 7, U, R)) > 0, 'pkBoth');
+    Assert.AreEqual('', R);
+    // Daneben (gleiches Verzeichnis).
+    Src := Join(['unit fOpts;', 'interface', 'uses uStructs;', 'implementation',
+      'procedure P;', 'begin', '  case NetGroup of', '    ngMySQL: A;',
+      '    ngMSSQL, ngPgSQL: B;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, U, R), 'daneben');
+    // Zwei Ebenen hoeher.
+    Src := Join(['unit uShell;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case MsgType of', '    lmtInfo: A;',
+      '    lmtSuccess: B;', '    lmtError: C;', '  end;', 'end;', 'end.']);
+    Assert.AreEqual('', CaseMenuLock(Src, 7, Deep + 'ushell.pas', R),
+      'zwei Ebenen');
+    // Gegenprobe: ohne uses-Eintrag kein Beweis (neutraler Text).
+    Assert.AreNotEqual('', CaseMenuLock(StringReplace(Src, 'uses uGlobs;',
+      '', []), 7, Deep + 'ushell.pas', R), 'ohne uses');
+    // Gegenprobe: im implementation-Teil der Nachbar-Unit - nicht sichtbar.
+    Src := Join(['unit uX;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case H of', '    hA: A;', '    hB: B;',
+      '  end;', 'end;', 'end.']);
+    Assert.AreNotEqual('', CaseMenuLock(Src, 7, U, R), 'implementation-Teil');
+    // issrc Setup.WizardForm.pas:2534: die Marke ist eine Konstante der
+    // Unit daneben - gesperrt.
+    Src := Join(['unit uX;', 'interface', 'implementation', 'uses uGlobs;',
+      'procedure P;', 'begin', '  case CurPageID of', '    wpLicense: A;',
+      '  end;', 'end;', 'end.']);
+    CaseMenuLock(Src, 7, U, R);
+    Assert.IsTrue(Pos('uGlobs', R) > 0, R);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_NeutralHint;
+var
+  R, Lock : string;
+begin
+  // HeidiSQL Vcl.Styles.UxTheme.pas:1181 (Rest ohne Typbeweis): eine Marke,
+  // die weder die Datei noch eine Unit daneben deklariert - der Hinweis
+  // nennt sie nicht mehr "Aufzaehlung" (bis rwE32 "die Aufzaehlung von
+  // MBI_NORMAL ist nicht in dieser Datei deklariert" - MBI_NORMAL ist eine
+  // Integer-Konstante der RTL). Nur im Menue, keine Sperre.
+  R := CaseMenuLock(InProc(['  case Details.State of', '    MBI_NORMAL: A;',
+    '  end;']), 5, '', Lock);
+  Assert.AreEqual('', Lock);
+  Assert.IsTrue(Pos('MBI_NORMAL', R) > 0, R);
+  Assert.AreEqual(_('%s is declared neither in this file nor in a unit next to '
+    + 'it - whether the values without an arm occur normally is not provable',
+    ['MBI_NORMAL']), R);
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseMenu_CastSelector;
+var
+  R, Src : string;
+begin
+  // doublecmd foptionshotkeys.pas:759 (minimiert): 'case THotKeySortOrder(
+  // cbCommandSortOrder.ItemIndex) of' nennt jeden Wert - ItemIndex ist ohne
+  // Auswahl aber -1, das else ist dort ein gewoehnlicher Weg. Bis zum
+  // Review in der Gluehbirne (rot ohne Fix: '').
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TKind(Combo.ItemIndex) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  R := CaseMenu(Src, 8);
+  Assert.IsTrue(Pos('TKind(Combo.ItemIndex)', R) > 0, R);
+  Assert.AreEqual('', CaseLock(Src, 8), 'nur Menue, keine Sperre');
+  // Ein Alias der Datei vor der Klammer ist ebenso eine Umwandlung.
+  Src := WithTypes(['  TKind = (kA, kB);', '  TKindAlias = TKind;'],
+    ['  case TKindAlias(Tag) of', '    kA: A;', '    kB: B;', '  end;']);
+  Assert.IsTrue(Pos('TKindAlias(Tag)', CaseMenu(Src, 9)) > 0, 'Alias');
+  // Gegenprobe: ein Funktionsaufruf liefert einen Wert des Typs -
+  // Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case KindOf(Obj) of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Funktion');
+  // Gegenprobe: die Umwandlung eines Objekts, danach ein Feld - Gluehbirne.
+  Src := WithTypes(['  TKind = (kA, kB);'], ['  case TItem(P).Kind of',
+    '    kA: A;', '    kB: B;', '  end;']);
+  Assert.AreEqual('', CaseMenu(Src, 8), 'Feld nach Umwandlung');
+end;
+
+// ---- SCA168.2, Fix-Runde 5 nach rwE33 ----
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetDeclInit;
+var
+  R, Src : string;
+begin
+  // doublecmd fFindDlg.pas:1907/1913 (minimiert): 'sActionWithFilters:
+  // string = (Leerstring);' im var-Abschnitt (FPC) - fonsKeep hat keinen
+  // Arm und behaelt den Leerstring, das ist dort der normale Weg. Bis rwE33
+  // nur im Menue, nicht gesperrt (rot ohne Fix: '').
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TFiltersOnNewSearch = (fonsKeep, fonsClear, fonsPrompt);',
+    'implementation',
+    'procedure TfrmFindDlg.cm_NewSearch(const Params: array of string);',
+    'var', '  Param: string;', '  sActionWithFilters: string = '''';',
+    'begin', '  StopSearch;', '  if length(Params) = 0 then', '  begin',
+    '    case gNewSearchClearFiltersAction of',
+    '      fonsClear: sActionWithFilters := ''clear'';',
+    '      fonsPrompt: if msgYesNo(rsClearFiltersOrNot) then '
+    + 'sActionWithFilters := ''clear'';', '    end;', '  end;',
+    '  for Param in Params do',
+    '    GetParamValue(Param, ''filters'', sActionWithFilters);', 'end;',
+    'end.']);
+  R := CaseLock(Src, 14);
+  Assert.IsTrue(Pos('sActionWithFilters', R) > 0, R);
+  Assert.IsTrue(Pos('9', R) > 0, 'Zeile: ' + R);
+  // Eine Inline-Variable mit Anfangswert vor dem case (Delphi; rot ohne
+  // Fix: '').
+  Src := WithTypes(['  TE = (eA, eB);'], ['  var X: Integer := 0;',
+    '  case E of', '    eA: X := 1;', '  end;']);
+  R := CaseLock(Src, 9);
+  Assert.IsTrue(Pos('X', R) > 0, R);
+  Assert.IsTrue(Pos('8', R) > 0, 'Zeile: ' + R);
+  Assert.AreNotEqual('', CaseLock(WithTypes(['  TE = (eA, eB);'],
+    ['  var X := 0;', '  case E of', '    eA: X := 1;', '  end;']), 9),
+    'Inline ohne Typ');
+  // Gegenprobe: ohne Anfangswert keine Vorbelegung - nur im Menue.
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    eA: X := 1;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'ohne Anfangswert');
+  Assert.AreNotEqual('', CaseMenu(Src, 10), 'Menue');
+  Assert.AreEqual('', CaseLock(WithTypes(['  TE = (eA, eB);'],
+    ['  var X: Integer;', '  case E of', '    eA: X := 1;', '  end;']), 9),
+    'Inline ohne Anfangswert');
+  // Gegenprobe: den Anfangswert traegt nur die lokale Routine davor - ihr
+  // X ist ein anderes (rot, wenn die Suche lokale Routinen mitliest).
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', '  procedure Inner;', '  var',
+    '    X: Integer = 1;', '  begin', '    Use(X);', '  end;', 'var',
+    '  X: Integer;', 'begin', '  case E of', '    eA: X := 1;', '  end;',
+    'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 16), 'lokale Routine');
+  // Gegenprobe (Review e/HilfeFixW): 'var' als Parametermodus und ein
+  // Vorgabewert in lokalen Prozedurtypen oeffnen keinen var-Abschnitt und
+  // sind kein Anfangswert - nur im Menue (rot ohne Fix: Sperre "X ...").
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'type',
+    '  TCb = procedure(var X: Integer);',
+    '  TCc = procedure(A: Integer = 0);', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    eA: X := 1;', '  end;', 'end;', 'end.']);
+  Assert.AreEqual('', CaseLock(Src, 13), 'Parametermodus');
+  Assert.AreNotEqual('', CaseMenu(Src, 13), 'Menue (Parametermodus)');
+  // Gegenprobe: jeder Wert hat einen Arm - der Anfangswert aendert nichts,
+  // Gluehbirne (wie bei einer Zuweisung davor).
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (eA, eB);',
+    'implementation', 'procedure P;', 'var', '  X: Integer = 0;', 'begin',
+    '  case E of', '    eA: X := 1;', '    eB: X := 2;', '  end;', 'end;',
+    'end.']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 10), 'Gluehbirne');
+end;
+
+procedure TTestRdxStructFixes.Sca168_RaiseLock_PresetEnclosingIf;
+var
+  R, Src : string;
+begin
+  // doublecmd fmultirename.pas:1061/1067 (minimiert, ein Wert ohne Arm):
+  // 'Result := False;' vor dem if, das case im else-Zweig mit begin. Die
+  // Suche geht schon seit rwE32 ueber umschliessende Anweisungsteile (gruen
+  // ohne Fix; der Fall dort ist voll abgedeckt, siehe unten).
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  Result := False;',
+    '  if C then', '    Result := True', '  else', '  begin',
+    '    case E of', '      mA: Result := True;', '      mB: Result := True;',
+    '    end;', '  end;']);
+  R := CaseLock(Src, 13);
+  Assert.IsTrue(Pos('Result', R) > 0, R);
+  Assert.IsTrue(Pos('8', R) > 0, 'Zeile: ' + R);
+  // Jeder Wert hat einen Arm (fmultirename.pas:1067 selbst): das raise ist
+  // unerreichbar, Gluehbirne trotz Vorbelegung (Entwurf rwE32).
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  Result := False;',
+    '  if C then', '    Result := True', '  else', '  begin',
+    '    case E of', '      mA: Result := True;', '      mB: Result := True;',
+    '      mC: Result := False;', '    end;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 13), 'voll abgedeckt');
+  Assert.AreEqual('', CaseMenu(Src, 13), 'Gluehbirne');
+  // Gegenprobe: die Zuweisung steht im else-Zweig eines if davor, ohne
+  // und mit begin - sie erreicht das case nicht sicher.
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  if C then', '    D := 0',
+    '  else', '    Result := False;', '  case E of', '    mA: Result := True;',
+    '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 12), 'else-Zweig');
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  if C then', '    D := 0',
+    '  else', '  begin', '    Result := False;', '  end;', '  case E of',
+    '    mA: Result := True;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 14), 'else-Block');
+  // Gegenprobe: die Zuweisung steht erst nach dem case - auch in einer
+  // Schleife, deren Rumpf das case traegt.
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  case E of',
+    '    mA: Result := True;', '  end;', '  Result := False;']);
+  Assert.AreEqual('', CaseLock(Src, 8), 'nach dem case');
+  Src := WithTypes(['  TE = (mA, mB, mC);'], ['  for I := 0 to 3 do',
+    '  begin', '    case E of', '      mA: Result := True;', '    end;',
+    '    Result := False;', '  end;']);
+  Assert.AreEqual('', CaseLock(Src, 10), 'Schleife nach dem case');
+  // Gegenprobe: die Zuweisung steht in einer lokalen Routine davor.
+  Src := Join(['unit u;', 'interface', 'type', '  TE = (mA, mB, mC);',
+    'implementation', 'function F: Boolean;', '  procedure Inner;',
+    '  begin', '    X := 0;', '  end;', 'var', '  X: Integer;', 'begin',
+    '  case E of', '    mA: X := 1;', '  end;', '  Result := X = 1;', 'end;',
+    'end.']);
+  Assert.AreEqual('', CaseLock(Src, 14), 'lokale Routine');
+end;
+
+// ---- SCA007, Fix-Runde 4 (rwE32) ----
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_Messages;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // TabbedBrowser uMainForm.pas:7-18/69 (minimiert): WM_APP und TWMMove
+  // kommen aus (Winapi.)Messages. Bis dahin nannte der Hinweis WM_APP
+  // ("kann aus System.Variants kommen") - rot ohne Fix: 'WM_APP'.
+  Src := Join(['unit uMainForm;', 'interface', 'uses',
+    '  Windows, Messages, SysUtils, Variants, Classes;', 'const',
+    '  CEFBROWSER_DESTROYTAB = WM_APP + $101;', 'type',
+    '  TMainForm = class(TObject)', '  private',
+    '    procedure WMMove(var aMessage: TWMMove); message WM_MOVE;', '  end;',
+    'implementation', 'procedure TMainForm.WMMove(var aMessage: TWMMove);',
+    'begin', '  if aMessage.Msg = WM_USER then Exit;', 'end;', 'end.']);
+  Assert.AreEqual('WM_APP', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(6, Li);
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'Messages');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('winapi.messages'), Li),
+    'Winapi.Messages');
+  // Gegenprobe: eine eigene Botschaft einer anderen Unit (keine
+  // Praefix-Regel WM_*) bleibt ohne Quelle.
+  Src := StringReplace(Src, 'WM_APP + $101', 'WM_CEFDESTROY + 1', []);
+  Assert.AreEqual('WM_CEFDESTROY', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('messages'), Li), 'eigene Botschaft');
+end;
+
+// ---- SCA007, Fix-Runde 5 (rwE33) ----
+
+// Beide Listen hintereinander (die Units der uses-Klauseln).
+function Both(const A, B: TArray<string>): TArray<string>;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(A) + Length(B));
+  for i := 0 to High(A) do
+    Result[i] := A[i];
+  for i := 0 to High(B) do
+    Result[Length(A) + i] := B[i];
+end;
+
+procedure TTestRdxStructFixes.Sca007_ForeignIdent_WindowsComObjDbTables;
+var
+  Li  : Integer;
+  Src : string;
+begin
+  // JvCategCh.pas:44/133 (minimiert): 'P: TPoint' - TPoint kommt aus
+  // Windows (dort in den uses). Bis dahin "kann aus Dialogs kommen" - rot
+  // ohne Fix: 'TPoint'.
+  Src := Join(['unit JvCategCh;', 'interface', 'uses',
+    '  Windows, Messages, SysUtils, Classes, Graphics, Controls, Dialogs;',
+    'type', '  TChooser = class(TObject)', '  protected',
+    '    procedure Paint;', '  end;', 'implementation',
+    'procedure TChooser.Paint;', 'var', '  P: TPoint;', '  R: TRect;',
+    'begin', '  P.X := 0;', '  R := Rect(0, 0, P.X, 1);', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(13, Li);
+  // Windows fuehrt die Typen, aber keine Funktion Rect - die steht in
+  // Classes (und Types).
+  Assert.AreEqual('Rect', Foreign(Src, TRdxStructFixes.ExtraIdents('windows'),
+    Li), 'Windows ohne Rect()');
+  Assert.AreEqual('', Foreign(Src, Both(TRdxStructFixes.ExtraIdents(
+    'winapi.windows'), TRdxStructFixes.ExtraIdents('classes')), Li),
+    'Windows und Classes');
+  // Abbrevia_TLB.pas:775-784 (minimiert): CreateRemoteComObject aus ComObj
+  // (uses im implementation-Teil). Bis dahin "kann aus Graphics kommen".
+  Src := Join(['unit Abbrevia_TLB;', 'interface',
+    'uses Windows, ActiveX, Classes, Graphics;', 'const',
+    '  CLASS_ZipItem: TGUID = ''{AF804E21-4043-499E-BB14-237B9F26F89F}'';',
+    'type', '  CoZipItem = class',
+    '    class function CreateRemote(const MachineName: string): IUnknown;',
+    '  end;', 'implementation', 'uses ComObj;',
+    'class function CoZipItem.CreateRemote(const MachineName: string): '
+    + 'IUnknown;', 'begin',
+    '  Result := CreateRemoteComObject(MachineName, CLASS_ZipItem);', 'end;',
+    'end.']);
+  Assert.AreEqual('CreateRemoteComObject', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(14, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('comobj'), Li),
+    'ComObj');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('system.win.comobj'), Li), 'System.Win.ComObj');
+  // JvDBIndex.pas:39/261 (minimiert): TTable aus DBTables. Bis dahin "kann
+  // aus Graphics kommen".
+  Src := Join(['unit JvDBIndex;', 'interface',
+    'uses SysUtils, Classes, Graphics, DB, DBTables;',
+    'function IsTable(ADataSet: TObject): Boolean;', 'implementation',
+    'function IsTable(ADataSet: TObject): Boolean;', 'begin',
+    '  Result := ADataSet.InheritsFrom(TTable);', 'end;', 'end.']);
+  Assert.AreEqual('TTable', Foreign(Src, [], Li), 'ohne Liste');
+  Assert.AreEqual<Integer>(8, Li);
+  Assert.AreEqual('', Foreign(Src, TRdxStructFixes.ExtraIdents('dbtables'),
+    Li), 'DBTables');
+  Assert.AreEqual('', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('bde.dbtables'), Li), 'Bde.DBTables');
+  // Gegenprobe: ein Name, der aus der entfernten Unit kommen kann
+  // (CF_PICTURE aus ClipBrd), bleibt ohne Quelle - auch wenn Windows und
+  // Classes seine Nachbarn zuordnen.
+  Src := Join(['unit u;', 'interface', 'uses Windows, Classes, ClipBrd;',
+    'function Fmt: Word;', 'implementation', 'function Fmt: Word;', 'var',
+    '  P: TPoint;', 'begin', '  P := Point(0, 0);', '  Result := CF_PICTURE;',
+    'end;', 'end.']);
+  Assert.AreEqual('CF_PICTURE', Foreign(Src, Both(
+    TRdxStructFixes.ExtraIdents('windows'),
+    TRdxStructFixes.ExtraIdents('classes')), Li), 'ClipBrd-Konstante');
+  Assert.AreEqual<Integer>(11, Li);
+  // Gegenprobe (Review e/HilfeFixY): tmBoth fuehren ComObj (TThreadingModel)
+  // UND ComCtrls (TTickMark) - ComCtrls kann der Fund sein, ohne ihn waere
+  // es der Wert von TThreadingModel (E2010). ComObj ordnet ihn nicht zu -
+  // rot mit 'tmboth' in COMOBJ_NAMES: ''.
+  Src := Join(['unit u;', 'interface', 'uses ComObj, ComCtrls;',
+    'procedure Ticks(T: TObject);', 'implementation', 'uses Unit1;',
+    'procedure Ticks(T: TObject);', 'begin',
+    '  Form1.TrackBar1.TickMarks := tmBoth;', 'end;', 'end.']);
+  Assert.AreEqual('tmBoth', Foreign(Src,
+    TRdxStructFixes.ExtraIdents('comobj'), Li), 'tmBoth aus ComCtrls');
+  Assert.AreEqual<Integer>(9, Li);
+end;
+
+// SCA007: der Eintrag AUnit auf ALine aus dem Text (genau einer) - steht er
+// in einem Zwillingszweig (TRdxStructFixes.TwinBranches)?
+function TwinOf(const ASource: string; ALine: Integer;
+  const AUnit: string): Boolean;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.TwinBranches(Map, C, Ix);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_TwinBranches;
+var
+  Src, Alt : string;
+begin
+  // MDIBrowser uChildForm.pas:7-17 (minimiert): der Dienst parst den
+  // {$ELSE}-Zweig, der Fund steht im DELPHI16_UP-Zweig (cef.inc). Jede Unit
+  // des {$ELSE}-Zweigs hat ihren Zwilling mit Praefix; System.UITypes steht
+  // nur im Zweig des Funds - das macht den Beweis nur strenger.
+  Src := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Winapi.Windows, System.Classes, Vcl.Forms, Vcl.ClipBrd, '
+    + 'Vcl.Samples.Spin,', '  System.UITypes,', '  {$ELSE}',
+    '  Windows, Classes, Forms, ClipBrd, Spin,', '  {$ENDIF}',
+    '  uCEFChromium;', 'implementation', 'end.']);
+  Assert.IsTrue(TwinOf(Src, 5, 'Vcl.ClipBrd'), 'Zwillinge');
+  // Umgekehrt nicht: im {$ELSE}-Zweig fehlt der Zwilling von System.UITypes.
+  Assert.IsFalse(TwinOf(Src, 8, 'ClipBrd'), 'UITypes ohne Zwilling');
+  // Ein Eintrag ausserhalb der Weiche steht in keinem Zweig.
+  Assert.IsFalse(TwinOf(Src, 10, 'uCEFChromium'), 'unbedingt');
+  // Gegenprobe: Classes steht nur im geparsten Zweig - ein TComponent hiesse
+  // dort "aus Classes", im Zweig des Funds kaeme er vielleicht aus der
+  // entfernten Unit.
+  Alt := StringReplace(Src, 'System.Classes, ', '', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Classes ohne Zwilling');
+  // Kein Unit-Scope: 'Jv.Spin' und 'Spin' sind zwei Units, 'FMX.Forms' und
+  // 'Forms' auch.
+  Alt := StringReplace(Src, 'Vcl.Samples.Spin', 'Jv.Spin', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'fremdes Praefix');
+  Alt := StringReplace(Src, 'Vcl.Forms', 'FMX.Forms', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'FMX');
+  // Eine weitere Direktive in der Klausel: nicht genau eine Weiche.
+  Alt := StringReplace(Src, '  System.UITypes,',
+    '  {$IFDEF X} System.UITypes, {$ENDIF}', []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'verschachtelt');
+  // Ohne {$ELSE} gibt es keinen geparsten Zwilling.
+  Alt := Join(['unit u;', 'interface', 'uses', '  {$IFDEF DELPHI16_UP}',
+    '  Vcl.ClipBrd,', '  {$ENDIF}', '  uCEFChromium;', 'implementation',
+    'end.']);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'ohne ELSE');
+  // {$IF ..} mit {$IFEND} gilt wie {$IFDEF} mit {$ENDIF}.
+  Alt := StringReplace(StringReplace(Src, '{$IFDEF DELPHI16_UP}',
+    '{$IF CompilerVersion >= 23}', []), '{$ENDIF}', '{$IFEND}', []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'IF/IFEND');
+  // Die uebrigen Klauseln liefert der Dienst in SEINER Sicht der Defines:
+  // eine Weiche dort zaehlt nur mit denselben Units in beiden Zweigen
+  // (TabbedOSRBrowser uChildForm.pas:105 'System.Math' / 'Math') ...
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, {$ENDIF}', '  uMain;']),
+    []);
+  Assert.IsTrue(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Zwillinge im implementation');
+  // ... Gegenprobe: im {$ELSE}-Zweig (geparst) steht Spin mehr - seine
+  // Bezeichner fehlen im Zweig des Funds vielleicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation', 'uses',
+    '  {$IFDEF DELPHI16_UP} System.Math, {$ELSE} Math, Spin, {$ENDIF}',
+    '  uMain;']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Spin nur im ELSE');
+  // ... und eine Klausel in einem bedingten Bereich gilt nicht in jeder
+  // Sicht.
+  Alt := StringReplace(Src, 'implementation', Join(['implementation',
+    '{$IFDEF MSWINDOWS}', 'uses Winapi.ShellAPI;', '{$ENDIF}']), []);
+  Assert.IsFalse(TwinOf(Alt, 5, 'Vcl.ClipBrd'), 'Klausel im IFDEF');
+end;
+
+
+// SCA007: ExtraIdentsOf der Klausel mit dem Eintrag AUnit auf ALine (aus dem
+// Text), Fundstelle dieser Eintrag - wie uRdxFixRunner.OtherUnitsIdents.
+function ExtraOf(const ASource: string; ALine: Integer;
+  const AUnit: string): TArray<string>;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  C   : TRdxUsesClause;
+  Ix  : Integer;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual<Integer>(1, TRdxStructFixes.TextUsesEntry(Map, ALine,
+      AUnit, C, Ix), 'Eintrag ' + AUnit);
+    Result := TRdxStructFixes.ExtraIdentsOf(Map, C.Entries, AUnit,
+      C.Entries[Ix].StartLine, C.Entries[Ix].StartCol);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxStructFixes.Sca007_ExtraIdents_OnlyWhereSiteCompiles;
+var
+  Li       : Integer;
+  Src, Alt : string;
+begin
+  // fpguicrosshelpers.pas:7-18 (minimiert): windows steht nur unter
+  // WINDOWS; unter Linux kommt TPoint aus Classes. Classes zu entfernen
+  // braeche dort den Bau - rot ohne Fix: '' (TPoint "aus windows").
+  Src := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  , fpg_main', '  {$IFDEF WINDOWS}', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('TPoint', Foreign(Src, ExtraOf(Src, 4, 'Classes'), Li),
+    'windows nur unter WINDOWS');
+  Assert.AreEqual<Integer>(11, Li);
+  // Gegenproben: unbedingt beweist windows TPoint ...
+  Alt := StringReplace(StringReplace(Src, '  {$IFDEF WINDOWS}', '', []),
+    '  {$ENDIF}', '', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'windows unbedingt');
+  // ... ebenso, wenn die Fundstelle im selben Block steht (fpg_main wird
+  // nur unter WINDOWS entfernt).
+  Alt := Join(['unit fpguicrosshelpers;', 'interface', 'uses', '  Classes',
+    '  , SysUtils', '  {$IFDEF WINDOWS}', '  , fpg_main', '  , windows',
+    '  {$ENDIF}', '  ;', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'implementation', 'function GetCursorPos(var aPoint: TPoint): Boolean;',
+    'begin', '  Result := False;', 'end;', 'end.']);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 7, 'fpg_main'), Li),
+    'derselbe Block');
+  // Die Listen bis Fix-Runde 5 (SysUtils, Types, Messages) bleiben wie sie
+  // waren - auch bedingt.
+  Alt := StringReplace(Src, '  , windows', '  , Types', []);
+  Assert.AreEqual('', Foreign(Alt, ExtraOf(Alt, 4, 'Classes'), Li),
+    'Types bedingt wie bisher');
 end;
 
 initialization

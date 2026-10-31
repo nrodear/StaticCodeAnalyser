@@ -30,11 +30,13 @@ Konzept: `Konzept_SourceRefactor_Quellstellen_2026-10-02.md`, Abschnitt 15
 ```
 reDelphix.d12.dpk / .dproj        {$DESIGNONLY}, requires rtl, vcl, designide, SCA.Engine
 source\uRdxRegister.pas           Register -> Anbieter an TFindingActions anmelden; finalization: abmelden
-source\uRdxProvider.pas           je Fund die Aktionen bauen (Anker/fixMode aus dem Regelkatalog); Quell-Cache TRdxSourceCache
-source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar
+source\uRdxProvider.pas           ToolsAPI-Seite des Anbieters: Text lesen (Puffer oder Platte), die Eintraege des Kerns als Menuepunkte mit Execute (Ersetzen, Markieren, Zwischenablage), Projekt-Units fuer den Kern; seit Charge P5 die Zeilen der zuletzt gelesenen Datei samt geteilter Code-Sicht (SharedLines) und ein Plattenblick je Menueaufbau (BeginDiskBatch, DISK_BATCH_MS); Code-Aktionen ohne Fund (ProvideContext)
+source\uRdxActionCore.pas         Kern des Anbieters ohne ToolsAPI/VCL (Entscheid E3, 2026-10-28): je Fund die Eintraege als Beschreibung (Rezept, Menuetext, Grund, Art, Kennzeichnung, Variante, Ersetzungen) - Rezepte und ihre Reihenfolge (Anker/fixMode aus dem Regelkatalog), Quell-Cache TRdxSourceCache; dieselbe Unit fragt die Probe tools\probe\RdxActionProbe
+source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Beschreibung -> Ersetzung fuer SCA044 (Format), SCA003 (SQL-Vorlage) und die uses-Klauseln (PlanUses, QualifyUses, ClausesOf); dazu die geteilten Ergebnistypen (TRdxFixOutcome) und der Aktionsring des Anbieters; ohne ToolsAPI, testbar. Describe, PartsOf, FormatRewrite und die uses-Fragen delegiert er seit C16 an uRdxPlacesRunner
+source\uRdxPlacesRunner.pas       der Teil des Rezept-Laeufers, der nur TSourcePlaces braucht (Charge N, C16; 1:1 aus uRdxRecipeRunner): Describe/DescribeAnchor, PartsOf, FormatRewrite (SCA044 und die Code-Aktion "Format() aus Verkettung"), PlanUses, Klauseln, Direktiven, FPC-Weiche; ohne Fund und Katalog, FPC-Pruefstand
 source\uRdxFixRunner.pas          die Ruempfe der einfachen Hilfen, die den Quellstellen-Dienst brauchen (TRdxFixRunner: SCA075/SCA085/SCA126/SCA074/SCA087/SCA139/SCA066/SCA072/SCA084/SCA007/SCA168/SCA101/SCA099), und die Bausteine der Tabelle (MapFix, CastFreeFix, EmptyRaiseFix, AppendUses, CondAssignReason, SelfAssignReason) - bis Charge B2S-b in uRdxRecipeRunner (Review R6-12); ohne ToolsAPI, nur Delphi; nur uRdxFixTable ruft sie
 source\uRdxFixTable.pas           Tabelle der einfachen Hilfen: je Fundart Planer, Hinweis, Kennzeichnung (E2), zweiter Eintrag, Menuetext (Charge R8); EIN Geruest fuer die Planer mit Plan-Record (TRdxFixFrame, generisch, Charge H5c); ohne ToolsAPI, nur Delphi
-source\uRdx*Fix.pas               die einfachen Hilfen der Chargen Q und R, je Hilfe eine Unit mit Planer und Adapter (TRdxFixPlanner, Zeile in FIX_ROWS): uRdxHttpsFix SCA115, uRdxParensFix SCA094, uRdxAttrGapFix SCA183, uRdxTwiceInheritedFix SCA093, uRdxNativeIntFix SCA161, uRdxEmptyFinallyFix SCA083, uRdxForRangeFix SCA046, uRdxTabsFix SCA061, uRdxTrailingBlanksFix SCA063, uRdxKeywordCaseFix SCA064, uRdxEmptyExceptFix SCA002, uRdxEmptyOnHandlerFix SCA159, uRdxEmptyBlockFix SCA077, uRdxNoSonarFix SCA065, uRdxTrailingCommaFix SCA068, uRdxGroupedDeclFix SCA076, uRdxIgnoreReasonFix SCA179, uRdxAttrDuplicateFix SCA180, uRdxCategoryArgFix SCA181, uRdxGotoExitFix SCA060 (tools\gen-quickfix-doc.py liest sie per Namensmuster); Charge QF: uRdxFormatSettingsFix SCA128/SCA059, uRdxMethodNameFix SCA106, uRdxIntegerOverflowFix SCA137, uRdxCharEscapeFix SCA188/SCA192, uRdxThreadResumeFix SCA113, uRdxInsecureRandomFix SCA167, uRdxFloatEqualityFix SCA144, uRdxMoveSizeFix SCA154, uRdxDebugOutputFix SCA017, uRdxDeadCodeFix SCA011, uRdxIfThenFix SCA131, uRdxAssertSideEffectFix SCA169; Chargen QF8..QF11: uRdxUnusedParameterFix SCA054, uRdxConstStringParameterFix SCA170, uRdxExceptionNameFix SCA118, uRdxLocalConstantNameFix SCA119, uRdxDigitGroupingFix SCA069, uRdxConsecutiveSectionFix SCA079, uRdxAvoidOutFix SCA086, uRdxRawExceptionFix SCA127; Chargen QF12..QF15: uRdxClassMethodFix SCA148, uRdxAlwaysTrueFix SCA150, uRdxObjectListFix SCA174, uRdxHomoglyphFix SCA193, uRdxParamNameFix SCA199, uRdxDeepNestingFix SCA018, uRdxLookupHoistFix SCA111/SCA112; Charge A3: uRdxLoopBoundFix SCA203; Charge A4: uRdxInheritedEmptyFix SCA125 - seit der Folgewelle G09-07 nur noch die Textlogik, die Adapter stehen in uRdxFixTable
+source\uRdx*Fix.pas               die einfachen Hilfen der Chargen Q und R, je Hilfe eine Unit mit Planer und Adapter (TRdxFixPlanner, Zeile in FIX_ROWS): uRdxHttpsFix SCA115, uRdxParensFix SCA094, uRdxAttrGapFix SCA183, uRdxTwiceInheritedFix SCA093, uRdxNativeIntFix SCA161, uRdxEmptyFinallyFix SCA083, uRdxForRangeFix SCA046, uRdxTabsFix SCA061, uRdxTrailingBlanksFix SCA063, uRdxKeywordCaseFix SCA064, uRdxEmptyExceptFix SCA002, uRdxEmptyOnHandlerFix SCA159, uRdxEmptyBlockFix SCA077, uRdxNoSonarFix SCA065, uRdxTrailingCommaFix SCA068, uRdxGroupedDeclFix SCA076, uRdxIgnoreReasonFix SCA179, uRdxAttrDuplicateFix SCA180, uRdxCategoryArgFix SCA181, uRdxGotoExitFix SCA060 (tools\gen-quickfix-doc.py liest sie per Namensmuster); Charge QF: uRdxFormatSettingsFix SCA128/SCA059, uRdxMethodNameFix SCA106, uRdxIntegerOverflowFix SCA137, uRdxCharEscapeFix SCA188/SCA192, uRdxThreadResumeFix SCA113, uRdxInsecureRandomFix SCA167, uRdxFloatEqualityFix SCA144, uRdxMoveSizeFix SCA154, uRdxDebugOutputFix SCA017, uRdxDeadCodeFix SCA011, uRdxIfThenFix SCA131, uRdxAssertSideEffectFix SCA169; Chargen QF8..QF11: uRdxUnusedParameterFix SCA054, uRdxConstStringParameterFix SCA170, uRdxExceptionNameFix SCA118, uRdxLocalConstantNameFix SCA119, uRdxDigitGroupingFix SCA069, uRdxConsecutiveSectionFix SCA079, uRdxAvoidOutFix SCA086, uRdxRawExceptionFix SCA127; Chargen QF12..QF15: uRdxClassMethodFix SCA148, uRdxAlwaysTrueFix SCA150, uRdxObjectListFix SCA174, uRdxHomoglyphFix SCA193, uRdxParamNameFix SCA199, uRdxDeepNestingFix SCA018, uRdxLookupHoistFix SCA111/SCA112; Charge A3: uRdxLoopBoundFix SCA203; Charge A4: uRdxInheritedEmptyFix SCA125; Charge N/FN: uRdxFuncNameFix SCA204 - seit der Folgewelle G09-07 nur noch die Textlogik, die Adapter stehen in uRdxFixTable
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, Query-Objekt eines SQL-Ziels, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste); Index der Projekt-Units TRdxProjectUnits (Gegenprobe, Netzpfade ungelesen - uRdxPaths)
 source\uRdxSimpleFixes.pas        Quick-Fixes SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
@@ -51,12 +53,15 @@ source\uRdxTryFixes.pas           Quick-Fixes try/finally SCA009/SCA001/SCA109/S
 source\uRdxSqlTemplate.pas        SQL-Vorlage zu SCA003 (Rezept 5.2, Charge S1, Nacharbeit SQc): nur Werte werden Parameter (DDL - auch hinter ';' -, Namen, Join-Bedingung, unbekannte Anweisungsart lehnen ab), Konstanten mitgelesen, ihr Name bleibt, FireDAC-ExecSQL, ADO-Parameters, Kette Q.SQL.Add, Namen aus dem Operanden; Nachweise am Quelltext (Konstante mit Sichtbarkeit ueber Routinen/Klassen, FireDAC-/ADO-Objekt), reine Textlogik
 source\uRdxResultFixes.pas        Quick-Fixes SCA096/SCA097 (inherited in Konstruktor/Destruktor) und SCA121/SCA196 (Result initialisieren, Charge H5) und die Bausteine erste/letzte Anweisung des Rumpfs, reine Textlogik; ein Index je Planerlauf (Typdeklarationen, Klassenkoepfe, seit Charge B2S-b auch die Methodendeklarationen je Kopf - kein Lauf ueber die ganze Datei je Vorfahr mehr, Review R5-07)
 source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default() ab Delphi 2009, Inline-Konstante ab 10.3; dazu die ProjectVersion der .dproj, Charge SQc) und Skript-Units, reine Textlogik (Charge Q14; bis dahin in uRdxResultFixes)
-source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal)
+source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren" (Charge Q14, E28): Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (Charge SQc; seit Charge B1-FD auch kein Include auf einem Netzpfad; `\\?\C:\..` ist seit Charge B2S-a lokal); Plattenblick-Cache TRdxDiskReasonCache (Charge P5, nur aktiv ueber UseDiskCache)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Variable einfuehren" (ohne Fund; seit Charge Q14 auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; IDE-Teil folgt)
-source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt), ein Eintrag je Kandidat; reine Textlogik, FPC-Pruefstand
+source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret (Charge B, V5): Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt) als Textlogik, seit C16 Format() aus Verkettung (TRdxPlacesRunner.FormatRewrite, mit Quellstellen-Dienst), seit Charge C78 C7/C8 (uRdxIfFixes, uRdxCondFixes, Waechter-Klausel ueber uRdxDeepNestingFix.GuardAt); ein Eintrag je Kandidat, FPC-Pruefstand
+source\uRdxCondExpr.pas           Ausdrucks-Leser der Code-Aktionen C7/C8 (Charge C78): Lexer mit Literalen, Vorrang-Parser (not > and > or > Vergleich), Wurzel am Caret (if/while/until/:=), Negation voll geklammert, {$B+}-Suche; reine Textlogik, FPC-Pruefstand
+source\uRdxIfFixes.pas            Code-Aktionen C7 if umkehren, C8 if teilen/zusammenfuegen (Charge C78): Anweisungs-Leser fuer if/else samt dangling else; reine Textlogik, FPC-Pruefstand
+source\uRdxCondFixes.pas          Code-Aktionen C8 De Morgan und Vergleich drehen (Charge C78) ueber uRdxCondExpr; reine Textlogik, FPC-Pruefstand
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
-source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07)
+source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - bis Charge B2S-a in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - bis dahin in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander (Review R3-07); seit Charge P5 die geteilte Sicht: TRdxMappedLines traegt ihre Map, TRdxCodeMap.Acquire/Release statt Create/Free
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxPaths.pas              die EINE Netzpfad-Regel (Charge B2S-a): UNC, auch mit `/` und als `\\?\UNC\..`, und Netzlaufwerke (GetDriveType, selbst deklariert, mit Naht fuer Tests) - `\\?\C:\..` ist lokal; fuer Include-, Form- und Projektdateien und die Projekt-Units, ohne Winapi.Windows (FPC-Pruefstand)
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
@@ -71,6 +76,8 @@ tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hi
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit, mehrere Fixtures und {$IFNDEF FPC}-Teile)
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
 tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf ziehen
+tools\probe\RdxActionProbe.dpr    Realworld-Probe der Editorhilfen (Entscheid E3): je Fundstelle die Eintraege des Kerns uRdxActionCore wie in Gluehbirne und Menue, CSV mit Grund, Kennzeichnung und Vorher/Nachher (siehe "Realworld-Probe der Editorhilfen")
+tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed, Deckel je Repo, Inhalts-Dubletten einmal) als Eingabe von RdxActionProbe; --selftest
 ```
 
 ## Voraussetzungen in der IDE
@@ -83,9 +90,10 @@ tools\probe\sites_from_sarif.py   Fundstellen einer Regel aus einem SARIF-Lauf z
   "Aktionen am Fund" (AH6 `uFindingActions`, mit `fakNavigate` und
   `fakSuppress`), `SCA.Engine.dcp` im Dcp-Verzeichnis der IDE.
 * reDelphix ist gegen Version 1 des Quellstellen-Vertrags geschrieben.
-  `uRdxRecipeRunner` (Rezept-Laeufer) und `uRdxFixRunner` (Ruempfe der
-  einfachen Hilfen, seit Charge B2S-b die meisten Typ- und with-Fragen an den
-  Vertrag) pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
+  `uRdxRecipeRunner` (Rezept-Laeufer), `uRdxPlacesRunner` (sein Teil, der
+  nur den Quellstellen-Dienst braucht - Charge N, C16) und `uRdxFixRunner`
+  (Ruempfe der einfachen Hilfen, seit Charge B2S-b die meisten Typ- und
+  with-Fragen an den Vertrag) pruefen `SOURCE_PLACES_VERSION` beim Uebersetzen
   (`{$IF SOURCE_PLACES_VERSION <> 1}` mit `{$MESSAGE ERROR}`, die Meldung
   nennt die Unit): hebt die Engine die Version, bricht der Bau von
   reDelphix ab, bis beide gegen den neuen Vertrag geprueft sind. Eine zur
@@ -170,7 +178,7 @@ Details je Hilfe (Menuetexte en/de/fr, Sperren, Beispiel vorher/nachher):
 | Selbstzuweisung von X entfernen | SCA047 | loescht `X := X;` - allein auf der Zeile die ganze Zeile -, auch Pfade (`Pt.Y := Pt.Y;`, `R^.F := R^.F;`). Bedeutungsgleich; war ein anderer Wert gemeint (Tippfehler, Katalog: `FCount := ACount`), fehlt er weiterhin - der Hinweis sagt es. Gegenprobe: links und rechts derselbe Pfad wie in der Meldung (ohne Leerraum, Gross/klein egal), dahinter endet die Anweisung. Die Wurzel muss eine Variable sein (DeclaredTypeOf oder Inline-Variable), kein Pfadteil eine Property der Unit (ihr Setter liefe sonst nicht mehr). Gesperrt fuer `Result := Result` (stillt vielleicht W1035 bzw. den FPC-Hinweis "Function result does not seem to be set" - der Katalog empfiehlt dort das Unterdruecken), wenn X auch eine Routine der Unit ist (rechts koennte ein rekursiver Aufruf stehen), bei einem `class operator Assign` in der Unit (verwaltete Records: die Zuweisung fuehrt Code aus; ein Record aus einer anderen Unit mit Assign-Operator ist nicht erkennbar - Restrisiko), bei einem Kommentar auf der Zeile (`Pt.Y := Pt.Y; // + Scroll` traegt die Absicht), als einzige Anweisung hinter `then`/`else`/`do`, eines case-Zweigs oder eines Blocks, ueber mehrere Zeilen und im `with`-Block |
 | Ungenutzte Routine X loeschen | SCA164 | loescht die freie Routine des implementation-Teils vom Kopf bis zu ihrem `end;` - samt lokaler Abschnitte und Routinen (Baustein Routinengrenzen: Variantenrecord, Prozedurtypen, Direktiven auf Folgezeilen, `asm` mit `@@end`), der `///`-Doku- und Attributzeilen darueber und der Kommentarzeilen direkt darueber, wenn sie die Routine beim Namen nennen und keinen Marker tragen (`// Name: X()`, `{ X }` gehen mit; ein Abschnittsmarker `{ Helpers }`, eine Ueberschrift wie `(* === run-time registration functions === *)`, `// noinspection-file` und TODO/FIXME/HACK/XXX bleiben stehen, ebenso jeder Kommentar ohne den Namen - eine Ueberschrift ist von einer Beschreibung nicht sicher zu unterscheiden; Korpus: bei 101 von 897 Angeboten bleibt der Kommentar seit Charge H3c stehen), EINER Leerzeile (dahinter, sonst davor) und einer `forward`-Deklaration; ein Einzeiler `procedure X; begin end;` als ganze Zeile. Bedeutungsgleich. Den Beweis fuehrt die Hilfe neu am Puffer: der Name steht ausserhalb der Routine nirgends als Code - auch nicht in einem inaktiven `$IFDEF`-Zweig (Korpus: mORMot `ExchgLen`, der Detektor meldete trotz Aufruf), als `@X`, in `exports` oder im interface-Teil -, in keinem String-Literal (`GetProcAddress`, RTTI, Skript-Registrierung) und in keiner Direktive (`{$EXTERNALSYM X}`). Ein Aufruf in anderer Gross/klein-Schreibung mit Umlaut zaehlt als Verwendung. Gesperrt bei Overloads, Methoden (das meldet SCA147), globalen FPC-Operatoren, `export`/`public`/`alias`/`external`/`forward`/`interrupt` (auch in FPC-Klammern `procedure X; [public, alias: 'X_C'];`), `{$L}`/`{$LINK}` in der Datei (der C-Code ruft per Name), `{$I}` im implementation-Teil (dort kann ein Aufrufer stehen), einem `{$I}` davor, das die Routine nennt oder neben der Unit nicht zu finden ist (verschachtelte Includes ebenso; es kann sie im interface-Teil deklarieren - nach dem Loeschen E2065; Includes im Kopf der Unit vor `interface` bzw. `uses` liest die Hilfe nicht, dort stehen nur Direktiven - `jcl.inc`, `CnWizards.inc`; Korpus: 5 von 897 Angeboten fallen weg; `{$I \datei.inc}` sucht die Hilfe seit der Nachpruefung B1-FD ab der Wurzel des Laufwerks der Unit - vorher auf dem aktuellen Laufwerk der IDE - und wie bisher neben der Unit) oder das bzw. dessen Unit auf einem Netzpfad liegt (UNC oder Netzlaufwerk: die Hilfe liest dort nichts, der Menueaufbau laeuft im Hauptthread - bis Charge B1-FD wartete er 9 bis 16 s je Include auf einen nicht erreichbaren Server; `\\?\C:\..` gilt als lokal - seit Charge B2S-a auch beim Lesen der Includes, bis dahin lehnte die Hilfe dort ab -, `\\?\UNC\..` als Netzpfad), einer Direktive im Bereich ausser ausgeglichenem `$IF..`/`$ENDIF` bzw. `$REGION` (`{$DEFINE}`, `{$R-}` wirkten weiter), einem Marker-Kommentar, der ausserhalb wirkt (Charge B1-FD: `end; // noinspection X` auf der letzten Zeile gilt der Zeile dahinter, ebenso hinter einer `forward`-Deklaration; ein Absichtskommentar TODO/FIXME/HACK/XXX dort bleibt wie ueber dem Kopf stehen; `// noinspection-file` im Bereich gilt der ganzen Datei; Korpus: kein Angebot betroffen) oder von aussen in den Bereich zielt (Nachpruefung B1-FD: ein `// noinspection X` ueber dem Kopf bzw. der `forward`-Deklaration - auf eigener Zeile, hinter Leerzeilen oder hinter dem `end;` davor - gilt der Routine; der Kommentar-Lauf bleibt stehen, und geloescht galt er still der Routine dahinter; Korpus: kein `noinspection`), zwei Routinen auf einer Zeile, einem Kopf vor `implementation` (Programme meldet der Detektor nicht) und unsicheren Grenzen (lokaler Klassentyp, Kopf im Rumpf, `$IFDEF`-geteilter Rumpf) |
 | Ungenutzte private Methode X loeschen | SCA147 | loescht die Deklaration im Klassenrumpf (samt `///`-Doku; ein Gruppenkommentar wie `{ Private declarations }` bleibt) und die Implementierung wie bei SCA164 (Baustein Decl/Impl-Finder: verschachtelte Klassen `TOuter.TInner.X`, generische `TFoo<T>.X`, `class procedure`). Bedeutungsgleich. Nur unter `private`/`strict private`; der Name steht nur in Deklaration und Implementierung (rekursive Aufrufe im eigenen Rumpf zaehlen nicht). Gesperrt bei `virtual`/`dynamic`/`override`/`abstract`/`reintroduce`/`message`/`overload`/`dispid`, Konstruktor, Destruktor und Operator, mehr als einer Deklaration oder Implementierung, keiner Implementierung in der Datei (Include, abstract), Property-Accessor, Name als String-Literal (`MethodAddress`), `{$RTTI}` in der Datei, Attribut an Methode oder Klasse, `{$I}` im Klassenrumpf (dort kann `property P read X` stehen) oder im implementation-Teil, einem `{$I}` davor, das den Namen nennt, neben der Unit fehlt oder auf einem Netzpfad liegt (seit Charge B1-FD wie bei SCA164, `\\?\C:\..` seit Charge B2S-a lokal - im interface-Teil kann es eine Nachfahrenklasse mit `property X read GetX` tragen, private ist in der ganzen Unit sichtbar; nach dem Loeschen E2003 im Include; Includes im Kopf der Unit liest die Hilfe nicht; Korpus: kein Angebot betroffen), einem Marker-Kommentar hinter der Deklaration oder dem `end;` der Implementierung (er gilt der Zeile dahinter) bzw. einem `// noinspection` darueber (er zielt auf sie, Nachpruefung B1-FD) wie bei SCA164, einem Interface der Klasse aus einer anderen Unit (die Methode kann sein Member sein; wie Gate E des Detektors auch `class(IFremd)` mit dem Interface als erstem Eintrag und der fremde Vorfahr eines lokalen Interfaces), einem Member von `IInterface`/`IDispatch` als Name (`_AddRef`) und einer `.dfm`/`.fmx`/`.lfm` neben der Unit, die den Namen nennt (der Detektor liest nur `.dfm`); auf einem Netzpfad bzw. Netzlaufwerk liest die Hilfe keine Formdatei und lehnt ab (Charge FB, Review R2-07: dreimal FileExists im Hauptthread je Menueaufbau, auf einer nicht erreichbaren Freigabe Sekunden; `\\?\C:\..` gilt als lokal, `\\?\UNC\..` als Netzpfad). Der leere private-Abschnitt, der bleiben kann, meldet danach SCA087 (eigene Hilfe) |
-| Auskommentierten Code loeschen | SCA070 | loescht die Region der Meldung ab Zeile und Spalte (`Comment at column C` bzw. `block of N lines starting at column C`): eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte (kein Leerraum am Zeilenende), die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)` (41 % der Korpusfunde zeigen auf eine Inhaltszeile). Bedeutungsgleich. Nur, was der Fund abdeckt: der Detektor bewertet jede Zeile einzeln und fasst gemeldete Zeilen zu einer Region zusammen, solange dazwischen nur reine Kommentarzeilen stehen - Prosa vor oder hinter der Region bleibt im Kommentar, ein langer Block mit Leerzeilen ergibt mehrere Funde. Die Begrenzer gehen erst mit, wenn der Kommentar danach nur noch Leerraum traegt (der letzte Fund raeumt auf); traegt er davor bzw. dahinter Text, bleibt der Oeffner bzw. Schliesser. Gegenprobe: ab der Spalte bis zum Ende der letzten Zeile nur Kommentar und Leerraum (Code-Sicht, ueber Zeilen; ein Delphi-12-Mehrzeilenstring ist kein Kommentar - der Detektor kennt ihn nicht), die Spalte am Anfang eines Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit Code-Merkmal wie im Detektor (`;` am Ende, `:=`, begin, procedure/function). Gesperrt bei einer Direktive im Bereich, einem Doku-Kommentar (`///`, `{*`, `(**`), einem Kommentar vor dem ersten Code der Datei (Lizenz-/Kopfkommentar), `noinspection` oder TODO/FIXME/HACK/XXX im geloeschten Text (Absichtskommentare wie bei SCA019) und wenn mehrere Kommentare in der Region stehen und einer mit Text ueber sie hinausreicht (der Schnitt waere nicht zusammenhaengend). Zwischen zwei Token bleibt ein Leerzeichen, wo sie sonst verschmoelzen (`begin{x}end` -> `begin end`). Grenze (Nachpruefung B1-FD, nicht gesperrt): ein `// noinspection` direkt ueber der Region zielt danach auf die naechste nicht leere Zeile - meist die Code-Zeile, die er ohnehin traf; nur wenn dort wieder ein `//`-Kommentar steht oder die Region aus Zeilen eines `{ }` bestand, wandert er. Folgefunde (Korpus-Rundlauf): SCA117, wo der Kommentar ueber einer public-Deklaration stand und ihr als Doku galt (54 von 6.696), SCA020, wo er der einzige Inhalt eines Rumpfs war (2), SCA021 DuplicateBlock (Bloecke werden gleich bzw. ungleich) und SCA070 selbst, wo ein Adapter-Doku-Kopf `{ procedure X; }` seine auskommentierte Routine verliert (3) |
+| Auskommentierten Code loeschen | SCA070 | loescht die Region der Meldung ab Zeile und Spalte (`Comment at column C` bzw. `block of N lines starting at column C`): eine `//`-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte (kein Leerraum am Zeilenende), die Inhaltszeilen eines mehrzeiligen `{ }`/`(* *)` (41 % der Korpusfunde zeigen auf eine Inhaltszeile). Bedeutungsgleich. Nur, was der Fund abdeckt: der Detektor bewertet jede Zeile einzeln und fasst gemeldete Zeilen zu einer Region zusammen, solange dazwischen nur reine Kommentarzeilen stehen - Prosa vor oder hinter der Region hat er nicht als Code gemeldet, ein langer Block mit Leerzeilen ergibt mehrere Funde. Geloescht werden trotzdem immer ganze Kommentare samt Begrenzern (Fix-Charge nach dem Realworld-Test rwE29 - bis dahin ging nur die Region, und 15 von 50 Stellen behielten einen Torso: `{ with X do }`, `(*` / `break;*)`, zerrissene Doku-Beispiele): reicht der Kommentar ueber die Region hinaus, muss jede Zeile ausserhalb leer oder eindeutig Code sein (endet auf `;`, traegt `:=`, Direktive, ein Schluesselwort allein wie `begin`/`finally`, eine Steuerzeile `if ... then`/`with ... do`/`end else begin`; seit der Fix-Runde 2 nach rwE30 auch ein case-Zweig `A:` unter `case ... of` bzw. `A: begin`, ein Aufruf ohne `;` vor `else` und das `{}`-Ende `...;{}`; ein innerer Kommentar - eine `//`-Zeile, in `(* *)` ein `{ ... }` allein auf der Zeile - zaehlt weder als Code noch als Prosa, ausser er nennt Herkunft oder Absicht wie `// reference implementation`, `// Taken from ...`, `// In case you ...`) - sonst keine Hilfe. Gegenprobe: ab der Spalte bis zum Ende der letzten Zeile nur Kommentar und Leerraum (Code-Sicht, ueber Zeilen; ein Delphi-12-Mehrzeilenstring ist kein Kommentar - der Detektor kennt ihn nicht), die Spalte am Anfang eines Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit Code-Merkmal wie im Detektor (`;` am Ende, `:=`, begin, procedure/function). Gesperrt bei einer Direktive im Bereich, einem Doku-Kommentar (`///`, `{*`, `(**`, eine Zeile mit fuehrendem `*` oder `<PRE>` - rwE29), einem Kommentar vor dem ersten Code der Datei (Lizenz-/Kopfkommentar) oder direkt hinter `unit X;` (Doku der Unit, rwE29), `noinspection` oder TODO/FIXME/HACK/XXX im geloeschten Text (Absichtskommentare wie bei SCA019) und wenn ein Kommentar mit anderem Text als Code ueber die Region hinausreicht (der Rest bliebe als Torso stehen). Zwischen zwei Token bleibt ein Leerzeichen, wo sie sonst verschmoelzen (`begin{x}end` -> `begin end`). Grenze (Nachpruefung B1-FD, nicht gesperrt): ein `// noinspection` direkt ueber der Region zielt danach auf die naechste nicht leere Zeile - meist die Code-Zeile, die er ohnehin traf; nur wenn dort wieder ein `//`-Kommentar steht oder die Region aus Zeilen eines `{ }` bestand, wandert er. Folgefunde (Korpus-Rundlauf): SCA117, wo der Kommentar ueber einer public-Deklaration stand und ihr als Doku galt (54 von 6.696), SCA020, wo er der einzige Inhalt eines Rumpfs war (2), SCA021 DuplicateBlock (Bloecke werden gleich bzw. ungleich) und SCA070 selbst, wo ein Adapter-Doku-Kopf `{ procedure X; }` seine auskommentierte Routine verliert (3) |
 | Ungenutzte Variable X entfernen | SCA053 | loescht die Deklaration: `X: T;` samt Zeile (ein `//`-Kommentar dahinter geht mit - ausser er traegt einen Marker, `noinspection` oder TODO/FIXME/HACK/XXX: ein `// noinspection` hinter Code gilt der Zeile dahinter, ein Absichtskommentar bleibt wie bei SCA070; dann bleibt er als eigene Zeile an der Einrueckung stehen, Charge B1-FD), `A, X, B: T;` -> `A, B: T;` (erstes, mittleres, letztes Element, auch ueber Zeilen), `var` mit, wenn die Section dadurch leer wird, inline `var X: T;` als ganze Anweisung. Bedeutungsgleich. Gegenprobe auf dem Rohtext: der Name kommt vom Routinenkopf vor der Section (inline: vom `var`) bis zum Ende des Rumpfs bzw. Blocks (in `repeat..until` bis zum Ende der until-Bedingung) sonst nirgends als Code vor - lokale Routinen, Code unter einer inaktiven Direktive und `asm` zaehlen mit, ein Name hinter `.` ist ein Member. Gesperrt bei `for var` (der Detektor meldet die Laufvariable, Korpus 75 von 757), einem Schluesselwort als Name (`resourcestring`: der Parser liest die Section als Variable, 17 Funde), einer const-/resourcestring-Section, einem Initialisierer (`= 5`, `:= F()`), `absolute`, einem Typ ueber mehrere Zeilen (`record`), einem Attribut, einer Aufrufkonvention hinter dem Typ, einem Kommentar in der Deklaration, einem `// noinspection` darueber, der auf ihre Zeile zielt (auf eigener Zeile oder hinter dem Code darueber - geloescht gaelte er der Zeile dahinter, Nachpruefung B1-FD; bleibt die Zeile, wie bei `A, X: T;`, sperrt er nicht; Korpus: kein `noinspection`), einer Direktive in der Deklaration bzw. ihrer var-Section (ein Zweig koennte leer werden), einem `class operator Initialize/Finalize` in der Unit (verwalteter Record: die Variable fuehrt Code aus; ein solcher Typ aus einer anderen Unit ist nicht erkennbar - Restrisiko), als einzige Anweisung eines Blocks, ausserhalb einer Routine, in einer offenen Klammer (`F: function(` bzw. `procedure Inner(` und auf der Folgezeile `var X: T;` - ein Parameter, keine Variable), bei einem `{$I}`-Include im Gueltigkeitsbereich (die Hilfe sieht es nicht; mit einer globalen Variablen gleichen Namens bindet es danach still an sie), einer Direktive, die den Namen nennt, `asm` im Gueltigkeitsbereich (`[ebp-4]` spricht die Variable ohne Namen an) und einem FPC-Makro `{$DEFINE M := X}` in der Datei (Charge H3c; Korpus: keines der 629 Angebote betroffen). Das Ende des Gueltigkeitsbereichs liest seit Charge H3c der Baustein Routinengrenzen (`ReadRoutine`): ein `end` als Bezeichner (`Range(start := 0, End := 0)`, benanntes OLE-Argument) beendete ihn vorher still mitten im Rumpf, eine Verwendung dahinter blieb ungesehen - jetzt keine Hilfe (Korpus: 4 Angebote in einer Formatierer-Testdatei). Das galt bis Charge B1-FD nur fuer var-Sections: bei einer Inline-Deklaration endete der Block weiter am `End` des Arguments, und die Hilfe loeschte eine benutzte Variable - mit einem Feld oder einer globalen Variablen gleichen Namens band die Verwendung danach still an sie (Code-Review R4-01). Seitdem zaehlt im Block ein Schluesselwort mit `:=` dahinter nicht (`IsKeywordAt`, vorwaerts bis zum Blockende wie rueckwaerts bei der Frage, ob die Deklaration inline steht); Korpus: kein Angebot betroffen. Ein `with` im Gueltigkeitsbereich sperrt nicht - kommt der Name nirgends vor, kann es ihn nicht binden. Im Korpus-Rundlauf verschwand jeder der 629 Funde (528 im Lauf der Charge H3a, die 101 nach dem Wegfall der with-Sperre im Gegen-Review H3), ohne dass ein anderer derselben Regel kam. Folgefunde anderer Regeln: SCA021 DuplicateBlock (28 Bloecke werden ungleich), SCA001 (die Zaehlung verschiebt sich: 15 Funde weniger, 13 mehr), SCA009 (6 weniger) und SCA007 (1 mehr - die geloeschte `TList<Integer>`-Variable war der letzte Nutzer von `System.Generics.Collections`) |
 | X in einem try/finally-Block freigeben (aendert Verhalten) | SCA009, SCA001 (nur Variante freed-outside-finally) | Baustein B5 (Charge H4): die Erzeugung `X := TFoo.Create..;` (auch `var X[: T] := ..`, CreateFmt & Co., ueber Zeilen) bleibt stehen, die Zeilen bis zur Freigabe `X.Free`/`X.Destroy`/`FreeAndNil(X)` (auch `SysUtils.FreeAndNil(X)`) kommen eine Stufe tiefer in den `try`-Teil, die Freigabe ins `finally` (ein direkt folgendes `X := nil;` geht mit, wenn es allein auf seiner Zeile steht bzw. die Zeile der Freigabe beschliesst - sonst bleibt es hinter dem `end;` stehen). `try`/`finally`/`end;` stehen in eigenen Zeilen, eingerueckt wie die Erzeugung; die Stufe ist die der Liste (Einrueckung der Erzeugung gegen ihren Oeffner `begin`/`try`/`except`/..., hoechstens vier Zeichen, sonst zwei Leerzeichen bzw. ein Tab; sie kommt hinter den Leerraum, den eine Zeile mit der Erzeugung teilt - gemischte Einrueckung aus Tab und Leerzeichen bleibt in ihrer Art), Leerzeilen bleiben leer, Kommentarzeilen ruecken mit. Gekennzeichnet nach E2: Free laeuft danach auch bei einer Ausnahme und bei Exit - das ist der Fix. Nachweis am Puffer: die Erzeugung ist eine ganze Anweisung einer Anweisungsliste (nicht hinter then/else/do, kein case-Zweig), allein auf ihrer Zeile, die rechte Seite traegt ein `.Create..`; die Freigabe steht als ganze, UNBEDINGTE Anweisung in DERSELBEN Liste dahinter (Blocktiefe 0, hinter `;`), allein auf ihrer Zeile. Gesperrt: keine solche Freigabe (sie steht tiefer, in einem Zweig oder fehlt), eine bedingte, tiefer liegende oder zweite Freigabe bzw. eine zweite Zuweisung an X im Bereich (Doppelfreigabe), nichts zwischen Erzeugung und Freigabe (es gaebe nichts zu schuetzen), Direktive, Marke/goto (ein Sprung in einen try-Block uebersetzt nicht), asm, Inline-`var`/`const` auf der Ebene der Erzeugung (ihr Gueltigkeitsbereich schrumpfte auf den try-Teil), mehrzeiliges `'''`-Literal (Einruecken aenderte es), Break/Continue, deren Schleife den Bereich umschliesst (X waere hinter der Schleife frei; in einer Schleife ganz im Bereich gehen sie), Exit, wenn X im Bereich weitergegeben wird (`if Liste.TryAdd(X) then Exit;` - der Ausstieg uebergibt vielleicht den Besitz; die Spruenge seit Charge B1-FE auch als `System.Exit`/`System.Break`/`System.Continue` - hinter dem Punkt sah die Hilfe sie vorher nicht, Gegen-Review R5), X in einem raise-Ausdruck (`raise X`, `raise TObject(X)`, `raise X at ..`, `Exception.RaiseOuterException(X)`), eine Freigabe in anderer Schreibweise im Bereich (`TObject(X).Free`, `Self.X.Free`, `FreeAndNil(Self.X)` - mit finally liefe sie doppelt), ein umschliessendes try, dessen except- bzw. finally-Teil X nennt (er liefe danach hinter dem finally: zweite Freigabe bzw. Zugriff auf ein freies Objekt), und eine Weitergabe auch OHNE Ausstieg (seit Charge H4c, Gegen-Review H4 Blocker 1 - im Fehlerfall gaebe finally X frei, waehrend ein Halter es noch kennt: aus einem Leck wuerde ein Use-after-free): X als direktes Argument eines Aufrufs, dessen Name mit add/insert/push/enqueue/register/attach/subscribe/put beginnt (nicht `InsertComponent` - der Destruktor meldet sich beim Owner ab - und `AddStrings`, das nur kopiert), X als ganze rechte Seite einer Zuweisung an etwas anderes als eine lokale Variable der Routine (Feld, Property, Element, `Result`, globale Variable, Parameter) - beides auch in einer Huelle aus Cast, Klammern und `as` (`List.Add(TObject(X))`, `List.Add(X as TObject)`, `FCurrent := TFoo(X)`, `FObj := (X)`; bis Charge B1-FE nur der Cast im Aufruf, Gegen-Review R5), ein Methodenzeiger `X.M` an ein Ereignis (`Btn.OnClick := X.Handler`) und `@X` bzw. `@X.M`. Bewusst eng: die breite Fassung (jedes Argument, jede Zuweisung) kostete 372 von 909 Objekt-Angeboten. Das Meldungs-Suffix `(try/except instead of try/finally)` sagt nur, dass die Methode irgendwo ein try/except hat (uMissingFinally), nichts ueber den Ort - die Hilfe prueft wie ohne; bis Charge H4c verlangte sie ein try/except im Bereich und keines drumherum (ein Lesefehler des Detektors, Gegen-Review H4 Major 1). SCA001: never-freed, return-value und proven-leak stehen gesperrt mit ihrer Variante da (massgeblich ist das Feld `TLeakFinding.LeakVariant`, das uLeakDetector2 setzt - ein Fund ohne Feld, etwa von uFieldLeak, bekommt keine Hilfe). Restrisiko: eine Weitergabe, die die Sperre nicht sieht - ueber einen Alias (`Y := X; Liste.Add(Y)`), an einen Konstruktor, der den Besitz uebernimmt (`TReader.Create(X)`), an einen Aufruf anderen Namens (`Store(X)`) oder als Methodenzeiger im Argument (`Subscribe(X.Handler)`). Korpus: SCA009 894 von 1.102 (Charge H4: 857; +49 ohne die Suffix-Regel, -12 durch die Weitergabe-Sperre), SCA001 52 von 67 (freed-outside-finally); im Rundlauf verschwand jeder Fund (auch die 49 neuen der Charge H4c; dort Folgefunde SCA090 NestedTry bei 39 - das try/except umschliesst jetzt ein try/finally - und SCA001 freed-outside-finally bei 17). Folgefunde: SCA001 freed-outside-finally fuer weitere Variablen derselben Routine (sie hat jetzt ein try/finally, deren Free steht daneben - 212 Angebote), SCA090 NestedTry, SCA012 LongMethod |
 | Sperre X in einem try/finally-Block freigeben (aendert Verhalten) | SCA109, SCA153 | derselbe Baustein fuer Sperren: Lock/UnLock, Enter/Leave, Acquire/Release, BeginWrite/EndWrite, `TMonitor.Enter(O)`/`TMonitor.Exit(O)`, `EnterCriticalSection(CS)`/`LeaveCriticalSection(CS)` (auch qualifiziert) und die eigene Methode `Lock;`/`UnLock;`. Die Freigabe bestimmt die Hilfe selbst: derselbe Empfaenger bzw. dasselbe Argument, als Text ohne Leerraum gleich (`Self.FLock` und `FLock` sind verschieden; steht dieselbe Sperre im Bereich in anderer Schreibweise frei - `Self.FLock.Leave`, `TFoo(FLock).Leave`, `FLock.Release` nach `FLock.Enter` (TCriticalSection kennt beide), `LeaveCriticalSection(Self.FCS)` -, sperrt das: mit finally liefe sie doppelt) - SCA153 nimmt jedes `unlock`/`release` im 200-Zeichen-Fenster, auch das fremder Objekte. Die Sperre der Meldung wird auf der Zeile nachgeprueft (SCA153: `FLocker.Lock`, `Lock`, `EnterCriticalSection`; SCA109: das Wort vor `.Enter`/`.Acquire`/`.BeginWrite`, `TMonitor.Enter(o)`, `EnterCriticalSection(...)`). Gesperrt wie oben, dazu: Exit im Bereich (Konzept; auch `System.Exit`), eine zweite Sperre derselben Sperre, `Lock(..)` mit Argumenten (keine Sperre), `TMonitor.Enter(O, Timeout)` bzw. `TMonitor.TryEnter(O)` (eine Bedingung, mit eigenem Grund) und ein umschliessender Handler, der sie freigibt (auch in anderer Schreibweise). Korpus: SCA109 30 von 35, SCA153 219 von 241; ein Fund an beiden Regeln verschwindet mit der einen Hilfe aus beiden |
@@ -609,6 +617,13 @@ liegt im Core (`uFindingActions`: `fakContext`, `TEditorContext`,
 |---|---|---|
 | Lokale Konstante fuer N einfuehren | ein Zahl-Literal (Caret davor, darin oder direkt dahinter; dezimal mit `_`, Bruch, Exponent, `$FF`) | dieselbe Kette wie der Quick-Fix SCA014 (`TRdxMagicFixes.IntroduceAt` -> `PlanLiteral`, Tabelle oben): `const MagicNr01 = N;` als Inline-Konstante direkt vor der Anweisung (E26), nur DIESES Literal (E28), ein Zweig ohne `begin` bekommt `begin..end`, Name `MagicNr01`.. der erste freie (F3), kein Sync Edit, kein Dialog; dieselben Sperren (Zeilen-Leser der Code-Aktion, FPC-Weiche, Spuren alter Compiler, Hauptblock, Skript) und derselbe Plattenblick (`FileReason`, `IncludeReason`: Lazarus-Projekt, alte Delphi-Projekte, Includes, Netzpfad). Sperrt die GANZE Datei (FPC-Weiche, Skript, Spuren alter Compiler - `TRdxMagicPlan.FileWide` aus `IntroduceAt` - und der ganze Plattenblick), steht KEIN Eintrag da, auch wenn zugleich die Stelle sperrt (Entscheid Nico 2026-10-24); Sperren der Stelle (Ausdrucksfortsetzung, `else if`, Deklarationszeile, Hauptblock ...) stehen ausgegraut mit Grund da. Die Fund-Hilfe SCA014 nennt weiter jeden Grund. Ein triviales Literal - dieselbe Menge, die SCA014 durchlaesst: die Vorgabe von `[Detectors] MagicNumberTrivials` (`0,1,2,-1,10,100`) und Zweierpotenzen bis 1024, nur dezimale Ganzzahlen, ein unaeres `-` zaehlt mit (`-1` trivial, `-10` nicht); gespiegelt in `TRdxMagicFixes.IsTrivialLiteral`, eine eigene Liste in der analyser.ini sieht reDelphix nicht - ist kein Kandidat: kein Eintrag (Entscheid Nico 2026-10-24; Korpus B3: 161 der 226 Angebote fallen weg). Nur Zahlen (F5): `#13`, Strings und Zeichen bieten nichts an; ein Binaer- oder Oktal-Literal (`%101`, `&17`) steht gesperrt da (ausser in einer gesperrten Datei). Bedeutungsgleich nach der Praemisse von E26 (unten: hier steht das Literal auch in Arithmetik und Aufrufen - gemessen ist P6 noch nicht) |
 | X in einem try/finally-Block freigeben (aendert Verhalten) | eine Zeile `X := T.Create..;` bzw. `var X[: T] := T.Create..;`, X eine LOKALE Variable der Routine | C3: dieselbe Kette wie der Quick-Fix SCA009 (`TRdxTryFixes.CreateAt` -> `ObjectPair`, Baustein B5), X aus der Zeile; die Freigabe `X.Free`/`FreeAndNil(X)` muss schon als ganze, unbedingte Anweisung in derselben Liste stehen, sonst gesperrt mit Grund (F6). Mehrere Erzeugungen auf der Zeile: die, in deren Anweisung der Caret steht. Gekennzeichnet (E2) wie SCA009 |
+| Format() aus Verkettung bilden | eine `+`-Kette einer Zuweisung oder des EINEN Arguments eines Aufrufs (`ShowMessage('a' + ..)`), Caret zwischen dem ersten und dem letzten Term oder direkt dahinter; auf einer Fortsetzungszeile wird die Anweisung bis zu 30 Zeilen aufwaerts gesucht (nicht ueber ein `;`) | C16 (Charge N): dieselbe Kette wie die Fund-Hilfe SCA044 (`TRdxPlacesRunner.DescribeAnchor` -> `ChainOf`/`CallOf`, dann `FormatRewrite` nach der Kompilat-Regel, Rezept 5.1) - aber schon ab einem `+`. Kandidat nur mit mindestens zwei Literalen ODER einem Literal und einer Umwandlung nach String (`IntToStr`, `UIntToStr`, `IntToHex`, `FloatToStr(F)`, `FormatFloat`, `CurrToStr(F)`, `FormatCurr`, `BoolToStr`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `FormatDateTime`, `VarToStr`, `GUIDToString`, `x.ToString`); `'a' + B` und Ketten ohne Literal bieten nichts an. Nur bedeutungsgleich wie bei SCA044: `IntToStr(x)` wird `%d`/`%u` nur mit bewiesenem Ganzzahltyp, `FloatToStr(x)` bleibt Argument von `%s` (kein `%g`), `%` im Literal wird `%%`, Apostrophe und `#13` bleiben; gesperrt mit dem Grund der Fund-Hilfe: Kommentar im Bereich, Variant-Anzeichen oder Variant-Typ, Zahl, Klammerausdruck, AnsiString, SQL-Text, schon ein `Format(` in der Kette. Fehlt `System.SysUtils`, kommt es als zweite Ersetzung mit; laesst es sich nicht einfuegen (Direktive in der Klausel, kein Abschnitt - `TRdxFormatOutcome.FileWide`), gilt das jeder Kette der Datei: kein Eintrag (wie bei der Konstante). Kein Eintrag auch bei einer Kette nur aus Literalen, mehreren Anweisungen auf der Zeile, mehreren Argumenten, einer Kette, die anders zerfaellt, als der Parser sie sieht. Bedeutungsgleich, nicht gekennzeichnet |
+| if umkehren (then und else tauschen) | `if` oder `then` eines if MIT else (auch `else if` als Anweisung, nicht der bedingte Ausdruck von Delphi 13) | C7 (Charge C78, `uRdxIfFixes.InvertIf`): Bedingung verneint, Zweige woertlich getauscht (Kommentare hinter then/else bleiben an ihrem Ort). Negation voll geklammert (`uRdxCondExpr.NegatedTop`): `not X` nur fuer einen einfachen Operanden (Name, Aufruf, Index, Klammer), sonst `not (..)`; `not F` -> `F`, `not (C)` -> `C`; `P = nil` <-> `P <> nil` (nur mit nil - sonst `not (A = B)`: NaN, Mengen, Variant, Ueberladungen). Gesperrt: Direktive in der Anweisung, Kommentar in der Bedingung, leerer Zweig, else-if-Kette, else-Zweig endet auf if ohne else (dangling else), mehrzeiliger String in der Bedingung. Kein Eintrag: if ohne else, Anweisung nicht lesbar (anonyme Methode, Marke, asm) |
+| Letztes if in eine Waechter-Klausel mit Exit umwandeln | `if`/`then` des LETZTEN `if A then begin B end` der Routine | C7: dieselbe Kette wie die Fund-Hilfe SCA018 (`TRdxDeepNestingFix.GuardAt` -> `LastIf`, `BuildGuard`), Menuetext und Hinweis wie dort (Dedup F2); dieselben Sperren ausser Meldung und "nicht innen". Kein Eintrag: if nicht die letzte Anweisung, mit else, ohne begin..end |
+| De Morgan auf "and"/"or" anwenden | `and`/`or` einer Kette bzw. `not` vor `( .. )` in der Bedingung von if, while, until - nur auf boolescher Ebene (keine Arithmetik, kein Vergleichsoperand, kein Argument) | C8 (`uRdxCondFixes.DeMorgan`): `not (A and B)` -> `(not A) or (not B)`, das Ergebnis geklammert, wenn es nicht allein den Ausdruck bzw. eine Klammer fuellt; sonst zurueck `A and B` -> `not ((not A) or (not B))`, `(not A) or (not B)` -> `not (A and B)`. Gleiche Glieder, gleiche Reihenfolge, gleicher Kurzschluss. Gesperrt: gemischte Operatoren (`or`/`xor`), Kommentar im Bereich |
+| Seiten von "<" tauschen | ein Vergleichsoperator (`=`, `<>`, `<`, `>`, `<=`, `>=`) in einer Bedingung oder auf der rechten Seite einer Zuweisung | C8 (`uRdxCondFixes.FlipCompare`): `A < B` -> `B > A` (`<=`/`>=` gespiegelt, `=`/`<>` bleiben). Gesperrt: eine Seite ruft mit Klammern eine Routine (ausser Length/High/Low/Ord/Chr/SizeOf/Abs/Odd/Succ/Pred ohne gleichnamige Routine der Datei), `as`, `inherited`, Kommentar. Kein Eintrag: Typparameter (`TList<T>`), Argument eines Aufrufs |
+| if am "and" teilen | ein `and` der obersten Ebene der Bedingung eines if (reine and-Kette) | C8 (`uRdxIfFixes.SplitIf`): `if A and B then X` -> `if A then` / `if B then X`, der Zweig eine Stufe tiefer. Gesperrt: else, `{$B+}`/`{$BOOLEVAL ON}` in der Datei, Direktive, Kommentar in der Bedingung, Zeile in Block-Kommentar/mehrzeiligem String. Kein Eintrag: `and` unter `or` oder in Klammern, while |
+| Mit dem inneren if zusammenfuegen (and) | `if`/`then` eines if, dessen then-Zweig ein if ist (direkt oder allein in `begin..end`) | C8 (`uRdxIfFixes.MergeIf`): `if A then if B then X` -> `if A and B then X` (Glied geklammert, wenn es kein Faktor und keine and-Kette ist), eine Stufe flacher, begin/end fallen weg. Gesperrt: else am aeusseren oder inneren if, `{$B+}`, Kommentar zwischen den Koepfen oder um begin/end, end nicht als erstes auf seiner Zeile |
 
 **Wann ein Eintrag entsteht (F4):** nur mit einem Kandidaten am Caret -
 dann freigegeben oder ausgegraut mit dem Grund im Hint; sonst gar nichts
@@ -624,12 +639,21 @@ Zeile. Der Text kommt nur aus dem Editor-Puffer einer Pascal-Datei; die
 Platte liest erst die Lokale Konstante fuer einen Kandidaten am Caret
 (`FileReason`: Projektdateien der Verzeichnisse darueber, `IncludeReason`:
 die Includes - wie die Fund-Hilfe SCA014), beide nach der Netzpfad-Sperre
-(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff).
+(`uRdxPaths.IsNetworkPath`, dort kein Plattenzugriff). "Format() aus
+Verkettung" braucht den geparsten Puffer: der Anbieter oeffnet den
+Quellstellen-Dienst (`TRdxProvider.ContextPlaces`, derselbe Quell-Cache wie
+fuer die Funde des Menues) nur, wenn auf der Caret-Zeile oder einer
+Nachbarzeile ein `+` als Code steht (`TRdxContextRunner.WantsPlaces`);
+scheitert der Parser, entfaellt nur dieser Eintrag (Protokoll).
 
 **Menuetext = der der Fund-Hilfe (F2):** `uRdxFixTable.ContextCaption`
 baut ihn ueber `CaptionFor` der Zeile `fkMagicNumber` bzw.
 `fkMissingFinally` - gleich geschrieben, also faellt die Kontextaktion auf
-einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg
+einer SCA014- bzw. SCA009-Fundzeile hinter der Fund-Hilfe weg; "Format()
+aus Verkettung" nimmt die msgid des SCA044-Rezepts (`CAP_FORMAT` in
+`uRdxActionCore`, `CAP_CONTEXT_FORMAT` in `uRdxFixTable` - SCA044 ist keine
+Zeile der Tabelle; die Gleichheit prueft
+`uTestRdxContextFormat.Caption_IsSca044RecipeCaption` am Quelltext)
 (`uFindingActionMenu`, Dedup per Caption). Die Hinweise sind dieselben
 msgids. Die Gross-/Kleinschreibung zaehlt dabei nicht (`SameText`, Review
 Charge B, Befund 5): der Name kommt auf dem Fundweg aus der Meldung des
@@ -650,6 +674,46 @@ Eintrag, Stelle = ausgegraut, SCA014 unveraendert; 4 in
 entscheidet), dazu 4 nur unter
 Delphi (Menuetext und Ersetzung gleich denen der Fund-Hilfen, ueber
 `PlanFixIn`; SCA014 ueber die Tabelle in einer FPC-Unit weiter mit Grund).
+"Format() aus Verkettung" (C16): `uTestRdxContextFormat` - 19 Tests auch
+im FPC-Pruefstand (gegen den Stub-Parser, der keine Typen kennt: dort
+bleibt `IntToStr(N)` Argument von `%s`, unter Delphi wird es `%d`):
+Angebot mit Umwandlung, mit zwei Literalen, Selbst-Anhaengen, Argument,
+`%`/Apostroph, fehlendes `System.SysUtils` (mit und ohne Klausel);
+Gegenproben triviale Kette, ohne Literal, nur Literale, `FloatToStr` bleibt
+`%s`, Variant-Anzeichen und Kommentar im Bereich gesperrt, Kette nur in
+Kommentar/String, Caret ausserhalb der Kette, mehrere Argumente, uses mit
+Direktive = kein Eintrag (die Fund-Hilfe nennt den Grund), ohne Dienst kein
+Eintrag, die Vorprobe, die Reihenfolge hinter der Konstante, der Menuetext
+gleich dem des SCA044-Rezepts; jede Ersetzung beginnt auf einem Zeichen
+(nie auf einer leeren Zeile). Dazu 4 nur unter Delphi (ContextCaption,
+Variant-Lokale, Caret auf der Fortsetzungszeile, Ersetzung gleich der des
+Fund-Wegs `TRdxRecipeRunner.Describe` + `FormatRewrite`). Je Mutante des
+Laeufers (Kandidat, Caret, NoOperand, FileWide, Vorprobe, Umwandlung,
+Aktion, uses-Ersetzung) wird mindestens ein Test rot; zwei Waechter
+schuetzen nur doppelt (Ende der Anweisung bei der Suche aufwaerts - sonst
+faengt der Caret-Bereich es; Form der Kette - Argumente zaehlen nie als
+Literal).
+C7/C8 (Charge C78): `uTestRdxContextIf` - 73 Tests auch im FPC-Pruefstand
+(je Aktion eine Fixture: umkehren 19, Waechter-Klausel 7, De Morgan 12,
+Vergleich drehen 11, teilen 10, zusammenfuegen 11, Texte/Reihenfolge 3),
+dazu 2 nur unter Delphi (ContextCaption: Waechter-Klausel = SCA018, die
+anderen = `TRdxContextRunner.CaptionOf`). Je Aktion Ergebnistext exakt,
+Sperre mit Grund und kein Eintrag; Rundreisen (zweimal umkehren, zweimal
+drehen, teilen + zusammenfuegen = Original). Mutanten (halbe Token bei
+mehrzeiligem String, OpenTail hinter do) werden rot. FPC-Mikroprobe
+(Scratchpad der Charge, nicht eingecheckt): 30 Umbauten aus den Tests gegen
+ihr Original ueber alle Belegungen (A/B/C als Funktionen mit Spur: Zweig UND
+Aufruf-Reihenfolge; Integer, Double mit NaN, Mengen, nil) gleich; die
+Gegenproben `not X = 0`, else-if ohne Block, De Morgan ohne Klammer und
+Teilen unter `{$B+}` erkennt sie als verschieden. Korpus-Probe (2026-10-27,
+`D:\git-sca-realworld`, 400 zufaellige .pas, Caret auf jedes `if`, `then`,
+`and`, `or`, `not`, `<`, `=`, `>=` einer Zeile, FPC-Harness mit `-Cr -Co`
+gegen `TRdxContextRunner.Run`): 57.423 Laeufe, 0 Ausnahmen, jede
+Ersetzung besteht `PlanByteEdits` (Expected = Puffer); haeufigste Sperren:
+else-if-Kette (Umkehren), else am inneren/aeusseren if (Zusammenfuegen),
+Direktive in der Anweisung, Typumwandlung als Aufruf (Drehen). Stichprobe
+je Art von Hand: bedeutungsgleich, auch in case-Zweigen und mit dangling
+else hinter dem inneren if.
 
 **Korpus-Probe (Charge B3, `D:\git-sca-realworld`, 13.446 .pas, je 3.000
 zufaellige Stellen, FPC-Harness gegen `TRdxContextRunner.Run`):**
@@ -675,6 +739,29 @@ ohne Eintrag, dieselben Stellen erneut): Konstante angeboten 65, gesperrt
 normalen Weg; die Freigabe laeuft danach auch bei einer Ausnahme - der
 Zweck). Laufzeit im Harness: Konstante rund 20 ms je Stelle (Plattenblick
 und Durchsicht der Datei), C3 unter 2 ms.
+
+**Korpus-Probe C16 (Charge N, 2026-10-25, `D:\git-sca-realworld`, 13.446
+.pas, 3.000 zufaellige Stellen aus 68.295 ASCII-Zeilen mit `+` und
+Apostroph, Caret an zufaelliger Spalte; FPC-Harness gegen
+`TRdxContextRunner.Run` mit Quellstellen-Dienst auf dem Stub-Parser des
+Pruefstands):** angeboten 273 (9,1 %; davon 136 mit mindestens drei `+`,
+dort steht auch der SCA044-Fund und die Kontextaktion faellt dahinter weg),
+gesperrt 13 (0,4 %: Kommentar im Bereich 4, kein einfacher Operand 5,
+Variant moeglich 2, schon `Format(` 1, SQL-Text 1), kein Eintrag 2.714
+(90,5 %; Stichprobe 20: mehrere Argumente, Caret auf dem Aufrufkopf, ein
+Literal ohne Umwandlung, keine Kette, Fortsetzungszeile einer langen
+Kette). Grenzen des Stubs nach beiden Seiten: er kennt keine Typen (eine
+AnsiString- oder Variant-Variable stuende unter Delphi gesperrt da,
+`IntToStr(N)` wird dort `%d`), und eine mehrzeilige Kette mit Text hinter
+`:=` zerfaellt fuer ihn anders als fuer den Parser (Delphi bietet dort
+mehr an). Stichprobe 20 Angebote von Hand: 20/20 uebersetzen und geben
+dasselbe aus (u. a. `raise Exception.Create(..)`, `FormID.ToString(True)`,
+Selbst-Anhaengen an `Result`, `inttohex(..)`, 30 Terme mit `sLineBreak`,
+eine Kette ueber vier Zeilen mit `#13`); ein `TimeSeparator: Char` geht
+ohne `string(..)`-Cast nach `%s` (bekannte Grenze der Kompilat-Regel: ein
+Char unbekannten Typs - gleiche Ausgabe ausser bei `#0`), ein
+`DebugLogger(line: AnsiString)` wandelt Format wie die Kette. Laufzeit im
+Harness: rund 1,6 ms je Stelle (ein Parse je Datei).
 
 ## Lokale Variable einfuehren (Refactoring ohne Fund, in Arbeit)
 
@@ -882,6 +969,23 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   englische msgid. Seit Charge FB pinnt `ResultDefaultHint_NamesShownValue` den
   festen Hinweis von SCA121 (er nennt keinen Default(T) mehr, der Menuetext
   nennt den Wert).
+* `uTestRdxActionCore` - der Kern des Anbieters (`uRdxActionCore`,
+  Entscheid E3): die Eintraege zu einem Fund gleich den Bausteinen, die
+  `uRdxProvider` bis dahin selbst rief - SCA017 mit erstem und zweitem
+  Eintrag (`FixFor`/`AlternativeFixFor` samt `CaptionFor`), SCA044 mit
+  "Stelle zeigen" und Format() (echte Detektor-Meldung, `Describe`/
+  `FormatRewrite`), SCA165 gesperrt mit Grund, Parser-Watchdog bzw. nicht
+  lesbare Quelle (nur Diagnose, Text-Rezept und Unterdruecken), Regel ohne
+  Hilfe (Diagnose), uses-Zeile ohne Lieferanten der Projekt-Units
+  (`UsesSkipped`), `FindingDiagnosis` und `MsgTooLongForEditor`; nach dem
+  Review E3 dazu `FindingActionOf` (jedes Feld des Eintrags in der
+  `TFindingAction`, bis dahin ungetestet in `TRdxProvider.AddEntry`), die
+  per RTTI gepinnten Felder von `TFindingAction`, `TRdxActionData` und
+  `TRdxActionEntry` (ein neues Feld wird rot, bis das Mapping es kennt),
+  die SQL-Vorlage (SCA003) gleich `SqlTemplate`, Format() mit fehlendem
+  `System.SysUtils` (zwei Ersetzungen) und eine Ausnahme in einem
+  Baum-Rezept (laeuft zum Aufrufer, Quelle vergessen) - 14 Tests, nur
+  reDelphix.Test (anonyme Methoden, Watchdog, RTTI).
 * `uTestRdxText` - die Sprache der Texte (`uRdxText`, Charge C0, Entscheid
   E29): Override (de/fr/en, Kuerzel ohne Uebersetzung, Normalisierung wie
   in der SCA), `auto` ueber die gesetzte Sprache der SCA, ohne sie ueber
@@ -962,8 +1066,9 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   dritte auch gegen 3d753de6.
 * `uTestRdxCleanupFixes` - die Quick-Fixes SCA070/SCA053 der Charge H3a auf
   Text, ohne Parser: `//`-Zeile, Kommentar hinter Code, Inhaltszeilen eines
-  Blockkommentars (leerer Rest samt Begrenzern, Prosa bleibt, Oeffner bzw.
-  Schliesser bleiben), mehrere Kommentare, letzte Zeile der Datei;
+  Blockkommentars (immer der ganze Kommentar: leerer Rest oder Rest aus
+  Code geht mit, Prosa im Rest sperrt - Fix-Charge rwE29), mehrere
+  Kommentare, letzte Zeile der Datei;
   Einzeldeklaration, leer werdende Section, Gruppen (auch ueber Zeilen),
   Inline-var; jede Sperre; dazu der Baustein `CutEdit` (20 Tests).
 * `uTestRdxCleanupScope` - die SCA053-Sperren der Charge H3c je mit der
@@ -984,7 +1089,8 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   `uCommentedOutCode`/`uUnusedLocal` (nur Delphi): Rundlauf bis der Detektor
   schweigt, Katalog-Beispiel SCA053 `bad` -> `good`, Sperren an echten
   Funden (for var, resourcestring, Kopfkommentar, TODO, Mehrzeilenstring,
-  Attribut), dazu der with-Rundlauf (with sperrt nicht). Das Katalog-Beispiel von SCA070 meldet der Detektor
+  Attribut, Teil eines Kommentars mit Prosa), dazu der with-Rundlauf (with
+  sperrt nicht) und der ganze Kommentar, dessen Rest Code ist (rwE29). Das Katalog-Beispiel von SCA070 meldet der Detektor
   nicht (zwei benachbarte `//`-Zeilen gelten ihm als Doku-Block).
 * `uTestRdxTryFixes` / `uTestRdxTryLocks` / `uTestRdxTryGates` - die Quick-Fixes try/finally der Charge H4
   (Baustein B5) auf Text, ohne Parser: die Form (Stufe zwei/vier Zeichen bzw. Tab,
@@ -1015,10 +1121,11 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
 * `uTestRdxTryFixesDetector` - dieselben Hilfen gegen die echten Detektoren (nur
   Delphi): Rundlauf SCA009 (auch mit Suffix - try/except im Bereich bzw. umschliessend),
   SCA001 freed-outside-finally (Variante
-  aus dem Fund, gekennzeichnet, Menuetext), Katalog-Beispiele SCA153/SCA109/SCA156
+  aus dem Fund, gekennzeichnet, Menuetext; auch fuer die Kopie des Funds,
+  TLeakFinding.Clone - Befund B1), Katalog-Beispiele SCA153/SCA109/SCA156
   `bad` -> `good` (SCA109 ohne den Kommentar in `bad`; SCA009: `good` ist einzeilig),
   Funde, die die Hilfe ablehnt (bedingtes Free, never-freed, fremde Freigabe,
-  ReallocMem) - 14 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 12/12; der
+  ReallocMem) - 15 Tests; ohne Delphi gegengeprueft (CLI-Exe und FPC-Planer, 12/12; der
   Rundlauf der Charge H4c ebenso, und das SCA156-Katalogbeispiel der Charge B1-FE, das seitdem
   in einer Routine mit `var P: Pointer;` steht).
 * `uTestRdxResultFixes` / `uTestRdxInheritedFixes` - die Quick-Fixes der Charge H5 auf
@@ -1201,13 +1308,66 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\` (Review R6-06).
   Charge A3: `uTestRdxLoopBoundFix` (SCA203, 26 Tests) - die Text-Fixture
   (18) laeuft auch im FPC-Pruefstand (`uRdxLoopBoundFix` steht in der
   Unit-Liste von build.sh), die Detektor-Fixture (8) nur in reDelphix.Test.
+  Charge N/FN: `uTestRdxFuncNameFix` (SCA204, 17 Tests) - die Text-Fixture
+  (13) laeuft auch im FPC-Pruefstand (`uRdxFuncNameFix` steht in der
+  Unit-Liste von build.sh), die Detektor-Fixture (4) nur in reDelphix.Test.
+* Charge N (C16): `uTestRdxContextFormat` (23 Tests) - "Format() aus
+  Verkettung" am Caret (Abschnitt "Code-Aktionen ohne Fund"); die erste
+  Fixture (19) laeuft auch im FPC-Pruefstand (`uRdxPlacesRunner` in der
+  Unit-Liste von build.sh), die zweite (4: ContextCaption, Variant-Lokale,
+  Fortsetzungszeile, gleich dem Fund-Weg) nur in reDelphix.Test.
+* Charge C78 (C7/C8): `uTestRdxContextIf` (75 Tests) - if umkehren,
+  Waechter-Klausel, De Morgan, Vergleich drehen, if teilen/zusammenfuegen am
+  Caret (Abschnitt "Code-Aktionen ohne Fund"); 73 auch im FPC-Pruefstand,
+  2 (ContextCaption) nur in reDelphix.Test.
+* Charge P5 (Performance): `uTestRdxSharedMap` (18 Tests, auch im
+  FPC-Pruefstand) - `TTestRdxSharedMap` (10): `TRdxCodeMap.Acquire` liefert
+  fuer `TRdxMappedLines` EINE Map, fuer andere Zeilen je Aufruf eine neue;
+  `Release` laesst die getragene stehen; jede Aenderung der Zeilen (auch in
+  `BeginUpdate`) verwirft sie, die neue gleicht der frischen; Serial je
+  Aufbau; Unterdrueck-Hilfen (je Zeile und Art) und Kontext-Laeufer (je
+  Caret-Spalte) liefern mit geteilter Map dieselben Ersetzungen und Gruende
+  wie mit frischer, bei genau einem Aufbau. `TTestRdxDiskReasonCache` (8):
+  ohne Cache sieht jeder Aufruf die Platte (Vorgabe), mit Cache der erste bis
+  `Clear`; erster Blick gleich dem ohne Cache; Dateiart und Netzpfad vor dem
+  Cache; Schluessel mit Sprache und - fuer IncludeReason - der Map;
+  `UseDiskCache` stellt wieder her; ein freigegebener Cache meldet sich ab.
+* Charge Q6 (Performance): `TTestRdxFileMarkerCache` (6 Tests in
+  `uTestRdxSharedMap`, auch im FPC-Pruefstand) - `TRdxSuppress.FileMarker`
+  liest den Text (erster erweiterbarer Datei-Marker, Kopfanweisung) je Map
+  einmal (`FileScans`): geteilte Map ein Durchlauf fuer alle Arten, frische
+  Zeilen je Aufruf einer; gleiche Ergebnisse wie mit frischer Map fuer jede
+  Form, nach Aenderung der Zeilen, im Wechsel zweier Dateien und je Sprache.
+  Nachbildung: ohne Cache 1 Test rot, Cache ohne Map-Schluessel 6 rot.
 
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxContextRunner
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxFuncNameFix uTestRdxContextRunner uTestRdxSharedMap uTestRdxContextFormat uTestRdxContextIf uTestRdxDeepNestingFix
 ```
 
+Gemessen (2026-10-27, FPC-Lauf, Charge C78 C7/C8): `PASSED 995  FAILED 0` -
+56 Testunits; 902 + 73 (`uTestRdxContextIf`) + 20 (Text-Fixture
+`uTestRdxDeepNestingFix`, SCA018 - seit C78 im Pruefstand, weil die
+Waechter-Klausel ohne Fund ueber `TRdxDeepNestingFix.GuardAt` laeuft); die
+Unit-Liste von build.sh traegt dazu `uRdxDeepNestingFix`, `uRdxCondExpr`,
+`uRdxIfFixes`, `uRdxCondFixes`.
+Gemessen (2026-10-25, FPC-Lauf, Charge N integriert = Q + C16 + FN):
+`PASSED 902  FAILED 0` - 54 Testunits; 864 + 6 (Q6 `TTestRdxFileMarkerCache`)
++ 19 (`uTestRdxContextFormat`) + 13 (Text-Fixture `uTestRdxFuncNameFix`).
+Gemessen (2026-10-25, FPC-Lauf, Charge N C16, Basis d2403f61 ohne Charge Q): `PASSED 883  FAILED 0` - 53
+Testunits, davon `uTestRdxContextFormat` 19 (neu: "Format() aus Verkettung" am
+Caret; die Unit-Liste von build.sh traegt dazu `uRdxPlacesRunner`). Davor
+`PASSED 864`.
+Gemessen (2026-10-25, FPC-Lauf, Charge Q6): `PASSED 870  FAILED 0` - 52
+Testunits, davon `uTestRdxSharedMap` 25 (neu `TTestRdxFileMarkerCache` 6:
+Datei-Marker je Map einmal). Davor `PASSED 864`.
+Gemessen (2026-10-25, FPC-Lauf, Review Charge P): `PASSED 864  FAILED 0` - 52
+Testunits, davon `uTestRdxSharedMap` 19 (neu: Changes zaehlt Schreiben, nicht
+Lesen - TRdxProvider.SharedLines). Davor `PASSED 863`.
+Gemessen (2026-10-25, FPC-Lauf, Charge P5): `PASSED 863  FAILED 0` - 52 Testunits,
+davon `uTestRdxSharedMap` 18 (geteilte Code-Sicht, Plattenblick-Cache). Davor
+`PASSED 845`.
 Gemessen (2026-10-24, FPC-Lauf, nach dem Entscheid "triviale Literale ohne Eintrag"):
 `PASSED 845  FAILED 0` - 51 Testunits, davon `uTestRdxContextRunner` 33 (neue
 Fixture `TTestRdxContextTrivial`, 4 Tests; ohne die Pruefung in `IntroduceAt` 3
@@ -1376,9 +1536,11 @@ ab (keine Fixture).
   ```
 
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
-uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen, mit
+uebersetzbar; `uRdxActionCore` (der Ablauf des Anbieters je Fund, seit E3)
+und `uRdxRecipeRunner` sind der testbare Kern dazwischen, mit
 `uRdxFixRunner` und `uRdxFixTable` fuer die einfachen Hilfen (in
-reDelphix.Test, nicht im FPC-Pruefstand).
+reDelphix.Test - `uTestRdxActionCore` vergleicht die Eintraege des Kerns
+mit diesen Bausteinen -, nicht im FPC-Pruefstand).
 
 **Doku der Quick-Fixes** (`QUICKFIXES.md`, Entscheid E30), ohne Delphi
 (Repo-Wurzel; auch in der CI, `.github/workflows/quickfix-doc.yml`):
@@ -1430,6 +1592,92 @@ Aktiv-Quote der Probe zu druecken. Exit 2 bei falschem Aufruf, nicht
 lesbarer Eingabe oder nicht schreibbarer Ausgabe. Die Python-Nachbildung
 der Regeln (Audit 2026-10-06) ist eine Obergrenze; was zaehlt, ist die
 Probe.
+
+## Realworld-Probe der Editorhilfen
+
+**`tools\probe\RdxActionProbe.dproj`** (Konsole, Win64 Release, in der
+d12-Projektgruppe; Entscheid E3, 2026-10-28) ermittelt fuer eine Liste von
+Fundstellen, was Gluehbirne und Kontextmenue anbieten wuerden - ueber
+DENSELBEN Kern wie das Package (`uRdxActionCore.TRdxActionCore.Describe`),
+nicht ueber einen Nachbau. Je Datei scannt die Probe selbst (Engine,
+`ssSingleFile` wie die CLI fuer `--file`, Direkt-Modus ohne `analyser.ini`,
+Profil `strict`, Mindestschwere hint, Delphi, `DefaultIfdefDefines`),
+nimmt den echten Fund gleicher Regel und Zeile (unter mehreren den mit
+derselben Meldung wie im SARIF; Spalte `Quelle` = `scan`) und ruft den Kern
+mit den Zeilen der Datei wie der Anbieter fuer eine geschlossene Datei.
+Liefert der Einzeldatei-Scan den Fund nicht - Funde ueber Projekt-Index,
+Querverweise oder die `analyser.ini` des Referenzlaufs, etwa die
+Unused-Familie SCA007/SCA053/SCA054/SCA147/SCA164 -, baut die Probe ihn aus
+den SARIF-Feldern der Stelle (`Quelle` = `sarif`): Art ueber den Katalog
+aus der RuleId, Zeile, EndLine, Meldung, Variante (SCA001), Konfidenz. Das
+SARIF traegt nicht: MethodName, RelatedLines, StructureChain, Spalte,
+Schwere, Custom-RuleID - die Planer und Rezepte lesen heute nur Datei,
+Zeile, Meldung, Art, Variante (SCA001) und Konfidenz (SCA144); eine leere
+Meldung schreibt der Export als Kurzbeschreibung der Regel. Die Stellen
+zieht `sites_sample.py` je Regel aus einem SARIF-Referenzlauf:
+
+```
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --catalog --n 200 --seed 1
+python reDelphix\tools\probe\sites_sample.py rw.sarif D:\git-sca-realworld sites.tsv --rules SCA017,SCA044 --n 100
+powershell -File tools\patch-stack-size.ps1 "Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe"
+"Output\RdxActionProbe\Win64 Release\RdxActionProbe.exe" sites.tsv actions.csv --lang de
+python reDelphix\tools\probe\sites_sample.py --selftest
+```
+
+`sites_sample.py`: Regeln aus `--rules`, sonst die mit
+`properties.editorHelp` im SARIF (Schalter `--sarif-editor-help`:
+`"editorHelp": ["SCA017:changes:slug", "SCA017.2:changes:slug"]` im
+properties-Bag der Results; auch `"editorHelp": true` im Regelblock), sonst
+mit `--catalog [datei.json]` die mit `"editorHelp": true` im Regelkatalog;
+je Regel gleiche Stelle (Datei, Zeile, Meldung) einmal, Dateien gleichen
+Inhalts (SHA-1) einmal, fehlende Dateien fallen weg (Warnung),
+reproduzierbare Stichprobe `--n` mit `--seed`, hoechstens `int(--cap x
+--n)` Stellen aus einem Repo (erster Pfadteil unter der Korpuswurzel;
+`--cap` Vorgabe 0,25, Bezug ist die angefragte Groesse `--n`). Das SARIF
+wird streamend gefiltert: gehalten werden nur Results der Regeln, die in
+Frage kommen. uri-Dekodierung und Korpuswurzel wie `sites_from_sarif.py`.
+Ausgabe `Datei<TAB>Zeile<TAB>RuleId<TAB>Meldung<TAB>EndLine<TAB>variant<TAB>confidence`
+(die vier hinteren Spalten aus dem SARIF, kodiert wie die Textspalten der
+CSV, dazu TAB als `\t`; die Probe liest auch das alte Format mit drei
+Spalten, dann ohne Quelle `sarif`) und `counts.tsv` (`--counts`, Vorgabe
+neben `sites.tsv`) mit der Grundgesamtheit je Regel:
+`RuleId<TAB>Funde<TAB>gezogen<TAB>Repos<TAB>ReposGesamt` (Funde = alle
+Results der Regel im SARIF, Repos = Repos der Stichprobe, ReposGesamt =
+Repos mit einem Fund der Regel).
+
+CSV der Probe (UTF-8, `;`, RFC 4180), eine Zeile je Hilfe-Eintrag:
+`Datei;Zeile;Regel;Eintrag;Kind;Menuetext;angeboten;aendert;Grund;Edits;VorherZeilen;NachherZeilen;Meldung;Hinweis;Quelle;inBirne`.
+Eintrag `1`/`2` ist der erste bzw. zweite Eintrag der einfachen Hilfe,
+`rezept:<Name>` ein Rezept (`RECIPE_*` in `uRdxActionCore`: ShowSpan,
+FormatCall, SqlTemplate, UsesActions, RemoveMarker), `diagnose` der
+Eintrag "reDelphix: <Grund>", `-` eine Stelle ohne Eintrag ("Fund nicht
+reproduziert", Scan-/Lesefehler - auch ein Scan, der nur SCA006 liefert -,
+Ausnahme, Abbruch nach Stapelueberlauf). `inBirne` sagt, ob der Eintrag
+in der Gluehbirne stuende - nach den Regeln des Hosts selbst
+(`uFindingActionMenu.BuildFindingMenuModelFrom` mit `moAvailableFixesOnly`:
+nur verfuegbare Hilfen, nie Stelle zeigen, Umbau oder Diagnose); gefragt
+wird je Stelle nur ihr eigener Fund, das Abschneiden nach
+`MAX_FINDINGS_PER_MENU` Funden einer Zeile bildet die Probe nicht nach.
+Vorher/Nachher sind die Zeilen der Ersetzungen mit 2 Zeilen Kontext vor
+und nach `PlanByteEdits`/`ApplyByteEdits` (der Weg des Editors); eine
+Ersetzung, die dort scheitert, steht als "Ersetzung scheitert: ..." im
+Grund. In den Textspalten steht LF als `\n`, CR als `\r` (ein CRLF also
+als `\r\n`) und ein Backslash als `\\` - umkehrbar, etwa in Python
+`re.sub(r'\\(.)', lambda m: {'n': '\n', 'r': '\r', 't': '\t'}.get(m.group(1), m.group(1)), s)`.
+Unterdruecken steht nur in der Zusammenfassung, "Stelle zeigen" ohne
+Ersetzungen, die SQL-Vorlage als "nachher", SCA197 traegt "nicht
+deterministisch (frische GUID)". Den uses-Umbau prueft die Probe nicht
+(keine Projekt-Units ohne IDE): auf einer uses-Zeile steht
+`rezept:UsesActions` mit `nicht geprueft`. Die Zusammenfassung (stdout)
+zaehlt Stellen je Regel und Quelle (scan, sarif, nicht reproduziert), je
+Regel und Eintrag angeboten/gesperrt/in der Birne getrennt nach Quelle und
+die Gruende der Sperren nach Kategorie (Ziffern maskiert). Eine Ausnahme
+kostet nur Datei bzw. Stelle, nie den Lauf. Ein Stapelueberlauf ist die
+Ausnahme: ein zweiter beendete den Prozess still, deshalb prueft die Probe
+nach dem ersten nichts mehr - die uebrigen Stellen stehen als "nicht
+geprueft: Abbruch nach Stapelueberlauf" in der CSV, die Zusammenfassung
+kommt, Exit-Code 3 (sonst 0; 1 Abbruch, 2 Aufruf). Deshalb der
+32-MB-Patch.
 
 ## Grenzen (Stand 2026-10-15)
 

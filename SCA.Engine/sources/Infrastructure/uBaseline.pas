@@ -18,8 +18,9 @@ unit uBaseline;
 //   Erst-Lauf:  analyser.exe --full --path repo --write-baseline sca.baseline.json
 //   Folge-Lauf: analyser.exe --branch --path repo --baseline sca.baseline.json
 //
-// Mit --baseline werden alle Findings entfernt, deren Fingerprint im
-// Baseline-Set vorkommt. Was uebrig bleibt sind die "neu seit Baseline"-
+// Mit --baseline werden die Findings entfernt, die ein Baseline-Eintrag
+// deckt - jeder Eintrag hoechstens einen (zaehlend seit 2026-10-30, s.
+// TBaselineMatcher). Was uebrig bleibt sind die "neu seit Baseline"-
 // Findings - das ist was die CI zaehlen soll.
 //
 // Fingerprint-Stabilitaet:
@@ -30,7 +31,9 @@ unit uBaseline;
 //   Line wird BEWUSST NICHT in den Fingerprint genommen - Insert/Delete
 //   einer Zeile verschiebt jedes Finding sonst. Trade-off: zwei Findings
 //   gleichen Detektor-Typs in derselben Methode mit identischem Detail
-//   matchen denselben Fingerprint -> Baseline matched einen davon (fine).
+//   teilen denselben Fingerprint. Die Baseline traegt dann zwei Eintraege
+//   mit ihm, und seit 2026-10-30 deckt jeder davon genau EINEN Fund (bis
+//   dahin deckte ein Eintrag alle - auch spaeter hinzugekommene).
 //   AUSNAHME fuer vier Metrik-Regeln: dort werden Ziffernfolgen im Detail
 //   vor dem Hashen ersetzt, weil dort der SCHWELLWERT mit im Text steht -
 //   Begruendung und Kosten bei METRIC_DETAIL_KINDS in der Implementation.
@@ -165,9 +168,10 @@ type
     class function Write(Findings: TObjectList<TLeakFinding>;
       const DestFile: string; const AScope: TBaselineScope): Integer; static;
 
-    // Liest BaselineFile und filtert aus Findings alle Eintraege heraus
-    // deren Fingerprint in der Baseline ist (vorhandene "akzeptierte"
-    // Befunde). Idempotent; fehlende/leere Datei = no-op.
+    // Liest BaselineFile und filtert aus Findings die Funde heraus, die
+    // ein Baseline-Eintrag deckt (vorhandene "akzeptierte" Befunde) -
+    // ZAEHLEND seit 2026-10-30: jeder Eintrag deckt hoechstens EINEN Fund,
+    // s. TBaselineMatcher. Fehlende/leere Datei = no-op.
     // Liefert die Anzahl der GEDROPPTEN Findings (fuer Reporting).
     // AScope ist der Zuschnitt DIESES Lesers - er muss zum Zuschnitt des
     // Schreibers passen, sonst matcht die Legacy-Stufe nichts.
@@ -251,6 +255,114 @@ type
       out AUsedFallback: Boolean): string; static;
   end;
 
+  // DER ZAEHLENDE ABGLEICH (2026-10-30, Review d/MethodAttr, Entscheid
+  // Nico "Apply zaehlt"). Haelt die Eintraege EINER Baseline-Datei und
+  // ordnet ihnen eine Fundliste so zu, dass JEDER EINTRAG HOECHSTENS EINEN
+  // FUND deckt - die Baseline ist eine MULTIMENGE, keine Menge.
+  //
+  // WARUM: der Fingerprint traegt keine Zeile (s. Unit-Kopf). Bis
+  // 2026-10-30 galt der Abgleich als MENGE ("contextHash ODER Fingerprint
+  // kommt in der Datei vor"), und damit verdeckte EIN Eintrag JEDEN
+  // aktuellen Fund mit diesem Fingerprint - auch einen, der nach dem
+  // Schreiben der Baseline neu dazukam. Seit d/MethodAttr bleibt die
+  // Methode ausserhalb jeder Routine leer; dort fallen alle Funde einer
+  // Regel mit gleicher Meldung in einer Datei auf EINEN Fingerprint
+  // (gemessen rw 13.363, laz 5.693 Funde, vor allem SCA081). Ein neuer
+  // Fund dieser Art waere unter der Mengen-Regel nie als neu erschienen.
+  // Jetzt gilt: drei aktuelle Funde gegen zwei gleiche Eintraege - genau
+  // einer ist neu.
+  //
+  // ZUORDNUNG IN DREI STUFEN, jede ueber die Fundliste in der
+  // KANONISCHEN Reihenfolge (FindingOrder, s. unten), jeder Eintrag wird
+  // hoechstens einmal verbraucht:
+  //   1. EXAKT - Fingerprint UND contextHash-Schluessel gleich. Zuerst,
+  //      damit ein unveraenderter Fund "seinen" Eintrag bekommt und ihn
+  //      nicht an einen Nachbarn gleichen Fingerprints verliert.
+  //   2. NUR contextHash - Code unveraendert, aber Methode umbenannt,
+  //      Zeile gewandert oder Meldetext geaendert.
+  //   3. NUR Fingerprint - Code ringsum geaendert, oder kein contextHash
+  //      auf einer der beiden Seiten (Baseline aelter als v0.9.8, Datei
+  //      nicht lesbar, Anzeige-Filter ohne Scan-Nachlauf).
+  // Innerhalb einer Stufe nimmt ein Fund den ersten freien Eintrag in
+  // Datei-Reihenfolge. Das ist deterministisch, aber GIERIG und keine
+  // optimale Zuordnung: nimmt Stufe 2 einem Fund einen Eintrag, den in
+  // Stufe 3 ein anderer Fund ueber den Fingerprint gebraucht haette,
+  // erscheint dieser als neu. Die ANZAHL der neuen Funde stimmt dann nur
+  // noch als Obergrenze; welcher von mehreren gleichartigen Funden als
+  // neu gilt, legt die Reihenfolge fest.
+  //
+  // WARUM EINE KANONISCHE REIHENFOLGE (Review d/MethodAttr 2026-10-30):
+  // die Listen-Reihenfolge haengt am Aufrufer - die CLI sieht die
+  // Engine-Reihenfolge, das IDE-Dock haengt nach einem Watch-Lauf die
+  // Funde der Datei hinten an. Weil Stufe 2 bestimmt, wer in Stufe 3
+  // noch einen Eintrag findet, haengt sonst nicht nur WELCHER Fund neu
+  // ist, sondern sogar WIE VIELE an der Reihenfolge. Gegenbeispiel, eine
+  // Datei, eine Regel: Eintraege E1 (Fingerprint W, Fenster K) und E2
+  // (Y, M); Funde A (Y, K) und B (Z, K). A vor B: A nimmt E1 ueber den
+  // contextHash, B ist neu. B vor A: B nimmt E1, A findet E2 ueber den
+  // Fingerprint - keiner neu. Zwei Abhilfen: FindingOrder sortiert vor
+  // der Zuordnung nach Inhalt (Datei, Zeile, Regel, Meldung, Methode) -
+  // CLI, EXE, Plugin und Silent-Lauf zeigen so fuer dieselben Funde
+  // dieselben "neu"-Funde -, und Stufe 2 bedient zuerst die Funde OHNE
+  // Fingerprint-Rueckweg (im Beispiel B), sodass A danach E2 findet.
+  // Optimal ist die Zuordnung auch damit nicht: WELCHER freie Eintrag
+  // einer contextHash-Kette verbraucht wird, fragt nicht, ob ein anderer
+  // Fund seinen Fingerprint noch braucht, und Stufe 1 gibt einen exakten
+  // Eintrag nie her (Absicht, s. oben).
+  //
+  // DATEIFORMAT UNVERAENDERT: BuildBaselineArray schreibt seit jeher einen
+  // Eintrag JE FUND, auch bei gleichem Fingerprint. Die Vielfachheit
+  // steckte also schon immer in der Datei, gelesen wurde sie nur nicht.
+  TBaselineMatcher = class
+  strict private
+    // Je Eintrag (Index = Position in der Datei, ohne leere Eintraege).
+    FFp       : TList<string>;
+    FCtx      : TList<string>;
+    // Verkettung der Eintraege gleichen Fingerprints bzw. gleichen
+    // contextHash-Schluessels, in Datei-Reihenfolge; -1 = Ende.
+    FFpNext   : TList<Integer>;
+    FCtxNext  : TList<Integer>;
+    // Schluessel -> Ketten-Nummer; je Kette erster und letzter Eintrag.
+    FFpChain  : TDictionary<string, Integer>;
+    FCtxChain : TDictionary<string, Integer>;
+    FFpHead   : TList<Integer>;
+    FFpTail   : TList<Integer>;
+    FCtxHead  : TList<Integer>;
+    FCtxTail  : TList<Integer>;
+    procedure Link(AChain: TDictionary<string, Integer>;
+      AHead, ATail, ANext: TList<Integer>; const AKey: string;
+      AEntry: Integer);
+    function NextFree(ANext: TList<Integer>; const AUsed: TArray<Boolean>;
+      AEntry: Integer): Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Clear;
+    // Einen Eintrag aufnehmen. Leerer Wert = dieser Eintrag hat die
+    // Match-Quelle nicht; sind beide leer, wird nichts aufgenommen.
+    procedure Add(const AFingerprint, AContextKey: string);
+    function EntryCount: Integer;
+    // Anzahl VERSCHIEDENER Werte je Match-Quelle.
+    function FingerprintCount: Integer;
+    function ContextKeyCount: Integer;
+    function HasFingerprint(const AFingerprint: string): Boolean;
+    function HasContextKey(const AContextKey: string): Boolean;
+    // Die Zuordnung. AFingerprints und AContextKeys sind index-gleich zur
+    // Fundliste und gleich lang ('' = Quelle fuer diesen Fund nicht
+    // verfuegbar); das Ergebnis ebenso: True = von einem Eintrag gedeckt.
+    // Veraendert den Matcher nicht - jeder Aufruf beginnt mit allen
+    // Eintraegen frei. AOrder ist die Bearbeitungsreihenfolge (eine
+    // Permutation der Fund-Indizes, s. FindingOrder) und genauso lang.
+    function Match(const AFingerprints, AContextKeys: TArray<string>;
+      const AOrder: TArray<Integer>): TArray<Boolean>;
+    // Die kanonische Bearbeitungsreihenfolge fuer Match: die Fund-Indizes
+    // von AFindings, sortiert nach Datei (ohne Gross/klein), Zeile, Regel,
+    // RuleID, Meldung, Methode und zuletzt dem Index. Haengt damit nur am
+    // Inhalt der Funde, nicht an ihrer Reihenfolge in der Liste.
+    class function FindingOrder(
+      AFindings: TList<TLeakFinding>): TArray<Integer>; static;
+  end;
+
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor, EXE):
   // laedt die Baseline einmalig und beantwortet pro Finding, ob es bereits
   // darin steht - OHNE die Findings-Liste zu veraendern. TBaseline.Apply
@@ -317,15 +429,22 @@ type
   //     angezeigt wird, kann kuenftig ausgeblendet werden. Das ist die
   //     Absicht des Umbaus - aber es ist eine Verhaltensaenderung fuer
   //     bestehende Baselines, und sie gehoert benannt.
+  //   * ZAEHLEND seit 2026-10-30 (TBaselineMatcher): fuer eine LISTE gilt,
+  //     dass jeder Eintrag hoechstens einen Fund deckt - das beantworten
+  //     CoveredFlags und NewOnly. Contains bleibt die Frage nach EINEM
+  //     Fund ("gibt es einen passenden Eintrag?") und darf deshalb nicht
+  //     Fund fuer Fund ueber eine Liste laufen: zwei Funde gleichen
+  //     Fingerprints bekaemen dort beide True, auch wenn die Baseline nur
+  //     einen Eintrag hat.
   TBaselineSet = class
   private
-    FFingerprints : TDictionary<string, Boolean>;
-    // contextHash-Werte AUS DER BASELINE-DATEI - die zweite Match-Quelle.
-    // Der Schluessel ist NICHT der blosse Hash, sondern Datei + Regel +
-    // Hash (BaselineContextKey), gebildet aus den Feldern desselben
-    // Eintrags. Ein nackter Hash blendete jeden Fund mit textgleichem
-    // Code-Fenster aus, quer ueber Dateien und Regeln.
-    FContextHashes: TDictionary<string, Boolean>;
+    // Die Eintraege AUS DER BASELINE-DATEI mit beiden Match-Quellen:
+    // Fingerprint und contextHash-Schluessel. Der Schluessel ist NICHT der
+    // blosse Hash, sondern Datei + Regel + Hash (BaselineContextKey),
+    // gebildet aus den Feldern desselben Eintrags. Ein nackter Hash
+    // blendete jeden Fund mit textgleichem Code-Fenster aus, quer ueber
+    // Dateien und Regeln.
+    FMatcher      : TBaselineMatcher;
     // contextHash JE FUND, im Scan-Nachlauf vorab gerechnet. Der Key ist
     // der Memo-Schluessel aus TFindingFingerprint (Datei + Zeile), dieses
     // Dictionary IST also zugleich das Memo, mit dem gerechnet wurde -
@@ -363,13 +482,23 @@ type
       const AScope: TBaselineScope): Integer;
     procedure Clear;
     function IsEmpty: Boolean;
-    // True wenn F bereits in der Baseline steht (= KEIN neuer Fund).
+    // True wenn ein Baseline-Eintrag zu F passt - die Frage nach EINEM
+    // Fund, ohne Verbrauch. Fuer eine Fundliste NICHT je Fund aufrufen,
+    // sondern CoveredFlags (zaehlend, s. Klassenkommentar).
     function Contains(const F: TLeakFinding): Boolean;
+    // Der Anzeige-Filter fuer eine ganze Liste: index-gleich zu ASource,
+    // True = von einem Baseline-Eintrag gedeckt (= KEIN neuer Fund). Jeder
+    // Eintrag deckt hoechstens einen Fund (TBaselineMatcher). Die
+    // contextHash-Strecke wirkt wie bei Contains nur mit vorab gerechnetem
+    // Speicher (PrepareContextHashes); ohne ihn zaehlt der Fingerprint
+    // allein. Leeres Set oder nil-Liste: nichts gedeckt.
+    function CoveredFlags(ASource: TList<TLeakFinding>): TArray<Boolean>;
     // Zaehlbasis "nur neue Funde" fuer die Filter-Combos von EXE und
     // Plugin (Konsistenz-Vertrag mit dem Grid, Review-Blocker 2026-08-12):
     // ASource selbst, solange das Set leer ist (fail-open - eine fehlende
     // oder kaputte Baseline blendet nichts aus), sonst eine NEUE Liste der
-    // Funde, die NICHT in der Baseline stehen. Die gehoert dem Aufrufer
+    // Funde, die kein Baseline-Eintrag deckt (zaehlend, CoveredFlags - die
+    // Zahl der Combos passt so zum Grid). Die gehoert dem Aufrufer
     // (AOwned; Result zeigt dann darauf; nil.Free ist ein No-op). Wirft
     // die Befuellung (praktisch nur OOM), ist AOwned nil - der Aufrufer
     // klammert erst NACH dem Aufruf in try/finally. Bis 2026-10-14 stand
@@ -414,10 +543,13 @@ type
     //
     // NICHT GEDECKT (Gegenpruefung 2026-08-28): liefert eine geaenderte
     // Datei GAR KEINE Funde mehr, steht ihr Pfad in keinem Fund und ihre
-    // Eintraege bleiben im Speicher stehen. Das bleibt heute folgenlos,
-    // weil OnWatchFindings Schritt 1 die alten Funde derselben Datei
-    // ebenfalls stehenlaesst (uIDEAnalyserForm - eigener Fehler, eigener
-    // Fix); wer den behebt, muss diese Loesch-Menge mitziehen.
+    // Eintraege bleiben im Speicher stehen. Seit 2026-10-30 loescht
+    // OnWatchFindings Schritt 1 (uIDEAnalyserForm) die alten Funde der
+    // Formdatei mit; die stehengebliebenen Eintraege gehoeren dann zu
+    // keinem Fund mehr und werden nie gefragt - ein spaeterer Fund mit
+    // demselben Schluessel kommt nur ueber einen Watch-Lauf dieser Datei
+    // (rechnet sie neu) oder einen Voll-Scan (PrepareContextHashes
+    // verwirft alles).
     function RefreshContextHashesForFile(const AFileName: string;
       AFindings: TObjectList<TLeakFinding>): Integer;
 
@@ -456,6 +588,7 @@ implementation
 
 uses
   System.JSON, System.IOUtils,
+  System.Generics.Defaults,  // TComparer - TBaselineMatcher.FindingOrder
   uJsonFormat,             // JsonFormatEscaped - Format(2) escaped keine
                            // Steuerzeichen (s. TBaseline.Write)
   uFindingFingerprint;
@@ -678,9 +811,14 @@ const
   // Ursache ist im Pfad-Modus ausschliesslich, dass jede dieser Regeln
   // hoechstens EINEN Fund je Methode erzeugt: kollidieren koennen nur
   // GLEICHNAMIGE Methoden derselben Datei mit verschiedenen Werten
-  // (Overloads, gleicher Name in zwei Klassen einer Unit). Festgenagelt am
-  // echten Weg Write -> Apply in uTestBaselineMetricFingerprint.
-  // EinBaselineEintrag_BlendetGleichnamigeMethodeMit.
+  // (Overloads, gleicher Name in zwei Klassen einer Unit).
+  // SEIT 2026-10-30 KOSTET DAS NUR NOCH DIE ZUORDNUNG, NICHT DIE ANZAHL:
+  // der Abgleich zaehlt (TBaselineMatcher), ein Eintrag deckt also nur
+  // EINEN der beiden Overloads, und der ueber Fingerprint UND contextHash
+  // passende bekommt ihn zuerst. Bis dahin blendete ein Eintrag beide aus.
+  // Festgenagelt am echten Weg Write -> Apply in
+  // uTestBaselineMetricFingerprint.
+  // EinBaselineEintrag_DecktNurEineGleichnamigeMethode.
   //
   // WARUM EINE SPANNE UND KEINE PUNKTZAHL - die Streuung ist ehrlich und
   // ihre Ursache ist bekannt: der Methodenname steht NICHT im SARIF, er
@@ -1179,14 +1317,20 @@ begin
   end;
 end;
 
-procedure CollectBaselineEntry(AObj: TJSONObject;
-  AFpSet, ACtxSet: TDictionary<string, Boolean>);
-// Einen Baseline-Eintrag in die beiden Match-Mengen einsortieren, inkl.
-// der Hardening-Kappung. Gemeinsam fuer TBaseline.Apply und
-// TBaselineSet.LoadFromFile: bis 2026-08-28 stand die Feldregel zweimal
-// im File, und genau die zweite Kopie holte den contextHash nicht - der
-// Anzeige-Filter warf beim Laden weg, was Write hineingeschrieben hatte.
-// Ein einzelnes Set darf nil sein (Aufrufer, der nur eines fuellt).
+procedure CollectBaselineEntry(AObj: TJSONObject; AMatcher: TBaselineMatcher);
+// Einen Baseline-Eintrag mit seinen beiden Match-Werten in den Matcher
+// aufnehmen, inkl. der Hardening-Kappung. Gemeinsam fuer TBaseline.Apply
+// und TBaselineSet.LoadFromFile: bis 2026-08-28 stand die Feldregel
+// zweimal im File, und genau die zweite Kopie holte den contextHash
+// nicht - der Anzeige-Filter warf beim Laden weg, was Write
+// hineingeschrieben hatte.
+//
+// Seit 2026-10-30 bleiben die beiden Werte EINES Eintrags beisammen (bis
+// dahin gingen sie getrennt in zwei Mengen): der zaehlende Abgleich muss
+// wissen, welcher Fingerprint und welcher contextHash zu DEMSELBEN
+// Eintrag gehoeren, damit ein Eintrag ueber beide Strecken zusammen nur
+// einmal verbraucht wird. Ein ungueltiger Wert (fehlt, zu lang) wird
+// leer - der Eintrag zaehlt dann nur ueber die andere Strecke.
 //
 // Der Unterschied zwischen den beiden Zweigen ist kein Versehen: ein
 // leerer contextHash bedeutet "nicht berechenbar" (Datei nicht lesbar)
@@ -1201,28 +1345,344 @@ procedure CollectBaselineEntry(AObj: TJSONObject;
 // viel - die gefaehrliche Richtung ist die andere.
 var
   V      : TJSONValue;
+  Fp     : string;
   CtxKey : string;
 begin
-  if Assigned(AFpSet) then
+  // Fingerprint: die Bestandsregel (nur Laengen-Kappung). Ein leerer
+  // Fingerprint trifft nie - jeder Fund hat einen nicht-leeren.
+  V := AObj.Values['fingerprint'];
+  if (V <> nil) and not V.Null
+     and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
   begin
-    V := AObj.Values['fingerprint'];
-    if (V <> nil) and not V.Null
-       and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
-      AFpSet.AddOrSetValue(V.Value, True);
+    Fp := V.Value;
   end;
-  if Assigned(ACtxSet) then
+  V := AObj.Values['contextHash'];
+  if (V <> nil) and not V.Null
+     and (V.Value <> '')
+     and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
   begin
-    V := AObj.Values['contextHash'];
-    if (V <> nil) and not V.Null
-       and (V.Value <> '')
-       and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
+    CtxKey := BaselineContextKey(JsonFieldStr(AObj, 'file'),
+                                 JsonFieldStr(AObj, 'kind'), V.Value);
+    if Length(CtxKey) > MAX_CONTEXT_KEY_LEN then
     begin
-      CtxKey := BaselineContextKey(JsonFieldStr(AObj, 'file'),
-                                   JsonFieldStr(AObj, 'kind'), V.Value);
-      if Length(CtxKey) <= MAX_CONTEXT_KEY_LEN then
-        ACtxSet.AddOrSetValue(CtxKey, True);
+      CtxKey := '';
     end;
   end;
+  AMatcher.Add(Fp, CtxKey);
+end;
+
+{ TBaselineMatcher }
+
+constructor TBaselineMatcher.Create;
+begin
+  inherited Create;
+  FFp       := TList<string>.Create;
+  FCtx      := TList<string>.Create;
+  FFpNext   := TList<Integer>.Create;
+  FCtxNext  := TList<Integer>.Create;
+  FFpChain  := TDictionary<string, Integer>.Create;
+  FCtxChain := TDictionary<string, Integer>.Create;
+  FFpHead   := TList<Integer>.Create;
+  FFpTail   := TList<Integer>.Create;
+  FCtxHead  := TList<Integer>.Create;
+  FCtxTail  := TList<Integer>.Create;
+end;
+
+destructor TBaselineMatcher.Destroy;
+begin
+  FCtxTail.Free;
+  FCtxHead.Free;
+  FFpTail.Free;
+  FFpHead.Free;
+  FCtxChain.Free;
+  FFpChain.Free;
+  FCtxNext.Free;
+  FFpNext.Free;
+  FCtx.Free;
+  FFp.Free;
+  inherited;
+end;
+
+procedure TBaselineMatcher.Clear;
+begin
+  FFp.Clear;
+  FCtx.Clear;
+  FFpNext.Clear;
+  FCtxNext.Clear;
+  FFpChain.Clear;
+  FCtxChain.Clear;
+  FFpHead.Clear;
+  FFpTail.Clear;
+  FCtxHead.Clear;
+  FCtxTail.Clear;
+end;
+
+procedure TBaselineMatcher.Link(AChain: TDictionary<string, Integer>;
+  AHead, ATail, ANext: TList<Integer>; const AKey: string; AEntry: Integer);
+// AEntry hinten an die Kette von AKey haengen - so bleibt jede Kette in
+// Datei-Reihenfolge, und "der erste freie Eintrag" ist reproduzierbar.
+var
+  C : Integer;
+begin
+  if AChain.TryGetValue(AKey, C) then
+  begin
+    ANext[ATail[C]] := AEntry;
+    ATail[C] := AEntry;
+  end
+  else
+  begin
+    C := AHead.Add(AEntry);
+    ATail.Add(AEntry);
+    AChain.Add(AKey, C);
+  end;
+end;
+
+procedure TBaselineMatcher.Add(const AFingerprint, AContextKey: string);
+var
+  E : Integer;
+begin
+  if (AFingerprint = '') and (AContextKey = '') then Exit;
+  E := FFp.Add(AFingerprint);
+  FCtx.Add(AContextKey);
+  FFpNext.Add(-1);
+  FCtxNext.Add(-1);
+  if AFingerprint <> '' then
+  begin
+    Link(FFpChain, FFpHead, FFpTail, FFpNext, AFingerprint, E);
+  end;
+  if AContextKey <> '' then
+  begin
+    Link(FCtxChain, FCtxHead, FCtxTail, FCtxNext, AContextKey, E);
+  end;
+end;
+
+function TBaselineMatcher.EntryCount: Integer;
+begin
+  Result := FFp.Count;
+end;
+
+function TBaselineMatcher.FingerprintCount: Integer;
+begin
+  Result := FFpChain.Count;
+end;
+
+function TBaselineMatcher.ContextKeyCount: Integer;
+begin
+  Result := FCtxChain.Count;
+end;
+
+function TBaselineMatcher.HasFingerprint(const AFingerprint: string): Boolean;
+begin
+  Result := FFpChain.ContainsKey(AFingerprint);
+end;
+
+function TBaselineMatcher.HasContextKey(const AContextKey: string): Boolean;
+begin
+  Result := FCtxChain.ContainsKey(AContextKey);
+end;
+
+function TBaselineMatcher.NextFree(ANext: TList<Integer>;
+  const AUsed: TArray<Boolean>; AEntry: Integer): Integer;
+// Ab AEntry den ersten noch nicht verbrauchten Eintrag der Kette; -1 wenn
+// keiner mehr frei ist.
+begin
+  Result := AEntry;
+  while (Result >= 0) and AUsed[Result] do
+  begin
+    Result := ANext[Result];
+  end;
+end;
+
+function TBaselineMatcher.Match(const AFingerprints,
+  AContextKeys: TArray<string>;
+  const AOrder: TArray<Integer>): TArray<Boolean>;
+// Drei Stufen, Begruendung an der Klasse. Die Ketten-Cursor (FpCur,
+// CtxCur) ruecken nur ueber verbrauchte Eintraege am Kettenkopf vor - weil
+// ein Eintrag nie wieder frei wird, bleibt jede Kette insgesamt linear.
+// Jede Stufe laeuft in der Reihenfolge AOrder (k = Rang, i = Fund-Index).
+var
+  Covered : TArray<Boolean>;
+  Used    : TArray<Boolean>;
+  FpCur   : TArray<Integer>;
+  CtxCur  : TArray<Integer>;
+  k, i     : Integer;
+  C, E     : Integer;
+  Pass     : Integer;
+  HasFpWay : Boolean;
+begin
+  if (Length(AContextKeys) <> Length(AFingerprints))
+     or (Length(AOrder) <> Length(AFingerprints)) then
+  begin
+    raise EArgumentException.Create(
+      'TBaselineMatcher.Match: fingerprint, context key and order lists ' +
+      'differ in length');
+  end;
+  SetLength(Covered, Length(AFingerprints));
+  SetLength(Used, FFp.Count);
+  FpCur  := FFpHead.ToArray;
+  CtxCur := FCtxHead.ToArray;
+
+  // 1. EXAKT: Fingerprint UND contextHash-Schluessel. Gesucht wird in der
+  //    contextHash-Kette - sie ist dateiweit qualifiziert und deshalb kurz.
+  for k := 0 to High(AOrder) do
+  begin
+    i := AOrder[k];
+    if (AFingerprints[i] = '') or (AContextKeys[i] = '') then Continue;
+    if not FCtxChain.TryGetValue(AContextKeys[i], C) then Continue;
+    E := NextFree(FCtxNext, Used, CtxCur[C]);
+    CtxCur[C] := E;
+    while E >= 0 do
+    begin
+      if (not Used[E]) and (FFp[E] = AFingerprints[i]) then
+      begin
+        Used[E] := True;
+        Covered[i] := True;
+        Break;
+      end;
+      E := FCtxNext[E];
+    end;
+  end;
+
+  // 2. NUR contextHash: der erste freie Eintrag mit diesem Schluessel.
+  //    In ZWEI Durchgaengen: zuerst die Funde, deren Fingerprint in der
+  //    Baseline gar nicht vorkommt - ohne den contextHash haben sie keine
+  //    Chance mehr -, danach die mit einem Rueckweg ueber Stufe 3. Je
+  //    Kette werden dieselben Eintraege verbraucht (die ersten freien),
+  //    nur WER sie bekommt, aendert sich; die Zahl der gedeckten Funde
+  //    kann dadurch nur steigen (Gegenbeispiel am Klassenkommentar).
+  for Pass := 0 to 1 do
+  begin
+    for k := 0 to High(AOrder) do
+    begin
+      i := AOrder[k];
+      if Covered[i] or (AContextKeys[i] = '') then Continue;
+      HasFpWay := (AFingerprints[i] <> '')
+                  and FFpChain.ContainsKey(AFingerprints[i]);
+      if HasFpWay <> (Pass = 1) then Continue;
+      if not FCtxChain.TryGetValue(AContextKeys[i], C) then Continue;
+      E := NextFree(FCtxNext, Used, CtxCur[C]);
+      CtxCur[C] := E;
+      if E >= 0 then
+      begin
+        Used[E] := True;
+        Covered[i] := True;
+      end;
+    end;
+  end;
+
+  // 3. NUR Fingerprint: der erste freie Eintrag mit diesem Fingerprint.
+  for k := 0 to High(AOrder) do
+  begin
+    i := AOrder[k];
+    if Covered[i] or (AFingerprints[i] = '') then Continue;
+    if not FFpChain.TryGetValue(AFingerprints[i], C) then Continue;
+    E := NextFree(FFpNext, Used, FpCur[C]);
+    FpCur[C] := E;
+    if E >= 0 then
+    begin
+      Used[E] := True;
+      Covered[i] := True;
+    end;
+  end;
+  Result := Covered;
+end;
+
+class function TBaselineMatcher.FindingOrder(
+  AFindings: TList<TLeakFinding>): TArray<Integer>;
+// Vertrag an der Deklaration, Begruendung an der Klasse. Datei und Zeile
+// werden vorab zu Zahlen (Rang der Datei unter den verschiedenen Namen,
+// Zeile als Integer) - der Vergleicher laeuft O(n log n) mal und soll
+// keine Pfade vergleichen und keine Zeilentexte parsen.
+var
+  Order    : TArray<Integer>;
+  FileRank : TArray<Integer>;
+  LineNo   : TArray<Integer>;
+  Names    : TList<string>;
+  NameIdx  : TDictionary<string, Integer>;
+  Sorted   : TArray<Integer>;
+  RankOf   : TArray<Integer>;
+  List     : TList<TLeakFinding>;
+  i, Id    : Integer;
+  Key      : string;
+  PrevName : string;
+  PrevId   : Integer;
+begin
+  if AFindings = nil then Exit(nil);
+  SetLength(Order, AFindings.Count);
+  SetLength(FileRank, AFindings.Count);
+  SetLength(LineNo, AFindings.Count);
+  Names   := TList<string>.Create;
+  NameIdx := TDictionary<string, Integer>.Create;
+  try
+    // 1. Datei-Nummer je Fund (ohne Gross/klein). Funde kommen je Datei
+    //    am Stueck - der Vergleich mit dem Vorgaenger spart fast jedes
+    //    UpperCase und jeden Dictionary-Zugriff.
+    PrevName := '';
+    PrevId   := -1;
+    for i := 0 to AFindings.Count - 1 do
+    begin
+      Order[i]  := i;
+      LineNo[i] := StrToIntDef(AFindings[i].LineNumber, 0);
+      if (PrevId >= 0) and (AFindings[i].FileName = PrevName) then
+      begin
+        FileRank[i] := PrevId;
+        Continue;
+      end;
+      Key := UpperCase(AFindings[i].FileName);
+      if not NameIdx.TryGetValue(Key, Id) then
+      begin
+        Id := Names.Add(Key);
+        NameIdx.Add(Key, Id);
+      end;
+      FileRank[i] := Id;
+      PrevName    := AFindings[i].FileName;
+      PrevId      := Id;
+    end;
+    // 2. Nummer -> Rang in der Sortierung der Namen.
+    SetLength(Sorted, Names.Count);
+    for i := 0 to Names.Count - 1 do
+    begin
+      Sorted[i] := i;
+    end;
+    TArray.Sort<Integer>(Sorted, TComparer<Integer>.Construct(
+      function(const A, B: Integer): Integer
+      begin
+        Result := CompareStr(Names[A], Names[B]);
+      end));
+    SetLength(RankOf, Names.Count);
+    for i := 0 to High(Sorted) do
+    begin
+      RankOf[Sorted[i]] := i;
+    end;
+    for i := 0 to High(FileRank) do
+    begin
+      FileRank[i] := RankOf[FileRank[i]];
+    end;
+  finally
+    NameIdx.Free;
+    Names.Free;
+  end;
+  // 3. Die Fund-Indizes sortieren. Der Index als letzter Schluessel macht
+  //    die Ordnung streng - TArray.Sort ist nicht stabil.
+  List := AFindings;
+  TArray.Sort<Integer>(Order, TComparer<Integer>.Construct(
+    function(const A, B: Integer): Integer
+    begin
+      Result := FileRank[A] - FileRank[B];
+      if Result <> 0 then Exit;
+      Result := LineNo[A] - LineNo[B];
+      if Result <> 0 then Exit;
+      Result := Ord(List[A].Kind) - Ord(List[B].Kind);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].RuleID, List[B].RuleID);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].MissingVar, List[B].MissingVar);
+      if Result <> 0 then Exit;
+      Result := CompareStr(List[A].MethodName, List[B].MethodName);
+      if Result <> 0 then Exit;
+      Result := A - B;
+    end));
+  Result := Order;
 end;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
@@ -1234,6 +1694,19 @@ class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
 //      ueberlebt Line-Drift + Re-Indent).
 //   2. Sonst: legacy fingerprint pruefen (File+Kind+Method+Detail).
 //   Backward-compat: alte Baselines ohne contextHash matchen weiter via 2.
+//
+// ZAEHLEND SEIT 2026-10-30 (Review d/MethodAttr, Entscheid "Apply
+// zaehlt"): die beiden Strecken bleiben, aber jeder Baseline-Eintrag
+// verbraucht hoechstens EINEN Fund - Reihenfolge exakt, dann nur
+// contextHash, dann nur Fingerprint (TBaselineMatcher). Bis dahin
+// verdeckte ein Eintrag JEDEN Fund mit seinem Fingerprint, auch einen
+// spaeter hinzugekommenen. FOLGE FUER BESTEHENDE BASELINES: wo mehr
+// gleichartige Funde stehen als Eintraege, erscheinen die ueberzaehligen
+// jetzt als neu - der CI-Zaehler kann steigen, ohne dass sich am Code
+// etwas geaendert hat; das sind genau die Funde, die bisher verdeckt
+// waren. Zusaetzlich ausgeblendet wird nichts. Kosten: der Fingerprint
+// wird jetzt fuer JEDEN Fund gerechnet (bisher nur, wenn der contextHash
+// nicht traf) - ein SHA2 je Fund mehr auf dem --baseline-Pfad.
 //
 // VERHALTENSAENDERUNG 2026-08-28 - AUSDRUECKLICH DEKLARIERT. Stufe 1
 // verglich bis dahin den NACKTEN Hash. Das ist ein BESTANDSFEHLER, seit
@@ -1259,12 +1732,14 @@ var
   Root      : TJSONValue;
   Arr       : TJSONArray;
   Obj       : TJSONValue;
-  FpSet     : TDictionary<string, Boolean>;
-  CtxSet    : TDictionary<string, Boolean>;
+  Matcher   : TBaselineMatcher;
   CtxMemo   : TDictionary<string, string>;
   i         : Integer;
   F         : TLeakFinding;
   FCtx      : string;
+  Fps       : TArray<string>;
+  CtxKeys   : TArray<string>;
+  Covered   : TArray<Boolean>;
 begin
   Result := 0;
   CtxMemo := nil;
@@ -1275,8 +1750,7 @@ begin
   Root := TJSONObject.ParseJSONValue(Raw);
   if Root = nil then Exit;
 
-  FpSet  := TDictionary<string, Boolean>.Create;
-  CtxSet := TDictionary<string, Boolean>.Create;
+  Matcher := TBaselineMatcher.Create;
   try
     if Root is TJSONObject then
     begin
@@ -1328,7 +1802,7 @@ begin
         end;
         if not (Obj is TJSONObject) then Continue;
         Inc(Loaded);
-        CollectBaselineEntry(TJSONObject(Obj), FpSet, CtxSet);
+        CollectBaselineEntry(TJSONObject(Obj), Matcher);
       end;
       if Truncated then
         try
@@ -1343,7 +1817,12 @@ begin
         end;
     end;
 
-    // Rueckwaerts iterieren wegen Delete.
+    if Matcher.EntryCount = 0 then Exit;
+
+    // Erst die beiden Match-Werte JE FUND, dann die zaehlende Zuordnung
+    // ueber die ganze Liste (TBaselineMatcher.Match) - ein Fund-fuer-Fund-
+    // Entscheid kann nicht zaehlen, weil Stufe 1 (exakt) fuer ALLE Funde
+    // vor Stufe 2 und 3 laufen muss.
     // Perf: ContextHash nur berechnen wenn die Baseline ueberhaupt
     // contextHash-Eintraege hat. Bei Legacy-Baselines (nur fingerprint)
     // spart das ein SHA256 + File-Read pro Finding (= ~191k vermiedene
@@ -1351,30 +1830,40 @@ begin
     // Perf (2026-07-05): P3 ContextHash-Memo - zusaetzlich wird innerhalb
     // dieses Apply-Laufs jede (Datei,Zeile) nur einmal gehasht (CtxMemo,
     // caller-scoped, im finally freigegeben).
-    var HasCtx: Boolean := CtxSet.Count > 0;
+    var HasCtx: Boolean := Matcher.ContextKeyCount > 0;
     if HasCtx then
       CtxMemo := TDictionary<string, string>.Create;
-    for i := Findings.Count - 1 downto 0 do
+    SetLength(Fps, Findings.Count);
+    SetLength(CtxKeys, Findings.Count);
+    for i := 0 to Findings.Count - 1 do
     begin
       F := Findings[i];
+      // Lesefehler bleiben bei '' / '' - kein Eintrag deckt sie.
       if F.Kind = fkFileReadError then Continue;
+      Fps[i] := Fingerprint(F, AScope);
       if HasCtx then
-        FCtx := TFindingFingerprint.ContextHashMemo(F, CtxMemo)
-      else
-        FCtx := '';
-      // Qualifiziert nachschlagen - Datei und Regel dieses Fundes, mit dem
-      // Zuschnitt DIESES Lesers gerechnet (s. BaselineContextKey).
-      if ((FCtx <> '') and CtxSet.ContainsKey(BaselineContextKey(
-            AScope.FileToken(F.FileName), KindName(F.Kind), FCtx)))
-         or FpSet.ContainsKey(Fingerprint(F, AScope)) then
+      begin
+        FCtx := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
+        // Qualifiziert - Datei und Regel dieses Fundes, mit dem Zuschnitt
+        // DIESES Lesers gerechnet (s. BaselineContextKey).
+        if FCtx <> '' then
+          CtxKeys[i] := BaselineContextKey(
+            AScope.FileToken(F.FileName), KindName(F.Kind), FCtx);
+      end;
+    end;
+    Covered := Matcher.Match(Fps, CtxKeys,
+      TBaselineMatcher.FindingOrder(Findings));
+    // Rueckwaerts wegen Delete.
+    for i := Findings.Count - 1 downto 0 do
+    begin
+      if Covered[i] then
       begin
         Findings.Delete(i);     // owns - F wird freigegeben
         Inc(Result);
       end;
     end;
   finally
-    FpSet.Free;
-    CtxSet.Free;
+    Matcher.Free;
     CtxMemo.Free;
     Root.Free;
   end;
@@ -1385,8 +1874,7 @@ end;
 constructor TBaselineSet.Create;
 begin
   inherited Create;
-  FFingerprints  := TDictionary<string, Boolean>.Create;
-  FContextHashes := TDictionary<string, Boolean>.Create;
+  FMatcher       := TBaselineMatcher.Create;
   FCtxByLine     := TDictionary<string, string>.Create;
   FPreparedCtx   := 0;
 end;
@@ -1394,8 +1882,7 @@ end;
 destructor TBaselineSet.Destroy;
 begin
   FCtxByLine.Free;
-  FContextHashes.Free;
-  FFingerprints.Free;
+  FMatcher.Free;
   inherited;
 end;
 
@@ -1409,8 +1896,7 @@ procedure TBaselineSet.Clear;
 // PrepareContextHashes, das ihn immer zuerst verwirft - oder auf
 // ausdrueckliche Anforderung ueber ReleaseContextHashes.
 begin
-  FFingerprints.Clear;
-  FContextHashes.Clear;
+  FMatcher.Clear;
 end;
 
 procedure TBaselineSet.ReleaseContextHashes;
@@ -1423,27 +1909,73 @@ begin
 end;
 
 function TBaselineSet.IsEmpty: Boolean;
-// Beide Match-Quellen zaehlen. Praktisch entscheidet weiter die
-// Fingerprint-Menge (Write legt in JEDEN Eintrag einen Fingerprint); eine
-// handgepflegte Datei mit ausschliesslich contextHashes soll aber nicht
-// als "nichts geladen" gelten und den Filter still abschalten.
+// Beide Match-Quellen zaehlen: ein Eintrag mit nur einem contextHash
+// (handgepflegte Datei) steht ebenso im Matcher wie einer mit
+// Fingerprint, und soll nicht als "nichts geladen" gelten und den Filter
+// still abschalten.
 begin
-  Result := (FFingerprints.Count = 0) and (FContextHashes.Count = 0);
+  Result := FMatcher.EntryCount = 0;
+end;
+
+function TBaselineSet.CoveredFlags(
+  ASource: TList<TLeakFinding>): TArray<Boolean>;
+// Vertrag an der Deklaration. Dieselben Match-Werte, die Contains je Fund
+// bildet - nur fuer alle Funde zugleich, damit der Matcher zaehlen kann.
+var
+  Flags   : TArray<Boolean>;
+  Fps     : TArray<string>;
+  CtxKeys : TArray<string>;
+  i       : Integer;
+  F       : TLeakFinding;
+  Ctx     : string;
+  UseFp   : Boolean;
+  UseCtx  : Boolean;
+begin
+  if ASource = nil then Exit(nil);
+  if FMatcher.EntryCount = 0 then
+  begin
+    SetLength(Flags, ASource.Count);    // alles False: nichts gedeckt
+    Exit(Flags);
+  end;
+  // Dieselben Guards wie in Contains: ohne Fingerprints in der Datei kein
+  // SHA2 je Fund, ohne vorab gerechneten Speicher keine contextHash-
+  // Strecke (hier wird nie eine Datei gelesen, s. Klassenkommentar).
+  UseFp  := FMatcher.FingerprintCount > 0;
+  UseCtx := (FMatcher.ContextKeyCount > 0) and (FCtxByLine.Count > 0);
+  SetLength(Fps, ASource.Count);
+  SetLength(CtxKeys, ASource.Count);
+  for i := 0 to ASource.Count - 1 do
+  begin
+    F := ASource[i];
+    // Lesefehler sind nie baseline-faehig (s. Contains) - '' / ''.
+    if F.Kind = fkFileReadError then Continue;
+    if UseFp then
+      Fps[i] := TBaseline.Fingerprint(F, FScope);
+    if UseCtx and FCtxByLine.TryGetValue(TFindingFingerprint.MemoKey(F), Ctx)
+       and (Ctx <> '') then
+      CtxKeys[i] := BaselineContextKey(FScope.FileToken(F.FileName),
+        KindName(F.Kind), Ctx);
+  end;
+  Result := FMatcher.Match(Fps, CtxKeys,
+    TBaselineMatcher.FindingOrder(ASource));
 end;
 
 function TBaselineSet.NewOnly(ASource: TList<TLeakFinding>;
   out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
-// Vertrag an der Deklaration.
+// Vertrag an der Deklaration. Seit 2026-10-30 ueber CoveredFlags statt
+// Contains je Fund: die Zahl der Combos muss zaehlen wie das Grid.
 var
-  i : Integer;
+  i       : Integer;
+  Covered : TArray<Boolean>;
 begin
   AOwned := nil;
   Result := ASource;
   if (ASource = nil) or IsEmpty then Exit;
+  Covered := CoveredFlags(ASource);
   AOwned := TList<TLeakFinding>.Create;
   try
     for i := 0 to ASource.Count - 1 do
-      if not Contains(ASource[i]) then
+      if not Covered[i] then
         AOwned.Add(ASource[i]);
   except
     FreeAndNil(AOwned);
@@ -1475,10 +2007,10 @@ begin
   //    textgleichem Code-Fenster aus, auch in fremden Dateien und unter
   //    fremden Regeln. Der Datei-Token kommt aus FScope - demselben
   //    Zuschnitt, mit dem LoadFromFile die Eintraege eingelesen hat.
-  if (FContextHashes.Count > 0) and (FCtxByLine.Count > 0)
+  if (FMatcher.ContextKeyCount > 0) and (FCtxByLine.Count > 0)
      and FCtxByLine.TryGetValue(TFindingFingerprint.MemoKey(F), Ctx)
      and (Ctx <> '')
-     and FContextHashes.ContainsKey(BaselineContextKey(
+     and FMatcher.HasContextKey(BaselineContextKey(
            FScope.FileToken(F.FileName), KindName(F.Kind), Ctx)) then
   begin
     Exit(True);
@@ -1490,8 +2022,8 @@ begin
   // Fingerprint mit dem in LoadFromFile gespeicherten Zuschnitt - nicht
   // mit den Prozess-Globals: die Abfrage muss zum LADEZEITPUNKT passen,
   // egal was ein spaeterer Lauf an den Globals gedreht hat.
-  Result := (FFingerprints.Count > 0)
-            and FFingerprints.ContainsKey(TBaseline.Fingerprint(F, FScope));
+  Result := (FMatcher.FingerprintCount > 0)
+            and FMatcher.HasFingerprint(TBaseline.Fingerprint(F, FScope));
 end;
 
 function TBaselineSet.ComputeContextHashes(
@@ -1526,7 +2058,7 @@ begin
   // Keine contextHashes in der Datei (Baseline aelter als v0.9.8, oder
   // Alt-Format): es gaebe nichts, wogegen zu matchen waere. Dann auch
   // nicht rechnen - dieselbe Ersparnis wie der HasCtx-Zweig in Apply.
-  if FContextHashes.Count = 0 then Exit;
+  if FMatcher.ContextKeyCount = 0 then Exit;
   // AForceStat=False: die Bytes liegen noch im Text-Cache des gerade
   // beendeten Scans, und seither hat sie niemand ueberschrieben. Genau die
   // Annahme, die der SARIF-Export im selben Nachlauf schon macht - sie
@@ -1546,7 +2078,7 @@ begin
   Result := 0;
   // Nie gerechnet -> nichts zu pflegen. Contains faellt dann ohnehin auf
   // den Fingerprint zurueck, und ein Teil-Nachtrag waere irrefuehrend.
-  if (FCtxByLine.Count = 0) or (FContextHashes.Count = 0) then Exit;
+  if (FCtxByLine.Count = 0) or (FMatcher.ContextKeyCount = 0) then Exit;
   // WELCHE Dateien geleert werden, sagen DIE FUNDE - nicht der Parameter.
   // Ein Watch-Lauf liefert auch Funde fremder Dateien (DFM-Detektoren
   // melden mit dem .dfm-Pfad, s. Deklaration); deren Eintraege stammen
@@ -1611,8 +2143,7 @@ begin
   // und ein Verwerfen hier haette die Vorab-Rechnung schon beim ersten
   // ApplyFilter nach dem Scan wieder entwertet. Wer ihn wirklich los
   // werden will, ruft ReleaseContextHashes (s. dort).
-  FFingerprints.Clear;
-  FContextHashes.Clear;
+  FMatcher.Clear;
   // Zuschnitt VOR den Ausstiegen speichern: auch ein leeres Set (Datei
   // fehlt/kaputt) antwortet danach konsistent mit dem Zuschnitt dieses
   // Ladeversuchs statt mit dem eines frueheren.
@@ -1650,13 +2181,13 @@ begin
         if Loaded >= MAX_BASELINE_ENTRIES then Break;
         if not (Obj is TJSONObject) then Continue;
         Inc(Loaded);
-        CollectBaselineEntry(TJSONObject(Obj), FFingerprints, FContextHashes);
+        CollectBaselineEntry(TJSONObject(Obj), FMatcher);
       end;
     end;
   finally
     Root.Free;
   end;
-  Result := FFingerprints.Count;
+  Result := FMatcher.FingerprintCount;
 end;
 
 const

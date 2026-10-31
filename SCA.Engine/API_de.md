@@ -9,9 +9,9 @@ komplette Analyse aufruft, ohne die internen Einheiten zu kennen.
 > Englische Demo-/API-Doku: siehe [../SCA.CLI.Demo/README.md](../SCA.CLI.Demo/README.md).
 > Lauffähiges Minimal-Beispiel: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
-- **Package:** `SCA.Engine` (`requires rtl;` — keine VCL/FMX-Abhängigkeit)
-- **Version:** 0.9.14 (`uSCAConsts.SCA_VERSION`)
-- **Umfang:** ~196 Detektoren (Regel-IDs `SCA001`–`SCA196`)
+- **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` liest `.dproj`/`.groupproj` für die Projekt-Scopes; keine VCL/FMX-Abhängigkeit)
+- **Version:** 0.9.18 (`uSCAConsts.SCA_VERSION`)
+- **Umfang:** 205 Regeln (Regel-IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
 
 ---
 
@@ -91,7 +91,7 @@ Ein vollständiges, lauffähiges Beispiel ist das Projekt **`SCA.CLI.Demo`**.
 ## 3. Die API: `uEngineApi`
 
 Die Facade besteht aus einem Request-Record, einem Result-Objekt, einer
-Session-Klasse und zwei Convenience-Funktionen.
+Session-Klasse, einem Testfixture-Filter und zwei Convenience-Funktionen.
 
 ### 3.1 Einstiegspunkte
 
@@ -104,12 +104,14 @@ Session-Klasse und zwei Convenience-Funktionen.
 ### 3.2 `TScanRequest`
 
 Mit `TScanRequest.Init` mit sinnvollen Defaults befüllen (`ssRecursive`, alle
-Detektoren, loseste Schwellen), dann gezielt überschreiben.
+Detektoren, loseste Schwellen, Ein-Zweig-`{$IFDEF}`-Sicht mit
+`TScanRequest.DefaultIfdefDefines`, Include-Defines an, `dlDelphi`, seriell),
+dann gezielt überschreiben.
 
 | Feld | Typ | Bedeutung |
 |------|-----|-----------|
 | `Scope` | `TScanScope` | Scan-Art (s. 3.5). Default `ssRecursive`. |
-| `Path` | `string` | Wurzel (rekursiv) / Datei (single) / Basis-Dir (Liste). |
+| `Path` | `string` | Wurzel (rekursiv) / Datei (single) / Basis-Dir (Liste) / `.dproj`, `.lpi`, `.lpk` (Projekt) / `.groupproj`, `.lpg` (Projektgruppe). |
 | `Files` | `TArray<string>` | Explizite Datei-Liste für `ssFileList`. |
 | `Source` | `string` | In-Memory-Quelltext für `ssSource`. |
 | `VcsRange` | `string` | `ssVcsChanged`: `''`=Auto, sonst `shaA..shaB`. |
@@ -119,7 +121,9 @@ Detektoren, loseste Schwellen), dann gezielt überschreiben.
 | `MaxFileBytes` | `Integer` | `<=0` → Engine-Default (5 MB). |
 | `UsesCheck` | `Boolean` | Teuren Unused-Uses-Detektor mitlaufen lassen. |
 | `AutoDiscover` | `Boolean` | Custom-Klassen während des Scans entdecken. |
-| `IfdefDefines` | `TArray<string>` | `{$IFDEF}`-aware Parsing mit diesen Defines. |
+| `IfdefDefines` | `TArray<string>` | `{$IFDEF}`-aware Parsing mit diesen Defines: ein Zweig, wie ihn ein Compiler sieht. `Init` setzt `DefaultIfdefDefines` (`MSWINDOWS`, `WIN64`, `UNICODE`, `CONDITIONALEXPRESSIONS`); `nil`/leer = beide Zweige jedes `{$IFDEF}`. Scan-Sicht: `Run` wendet sie auch bei `SkipConfig` an. |
+| `IncludeDefines` | `Boolean` | `{$I}`-Include-Dateien für ihre `{$DEFINE}`-Wirkung lesen. `Init` setzt `True`; `False` = Include-blind (CLI `--no-include-defines`). Scan-Sicht wie `IfdefDefines`. |
+| `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) oder `dlFpc` (`uSCAConsts`): `dlFpc` sammelt beim Verzeichnis-Walk zusätzlich `*.pp` und ergänzt bei nicht leerem `IfdefDefines` `FPC` und `LCL`. Bei `.lpi`/`.lpk`/`.lpg`-Projekt-Scopes erzwungen `dlFpc`. Scan-Sicht wie `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML mit Custom-Rules (`''`=keine). |
 | `BaselinePath` | `string` | Funde gegen Baseline-JSON filtern (`''`=aus). |
 | `WriteBaselinePath` | `string` | Aktuelle Funde als neue Baseline schreiben. |
@@ -127,9 +131,12 @@ Detektoren, loseste Schwellen), dann gezielt überschreiben.
 | `MinSeverityName` | `string` | INI-Modus: Override `'error'`/`'warning'`/`'hint'`. |
 | `ConfigRoot` | `string` | INI-Modus: Wurzel für INI-/Rules-Auflösung. |
 | `SkipConfig` | `Boolean` | `true`: keine Config anwenden (Consumer hat State selbst gesetzt). |
+| `IndexRoot` | `string` | `ssProject`/`ssProjectGroup`/`ssFileList`: Verzeichnis, über das die Cross-Unit-Indizes (Symbol-Referenzen, Typen, DFM) gebaut werden, während die Analyse auf der Liste bleibt. `''` = gemeinsamer Wurzelpfad der aufgelösten Liste (Projekt-Scopes) bzw. die Liste selbst (`ssFileList`). |
 | `SingleFileProjectRoot` | `string` | `ssSingleFile`: ProjectRoot für Cross-Unit-Index. |
-| `IgnoreList` | `TIgnoreList` | `ssRecursive`: Ignore-/Test-Filter (`nil`=keiner). |
-| `Progress` | `TProc<Integer,Integer>` | `(current,total)`; `EAbort` darin bricht ab. |
+| `IgnoreList` | `TIgnoreList` | `ssRecursive`, `ssProject`, `ssProjectGroup`: Ignore-/Test-Filter (`nil`=keiner). |
+| `Parallel` | `Boolean` | Per-Datei-paralleler Scan (Opt-in, `Init`: `False`; CLI `--parallel`). Fällt auf seriell zurück, wenn ein nicht parallel-sicherer Modus aktiv ist (Auto-Discovery, Custom-Rules, Detektor-Zeitmessung); die Ergebnis-Reihenfolge gleicht dem seriellen Lauf. Bei `SkipConfig` nicht angewendet. |
+| `ParallelWorkers` | `Integer` | Worker-Zahl bei `Parallel`; `0` = `TThread.ProcessorCount`. |
+| `Progress` | `TProc<Integer,Integer>` | `(current,total)`; `EAbort` darin bricht ab. Im Parallel-Modus kommt der Callback erst in der Merge-Phase, auf dem Aufrufer-Thread. |
 
 ### 3.3 `TScanResult`
 
@@ -168,7 +175,8 @@ Konfiguration kommt:
 3. **`SkipConfig := True`:** `Run` wendet **keine** Config an — der Consumer hat
    den globalen Detektor-/Schwellen-State bereits selbst gesetzt (so machen es
    IDE-Plugin und Form über ihre eigene Vorbereitung). `Run` macht dann nur
-   Scope → Scan → Baseline.
+   Scope → Scan → Baseline. Die Scan-Sicht (`IfdefDefines`, `IncludeDefines`,
+   `Dialect`) gilt in jedem Modus.
 
 ### 3.5 Scopes (`TScanScope`)
 
@@ -179,6 +187,11 @@ Konfiguration kommt:
 | `ssFileList` | Explizite Datei-Liste (`Files`); `Path` = optionaler Basis-Dir. |
 | `ssVcsChanged` | Nur per VCS geänderte Dateien (`Path`=Repo, `VcsRange` optional). |
 | `ssSource` | In-Memory-Quelltext (`Source`); `Path`=optionaler logischer Name. |
+| `ssProject` | Dateien eines Projekts (`Path` = `.dproj`: dessen `DCCReference`-Liste; `.lpi`/`.lpk`: das Lazarus-Pendant); meldet zusätzlich Dateien im Projektordner, die das Projekt nicht führt (SCA194/SCA195). |
+| `ssProjectGroup` | Vereinigung der Projekt-Listen einer Gruppe (`Path` = `.groupproj` oder `.lpg`). |
+
+Eine nicht auflösbare Projektdatei liefert ein Ergebnis mit genau einem
+`fkFileReadError`-Fund statt einer Exception.
 
 ### 3.6 Profile
 
@@ -187,12 +200,15 @@ Detektoren. Eingebaute Profile (`uRuleCatalog`):
 
 | Profil | Inhalt |
 |--------|--------|
-| `default` / `strict` | Alle Regeln. |
+| `default` | Alle Regeln außer den Stil-Regeln von `style`. |
+| `strict` | Alle Regeln. |
 | `ide-fast` | Schnelles Subset für Live-Analyse (Bugs + Vulnerabilities + DFM-Kritisches). |
 | `security` | Nur Vulnerabilities/Secrets (SQLInjection, HardcodedSecret, …). |
 | `bugs-only` | Nur echte Fehler (Leaks, NilDeref, DivByZero, FormatMismatch, …). |
 | `code-quality` | Code-Smells (LongMethod, MagicNumber, Cyclomatic, Duplikate, …). |
 | `dfm-only` | Nur DFM-/Formular-Regeln. |
+| `style` | Nur Stil-Regeln (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
+| `selftest-quiet` | Alle Regeln außer einigen Layout-Regeln — für den Scan des Analysers selbst. |
 
 ### 3.7 Datenmodell: `TLeakFinding` (`uMethodd12`)
 
@@ -203,14 +219,24 @@ Jeder Befund:
 | `FileName` | `string` | Quelldatei. |
 | `MethodName` | `string` | Methode/Routine (falls bekannt). |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Zeile (String-Feld + Integer-Helper). |
+| `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Letzte Zeile des Befund-Bereichs. `EndLine = 0` (Default) = einzeilig; `SpanEnd` lesen (geklemmt, nie kleiner als die Startzeile) statt des Rohfelds. Ein Bereich ändert nur, wie viel Fläche ein Fund markiert, nie die Zahl der Funde. |
 | `MissingVar` / `Message` | `string` | Detailmeldung (`Message` = Alias). |
-| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint`. |
+| `Severity` | `TLeakSeverity` | `lsError` / `lsWarning` / `lsHint` — so, wie sie nach den Post-Filtern (Evidenz-Politik, `[PathOverrides]`) steht. |
+| `OriginalSeverity` | `TLeakSeverity` | Die Schwere, die der **Detektor** vergeben hat. Post-Filter ändern `Severity` nur über `OverrideSeverity`, das die erste Original-Schwere sichert; `SavedDetectorSeverity`/`SeverityWasOverridden` sind deren Speicher — nicht direkt lesen. |
 | `Kind` | `TFindingKind` | Konkrete Regel-Art (`fkXxx`). |
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | Custom-Rule-ID (sonst leer). |
+| `RelatedLines` | `string` | Weitere Zeilen derselben Sache — heute nur SCA015/SCA021 (die Partnerstellen einer Duplikat-Gruppe): kommagetrennte 1-basierte Zeilennummern, aufsteigend, ohne die Ankerzeile; leer bei allen anderen Regeln. |
+| `StructureChain` | `string` | Verschachtelungskette zur Fundstelle, von außen nach innen, verbunden mit `CHAIN_SEP` (`' → '`), z. B. `if → for → while`; heute nur SCA018 (DeepNesting), sonst leer. |
+| `LeakVariant` / `MemoryLeakVariant` | `string` | Variante von SCA001 (MemoryLeak): `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` ist das Feld, das der Detektor setzt (leer = nicht gesetzt); `MemoryLeakVariant` liefert es oder leitet es aus `OriginalSeverity` und Meldung ab; `''` bei jeder anderen Art. |
 | `FindingType` | `TFindingType` | Kategorie (s.u.). |
 | `SeverityText` / `TypeText` | `string` | Lesbare Labels. |
 | `ResolvedRuleId` | `string` | `SCAxxx` (RuleID falls gesetzt, sonst Catalog-Lookup). |
+
+`RelatedLines`, `StructureChain` und `LeakVariant` stehen bewusst nicht in der
+Meldung und damit weder im SARIF- noch im Baseline-Fingerprint. Erzeuger legen
+Funde mit `TLeakFinding.New(...)`/`NewAtPos(...)` oder `Create` +
+`SetKind(Kind[, Confidence])` an (Schwere aus der Katalog-Vorgabe).
 
 Enums (`uSCAConsts`):
 
@@ -220,6 +246,8 @@ TFindingConfidence= (fcLow, fcMedium, fcHigh);
 TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
+
+Fund kopieren: `procedure CopyFrom(ASource: TLeakFinding)` übernimmt **alle** Felder von `ASource` (nicht nil); `function Clone: TLeakFinding` liefert einen neuen Fund mit allen Feldern von `Self`, der dem Aufrufer gehört - immer ein schlichter `TLeakFinding`, auch für eine Unterklasse. Funde nicht feldweise von Hand kopieren. Ein neues Feld in `TLeakFinding` kommt in `CopyFrom`, danach wird `FINDING_FIELD_COUNT` in `uTestFindingCopy` erhöht; der Test zählt die Felder per RTTI und wird rot, wenn `CopyFrom` eines vergisst.
 
 ### 3.8 Quellstellen: `TSourcePlaces` (`uSourcePlaces`)
 
@@ -285,16 +313,35 @@ end;
 
 **Was `ChainOf` und `CallOf` beweisen.** Ein Operand, der ein bloßer Bezeichner ist, bekommt seinen deklarierten Typ (`rvString`/`rvNonString`, `Resolved` = Typname), und `FixSafe` wird neu abgeleitet. Ein Operand vom Typ `Char`, `WideChar`, `AnsiChar`, `ShortString` oder `PAnsiChar` bleibt `rvString` (Format nimmt ihn für `%s`), aber nicht verlustfrei - ein `#0` beendet den Text, ein `AnsiChar` ab `#$80` geht als Ordinalwert durch -, er macht also nie `FixSafe`. Unbekannt bleibt unbekannt: `rvUnknown` und `FixSafe = False` sind der Normalfall. Keinen `rvString`-Beweis gibt es in einem `with`-Block (`InWithBlock`; `Resolved` nennt weiter die gefundene Deklaration) und keinen für einen bekannten RTL-Aufruf oder einen `.ToString`-Term, dessen Namen eine Funktion der Unit selbst mit einem Nicht-String-Ergebnis deklariert — sie verdeckt die RTL-Routine (z. B. ein unit-lokales `function Trim(..): Variant`). Mit `SysUtils.`/`StrUtils.` qualifizierte Aufrufe behalten ihren Beweis. Eine Funktion in einer verschachtelten Routine sieht der Dienst nicht (der Parser verwirft verschachtelte Routinen).
 
-Koordinaten sind 1-basiert; `EndCol` zeigt **hinter** das letzte Zeichen. Jedes Primitiv außer `Open`/`OpenSource` ist total (`nil`, leer, `0` oder `False` statt Exception, auch wenn nichts geöffnet ist). `SOURCE_PLACES_VERSION` (= 1) ist die Vertragsversion — eine **Übersetzungszeit**-Konstante: ein Konsument prüft sie mit `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix tut das in `uRdxRecipeRunner` und `uRdxFixRunner`) und baut dann gegen einen geänderten Vertrag nicht mehr. Eine zur Laufzeit getauschte BPL erkennt sie nicht; das leistet die Paketbindung (DCP/`requires`). Die Version steigt bei einer Änderung an der Signatur eines bestehenden Primitivs, an Rollen, an Koordinaten oder an einer Ableitung von `FixSafe`/`ValueType`/`Resolved`, die etwas neu als bewiesen meldet; sie bleibt bei neuen Primitiven, neuen Parametern mit Vorgabewert und Ableitungen, die nur strenger werden.
+Koordinaten sind 1-basiert; `EndCol` zeigt **hinter** das letzte Zeichen. Jedes Primitiv außer `Open`/`OpenSource` ist total (`nil`, leer, `0` oder `False` statt Exception, auch wenn nichts geöffnet ist). `SOURCE_PLACES_VERSION` (= 1) ist die Vertragsversion — eine **Übersetzungszeit**-Konstante: ein Konsument prüft sie mit `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix tut das in `uRdxRecipeRunner`, `uRdxPlacesRunner` und `uRdxFixRunner`) und baut dann gegen einen geänderten Vertrag nicht mehr. Eine zur Laufzeit getauschte BPL erkennt sie nicht; das leistet die Paketbindung (DCP/`requires`). Die Version steigt bei einer Änderung an der Signatur eines bestehenden Primitivs, an Rollen, an Koordinaten oder an einer Ableitung von `FixSafe`/`ValueType`/`Resolved`, die etwas neu als bewiesen meldet; sie bleibt bei neuen Primitiven, neuen Parametern mit Vorgabewert und Ableitungen, die nur strenger werden.
 
-Je Regel kann `rules/sca-rules.json` `anchor` (worauf die Funde ankern: `statement`, `assign`, `call`, `assign-or-call`; `uses-item` ist reserviert) und `fixMode` (`none` / `assisted` / `auto`) tragen; gelesen über `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). Ein fehlender oder unbekannter Wert fällt auf den einkompilierten Katalog zurück; abgeschaltet wird eine Regel mit `"fixMode": "none"` - dann bietet ein Modul auf ihrem Signal gar keine Schreibhilfe an. `assisted` = nur Vorlage oder Vorschau, nie geschrieben; `auto` = darf schreiben. Ohne Wert bieten die Rezepte auf der Anweisung (Format()/SQL) nichts an, zeilenbasierte Hilfen eines Moduls entscheiden selbst. `editorHelp` (Boolean) sagt, ob ein IDE-Modul für die Regel einen Quick-Fix hat (eine Code-Aktion zu ihren Funden; reDelphix: Glühbirne, Strg+Alt+F); Berichte lesen es für das QF-Badge und den Filter „Quick-Wins“ im HTML (`TRuleMeta.EditorHelp`, ein fehlender Wert fällt auf den einkompilierten Katalog zurück).
+Je Regel kann `rules/sca-rules.json` `anchor` (worauf die Funde ankern: `statement`, `assign`, `call`, `assign-or-call`; `uses-item` ist reserviert) und `fixMode` (`none` / `assisted` / `auto`) tragen; gelesen über `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). Ein fehlender oder unbekannter Wert fällt auf den einkompilierten Katalog zurück; abgeschaltet wird eine Regel mit `"fixMode": "none"` - dann bietet ein Modul auf ihrem Signal gar keine Schreibhilfe an. `assisted` = nur Vorlage oder Vorschau, nie geschrieben; `auto` = darf schreiben. Ohne Wert bieten die Rezepte auf der Anweisung (Format()/SQL) nichts an, zeilenbasierte Hilfen eines Moduls entscheiden selbst. `editorHelp` (Boolean) sagt, ob ein IDE-Modul für die Regel einen Quick-Fix hat (eine Code-Aktion zu ihren Funden; reDelphix: Glühbirne, Strg+Alt+F); Berichte lesen es für das QF-Badge und den Filter „Quick-Wins“ im HTML (`TRuleMeta.EditorHelp`, ein fehlender Wert fällt auf den einkompilierten Katalog zurück). `editorHelps` listet diese Quick-Fixes, je Menüeintrag ein Eintrag (`id`, `effect`: `same`/`changes`/`depends`/`template`, `slug`) - `TRuleMeta.EditorHelps`, leer ohne `EditorHelp`; der SARIF-Export schreibt sie je Fund als `properties.editorHelp` (`EditorHelpTokens`: `id:effect:slug`), nur wenn verlangt (`TSarifOptions.EditorHelp`, CLI `--sarif-editor-help`; Voreinstellung aus), und `tools/gen-quickfix-doc.py --check` hält sie deckungsgleich mit der Tabelle von reDelphix. Der HTML-Bericht (`TExporterHtml.Run`, `TScanResult.WriteHtml`) zeigt die Liste einmal je Regel im Regel-Report und einen Verweis darauf in den Details jedes Funds, solange `THtmlReportOptions.EditorHelp` True ist - die Voreinstellung; CLI `--html-no-editor-help` setzt es auf False. Die Workbench-Seite (`TFindingsWorkbenchExport.BuildHtml`/`Run`) zeigt dieselbe Liste einmal je Regel oben im Regel-Template des Drawers, solange ihr Parameter `AEditorHelp` True ist (die Voreinstellung).
+
+### 3.9 Klassenmethoden der Session: Engine-Lock und Caches
+
+| Aufruf | Zweck |
+|--------|-------|
+| `TAnalysisSession.AcquireEngineLock` / `ReleaseEngineLock` | Prozessweiter Engine-Lock für Consumer, die den globalen Detektor-State selbst ändern (z. B. vor einem `SkipConfig`-Lauf). Rekursiv: ein Halter, der danach `Run` ruft, betritt ihn erneut. Nie über `Synchronize`/`ProcessMessages` hinweg halten. |
+| `TAnalysisSession.TryAcquireEngineLock: Boolean` | Nicht blockierende Probe für Aufrufer im UI-Thread, die bei laufendem Scan überspringen statt einfrieren. `True` = Lock gehalten; der Aufrufer **muss** `ReleaseEngineLock` rufen. |
+| `TAnalysisSession.ReleaseTransientCaches` | Gibt die transienten Engine-Caches frei (heute: der prozessweite Datei-Text-Cache). Der Consumer ruft das an seinem letzten Punkt (nach Anzeige, Reports oder Export). Zu früh kostet nur einen Warmstart, nie Korrektheit; nicht während eines laufenden Scans rufen. |
+
+### 3.10 Testfixtures: `TFixtureFilter`
+
+Die Regel, Funde in Testfixture-Pfaden auszublenden, gehört der Engine; `Run`
+wendet sie **nicht** an — das entscheidet der Consumer (heute nur der CLI).
+
+| Aufruf | Zweck |
+|--------|-------|
+| `TFixtureFilter.AutoHidesFixtures(AProfile): Boolean` | Ob ein Profil Fixture-Funde von sich aus ausblendet: `default` und `selftest-quiet` ja, `strict` und jedes andere Profil nein. |
+| `TFixtureFilter.Apply(AFindings, ABaseDir, ADroppedFiles = nil): Integer` | Entfernt Fixture-Funde aus der Liste und liefert ihre Anzahl. `ABaseDir` (die Scan-Wurzel) verankert die Pfadmuster; `fkFileReadError` bleibt immer stehen; `ADroppedFiles` sammelt optional die betroffenen Dateinamen. |
 
 ---
 
 ## 4. Lebenszyklus / Threading
 
 - Die Engine ist **nicht thread-safe** (geteilter globaler Konfig-/Cache-State).
-  Pro Prozess einen Scan zur Zeit.
+  Pro Prozess einen Scan zur Zeit; `Run` nimmt den Engine-Lock (s. 3.9).
+  `Parallel` parallelisiert die Dateien *innerhalb* eines Scans.
 - Der **rekursive Scan** ist für kurzlebige Ein-Scan-Prozesse (CLI/Demo) sicher.
   In residenten Hosts (IDE) den Single-File-/Source-Pfad bevorzugen.
 - `TScanResult` besitzt die Findings; `Free` gibt sie frei. Mit
@@ -308,8 +355,9 @@ Ein Fremd-Consumer braucht **nur das Package**, keine Engine-Quelltexte:
 
 - `.dproj`: `UsePackages=true` und `DCC_UsePackage` enthält `SCA.Engine;rtl`.
 - **Kein** Engine-Source-Verzeichnis im `DCC_UnitSearchPath`.
-- Zur Laufzeit muss `SCA.Engine290.bpl` auffindbar sein (globales BPL-Verzeichnis
-  oder neben der `.exe`).
+- Zur Laufzeit müssen `SCA.Engine290.bpl` (Delphi 12; `{$LIBSUFFIX AUTO}`) und
+  die Delphi-Laufzeitpakete, die es verlangt (`rtl`, `xmlrtl`), auffindbar sein
+  (globales BPL-Verzeichnis oder neben der `.exe`).
 - `uses uEngineApi;` (+ bei Detailzugriff `uMethodd12`, `uSCAConsts`;
   `uRefactorInfo`, `uSourcePlaces` für die Konstanten des Quellstellen-Dienstes,
   s. 3.8) — alles aus dem Package.

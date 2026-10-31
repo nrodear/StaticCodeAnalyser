@@ -77,6 +77,24 @@ type
     [Test] procedure MethodeFinalize_Gemeldet;
   end;
 
+  // U12 (2026-10-27): zwei Restklassen der Stichprobe vom 22.10. -
+  // Nil-Test-Schleife (W) und Locals anonymer Methoden (A). Eigene
+  // Fixture; die beiden anderen tragen 37 bzw. 14 Faelle. (A) traegt seit
+  // der Parser-Charge P2 der Parser, nicht mehr ein Detektor-Gate.
+  [TestFixture]
+  TTestFreeWithoutNilU12 = class
+  public
+    [Test] procedure WhileNotNilSelfUnlink_NotReported;
+    [Test] procedure WhileAssignedBlockBody_NotReported;
+    [Test] procedure WhileCountCondition_StillReported;   // Gegenprobe
+    [Test] procedure WhileNilTestOfOtherField_StillReported;   // Gegenprobe
+    [Test] procedure AnonMethodVarLocal_NotReported;
+    [Test] procedure AnonMethodConstParam_NotReported;
+    [Test] procedure AnonMethodVarParam_BodyIsRhsText_KnownLimit;   // FN, seit P2
+    [Test] procedure FieldFreedAfterAnonMethodEnds_StillReported;   // Gegenprobe
+    [Test] procedure PlainFieldFree_FileHarness_Reported;
+  end;
+
 implementation
 
 // noinspection-file GodClass, LargeClass, DuplicateBlock
@@ -1441,8 +1459,317 @@ begin
   finally F.Free; end;
 end;
 
+{ --- U12: Nil-Test-Schleife und anonyme Methoden ------------------- }
+
+procedure TTestFreeWithoutNilU12.WhileNotNilSelfUnlink_NotReported;
+// U12-W: sich selbst aushaengende Liste (Lazarus definetemplates/
+// lfmtrees). Die Schleife endet nur, weil der Destruktor FFirst
+// weiterschaltet - danach ist das Feld nil. Bestehende Exe: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'begin'#13#10 +
+  '  while FFirst <> nil do FFirst.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.WhileAssignedBlockBody_NotReported;
+// U12-W: dieselbe Klasse mit Assigned() und begin..end-Rumpf - das
+// Free haengt dann unter einem nkBlock im Schleifenknoten.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'begin'#13#10 +
+  '  while Assigned(FFirst) do'#13#10 +
+  '  begin'#13#10 +
+  '    FFirst.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.WhileCountCondition_StillReported;
+// GEGENPROBE U12-W: keine Nil-Bedingung. Nach dem ersten Free liest
+// FList.Count freigegebenen Speicher - Befund bleibt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'begin'#13#10 +
+  '  while FList.Count > 0 do FList.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.WhileNilTestOfOtherField_StillReported;
+// GEGENPROBE U12-W: die Bedingung testet ein ANDERES Feld auf nil.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'begin'#13#10 +
+  '  while FOther <> nil do FList.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.AnonMethodVarLocal_NotReported;
+// U12-A: L ist Local der anonymen Methode (delphimvcframework-Muster).
+// Bis zur Parser-Charge P2 kippte der Parser deren Rumpf in Run, L.Free
+// sah wie ein Feld-Free aus; ein Quelltext-Gate entlastete. Seit P2
+// bleibt der Rumpf RHS-Text der Zuweisung, das Gate ist entfernt.
+// Exe 0fe5d84c (Parser alt, ohne Gate): 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'var'#13#10 +
+  '  P: TProc;'#13#10 +
+  'begin'#13#10 +
+  '  P := procedure'#13#10 +
+  '    var'#13#10 +
+  '      L: TStringList;'#13#10 +
+  '    begin'#13#10 +
+  '      L := TStringList.Create;'#13#10 +
+  '      try'#13#10 +
+  '        L.Add(''x'');'#13#10 +
+  '      finally'#13#10 +
+  '        L.Free;'#13#10 +
+  '      end;'#13#10 +
+  '    end;'#13#10 +
+  '  P();'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.AnonMethodConstParam_NotReported;
+// U12-A: const-Parameter der anonymen Methode - lokale Kopie wie
+// bei einer gewoehnlichen Methode (IsLocalCopyParam). Seit der Parser-
+// Charge P2 ist der ganze Rumpf RHS-Text (kein Gate mehr noetig).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'var'#13#10 +
+  '  P: TProc<TList>;'#13#10 +
+  'begin'#13#10 +
+  '  P := procedure(const AList: TList)'#13#10 +
+  '    var'#13#10 +
+  '      I: Integer;'#13#10 +
+  '    begin'#13#10 +
+  '      I := AList.Count;'#13#10 +
+  '      AList.Free;'#13#10 +
+  '    end;'#13#10 +
+  '  P(nil);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.AnonMethodVarParam_BodyIsRhsText_KnownLimit;
+// Bis P2 die Gegenprobe des U12-A-Gates (var-Parameter = Variable des
+// Aufrufers, Befund blieb). Seit der Parser-Charge P2 ist der Rumpf einer
+// anonymen Methode mit var-Sektion RHS-Text - wie der jeder anonymen
+// Methode ohne Sektion schon immer; AList.Free ist fuer SCA139 keine
+// Anweisung mehr (bekannte Grenze: anonyme Methoden haben keinen eigenen
+// Knoten, Paket 9015). Exe 8c3eac8f: 1 Fund (ROT ohne P2).
+// BEKANNTE GRENZE, kein Wunschverhalten: der Test pinnt einen FN - AList
+// ist die Variable des Aufrufers, nach dem Free haengt sie. Bekommen
+// anonyme Methoden eigene Knoten, kippt er auf 1 (dann bewusst anpassen).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'var'#13#10 +
+  '  P: TProc;'#13#10 +
+  'begin'#13#10 +
+  '  P := procedure(var AList: TList)'#13#10 +
+  '    var'#13#10 +
+  '      I: Integer;'#13#10 +
+  '    begin'#13#10 +
+  '      I := AList.Count;'#13#10 +
+  '      AList.Free;'#13#10 +
+  '    end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.FieldFreedAfterAnonMethodEnds_StillReported;
+// GEGENPROBE U12-A: gleichnamiges Local in der anonymen Methode, das
+// Free steht aber NACH ihrem Ende - gemeint ist das Feld FData.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'var'#13#10 +
+  '  P: TProc;'#13#10 +
+  'begin'#13#10 +
+  '  P := procedure'#13#10 +
+  '    var'#13#10 +
+  '      FData: TStringList;'#13#10 +
+  '    begin'#13#10 +
+  '      FData := nil;'#13#10 +
+  '    end;'#13#10 +
+  '  FData.Free;'#13#10 +
+  '  P();'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNilU12.PlainFieldFree_FileHarness_Reported;
+// Positiv-Waechter: SCA139 laeuft seit U12 auch in FindingsOfFile.
+// Ohne die Registrierung waeren die Gegenproben oben stumm-gruen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes, System.SysUtils;'#13#10 +
+  'type'#13#10 +
+  '  TNode = class'#13#10 +
+  '    FFirst, FOther: TNode;'#13#10 +
+  '    FList: TList;'#13#10 +
+  '    FData: TStringList;'#13#10 +
+  '    procedure Run;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TNode.Run;'#13#10 +
+  'begin'#13#10 +
+  '  FData.Free;'#13#10 +
+  '  FList.Clear;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFreeWithoutNil));
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNil);
   TDUnitX.RegisterTestFixture(TTestFreeWithoutNilLetzterAufruf);
+  TDUnitX.RegisterTestFixture(TTestFreeWithoutNilU12);
 
 end.

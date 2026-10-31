@@ -81,7 +81,8 @@ type
 var
   // Optional Per-Detector-Timing-Accumulator. Wenn von aussen
   // (CLI --time-detectors, IDE-Perf-Mode) gesetzt, summiert das
-  // AOnTime-Lambda in ParseLeaks pro Scan TotalMs + CallCount auf.
+  // AOnTime-Lambda in ParseLeaks pro Scan TotalTicks + CallCount auf
+  // (Key = Summe TStopwatch-TICKS, NICHT ms - s. AccumulateDetectorTicks).
   // Nil = kein Tracking (Default).
   // Lifecycle: Caller erzeugt, Lambda fuellt, Caller liest und gibt frei.
   // KEIN threadvar: Konsumenten (CLI uConsoleRunner / IDE) erzeugen, lesen und
@@ -107,6 +108,23 @@ var
   // Grund: der Konsument (CLI) liegt AUSSERHALB des SCA.Engine-Package,
   // ein exportierter threadvar traegt dort nicht.
   gParallelDeclineReason : string;
+
+// Per-Detector-Timing (--time-detectors), reine Funktionen (Tests:
+// uTestDetectorTimings). Bis 2026-10-25 summierte das AOnTime-Lambda je
+// Aufruf Watch.ElapsedMilliseconds - ganze ms, abgeschnitten: ein Aufruf
+// unter 1 ms zaehlte 0, auf grossen Korpora fehlte so rund die Haelfte der
+// Detektorzeit, kleine Detektoren sprangen zwischen 0 und N ms. Jetzt wird
+// in Ticks summiert und erst bei der Ausgabe in ms umgerechnet.
+// ATimings = nil -> nichts zu tun (kein Tracking angefordert).
+procedure AccumulateDetectorTicks(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  const AName: string; AElapsedTicks: Int64);
+// Ticks -> ms mit Nachkommastellen; AFrequency = TStopwatch.Frequency.
+// AFrequency <= 0 liefert 0 (kein Zeitgeber, keine Division durch 0).
+function DetectorTicksToMs(ATicks, AFrequency: Int64): Double;
+// Ticks -> ganze ms, abgeschnitten - fuer die "langsam!"-Logzeile, deren
+// Schwelle (> 500 ms) und Format ('%d ms') unveraendert bleiben.
+function DetectorTicksToWholeMs(ATicks, AFrequency: Int64): Int64;
 
 implementation
 
@@ -154,6 +172,7 @@ uses
   uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
   uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
+  uFunctionNameResult,   // SCA204/SCA205 - Funktionsname statt Result
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -227,7 +246,7 @@ type
   end;
   // Callbacks fuer den Aufrufer (Logging / Fehler-Reporting), damit
   // RunAllDetectors selbst kein Wissen ueber LogStream/FileError-Liste hat.
-  TDetectorTimeProc  = reference to procedure(const Name: string; ElapsedMs: Int64);
+  TDetectorTimeProc  = reference to procedure(const Name: string; ElapsedTicks: Int64);
   TDetectorErrorProc = reference to procedure(const Name, ErrMsg: string);
 
 const
@@ -652,7 +671,8 @@ begin
   // SCA175 AnonMethodCaptureLoopVar: Pre-Filter 'procedure' (anonymous-Marker).
   AddD3('AnonMethodCaptureLoopVar', fkAnonMethodCaptureLoopVar, TAnonMethodCaptureLoopVarDetector.AnalyzeUnit, ['procedure']);
   // SCA176 CognitiveComplexity: kein Pre-Filter (jede Method gepruft).
-  AddD3('CognitiveComplexity', fkCognitiveComplexity, TCognitiveComplexityDetector.AnalyzeUnit);
+  // Perf Q2: AContext-fuehrend (Schwelle einmal je Kontext statt ini je Datei).
+  AddD('CognitiveComplexity', fkCognitiveComplexity, TCognitiveComplexityDetector.AnalyzeUnit);
   // SCA177 ThreadFreeOnTerminateWithRef: Pre-Filter 'freeonterminate'.
   AddD3('ThreadFreeOnTerminateWithRef', fkThreadFreeOnTerminateWithRef, TThreadFreeOnTerminateWithRefDetector.AnalyzeUnit, ['freeonterminate']);
   // SCA178 PathTraversal: Pre-Filter file-open-API tokens.
@@ -710,7 +730,9 @@ begin
   // ausgewertet. Frueher haerteres Skip:=True nach dem Add - jetzt
   // dynamisch, damit derselbe Detector-Cache fuer Scans mit und ohne
   // UsesCheck wiederverwendet werden kann.
-  AddD3('UnusedUses',      fkUnusedUses,      TUnusedUsesDetector.AnalyzeUnit);
+  // Charge P1 (2026-10-25): AContext-fuehrend (Zeilen- und Strip-Cache des
+  // Scans statt eines eigenen Strips je Datei) -> AddD statt AddD3.
+  AddD('UnusedUses',       fkUnusedUses,      TUnusedUsesDetector.AnalyzeUnit);
   AddD3('NilDeref',        fkNilDeref,        TNilDerefDetector.AnalyzeUnit);
   AddD('MissingFinally',   fkMissingFinally,  TMissingFinallyDetector.AnalyzeUnit);   // TD-1 2c: AContext-fuehrend (LeakyClasses aus Ctx)
   AddD3('DivByZero',       fkDivByZero,       TDivByZeroDetector.AnalyzeUnit);
@@ -732,6 +754,14 @@ begin
   // steht dann in der Datei (NOTWENDIGE Bedingung).
   AddD('LoopPastHighBound', fkLoopPastHighBound,
        TLoopPastHighBoundDetector.AnalyzeUnit, ['count', 'length', 'high']);
+  // SCA204 + SCA205 (Charge N / FN, 2026-10-25): eine Unit, zwei Kinds. Anker
+  // SCA204 (Hint, nur strict/style); ohne ExtraKinds liefe der Detektor
+  // unter default/bugs-only (die nur SCA205 fuehren) gar nicht - und die
+  // Severity-Schwelle zaehlt die strengste der beiden (Error). Jeder Fund
+  // steht im Rumpf einer Funktion: 'function' ist NOTWENDIG.
+  AddD('FunctionNameResult', fkFunctionNameAsResult,
+       TFunctionNameResultDetector.AnalyzeUnit, ['function']);
+  gDetectors[Count - 1].ExtraKinds := [fkFunctionNameRecursion];
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
@@ -995,13 +1025,38 @@ begin
       AUnits.Add(F);
 end;
 
-procedure FillMissingMethodNames(Root: TAstNode;
+procedure FillMissingMethodNames(Root: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; FromIdx: Integer);
 // Line-basierte Detektoren (AttributeDuplicate, TooLongLine, ...) setzen
 // MethodName = '' weil sie keinen AST-Methodenknoten kennen. Damit das Grid
 // (Haupt-Frame + File-Panel) trotzdem die einschliessende Methode zeigt,
 // loesen wir hier zentral Zeile -> Methode auf: fuer jeden Befund ohne
-// MethodName die Methode mit der GROESSTEN Decl-Zeile <= Befund-Zeile.
+// MethodName die Routine, deren Spanne [Line, EndLine] die Befund-Zeile
+// enthaelt - also die mit der GROESSTEN Kopfzeile <= Befund-Zeile, sofern
+// die Zeile nicht hinter ihrem Rumpf-Ende liegt.
+//
+// NUR ROUTINEN MIT RUMPF (EndLine > 0, gesetzt in uParser2.ParseMethodImpl).
+// Bis 2026-10-30 zaehlte jeder nkMethod-Knoten mit, ohne Ende: eine Zeile
+// ausserhalb jeder Routine bekam den Namen des letzten Kopfes davor.
+// Beobachtet an examples\ShowcaseDemo\uLegacyImport.pas:40 (SCA188 in
+// einem Kommentar zwischen const-Block und dem ersten Konstruktor) -
+// 'ImportFile', weil die INTERFACE-Deklaration in Zeile 27 der letzte
+// Kopf davor war. Ebenso falsch: Kommentare zwischen zwei Routinen (bei
+// der vorigen), Klassen-Deklarationen, initialization/finalization und
+// der Programm-Hauptblock (bei der letzten Routine). Ausserhalb jeder
+// Routine bleibt MethodName jetzt leer.
+//
+// Geschachtelte Routinen stehen nicht im AST (uParser2 verwirft sie nach
+// dem Parsen), ihre Zeilen liegen in der Spanne der aeusseren - Zuordnung
+// zur aeusseren wie bisher. Kopfzeile, Deklarationsteil (var/const/label)
+// und die Zeile des schliessenden 'end' gehoeren zur Routine.
+//
+// NUR FUNDE DIESER DATEI (FileName = die Datei, deren AST Root ist). Der
+// DFM-Durchlauf (uDfmAnalysisRunner, ein Detektor dieses Laufs) meldet
+// seine Funde auf der .dfm/.lfm, SCA194/195 auf fremden Units - deren
+// Zeilennummern gehoeren nicht zu diesem AST. Bis 2026-10-30 bekamen sie
+// trotzdem einen Namen aus der .pas (z.B. SCA025 auf Unit1.dfm:85 ->
+// 'TForm1.btnNavHomePaint'); jetzt bleiben sie leer.
 //
 // FindAll(nkMethod) liefert eine eigene Kopie (Caller-owned) - Sortieren +
 // Freigeben sind sicher. Greift nur wenn ueberhaupt ein leerer MethodName im
@@ -1010,6 +1065,12 @@ var
   Methods : TList<TAstNode>;
   i, Ln   : Integer;
   NeedFill: Boolean;
+
+  function IsOwnEmpty(F: TLeakFinding): Boolean;
+  begin
+    Result := (F.MethodName = '') and (F.Kind <> fkFileReadError)
+              and SameText(F.FileName, FileName);
+  end;
 
   function MethodNameForLine(L: Integer): string;
   var lo, hi, mid, found: Integer;
@@ -1022,21 +1083,29 @@ var
       if Methods[mid].Line <= L then begin found := mid; lo := mid + 1; end
       else hi := mid - 1;
     end;
-    if found >= 0 then Result := Methods[found].Name;
+    // Nur der Kandidat mit der groessten Kopfzeile wird geprueft, kein
+    // Rueckwaertslauf: Spannen ueberlappen nur nach der IFDEF-Body-
+    // Recovery des Parsers, und dort ist das Ende der aeusseren Routine
+    // ohnehin unzuverlaessig - leer ist dann die ehrlichere Antwort.
+    if (found >= 0) and (L <= Methods[found].EndLine) then
+      Result := Methods[found].Name;
   end;
 
 begin
   if (Root = nil) or (Results = nil) then Exit;
   NeedFill := False;
   for i := FromIdx to Results.Count - 1 do
-    if (Results[i].MethodName = '') and (Results[i].Kind <> fkFileReadError) then
+    if IsOwnEmpty(Results[i]) then
     begin NeedFill := True; Break; end;
   if not NeedFill then Exit;
 
   Methods := Root.FindAll(nkMethod);
   try
+    // namenlose raus, und alle ohne Rumpf-Spanne (Deklarationen,
+    // forward/external, kopflose Routinen - s. Kopfkommentar)
     for i := Methods.Count - 1 downto 0 do
-      if Methods[i].Name = '' then Methods.Delete(i);   // namenlose raus
+      if (Methods[i].Name = '') or (Methods[i].EndLine <= 0) then
+        Methods.Delete(i);
     if Methods.Count = 0 then Exit;
     Methods.Sort(TComparer<TAstNode>.Construct(
       function(const A, B: TAstNode): Integer
@@ -1045,8 +1114,7 @@ begin
       end));
     for i := FromIdx to Results.Count - 1 do
     begin
-      if Results[i].MethodName <> '' then Continue;
-      if Results[i].Kind = fkFileReadError then Continue;
+      if not IsOwnEmpty(Results[i]) then Continue;
       Ln := StrToIntDef(Results[i].LineNumber, 0);
       if Ln > 0 then
         Results[i].MethodName := MethodNameForLine(Ln);
@@ -1054,6 +1122,35 @@ begin
   finally
     Methods.Free;
   end;
+end;
+
+procedure AccumulateDetectorTicks(
+  ATimings: TDictionary<string, TPair<Int64, Integer>>;
+  const AName: string; AElapsedTicks: Int64);
+var
+  Acc: TPair<Int64, Integer>;
+begin
+  if ATimings = nil then
+    Exit;
+  if ATimings.TryGetValue(AName, Acc) then
+    ATimings.AddOrSetValue(AName,
+      TPair<Int64, Integer>.Create(Acc.Key + AElapsedTicks, Acc.Value + 1))
+  else
+    ATimings.Add(AName, TPair<Int64, Integer>.Create(AElapsedTicks, 1));
+end;
+
+function DetectorTicksToMs(ATicks, AFrequency: Int64): Double;
+begin
+  if AFrequency <= 0 then
+    Exit(0);
+  Result := (ATicks * 1000.0) / AFrequency;
+end;
+
+function DetectorTicksToWholeMs(ATicks, AFrequency: Int64): Int64;
+begin
+  if AFrequency <= 0 then
+    Exit(0);
+  Result := (ATicks * 1000) div AFrequency;
 end;
 
 procedure RunAllDetectors(Root: TAstNode; const FileName: string;
@@ -1108,7 +1205,10 @@ var
     Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
     if Lines = nil then Exit(False);
     try
-      SrcLow := LowerCase(Lines.Text);
+      // Perf Charge P4 (2026-10-25): Ganztext ueber den Context-Slot -
+      // SCA202 braucht denselben Text derselben Datei.
+      SrcLow := LowerCase(TDetectorUtils.LinesTextCached(Lines, AContext,
+        FileName));
     finally
       ReleaseLines(Lines, Cached);
     end;
@@ -1204,13 +1304,18 @@ begin
       // Scan-Schleife, auch kuenftige.
       on EStackExhausted do raise;
       on E: Exception do
+      begin
+        // Diagnose-Stapel (SCA_CRASH_STACK): Rahmen in die eigene Datei,
+        // NIE in den Meldetext (Fund-Identitaet). Aus = sofort zurueck.
+        CrashStackReport('Detektor ' + gDetectors[i].Name, FileName, E);
         if Assigned(AOnError) then
           // Stuerzt ein Detektor ab, ist die Exception-Klasse und die
           // modulrelative Adresse das Einzige, was ihn eingrenzt.
           AOnError(gDetectors[i].Name, DescribeException(E));
+      end;
     end;
     if HasTimeCb then
-      AOnTime(gDetectors[i].Name, Watch.ElapsedMilliseconds);
+      AOnTime(gDetectors[i].Name, Watch.ElapsedTicks);
   end;
 
   // ---- Post-Filter ----
@@ -1247,7 +1352,7 @@ begin
 
   // Einschliessende Methode fuer line-basierte Befunde (MethodName='')
   // nachtragen - zentral, damit Haupt-Grid UND File-Panel sie anzeigen.
-  FillMissingMethodNames(Root, Results, PrevCount);
+  FillMissingMethodNames(Root, FileName, Results, PrevCount);
 
   finally
     TokenPresent.Free;
@@ -1396,6 +1501,7 @@ begin
       on EStackExhausted do raise;
       on E: Exception do
       begin
+        CrashStackReport('Parser (parallel)', AFileName, E);
         SlotLog('  PARSER-FEHLER: ' + DescribeException(E));
         AddSlotError(AFileName, 'Lesefehler: ' + DescribeException(E));
         Exit;
@@ -2155,6 +2261,7 @@ begin
           on EStackExhausted do raise;
           on E: Exception do
           begin
+            CrashStackReport('Parser', FileName, E);
             LogLine('  PARSER-FEHLER: ' + DescribeException(E));
             AddFileError(FileName, 'Lesefehler: ' + DescribeException(E));
             Continue;
@@ -2273,28 +2380,23 @@ begin
 
         LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
         RunAllDetectors(Root, FileName, Results, AIncludeUsesCheck, Ctx,
-          procedure(const Name: string; ElapsedMs: Int64)
+          procedure(const Name: string; ElapsedTicks: Int64)
           var
-            Acc: TPair<Int64, Integer>;
+            SlowMs: Int64;
           begin
-            if (ElapsedMs > 500) and Assigned(CaptLogStream) then
+            // Logzeile unveraendert: ganze ms (abgeschnitten), Schwelle > 500.
+            // Eigener Name: ParseLeaks hat selbst ein ElapsedMs (Parse-Zeit).
+            SlowMs := DetectorTicksToWholeMs(ElapsedTicks, TStopwatch.Frequency);
+            if (SlowMs > 500) and Assigned(CaptLogStream) then
               try
                 CaptLogStream.WriteLine(Format('  Detektor %s: %d ms (langsam!)',
-                  [Name, ElapsedMs]));
+                  [Name, SlowMs]));
                 CaptLogStream.Flush;
               except end;
             // Per-Detector-Timing aggregieren wenn Accumulator vom Caller
-            // bereitgestellt wurde. Spart einem CLI-Konsumenten den eigenen
-            // AOnTime-Pfad zu bauen.
-            if Assigned(gDetectorTimings) then
-            begin
-              if gDetectorTimings.TryGetValue(Name, Acc) then
-                gDetectorTimings.AddOrSetValue(Name,
-                  TPair<Int64, Integer>.Create(Acc.Key + ElapsedMs, Acc.Value + 1))
-              else
-                gDetectorTimings.Add(Name,
-                  TPair<Int64, Integer>.Create(ElapsedMs, 1));
-            end;
+            // bereitgestellt wurde (nil -> No-Op). Spart einem CLI-
+            // Konsumenten den eigenen AOnTime-Pfad zu bauen.
+            AccumulateDetectorTicks(gDetectorTimings, Name, ElapsedTicks);
           end,
           procedure(const Name, ErrMsg: string)
           begin

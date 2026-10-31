@@ -86,6 +86,17 @@ type
     Target : string;
   end;
 
+  // SCA085/SCA139: was der Text ueber einen Namen beweist
+  // (TRdxSimpleFixes.VariableProof): nichts, Parameter/lokale Variable/
+  // Result einer umschliessenden Routine, Feld der eigenen Klasse, Variable
+  // auf Unit-Ebene.
+  TRdxVarProofKind = (vpNone, vpLocal, vpField, vpGlobal);
+
+  TRdxVarProof = record
+    Kind    : TRdxVarProofKind;
+    TypeLow : string;   // der deklarierte Typ, klein ('' = untypisiert)
+  end;
+
   // Die Planer der einfachen Hilfen: Zeilen und Token, ohne Parser.
   TRdxSimpleFixes = class
   public
@@ -105,14 +116,74 @@ type
       out AEdits: TArray<TRdxEdit>; out AName: string;
       out AReason: string): Boolean; static;
 
-    // True, wenn in der Routine um ALine vor dieser Zeile ein 'with' steht -
-    // ein Name kann dort ein Member des with-Ausdrucks sein.
+    // True, wenn ALine im Rumpf eines 'with' liegt (TRdxTypeProof.
+    // InWithBody ab dem ersten Code-Token der Zeile) oder auf ALine selbst
+    // ein 'with' steht - ein Name kann dort ein Member des with-Ausdrucks
+    // sein. Bis zum Realwelt-Test rwE30 sperrte jedes 'with' vor der Zeile
+    // in der Routine, auch eines, dessen Rumpf laengst zu Ende war, und eines
+    // in einer verschachtelten Routine davor (uPSCompiler.pas, CheckFurther:
+    // 40 unnoetige SCA085-Sperren). Der Name bleibt - die Aufrufer im Laeufer
+    // fragen weiter "with um die Zeile?".
     class function WithBefore(AMap: TRdxCodeMap; ALine: Integer): Boolean; static;
+    // SCA085/SCA139 (rwE30): ist AName an ALine nach dem Text eine Variable?
+    // vpLocal: Parameter, lokale Variable oder Result einer umschliessenden
+    // Routine, auch einer verschachtelten (TRdxTypeProof.LocalBinding - der
+    // Quellstellen-Dienst kennt verschachtelte Routinen nicht); sie
+    // verdeckt eine gleichnamige Property der Unit. Sonst, wenn keine
+    // umschliessende Routine den Namen deklariert: vpField, ein Feld der
+    // Klasse der aeussersten Methode (OwnFieldType - auch aus einer
+    // verschachtelten Routine, auch in einem bedingten Abschnitt); vpGlobal,
+    // eine Variable auf Unit-Ebene (UnitVarType, auch threadvar und 'X: T =
+    // nil') - in einer Methode nur, wenn die Unit kein Feld, keine Property
+    // und keine Routine dieses Namens deklariert und die Klasse nicht von
+    // einer Klasse der Delphi-Quellen erbt (ein geerbtes Member verdeckte das
+    // Global; Pin missed R2(3)). GRENZE: eine fremde Kundenklasse als
+    // Vorfahr koennte ein gleichnamiges Member tragen - der Code 'X.Free'
+    // meinte dann dieses, FreeAndNil(X) ebenso (Feld) bzw. scheitert beim
+    // Uebersetzen (Property). with prueft der Aufrufer vorher (WithBefore).
+    // Seit rwE31 mit AUnitFile (die Datei von AMap, '' = unbekannt) auch
+    // vpGlobal, wenn diese Unit den Namen gar nicht deklariert und eine
+    // Unit ihrer uses-Klauseln NEBEN der Datei ihn im interface-Teil als
+    // Variable deklariert (TRdxTypeProof.NeighbourVarType; HeidiSQL
+    // main.pas:2778 'frmPreferences' aus preferences.pas) - dieselben
+    // Bedingungen wie fuer ein Global dieser Unit.
+    class function VariableProof(AMap: TRdxCodeMap; ALine: Integer;
+      const AName: string;
+      const AUnitFile: string = ''): TRdxVarProof; static;
     // True, wenn in der Routine um ALine vor dieser Zeile 'var AName :='
     // steht: eine Inline-Variable ohne Typangabe, die DeclaredTypeOf nicht
     // kennt.
     class function DeclaresInlineVar(AMap: TRdxCodeMap; ALine: Integer;
       const AName: string): Boolean; static;
+    // SCA085/SCA139 (rwE33 Stufe 5, Dev-Cpp InstallWizards.pas:684): die
+    // Aufrufe von AName im Code, die sicher die Routine auf Unit-Ebene
+    // meinen, in Textreihenfolge - unqualifiziert (kein '.' und kein
+    // 'inherited' davor), mit '(' dahinter, nicht im Rumpf eines with und
+    // nicht auf einer Zeile mit 'with' (WithBefore: AName koennte dort ein
+    // Member sein). Kommentare, Strings und Direktiven tragen keine Token.
+    // Leer, wenn die Datei selbst eine Routine AName deklariert
+    // (DeclaresRoutine, auch als Methode) oder AName irgendwo im Code vor
+    // ':', '=', ',' bzw. ':=' steht (Feld, Variable, Parameter, Property,
+    // Konstante 'FreeAndNil: procedure(..)' - Review e/HilfeFixU, MINOR 2):
+    // ein Aufruf bewiese dann nichts. Ob der Aufruf dort uebersetzt wird,
+    // wo er gebraucht wird, prueft der Aufrufer (TRdxPlacesRunner.
+    // CoveringPlace), ob er dasselbe bindet wie die Stelle CallsBindingAt.
+    class function UnqualifiedCalls(AMap: TRdxCodeMap;
+      const AName: string): TArray<TRdxToken>; static;
+    // Die Aufrufe aus UnqualifiedCalls, die AName so binden wie die Stelle
+    // ALine (Review e/HilfeFixU, MINOR 1): keine umschliessende Routine
+    // deklariert AName (TRdxTypeProof.LocalBinding = lkNone, am Aufruf und
+    // an ALine), und der Aufruf steht in einer freien Routine bzw. auf
+    // Unit-Ebene oder in einer Methode DERSELBEN Klasse wie ALine (Klasse
+    // aus dem Kopf der aeussersten Routine, 'procedure TKlasse.X'). Ein
+    // Aufruf in einer Methode von TA kann ein geerbtes oder Helper-Member
+    // FreeAndNil einer fremden Unit meinen - an einer Stelle in einer freien
+    // Routine oder in TB fehlte es (E2003). Die Gegenrichtung (Aufruf frei,
+    // Stelle in einer Methode) bleibt: dort riefe auch die uses-Ergaenzung
+    // das Member. GRENZE: ein fremdes Member AName der Klasse der Stelle
+    // sieht der Text nicht (wie vorher mit uses-Ergaenzung).
+    class function CallsBindingAt(AMap: TRdxCodeMap; const AName: string;
+      ALine: Integer): TArray<TRdxToken>; static;
 
     // ---- Editorhilfen Stufe 2, Rest (Nico 2026-10-10: "baue weitere") ----
 
@@ -266,6 +337,9 @@ const
   SPAN_074 = 'sca074';
   SPAN_087 = 'sca087';
   SPAN_139 = 'sca139';
+  // Dahinter ist ein Name deklariert oder zugewiesen, nicht aufgerufen
+  // (UnqualifiedCalls).
+  DECL_AFTER: array[0..3] of string = (':', '=', ',', ':=');
   // Die Code-Stuecke der Gruende "<Code> steht nicht mehr an der gemeldeten
   // Stelle" (MsgNoLongerAtReportedPlace, uRdxText) - Quelltext, keine
   // Uebersetzung.
@@ -329,6 +403,10 @@ const
     'constructor', 'destructor');
   R_FREE_COMMENT  = 'comment in the expression X.Free;';
   R_NOT_NIL_LINE  = 'the next line is not "X := nil;"';
+  // Ein Kommentar der nil-Zeile, der das nennt, wandert nicht (rwE30).
+  FREEANDNIL_WORD = 'FreeAndNil';
+  // Seit welcher Delphi-Version SysUtils.FreeAndNil kennt.
+  FREEANDNIL_SINCE_DELPHI = 5;
 
 // Steht ab S[AAt] das Wort AWord (Gross/Klein egal, rechts kein
 // Bezeichnerzeichen)?
@@ -483,6 +561,149 @@ begin
   Result := MatchFreeCall(Code, 1, NameEnd, FreeEnd, SemiCol);
 end;
 
+// Steht T fuer eine Anweisung, die nur bedingt laeuft - then, else, do
+// oder eine case-Marke davor?
+function IsBranchHead(const T: TRdxToken): Boolean;
+begin
+  Result := (T.Low = 'then') or (T.Low = 'else') or (T.Low = 'do')
+    or (T.Low = ':');
+end;
+
+const
+  // So viele Stellen prueft DirectiveMayGuard hoechstens; darueber: sperren.
+  MAX_GUARD_PLACES = 64;
+
+// Kann die Anweisung an (ALine, ACol) in EINER Konfiguration der bedingten
+// Uebersetzung direkt hinter then/else/do bzw. einer case-Marke stehen?
+// Gelesen werden die Direktiven zwischen dem Token davor und der Stelle
+// (rueckwaerts): eine oeffnende ({$IF..}) laesst die Stelle in ihrem Zweig -
+// sie gilt dann zusammen mit der nil-Zeile; ein {$ELSE}/{$ELSEIF} schliesst
+// den Zweig davor aus - Vorgaenger ist dann das Token vor dem oeffnenden
+// {$IF..}; ein {$ENDIF}/{$IFEND} laesst seinen Block zu oder nicht -
+// Vorgaenger ist das Token davor (schon geprueft), das vor jedem
+// {$ELSE}-Trenner des Blocks oder das vor dem oeffnenden {$IF..}. Jede
+// solche Stelle wird ebenso geprueft (Arbeitsliste). Ein Include ({$I x})
+// kann Code bringen - sperren, ebenso ein Block ohne Oeffner oder mehr als
+// MAX_GUARD_PLACES Stellen. Andere Direktiven ({$R-}, {$DEFINE X}) bringen
+// keinen Code. Bis zum Realwelt-Test rwE30 sperrte JEDE Direktive zwischen
+// dem Token davor und X.Free; - auch ein abgeschlossener Einzeiler
+// '{$IFOPT D+}SendDebug(..);{$ENDIF}' oder ein Zweig, in dem Free und nil
+// zusammen stehen ('{$ELSE} Temp.Free; Temp := nil; {$ENDIF}').
+function DirectiveMayGuard(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
+var
+  DLine, DCol : array of Integer;
+  DWord       : array of string;
+  DInc        : array of Boolean;
+  WLine, WCol : array of Integer;
+  n, nw, iw   : Integer;
+  Li, Co      : Integer;
+  k, m        : Integer;
+  Depth       : Integer;
+  Arg         : Boolean;
+  Over        : Boolean;   // mehr Stellen als MAX_GUARD_PLACES
+  Prev        : TRdxToken;
+  CL, CC      : Integer;
+
+  procedure Push(ALi, ACo: Integer);
+  begin
+    if nw >= MAX_GUARD_PLACES then
+    begin
+      Over := True;
+      Exit;
+    end;
+    WLine[nw] := ALi;
+    WCol[nw] := ACo;
+    Inc(nw);
+  end;
+
+  // Liegt Direktive Nr. AIdx hinter dem Token ATok?
+  function AfterTok(AIdx: Integer; const ATok: TRdxToken): Boolean;
+  begin
+    Result := (ATok.Low = '') or (DLine[AIdx] > ATok.Line)
+      or ((DLine[AIdx] = ATok.Line) and (DCol[AIdx] >= ATok.EndCol));
+  end;
+
+begin
+  Result := True;
+  // Alle Direktiven vor der Stelle, in Textreihenfolge.
+  n := 0;
+  SetLength(DLine, 16);
+  SetLength(DCol, 16);
+  SetLength(DWord, 16);
+  SetLength(DInc, 16);
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co)
+        and ((Li < ALine) or ((Li = ALine) and (Co < ACol))) do
+  begin
+    if n = Length(DLine) then
+    begin
+      SetLength(DLine, n * 2);
+      SetLength(DCol, n * 2);
+      SetLength(DWord, n * 2);
+      SetLength(DInc, n * 2);
+    end;
+    DLine[n] := Li;
+    DCol[n] := Co;
+    DWord[n] := DirectiveWord(AMap, Li, Co, Arg);
+    DInc[n] := IncludeFileAt(AMap, Li, Co) <> '';
+    Inc(n);
+    Inc(Co);
+  end;
+  SetLength(WLine, MAX_GUARD_PLACES);
+  SetLength(WCol, MAX_GUARD_PLACES);
+  nw := 0;
+  Over := False;
+  Push(ALine, ACol);
+  iw := 0;
+  while iw < nw do
+  begin
+    CL := WLine[iw];
+    CC := WCol[iw];
+    Inc(iw);
+    Prev := PrevToken(AMap, CL, CC);
+    if IsBranchHead(Prev) then
+      Exit;
+    // Die Direktiven zwischen Prev und der Stelle, die letzte zuerst.
+    k := n - 1;
+    while (k >= 0) and ((DLine[k] > CL) or ((DLine[k] = CL) and (DCol[k] >= CC))) do
+      Dec(k);
+    while (k >= 0) and AfterTok(k, Prev) do
+    begin
+      if DInc[k] then
+        Exit;
+      if (DWord[k] = 'else') or (DWord[k] = 'elseif')
+         or InList(DWord[k], COND_CLOSERS) then
+      begin
+        // Der oeffnende Partner und die Trenner seines Blocks.
+        Depth := 0;
+        m := k - 1;
+        while m >= 0 do
+        begin
+          if InList(DWord[m], COND_CLOSERS) then
+            Inc(Depth)
+          else if InList(DWord[m], COND_OPENERS) then
+          begin
+            if Depth = 0 then
+              Break;
+            Dec(Depth);
+          end
+          else if (Depth = 0) and ((DWord[m] = 'else') or (DWord[m] = 'elseif')) then
+            Push(DLine[m], DCol[m]);
+          Dec(m);
+        end;
+        if m < 0 then
+          Exit;   // kein Oeffner vor der Stelle
+        Push(DLine[m], DCol[m]);
+        if Over then
+          Exit;
+      end;
+      Dec(k);
+    end;
+  end;
+  Result := False;
+end;
+
 // Zeile ALine: erste Anweisung 'X.Free;' - wie
 // uFreeAndNilHint.ExtractFreeReceiver, aber auf der Code-Sicht -, dahinter
 // hoechstens ein //-Kommentar, und nicht allein hinter then/else/do oder
@@ -525,8 +746,11 @@ begin
     Exit(_('X.Free; is the statement after "%s" - the nil would become '
       + 'conditional', [Prev.Low]));
   // 'if A then {$IFDEF LOG}Log;{$ENDIF} X.Free;': ohne LOG steht X.Free;
-  // allein hinter 'then' - die Sperre oben saehe nur das ';' von Log.
-  if DirectiveBetween(AMap, Prev, ALine, AColX) then
+  // allein hinter 'then' - die Sperre oben saehe nur das ';' von Log. Seit
+  // rwE30 nur, wenn eine Konfiguration das wirklich so stellt
+  // (DirectiveMayGuard).
+  if DirectiveBetween(AMap, Prev, ALine, AColX)
+     and DirectiveMayGuard(AMap, ALine, AColX) then
     Result := _('compiler directive before X.Free; - the statement before '
       + 'it does not always apply');
 end;
@@ -555,8 +779,9 @@ class function TRdxSimpleFixes.FreeAndNilFix(AMap: TRdxCodeMap;
   ALine: Integer; out AEdits: TArray<TRdxEdit>; out AName: string;
   out AReason: string): Boolean;
 var
-  L, N                   : string;
+  L, N, Code, Comment    : string;
   ColX, NameEnd, FreeEnd : Integer;
+  SemiCol, Slash         : Integer;
 begin
   Result := False;
   AEdits := nil;
@@ -569,24 +794,67 @@ begin
     Exit;
   end;
   AReason := CheckFreeLine(AMap, ALine, ColX, NameEnd, FreeEnd);
-  if AReason <> '' then Exit;
   L := AMap.Raw(ALine);
-  // Zeile i+1: genau 'X := nil;', ohne Kommentar.
+  // Der Name auch fuer eine Sperre hinter dem Treffer - der Menuetext
+  // nennt sonst 'FreeAndNil(X)' (Realwelt-Test rwE30: GX_ClassBrowser,
+  // FileView, JvLookup ...).
+  if MatchFreeCall(L, ColX, NameEnd, FreeEnd, SemiCol) then
+    AName := Copy(L, ColX, NameEnd - ColX);
+  if AReason <> '' then Exit;
+  // FreeAndNil gibt es ab Delphi 5: ein Zweig nur fuer aeltere Compiler
+  // ('{$IFNDEF GX_VER130_up}', '{$IFNDEF WIN32}') sperrt (rwE30,
+  // GX_Actions.pas:315, JvDBCtrl.pas:1089).
+  AReason := TRdxTypeProof.OldCompilerBranchReason(AMap, ALine,
+    FREEANDNIL_SINCE_DELPHI);
+  if AReason <> '' then Exit;
+  // Zeile i+1: genau 'X := nil;', dahinter hoechstens ein //-Kommentar.
   N := AMap.Raw(ALine + 1);
-  if AMap.HasNonCode(ALine + 1, 1, Length(N)) then
+  Code := N;
+  Comment := '';
+  Slash := AMap.LineCommentCol(ALine + 1);
+  if Slash > 0 then
+  begin
+    Code := Copy(N, 1, Slash - 1);
+    Comment := TrimRight(Copy(N, Slash, MaxInt));
+  end;
+  if AMap.HasNonCode(ALine + 1, 1, Length(Code)) then
   begin
     AReason := _('comment or string in the nil line');
     Exit;
   end;
-  AReason := CheckNilLine(N, Copy(L, ColX, NameEnd - ColX));
+  AReason := CheckNilLine(Code, Copy(L, ColX, NameEnd - ColX));
   if AReason <> '' then Exit;
+  // Ein leerer Kommentar ('//') geht mit der Zeile, ein Text wandert an
+  // das Ende der FreeAndNil-Zeile ('frmPreferences := nil; // Important in
+  // SetupSynEditors', HeidiSQL main.pas, rwE30) - ausser er nennt
+  // FreeAndNil (dann ist die Reihenfolge vermutlich Absicht) oder die
+  // Free-Zeile traegt schon einen.
+  if Trim(Copy(Comment, 3, MaxInt)) = '' then
+    Comment := ''
+  else if ContainsText(Comment, FREEANDNIL_WORD)
+     or (AMap.LineCommentCol(ALine) > 0) then
+  begin
+    AReason := _('comment or string in the nil line');
+    Exit;
+  end;
 
-  AName := Copy(L, ColX, NameEnd - ColX);
   SetLength(AEdits, 2);
-  // E1: 'X.Free' -> 'FreeAndNil(X)'; ';' und ein Kommentar bleiben stehen.
-  AEdits[0].Span := TRefactorSpan.Make(SPAN_085, ALine, ColX, ALine, FreeEnd);
-  AEdits[0].Expected := Copy(L, ColX, FreeEnd - ColX);
-  AEdits[0].NewText  := 'FreeAndNil(' + AName + ')';
+  // E1: 'X.Free' -> 'FreeAndNil(X)'; ';' und ein Kommentar bleiben stehen,
+  // der Kommentar der nil-Zeile kommt dahinter.
+  if Comment = '' then
+  begin
+    AEdits[0].Span := TRefactorSpan.Make(SPAN_085, ALine, ColX, ALine, FreeEnd);
+    AEdits[0].Expected := Copy(L, ColX, FreeEnd - ColX);
+    AEdits[0].NewText  := 'FreeAndNil(' + AName + ')';
+  end
+  else
+  begin
+    AEdits[0].Span := TRefactorSpan.Make(SPAN_085, ALine, ColX, ALine,
+      Length(L) + 1);
+    AEdits[0].Expected := Copy(L, ColX, MaxInt);
+    AEdits[0].NewText  := 'FreeAndNil(' + AName + ')'
+      + TrimRight(Copy(L, FreeEnd, MaxInt)) + ' ' + Comment;
+  end;
   // E2: die nil-Zeile samt Zeilenende.
   AEdits[1].Span := TRefactorSpan.Make(SPAN_085, ALine + 1, 1, ALine + 2, 1);
   AEdits[1].Expected := N + #10;
@@ -635,12 +903,156 @@ var
   T : TRdxToken;
 begin
   Result := False;
-  T := NextToken(AMap, RoutineStartLine(AMap, ALine), 1);
-  while (T.Low <> '') and (T.Line < ALine) do
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  T := NextToken(AMap, ALine, 1);
+  if T.Low = '' then
+    Exit;
+  if TRdxTypeProof.InWithBody(AMap, T) then
+    Exit(True);
+  // Ein 'with' auf der Zeile selbst ('with X do Y.Free;') - der Lauf oben
+  // beginnt VOR ihrem ersten Token. Vorsichtig jedes, auch eines hinter
+  // der gefragten Anweisung.
+  while (T.Low <> '') and (T.Line = ALine) do
   begin
-    if T.Low = 'with' then
+    if (T.Low = 'with') and IsKeywordAfter(T, Before(AMap, T)) then
       Exit(True);
     T := After(AMap, T);
+  end;
+end;
+
+class function TRdxSimpleFixes.UnqualifiedCalls(AMap: TRdxCodeMap;
+  const AName: string): TArray<TRdxToken>;
+var
+  Low     : string;
+  T, P, N : TRdxToken;
+begin
+  Result := nil;
+  if (AName = '') or TRdxTypeProof.DeclaresRoutine(AMap, AName) then
+    Exit;
+  Low := LowerCase(AName);
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), Low);
+  while T.Low <> '' do
+  begin
+    if T.Low = Low then
+    begin
+      P := Before(AMap, T);
+      N := After(AMap, T);
+      // 'FreeAndNil: procedure(..)', 'FreeAndNil = ..', 'A, FreeAndNil: T',
+      // 'FreeAndNil := ..': der Name ist hier auch etwas anderes.
+      if InList(N.Low, DECL_AFTER) then
+        Exit(nil);
+      if (N.Low = '(') and (P.Low <> '.') and (P.Low <> 'inherited')
+         and not WithBefore(AMap, T.Line) then
+        AddToken(Result, T);
+    end;
+    T := NextTokenOnLineWith(AMap, T, Low);
+  end;
+end;
+
+// Die Klasse der aeussersten Routine um die Stelle (LocalBinding:
+// 'TFoo.Bar' -> 'TFoo'); '' in einer freien Routine oder auf Unit-Ebene.
+function ClassOfBinding(const AFind: TRdxLocalFind): string;
+var
+  P : Integer;
+begin
+  Result := '';
+  P := LastDelimiter('.', AFind.OuterName);
+  if (AFind.Routines > 0) and (P > 0) then
+    Result := Copy(AFind.OuterName, 1, P - 1);
+end;
+
+class function TRdxSimpleFixes.CallsBindingAt(AMap: TRdxCodeMap;
+  const AName: string; ALine: Integer): TArray<TRdxToken>;
+var
+  At, C     : TRdxToken;
+  Site, Use : TRdxLocalFind;
+  SiteClass : string;
+  UseClass  : string;
+begin
+  Result := nil;
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  At := NextToken(AMap, ALine, 1);
+  if (At.Low = '') or (At.Line <> ALine) then
+    Exit;
+  Site := TRdxTypeProof.LocalBinding(AMap, At, AName);
+  if Site.Kind <> lkNone then
+    Exit;
+  SiteClass := ClassOfBinding(Site);
+  for C in UnqualifiedCalls(AMap, AName) do
+  begin
+    Use := TRdxTypeProof.LocalBinding(AMap, C, AName);
+    if Use.Kind <> lkNone then
+      Continue;
+    UseClass := ClassOfBinding(Use);
+    if (UseClass = '') or SameText(UseClass, SiteClass) then
+      AddToken(Result, C);
+  end;
+end;
+
+class function TRdxSimpleFixes.VariableProof(AMap: TRdxCodeMap;
+  ALine: Integer; const AName: string;
+  const AUnitFile: string): TRdxVarProof;
+var
+  At        : TRdxToken;
+  Find      : TRdxLocalFind;
+  P         : Integer;
+  ClassPath : string;
+  Ty        : string;
+begin
+  Result := Default(TRdxVarProof);
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+    Exit;
+  At := NextToken(AMap, ALine, 1);
+  if (At.Low = '') or (At.Line <> ALine) then
+    Exit;
+  Find := TRdxTypeProof.LocalBinding(AMap, At, AName);
+  if Find.Kind = lkVar then
+  begin
+    Result.Kind := vpLocal;
+    Result.TypeLow := Find.TypeLow;
+    Exit;
+  end;
+  if Find.Kind <> lkNone then
+    Exit;
+  P := LastDelimiter('.', Find.OuterName);
+  if (Find.Routines > 0) and (P > 0) then
+  begin
+    // In einer Methode (auch verschachtelt darin): erst das eigene Feld,
+    // dann ein Global nur ohne Namensvetter in der Klasse bzw. der Unit.
+    ClassPath := Copy(Find.OuterName, 1, P - 1);
+    Ty := TRdxTypeProof.OwnFieldType(AMap, ClassPath, AName);
+    if Ty <> '' then
+    begin
+      Result.Kind := vpField;
+      Result.TypeLow := Ty;
+      Exit;
+    end;
+    if (TRdxTypeProof.FieldTypeOf(AMap, AName) <> '')
+       or TRdxTypeProof.DeclaresProperty(AMap, AName)
+       or TRdxTypeProof.DeclaresRoutine(AMap, AName)
+       or TRdxTypeProof.RtlAncestorOrUnknown(AMap, ClassPath, AName) then
+      Exit;
+  end;
+  // Ausserhalb einer Methode (freie Routine, initialization/finalization,
+  // Hauptprogramm) gibt es kein Self: ein zuweisbarer Name ohne lokale
+  // Deklaration ist eine Variable einer Unit - bewiesen nur die dieser.
+  Ty := TRdxTypeProof.UnitVarType(AMap, AName);
+  // rwE31: ein Global einer Unit neben der Datei - nur, wenn diese Unit
+  // den Namen weder als Variable noch sonst deklariert (sie verdeckte
+  // jede andere Unit).
+  if (Ty = '') and (AUnitFile <> '')
+     and (TRdxTypeProof.FieldTypeOf(AMap, AName) = '')
+     and not TRdxTypeProof.DeclaresProperty(AMap, AName)
+     and not TRdxTypeProof.DeclaresRoutine(AMap, AName)
+     and (TRdxTypeProof.DeclaredTypeKind(AMap, AName) = '')
+     and not DeclaresAfter(AMap, ['const', 'resourcestring'], AName) then
+    Ty := TRdxTypeProof.NeighbourVarType(AMap, AUnitFile, AName);
+  if Ty <> '' then
+  begin
+    Result.Kind := vpGlobal;
+    Result.TypeLow := Ty;
   end;
 end;
 

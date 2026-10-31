@@ -78,6 +78,28 @@ begin
   Result := CharInSet(C, [' ', #9]);
 end;
 
+function TextAt(const Line: string; P: Integer; const W: string): Boolean; inline;
+// Perf Charge Q4 (2026-10-25): ersetzt SameText(Copy(Line, P, Length(W)), W).
+// Die Kopie lief an JEDER Codespalte jeder Zeile (for-Pruefung) - mit dem
+// Vorfilter 'for ' auf ~6x so vielen Dateien wie bis v0.9.18. W ist klein
+// geschrieben und besteht nur aus Buchstaben; gefaltet wird wie in
+// CompareText (nur A..Z), also bedeutungsgleich zu SameText. Der Aufrufer
+// garantiert P + Length(W) - 1 <= Length(Line) - genau die Bedingung, unter
+// der Copy vorher exakt Length(W) Zeichen lieferte.
+var
+  k : Integer;
+  c : Char;
+begin
+  for k := 1 to Length(W) do
+  begin
+    c := Line[P + k - 1];
+    if (c >= 'A') and (c <= 'Z') then
+      c := Char(Ord(c) or $20);
+    if c <> W[k] then Exit(False);
+  end;
+  Result := True;
+end;
+
 // Findet den ERSTEN for-to-Range-Verstoss einer Code-Zeile; der Caller ruft
 // je Quellzeile genau einmal. Stehen zwei Verstoesse auf EINER physischen
 // Zeile, meldet der Detektor nur den vorderen - an der Sonde gemessen
@@ -183,7 +205,7 @@ begin
     end;
 
     // Versuche, ein `for ... to ... do` ab Position i zu matchen.
-    if (not Result) and (i + 3 <= n) and SameText(Copy(Line, i, 3), 'for') and
+    if (not Result) and (i + 3 <= n) and TextAt(Line, i, 'for') and
        ((i = 1) or (not IsIdent(Line[i - 1]))) and
        ((i + 3 > n) or (not IsIdent(Line[i + 3]))) then
     begin
@@ -191,7 +213,7 @@ begin
       p := i + 3;
       while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       // Schleifenvariable - skip `var` Inline-Decl
-      if (p + 3 <= n) and SameText(Copy(Line, p, 3), 'var') and
+      if (p + 3 <= n) and TextAt(Line, p, 'var') and
          ((p + 3 > n) or (not IsIdent(Line[p + 3]))) then
       begin
         Inc(p, 3);
@@ -237,7 +259,7 @@ begin
       // Line[p + 2] existiert (p + 2 > n waere tot durch das erste
       // Guard); deshalb nur ein IsIdent-Check.
       while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
-      if not ((p + 2 <= n) and SameText(Copy(Line, p, 2), 'to') and
+      if not ((p + 2 <= n) and TextAt(Line, p, 'to') and
               not IsIdent(Line[p + 2])) then
       begin
         Inc(i); Continue;
@@ -267,7 +289,7 @@ begin
       // nicht. Genau der dominante Formatierungsfall (Body auf
       // Folgezeile) blieb dadurch ungemeldet.
       while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
-      if not ((p + 1 <= n) and SameText(Copy(Line, p, 2), 'do') and
+      if not ((p + 1 <= n) and TextAt(Line, p, 'do') and
               ((p + 2 > n) or not IsIdent(Line[p + 2]))) then
       begin
         // Range mehrzeilig - Konservativ: kein Match

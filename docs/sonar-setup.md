@@ -5,6 +5,8 @@ SonarCloud liefern. Wir konkurrieren nicht mit
 [SonarDelphi](https://github.com/integrated-application-development/sonar-delphi) —
 unsere Findings (mORMot-Leaks, DFM-Detektoren, sonarfremde Smells wie
 `ConcatToFormat` / `TautologicalBoolExpr`) ergänzen den SonarDelphi-Report.
+SonarDelphi ist dabei optional: SCA-Findings kommen auch ohne das Plugin ins
+Projekt.
 
 ---
 
@@ -34,7 +36,11 @@ sonar-scanner
 ```
 
 Im Sonar-Dashboard erscheinen die SCA-Findings unter Issues als
-`external_static-code-analyser:SCA<NNN>` neben den SonarDelphi-Findings.
+`external_static-code-analyser:SCA<NNN>`, neben den SonarDelphi-Findings,
+falls das Plugin mitläuft.
+
+Ohne `sonar-project.properties` und ohne SonarDelphi geht es über
+`sonar-upload.ps1`, siehe [Sonar-Projekt einrichten](#sonar-projekt-einrichten).
 
 ---
 
@@ -105,7 +111,7 @@ sonar.externalIssuesReportPaths=sca-findings.json
 | `--sonar-project <key>` | Project-Key überschreiben |
 | `--sonar-branch <name>` | Branch-Name für das `--sonar-init`-Template (`sonar.branch.name`). Der Findings-Export hat kein Branch-Feld — den Branch liest der `sonar-scanner` |
 | `--sonar-insecure` | Self-signed TLS-Cert akzeptieren |
-| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity zur Laufzeit **herabgestuft** wurde (Pfad-Überschreibung, Konfidenz). Standard: aus — siehe Kasten unten |
+| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity per Pfad-Überschreibung **herabgestuft** wurde (der Konfidenz-Deckel zählt nicht dazu). Standard: aus — siehe Kasten unten |
 | `--sonar-config <ini>` | Alternativer `analyser.ini`-Pfad |
 
 `--sonar-test` und `--sonar-init` sind **Standalone-Aktionen** und brauchen
@@ -124,6 +130,24 @@ in der Konsolenausgabe bleiben sie vollständig erhalten.
 
 **Hoch**gestufte Funde sind nie betroffen — sie gehen immer in den Report
 (mit der Katalog-Schwere, mehr gibt das Format nicht her).
+
+**Custom-Regeln** (`--custom-rules`): ihre Severity steht in der YAML-Regel
+selbst und ist der Maßstab – auch `severity: hint` gilt nicht als
+herabgestuft. Herabgestuft ist ein Custom-Fund nur, wenn eine
+Pfad-Überschreibung ihn unter seine YAML-Severity setzt; dann bleibt er wie
+jeder andere draußen. Jede Custom-Regel erscheint in Sonar
+unter eigenem Namen („User-defined custom rule PROJ001“) mit einem Impact nach
+ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
+
+**Konfidenz-Deckel ist keine Herabstufung:** die Evidenz-Politik deckelt
+Funde mit Konfidenz *medium* auf Warning (*low* auf Hint). Das zählt nicht
+als Herabstufung — solche Funde gehen in den Report. Bis Oktober 2026 galten
+sie als herabgestuft und fehlten: im Realwelt-Korpus 726 Funde, u. a. fast
+alle von SCA001, SCA003 und SCA004. Eine Regel, deren Funde die Politik
+schon mit der Standard-Konfidenz des Kinds deckelt, trägt in Sonar die
+gedeckelte Schwere als Impact (Warning → höchstens MEDIUM): SCA004 kommt als
+SECURITY/MEDIUM statt BLOCKER an. Mit `[Rules] EvidenceTiering=0` bleiben die
+Katalog-Impacts.
 
 Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
 einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
@@ -223,6 +247,126 @@ sonar.externalIssuesReportPaths=.sonar/external/
 
 ---
 
+## Sonar-Projekt einrichten
+
+Der Weg für SCA-Findings in ein neues SonarQube-Projekt, von oben nach unten
+abzuarbeiten. Er nutzt `sonar-upload.ps1` und läuft ohne das Java-Plugin
+SonarDelphi.
+
+1. **Voraussetzungen prüfen.** Der Server ist erreichbar und
+   `<host>/api/system/status` meldet `UP`. `sonar-scanner` ist installiert,
+   siehe `sonarHowto.md`, Abschnitt 0.1.
+
+2. **Projekt anlegen.** Im Web-UI *Create Project* → *manually*. Der Key muss
+   dem `ProjectKey` in der SCA-Konfiguration entsprechen. In den Project
+   Settings auf dem Server sind für diesen Weg keine Einträge nötig.
+
+3. **Token erzeugen.** Unter *My Account* → *Security* einen **User Token**
+   (`squ_...`) generieren. Der Name muss je Benutzer eindeutig sein, der Wert
+   wird nur einmal angezeigt. Badge-Token (`sqb_...` aus *Project Information*)
+   taugen nicht für Analysen; `--sonar-test` meldet damit `{"valid":false}`.
+
+4. **SCA konfigurieren.** Auf der
+   [Options-Seite](#tools--options--third-party--sonar-integration) Host,
+   Project Key und Bearer Token eintragen. Steht im Token-Feld der Platzhalter
+   oder ist es leer, bleibt der alte Token erhalten: zum Ersetzen das Feld
+   leeren und den neuen Wert einfügen. `sonar-upload.ps1` nimmt wie das
+   Werkzeug zuerst `SONAR_HOST_URL`, `SONAR_PROJECT_KEY` und `SONAR_TOKEN` aus
+   der Umgebung und für alles Übrige die `analyser.ini`.
+
+5. **Verbindung testen.** `analyser.exe --sonar-test` muss alle Stufen mit
+   `[OK]` und am Ende `Sonar connection healthy.` melden, siehe
+   [Beispiel-Output](#beispiel-health-check-output).
+
+6. **Report schreiben.** Reports für Sonar kommen aus der CLI, der Lauf sendet
+   nichts:
+
+   ```cmd
+   powershell -ExecutionPolicy Bypass -File StaticCodeAnalyserForm\scripts\sonar-scan.ps1 -ProjectPath <repo>
+   ```
+
+   Das Skript nimmt das Regel-Profil der IDE (`[Rules] IdeProfile` aus der
+   `analyser.ini`) und behält Test-Fixtures im Report, damit dieselben Findings
+   entstehen wie in der IDE. `-RuleProfile` und `-HideTestFixtures` weichen davon
+   ab. Einen unbekannten Profilnamen lehnt das Skript ab, die EXE selbst würde
+   damit ohne Fehler andere Regeln anwenden.
+
+   **Warum nicht aus dem Export-Menü:** GUI und CLI schreiben bei gleichen
+   Findings unterschiedliche Regel-Metadaten (Beschreibung,
+   `cleanCodeAttribute`, Impacts). Ein Wechsel des Wegs ändert in Sonar deshalb
+   Severities und Ratings, obwohl sich am Code nichts geändert hat.
+
+7. **Hochladen.** Im SCA-Repo in `cmd` zuerst als Probelauf, dann ohne `-DryRun`:
+
+   ```cmd
+   StaticCodeAnalyserForm\scripts\sonar-upload.cmd -ProjectPath <analyse-ordner> -JsonPath <analyse-ordner>\sca-findings.json -DryRun
+   StaticCodeAnalyserForm\scripts\sonar-upload.cmd -ProjectPath <analyse-ordner> -JsonPath <analyse-ordner>\sca-findings.json
+   ```
+
+   **`-ProjectPath` muss der Ordner sein, über den die Analyse lief.** Die Pfade
+   im Report sind relativ zu diesem Ordner. Existiert keiner davon, bricht das
+   Skript vor dem Scan ab; existiert nur ein Teil, warnt es und läuft weiter.
+   `-JsonPath` ist nötig, wenn der Report nicht als `sca-findings.json` im
+   `-ProjectPath` liegt.
+
+   Die Vorprüfung läuft auch mit `-DryRun` und sagt vorab, was der Scanner
+   verwerfen wird. Sie warnt je Grund mit Dateien, Findings und Beispielen,
+   bricht aber nie ab:
+
+   ```
+   Report:   1015 files, 1015 found under ProjectPath
+   Report:   309 of 1015 found files will be dropped by the scanner
+   WARNING: 106 report files (1067 findings) match sonar.exclusions, ...
+   WARNING: 135 report files (1421 findings) are in embedded git repos the scanner does not see ...: lib-a (105), tool-b (23), tool-c (7)
+   WARNING: 68 report files (302 findings) are gitignored in their repo, ...
+   ```
+
+   Jede Datei zählt einmal, geprüft wird in der Reihenfolge des Scanners: erst
+   die Ausschlussmuster, dann Git. Fehlt `git` oder ist `-ProjectPath` kein
+   Git-Repo, entfällt der Git-Teil, und eine Zeile `SCM check skipped: ...` sagt
+   das.
+
+   Die `.cmd` setzt `-DisableDelphi`. SonarDelphi läuft also nicht mit und
+   braucht keine Einstellungen.
+
+8. **Ergebnis prüfen.** `Upload complete` beweist keinen Import. Entscheidend
+   sind diese Zeilen im Scanner-Log:
+
+   ```
+   Imported N issues in M files
+   External issues ignored for N unknown files, including: ...
+   ```
+
+   Danach verarbeitet der Server die Analyse noch kurz im Hintergrund, erst dann
+   erscheinen die Issues im Dashboard.
+
+### Grenzen
+
+- **Pro Git-Repo ein Sonar-Projekt.** Das Skript nimmt den Key aus
+  `SONAR_PROJECT_KEY`, sonst aus der INI. Eine Analyse aus einem anderen Ordner
+  ersetzt den Stand im Projekt.
+- **Kein Scan eines Repos aus dem Elternordner.** Wird ein Oberordner analysiert,
+  landet auch der Quellcode aller Unterprojekte im Sonar-Projekt, und für die
+  Dateien eines eingebundenen Repos fehlt die Blame-Information. Sonar setzt dann
+  das Analysedatum als Entstehungsdatum, und jedes Issue dieser Dateien zählt als
+  neuer Code. Das Zeichen dafür ist die Warnung
+  `Missing blame information for N files`.
+- **Ausschlüsse.** Die Standard-Ausschlüsse von `sonar-upload.ps1`
+  (`**/lib/**`, `**/DUnitX-*/**` usw.) verwerfen Findings in diesen Pfaden.
+- **Eingebettete Git-Repos.** Ein Unterordner mit eigenem `.git`, der im Index
+  des Eltern-Repos nicht als Gitlink steht, ist für den Scanner unsichtbar: seine
+  Dateien zählen als `files ignored because of scm ignore settings`, ihre
+  Findings gehen verloren. Ein als Gitlink eingetragenes Repo wird dagegen
+  gescannt, samt seiner eigenen `.gitignore`. Belegt ist das über den Abgleich
+  der Scanner-Zähler in einem Lauf über einen Oberordner: 3 eingebettete Repos
+  fehlten, 1 Gitlink-Repo war vollständig da. Das Scanner-Log nennt keine
+  Einzeldateien; die Vorprüfung von `sonar-upload.ps1` tut das je Repo.
+- **Gitignorierte Dateien.** Sie fehlen ebenfalls, auch wenn SCA sie analysiert
+  hat. Das betrifft auch die `.gitignore` in Unterordnern und im Repo hinter
+  einem Gitlink.
+
+---
+
 ## MQR (Multi-Quality-Rating)
 
 Jede SCA-Rule trägt im Catalog [`rules/sca-rules.json`](../rules/sca-rules.json):
@@ -230,6 +374,13 @@ Jede SCA-Rule trägt im Catalog [`rules/sca-rules.json`](../rules/sca-rules.json
 - **`impacts[]`** — `{ softwareQuality, severity }` mit
   `softwareQuality ∈ {SECURITY, RELIABILITY, MAINTAINABILITY}` und
   `severity ∈ {BLOCKER, HIGH, MEDIUM, LOW, INFO}`
+
+**Mindestversion:** `BLOCKER` und `INFO` als Impact-Severity kennt SonarQube
+erst ab **10.8** (Server 2025.x, Community Build 24.12+). 10.3 bis 10.7
+erlauben laut Spezifikation nur `HIGH`/`MEDIUM`/`LOW`; ein Report mit
+`BLOCKER`/`INFO` ist dort ungültig (zu erwarten: der Scanner verwirft ihn
+ganz, am Server noch nicht beobachtet). Vor 10.3 versteht Sonar das Format mit
+`rules[]` gar nicht.
 
 Diese Felder landen automatisch in der Generic-Issue-Output. Sonar nutzt sie
 für das MQR-Dashboard. Beispiele:
@@ -255,6 +406,12 @@ fährt hoch. ~60s warten und retry.
 Web-UI rotieren (User > My Account > Security > Generate Tokens), neuen Wert
 in der INI / Env oder per CLI setzen.
 
+**`[FAIL] Token validation: 200` mit `{"valid":false}`** — Der Server akzeptiert
+den Token nicht, nennt aber keinen Grund. Möglich sind ein Badge-Token
+(`sqb_...`) oder ein Wert, den dieser Server nicht (mehr) kennt. Neuen User
+Token erzeugen und in den IDE-Optionen das Token-Feld erst leeren, sonst bleibt
+der alte Wert stehen.
+
 **`[FAIL] Project access: not found`** — Project existiert nicht oder Token
 hat keine Browse-Permission. Anlegen via Web-UI oder per API:
 
@@ -262,6 +419,20 @@ hat keine Browse-Permission. Anlegen via Web-UI oder per API:
 curl -u $env:SONAR_TOKEN: -X POST `
   "$env:SONAR_HOST_URL/api/projects/create?project=my-delphi-project&name=My+Delphi+Project"
 ```
+
+**`Imported 0 issues` oder `External issues ignored for N unknown files`** —
+Sonar findet die Dateien aus dem Report nicht im Scan-Ordner. Der Scanner muss
+in dem Ordner laufen, über den die Analyse lief (`sonar-upload.ps1 -ProjectPath`,
+siehe [Sonar-Projekt einrichten](#sonar-projekt-einrichten)). Einzelne Dateien
+fallen außerdem durch Ausschlüsse, `.gitignore` oder eingebettete Git-Repos weg,
+siehe [Grenzen](#grenzen). `sonar-upload.ps1 -DryRun` nennt sie vorab je Grund.
+
+**`Path to Delphi standardlibrary is invalid`** — Das Java-Plugin SonarDelphi
+sucht die Delphi-Standardbibliothek und bricht den Scanner ab. Ohne Angabe nimmt
+es `C:\Program Files (x86)\Embarcadero\Studio\22.0` und `VER350`. Entweder ohne
+Plugin hochladen (`sonar-upload.ps1 -DisableDelphi`, die `sonar-upload.cmd` setzt
+das schon) oder `sonar.delphi.installationPath` und
+`sonar.delphi.compilerVersion` auf die installierte Delphi-Version setzen.
 
 **SARIF + Sonar-Generic gleichzeitig** — Sonar dedupliziert die beiden nicht.
 Genau **ein** Report-Format auswählen (entweder
@@ -280,7 +451,8 @@ Diese Implementierung deckt **todo-sonar.md Phase 0 + A + B + C + D**:
 - ✅ Generic Issue Export (`--sonar-export`)
 - ✅ Project-Properties-Template (`--sonar-init`)
 - ✅ Tools>Options Sonar-Seite
-- ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue)
+- ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue): schreibt nur Dateien, der
+  Upload läuft separat über `sonar-scanner` bzw. `sonar-upload.ps1`
 - ❌ Pull-Mode für IDE — **nicht Teil des Produkts**. Die Engine (`uSonarPull`)
   war seit v0.9.1 implementiert, bekam nie eine UI-Anbindung und wurde 2026-08
   entfernt; sie steckte als ausgehender HTTP-Client mit Bearer-Token in jeder

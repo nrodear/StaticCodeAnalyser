@@ -4,10 +4,10 @@ unit uRdxCleanupFixes;
 // (Konzept_Editorhilfen_Recherche_2026-10-11, Abschnitt 6, Charge H3a):
 //   SCA070 CommentedOutCode: den auskommentierten Bereich loeschen - eine
 //          '//'-Zeile ganz, einen Kommentar hinter Code ab seiner Spalte
-//          (der Leerraum am Zeilenende geht mit), die Inhaltszeilen eines
-//          mehrzeiligen '{ }'/'(* *)' (41 % der Korpusfunde zeigen auf eine
-//          Inhaltszeile, nicht auf den Oeffner) - die Begrenzer nur, wenn
-//          der Kommentar danach leer ist.
+//          (der Leerraum am Zeilenende geht mit), einen mehrzeiligen
+//          '{ }'/'(* *)' immer GANZ samt Begrenzern (41 % der Korpusfunde
+//          zeigen auf eine Inhaltszeile, nicht auf den Oeffner): reicht er
+//          ueber den Fund hinaus, nur wenn auch der Rest Code ist.
 //   SCA053 UnusedLocalVar: die Deklaration der ungenutzten Variable
 //          loeschen - 'X: T;' samt Zeile (ein '//'-Kommentar dahinter mit,
 //          ausser er traegt einen Marker - dann bleibt er als eigene
@@ -33,9 +33,30 @@ unit uRdxCleanupFixes;
 // Zeilen R1..R1+N-1 ab (R1, C) ab - NICHT den ganzen Blockkommentar: ein
 // '{ ... }' ueber 200 Zeilen mit Leerzeilen darin ergibt mehrere Funde, und
 // Prosa vor oder hinter der Region hat der Detektor nicht als Code gemeldet.
-// Deshalb loescht die Hilfe nur die Region; die Begrenzer gehen erst mit,
-// wenn der Kommentar danach nur noch Leerraum traegt (der letzte Fund eines
-// Blocks raeumt auf). Ein Begrenzer wird nie halbiert.
+// Bis zur Fix-Charge nach dem Realworld-Test rwE29 loeschte die Hilfe nur
+// die Region und liess die Begrenzer stehen, solange der Kommentar danach
+// Text trug - 15 von 50 Stellen waren falsch: verstuemmelte Reste ('{ with
+// memEdit do }', 'begin' ohne 'end'), ein Off-by-one am Schliesser
+// ('(*' / 'break;*)' blieben, fmain.pas:240), zerstoerte Doku-Beispiele.
+// Seitdem loescht sie nur GANZE Kommentare (bzw. ganze '//'-Zeilen):
+// reicht der Kommentar ueber die Region hinaus, muss jede Zeile ausserhalb
+// leer oder eindeutig Code sein (CodePiece, strenger als der Detektor) -
+// dann geht der ganze Kommentar, sonst gibt es keine Hilfe (der Rest
+// bliebe als Torso stehen oder Prosa ginge mit). Seit der Fix-Runde 2 nach
+// dem Realworld-Test rwE30 (28 unnoetige Sperren) zaehlen dort auch ein
+// innerer Kommentar ('// IdentList', in '(* *)' ein '{ read X }' allein auf
+// der Zeile - ausser er sagt, woher der Code stammt oder warum er bleibt:
+// KEEP_WORDS), ein case-Zweig 'A:' unter 'case ... of' bzw. 'A: begin' und
+// ein Aufruf ohne ';' vor 'else' als Code; eine Prosazeile ohne
+// Kommentarzeichen sperrt weiter. Seit der Fix-Runde 3 (rwE31, 12
+// unnoetige Sperren) auch ein Aufruf ohne ';' vor end/until/finally/
+// except, ein Typkopf 'TName = class(TBase)' und eine Anweisung ueber
+// mehrere Zeilen (WrappedStatement: umgebrochener Aufruf 'CheckEquals' /
+// '(..., x);', Fortsetzung mit and/or, eine Aufzaehlung ueber Zeilen) und
+// eine anonyme Methode als Argument ('X(' / 'procedure'), eine entschaerfte
+// Direktive ohne '}' in einem '{ }' ('{$IFDEF MSWINDOWS') -
+// nur wenn die zusammengezogenen Zeilen Code-Form haben und keine zwei
+// gewoehnlichen Woerter nebeneinander stehen (ProseFree).
 //
 // GRUNDSATZ wie in uRdxSimpleFixes: lieber keine Hilfe als eine falsche -
 // der Planer prueft den Fund am aktuellen Text nach, statt dem Detektor zu
@@ -72,12 +93,17 @@ type
     // ALine loeschen. Gegenprobe: ab (ALine, C) bis zum Ende der letzten
     // Zeile nur Kommentar und Leerraum, die Spalte am Anfang eines
     // Kommentars bzw. einer Inhaltszeile, erste und letzte Zeile mit
-    // Code-Merkmal wie im Detektor. Keine Hilfe bei einer Direktive im
-    // Bereich, einem Doku-Kommentar ('///', '{*', '(**'), einem Kommentar
-    // vor dem ersten Code der Datei (Lizenz-/Kopfkommentar), 'noinspection'
-    // oder einem Absichtsmarker wie bei SCA019 im geloeschten Text und
-    // wenn mehrere Kommentare in der Region stehen und einer mit Text ueber
-    // sie hinausreicht (der Schnitt waere nicht zusammenhaengend).
+    // Code-Merkmal wie im Detektor. Geloescht werden immer ganze
+    // Kommentare; reicht einer ueber die Region hinaus, nur wenn sein Text
+    // dort leer oder Code ist (CodePiece; dazu innere Kommentare ohne
+    // Herkunfts-/Absichtswort, case-Zweige, ein Aufruf vor 'else' - s. Kopf
+    // der Unit). Keine Hilfe bei einer Direktive
+    // im Bereich, einem Doku-Kommentar ('///', '{*', '(**', eine Zeile mit
+    // fuehrendem '*' oder '<PRE>'), einem Kommentar vor dem ersten Code der
+    // Datei (Lizenz-/Kopfkommentar) oder direkt hinter 'unit X;' (Doku der
+    // Unit), 'noinspection' oder einem Absichtsmarker wie bei SCA019 im
+    // geloeschten Text und wenn ein Kommentar mit anderem Text ueber die
+    // Region hinausreicht (Prosa oder nicht eindeutiger Code).
     class function CommentedOutCode(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
@@ -143,6 +169,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,   // PosEx (WrapPiece, rwE31)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
@@ -197,6 +224,40 @@ const
   // FPC-Makro: '{$DEFINE M := X}' (MacroReason).
   MACRO_WORDS: array[0..1] of string = ('define', 'definec');
   MACRO_ASSIGN = ':=';
+  // SCA070, CodePiece: ein Wort allein auf der Zeile, das so nur Code ist.
+  CODE_SOLO_WORDS: array[0..21] of string = ('begin', 'end', 'else', 'try',
+    'finally', 'except', 'repeat', 'var', 'const', 'type', 'uses', 'label',
+    'resourcestring', 'threadvar', 'initialization', 'finalization',
+    'implementation', 'interface', 'private', 'protected', 'public',
+    'published');
+  // ... eine Steuerzeile: beginnt mit einem dieser Woerter ...
+  CODE_LEAD_WORDS: array[0..7] of string = ('if', 'while', 'for', 'with',
+    'case', 'else', 'end', 'on');
+  // ... und endet mit einem dieser ('if X then', 'end else begin').
+  CODE_TAIL_WORDS: array[0..6] of string = ('then', 'do', 'of', 'begin',
+    'else', 'try', 'repeat');
+  // SCA070: der Kopf einer Unit ('unit X;'), hinter dem ihre Doku steht.
+  UNIT_HEADS: array[0..3] of string = ('unit', 'program', 'library',
+    'package');
+  // SCA070, InnerComment: Woerter, mit denen ein Kommentar im
+  // auskommentierten Code sagt, woher er stammt oder warum er bleibt
+  // ('// reference implementation', '// Taken from ...', '// In case you
+  // use ...') - dann ist der Block dokumentiert, nicht vergessen.
+  KEEP_WORDS: array[0..15] of string = ('you', 'your', 'because',
+    'reference', 'example', 'sample', 'demo', 'keep', 'kept', 'taken', 'from',
+    'adapted', 'copied', 'see', 'note', 'why');
+  // SCA070, CallBeforeStop: vor diesen Woertern endet eine Anweisung ohne
+  // ';' ('Strings.Add(IntToStr(i))' / 'end;', rwE31 TestJclStrings.pas).
+  CALL_STOP_WORDS: array[0..4] of string = ('else', 'end', 'until',
+    'finally', 'except');
+  // SCA070, TypeHead: 'TName = class(TBase)' (rwE31 JclStreams.pas:107).
+  TYPE_HEAD_WORDS: array[0..4] of string = ('class', 'record', 'object',
+    'interface', 'dispinterface');
+  // SCA070, WrappedStatement: so viele Zeilen zieht sie hoechstens zusammen
+  // - und keinen Routinenkopf (WrapShape).
+  MAX_WRAP_LINES = 8;
+  WRAP_NOT_HEADS: array[0..7] of string = ('function', 'procedure',
+    'constructor', 'destructor', 'operator', 'property', 'class', 'method');
 
 type
   // SCA070: die Region der Meldung.
@@ -274,13 +335,6 @@ function SpanOf(const AFrom, ATo: TRdxTextPos;
 begin
   Result := TRefactorSpan.Make(ARole, AFrom.Line, AFrom.Col, ATo.Line,
     ATo.Col);
-end;
-
-// Steht von AFrom bis vor ATo nur Leerraum (Zeilenenden eingeschlossen)?
-function BlankText(AMap: TRdxCodeMap; const AFrom, ATo: TRdxTextPos): Boolean;
-begin
-  Result := not PosBefore(AFrom, ATo)
-    or (Trim(RangeText(AMap, SpanOf(AFrom, ATo, SPAN_070))) = '');
 end;
 
 { ---- CutEdit: loeschen und aufraeumen ---- }
@@ -384,8 +438,9 @@ var
   From : TRdxTextPos;
 begin
   // Beginnt der Schnitt hinter einem Zeilenende oder auf einer leeren Zeile
-  // (SCA070: '(*' allein auf der Zeile, der Kommentar bleibt), beginnt er
-  // auf der naechsten Zeile - das Zeilenende bleibt.
+  // (bis zur Fix-Charge rwE29 bei SCA070: '(*' allein auf der Zeile, der
+  // Kommentar blieb), beginnt er auf der naechsten Zeile - das Zeilenende
+  // bleibt.
   From := AFrom;
   while (From.Col > Length(AMap.Raw(From.Line))) and (From.Line < ATo.Line) do
     From := TextPos(From.Line + 1, 1);
@@ -569,29 +624,6 @@ begin
     [ARegion.Col]));
 end;
 
-// Die Sperren je Kommentar: Direktive, Doku, offenes Ende - und ein
-// Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar).
-function KindReason(AMap: TRdxCodeMap; const AList: TRdxCommentList): string;
-var
-  C : TRdxComment;
-begin
-  Result := '';
-  for C in AList do
-  begin
-    if C.Directive then
-      Exit(_('directive in the range (line %d) - it is active code, not a '
-        + 'comment', [C.Open.Line]));
-    if C.Doc then
-      Exit(_('documentation comment (///, {* or (**, line %d) - its sample '
-        + 'code stays', [C.Open.Line]));
-    if not C.IsClosed then
-      Exit(_('comment without an end up to the end of the file'));
-  end;
-  if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
-    Result := _('comment before the first code of the file (license or '
-      + 'header comment) - %s', [MsgDecideByHand]);
-end;
-
 // Backtick-Spannen ('`code`') entfernen - wie der Detektor
 // (StripBacktickCodeSpans): Doku zitiert dort Code.
 function StripBackticks(const S: string): string;
@@ -670,6 +702,84 @@ begin
     + 'end, no ":=", no begin/procedure/function)', [ALine]));
 end;
 
+// Die erste Zeile eines Blockkommentars in Doku-Form: sie beginnt mit '*'
+// (der Rand der CnPack- und JavaDoc-Koepfe, '*  type' ueber dem Beispiel)
+// oder traegt '<PRE>' ('{ |<PRE>' der CnPack-Koepfe); 0 ohne. Realworld-
+// Test rwE29: CnWizMethodHook.pas:58 - die Hilfe loeschte 80 Zeilen aus
+// dem Beispiel eines Kopfkommentars, den kein '{*' eroeffnete.
+function DocShapeLine(AMap: TRdxCodeMap; const AComment: TRdxComment): Integer;
+var
+  Li : Integer;
+  S  : string;
+begin
+  Result := 0;
+  if AComment.CloserText = '' then
+    Exit;
+  for Li := AComment.Body.Line to AComment.CloseAt.Line do
+  begin
+    S := TrimLeft(PieceOn(AMap, AComment, Li, 1));
+    if (Copy(S, 1, 1) = '*') or (Pos('<pre>', LowerCase(S)) > 0) then
+      Exit(Li);
+  end;
+end;
+
+// Steht vor APos nur der Kopf der Unit - 'unit X;' (auch program, library,
+// package; der Name auch mit Punkten)? Der Kommentar direkt dahinter ist
+// ihre Doku (rwE29: JvgXMLSerializer.pas:50, die Schnittstelle der Unit
+// mit Signaturen und Beschreibung hinter 'unit JvgXMLSerializer;').
+function AfterUnitHeader(AMap: TRdxCodeMap; const APos: TRdxTextPos): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := PrevToken(AMap, APos.Line, APos.Col);
+  if T.Low <> ';' then
+    Exit;
+  T := Before(AMap, T);
+  if not T.IsWord then
+    Exit;
+  while Before(AMap, T).Low = '.' do
+  begin
+    T := Before(AMap, Before(AMap, T));
+    if not T.IsWord then
+      Exit;
+  end;
+  T := Before(AMap, T);
+  Result := InList(T.Low, UNIT_HEADS) and (Before(AMap, T).Low = '');
+end;
+
+// Die Sperren je Kommentar: Direktive, Doku, offenes Ende - und ein
+// Kommentar vor dem ersten Code der Datei (Lizenz- oder Kopfkommentar)
+// bzw. direkt hinter dem Kopf der Unit.
+function KindReason(AMap: TRdxCodeMap; const AList: TRdxCommentList): string;
+var
+  C  : TRdxComment;
+  Li : Integer;
+begin
+  Result := '';
+  for C in AList do
+  begin
+    if C.Directive then
+      Exit(_('directive in the range (line %d) - it is active code, not a '
+        + 'comment', [C.Open.Line]));
+    if C.Doc then
+      Exit(_('documentation comment (///, {* or (**, line %d) - its sample '
+        + 'code stays', [C.Open.Line]));
+    if not C.IsClosed then
+      Exit(_('comment without an end up to the end of the file'));
+    Li := DocShapeLine(AMap, C);
+    if Li > 0 then
+      Exit(_('documentation comment (leading "*" or <PRE> in line %d) - its '
+        + 'sample code stays', [Li]));
+  end;
+  if PrevToken(AMap, AList[0].Open.Line, AList[0].Open.Col).Low = '' then
+    Result := _('comment before the first code of the file (license or '
+      + 'header comment) - %s', [MsgDecideByHand])
+  else if AfterUnitHeader(AMap, AList[0].Open) then
+    Result := _('comment directly after the unit header (documentation of '
+      + 'the unit) - %s', [MsgDecideByHand]);
+end;
+
 // Die Gegenproben am Kommentar: Anfang, Art, Code-Merkmal. '' oder der
 // Grund.
 function CommentReason(AMap: TRdxCodeMap; const ARegion: TRdxRegion;
@@ -688,46 +798,624 @@ begin
     Result := MarkerOnLineReason(ARegion.Last);
 end;
 
-// Wo der Schliesser von AComment beginnt; steht davor auf seiner Zeile nur
-// Leerraum, der Zeilenanfang (die Zeile bleibt ganz).
-function CloserStart(AMap: TRdxCodeMap; const AComment: TRdxComment): TRdxTextPos;
+// Das erste bzw. letzte Wort von S, klein; '' wenn S nicht mit einem
+// Bezeichner beginnt bzw. endet.
+function FirstWordOf(const S: string): string;
+var
+  i : Integer;
 begin
-  Result := AComment.CloseAt;
-  if SkipBlanks(AMap.Raw(Result.Line), 1) >= Result.Col then
-    Result.Col := 1;
+  Result := '';
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i < Length(S)) and IsIdentChar(S[i + 1]) do
+    Inc(i);
+  Result := LowerCase(Copy(S, 1, i));
 end;
 
-// Was geloescht wird (s. Kopf): der Inhalt der Region; die Begrenzer nur,
-// wenn der Kommentar danach leer ist. KeepFront: der erste Kommentar begann
-// vor R1 und traegt davor Text; KeepBack: der letzte endet hinter R2 und
-// traegt dahinter Text - dann bleibt der jeweilige Begrenzer. '' oder der
-// Grund.
+function LastWordOf(const S: string): string;
+var
+  i : Integer;
+begin
+  Result := '';
+  if (S = '') or not IsIdentChar(S[Length(S)]) then
+    Exit;
+  i := Length(S);
+  while (i > 1) and IsIdentChar(S[i - 1]) do
+    Dec(i);
+  if IsIdentStart(S[i]) then
+    Result := LowerCase(Copy(S, i, MaxInt));
+end;
+
+// Der Code-Teil eines Kommentarstuecks: ohne Leerraum aussen, ohne einen
+// '//'-Kommentar dahinter und ohne ein '{' am Ende - das '{}'-Ende der
+// JVCL-Quellen ('...;Forward;{}': in einem '{ }' ist das innere '{' nur
+// Text; rwE30 JvThumbImage.pas:600).
+function CodeText(const APiece: string): string;
+var
+  P : Integer;
+begin
+  Result := Trim(APiece);
+  P := Pos('//', Result);
+  if P > 1 then
+    Result := TrimRight(Copy(Result, 1, P - 1));
+  if (Length(Result) > 1) and (Result[Length(Result)] = '{') then
+    Result := TrimRight(Copy(Result, 1, Length(Result) - 1));
+end;
+
+// Ist das Stueck eines Kommentars (ohne Begrenzer) leer oder eindeutig
+// Pascal-Code - so streng, dass Prosa es kaum trifft? Code ist: endet auf
+// ';' (ein '//' dahinter und ein '{' am Ende abgeschnitten, CodeText),
+// traegt ':=', ist eine Direktive '{$...}' (in '(* *)' totgelegt) oder
+// 'end.', ein Schluesselwort allein (CODE_SOLO_WORDS) oder eine Steuerzeile
+// (CODE_LEAD_WORDS ... CODE_TAIL_WORDS: 'if X then', 'with Y do', 'end else
+// begin'). Eine Zeile, die auf ',' oder ein anderes Wort endet
+// ('CheckEquals', 'a,'), ist es nicht. Anders als der Detektor (zwei
+// Merkmale, eines stark) prueft das nur Zeilen ausserhalb des Funds; was
+// hier nicht besteht, prueft NonCodeLine weiter (innerer Kommentar,
+// case-Zweig, Aufruf vor 'else') - sonst sperrt es: der Detektor hat es
+// nicht als Code gemeldet.
+function CodePiece(const APiece: string): Boolean;
+var
+  S, W1 : string;
+begin
+  S := Trim(APiece);
+  if S = '' then
+    Exit(True);
+  if Copy(S, 1, 2) = '//' then
+    Exit(False);
+  S := CodeText(S);
+  if (S[Length(S)] = ';') or (Pos(':=', S) > 0) or SameText(S, 'end.') then
+    Exit(True);
+  if (Copy(S, 1, 2) = '{$') and (Pos('}', S) = Length(S)) then
+    Exit(True);
+  W1 := FirstWordOf(S);
+  if W1 = '' then
+    Exit(False);
+  if Length(W1) = Length(S) then
+    Exit(InList(W1, CODE_SOLO_WORDS));
+  Result := InList(W1, CODE_LEAD_WORDS)
+    and InList(LastWordOf(S), CODE_TAIL_WORDS);
+end;
+
+// Ein Kommentar im auskommentierten Code (S getrimmt): eine ganze
+// '//'-Zeile in einem '{ }'/'(* *)' bzw. in einem '(* *)' ein geschlossenes
+// '{ ... }' allein auf der Zeile (keine Direktive). Realworld-Test rwE30:
+// 18 von 28 unnoetigen Sperren - '// IdentList' (CnCodeFormatter.pas:3989),
+// '// The Gamebryo way' (ProcCheckForErrors.pas:884), '{ read
+// CurrencyString: string }' vor jeder Routine der JvInterpreter-Quellen.
+// Er gehoert zum toten Code und geht mit ihm; NonCodeLine wertet ihn weder
+// als Code noch als Prosa - ausser er traegt ein KEEP_WORDS-Wort
+// (KeepNote). Eine Prosazeile OHNE Kommentarzeichen sperrt weiter.
+function InnerComment(const AComment: TRdxComment; const S: string): Boolean;
+begin
+  if Copy(S, 1, 2) = '//' then
+    Exit(True);
+  Result := (AComment.CloserText = '*)') and (Copy(S, 1, 1) = '{')
+    and (Copy(S, 1, 2) <> '{$') and (Pos('}', S) = Length(S));
+end;
+
+// Sagt der innere Kommentar S, woher der Code stammt oder warum er bleibt
+// (KEEP_WORDS als Wort, ohne Gross-/Kleinschreibung)? rwE30: Img32.pas:1434
+// '// reference implementation' - der Autor hebt den Block bewusst auf.
+function KeepNote(const S: string): Boolean;
+var
+  LowS : string;
+  i    : Integer;
+begin
+  Result := False;
+  LowS := LowerCase(S);
+  for i := Low(KEEP_WORDS) to High(KEEP_WORDS) do
+    if HasAsciiWord(LowS, KEEP_WORDS[i]) then
+      Exit(True);
+end;
+
+// Ein case-Zweig 'A[, B]:' auf ALine (S = CodeText): mit Rest Code, wenn
+// der Rest CodePiece besteht ('{caImmed: begin', rwE30 DAsmUtil.pas:1062);
+// allein ('FS_NM_ACTION_ADD:', rwE30 ftpfunc.pas:1133) nur unter einem
+// 'case ... of' weiter oben im selben Kommentar - 'Note:' oder 'Usage:'
+// allein ist Prosa.
+function CaseLabel(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  i, Li : Integer;
+  Rest  : string;
+  T     : string;
+begin
+  Result := False;
+  i := 1;
+  repeat
+    if (i > Length(S)) or not IsIdentStart(S[i]) then
+      Exit;
+    while (i <= Length(S)) and IsIdentChar(S[i]) do
+      Inc(i);
+    i := SkipBlanks(S, i);
+    if (i > Length(S)) or (S[i] <> ',') then
+      Break;
+    i := SkipBlanks(S, i + 1);
+  until False;
+  if (i > Length(S)) or (S[i] <> ':') or (Copy(S, i + 1, 1) = '=') then
+    Exit;
+  Rest := Trim(Copy(S, i + 1, MaxInt));
+  if Rest <> '' then
+    Exit(CodePiece(Rest));
+  for Li := AComment.Body.Line to ALine - 1 do
+  begin
+    T := CodeText(PieceOn(AMap, AComment, Li, 1));
+    if (FirstWordOf(T) = 'case') and (LastWordOf(T) = 'of') then
+      Exit(True);
+  end;
+end;
+
+// Ein Aufruf ohne ';' vor einem 'else' auf ALine (S = CodeText): 'Name(...)'
+// bzw. 'A.B(...)', und die naechste nicht leere Zeile des Kommentars beginnt
+// mit 'else' und besteht CodePiece. rwE30: 'Match(Scaner.Token)'
+// (CnCodeFormatter.pas:4005), 'PutSFmt(...)' (DCURecs.pas:1772). Seit rwE31
+// auch vor end, until, finally und except (CALL_STOP_WORDS;
+// TestJclStrings.pas:2288 'Strings.Add(inttostr(i))' / 'end;') - bis dahin
+// CallBeforeElse.
+function CallBeforeStop(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  i, Li : Integer;
+  T     : string;
+begin
+  Result := False;
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i <= Length(S))
+        and (IsIdentChar(S[i]) or CharInSet(S[i], ['.', '^'])) do
+    Inc(i);
+  i := SkipBlanks(S, i);
+  if (i > Length(S)) or (S[i] <> '(') or (S[Length(S)] <> ')') then
+    Exit;
+  for Li := ALine + 1 to AComment.CloseAt.Line do
+  begin
+    T := Trim(PieceOn(AMap, AComment, Li, 1));
+    if T <> '' then
+      Exit(InList(FirstWordOf(T), CALL_STOP_WORDS) and CodePiece(T));
+  end;
+end;
+
+// Die naechste (ADir = 1) bzw. vorige (ADir = -1) nicht leere Zeile des
+// Kommentars ab ALine, als CodeText; '' ohne.
+function NearPiece(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine, ADir: Integer): string;
+var
+  Li : Integer;
+begin
+  Result := '';
+  Li := ALine + ADir;
+  while (Li >= AComment.Body.Line) and (Li <= AComment.CloseAt.Line) do
+  begin
+    Result := CodeText(PieceOn(AMap, AComment, Li, 1));
+    if Result <> '' then
+      Exit;
+    Li := Li + ADir;
+  end;
+end;
+
+// Eine anonyme Methode als Argument (S = CodeText): der Aufruf 'X.Y(' am
+// Zeilenende vor einer Zeile 'procedure'/'function', bzw. diese Zeile
+// selbst ('procedure' allein oder mit Parameterliste) hinter einer Zeile,
+// die auf '(' oder ',' endet. rwE31 MessagingExtensionsTestU.pas:169
+// 'TThread.CreateAnonymousThread(' / 'procedure' / .. / 'end).Start;'.
+function AnonMethodLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; const S: string): Boolean;
+var
+  W, Near : string;
+  i       : Integer;
+begin
+  Result := False;
+  if S = '' then
+    Exit;
+  W := FirstWordOf(S);
+  if (W = 'procedure') or (W = 'function') then
+  begin
+    if (Length(S) > Length(W)) and (S[Length(W) + 1] <> '(') then
+      Exit;
+    Near := NearPiece(AMap, AComment, ALine, -1);
+    Exit((Near <> '') and CharInSet(Near[Length(Near)], ['(', ',']));
+  end;
+  if (S[Length(S)] <> '(') or not IsIdentStart(S[1]) then
+    Exit;
+  for i := 1 to Length(S) - 1 do
+    if not (IsIdentChar(S[i]) or (S[i] = '.')) then
+      Exit;
+  W := FirstWordOf(NearPiece(AMap, AComment, ALine, 1));
+  Result := (W = 'procedure') or (W = 'function');
+end;
+
+// Eine entschaerfte Direktive in einem '{ }' (S getrimmt): '{$IFDEF X'
+// ohne '}' - ein '}' beendete den Kommentar, darum fehlt er (rwE31
+// JclInstall.pas:3301 '{$IFDEF MSWINDOWS' .. '{$ENDIF MSWINDOWS' in einer
+// auskommentierten Methode). Gehoert zum toten Code.
+function DefusedDirective(const AComment: TRdxComment; const S: string): Boolean;
+begin
+  Result := (AComment.CloserText = '}') and (Copy(S, 1, 2) = '{$')
+    and (Pos('}', S) = 0) and (Length(S) > 2) and IsIdentStart(S[3]);
+end;
+
+// Ein Typkopf allein auf der Zeile (S = CodeText): 'TName = [packed]
+// class|record|object|interface|dispinterface', dahinter hoechstens die
+// Vorfahrenliste '(TBase, IFoo)' aus Namen mit Punkten. rwE31
+// JclStreams.pas:107 '{ TJclCustomMemoryStream = class(TJclStream)' /
+// 'end; ..}'.
+function TypeHead(const S: string): Boolean;
+var
+  i : Integer;
+  W : string;
+begin
+  Result := False;
+  if (S = '') or not IsIdentStart(S[1]) then
+    Exit;
+  i := 1;
+  while (i <= Length(S)) and IsIdentChar(S[i]) do
+    Inc(i);
+  i := SkipBlanks(S, i);
+  if (i > Length(S)) or (S[i] <> '=') then
+    Exit;
+  i := SkipBlanks(S, i + 1);
+  W := FirstWordOf(Copy(S, i, MaxInt));
+  if W = 'packed' then
+  begin
+    i := SkipBlanks(S, i + Length(W));
+    W := FirstWordOf(Copy(S, i, MaxInt));
+  end;
+  if not InList(W, TYPE_HEAD_WORDS) then
+    Exit;
+  i := SkipBlanks(S, i + Length(W));
+  if i > Length(S) then
+    Exit(True);
+  if (S[i] <> '(') or (S[Length(S)] <> ')') then
+    Exit;
+  for i := i + 1 to Length(S) - 1 do
+    if not (IsIdentChar(S[i]) or CharInSet(S[i], ['.', ',', ' '])) then
+      Exit;
+  Result := True;
+end;
+
+// Der Text eines Kommentarstuecks fuer WrappedStatement: CodeText, ohne
+// innere '{ ... }' in einem '(* *)' (x86defs.pas:41 '({en_unknown,}en_alias,
+// ..'), String-Literale leer ('''x;y''' -> ''''''). '' fuer eine Zeile mit
+// offenem String.
+function WrapPiece(const AComment: TRdxComment; const APiece: string): string;
+var
+  i, j : Integer;
+  S    : string;
+begin
+  S := CodeText(APiece);
+  Result := '';
+  i := 1;
+  while i <= Length(S) do
+  begin
+    if S[i] = '''' then
+    begin
+      j := PosEx('''', S, i + 1);
+      if j = 0 then
+        Exit('');
+      Result := Result + '''''';
+      i := j + 1;
+    end
+    else if (S[i] = '{') and (AComment.CloserText = '*)') then
+    begin
+      j := PosEx('}', S, i + 1);
+      if j = 0 then
+        Exit('');
+      i := j + 1;
+    end
+    else
+    begin
+      Result := Result + S[i];
+      Inc(i);
+    end;
+  end;
+  Result := Trim(Result);
+end;
+
+// Stehen in S (WrapPiece) zwei gewoehnliche Woerter nebeneinander, nur
+// durch Leerraum getrennt ('This function', 'call Foo')? Code trennt Namen
+// durch Operatoren, Klammern, Kommas - oder ein reserviertes Wort steht
+// dazwischen ('if not Assigned(X)', 'X in [..]', 'then begin').
+function ProseFree(const S: string): Boolean;
+var
+  i, j      : Integer;
+  Prev, W   : string;
+  PrevEnd   : Integer;
+begin
+  Result := True;
+  Prev := '';
+  PrevEnd := 0;
+  i := 1;
+  while i <= Length(S) do
+  begin
+    if IsIdentStart(S[i]) and ((i = 1) or not IsIdentChar(S[i - 1])) then
+    begin
+      j := i;
+      while (j <= Length(S)) and IsIdentChar(S[j]) do
+        Inc(j);
+      W := LowerCase(Copy(S, i, j - i));
+      if (Prev <> '') and (Trim(Copy(S, PrevEnd, i - PrevEnd)) = '')
+         and not InList(Prev, RESERVED) and not InList(W, RESERVED) then
+        Exit(False);
+      Prev := W;
+      PrevEnd := j;
+      i := j;
+    end
+    else
+    begin
+      if not IsBlank(S[i]) then
+        Prev := '';
+      Inc(i);
+    end;
+  end;
+end;
+
+// Ist der zusammengezogene Text J (WrapPiece je Zeile, mit ' ' verbunden)
+// Code-Form: beginnt mit einem Namen, Klammern nie negativ und am Ende
+// ausgeglichen, CodePiece (';' am Ende, ':=', Steuerzeile 'if .. then'),
+// eine Klammer oder ':=' darin bzw. eine Steuerzeile, und ProseFree?
+// AStopNext: die naechste Zeile beginnt mit end/else/.. - dann reicht ein
+// Aufruf, der auf ')' endet. Kein Routinenkopf ueber Zeilen (WRAP_NOT_HEADS):
+// eine Liste von Prototypen ist meist Doku (rwE29 wfxplugin.pas:364,
+// Sca070_PartOfComment_ProseRefused).
+function WrapShape(const J: string; AStopNext: Boolean): Boolean;
+var
+  i, Depth : Integer;
+begin
+  Result := False;
+  if (J = '') or not IsIdentStart(J[1]) or not ProseFree(J)
+     or InList(FirstWordOf(J), WRAP_NOT_HEADS) then
+    Exit;
+  Depth := 0;
+  for i := 1 to Length(J) do
+  begin
+    if CharInSet(J[i], ['(', '[']) then
+      Inc(Depth)
+    else if CharInSet(J[i], [')', ']']) then
+    begin
+      Dec(Depth);
+      if Depth < 0 then
+        Exit;
+    end;
+  end;
+  if Depth <> 0 then
+    Exit;
+  if CodePiece(J) then
+    Result := (Pos('(', J) > 0) or (Pos(':=', J) > 0)
+      or InList(FirstWordOf(J), CODE_LEAD_WORDS)
+  else
+    Result := AStopNext and (J[Length(J)] = ')');
+end;
+
+// Laeuft eine Anweisung, die nicht auf einer Zeile Platz hatte, ueber die
+// Zeile ALine (WrapPiece-Text, nicht leer)? Gesucht wird ein Anfang A bis
+// MAX_WRAP_LINES Zeilen darueber und ein Ende M darunter im selben
+// Kommentar, beide ohne Leerzeile und ohne inneren Kommentar dazwischen; an
+// jeder Zeilengrenze ist eine Klammer offen oder die Zeile endet bzw. die
+// naechste beginnt wie eine Fortsetzung (',', '(', ')', ein Operator,
+// and/or/then/do ..), und die Zeilen A..M zusammen haben Code-Form
+// (WrapShape). rwE31: MessagingExtensionsTestU.pas:120 'CheckEquals' /
+// '(''/queue/..'',' / 'x);', JclInstall.pas:3294 'if not ..' / 'and (..)
+// then', ProcUniversalFixer.pas:999 'if (..) and' .. 'then begin',
+// wbImplementation.pas:2192 'Cardinal(..),  // Arbitrary ..' im Aufruf von
+// 'Result := CmpW32(', x86defs.pas:41 die Aufzaehlung ueber sechs Zeilen.
+// True mit der letzten Zeile in ALast.
+function WrappedStatement(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine: Integer; out ALast: Integer): Boolean;
+const
+  CONT_TAIL: array[0..3] of string = ('and', 'or', 'xor', 'not');
+  CONT_HEAD: array[0..5] of string = ('and', 'or', 'xor', 'then', 'do', 'in');
+var
+  A, M, Lo, Hi, k, Depth, c : Integer;
+  Pieces                    : array of string;
+  J, Raw, T                 : string;
+  Stop                      : Boolean;
+
+  function Piece(ALi: Integer): string;
+  begin
+    Result := Pieces[ALi - Lo];
+  end;
+
+  // Ist die Grenze hinter Zeile ALi offen (s. o.)?
+  function OpenAfter(ALi: Integer): Boolean;
+  var
+    P, Q : string;
+  begin
+    P := Piece(ALi);
+    Q := Piece(ALi + 1);
+    Result := (Depth > 0)
+      or CharInSet(P[Length(P)], [',', '(', '[', '+'])
+      or (Copy(P, Length(P) - 1, 2) = ':=')
+      or InList(LastWordOf(P), CONT_TAIL)
+      or CharInSet(Q[1], ['(', ')', '.', '+', '*', '/', '['])
+      or InList(FirstWordOf(Q), CONT_HEAD);
+  end;
+
+  // Beginnt die Zeile ALi wie eine Anweisung: ein Steuerwort
+  // (CODE_LEAD_WORDS) oder ein Name mit Punkten, dahinter nichts, '(',
+  // '[', ',', '=' oder ':=' - nicht 'TypeId -> [UnitId ..]' (Grammatik in
+  // CnCodeFormatter.pas:3532)?
+  function StartsLikeCode(ALi: Integer): Boolean;
+  var
+    P : string;
+    i : Integer;
+  begin
+    P := Piece(ALi);
+    if InList(FirstWordOf(P), CODE_LEAD_WORDS) then
+      Exit(True);
+    i := 1;
+    while (i <= Length(P)) and (IsIdentChar(P[i]) or (P[i] = '.')) do
+      Inc(i);
+    i := SkipBlanks(P, i);
+    Result := (i > Length(P)) or CharInSet(P[i], ['(', '[', ',', '='])
+      or (Copy(P, i, 2) = ':=');
+  end;
+
+begin
+  Result := False;
+  ALast := 0;
+  Lo := ALine - MAX_WRAP_LINES + 1;
+  if Lo < AComment.Body.Line then
+    Lo := AComment.Body.Line;
+  Hi := ALine + MAX_WRAP_LINES - 1;
+  if Hi > AComment.CloseAt.Line then
+    Hi := AComment.CloseAt.Line;
+  SetLength(Pieces, Hi - Lo + 1);
+  for k := Lo to Hi do
+  begin
+    Raw := Trim(PieceOn(AMap, AComment, k, 1));
+    if (Raw = '') or InnerComment(AComment, Raw) then
+      Pieces[k - Lo] := ''
+    else
+      Pieces[k - Lo] := WrapPiece(AComment, Raw);
+  end;
+  if Piece(ALine) = '' then
+    Exit;
+  for A := ALine downto Lo do
+  begin
+    if Piece(A) = '' then
+      Break;
+    if not StartsLikeCode(A) then
+      Continue;
+    J := '';
+    Depth := 0;
+    for M := A to Hi do
+    begin
+      if Piece(M) = '' then
+        Break;
+      if M > A then
+      begin
+        if not OpenAfter(M - 1) then
+          Break;
+        J := J + ' ';
+      end;
+      J := J + Piece(M);
+      for c := 1 to Length(Piece(M)) do
+        if CharInSet(Piece(M)[c], ['(', '[']) then
+          Inc(Depth)
+        else if CharInSet(Piece(M)[c], [')', ']']) then
+          Dec(Depth);
+      if M < ALine then
+        Continue;
+      // Endet die Anweisung ohne ';' vor end/else/.. auf der naechsten Zeile?
+      Stop := False;
+      for k := M + 1 to AComment.CloseAt.Line do
+      begin
+        T := Trim(PieceOn(AMap, AComment, k, 1));
+        if T <> '' then
+        begin
+          Stop := InList(FirstWordOf(T), CALL_STOP_WORDS) and CodePiece(T);
+          Break;
+        end;
+      end;
+      if (M > A) and WrapShape(J, Stop) then
+      begin
+        ALast := M;
+        Exit(True);
+      end;
+    end;
+  end;
+end;
+
+// Die erste Zeile von ALine1 bis ALine2, deren Text in AComment (ohne
+// Begrenzer) weder CodePiece noch ein case-Zweig (CaseLabel), ein Aufruf
+// vor 'else'/'end' .. (CallBeforeStop), ein Typkopf (TypeHead), eine
+// anonyme Methode als Argument (AnonMethodLine) oder eine entschaerfte
+// Direktive (DefusedDirective) ist,
+// nicht in einer Anweisung ueber mehrere Zeilen steht (WrappedStatement -
+// deren Zeilen gelten dann alle) und kein innerer Kommentar (InnerComment)
+// ohne KeepNote; 0, wenn alle bestehen.
+function NonCodeLine(AMap: TRdxCodeMap; const AComment: TRdxComment;
+  ALine1, ALine2: Integer): Integer;
+var
+  Li, Last : Integer;
+  S        : string;
+begin
+  Result := 0;
+  Li := ALine1;
+  while Li <= ALine2 do
+  begin
+    S := Trim(PieceOn(AMap, AComment, Li, 1));
+    if InnerComment(AComment, S) then
+    begin
+      if KeepNote(S) then
+        Exit(Li);
+    end
+    else if not CodePiece(S)
+       and not CaseLabel(AMap, AComment, Li, CodeText(S))
+       and not CallBeforeStop(AMap, AComment, Li, CodeText(S))
+       and not TypeHead(CodeText(S))
+       and not AnonMethodLine(AMap, AComment, Li, CodeText(S))
+       and not DefusedDirective(AComment, S) then
+    begin
+      if not WrappedStatement(AMap, AComment, Li, Last) then
+        Exit(Li);
+      Li := Last;
+    end;
+    Inc(Li);
+  end;
+end;
+
+// Was geloescht wird (s. Kopf): immer ganze Kommentare, vom Oeffner des
+// ersten bis hinter den Schliesser des letzten. Beginnt der erste vor R1
+// bzw. endet der letzte hinter R2, muss sein Text dort leer oder Code sein
+// (NonCodeLine) - sonst bliebe ein Torso stehen ('{ with X do }', '(*' /
+// 'break;*)') oder Prosa ginge mit: keine Hilfe. Bis zur Fix-Charge rwE29
+// blieb der Begrenzer dann stehen und nur die Region ging (KeepFront/
+// KeepBack). '' oder der Grund.
 function CommentCut(AMap: TRdxCodeMap; const ARegion: TRdxRegion;
   const AList: TRdxCommentList; out AFrom, ATo: TRdxTextPos): string;
 var
-  F, G                : TRdxComment;
-  KeepFront, KeepBack : Boolean;
+  F, G : TRdxComment;
+  Li   : Integer;
 begin
   Result := '';
   F := AList[0];
   G := AList[High(AList)];
-  KeepFront := (F.Open.Line < ARegion.First)
-    and not BlankText(AMap, F.Body, TextPos(ARegion.First, 1));
-  KeepBack := (G.CloseAt.Line > ARegion.Last)
-    and not BlankText(AMap, TextPos(ARegion.Last + 1, 1), G.CloseAt);
   AFrom := F.Open;
   ATo := G.Stop;
-  if (Length(AList) > 1) and (KeepFront or KeepBack) then
-    Exit(_('several comments, and one reaches beyond the finding with text - '
-      + 'the cut would not be contiguous; %s', [MsgDeleteByHand]));
-  if KeepFront then
-    AFrom := TextPos(ARegion.First, 1)
-  else if KeepBack then
-    AFrom := F.Body;
-  if KeepBack then
-    ATo := TextPos(ARegion.Last, Length(AMap.Raw(ARegion.Last)) + 1)
-  else if KeepFront then
-    ATo := CloserStart(AMap, G);
+  Li := 0;
+  if F.Open.Line < ARegion.First then
+    Li := NonCodeLine(AMap, F, F.Body.Line, ARegion.First - 1);
+  if (Li = 0) and (G.CloseAt.Line > ARegion.Last) then
+    Li := NonCodeLine(AMap, G, ARegion.Last + 1, G.CloseAt.Line);
+  if Li > 0 then
+    Result := _('the finding covers only part of the comment (lines %d to '
+      + '%d), and its line %d is not plainly code - the rest would stay '
+      + 'behind as a torso; %s', [F.Open.Line, G.CloseAt.Line, Li,
+      MsgDeleteByHand]);
+end;
+
+// SCA070 (rwE32 Stufe 4, Fragwuerdig "leerzeilen-doppelt": cnwizards
+// x86Defs.pas:46, jcl JclStreams.pas:108, TestJclStrings.pas:2239/2249):
+// geht der Schnitt AFrom..ATo ueber ganze Zeilen (davor und dahinter auf
+// seinen Zeilen nur Leerraum, wie CutFrom) und steht davor UND dahinter
+// eine Leerzeile (IsBlankLine), blieben zwei Leerzeilen uebereinander - die
+// dahinter geht mit: das neue Ende ist der Anfang der Zeile hinter ihr.
+// Ist die Leerzeile dahinter die letzte der Datei, bleibt der Schnitt
+// (WholeLinesEdit rechnet am Dateiende anders, das Zeilenende davor geht
+// dort ohnehin mit); ebenso ohne Leerzeile davor oder dahinter.
+function WithBlankBelow(AMap: TRdxCodeMap;
+  const AFrom, ATo: TRdxTextPos): TRdxTextPos;
+var
+  Last : Integer;
+  L    : string;
+begin
+  Result := ATo;
+  if SkipBlanks(AMap.Raw(AFrom.Line), 1) < AFrom.Col then
+    Exit;   // Text vor dem Schnitt
+  L := AMap.Raw(ATo.Line);
+  if ATo.Col = 1 then
+    Last := ATo.Line - 1
+  else if SkipBlanks(L, ATo.Col) > Length(L) then
+    Last := ATo.Line
+  else
+    Exit;   // Text hinter dem Schnitt
+  if (AFrom.Line > 1) and IsBlankLine(AMap.Raw(AFrom.Line - 1))
+     and (Last + 1 < AMap.LineCount) and IsBlankLine(AMap.Raw(Last + 1)) then
+    Result := TextPos(Last + 2, 1);
 end;
 
 class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
@@ -758,7 +1446,8 @@ begin
     AReason := MarkerReason(RangeText(AMap, SpanOf(CutStart, CutStop,
       SPAN_070)));
   if AReason = '' then
-    AReason := CutEdit(AMap, CutStart, CutStop, SPAN_070, AEdit);
+    AReason := CutEdit(AMap, CutStart, WithBlankBelow(AMap, CutStart, CutStop),
+      SPAN_070, AEdit);
   Result := AReason = '';
 end;
 

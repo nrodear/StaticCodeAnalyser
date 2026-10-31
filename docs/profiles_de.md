@@ -1,7 +1,7 @@
 ﻿# Scan-Profile
 
 Ein **Profil** ist eine benannte Regelmenge. Es beantwortet eine einzige
-Frage: *welche der 203 Detektoren laufen in diesem Scan?* Alles andere -
+Frage: *welche der 205 Detektoren laufen in diesem Scan?* Alles andere -
 Severity-Schwelle, Unterdrückungen, Baseline - filtert hinterher. Das
 Profil entscheidet, wonach überhaupt gesucht wird.
 
@@ -9,15 +9,15 @@ Profil entscheidet, wonach überhaupt gesucht wird.
 
 | Profil | Regeln | Wofür es da ist |
 |---|---|---|
-| `strict` | 203 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
-| `default` | 196 | Alles außer den sieben reinen Konventionsregeln aus `style`. Diese sieben machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
-| `selftest-quiet` | 192 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
+| `strict` | 205 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
+| `default` | 197 | Alles außer den acht reinen Konventionsregeln aus `style`. Diese acht machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
+| `selftest-quiet` | 194 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
 | `code-quality` | 26 | Wartbarkeit: toter Code, lange Methoden, Komplexität, unbenutzte Uses. |
 | `ide-fast` | 21 | Klein genug, um bei jeder geöffneten Datei in der IDE zu laufen. Bugs und Sicherheit, kein Stil. |
 | `dfm-only` | 20 | Nur die Form-Datei-Prüfungen. |
-| `bugs-only` | 19 | Nur Defekte - keine Smells, keine Konventionen. |
+| `bugs-only` | 20 | Nur Defekte - keine Smells, keine Konventionen. |
 | `security` | 9 | Nur Verwundbarkeiten und Hotspots. |
-| `style` | 7 | Die reinen Konventionsregeln, die `default` weglässt. |
+| `style` | 8 | Die reinen Konventionsregeln, die `default` weglässt. |
 
 Die Zahlen sind am aktuellen Katalog gemessen, nicht geschätzt.
 
@@ -52,7 +52,7 @@ rechts**:
 
 | Token | Wirkung |
 |---|---|
-| `*` | alle 203 Kinds |
+| `*` | alle 205 Kinds |
 | `Kind` | dieses Kind aufnehmen |
 | `!Kind` bzw. `-Kind` | dieses Kind entfernen |
 

@@ -99,6 +99,42 @@ type
     [Test] procedure TwoAbsoluteAliasesOnTwoLines_NotReported;
   end;
 
+  // U11 (2026-10-27): ein String-Literal mit dem Parameternamen zaehlte als
+  // Lesen - der AST-Flachtext traegt Literale in Quellform. Eigene Fixture,
+  // weil TTestUnusedParameter die 20-Tests-Grenze laengst ueberschreitet.
+  // Die drei Positiv-Tests laufen ueber FindingsOfFile (Produktionsweg MIT
+  // Quell-Rueckfrage - die darf den Fund nicht zurueckholen); die beiden
+  // Gegenproben ueber FindingsOf: ohne Quelle gibt es keine Rueckfrage, ein
+  // zu gieriges Ausblenden der Literale waere dort sofort ein falscher Fund.
+  [TestFixture]
+  TTestUnusedParameterLiteral = class
+  public
+    [Test] procedure OnlyInCallArgumentLiteral_Reported;
+    [Test] procedure OnlyInAssignedLiteral_Reported;
+    [Test] procedure OnlyInLocalConstLiteral_Reported;
+    [Test] procedure UsedInCodeAndLiteral_NoFinding;           // Gegenprobe
+    [Test] procedure EscapedQuoteBeforeCodeUse_NoFinding;      // Gegenprobe
+  end;
+
+  // SCA054u (2026-10-27): die Quell-Rueckfrage endete am LETZTEN KNOTEN
+  // statt am end der Routine - until-Bedingung, Fortsetzungszeilen und
+  // inaktive {$IFDEF}-Zweige am Rumpfende blieben unsichtbar. Alle Tests
+  // ueber FindingsOfFile: nur dort laeuft die Quell-Rueckfrage. Die
+  // IFDEF-Form (Korpus-Mehrheit) ist hier NICHT pruefbar - der Harness
+  // parst beide Zweige, die Nutzung steht dann ohnehin im AST.
+  [TestFixture]
+  TTestUnusedParameterBodyEnd = class
+  public
+    [Test] procedure UsedOnlyInUntilCondition_NoFinding;
+    [Test] procedure UsedOnlyInUntilContinuationLine_NoFinding;
+    [Test] procedure UsedInIndexOnContinuationLine_NoFinding;
+    [Test] procedure UsedInUntilAfterNestedBlocks_NoFinding;
+    [Test] procedure OnlyInCommentAfterEnd_StillReported;   // Gegenprobe
+    [Test] procedure OnlyInUntilLiteral_StillReported;   // Gegenprobe
+    [Test] procedure NameInFollowingRoutine_StillReported;   // Gegenprobe
+    [Test] procedure NameInInitializationSection_StillReported;   // Gegenprobe
+  end;
+
 implementation
 
 uses
@@ -1258,7 +1294,310 @@ begin
   finally F.Free; end;
 end;
 
+{ --- U11: String-Literale zaehlen nicht als Nutzung ---------------------- }
+
+procedure TTestUnusedParameterLiteral.OnlyInCallArgumentLiteral_Reported;
+// Korpusform mORMot TTextWriter.Add: RaiseUnimplemented('Add(Escape)').
+// Bestehende Exe (26.10.): 0 Funde; dieselbe Quelle mit 'Add(Xq)': 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Escape: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  NotImplemented(''Add(Escape)'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Der Name im Aufruf-Literal ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.OnlyInAssignedLiteral_Reported;
+// Literal auf der rechten Seite einer Zuweisung (nkAssign.TypeRef).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'var G: string;'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  G := ''Mode: '' + ''x'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'Der Name im Literal einer Zuweisung ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.OnlyInLocalConstLiteral_Reported;
+// Korpusform JvProps: Parameter 'S', Literal mit '%s'. Das Literal steht
+// hier in einer lokalen const-Sektion (nkConstSection) - VOR dem begin,
+// also auch ausserhalb der Quell-Rueckfrage.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(S: string);'#13#10 +
+  'const'#13#10 +
+  '  Pattern = ''%s.%s'';'#13#10 +
+  'begin'#13#10 +
+  '  Log(Pattern);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      '''%s'' im Literal ist kein Lesen von S');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.UsedInCodeAndLiteral_NoFinding;
+// GEGENPROBE: der Name steht im Literal UND als Argument. Ausgeblendet
+// werden darf nur das Literal.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Log(''Mode='', Mode);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Das Argument Mode ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterLiteral.EscapedQuoteBeforeCodeUse_NoFinding;
+// GEGENPROBE zur Quote-Paarung: verdoppeltes Apostroph im Literal davor
+// und ein Ein-Zeichen-Literal '''' dahinter. Paart das Ausblenden falsch,
+// verschwindet das Argument Mode mit - und ohne Quelle (FindingsOf) holt
+// es keine Rueckfrage zurueck.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Mode: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Log(''it''''s'', Mode, '''''''');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+      'Mode zwischen zwei Literalen mit Escape bleibt eine Nutzung');
+  finally F.Free; end;
+end;
+
+// ---- TTestUnusedParameterBodyEnd (SCA054u) ---------------------------
+
+const
+  MSG_BODYEND_USED = 'Nutzung hinter dem letzten Knoten ist eine Nutzung';
+  MSG_BODYEND_KEPT = 'Der Fund muss bleiben';
+
+function UnusedParamCountOfFile(const ASource: string): Integer;
+// SCA054-Funde ueber FindingsOfFile - der Produktionsweg MIT Quell-
+// Rueckfrage. FindingsOf haette keine Datei, die Rueckfrage liefe tot.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(ASource);
+  try
+    Result := TFindingHelper.Count(F, fkUnusedParameter);
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedOnlyInUntilCondition_NoFinding;
+// Korpusform jvcl HID CollectionDemo Unit1.pas:40. Die until-Bedingung
+// hat keinen eigenen Knoten - sie lag hinter dem letzten Knoten und
+// damit ausserhalb der Quell-Rueckfrage. Alte Exe (27.10.): 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Idx, Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  I: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  I := Idx;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(I);'#13#10 +
+  '  until I >= Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedOnlyInUntilContinuationLine_NoFinding;
+// Korpusform VirtualTrees GetNextVisibleSibling: die Nutzung steht in
+// der FORTSETZUNGSZEILE einer mehrzeiligen until-Bedingung.
+// Alte Exe: 1 Fund (IncludeFiltered).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'function Foo(Node: Integer; IncludeFiltered: Boolean): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Node;'#13#10 +
+  '  repeat'#13#10 +
+  '    Result := Next(Result);'#13#10 +
+  '  until (Result = 0) or'#13#10 +
+  '        (IncludeFiltered and (Result > 5));'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedInIndexOnContinuationLine_NoFinding;
+// Korpusform JvDBFilter SetNodeOp: letzte Anweisung ueber zwei Zeilen,
+// der Index-Ausdruck links der Zuweisung fehlt im AST-Text und steht
+// hinter der Knotenzeile. Alte Exe: 1 Fund (Index).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Node, Index, Data: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  PWordArray(Buf + (Node +'#13#10 +
+  '    4))^[Index] := Data;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.UsedInUntilAfterNestedBlocks_NoFinding;
+// Bilanz-Probe fuer RoutineEndLine: try/case/begin im Rumpf schliessen
+// je ein end, erst das letzte end beendet die Routine. Zaehlte die
+// Bilanz falsch, endete der Bereich vor dem until. Alte Exe: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  J: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  J := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    try'#13#10 +
+  '      case J of'#13#10 +
+  '        0: begin Inc(J); end;'#13#10 +
+  '      else'#13#10 +
+  '        Inc(J, 2);'#13#10 +
+  '      end;'#13#10 +
+  '    finally'#13#10 +
+  '      Dec(J);'#13#10 +
+  '    end;'#13#10 +
+  '  until J >= Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0, UnusedParamCountOfFile(SRC), MSG_BODYEND_USED);
+end;
+
+procedure TTestUnusedParameterBodyEnd.OnlyInCommentAfterEnd_StillReported;
+// GEGENPROBE: der Name steht nur in Kommentaren auf der until- und der
+// end-Zeile. Kommentare zaehlen nie - auch nicht im verlaengerten Bereich.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  I: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  I := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(I);'#13#10 +
+  '  until I >= 10; { Count }'#13#10 +
+  'end; // Count'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.OnlyInUntilLiteral_StillReported;
+// GEGENPROBE: der Name steht nur im Literal der until-Bedingung.
+// Die Quell-Rueckfrage liest die gestrippte Quelle.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  S: string;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '    S := Next;'#13#10 +
+  '  until S = ''Count'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.NameInFollowingRoutine_StillReported;
+// GEGENPROBE zur Obergrenze: hinter dem end steht die naechste Routine
+// mit dem Namen als Code. Der Bereich endet am end von Foo - ein Scan bis
+// zur naechsten Routine oder ans Dateiende wuerde den Fund verschlucken.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  N: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  N := 1;'#13#10 +
+  '  repeat'#13#10 +
+  '    N := N * 2;'#13#10 +
+  '  until N > 100;'#13#10 +
+  'end;'#13#10 +
+  ''#13#10 +
+  'procedure Bar(Total: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Total := Count;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
+procedure TTestUnusedParameterBodyEnd.NameInInitializationSection_StillReported;
+// GEGENPROBE fuer die letzte Routine der Unit: dahinter steht nur noch
+// die initialization-Sektion, die den Namen (eine Unit-Variable) liest.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'var'#13#10 +
+  '  Count: Integer;'#13#10 +
+  'procedure Foo(Count: Integer);'#13#10 +
+  'var'#13#10 +
+  '  K: Cardinal;'#13#10 +
+  'begin'#13#10 +
+  '  K := 5;'#13#10 +
+  '  repeat'#13#10 +
+  '    Dec(K);'#13#10 +
+  '  until K = 0;'#13#10 +
+  'end;'#13#10 +
+  'initialization'#13#10 +
+  '  Count := 1;'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(1, UnusedParamCountOfFile(SRC), MSG_BODYEND_KEPT);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedParameter);
+  TDUnitX.RegisterTestFixture(TTestUnusedParameterLiteral);
+  TDUnitX.RegisterTestFixture(TTestUnusedParameterBodyEnd);
 
 end.

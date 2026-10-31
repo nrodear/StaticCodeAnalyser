@@ -429,29 +429,11 @@ end;
 
 function TFindingsPropertiesDockableForm.CloneFinding(
   F: TLeakFinding): TLeakFinding;
-// Deep-Copy aller Datenfelder. Alle Felder sind value-types oder strings -
-// shallow copy reicht.
+// Kopie aller Datenfelder ueber TLeakFinding.Clone (wie im Frame,
+// uFindingsPropertiesFrame). Bis 2026-10-28 feldweise von Hand, ohne
+// SavedDetectorSeverity/SeverityWasOverridden.
 begin
-  Result := TLeakFinding.Create;
-  Result.FileName   := F.FileName;
-  Result.MethodName := F.MethodName;
-  Result.LineNumber := F.LineNumber;
-  // EndLine gehoert dazu, seit Befunde einen Zeilenbereich haben koennen
-  // (SCA021 DuplicateBlock). Fehlt es, faellt der Klon lautlos auf
-  // "einzeilig" zurueck - genau die Art Verlust, die eine feldweise
-  // Kopie mit dem Versprechen "alle Datenfelder" unsichtbar macht.
-  Result.EndLine    := F.EndLine;
-  Result.MissingVar := F.MissingVar;
-  Result.Severity   := F.Severity;
-  Result.Kind       := F.Kind;
-  Result.Confidence := F.Confidence;
-  Result.RuleID     := F.RuleID;
-  // Neue Felder MUESSEN hier mitwandern - der Klon geht in den
-  // Properties-Cache und ueberlebt den Tab-Wechsel; was hier fehlt,
-  // ist danach weg (derselbe Fehlermodus wie bei EndLine oben).
-  Result.RelatedLines := F.RelatedLines;
-  Result.StructureChain := F.StructureChain;
-  Result.LeakVariant := F.LeakVariant;
+  Result := F.Clone;
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;

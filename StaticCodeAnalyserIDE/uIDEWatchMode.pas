@@ -327,7 +327,7 @@ implementation
 // monolithischen Notifier-Lifecycle.
 
 uses
-  System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uEngineApi, uStaticFiles, uLocalization,
+  System.StrUtils, Vcl.Forms, uEngineApi, uStaticFiles, uLocalization,
   uCrashDiag,       // EStackExhausted - Kontrakt 2026-08-04, s. Worker-except
   uPathNormalize,   // SPOT fuer Pfad-Normalisierung
   uIDELineHighlighter;  // GFileClosingSubscriber (zentraler ofnFileClosing-Hook)

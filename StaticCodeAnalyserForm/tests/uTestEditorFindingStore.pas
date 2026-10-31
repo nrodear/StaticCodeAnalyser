@@ -5,7 +5,10 @@ unit uTestEditorFindingStore;
 // Gluehbirne lesen, wenn das Dock die Datei nicht haelt (Review Woche
 // 2026-10-21, G04-06 - vorher ungetestet in uIDEAnalyserForm).
 //
-// Abgesichert: Ersetzen bei vorhandenem Schluessel (nicht Add), Verdraengen
+// Abgesichert: die Kopie traegt ALLE Felder (TLeakFinding.Clone; vorher
+// feldweise ohne LeakVariant - reDelphix sperrte im Silent-Pfad den
+// SCA001-Fix "Free ausserhalb finally", Befund B1), Ersetzen bei
+// vorhandenem Schluessel (nicht Add), Verdraengen
 // nach der kleinsten GENERATION (nicht nach der Einfuegereihenfolge, nicht
 // beim Ersetzen), Eigentum (Kopien statt geteilter Objekte; Ersetzen,
 // Verdraengen und Destroy geben frei; ein scheiternder Lauf leckt nicht und
@@ -24,6 +27,8 @@ type
   TTestEditorFindingStore = class
   public
     [Test] procedure Keep_CopiesFieldsAndGeneration;
+    [Test] procedure Keep_CopiesEveryField;
+    [Test] procedure Keep_KeepsLeakVariantAndDetectorSeverity;
     [Test] procedure Keep_CopiesAreOwnObjects;
     [Test] procedure Keep_SkipsNilEntriesAndNilList;
     [Test] procedure TryGet_UnknownKey_FalseAndNil;
@@ -44,6 +49,7 @@ uses
   System.Generics.Collections,
   uSCAConsts,                   // lsHint, fkSQLInjection, fcLow
   uMethodd12,                   // TLeakFinding
+  uTestFindingCopy,             // FillEveryField, DifferingFields
   uEditorFindingStore;
 
 var
@@ -163,6 +169,71 @@ begin
     Assert.AreEqual<Integer>(Ord(fkSQLInjection), Ord(C.Kind));
     Assert.AreEqual<Integer>(Ord(fcLow), Ord(C.Confidence));
     Assert.AreEqual('PROJ001', C.RuleID);
+  finally
+    Store.Free;
+  end;
+end;
+
+procedure TTestEditorFindingStore.Keep_CopiesEveryField;
+var
+  Store : TEditorFindingStore;
+  Src   : TObjectList<TLeakFinding>;
+  F     : TLeakFinding;
+  Kept  : TEditorFindingsCopy;
+begin
+  // Jedes Feld laut RTTI (uTestFindingCopy) - auch eines, das es heute
+  // noch nicht gibt. Vorher kopierte CopyOf neun von vierzehn Feldern.
+  Store := TEditorFindingStore.Create(8);
+  try
+    Src := TObjectList<TLeakFinding>.Create(True);
+    try
+      F := TLeakFinding.Create;
+      Src.Add(F);
+      FillEveryField(F);
+      Store.Keep('a', Src, 1);
+      Assert.IsTrue(Store.TryGet('a', Kept));
+      Assert.AreEqual<Integer>(1, Kept.Items.Count);
+      Assert.AreEqual('', DifferingFields(F, Kept.Items[0]),
+        'fehlt in der Silent-Kopie');
+    finally
+      Src.Free;
+    end;
+  finally
+    Store.Free;
+  end;
+end;
+
+procedure TTestEditorFindingStore.Keep_KeepsLeakVariantAndDetectorSeverity;
+var
+  Store : TEditorFindingStore;
+  Src   : TObjectList<TLeakFinding>;
+  F     : TLeakFinding;
+  Kept  : TEditorFindingsCopy;
+  C     : TLeakFinding;
+begin
+  // B1: ein SCA001-Fund freed-outside-finally, von der Evidenz-Politik
+  // gedeckelt. reDelphix (PlanMemoryLeak) bietet den Fix nur, wenn die
+  // Kopie LeakVariant traegt - bis 2026-10-28 fehlte das Feld hier.
+  Store := TEditorFindingStore.Create(8);
+  try
+    Src := TObjectList<TLeakFinding>.Create(True);
+    try
+      F := TLeakFinding.New('C:\p\a.pas', 'TFoo.Bar', 12, 'L', fkMemoryLeak);
+      Src.Add(F);
+      F.Severity := lsError;
+      F.LeakVariant := 'freed-outside-finally';
+      F.OverrideSeverity(lsWarning);
+      Store.Keep('c:\p\a.pas', Src, 7);
+    finally
+      Src.Free;
+    end;
+    Assert.IsTrue(Store.TryGet('c:\p\a.pas', Kept));
+    C := Kept.Items[0];
+    Assert.AreEqual('freed-outside-finally', C.LeakVariant);
+    Assert.AreEqual('freed-outside-finally', C.MemoryLeakVariant);
+    Assert.AreEqual<Integer>(Ord(lsWarning), Ord(C.Severity));
+    Assert.AreEqual<Integer>(Ord(lsError), Ord(C.OriginalSeverity),
+      'die Detektor-Schwere reist mit');
   finally
     Store.Free;
   end;

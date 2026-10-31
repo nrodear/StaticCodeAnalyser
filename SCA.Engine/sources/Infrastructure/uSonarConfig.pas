@@ -553,18 +553,20 @@ begin
     TEncoding.UTF8.GetBytes(PlainTextToken));
   {$ENDIF}
 
-  // TMemIniFile haelt Writes in-memory bis UpdateFile aufgerufen wird.
-  // Vorher: TIniFile schrieb sofort via WritePrivateProfileString - das
-  // hat Win-Default-Encoding (typisch UTF-16 LE auf Win10+), kollidiert
-  // dann mit unserem TMemIniFile-Reader. Beides UTF-8 ohne BOM via
-  // TMemIniFile haelt die Datei konsistent.
+  // Geschichte: zuerst schrieb hier TIniFile sofort via
+  // WritePrivateProfileString - mit dem Encoding der Profil-API, das mit
+  // unserem UTF-8-Leser (TMemIniFile mit TEncoding.UTF8) kollidiert. Dann
+  // TMemIniFile fuer Leser UND Schreiber, damit beide dasselbe UTF-8
+  // sprechen.
   // TCommentPreservingIni statt TMemIniFile (2026-08-21): FileName ist in
   // aller Regel die analyser.ini, und die traegt zu jedem Schluessel einen
   // Erklaerblock. TMemIniFile.UpdateFile schreibt die Datei aus seinem
   // Speichermodell neu und kennt darin keine Kommentare - ein einziges
   // Token-Speichern haette die ganze Dokumentation geloescht. Das
-  // Encoding-Argument von oben gilt unveraendert: UTF-8 ohne BOM, jetzt
-  // vom Schreiber fest gesetzt.
+  // Encoding-Argument von oben gilt unveraendert: ein Schreiber, fest
+  // UTF-8 - und zwar MIT BOM (TStrings.SaveToFile mit TEncoding.UTF8
+  // schreibt die Praeambel), genau wie EnsureConfigExists die Datei anlegt.
+  // Die Leser (TMemIniFile mit TEncoding.UTF8) erkennen die BOM.
   Ini := TCommentPreservingIni.Create(FileName);
   try
     Ini.WriteString('SonarTokens', TokenRef, Hex);

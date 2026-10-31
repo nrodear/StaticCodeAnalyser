@@ -14,11 +14,31 @@ type
   // Stop-Menge der Sammel-Schleifen (CollectTypeNameUntil).
   TTokenKinds = set of TTokenKind;
 
+  // Zustand der RHS-Scanner fuer Koepfe anonymer Methoden (Parser-Charge
+  // P2, 2026-10-27) - s. TParser2.StepAnonHead.
+  TAnonHeadScan = record
+    // Stapel der offenen Koepfe (deren 'begin' noch fehlt): je Kopf die
+    // Schachtelungstiefe des Scanners an seinem procedure/function. Nur
+    // ein 'begin' auf GENAU dieser Tiefe schliesst ihn (Review P2, M1).
+    Depths    : TArray<Integer>;
+    Count     : Integer;
+    KwPending : Boolean;     // das letzte Token war procedure/function
+    KwPrev    : TTokenKind;  // das Token VOR diesem procedure/function
+    KwDepth   : Integer;     // Tiefe an diesem procedure/function
+  end;
+
   TParser2 = class
   public
     constructor Create;
     // Laedt Datei, parst und gibt Root-Node (nkUnit) zurueck.
     function ParseFile(const FileName: string): TAstNode;
+    // Die Lese-/Dekodierkette von ParseFile (Default-Kodierung bzw. BOM,
+    // dann UTF-8, dann Default-Codepage ohne BOM) - fuer Konsumenten, die
+    // Zeile/Spalte eines Knotens im Quelltext nachschlagen: ParseFile parst
+    // ALines.Text, die Zeilen und Spalten stimmen also ueberein (Review
+    // Parser-Charge P, n1). False, wenn die Datei nicht lesbar ist.
+    class function TryLoadSourceLines(const FileName: string;
+      ALines: TStringList): Boolean; static;
     // Parst einen String direkt.
     function ParseSource(const Source: string): TAstNode;
     // Parst einen schon gelesenen Dateiinhalt so, wie ParseFile die Datei
@@ -64,9 +84,11 @@ type
     FConsumeCount: Integer;
 
     // Kind des ZULETZT konsumierten Tokens (tkUnknown = noch keines).
-    // Einziger Konsument ist ParseIfStmt: ein ';' unmittelbar vor einem
-    // 'else' ist ein Indiz dafuer, dass das else NICHT zum if gehoert
-    // (vollstaendige Begruendung samt Gegenbeispielen dort).
+    // Konsumenten: ParseIfStmt - ein ';' unmittelbar vor einem 'else' ist
+    // ein Indiz dafuer, dass das else NICHT zum if gehoert (vollstaendige
+    // Begruendung samt Gegenbeispielen dort) - und StepAnonHead (P2): steht
+    // vor 'procedure'/'function' ein ':=', '(' oder ',', ist es der Kopf
+    // einer anonymen Methode.
     //
     // +---------------------------------------------------------------+
     // | INVARIANTE - BEIM AENDERN DIESER UNIT LESEN:                   |
@@ -91,6 +113,10 @@ type
     // nichts; SkipTo/SkipToSemicolon/SkipBalanced/GuardAdvance laufen ueber
     // Next und sind damit abgedeckt.
     FLastConsumed: TTokenKind;
+    // Zeile des zuletzt konsumierten Tokens - dieselben zwei Konsumpunkte,
+    // dieselbe Invariante wie FLastConsumed. Einziger Leser:
+    // ParseMethodImpl, das daraus TAstNode.EndLine der Routine setzt.
+    FLastConsumedLine: Integer;
 
     // Kann ein UMGEBENDER Rahmen ein liegengelassenes 'else' ueberhaupt
     // AUFNEHMEN? Nur dann darf ParseIfStmt ein else ablehnen (Begruendung
@@ -221,6 +247,15 @@ type
     // Argumenten oder ein Sektions-Schluesselwort; zaehlt begin/case/try/
     // asm/record und ihr 'end' in ABlockDepth mit.
     function ArgScanContinues(var ABlockDepth: Integer): Boolean;
+    // RHS-Scanner (ParseCallOrAssign, ScanInlineInitializer): fuehrt die
+    // offenen Koepfe anonymer Methoden mit, BEVOR das aktuelle Token
+    // ausgewertet wird. Solange ein auf Tiefe 0 geoeffneter Kopf offen ist,
+    // beendet ein ';' auf Tiefe 0 den Scan nicht (var-/const-/type-Sektion
+    // im Kopf). 'record' im Kopf erhoeht ANestDepth (sein 'end' senkt sie).
+    procedure StepAnonHead(var AScan: TAnonHeadScan; var ANestDepth: Integer);
+    // Abbruch der beiden RHS-Scanner auf Tiefe 0: ';' (nur ohne offenen
+    // Kopf einer anonymen Methode), else, until, except, finally, Dateiende.
+    function RhsStopsAt(ANestDepth: Integer; const AScan: TAnonHeadScan): Boolean;
   end;
 
 implementation
@@ -327,10 +362,26 @@ begin
     Result := '''' + StringReplace(Value, '''', '''''', [rfReplaceAll]) + '''';
 end;
 
+function TokSourceText(const T: TToken): string;
+// DIE Literal-Ablage aller flachen Knotentexte (Parser-Charge P3,
+// 2026-10-27): ein String-/Zeichenliteral in Quellform (QuoteStrLit),
+// jedes andere Token mit seinem Wert. Die Flachtext-Leser der Detektoren
+// blenden Literale nur in dieser Form aus (BlankStringLiterals); bis P3
+// legten Exit-Argument, for-Kopf, 'raise .. at' und Parameter-Vorgabewert
+// den Inhalt ROH ab - 'Exit(''AName'')' las sich fuer SCA054 wie ein
+// Lesen des Parameters AName. Neue Sammel-Schleifen nehmen diese Funktion.
+begin
+  if T.Kind = tkStrLit then
+    Result := QuoteStrLit(T.Value)
+  else
+    Result := T.Value;
+end;
+
 constructor TParser2.Create;
 begin
   inherited;
   FLastConsumed  := tkUnknown; // ParseSource setzt pro Datei nach
+  FLastConsumedLine := 0;      // dito
   FElseTakerOpen := False;     // dito
 end;
 
@@ -375,21 +426,28 @@ begin
   Result := True;
 end;
 
+class function TParser2.TryLoadSourceLines(const FileName: string;
+  ALines: TStringList): Boolean;
+begin
+  Result := True;
+  try
+    ALines.LoadFromFile(FileName);
+  except
+    try ALines.LoadFromFile(FileName, TEncoding.UTF8);
+    except
+      Result := LoadAnsiWithoutBom(FileName, ALines);
+    end;
+  end;
+end;
+
 function TParser2.ParseFile(const FileName: string): TAstNode;
 var
   SL: TStringList;
 begin
   SL := TStringList.Create;
   try
-    try
-      SL.LoadFromFile(FileName);
-    except
-      try SL.LoadFromFile(FileName, TEncoding.UTF8);
-      except
-        if not LoadAnsiWithoutBom(FileName, SL) then
-          raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
-      end;
-    end;
+    if not TryLoadSourceLines(FileName, SL) then
+      raise Exception.CreateFmt('Datei nicht lesbar: %s', [FileName]);
     Result := ParseNamedSource(SL.Text, FileName);
   finally
     SL.Free;
@@ -469,6 +527,7 @@ begin
     // Gurt fuer den Fall, dass jemand spaeter einen Rahmen ohne finally
     // ergaenzt - die Datei-Grenze bleibt dann trotzdem sauber.
     FLastConsumed  := tkUnknown;
+    FLastConsumedLine := 0;
     FElseTakerOpen := False;
     // Recovery-Zustand pro Datei zuruecksetzen (2026-07-04): ein Parser-
     // Objekt kann mehrere Dateien nacheinander parsen; Reste einer
@@ -532,6 +591,7 @@ begin
       'pathologisch, Analyse abgebrochen.', [MAX_NEXT_CALLS]);
   Result := FLex.Next;
   FLastConsumed := Result.Kind; // Konsumpunkt 1 von 2 (siehe Feld-Kommentar)
+  FLastConsumedLine := Result.Line;
 end;
 
 procedure TParser2.GuardAdvance(StartCount: Integer);
@@ -764,6 +824,7 @@ begin
   begin
     Inc(FConsumeCount);  // Fortschritt - GuardAdvance MUSS ihn sehen
     FLastConsumed := K;
+    FLastConsumedLine := Dummy.Line;
   end;
 end;
 
@@ -1195,6 +1256,37 @@ begin
       Continue;
     end;
 
+    // FPC-'type helper for X' ({$modeswitch typehelpers}, Parser-Charge
+    // P1, 2026-10-27). Bis dahin fiel die Deklaration in den Alias-Zweig
+    // unten: er las bis zum ersten ';' (erste Methode des Helpers), das
+    // naechste 'function'/'end' beendete die GANZE Typsektion - jede
+    // Klasse dahinter fehlte im AST (lcl/stdctrls.pp: TCustomComboBox ..
+    // TLabel hinter TComboBoxStyleHelper; Korpus laz 16 Dateien, rw 0).
+    // Jetzt wie 'record helper': SkipHelperFor, nkRecord, ParseClassBody.
+    // Der Lexer hat nur 1-Token-Peek - 'type' wird darum konsumiert, bevor
+    // 'helper' sichtbar ist. Folgt kein 'helper' (starker Alias
+    // 'TFoo = type Integer'), laeuft der Alias-Zweig ohne das 'type'
+    // weiter; er sammelt nur Bezeichner, das Ergebnis ist dasselbe.
+    // Knoten-Position = das 'type'-Token: uDfmRepoIndex erkennt den
+    // type helper daran (SCA184/S4-Kriterium fuer .pp-Units).
+    // Grenze wie bei 'class helper(TBase) for': ein Ahnen-Helper
+    // 'type helper(TBase) for X' bricht SkipHelperFor am '(' ab.
+    var TypeKwConsumed := False;
+    if T.Kind = tkKwType then
+    begin
+      Next; // 'type'
+      TypeKwConsumed := True;
+      if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'helper') then
+      begin
+        SkipHelperFor;
+        var HNode := SecNode.Add(nkRecord, Name, T.Line, T.Col);
+        ParseClassBody(HNode, SecNode);
+        Eat(tkSemicolon);
+        GuardAdvance(StartCount);
+        Continue;
+      end;
+    end;
+
     case T.Kind of
       tkKwClass:
         begin
@@ -1270,7 +1362,9 @@ begin
         // liefert. Ripple ~0: KEIN Detektor konsumiert nkTypeAlias/tkiAlias,
         // und CollectText (uUnusedUses) addiert TypeRef fuer JEDE Knotenart
         // (nur nkUsesItem ausgenommen) -> Usage-Zaehlung unveraendert.
-        var IsEnum       := (Tok.Kind = tkLParen);
+        // Nach einem konsumierten 'type' (starker Alias) ist '(' kein
+        // Enum-Anfang - wie vor P1, als Tok noch auf 'type' stand.
+        var IsEnum       := (Tok.Kind = tkLParen) and not TypeKwConsumed;
         var AliasContent := '';
         var Depth        := 0;
         while not (Tok.Kind in [tkKwEnd, tkEof]) do
@@ -1380,10 +1474,7 @@ begin
             tkSemicolon:
               if NestDepth = 0 then Break;
           end;
-          if Tok.Kind = tkStrLit then
-            JoinTokInto(ConstValue, QuoteStrLit(Tok.Value))
-          else
-            JoinTokInto(ConstValue, Tok.Value);
+          JoinTokInto(ConstValue, TokSourceText(Tok));
           Next;
         end;
       end;
@@ -2055,7 +2146,9 @@ begin
             // JoinTokInto statt roher Konkatenation: Mehrwort-Typen wie
             // 'array of Integer' klebten sonst zu 'arrayofInteger' zusammen
             // (Audit 2026-07) - Wortgrenzen-Checks auf TypeRef liefen ins Leere.
-            JoinTokInto(PType, Tok.Value);
+            // Ein Literal im Vorgabewert ('S: string = ''x''') in Quellform
+            // (TokSourceText, P3) - roh las es sich als Code.
+            JoinTokInto(PType, TokSourceText(Tok));
             Next;
           end;
 
@@ -2236,14 +2329,26 @@ begin
     ParseLocalVarSection(MNode);
   end;
 
+  // Rumpf-Ende festhalten (TAstNode.EndLine): die Zeile des letzten
+  // konsumierten Tokens nach dem Rumpf, also des schliessenden 'end' bzw.
+  // des ';' dahinter. FillMissingMethodNames ordnet eine Fundzeile nur
+  // dann dieser Routine zu, wenn sie in [Line, EndLine] liegt - ohne das
+  // Ende landete ein Kommentar ZWISCHEN zwei Routinen bei der vorigen
+  // und eine Zeile vor der ersten Implementierung bei der letzten
+  // Interface-Deklaration. Ohne begin/asm (kopflose Routine) bleibt
+  // EndLine 0: keine Spanne, keine Zuordnung.
   if Tok.Kind = tkKwBegin then
-    ParseBlock(MNode)
+  begin
+    ParseBlock(MNode);
+    MNode.EndLine := FLastConsumedLine;
+  end
   else if Tok.Kind = tkKwAsm then
   begin
     Next;
     SkipTo([tkKwEnd, tkEof]);
     Eat(tkKwEnd);
     Eat(tkSemicolon);
+    MNode.EndLine := FLastConsumedLine;
   end;
 end;
 
@@ -2645,7 +2750,9 @@ begin
               Dec(Depth);
             end;
             if ExitArg <> '' then ExitArg := ExitArg + ' ';
-            ExitArg := ExitArg + Tok.Value;
+            // Literale in Quellform (TokSourceText, P3): roh las sich
+            // 'Exit(''AName'')' wie ein Lesen von AName (SCA054).
+            ExitArg := ExitArg + TokSourceText(Tok);
             Next;
           end;
           Eat(tkRParen);
@@ -2678,10 +2785,7 @@ begin
           while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkKwElse, tkKwUntil,
                                   tkKwExcept, tkKwFinally, tkEof]) do
           begin
-            if Tok.Kind = tkStrLit then
-              JoinTokInto(RhsTxt, QuoteStrLit(Tok.Value))
-            else
-              JoinTokInto(RhsTxt, Tok.Value);
+            JoinTokInto(RhsTxt, TokSourceText(Tok));
             Next;
           end;
           Parent.Add(nkAssign, T.Value, T.Line, T.Col).TypeRef := RhsTxt;
@@ -2884,10 +2988,7 @@ begin
   CondText := '';
   while not (Tok.Kind in [tkKwThen, tkKwEnd, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      CondText := CondText + QuoteStrLit(Tok.Value)
-    else
-      CondText := CondText + Tok.Value;
+    CondText := CondText + TokSourceText(Tok);
     CondText := CondText + ' ';
     Next;
   end;
@@ -3061,10 +3162,7 @@ begin
   var Sel := '';
   while not (Tok.Kind in [tkKwOf, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Sel, QuoteStrLit(Tok.Value))
-    else
-      JoinTokInto(Sel, Tok.Value);
+    JoinTokInto(Sel, TokSourceText(Tok));
     Next;
   end;
   CaseNode.TypeRef := Sel;
@@ -3174,15 +3272,16 @@ begin
   // was auf '.' endet, am Folgetoken - der Bereichsoperator '..'
   // (tkDotDot) stand als 'Low ( A ) ..High ( A )', ein Stringliteral '.'
   // ebenso. Jetzt traegt '..' wie vor Major 14 beidseitig ein Leerzeichen.
-  // Bestand und bewusst unveraendert: Stringliterale stehen roh (ohne
-  // QuoteStrLit) im Kopf - eine Umstellung bewegt Funde (A/B).
+  // Stringliterale stehen seit der Parser-Charge P3 in Quellform im Kopf
+  // (TokSourceText) - vorher roh, 'for C in ''AItem''' las sich wie ein
+  // Lesen von AItem. Korpus-A/B (Simulation): 0 Bewegung.
   Header := '';
   PrevKind := tkEof;
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
     if (Header <> '') and (Tok.Kind <> tkDot) and (PrevKind <> tkDot) then
       Header := Header + ' ';
-    Header := Header + Tok.Value;
+    Header := Header + TokSourceText(Tok);
     PrevKind := Tok.Kind;
     Next;
   end;
@@ -3210,10 +3309,7 @@ begin
   Cond := '';
   while not (Tok.Kind in [tkKwDo, tkEof]) do
   begin
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Cond, QuoteStrLit(Tok.Value))
-    else
-      JoinTokInto(Cond, Tok.Value);
+    JoinTokInto(Cond, TokSourceText(Tok));
     Next;
   end;
   WhileNode.TypeRef := Cond;
@@ -3441,7 +3537,7 @@ begin
                             tkKwExcept, tkKwFinally, tkEof]) do
     begin
       if AtExpr <> '' then AtExpr := AtExpr + ' ';
-      AtExpr := AtExpr + Tok.Value;
+      AtExpr := AtExpr + TokSourceText(Tok);   // Literale in Quellform (P3)
       Next;
     end;
     RaiseNode.TypeRef := Trim(AtExpr);
@@ -3509,14 +3605,91 @@ begin
   Result := True;
 end;
 
+procedure TParser2.StepAnonHead(var AScan: TAnonHeadScan;
+  var ANestDepth: Integer);
+// Ein Kopf oeffnet sich an 'procedure'/'function', wenn
+//   * davor ':=', '(' oder ',' steht - die anonyme Methode selbst
+//     (FLastConsumed ist hier das Token VOR dem Schluesselwort), oder
+//   * dahinter ein Bezeichner folgt - eine benannte lokale Routine im
+//     Deklarationsteil der anonymen Methode; sie bringt ihr eigenes begin.
+// Prozedurtypen ('F: procedure(X: Integer);', '= procedure of object',
+// 'reference to function') oeffnen nichts. Der Lexer hat nur 1-Token-Peek,
+// darum faellt die Entscheidung einen Schritt spaeter (KwPending).
+// Jeder Kopf merkt sich die Tiefe an seinem Schluesselwort. Ein 'begin'
+// (oder 'forward' einer lokalen Routine) schliesst den obersten Kopf nur
+// auf GENAU dieser Tiefe - ein inneres 'begin' im Rumpf einer lokalen
+// Routine (Tiefe + 1) gehoert ihr, nicht dem Kopf (Review P2, M1). Ist der
+// Scanner unter die Tiefe eines Kopfs zurueckgefallen (dessen Klammer bzw.
+// Block ist zu), kann der Kopf kein 'begin' mehr bekommen und faellt weg -
+// ein Kopf in einer Klammer ohne 'begin' haelt das ';' auf Tiefe 0 also
+// nicht mehr auf (Review P2, m1). Die Tiefe selbst zaehlt der Aufrufer.
+// Grenze (Korpus 0 Stellen): ein varianter record ('case .. of' ohne
+// eigenes 'end') im Kopf zaehlt eine Tiefe zu viel.
+begin
+  while (AScan.Count > 0) and (AScan.Depths[AScan.Count - 1] > ANestDepth) do
+    Dec(AScan.Count);
+  if AScan.KwPending then
+  begin
+    AScan.KwPending := False;
+    if (Tok.Kind = tkIdent) or
+       (AScan.KwPrev in [tkAssign, tkLParen, tkComma]) then
+    begin
+      if AScan.Count >= Length(AScan.Depths) then
+        SetLength(AScan.Depths, AScan.Count + 4);
+      AScan.Depths[AScan.Count] := AScan.KwDepth;
+      Inc(AScan.Count);
+    end;
+  end;
+  case Tok.Kind of
+    tkKwProcedure, tkKwFunction:
+      begin
+        AScan.KwPending := True;
+        AScan.KwPrev    := FLastConsumed;
+        AScan.KwDepth   := ANestDepth;
+      end;
+    tkKwBegin, tkKwForward:
+      if (AScan.Count > 0) and
+         (AScan.Depths[AScan.Count - 1] = ANestDepth) then
+        Dec(AScan.Count);
+    tkKwRecord:
+      if AScan.Count > 0 then Inc(ANestDepth);
+  else
+    ;   // jedes andere Token aendert den Kopf-Zustand nicht
+  end;
+end;
+
+function TParser2.RhsStopsAt(ANestDepth: Integer;
+  const AScan: TAnonHeadScan): Boolean;
+// Dieselben Abbruch-Token wie vor P2, nur ';' wartet auf das 'begin' eines
+// offenen Kopfs. Die Token aendern die Tiefe nicht - die Pruefung vor dem
+// case ist darum gleichwertig zur frueheren im case. Auf Tiefe 0 hat
+// StepAnonHead alle tieferen Koepfe schon verworfen: Count > 0 heisst
+// 'ein Kopf auf Tiefe 0 ist offen'.
+begin
+  Result := False;
+  if ANestDepth > 0 then Exit;
+  case Tok.Kind of
+    tkSemicolon:
+      Result := AScan.Count = 0;
+    tkKwElse, tkKwUntil, tkKwExcept, tkKwFinally, tkEof:
+      Result := True;
+  else
+    ;   // jedes andere Token setzt den Scan fort
+  end;
+end;
+
 function TParser2.ScanInlineInitializer: string;
 var
   NestDepth : Integer;
+  Anon      : TAnonHeadScan;
 begin
   Result := '';
   NestDepth := 0;
+  Anon := Default(TAnonHeadScan);
   while not FLex.AtEnd do
   begin
+    StepAnonHead(Anon, NestDepth);   // P2: 'var X := procedure var ..'
+    if RhsStopsAt(NestDepth, Anon) then Break;
     case Tok.Kind of
       // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
       // schliessenden Block und muessen wie 'begin' die Tiefe erhoehen -
@@ -3528,14 +3701,10 @@ begin
       tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
       tkKwEnd:
         if NestDepth > 0 then Dec(NestDepth) else Break;
-      tkSemicolon, tkKwElse, tkKwUntil,
-      tkKwExcept, tkKwFinally, tkEof:
-        if NestDepth = 0 then Break;
-    end;
-    if Tok.Kind = tkStrLit then
-      JoinTokInto(Result, QuoteStrLit(Tok.Value))
     else
-      JoinTokInto(Result, Tok.Value);
+      ;   // ';' else until except finally: RhsStopsAt oben
+    end;
+    JoinTokInto(Result, TokSourceText(Tok));
     Next;
   end;
 end;
@@ -3721,8 +3890,19 @@ begin
     // Wichtig: '+'-Verkettungen, Klammern und Zeichenketten vollstaendig mitladen.
     var FullRHS := '';
     var NestDepth := 0;
+    // P2 (Paket 9015): Kopf einer anonymen Methode mit var-/const-/type-
+    // Sektion. Bis dahin endete der Scan am ';' der Sektion, der Rumpf lief
+    // als Anweisungen DIESER Methode weiter (var-Zeilen als Label-Phantome).
+    // Jetzt bleibt er RHS-Text wie bei jeder anonymen Methode ohne Sektion.
+    var Anon := Default(TAnonHeadScan);
     while not FLex.AtEnd do
     begin
+      StepAnonHead(Anon, NestDepth);
+      // RHS endet an ';' (nicht bei offenem Kopf einer anonymen Methode, P2)
+      // und an else/until/except/finally - eine Zuweisung im THEN-Zweig hat
+      // keinen ';' vor dem else, sonst wuerde der else-Zweig verschluckt und
+      // das end;-Zaehlen geht schief. Alles nur auf Tiefe 0.
+      if RhsStopsAt(NestDepth, Anon) then Break;
       case Tok.Kind of
         // [8] (Core-Audit 2026-07-17): case/try/asm oeffnen einen mit 'end'
         // schliessenden Block - wie 'begin' Tiefe erhoehen, sonst bricht der
@@ -3736,17 +3916,10 @@ begin
         // oberster Ebene.
         tkKwEnd:
           if NestDepth > 0 then Dec(NestDepth) else Break;
-        // RHS endet auch an else/until/except/finally - eine Zuweisung im
-        // THEN-Zweig hat keinen ';' vor dem else, sonst wuerde der else-Zweig
-        // verschluckt und das end;-Zaehlen geht schief.
-        tkSemicolon, tkKwElse, tkKwUntil,
-        tkKwExcept, tkKwFinally, tkEof:
-          if NestDepth = 0 then Break;
-      end;
-      if Tok.Kind = tkStrLit then
-        JoinTokInto(FullRHS, QuoteStrLit(Tok.Value))
       else
-        JoinTokInto(FullRHS, Tok.Value);
+        ;   // Abbruch-Token: RhsStopsAt oben
+      end;
+      JoinTokInto(FullRHS, TokSourceText(Tok));
       Next;
     end;
     Node         := Parent.Add(nkAssign, LHS, T.Line, T.Col);
@@ -3855,10 +4028,8 @@ begin
             // 'varlow.') ein Phantom-Deref einer gleichnamigen lokalen
             // Variable. Als Wort-Evidenz ('Data DB TField') bleiben die
             // Idents fuer uUnusedUses vollwertig erhalten.
-            if Tok.Kind = tkStrLit then
-              JoinTokInto(GText, QuoteStrLit(Tok.Value))
-            else if Tok.Kind <> tkDot then
-              JoinTokInto(GText, Tok.Value);
+            if Tok.Kind <> tkDot then
+              JoinTokInto(GText, TokSourceText(Tok));
             Next;
           end;
           S := S + GText;
@@ -3906,10 +4077,7 @@ begin
             end
             else
             begin
-              if ArgTok.Kind = tkStrLit then
-                JoinTokInto(Args, QuoteStrLit(ArgTok.Value))
-              else
-                JoinTokInto(Args, ArgTok.Value);
+              JoinTokInto(Args, TokSourceText(ArgTok));
               Next;
             end;
           end;

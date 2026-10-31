@@ -35,6 +35,23 @@ type
     [Test] procedure Review_Forms;
     // Review R3, verpasst (Charge FC): 'E := ..' zwischen Handler und raise.
     [Test] procedure Sca122_BoundReassigned_Refused;
+    // rwE29: raise ENotImplemented nicht in einen Haken (virtual/override,
+    // per inherited bzw. vom Framework gerufen) und nicht in einen Callback.
+    [Test] procedure Sca020_RaiseInHookOrCallback_Refused;
+    // rwE29: ein Kommentar nennt das fehlende raise - der Autor kennt es.
+    [Test] procedure Sca120_KnownMissingRaise_Refused;
+    // rwE30: ein Kommentar ohne Inhalt ('//') bzw. eine Leerzeile im Rumpf
+    // wird ersetzt statt zu sperren bzw. stehen zu bleiben.
+    [Test] procedure Sca020_EmptyCommentOrBlankLine_Replaced;
+    // rwE30: kein raise in einer Methode, die ein Interface implementieren
+    // kann (Klasse mit Interface-Liste).
+    [Test] procedure Sca020_RaiseInInterfaceMethod_Refused;
+    // rwE30: kein raise in einem Callback fremden Codes (cdecl), in einer
+    // als Wert uebergebenen Prozedur und in einem Setter.
+    [Test] procedure Sca020_RaiseInValueCallbackOrSetter_Refused;
+    // rwE31 Stufe 3 (cnwizards CnWizIdeUtils.pas:1226): die Unit baut auch
+    // mit Delphi 5 - dort gibt es kein ENotImplemented.
+    [Test] procedure Sca020_RaiseOldCompiler_Refused;
   end;
 
 implementation
@@ -358,6 +375,284 @@ begin
   Assert.AreEqual('', Fix(rkReRaise, InProc(['  try X; except on E: EFoo do '
     + 'begin Replace(A, E, B); raise E; end; end;']), 6, ReRaiseMsg('E'), R));
   Assert.IsTrue(Pos('als Argument', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseInHookOrCallback_Refused;
+var
+  R, Src : string;
+begin
+  // doublecmd kascrypt dcpcrypt2.pas:307 (minimiert): TDCP_hash.Init ist
+  // 'virtual' und leer, die Nachfahren rufen 'inherited Init;' - mit raise
+  // scheiterte jedes Hashing. Ohne Fix angeboten (rot).
+  Src := Join(['unit u;', 'interface', 'type', '  TDCP_hash = class',
+    '    procedure Init; virtual;', '    procedure Burn;', '  end;',
+    'implementation', 'procedure TDCP_hash.Init;', 'begin', 'end;',
+    'procedure TDCP_hash.Burn;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 9, RAISE_NOT_IMPLEMENTED, R), 'virtual');
+  Assert.IsTrue(Pos('virtual', R) > 0, R);
+  // Der Absichtskommentar bleibt (bedeutungsgleich).
+  Assert.IsTrue(Fix(rkEmpty, Src, 9, '', R) <> '', R);
+  // Gegenprobe: dieselbe Klasse, Methode ohne Direktive.
+  Assert.IsTrue(Fix(rkEmpty, Src, 12, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+  // Ein leerer override schaltet den Vorfahren bewusst ab (cnwizards
+  // LoadSettings, doublecmd Finalize).
+  Src := Join(['unit u;', 'interface', 'type', '  TWiz = class(TBase)',
+    '    procedure LoadSettings(Ini: TObject); override;', '  end;',
+    'implementation', 'procedure TWiz.LoadSettings(Ini: TObject);', 'begin',
+    'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 8, RAISE_NOT_IMPLEMENTED, R), 'override');
+  Assert.IsTrue(Pos('override', R) > 0, R);
+  // doublecmd multithreadprocslaz.pas:15 (minimiert): Register geht per
+  // '@Register' an RegisterPackage - das raise braeche die Installation.
+  Src := InImpl(['procedure Register;', 'begin', 'end;', 'initialization',
+    '  RegisterPackage(''MultiThreadProcsLaz'', @Register);']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R), 'Callback');
+  Assert.IsTrue(Pos('@Register', R) > 0, R);
+  // Auch qualifiziert ('@Self.Bar').
+  Src := InImpl(['procedure TFoo.Bar;', 'begin', 'end;',
+    'procedure TFoo.Hook;', 'begin', '  SetHandler(@Self.Bar);', 'end;']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R),
+    '@Self.Bar');
+  Assert.IsTrue(Pos('@Bar', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca120_KnownMissingRaise_Refused;
+var
+  R : string;
+begin
+  // Indy IdHTTPWebBrokerBridge.pas:741 (minimiert): Arm eines Setters, der
+  // Kommentar fragt nach dem raise - der eigene Konstruktor ruft den Setter,
+  // mit raise scheiterte jede Antwort. Ohne Fix angeboten (rot).
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  case Index of',
+    '    1: EFoo.Create(''x''); // shouldn''t this be calling ''raise''?',
+    '    2: S := V;', '  end;']), 7, MissingMsg('EFoo'), R), 'Kommentar');
+  Assert.IsTrue(Pos('raise', R) > 0, R);
+  // Ebenso auf der Zeile darueber.
+  Assert.AreEqual('', Fix(rkMissing, InProc(['  // no raise here: called while '
+    + 'constructing', '  EFoo.Create(''x'');']), 7, MissingMsg('EFoo'), R),
+    'Kommentar darueber');
+  // Gegenprobe: 'raised' ist ein anderes Wort (Katalog: '// never raised!'),
+  // 'raise' in einem String zaehlt nicht.
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''x''); // never raised!']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''x''); // never raised!']), 6,
+      MissingMsg('EFoo'), R), R);
+  Assert.AreEqual(InProc(['  raise EFoo.Create(''raise'');']),
+    Fix(rkMissing, InProc(['  EFoo.Create(''raise'');']), 6, MissingMsg('EFoo'),
+      R), R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_EmptyCommentOrBlankLine_Replaced;
+var
+  R, Src : string;
+begin
+  // CEF4Delphi uCEFAccessibilityHandler.pas:80 (minimiert): im Rumpf nur
+  // ein nacktes '//' - bis rwE30 gesperrt als 'auskommentierter Code
+  // (SCA070)?' (rot ohne Fix). Die Zeile wird ersetzt.
+  Src := InImpl(['procedure TCEFAccessibilityHandlerOwn.OnAccessibilityTreeChange'
+    + '(const value: ICefValue);', 'begin', '  //', 'end;']);
+  Assert.AreEqual(InImpl(['procedure TCEFAccessibilityHandlerOwn.'
+      + 'OnAccessibilityTreeChange(const value: ICefValue);', 'begin',
+      '  ' + INTENT_LINE, 'end;']), Fix(rkEmpty, Src, 4, '', R), R);
+  // jcl StackTraceViewerHelloWorldExampleReg.pas:321: '//' in Spalte 1, die
+  // neue Zeile eine Stufe unter dem end.
+  Assert.AreEqual(InImpl(['procedure TTestLocationInfo.SetFileName(AValue: '
+      + 'string);', 'begin', '  ' + INTENT_LINE, 'end;']),
+    Fix(rkEmpty, InImpl(['procedure TTestLocationInfo.SetFileName(AValue: '
+      + 'string);', 'begin', '//', 'end;']), 4, '', R), R);
+  // Die raise-Variante bleibt beim leeren '//' gesperrt - es kann die Marke
+  // "nichts zu tun" sein (HeidiSQL main.pas:4641) -, jetzt mit diesem Grund
+  // statt 'SCA070?'; eine Leerzeile ersetzt sie.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  //',
+    'end;']), 4, RAISE_NOT_IMPLEMENTED, R), 'raise und //');
+  Assert.IsTrue(Pos('SCA070', R) = 0, R);
+  Assert.AreEqual(InImpl(['procedure P;', 'begin',
+      '  raise ENotImplemented.Create(''P'');', 'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', 'begin', '', 'end;']), 4,
+      RAISE_NOT_IMPLEMENTED, R), R);
+  // Leere Blockkommentare ebenso.
+  Assert.AreEqual(InImpl(['procedure P;', 'begin', '  ' + INTENT_LINE, 'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  { }', 'end;']), 4, '', R), R);
+  // cnwizards CnWizIdeUtils.pas:1226 (minimiert): eine Leerzeile im Rumpf -
+  // bis rwE30 kam der Kommentar hinter das begin, die Leerzeile blieb
+  // darunter stehen (rot ohne Fix).
+  Src := InImpl(['procedure TCnEditControlWrapper.AddEditorMouseMoveNotifier(',
+    '  Notifier: TEditorMouseMoveNotifier);', 'begin', '', 'end;']);
+  Assert.AreEqual(InImpl(['procedure TCnEditControlWrapper.'
+      + 'AddEditorMouseMoveNotifier(', '  Notifier: TEditorMouseMoveNotifier);',
+      'begin', '  ' + INTENT_LINE, 'end;']), Fix(rkEmpty, Src, 4, '', R), R);
+  // Leerzeilen und '//' gemischt, eingerueckt (Tabs).
+  Assert.AreEqual(InImpl(['procedure P;', #9'begin', #9#9 + INTENT_LINE,
+      #9'end;']),
+    Fix(rkEmpty, InImpl(['procedure P;', #9'begin', '', #9#9'//', '   ',
+      #9'end;']), 4, '', R), R);
+  // Gegenproben: ein Kommentar MIT Text bleibt gesperrt (SCA070?), eine
+  // Direktive ebenso, ein '//' hinter dem begin ebenso.
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  //',
+    '  // X := 1;', 'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin', '  {$R-}',
+    'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
+  Assert.AreEqual('', Fix(rkEmpty, InImpl(['procedure P;', 'begin //', '',
+    'end;']), 4, '', R));
+  Assert.IsTrue(Pos('SCA070', R) > 0, R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseInInterfaceMethod_Refused;
+var
+  R, Src : string;
+begin
+  // jvcl JvDynControlEngineJVCL.pas:1567 (minimiert): ControlSetOnClick
+  // gehoert zu IJvDynControl (eine andere Unit), die Engine ruft es fuer
+  // jedes Steuerelement - ohne Fix angeboten (rot).
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TJvDynControlJVCLDateEdit = class(TJvDateTimePicker, IUnknown,',
+    '    IJvDynControl, IJvDynControlData)', '  public',
+    '    procedure ControlSetOnClick(Value: TNotifyEvent);', '  end;',
+    'implementation',
+    'procedure TJvDynControlJVCLDateEdit.ControlSetOnClick(Value: TNotifyEvent);',
+    'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 10, RAISE_NOT_IMPLEMENTED, R), 'extern');
+  Assert.IsTrue(Pos('IJvDynControl', R) > 0, R);
+  // Der Absichtskommentar bleibt (bedeutungsgleich).
+  Assert.IsTrue(Fix(rkEmpty, Src, 10, '', R) <> '', R);
+  // skia4delphi Skia.Tests.Foundation.Runner.pas:370: unter protected,
+  // ITestLogger aus DUnitX.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  TAsyncTestRunner = class(TInterfacedObject, ITestLogger, IAsyncTestRunner)',
+    '  protected', '    procedure OnEndSetupTest(const ATest: ITestInfo);',
+    '  end;', 'implementation',
+    'procedure TAsyncTestRunner.OnEndSetupTest(const ATest: ITestInfo);',
+    'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 9, RAISE_NOT_IMPLEMENTED, R), 'skia');
+  Assert.IsTrue(Pos('ITestLogger', R) > 0, R);
+  // Das Interface steht in der Datei und deklariert die Methode - auch ueber
+  // seinen Vorfahren.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  IBase = interface', '    [''{8A3B2C10-0000-0000-0000-000000000001}'']',
+    '    procedure Changed;', '  end;', '  INotify = interface(IBase)',
+    '    procedure Other;', '  end;',
+    '  TFoo = class(TInterfacedObject, INotify)', '    procedure Changed;',
+    '    procedure Helper;', '  end;', 'implementation',
+    'procedure TFoo.Changed;', 'begin', 'end;',
+    'procedure TFoo.Helper;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 16, RAISE_NOT_IMPLEMENTED, R), 'Vorfahr');
+  Assert.IsTrue(Pos('INotify.Changed', R) > 0, R);
+  // Gegenprobe: Helper steht in keinem Interface der Kette (alle in der
+  // Datei, die Wurzel IInterface) - die Hilfe bleibt.
+  Assert.IsTrue(Fix(rkEmpty, Src, 19, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+  // Eine Methodenzuordnung leitet ein Interface auf die Methode um.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  IFoo = interface', '    procedure Bar;', '  end;',
+    '  TFoo = class(TInterfacedObject, IFoo)',
+    '    procedure IFoo.Bar = DoBar;', '    procedure DoBar;', '  end;',
+    'implementation', 'procedure TFoo.DoBar;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 12, RAISE_NOT_IMPLEMENTED, R), 'Zuordnung');
+  Assert.IsTrue(Pos('DoBar', R) > 0, R);
+  // Ein Interface-Vorfahr ausserhalb der Datei: nicht zu beweisen.
+  Src := Join(['unit u;', 'interface', 'type',
+    '  IMine = interface(IOTANotifier)', '    procedure Other;', '  end;',
+    '  TFoo = class(TInterfacedObject, IMine)', '    procedure Modified;',
+    '  end;', 'implementation', 'procedure TFoo.Modified;', 'begin', 'end;',
+    'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 11, RAISE_NOT_IMPLEMENTED, R),
+    'Vorfahr extern');
+  Assert.IsTrue(Pos('IMine', R) > 0, R);
+  // Review e/HilfeFixF: nur Interfaces in der Liste - 'class(IFremd)' hat
+  // die Basis TObject, IFremd steht an erster Stelle (bis dahin
+  // uebersprungen, raise angeboten: rot ohne Fix).
+  Src := Join(['unit u;', 'interface', 'type', '  TFoo = class(IFremd)',
+    '    procedure Bar;', '  end;', 'implementation', 'procedure TFoo.Bar;',
+    'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 8, RAISE_NOT_IMPLEMENTED, R),
+    'class(IFremd)');
+  Assert.IsTrue(Pos('IFremd', R) > 0, R);
+  // Gegenprobe: nur eine Basisklasse ('class(TFremd)') - raise bleibt.
+  Assert.IsTrue(Fix(rkEmpty, StringReplace(Src, 'IFremd', 'TFremd', []), 8,
+    RAISE_NOT_IMPLEMENTED, R) <> '', R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseInValueCallbackOrSetter_Refused;
+var
+  R, Src : string;
+begin
+  // mORMot2 mormot.db.sql.postgres.pas:494 (minimiert): ein cdecl-Callback
+  // an libpq - ohne Fix angeboten (rot).
+  Src := InImpl(['procedure DummyNoticeProcessor(arg: pointer; message: '
+    + 'PUtf8Char); cdecl;', 'begin', 'end;']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R), 'cdecl');
+  Assert.IsTrue(Pos('cdecl', R) > 0, R);
+  Assert.IsTrue(Fix(rkEmpty, Src, 4, '', R) <> '', R);
+  // mORMot2 mormot.orm.storage.pas:4483 (minimiert): DoNothingEvent geht
+  // als Argument an SearchEvent (rot ohne Fix).
+  Src := InImpl(['function TRestStorageInMemory.Count: integer;', 'begin',
+    '  result := SearchEvent(FieldName, FieldValue, DoNothingEvent,',
+    '    nil, 0, 0);', 'end;', '',
+    'class procedure TRestStorageInMemory.DoNothingEvent(', '  aDest: pointer; '
+    + 'aRec: TOrm; aIndex: integer);', 'begin', 'end;']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 10, RAISE_NOT_IMPLEMENTED, R), 'Argument');
+  Assert.IsTrue(Pos('DoNothingEvent', R) > 0, R);
+  Assert.IsTrue(Pos('6', R) > 0, R);
+  // Indy IdFIPS.pas:169: Vorgabe einer Prozedurvariablen.
+  Src := InImpl(['procedure DefUpdateHashInst(ACtx: TIdHashIntCtx);', 'begin',
+    'end;', 'initialization', '  UpdateHashInst := DefUpdateHashInst;']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R),
+    'Zuweisung');
+  Assert.IsTrue(Pos('DefUpdateHashInst', R) > 0, R);
+  // Gegenproben: als Anweisung aufgerufen (mit und ohne Klammern) - die
+  // Hilfe bleibt. Eine Funktion als Wert sieht der Planer nicht (GRENZE).
+  Src := InImpl(['procedure Init;', 'begin', 'end;', 'procedure Run;', 'begin',
+    '  Init;', '  if X then Init else Init();', 'end;']);
+  Assert.IsTrue(Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+  Src := InImpl(['function GetFoo: Integer;', 'begin', 'end;',
+    'procedure Run;', 'begin', '  X := GetFoo;', 'end;']);
+  Assert.IsTrue(Fix(rkEmpty, Src, 4, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+  // jvcl JvAppStorage.pas:1504 (minimiert): der leere Schreibzugriff einer
+  // Eigenschaft ignoriert Zuweisungen mit Absicht.
+  Src := Join(['unit u;', 'interface', 'type', '  TStore = class',
+    '    procedure SetSubStorages(Value: TObject);',
+    '    function GetName: string;',
+    '    property SubStorages: TObject read FSub write SetSubStorages;',
+    '    property Name: string read GetName;', '  end;', 'implementation',
+    'procedure TStore.SetSubStorages(Value: TObject);', 'begin', 'end;',
+    'function TStore.GetName: string;', 'begin', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Src, 11, RAISE_NOT_IMPLEMENTED, R), 'Setter');
+  Assert.IsTrue(Pos('7', R) > 0, R);
+  // Gegenprobe: ein leerer Lesezugriff liefert nichts - raise bleibt.
+  Assert.IsTrue(Fix(rkEmpty, Src, 14, RAISE_NOT_IMPLEMENTED, R) <> '', R);
+end;
+
+procedure TTestRdxRaiseFixes.Sca020_RaiseOldCompiler_Refused;
+var
+  R, Body : string;
+begin
+  // cnwizards Bin\PSDeclEx\CnWizIdeUtils.pas:1226 (minimiert): die uses
+  // fragt '{$IFNDEF VER130}' (Delphi 5), ENotImplemented steht in SysUtils
+  // erst ab Delphi 2009 - der Klick braeche dort den Bau. Bis rwE31
+  // angeboten (rot ohne Fix). Der Kopf steht auf Zeile 10.
+  Body := Join(['implementation',
+    'procedure TCnEditControlWrapper.AddEditorMouseLeaveNotifier(',
+    '  Notifier: TEditorMouseLeaveNotifier);', 'begin', '', 'end;', 'end.']);
+  Assert.AreEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '{$IFNDEF VER130}', '  DesignIntf,',
+    '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10, RAISE_NOT_IMPLEMENTED, R),
+    'Delphi 5');
+  Assert.IsTrue(Pos('VER130', R) > 0, R);
+  Assert.IsTrue(Pos('ENotImplemented', R) > 0, R);
+  // Der Absichtskommentar bleibt (bedeutungsgleich).
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '{$IFNDEF VER130}', '  DesignIntf,',
+    '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10, '', R), R);
+  // Gegenprobe: ohne die Weiche - raise angeboten (Kopf auf Zeile 8).
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Windows, SysUtils,', '  DesignIntf,', '  ToolsAPI;']) + #13#10
+    + Body, 8, RAISE_NOT_IMPLEMENTED, R), R);
+  // Gegenprobe: ein RTL-Namensraum ausserhalb der Weiche beweist Delphi ab
+  // XE2 - die Spur zaehlt nicht.
+  Assert.AreNotEqual('', Fix(rkEmpty, Join(['unit CnWizIdeUtils;', 'interface',
+    'uses', '  Winapi.Windows, System.SysUtils,', '{$IFNDEF VER130}',
+    '  DesignIntf,', '{$ENDIF}', '  ToolsAPI;']) + #13#10 + Body, 10,
+    RAISE_NOT_IMPLEMENTED, R), R);
 end;
 
 initialization

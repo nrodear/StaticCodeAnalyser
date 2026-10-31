@@ -51,7 +51,35 @@ type
     [Test] procedure Test_OtherTextInConstLiteral_StillDetected;   // S3-Gegenprobe
   end;
 
+  // S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26). Eigene
+  // Fixture, weil TTestDfmComponentUnused sonst ueber 20 Tests waechst;
+  // Ablauf (RunDetector/CountUnused) und Fixturen liegen auf Unit-Ebene.
+  [TestFixture]
+  TTestDfmComponentUnusedVisibility = class
+  public
+    [Test] procedure Test_FrameClassInUnusedUnit_StillDetected;    // nicht per uses
+    [Test] procedure Test_ImplUsesClass_NotDetected;               // uses im impl-Teil
+    [Test] procedure Test_HeaderStubUnitInUses_StillDetected;      // PSDecl-Muster
+    [Test] procedure Test_HeaderStubWithInclude_NotDetected;       // {$I}-Rumpf
+    [Test] procedure Test_IncludeSpellings_NotStub;                // (*$I, {$i'..'}, Tab
+    [Test] procedure Test_ConditionalDirectives_StillStub;         // {$IFDEF} ist kein {$I}
+    [Test] procedure Test_AbstractOnlyUnit_NotDetected;            // kein Rumpf noetig
+    [Test] procedure Test_ExternalOnlyUnit_NotDetected;            // external: kein Rumpf
+    [Test] procedure Test_UnitScopeSuffixInUses_NotDetected;       // 'Other' -> Vcl.Other
+    [Test] procedure Test_InterposerInOwnUnit_NotDetected;         // eigene Unit
+    [Test] procedure Test_UsesInIfdefBranch_NotDetected;           // inaktiver Zweig
+    [Test] procedure Test_UsesInElseBranch_NotDetected;            // inaktives ELSE
+    [Test] procedure Test_UsesOnlyInComment_StillDetected;         // Kommentar/String
+    [Test] procedure Test_ClassBehindTypeHelper_NotDetected;       // Parser P1
+    [Test] procedure Test_ClassBehindTypeHelperInPpUnit_StillDetected; // LCL-Kriterium
+  end;
+
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei Fixtures fuer denselben Detektor (Grenze 20 Tests je Fixture): die
+// Kernregeln und die S4-Sichtbarkeit teilen RunDetector und die Fixturen -
+// eine zweite Datei braechte nur einen zweiten Projekteintrag.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
@@ -59,13 +87,17 @@ uses
   uAstNode, uParser2,
   uDfmParser, uComponentGraph,
   uFormBinder, uDfmRepoIndex, uSymbolReferenceIndex,
+  uStaticFiles,   // ScanDialect - .pp zaehlt nur unter dlFpc als Unit
   uDfmComponentUnused;
 
 // Schreibt Main- (+ optional Other-) .pas in einen temp-Ordner, baut Repo-
 // und Symbol-Index ueber BEIDE Dateien und laesst den Detektor laufen.
 // MainFn wird als AOwnUnitPath (Cross-Unit + S3-Quelltext) uebergeben.
+// OtherFile: Dateiname der zweiten Unit - S4 vergleicht den Unit-Namen
+// (Dateistamm) mit den uses-Eintraegen, z.B. 'Vcl.Other.pas'.
 function RunDetector(const DfmSrc, MainPas, OtherPas: string;
-  UseSymIdx: Boolean = True): TObjectList<TLeakFinding>;
+  UseSymIdx: Boolean = True;
+  const OtherFile: string = 'uOther.pas'): TObjectList<TLeakFinding>;
 var
   DfmParser : TDfmParser;
   Graph     : TComponentGraph;
@@ -84,7 +116,7 @@ begin
   TDirectory.CreateDirectory(Tmp);
 
   MainFn  := TPath.Combine(Tmp, 'uMain.pas');
-  OtherFn := TPath.Combine(Tmp, 'uOther.pas');
+  OtherFn := TPath.Combine(Tmp, OtherFile);
   try
     TFile.WriteAllText(MainFn, MainPas, TEncoding.UTF8);
     if OtherPas <> '' then
@@ -495,10 +527,14 @@ end;
 procedure TTestDfmComponentUnused.Test_OwnProjectFrameClass_NotDetected;
 // S4: TMyFrame ist im Repo-Index (uOther deklariert die Klasse) -> visuelle
 // Vererbung bzw. eingebetteter Frame, konservativ ueberspringen.
+// 2026-10-26: uMain bindet uOther jetzt per uses ein. Die alte Fixture tat
+// das nicht - sie war so nicht uebersetzbar (TMyFrame in uMain unsichtbar)
+// und gruen nur, weil S4 jede Deklaration im Scan-Umfang zaehlte. Genau
+// die alte Fixture ist jetzt Test_FrameClassInUnusedUnit_StillDetected.
 const PAS_MAIN =
   'unit uMain;'#13#10 +
   'interface'#13#10 +
-  'uses Vcl.Forms;'#13#10 +
+  'uses Vcl.Forms, uOther;'#13#10 +
   'type TForm1 = class(TForm)'#13#10 +
   '  fraEmbedded: TMyFrame;'#13#10 +
   'end;'#13#10 +
@@ -677,7 +713,407 @@ begin
   finally F.Free; end;
 end;
 
+// ---- S4 nur fuer SICHTBARE, uebersetzbare Deklarationen (2026-10-26) -------
+//
+// Korpus-Anlass: im Sammelscan D:\git-sca-realworld schalteten die Pascal-
+// Script-Koepfe cnwizards/Bin/PSDecl/StdCtrls.pas, Menus.pas, ... (leerer
+// implementation-Teil) und fremde Interposer (Kastri MainFrm 'TButton =
+// class(...)') SCA184 fuer TLabel/TButton/TMenuItem in ALLEN Repos stumm -
+// 10.975 von 11.993 Funden. Jetzt zaehlt nur eine Deklaration in der Form-
+// Unit selbst oder in einer per uses eingebundenen Unit, und nie ein Stub.
+//
+// Am gebauten Stand f45c964d (alte Regel) per Mini-Repo nachgemessen
+// (scratchpad sca184\mini, MinConfidence=low): UnusedUnit 0, HeaderStub 0 -
+// beide Tests sind dort ROT (erwartet 1); die vier Gegenproben 0 = gruen.
+// Die Pruefung, dass der Detektor im Mini-Repo ueberhaupt meldet, ist der
+// Fall ohne zweite Unit (Test_UnknownFrameClass_StillDetected): 1.
+//
+// Die Fixturen entstehen aus FrameMain/FrameUnit: der eine Unterschied
+// zwischen Fall und Gegenprobe steht damit als Argument im Aufruf.
+
+function CountUnused(const DfmSrc, MainPas, OtherPas: string;
+  const OtherFile: string = 'uOther.pas'): Integer;
+// RunDetector, zaehlen, freigeben - die S4-Faelle unterscheiden sich nur in
+// den Quelltexten, nicht im Ablauf.
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DfmSrc, MainPas, OtherPas, True, OtherFile);
+  try
+    Result := Count(F, fkDfmComponentUnused);
+  finally
+    F.Free;
+  end;
+end;
+
+function FrameMainBlock(const AUsesBlock, AImplPart: string): string;
+// uMain mit der Komponente fraEmbedded: TMyFrame. AUsesBlock steht
+// woertlich zwischen 'interface' und 'type' (uses-Klausel samt Direktiven
+// und Kommentaren), AImplPart direkt hinter 'implementation'.
+begin
+  Result := Format(
+    'unit uMain;'#13#10 +
+    'interface'#13#10 +
+    '%s' +
+    'type TForm1 = class(TForm)'#13#10 +
+    '  fraEmbedded: TMyFrame;'#13#10 +
+    'end;'#13#10 +
+    'var Form1: TForm1;'#13#10 +
+    'implementation'#13#10 +
+    '%send.', [AUsesBlock, AImplPart]);
+end;
+
+function FrameMain(const AIfaceUses, AImplPart: string): string;
+// FrameMainBlock mit einer schlichten uses-Liste AIfaceUses.
+begin
+  Result := FrameMainBlock(Format('uses %s;'#13#10, [AIfaceUses]), AImplPart);
+end;
+
+function FrameUnit(const AMember, AImplPart: string;
+  const AUnitName: string = 'uOther'): string;
+// Die zweite Unit: deklariert TMyFrame mit AMember als Rumpf ('' = ohne
+// Member); AImplPart steht direkt hinter 'implementation'.
+begin
+  Result := Format(
+    'unit %s;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type TMyFrame = class(TFrame)'#13#10 +
+    '%send;'#13#10 +
+    'implementation'#13#10 +
+    '%send.', [AUnitName, AMember, AImplPart]);
+end;
+
+const
+  DFM_FRAME_OBJECT =
+    'object Form1: TForm1'#13#10 +
+    '  object fraEmbedded: TMyFrame'#13#10 +
+    '  end'#13#10 +
+    'end';
+  // Konstruktor ohne Rumpf im implementation-Teil: macht uOther zum Stub,
+  // solange kein Include den Rumpf nachliefert.
+  MEMBER_NEEDS_BODY = '  constructor Create;'#13#10;
+  USES_OTHER        = 'Vcl.Forms, uOther';
+
+procedure TTestDfmComponentUnusedVisibility.Test_FrameClassInUnusedUnit_StillDetected;
+// Die alte S4-Fixture: uOther deklariert TMyFrame, uMain bindet uOther aber
+// NICHT ein. Der Compiler saehe die Klasse nicht; eine gleichnamige Klasse
+// irgendwo im Scan-Umfang ist kein Beleg fuer "projekteigen". Gegenproben:
+// Test_OwnProjectFrameClass_NotDetected (uOther im interface-uses) und
+// Test_ImplUsesClass_NotDetected (uOther im implementation-uses).
+begin
+  Assert.AreEqual<Integer>(1,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms', ''), FrameUnit('', '')),
+    'Klasse nur in einer NICHT eingebundenen Unit: S4 darf nicht greifen');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ImplUsesClass_NotDetected;
+// uOther steht nur in der uses-Klausel des implementation-Teils. Fuer den
+// Feldtyp reichte das dem Compiler nicht - S4 nimmt trotzdem beide Klauseln
+// (konservative Seite, kein neuer Fund aus einer Sichtbarkeitsfeinheit).
+// Traeger: CollectUsedUnits (uDfmComponentUnused) sammelt nkUsesItem ueber
+// die GANZE Unit. Beschraenkt man es auf den interface-Teil, liefert dieser
+// Test 1 wie Test_FrameClassInUnusedUnit_StillDetected, von dem er sich nur
+// in AImplPart unterscheidet.
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms', 'uses uOther;'#13#10),
+      FrameUnit('', '')),
+    'uses im implementation-Teil zaehlt fuer S4 mit');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_HeaderStubUnitInUses_StillDetected;
+// PSDecl-Muster: uOther ist eingebunden, deklariert TMyFrame mit einem
+// Konstruktor, hat aber KEINE Routine im implementation-Teil - so eine Unit
+// ist nicht uebersetzbar und liefert keine Komponentenklasse.
+begin
+  Assert.AreEqual<Integer>(1,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit(MEMBER_NEEDS_BODY, '')),
+    'Header-Stub zaehlt nicht als projekteigene Klasse');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_HeaderStubWithInclude_NotDetected;
+// Gegenprobe zum Stub, unterscheidet sich in genau einer Zeile: der Rumpf
+// kommt per {$I} (Lazarus-LCL-Muster). Der Parser expandiert Includes nicht;
+// ohne den Text-Schutz waere jede so gebaute Unit ein "Stub".
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit(MEMBER_NEEDS_BODY, '{$I uOther.inc}'#13#10)),
+    'Rumpf per Include: kein Stub, S4 greift');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_IncludeSpellings_NotStub;
+// Weitere Schreibweisen derselben Direktive (Review 2026-10-26, m1): klein,
+// Langform, Tab statt Leerzeichen, Apostroph direkt hinter $I, Klammer-
+// Stern-Form. Traeger: DirectiveIsInclude/HasIncludeAfter (uDfmRepoIndex);
+// die Fassung bis 3dd7d188 kannte nur '{$I ' und '{$INCLUDE ' (nach
+// UpperCase) und machte die letzten vier Faelle zum Stub (1 Fund).
+const
+  SPELLINGS: array[0..5] of string = (
+    '{$i uOther.inc}',
+    '{$include uOther.inc}',
+    '{$I'#9'uOther.inc}',
+    '{$INCLUDE'#9'uOther.inc}',
+    '{$I''uOther.inc''}',
+    '(*$I uOther.inc*)');
+var
+  S : string;
+begin
+  for S in SPELLINGS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+        FrameUnit(MEMBER_NEEDS_BODY, S + #13#10)),
+      'Include nicht erkannt: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ConditionalDirectives_StillStub;
+// Gegenprobe zu den Schreibweisen: Direktiven, die mit $I BEGINNEN, aber
+// kein Include sind, lassen den Stub ein Stub. Traeger: die Bedingung an
+// das Zeichen hinter $I/$INCLUDE (Whitespace oder Apostroph) in
+// DirectiveIsInclude - ein blosser Praefix-Vergleich auf '{$I' machte jeden
+// Fall hier zu 0.
+const
+  NOT_INCLUDES: array[0..4] of string = (
+    '{$IFDEF DEBUG}{$ENDIF}',
+    '{$IFNDEF DEBUG}{$ENDIF}',
+    '{$IF Defined(DEBUG)}{$IFEND}',
+    '{$IFOPT R+}{$ENDIF}',
+    '{$I+}');
+var
+  S : string;
+begin
+  for S in NOT_INCLUDES do
+  begin
+    Assert.AreEqual<Integer>(1,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+        FrameUnit(MEMBER_NEEDS_BODY, S + #13#10)),
+      'Kein Include, trotzdem als Rumpf gewertet: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_AbstractOnlyUnit_NotDetected;
+// Gegenprobe zum Stub: eine abstrakte Methode braucht keinen Rumpf - die
+// Unit ist trotz leerem implementation-Teil uebersetzbar.
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+      FrameUnit('  procedure Run; virtual; abstract;'#13#10, '')),
+    'nur abstrakte Methoden: kein Stub, S4 greift');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ExternalOnlyUnit_NotDetected;
+// Das interface deklariert NUR eine external-Routine, der implementation-
+// Teil ist leer - uebersetzbar (der Rumpf liegt in der DLL), also kein
+// Stub, TMyFrame bleibt geschuetzt.
+// Traeger: MethodNeedsBody (uDfmRepoIndex), die Pruefung auf ';external'
+// im TypeRef (ParseMethodDirectives haengt es an, der Bibliotheksname
+// danach bricht die Direktivenschleife nur ab). Ohne sie braucht Beep einen
+// Rumpf, uOther wird zum Stub und der Test liefert 1 - wie
+// Test_HeaderStubUnitInUses_StillDetected.
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  'end;'#13#10 +
+  'procedure Beep; external ''user32.dll'';'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), PAS_OTHER),
+    'nur external-Routinen: kein Stub, S4 greift');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_UnitScopeSuffixInUses_NotDetected;
+// Unit-Scope-Namen: 'uses Other' findet die Datei Vcl.Other.pas (wie
+// 'uses StdCtrls' -> Vcl.StdCtrls). Ohne Suffix-Abgleich verloeren alte
+// Formen ihre echten projekteigenen Klassen.
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMain('Vcl.Forms, Other', ''),
+      FrameUnit('', '', 'Vcl.Other'), 'Vcl.Other.pas'),
+    'uses-Eintrag ohne Scope-Praefix trifft Vcl.Other.pas');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_InterposerInOwnUnit_NotDetected;
+// Interposer in der Form-Unit selbst ('TButton = class(Vcl.StdCtrls.TButton)'):
+// sichtbar ohne uses-Eintrag, der Vergleich laeuft ueber den Pfad. Die
+// Gegenprobe ohne Interposer ist Test_UnusedComponent_Detected.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Vcl.StdCtrls;'#13#10 +
+  'type TButton = class(Vcl.StdCtrls.TButton)'#13#10 +
+  '  procedure Run;'#13#10 +
+  'end;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  btnX: TButton;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TButton.Run;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object btnX: TButton'#13#10 +
+  '  end'#13#10 +
+  'end';
+begin
+  Assert.AreEqual<Integer>(0, CountUnused(DFM, PAS_MAIN, ''),
+    'Interposer in der eigenen Unit bleibt projekteigen');
+end;
+
+// ---- uses in bedingten Zweigen (Nachtrag 2026-10-27, A/B perfS184) --------
+//
+// Der Lexer verwirft inaktive {$IFDEF}-Zweige; steht die uses-Klausel dort,
+// fehlen die nkUsesItem. S4 nimmt deshalb zusaetzlich die uses-Namen aus dem
+// Quelltext ALLER Zweige (CollectUsedUnits -> TDetectorUtils.UsesNamesOfText).
+// SCA_NIE_DEFINIERT ist in keiner Konfiguration gesetzt. Am gebauten Stand
+// 0fe5d84c (ohne Textscan) per Mini-Repo nachgemessen (scratchpad sca184b\
+// mini): IFDEF-Faelle und ELSE-Fall je 1 Fund - die beiden Tests sind dort
+// ROT (erwartet 0); die Kommentar-/String-Faelle je 1 = gruen.
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesInIfdefBranch_NotDetected;
+// fEdits-Muster (jvcl examples/JvEdits): die ganze uses-Klausel steht in
+// einem {$IFDEF}, dessen Symbol der Lexer nicht kennt. Zweiter Fall: das
+// Cross-Platform-Idiom mitten in der Liste.
+const
+  BLOCKS: array[0..1] of string = (
+    '{$IFDEF SCA_NIE_DEFINIERT}'#13#10'uses Vcl.Forms, uOther;'#13#10'{$ENDIF}'#13#10,
+    'uses Vcl.Forms{$IFDEF SCA_NIE_DEFINIERT}, uOther{$ENDIF};'#13#10);
+var
+  S : string;
+begin
+  for S in BLOCKS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(S, ''), FrameUnit('', '')),
+      'uses im inaktiven Zweig zaehlt fuer S4: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesInElseBranch_NotDetected;
+// Zwei vollstaendige Klauseln als IFNDEF/ELSE-Weiche; uOther steht nur im
+// ELSE-Zweig, den der Lexer verwirft (IFNDEF eines unbekannten Symbols ist
+// aktiv).
+const
+  BLOCK =
+    '{$IFNDEF SCA_NIE_DEFINIERT}'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    '{$ELSE}'#13#10 +
+    'uses Vcl.Forms, uOther;'#13#10 +
+    '{$ENDIF}'#13#10;
+begin
+  Assert.AreEqual<Integer>(0,
+    CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(BLOCK, ''), FrameUnit('', '')),
+    'uses im inaktiven ELSE-Zweig zaehlt fuer S4');
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_UsesOnlyInComment_StillDetected;
+// Gegenprobe zum Textscan: Kommentare und Strings sind NIE Code. Ein
+// Scan ohne Kommentar-/String-Blanking machte uOther in jedem Fall sichtbar
+// (0 statt 1). Traeger: StripForUsesScan (uDetectorUtils).
+const
+  BLOCKS: array[0..3] of string = (
+    'uses Vcl.Forms { , uOther };'#13#10,
+    'uses Vcl.Forms (* , uOther *);'#13#10,
+    'uses Vcl.Forms; // uses uOther;'#13#10,
+    'uses Vcl.Forms;'#13#10'const SHinweis = ''uses uOther;'';'#13#10);
+var
+  S : string;
+begin
+  for S in BLOCKS do
+  begin
+    Assert.AreEqual<Integer>(1,
+      CountUnused(DFM_FRAME_OBJECT, FrameMainBlock(S, ''), FrameUnit('', '')),
+      'uOther nur im Kommentar/String darf nicht sichtbar machen: ' + S);
+  end;
+end;
+
+function HelperUnit(const AHelperHead: string): string;
+// uOther mit einem Helper VOR TMyFrame; AHelperHead = 'record helper for
+// Integer' oder 'type helper for Integer'. Helper und Klasse stehen in
+// DERSELBEN type-Sektion - ein zweites 'type' faengt den Parser wieder.
+const
+  TEMPLATE =
+    'unit uOther;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'type'#13#10 +
+    '  TIntHelper = %s'#13#10 +
+    '    function IsZero: Boolean;'#13#10 +
+    '  end;'#13#10 +
+    '  TMyFrame = class(TFrame)'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'function TIntHelper.IsZero: Boolean;'#13#10 +
+    'begin'#13#10 +
+    '  Result := Self = 0;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+begin
+  Result := Format(TEMPLATE, [AHelperHead]);
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelper_NotDetected;
+// Parser-Charge P1 (2026-10-27): TParser2 fuehrt den FPC-'type helper' wie
+// 'record helper'; die Klasse dahinter steht im AST und in FClassDeclUnits.
+// Vorher fiel die Deklaration in den Alias-Zweig, das erste 'function'
+// beendete die type-Sektion - TMyFrame fehlte, SCA184 meldete die
+// Komponente (Exe 8c3eac8f am Mini-Repo: record helper 0, type helper 1
+// -> der zweite Fall ist ohne den Fix ROT).
+const
+  HEADS: array[0..1] of string = ('record helper for Integer', 'type helper for Integer');
+var
+  S : string;
+begin
+  for S in HEADS do
+  begin
+    Assert.AreEqual<Integer>(0,
+      CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''), HelperUnit(S)),
+      'Klasse hinter einem Helper in einer .pas-Unit: ' + S);
+  end;
+end;
+
+procedure TTestDfmComponentUnusedVisibility.Test_ClassBehindTypeHelperInPpUnit_StillDetected;
+// Nico 2026-10-27: LCL-Klassen sind fuer S4 NICHT projekteigen - die 559
+// SCA184-Funde im Lazarus-Korpus (TLabel/TButton/... aus lcl/stdctrls.pp)
+// bleiben. Kriterium (uDfmRepoIndex.CollectVisibleClassDecls): in einer
+// .pp-Unit zaehlen fuer S4 nur Klassen VOR der ersten 'type helper'-
+// Deklaration - genau die, die der Parser vor P1 sah. Ohne das Kriterium
+// faellt der zweite Fall mit dem Parser-Fix auf 0 (Simulation laz: -558).
+// Der erste Fall ist die Gegenprobe: ein record helper verdeckt nichts.
+const
+  HEADS: array[0..1] of string = ('record helper for Integer', 'type helper for Integer');
+  EXPECTED: array[0..1] of Integer = (0, 1);
+var
+  I   : Integer;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    for I := Low(HEADS) to High(HEADS) do
+    begin
+      Assert.AreEqual<Integer>(EXPECTED[I],
+        CountUnused(DFM_FRAME_OBJECT, FrameMain(USES_OTHER, ''),
+          HelperUnit(HEADS[I]), 'uOther.pp'),
+        'Klasse hinter einem Helper in einer .pp-Unit: ' + HEADS[I]);
+    end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestDfmComponentUnused);
+  TDUnitX.RegisterTestFixture(TTestDfmComponentUnusedVisibility);
 
 end.

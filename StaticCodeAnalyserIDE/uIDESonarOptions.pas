@@ -356,7 +356,7 @@ begin
     Ini.WriteString('Sonar', 'Branch',     Trim(edBranch.Text));
     Ini.WriteBool  ('Sonar', 'Insecure',   chkInsecure.Checked);
     Ini.WriteString('Sonar', 'TokenRef',   TOKEN_REF_DEFAULT);
-    Ini.UpdateFile;  // TMemIniFile persistiert erst durch UpdateFile
+    Ini.UpdateFile;  // schreibt erst hier, und nur bei echter Aenderung
   finally
     Ini.Free;
   end;

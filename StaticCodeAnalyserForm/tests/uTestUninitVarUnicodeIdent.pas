@@ -32,6 +32,9 @@ type
     // ---- Echte Variablen bleiben gemeldet ---------------------------------
     [Test] procedure RealVarBeforeFragmentInNameList_StillReported;
     [Test] procedure AsciiTwinOfFragment_StillReported;
+    // ---- Perf Charge P4: PhaseA und PhaseC teilen das Strip-Array --------
+    [Test] procedure UmlautOnlyInComment_SharedStrip_ReadLineExact;
+    [Test] procedure FragmentAndRealVar_SharedStrip_ReadLineExact;
   end;
 
 implementation
@@ -182,6 +185,50 @@ begin
     'end;' + CRLF),
     ': Am read on line',
     'Das echte ASCII-Am bleibt gemeldet, das Bruchstueck in ParseIt nicht');
+end;
+
+// Perf Charge P4 (2026-10-25): steht ein Nicht-ASCII-Zeichen in der
+// Methode, strippt PhaseA die Methodenzeilen fuer die Code-Sicht; PhaseC
+// uebernimmt dasselbe Array fuer FindFirstReadLine, statt neu zu strippen.
+// Die beiden Tests pinnen die Lesezeile im Meldetext - stimmten Grenzen
+// oder Versatz (StrippedFrom0) des geteilten Arrays nicht, wanderte sie.
+
+procedure TTestUninitVarUnicodeIdent.UmlautOnlyInComment_SharedStrip_ReadLineExact;
+begin
+  // Umlaut nur im Kommentar (Zeile 8): die Code-Sicht ist nil, das
+  // Strip-Array ist trotzdem schon gebaut. Wert wird auf Zeile 10 gelesen.
+  AssertSingleFinding(WrapUnit(
+    'function Calc(const S: string): Integer;' + CRLF +   // 4
+    'var' + CRLF +                                        // 5
+    '  Wert: Integer;' + CRLF +                           // 6
+    'begin' + CRLF +                                      // 7
+    '  // Pr' + #$00FC + 'fung: Wert lesen' + CRLF +      // 8
+    '  if S = '''' then' + CRLF +                         // 9
+    '    Result := Wert' + CRLF +                         // 10
+    '  else' + CRLF +                                     // 11
+    '    Result := 0;' + CRLF +                           // 12
+    'end;' + CRLF),
+    'Uninitialised variable: Wert is read on line 10 ',
+    'Kommentar-Umlaut darf die Lesezeile nicht verschieben');
+end;
+
+procedure TTestUninitVarUnicodeIdent.FragmentAndRealVar_SharedStrip_ReadLineExact;
+var
+  A : string;
+begin
+  // Unicode-Bezeichner im CODE: die Code-Sicht IST das geteilte Array.
+  // Das Bruchstueck faellt weg, X bleibt mit seiner Lesezeile 9.
+  A := 'Am' + CYR_O + 'unt';
+  AssertSingleFinding(WrapUnit(
+    'function P(const S: string): Integer;' + CRLF +      // 4
+    'var' + CRLF +                                        // 5
+    '  X, ' + A + ': Integer;' + CRLF +                   // 6
+    'begin' + CRLF +                                      // 7
+    '  ' + A + ' := Length(S);' + CRLF +                  // 8
+    '  Result := X + ' + A + ';' + CRLF +                 // 9
+    'end;' + CRLF),
+    'Uninitialised variable: X is read on line 9 ',
+    'X wird auf Zeile 9 gelesen, das Bruchstueck ist keine Variable');
 end;
 
 initialization

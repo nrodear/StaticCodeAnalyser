@@ -49,17 +49,20 @@ unit uTestBaselineMetricFingerprint;
 //       (9.150 Funde), ist aber BEWUSST nicht in der Menge, weil bei ihr die
 //       Zeilennummern zwei Duplikat-Gruppen derselben Datei unterscheiden.
 //       WAECHTER, auch ohne den Zweig gruen.
-//   (h) EinBaselineEintrag_BlendetGleichnamigeMethodeMit -
+//   (h) EinBaselineEintrag_DecktNurEineGleichnamigeMethode -
 //       DIE KOSTEN, festgenagelt statt versteckt, und zwar am ECHTEN
 //       Weg Write -> Apply statt an zwei Hashes. Zwei gleichnamige Methoden
 //       derselben Datei (Overload, oder gleicher Name in zwei Klassen einer
-//       Unit) mit verschiedenen Scores teilen ab jetzt einen Fingerprint;
-//       ein Baseline-Eintrag blendet beide aus. Am Korpus rw20
-//       methodengenau nachgemessen: 183 bis 185 Faelle im PFAD-MODUS -
+//       Unit) mit verschiedenen Scores teilen einen Fingerprint. Am Korpus
+//       rw20 methodengenau nachgemessen: 183 bis 185 Faelle im PFAD-MODUS -
 //       SCA022 61, SCA176 60, SCA018 33-35, SCA012 29 - also 0,49 % der
 //       vier Regeln und 0,024 % des Korpus; im DEFAULT (Basisname) rund
-//       1.450 = 3,8 %. OHNE DEN ZWEIG ROT, weil er das NEUE Verhalten
-//       beschreibt: bis 2026-08-28 blieb der Zwilling stehen.
+//       1.450 = 3,8 %. Von 2026-08-28 bis 2026-10-30 blendete EIN
+//       Baseline-Eintrag beide aus (Mengen-Abgleich); seit dem zaehlenden
+//       Abgleich (uBaseline.TBaselineMatcher) deckt er nur EINEN - der neu
+//       hinzugekommene Overload bleibt neu. Was bleibt, ist die geteilte
+//       Identitaet: welcher Overload "seinen" Eintrag bekommt, entscheidet
+//       der contextHash. ROT GEGEN DIE MENGEN-REGEL (Dropped 2).
 //   (i) VerschiedeneMethoden_BleibenGetrennt - die Grenze dazu: der
 //       Methodenname traegt weiter. Ohne ihn waere aus den 183-185
 //       Kollisionen eine je Datei und Regel geworden. REGRESSIONSSCHUTZ.
@@ -124,7 +127,7 @@ type
     [Test] procedure DeepNesting_Schluesselwort_BleibtUnterscheider;
     [Test] procedure SCA101_Spalte_BleibtUnterscheider;
     [Test] procedure DuplicateBlock_Zeilen_BleibenUnterscheider;
-    [Test] procedure EinBaselineEintrag_BlendetGleichnamigeMethodeMit;
+    [Test] procedure EinBaselineEintrag_DecktNurEineGleichnamigeMethode;
     [Test] procedure VerschiedeneMethoden_BleibenGetrennt;
     [Test] procedure LeererMethodName_LaesstNurNochEineIdentitaetJeDatei;
   end;
@@ -376,9 +379,15 @@ begin
     'zwei Duplikat-Gruppen derselben Datei muessen unterscheidbar bleiben');
 end;
 
-procedure TTestBaselineMetricFingerprint.EinBaselineEintrag_BlendetGleichnamigeMethodeMit;
-// (h) OHNE DEN ZWEIG ROT, weil er das NEUE Verhalten beschreibt: bis
-// 2026-08-28 blieb der zweite Overload stehen.
+procedure TTestBaselineMetricFingerprint.EinBaselineEintrag_DecktNurEineGleichnamigeMethode;
+// (h) BIS 2026-10-30 HIESS ER EinBaselineEintrag_BlendetGleichnamigeMethodeMit
+// und verlangte Dropped = 2: unter dem Mengen-Abgleich blendete EIN
+// Eintrag beide Overloads aus, auch den spaeter hinzugekommenen. Das ist
+// genau die Verdeckung, die der zaehlende Abgleich (Entscheid "Apply
+// zaehlt", Review d/MethodAttr) abstellt - der Test schrieb die alte
+// Semantik fest und ist deshalb umgedreht, nicht geloescht: der Fingerprint
+// ist weiter geteilt (Score normalisiert), aber ein Eintrag deckt nur noch
+// EINEN Fund, und zwar den, dessen contextHash passt.
 //
 // DAS SIND DIE KOSTEN, und sie stehen hier am ECHTEN Weg (Write -> Apply)
 // statt an zwei nackten Hashes: so ist sichtbar, was der Nutzer erlebt.
@@ -390,8 +399,8 @@ procedure TTestBaselineMetricFingerprint.EinBaselineEintrag_BlendetGleichnamigeM
 // Regeln, 0,024 % des Korpus; im Default rund 1.450 = 3,8 %.
 //
 // Die beiden Funde sitzen zehn Zeilen auseinander, ihre contextHash-Fenster
-// beruehren sich also nicht: der zweite Treffer kann NUR vom Fingerprint
-// kommen und nicht von der zweiten Match-Quelle.
+// beruehren sich also nicht: ein Treffer fuer den zweiten koennte NUR vom
+// Fingerprint kommen - und den hat der erste Fund schon exakt verbraucht.
 var
   Nur1   : TObjectList<TLeakFinding>;
   Beide  : TObjectList<TLeakFinding>;
@@ -415,18 +424,27 @@ begin
 
   Beide := TObjectList<TLeakFinding>.Create(True);
   try
-    Beide.Add(TLeakFinding.New(FPasFile, 'DoWork', OVERLOAD_LINE_A,
-      CC_SCORE_11, fkCyclomaticComplexity));
+    // Der neue Overload steht VORN: welcher Fund den Eintrag bekommt,
+    // entscheidet die exakte Stufe (Fingerprint UND contextHash), nicht
+    // die Reihenfolge der Liste.
     Beide.Add(TLeakFinding.New(FPasFile, 'DoWork', OVERLOAD_LINE_B,
       CC_SCORE_12, fkCyclomaticComplexity));
+    Beide.Add(TLeakFinding.New(FPasFile, 'DoWork', OVERLOAD_LINE_A,
+      CC_SCORE_11, fkCyclomaticComplexity));
+    Assert.AreEqual(
+      TBaseline.Fingerprint(Beide[0], TBaselineScope.ByFileName),
+      TBaseline.Fingerprint(Beide[1], TBaselineScope.ByFileName),
+      'Vorbedingung: die beiden Overloads teilen den Fingerprint');
     Dropped := TBaseline.Apply(Beide, FBaselineFile,
       TBaselineScope.ByFileName);
-    Assert.AreEqual<Integer>(2, Dropped,
-      'DIE KOSTEN: ein Eintrag blendet BEIDE gleichnamigen Methoden aus - ' +
-      '183 bis 185 solcher Faelle auf rw20 im Pfad-Modus, gemessen und ' +
-      'akzeptiert');
-    Assert.AreEqual<Integer>(0, Beide.Count,
-      'und es bleibt kein Fund uebrig');
+    Assert.AreEqual<Integer>(1, Dropped,
+      'ein Eintrag deckt seit dem zaehlenden Abgleich nur EINEN der ' +
+      'beiden gleichnamigen Overloads');
+    Assert.AreEqual<Integer>(1, Beide.Count,
+      'der hinzugekommene Overload bleibt als neu stehen');
+    Assert.AreEqual(IntToStr(OVERLOAD_LINE_B), Beide[0].LineNumber,
+      'und zwar der aus Zeile 14 - der Eintrag gehoert dem Overload, ' +
+      'dessen contextHash passt');
   finally
     Beide.Free;
   end;
@@ -453,8 +471,10 @@ procedure TTestBaselineMetricFingerprint.LeererMethodName_LaesstNurNochEineIdent
 // fest, was passiert, wenn es keinen gibt: dann ist der Detailtext der
 // letzte Unterscheider zweier Funde derselben Datei - und genau den
 // normalisiert der Zweig weg. Zwei verschiedene Methoden mit
-// verschiedenen Scores teilen dann EINEN Fingerprint, ein Baseline-Eintrag
-// blendet beide aus. Es gilt dann die annahmefreie Obergrenze: ein
+// verschiedenen Scores teilen dann EINEN Fingerprint (seit dem zaehlenden
+// Abgleich 2026-10-30 deckt ein Eintrag davon nur noch einen Fund, die
+// Zuordnung haengt dann am contextHash). Es gilt die annahmefreie
+// Obergrenze: ein
 // Fingerprint je Datei und Regel, an rw20 waeren das 20.194 statt 183-185
 // (im Default 18.346).
 //

@@ -37,7 +37,7 @@ program" — it means *not reachable from a script*.
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
 | **Plain text (clipboard)** | — | ✅ | One file's findings with before/after, for pasting |
 | **Sonar: single finding** | — | ✅ | One selected finding as an external-issue file under `.sonar\external\` |
-| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 203 rules — not a findings export |
+| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 205 rules — not a findings export |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
 | **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |
@@ -69,6 +69,31 @@ search and sorting only ever work on the rendered rows.
 rule profile the scan ran with. An empty value means *no profile
 filter* — every detector ran — and is not the same as the curated
 `default` profile.
+
+**Editor helps in both HTML reports.** For a rule with an **editor help**
+(a code action of the IDE module reDelphix: light bulb, Ctrl+Alt+F)
+the `--report-html` page names the helps — on by default;
+`--html-no-editor-help` leaves them out, and the page is then exactly
+the one without them. The rule report gets a column *Editor helps*
+with the list of each rule, one entry per menu entry: the id
+(`SCA017`, `SCA017.2` for a second entry), the menu text read from its
+slug (`put-debug-output-in-ifdef-debug` becomes "Put debug output in
+ifdef debug": hyphens become spaces, the first letter upper case — the
+CLI does not link reDelphix and does not know the menu text itself)
+and the effect, translated by the language switch of the page (keeps
+behaviour / changes behaviour / depends on the finding / template,
+writes nothing). The details of a finding show the same list in one
+line, "Editor helps: …". The list stands **once per rule**; a finding
+carries only a reference of about 40 bytes, so the report does not
+grow by the list with the number of findings. The list comes from the
+rule catalog (`editorHelps`), like the SARIF field below. The
+**workbench page** of the GUI and the IDE shows the same list, in the
+language of the page, as the first line of the rule documentation in
+the drawer — once per rule, not one extra byte per finding (the export
+menu always includes it; in code `AEditorHelp` of
+`TFindingsWorkbenchExport.BuildHtml`/`Run`, default on). The other
+exports (CSV, JSON, Sonar) carry no editor helps; SARIF names them
+only with `--sarif-editor-help`.
 
 The workbench page keeps the rule documentation **once per rule**, the
 source excerpt as plain text, and no per-finding copy of the search
@@ -236,6 +261,49 @@ report, and SARIF, which lists it both as a result and under
 and Sonar accepts it. Check the console line, not the dashboard, to see
 whether a scan was complete.
 
+### What changes for existing users (export fix, October 2026)
+
+If you already import SCA findings into SonarQube, the first analysis after
+the update moves issues — once. Sonar matches issues per rule, file and
+line, so every change below shows up as *closed* plus *new* in the
+new-code period.
+
+- **New issues appear.**
+  - Form files whose extension is spelled differently on disk
+    (`ABOUT.DFM` vs. `ABOUT.dfm`) were silently discarded by Sonar as
+    unknown files. The export now uses the spelling on disk (reference
+    corpus: 960 issues).
+  - Custom rules with `severity: hint` were missing entirely; they are
+    exported now.
+  - Findings capped by the evidence policy (confidence *medium* → at most
+    Warning) no longer count as downgraded. SCA001, SCA003, SCA004 and
+    others now reach Sonar (reference corpus: +726 issues). Only a
+    downgrade you configured yourself (`[PathOverrides]`) keeps a finding
+    out; `--sonar-keep-downgraded` still brings those back.
+- **Capped rules carry the capped severity.** A rule whose findings the
+  policy caps gets the capped severity as its impact — SCA004 arrives as
+  SECURITY/MEDIUM instead of BLOCKER, SCA001 as RELIABILITY/MEDIUM. With
+  `[Rules] EvidenceTiering=0` the catalog impacts stay.
+- **Binary forms on file level.** Issues in binary `.dfm` files, and
+  issues on a line beyond the end of the file, now have no line. Before,
+  such a line could make the scanner abort (*"N is not a valid line for
+  pointer"*). Sonar closes the old line-bound issues and opens file-level
+  ones.
+- **Custom rule names and impacts.** Each custom rule now has its own name
+  (`User-defined custom rule PROJ001`) and an impact that follows its YAML
+  severity (error → HIGH, warning → MEDIUM, hint → LOW) instead of the
+  shared placeholder MAINTAINABILITY/MEDIUM.
+- **`engineId` only on the rule.** The issue-level `engineId` — a field of
+  the deprecated format — is gone. Scripts that read the JSON directly take
+  the engine from `rules[].engineId`.
+- **Minimum server version.** The impact severities BLOCKER and INFO need
+  SonarQube 10.8 or later (Server 2025.x, Community Build). On 10.3–10.7 a
+  report containing them is invalid; SCA026 still carries BLOCKER.
+
+`filePath` is resolved by Sonar relative to `sonar.projectBaseDir` (the
+folder of `sonar-project.properties`), not relative to `sonar.sources` —
+give `--base-dir` that folder.
+
 ## Workflow 4 — GitHub / Azure code scanning
 
 ```bash
@@ -261,6 +329,28 @@ and travels with the finding cohort, so toggling the ini between scan
 and export cannot mix levels and confidence values from two different
 policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
 pre-0.9.18 output.
+
+With **`--sarif-editor-help`** (off by default; without it the SARIF
+is unchanged) a result of a rule that has an **editor help** (a code
+action of the IDE module reDelphix: light bulb, Ctrl+Alt+F) carries
+`properties.editorHelp`, one entry per menu entry as `id:effect:slug`,
+on one line:
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` is the rule ID, `<rule ID>.2` for a second entry; `effect` is
+`same` (keeps the behaviour), `changes` (changes it — never on
+Ctrl+Alt+F), `depends` (depends on the finding) or `template` (writes
+nothing into the source: SCA003 copies a parameterised SQL template to
+the clipboard); `slug` names the menu text. The list comes from the
+rule catalog (`editorHelps` in `rules/sca-rules.json`; the CLI does not
+link reDelphix), so it says what the rule offers — whether the help
+applies to that very finding is decided in the IDE. Results of rules
+without a help carry no such field; `tool.driver.rules[]` carries the
+same list in each rule's `properties`. The export menu of the GUI and
+the IDE never write the field.
 
 Two things to watch: a SARIF written by **v0.9.14 or earlier** carries a
 UTF-8 BOM that trips Node-based uploaders (current output is BOM-free,

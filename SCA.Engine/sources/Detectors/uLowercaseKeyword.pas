@@ -45,6 +45,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Generics.Defaults,  // Perf Charge R3: einmal geholter Default-Comparer
   System.StrUtils,
   uFileTextCache;
 
@@ -116,6 +117,16 @@ type
     Col  : Integer;       // 1-basierte Spalte
     Word : string;        // Original-Schreibweise
   end;
+
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der Treffer-Liste in AnalyzeUnit EINMAL je Prozess (initialization) und
+  // jedem Create mitgegeben. TList<T>.Create ohne Comparer ruft fuer
+  // Record-T TComparer<T>._Default, und das fragt in der Delphi-12-RTL bei
+  // JEDEM Aufruf per TRttiContext die RTTI nach einem '='-Operator ab
+  // (Delphi 13 nicht mehr) - hier je Datei. VERHALTENSNEUTRAL: derselbe
+  // Default-Comparer, und die Liste ruft nie IndexOf/Contains/Remove/Sort.
+  GKwHitComparer : IComparer<TKwHit>;
 
 // Scannt eine Zeile und liefert alle Keywords, deren Schreibweise NICHT
 // lowercase ist. Beruecksichtigt String-Literale und Kommentare. Block-
@@ -270,7 +281,7 @@ var
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
-  Hits := TList<TKwHit>.Create;
+  Hits := TList<TKwHit>.Create(GKwHitComparer);
   try
     InBlk   := False;
     InParen := False;
@@ -290,5 +301,9 @@ begin
     ReleaseLines(Lines, Cached);
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GKwHitComparer.
+  GKwHitComparer := TComparer<TKwHit>.Default;
 
 end.

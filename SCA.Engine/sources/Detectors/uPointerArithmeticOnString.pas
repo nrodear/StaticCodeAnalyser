@@ -72,7 +72,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 class procedure TPointerArithmeticOnStringDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -105,8 +106,11 @@ begin
 
     // Pattern: PChar|PAnsiChar|PWideChar(<id>) <+|-> ...
     // Group 1 = Cast-Name, Group 2 = String-Variable.
-    RE := TRegEx.Create(
-      '(?i)\b(PChar|PAnsiChar|PWideChar)\s*\(\s*(\w+)\s*\)\s*[+\-]');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx(
+      '(?i)\b(PChar|PAnsiChar|PWideChar)\s*\(\s*(\w+)\s*\)\s*[+\-]', [roNotEmpty]);
 
     for M in RE.Matches(Code) do
     begin

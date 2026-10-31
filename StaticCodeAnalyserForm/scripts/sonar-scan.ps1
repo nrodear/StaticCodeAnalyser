@@ -16,6 +16,17 @@
   <ProjectPath>\sca-findings.json. The companion sonar-upload.ps1 looks at
   the same default - if you change one, change the other.
 
+.PARAMETER RuleProfile
+  Rule profile for the report (--profile). Default: [Rules] IdeProfile from
+  analyser.ini, so the report has the rule set of the IDE. Without that entry
+  the analyser decides ([Rules] Profile, else 'default'). The script aborts on
+  a name it cannot find: the analyser itself would accept it and silently scan
+  with a different rule set.
+
+.PARAMETER HideTestFixtures
+  Leave out findings in test fixtures. Default: they stay in the report, as in
+  the IDE (--show-test-fixtures).
+
 .PARAMETER Branch
   If set, scan only VCS-changed files (--branch mode). Default: full scan.
 
@@ -24,10 +35,13 @@
 
 .EXAMPLE
   .\sonar-scan.ps1
-  # Scans the parent of the repo, writes sca-findings.json next to it.
+  # Scans the repo, writes sca-findings.json into it.
 
 .EXAMPLE
   .\sonar-scan.ps1 -ProjectPath D:\myrepo -OutputPath D:\myrepo\sca-findings.json -Quiet
+
+.EXAMPLE
+  .\sonar-scan.ps1 -RuleProfile security -HideTestFixtures
 
 .EXAMPLE
   .\sonar-scan.ps1 -Branch
@@ -35,14 +49,22 @@
 #>
 [CmdletBinding()]
 param(
-  # Default = analyser repo root (..\..\ from scripts/). Override for own projects.
-  [string]$ProjectPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\'),
+  # Default = analyser repo root, resolved below. Override for own projects.
+  [string]$ProjectPath = $null,
   [string]$OutputPath  = $null,
+  [string]$RuleProfile = $null,
+  [switch]$HideTestFixtures,
   [switch]$Branch,
   [switch]$Quiet
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Nicht im param-Block: dort ist $PSScriptRoot unter Windows PowerShell 5.1
+# mit `powershell -File` leer, und das Skript bricht vor der ersten Zeile ab.
+if (-not $ProjectPath) {
+  $ProjectPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
+}
 
 # Locate the analyser EXE. Win64 Release first: the project builds to
 # ..\Output\<Platform> <Config>\ (DCC_ExeOutput), and a full-repo SARIF from
@@ -92,6 +114,30 @@ if (-not (Test-Path $catUser)) {
   Write-Host "Catalog deployed to: $catUser" -ForegroundColor DarkGray
 }
 
+# Regelsatz: Vorgabe ist das Profil der IDE, damit ein Report nicht vom Weg
+# abhaengt, auf dem er entstand. Die EXE lehnt einen unbekannten Namen nicht ab,
+# sondern scannt ohne Fehler mit anderen Regeln - also hier pruefen.
+$configDir = Join-Path $env:APPDATA 'StaticCodeAnalyser'
+if (-not $RuleProfile) {
+  $iniPath = Join-Path $configDir 'analyser.ini'
+  if (Test-Path $iniPath) {
+    $m = [regex]::Match((Get-Content $iniPath -Raw -Encoding UTF8), '(?m)^IdeProfile=(.*)$')
+    if ($m.Success) { $RuleProfile = $m.Groups[1].Value.Trim() }
+  }
+}
+if ($RuleProfile) {
+  $knownProfiles = @()
+  foreach ($file in @($catRepo, $catUser, (Join-Path $configDir 'profiles.json'))) {
+    if (Test-Path $file) {
+      $json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json
+      if ($json.profiles) { $knownProfiles += $json.profiles.PSObject.Properties.Name }
+    }
+  }
+  if ($knownProfiles -notcontains $RuleProfile) {
+    throw "Rule profile '$RuleProfile' not found. Known: $(($knownProfiles | Sort-Object -Unique) -join ', '). Pass -RuleProfile, or fix [Rules] IdeProfile in analyser.ini."
+  }
+}
+
 # Compose flags
 $flags = @(
   '--path',       $ProjectPath
@@ -100,9 +146,12 @@ $flags = @(
 )
 if ($Branch) { $flags += '--branch' } else { $flags += '--full' }
 if ($Quiet)  { $flags += '--quiet' }
+if ($RuleProfile) { $flags += @('--profile', $RuleProfile) }
+if (-not $HideTestFixtures) { $flags += '--show-test-fixtures' }
 
 Write-Host "Analyser: $exe" -ForegroundColor DarkGray
 Write-Host "Scope:    $ProjectPath ($(if ($Branch) {'branch'} else {'full'}))" -ForegroundColor DarkGray
+Write-Host "Rules:    $(if ($RuleProfile) { $RuleProfile } else { '(analyser default)' }), test fixtures $(if ($HideTestFixtures) { 'hidden' } else { 'shown' })" -ForegroundColor DarkGray
 Write-Host "Output:   $OutputPath" -ForegroundColor DarkGray
 Write-Host ''
 

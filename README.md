@@ -17,7 +17,7 @@ a 64-bit build. **Lazarus / Free Pascal** projects are scanned natively by the
 standalone app and the CLI — same engine, same rules, dialect-aware: `.lpi`/`.lpk`
 projects, `.pp`/`.lpr` units and `.lfm` forms
 ([details](#lazarus--free-pascal-fpc)).
-AST-based analysis with **203 rules**: 179 Pascal checks for memory leaks,
+AST-based analysis with **205 rules**: 181 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
 (Trojan Source), and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
@@ -60,7 +60,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ## Main features
 
-### 1. Static code analysis (203 rules — 179 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
+### 1. Static code analysis (205 rules — 181 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
 
 **Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -264,7 +264,7 @@ reference: [docs/sonar-config.md](docs/sonar-config.md).
 
 ---
 
-## What is detected (203 rules — 179 Pascal + 23 DFM + 1 INI)
+## What is detected (205 rules — 181 Pascal + 23 DFM + 1 INI)
 
 Findings fall into one of **five Sonar categories**:
 
@@ -1125,7 +1125,6 @@ SCA.SharedUI/sources/                  UI pieces shared by EXE and IDE plugin
   uRecentPaths.pas                     recent.ini handling
 
 StaticCodeAnalyserForm/sources/        Standalone front-end
-  MainController.pas                   GUI shell wiring
   UI/                                  Forms, options dialog, panels
   Console/uConsoleRunner.pas           CLI (--path, --report-*, exit codes)
 ```

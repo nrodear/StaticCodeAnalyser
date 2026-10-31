@@ -15,7 +15,7 @@ mit SonarQube Server als auch SonarCloud.
 
 | Script | Was es macht |
 |---|---|
-| [`sonar-scan.ps1`](sonar-scan.ps1)     | Ruft `analyser.exe --sonar-export` und produziert `sca-findings.json`. Deployt beim ersten Lauf den Rule-Catalog nach `%APPDATA%`, decodiert den Exit-Code in ein menschenlesbares Verdict, validiert dass die Output-Datei wirklich entstand. |
+| [`sonar-scan.ps1`](sonar-scan.ps1)     | Ruft `analyser.exe --sonar-export` und produziert `sca-findings.json`. Deployt beim ersten Lauf den Rule-Catalog nach `%APPDATA%`, decodiert den Exit-Code in ein menschenlesbares Verdict, validiert dass die Output-Datei wirklich entstand. Nimmt das Regel-Profil der IDE (`[Rules] IdeProfile`) und behält Test-Fixtures; `-RuleProfile` und `-HideTestFixtures` weichen davon ab. |
 | [`sonar-upload.ps1`](sonar-upload.ps1) | Entschlüsselt das DPAPI-Token aus `analyser.ini`, liest Host/Project aus `[Sonar]`, ruft `sonar-scanner` mit den richtigen `-D`-Flags. Unterstützt `-DryRun` und `-DisableDelphi`. |
 
 ---

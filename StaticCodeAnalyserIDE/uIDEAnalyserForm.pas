@@ -15,7 +15,7 @@ uses
   Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Grids, Vcl.ActnList, Vcl.ImgList, Vcl.Menus,
   Vcl.Clipbrd, Vcl.Themes,
   DesignIntf, ToolsAPI, DockForm,    // DockForm: TDockableForm (Editor-Service-Notifier-Signatur)
-  uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
+  uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
@@ -31,6 +31,7 @@ uses
   uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter,
   uUiElementRegistry,                      // TUiElementRegistry - AddUiElements-Signatur
+  uFindingFileIndex,                       // TFindingFileIndex - Dock-Funde je Datei (FFileIndex)
   uFuzzyComboSearch;              // tippbare Filter-Combo mit Fuzzy-Suche
 
 const
@@ -51,8 +52,17 @@ type
     // Stand von FAllFindings fuer FindingsAtEditorLine (Review reDelphiX
     // nach Bereichen 2026-10-10, Minor 19): Generation des letzten
     // Voll-Befuellens bzw. je Datei (klein) des letzten Watch-Laufs.
+    // JEDER Schreiber von FAllFindings dreht eine dieser Generationen mit
+    // NextFindingsGeneration weiter (heute PopulateFindings,
+    // ClearAllFindings, OnWatchFindings) - daran erkennt FFileIndex, dass
+    // er neu bauen muss (FindingsStampOf).
     FFindingsGen    : UInt64;
     FFileGens       : TDictionary<string, UInt64>;
+    // Die Funde von FAllFindings je Pfadschluessel fuer
+    // FindingsAtEditorLine (Charge P, P6): lazy gebaut, Stand ueber
+    // FindingsStampOf(FFindingsGen, FFileGens). Lebt genau so lange wie
+    // FAllFindings (vorher erzeugt, danach freigegeben).
+    FFileIndex      : TFindingFileIndex;
     // Snapshot der initial-populierten Combo-Items (FormCreate). Wird
     // in RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege
     // mit > 0 Treffern zu reduzieren - und beim naechsten Scan wieder
@@ -781,13 +791,14 @@ const
   BTN_W_MED_SHORT    = 64;     // "Settings..."
   BTN_W_MED          = 68;     // "Cancel", "Export"
   BTN_W_MED_LONG     = 48;     // "📄 File"
-  BTN_W_LONG         = 64;     // "▶ Analyse"
+  BTN_W_LONG         = 71;     // "▶ Analyse" (de "▶ Analysieren" braucht +7)
 
   // ---- Label-Widths -----------------------------------------------------
   LBL_W_PATH         = 78;     // "Path:" (AutoSize, Wert nur als Fallback)
-  LBL_W_FILTER       = 76;     // "Severity:"
+  LBL_W_FILTER       = 87;     // "Severity:" (de "Schweregrad:" braucht +11)
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
+  LBL_PAD_LEFT       = 2;      // Abstand "Profile:"/"Severity:" zum Control davor (Margins.Left)
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
@@ -1037,6 +1048,7 @@ begin
   // auf das Host-Form propagiert, damit der IDE-Floating-Container die
   // Mindestbreite ebenfalls respektiert.
   Constraints.MinWidth    := ScaleW(FLOAT_MIN_WIDTH);
+  FFileIndex         := TFindingFileIndex.Create;
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
   FFileGens          := TDictionary<string, UInt64>.Create;
   FDisplayedFindings := TList<TLeakFinding>.Create;
@@ -1142,6 +1154,10 @@ begin
   FFilterCombo.DropDownCount := 16;
   FFilterCombo.OnChange := FilterChange;
   FPanelSev := FFilterCombo.Parent as TPanel;
+  // Linker Rand wie beim Profil-Label; der Sub-Container waechst mit.
+  FLblFilter.AlignWithMargins := True;
+  FLblFilter.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER);
   PopulateFilterCombo;
 
   // Type-Filter (Sonar-Kategorie).
@@ -1195,6 +1211,11 @@ begin
                               'Takes effect at the next analysis run.');
   FProfileCombo.ShowHint := True;
   FPanelProfile := FProfileCombo.Parent as TPanel;
+  // Das Label klebte am ⊘-Knopf: linker Rand ueber Margins, der Sub-
+  // Container waechst um denselben Betrag (Combo bleibt gleich breit).
+  FLblProfile.AlignWithMargins := True;
+  FLblProfile.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE);
   PopulateProfileCombo;
 
   // FBtnAnalyseChanged + FBtnCancel + FBtnExport sind aus der Toolbar raus -
@@ -1360,6 +1381,7 @@ begin
   FreeAndNil(FAnalyseProgress);
 
   FreeAndNil(FAllFindings);
+  FreeAndNil(FFileIndex);
   FreeAndNil(FFileGens);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FBaselineSet);
@@ -1962,6 +1984,7 @@ var
   TotalMatched   : Integer;
   BaselineActive : Boolean;
   BaselineHidden : Integer;
+  Covered        : TArray<Boolean>;
 begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
@@ -1987,13 +2010,20 @@ begin
   try
     FDisplayedFindings.Clear;
 
+    // Baseline-Abgleich EINMAL fuer die ganze Liste, nicht Contains je
+    // Fund: seit 2026-10-30 deckt jeder Baseline-Eintrag hoechstens EINEN
+    // Fund (TBaselineMatcher), und zaehlen kann nur, wer alle Funde
+    // zugleich sieht. Leer, solange der Filter aus ist.
+    if BaselineActive then
+      Covered := FBaselineSet.CoveredFlags(FAllFindings);
+
     // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
     for i := 0 to FAllFindings.Count - 1 do
     begin
       // Baseline-Filter zuerst: bereits akzeptierte Funde ausblenden.
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
-      if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      if (i < Length(Covered)) and Covered[i] then
       begin
         Inc(BaselineHidden);
         Continue;
@@ -2263,7 +2293,8 @@ procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
 // Scans zu verlieren. Findings.OwnsObjects := False damit die TLeakFinding-
 // Instanzen an FAllFindings (hat eigene Ownership=True) wandern.
 var
-  i: Integer;
+  i        : Integer;
+  UnitBase : string;
 begin
   if GLiveAnalyserFrame <> Pointer(Self) then
   begin
@@ -2275,16 +2306,35 @@ begin
   if not Assigned(Findings) then Exit;
 
   try
-    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
+    // 0) Generation der Datei ZUERST weiterdrehen (Review Charge P): Delete
+    // gibt Funde frei, auf die FFileIndex zeigt. Liefe zwischen Delete und
+    // dem Weiterdrehen eine Ausnahme, bliebe der Stempel stehen und der
+    // naechste Sync nicht neu gebaut - mit haengenden Zeigern. Dazwischen
+    // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
+    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
+
+    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
+    // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
+    // .pas liefert die DFM-Funde mit dem Pfad der Formdatei neu mit
+    // (TDfmAnalysisRunner); geloescht wurde bis 2026-10-30 nur nach der
+    // .pas, jeder Watch-Lauf haengte also eine weitere Kopie der DFM-Funde
+    // an. Unter dem zaehlenden Baseline-Abgleich (uBaseline.
+    // TBaselineMatcher) deckt ein Eintrag nur EINE Kopie - die zweite
+    // erschien als neu (Review d/MethodAttr). Die Generation oben reicht
+    // auch fuer die Formdatei: der Index-Stempel ist das Maximum aller
+    // Generationen (FindingsStampOf), FFileIndex baut also neu.
+    UnitBase := ChangeFileExt(FileName, '');
     for i := FAllFindings.Count - 1 downto 0 do
-      if SameText(FAllFindings[i].FileName, FileName) then
+      if SameText(FAllFindings[i].FileName, FileName)
+         or (TStaticFiles.IsFormFileNameAnyDialect(FAllFindings[i].FileName)
+             and SameText(ChangeFileExt(FAllFindings[i].FileName, ''),
+                          UnitBase)) then
         FAllFindings.Delete(i);
 
     // 2) Neue Findings einhaengen (Ownership-Transfer).
     Findings.OwnsObjects := False;
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
-    FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
@@ -3625,7 +3675,7 @@ begin
   if Assigned(FPanelSev) and Assigned(FLblFilter) then
   begin
     if FLblFilter.Visible then
-      FPanelSev.Width := ScaleW(LBL_W_FILTER + CMB_W_FILTER)
+      FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER)
     else
       FPanelSev.Width := ScaleW(CMB_W_FILTER);
   end;
@@ -3639,7 +3689,7 @@ begin
   if Assigned(FPanelProfile) and Assigned(FLblProfile) then
   begin
     if FLblProfile.Visible then
-      FPanelProfile.Width := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE)
+      FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE)
     else
       FPanelProfile.Width := ScaleW(CMB_W_PROFILE);
   end;
@@ -4899,75 +4949,35 @@ function FindingsAtEditorLine(const AFile: string;
 // 2026-10-10, Minor 19): das Dock, wenn es Funde dieser Datei haelt und
 // nicht aelter ist als der letzte Silent-Lauf auf ihr, sonst die Kopien
 // dieses Laufs.
+//
+// Die Regel je Fund (Pfad, Bereich, Doppelte) steht seit Charge P (P6,
+// 2026-10-25) in uFindingFileIndex.FindingsAtLine (getestet). Das Dock
+// fragt nicht mehr linear ueber ALLE Funde, sondern nur die seiner Datei
+// (Frame.FFileIndex, neu gebaut nach jedem Schreiben von FAllFindings) -
+// gleiche Funde, gleiche Reihenfolge.
 var
-  Found    : TArray<TLeakFinding>;
   Frame    : TAnalyserFrame;
   State    : TFindingSourceState;
   FileGen  : UInt64;
-  F        : TLeakFinding;
   FileKey  : string;   // AFile wie der Highlighter ihn vergleicht
   Silent   : TEditorFindingsCopy;
-
-  // Derselbe Pfad? '/' gegen '\' und Gross/Klein wie NormalizePathForKey
-  // (Review nach Bereichen 2026-10-10, Nit 44) - die Laenge zuerst, das
-  // laesst die meisten Funde anderer Dateien ohne Kopie durch.
-  function SameFile(const AName: string): Boolean;
-  begin
-    Result := (Length(AName) = Length(AFile))
-      and (SameText(AName, AFile) or (NormalizePathForKey(AName) = FileKey));
-  end;
-
-  function AlreadyFound(F: TLeakFinding): Boolean;
-  // Derselbe Fund kann aus zwei Scans (Projekt + Datei) in der Liste
-  // stehen - im Menue soll er einmal erscheinen. Identitaet wie die
-  // Gluehbirne sie fuer ihren Fingerabdruck nimmt (FindingIdentityKey).
-  var
-    k   : Integer;
-    Key : string;
-  begin
-    Result := False;
-    Key := FindingIdentityKey(F);
-    for k := 0 to High(Found) do
-      if FindingIdentityKey(Found[k]) = Key then
-        Exit(True);
-  end;
-
-  procedure Collect(AList: TList<TLeakFinding>);
-  var
-    F       : TLeakFinding;
-    SpanEnd : Integer;
-  begin
-    if not Assigned(AList) then Exit;
-    for F in AList do
-    begin
-      if not Assigned(F) or not SameFile(F.FileName) then Continue;
-      SpanEnd := F.SpanEnd;
-      if SpanEnd > F.LineInt + MAX_SPAN_LINES then
-        SpanEnd := F.LineInt + MAX_SPAN_LINES;
-      if (ALine >= F.LineInt) and (ALine <= SpanEnd)
-         and not AlreadyFound(F) then
-      begin
-        SetLength(Found, Length(Found) + 1);
-        Found[High(Found)] := F;
-      end;
-    end;
-  end;
-
+  DockIdx  : TFindingFileIndex;
 begin
-  Found := nil;
-  Frame := nil;
+  Result  := nil;
+  Frame   := nil;
+  DockIdx := nil;
   FileKey := NormalizePathForKey(AFile);
   if Assigned(GDockableForm) then
     Frame := GDockableForm.Frame;
   State := Default(TFindingSourceState);
-  if Assigned(Frame) and Assigned(Frame.FAllFindings) then
+  // FFileIndex lebt so lange wie FAllFindings (Create/Destroy des Frames).
+  if Assigned(Frame) and Assigned(Frame.FAllFindings)
+     and Assigned(Frame.FFileIndex) then
   begin
-    for F in Frame.FAllFindings do
-      if Assigned(F) and SameFile(F.FileName) then
-      begin
-        State.DockHasFile := True;
-        Break;
-      end;
+    DockIdx := Frame.FFileIndex;
+    DockIdx.Sync(Frame.FAllFindings,
+      FindingsStampOf(Frame.FFindingsGen, Frame.FFileGens));
+    State.DockHasFile := DockIdx.HasFile(AFile, FileKey);
     FileGen := 0;
     if Assigned(Frame.FFileGens) then
       Frame.FFileGens.TryGetValue(FileKey, FileGen);
@@ -4980,12 +4990,13 @@ begin
     State.SilentGen     := Silent.Gen;
   end;
   case PickFindingSource(State) of
-    fsDock:   Collect(Frame.FAllFindings);
-    fsSilent: Collect(Silent.Items);
+    fsDock:   Result := FindingsAtLine(DockIdx.Candidates(FileKey), AFile,
+                FileKey, ALine, MAX_SPAN_LINES);
+    fsSilent: Result := FindingsAtLine(Silent.Items, AFile, FileKey, ALine,
+                MAX_SPAN_LINES);
   else
     ;   // fsNone: keine Quelle fuer diese Datei - keine Funde
   end;
-  Result := Found;
 end;
 
 // Verzeichnis, gegen das [Baseline] File= im Silent-Lauf aufgeloest wird:

@@ -37,6 +37,7 @@ type
     [Test] procedure Sca001_FreedOutsideFinally_RoundTrip;
     [Test] procedure Sca001_Outcome_MarkedWithCaption;
     [Test] procedure Sca001_NeverFreed_NoHelp;
+    [Test] procedure Sca001_ClonedFinding_KeepsHelp;
     [Test] procedure Sca153_CatalogExample;
     [Test] procedure Sca153_ForeignRelease_NoHelp;
     [Test] procedure Sca109_CatalogExample;
@@ -48,12 +49,13 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uMissingFinally, uLeakDetector2, uLockWithoutTryFinally, uUnpairedLock,
   uGetMemWithoutFreeMem,
   uRdxRecipeRunner,      // TRdxFixOutcome
-  uRdxFixTable,          // CaptionFor
+  uRdxFixTable,          // CaptionFor, FixFor
+  uEngineApi,            // TSourcePlaces
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
   uTestRdxTextKit;       // Join, Apply
 
@@ -150,6 +152,42 @@ begin
   Result := InProc(['  L, S: TStringList;'], ['  L := TStringList.Create;',
     '  S := TStringList.Create;', '  try', '    L.Add(S.Text);', '  finally',
     '    S.Free;', '  end;', '  L.Free;']);
+end;
+
+// Die Hilfe fuer die KOPIE (TLeakFinding.Clone) eines Funds wie aus dem
+// Detektor - so plant der Anbieter im Silent-Pfad (uEditorFindingStore) und
+// aus dem Properties-Cache. Das Original ist vor dem Planen frei, wie die
+// Liste des Silent-Laufs.
+function PlanClone(const ASource: string; const ASeen: TSeen): TRdxFixOutcome;
+var
+  SL       : TStringList;
+  Places   : TSourcePlaces;
+  Original : TLeakFinding;
+  Kopie    : TLeakFinding;
+begin
+  SL := nil;
+  Places := nil;
+  Kopie := nil;
+  try
+    Original := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
+      fkMemoryLeak);
+    try
+      Original.LeakVariant := ASeen.Variant;
+      Kopie := Original.Clone;
+    finally
+      Original.Free;
+    end;
+    SL := TStringList.Create;
+    Places := TSourcePlaces.Create;
+    SL.Text := ASource;
+    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
+    Result := TRdxFixTable.FixFor(Places, SL, Kopie,
+      TRdxRecipeRunner.UsesNamesOf(Places));
+  finally
+    Kopie.Free;
+    Places.Free;
+    SL.Free;
+  end;
 end;
 
 { ---- SCA009 ---- }
@@ -287,6 +325,20 @@ begin
   Assert.IsTrue(Pos('list.Free', Meta.BadExample) = 0, Meta.BadExample);
   AssertNoHelp(InProc(['  L: TStringList;'], ['  L := TStringList.Create;',
     '  ShowMessage(L.Text);']), fkMemoryLeak, 'die Variante');
+end;
+
+procedure TTestRdxTryFixesDetector.Sca001_ClonedFinding_KeepsHelp;
+var
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  // Befund B1: die Silent-Kopie trug LeakVariant nicht, PlanMemoryLeak
+  // sperrte den Fix. Seit TLeakFinding.Clone reist die Variante mit.
+  Seen := Detect(FofSource, fkMemoryLeak);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  Assert.AreEqual('freed-outside-finally', Seen[0].Variant);
+  O := PlanClone(FofSource, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
 { ---- SCA153 ---- }

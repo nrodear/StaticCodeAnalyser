@@ -15,7 +15,7 @@ avec SonarQube Server qu'avec SonarCloud.
 
 | Script | Ce qu'il fait |
 |---|---|
-| [`sonar-scan.ps1`](sonar-scan.ps1)     | Exécute `analyser.exe --sonar-export` et produit `sca-findings.json`. Déploie le catalogue de règles vers `%APPDATA%` au premier lancement, décode le code de sortie en un verdict lisible, valide le fichier de sortie. |
+| [`sonar-scan.ps1`](sonar-scan.ps1)     | Exécute `analyser.exe --sonar-export` et produit `sca-findings.json`. Déploie le catalogue de règles vers `%APPDATA%` au premier lancement, décode le code de sortie en un verdict lisible, valide le fichier de sortie. Utilise le profil de règles de l'IDE (`[Rules] IdeProfile`) et conserve les fixtures de test ; `-RuleProfile` et `-HideTestFixtures` permettent de s'en écarter. |
 | [`sonar-upload.ps1`](sonar-upload.ps1) | Déchiffre le jeton DPAPI depuis `analyser.ini`, lit hôte/projet dans `[Sonar]`, lance `sonar-scanner` avec les bons drapeaux `-D`. Prend en charge `-DryRun` et `-DisableDelphi`. |
 
 ---

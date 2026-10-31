@@ -19,7 +19,7 @@ type
     // Posten 180: Exits aus anonymen Methoden - vier gemessene Faelle
     [Test] procedure AnonMethodInArgument_ExitsNotCounted;
     [Test] procedure SevenOwnExitsWithArgLambda_Reported_Kontrolle;
-    [Test] procedure AnonMethodAssignedWithLocals_CountsToHost_KnownLimit;
+    [Test] procedure AnonMethodAssignedWithLocals_StaysOut;
     [Test] procedure AnonMethodAssignedWithoutLocals_StaysOut;
   end;
 
@@ -38,17 +38,17 @@ uses
 //
 //   Lambda als ARGUMENT, 8 Exits, Wirt 0     kein Fund
 //     -> es gibt keinen eigenen Knoten, sonst waere DER gemeldet
-//   Lambda per ZUWEISUNG mit var-Sektion     Wirt bekommt sie
+//   Lambda per ZUWEISUNG mit var-Sektion     Wirt bekam sie (bis P2)
 //   dieselbe Zuweisung ohne var-Sektion      Wirt bekommt sie nicht
 //
-// Der Unterschied ist ein Parser-Artefakt: der RHS-Scan von
-// uParser2 endet am ersten ";" auf Tiefe 0, und das ist bei einer
-// eigenen var-Sektion deren Semikolon - der Lambda-Rumpf wird dann
-// als Rumpf des WIRTS geparst. Korpus: 74 solcher Zuweisungen in 44
-// Dateien. Eigenes Paket (9015), s. Kopf von uMultipleExit.
+// Der Unterschied war ein Parser-Artefakt: der RHS-Scan von
+// uParser2 endete am ersten ";" auf Tiefe 0, und das ist bei einer
+// eigenen var-Sektion deren Semikolon - der Lambda-Rumpf wurde dann
+// als Rumpf des WIRTS geparst (Paket 9015). Seit der Parser-Charge P2
+// (2026-10-27) laeuft der Scan ueber den Kopf der anonymen Methode
+// hinweg; beide Zuweisungen verhalten sich gleich (rw 157 Koepfe).
 //
-// Die vier Tests halten die Matrix fest. Sie sind absichtlich
-// KnownLimit-benannt, wo sie ein Artefakt pinnen, nicht ein Design.
+// Die vier Tests halten die Matrix fest.
 
 procedure TTestMultipleExit.AnonMethodInArgument_ExitsNotCounted;
 // Wirt 6 (an der Schwelle) + 2 im Argument-Lambda. Zaehlten
@@ -136,11 +136,11 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMultipleExit.AnonMethodAssignedWithLocals_CountsToHost_KnownLimit;
-// PARSER-ARTEFAKT, Paket 9015: Wirt 5 + 2 im zugewiesenen
-// Lambda MIT eigener var-Sektion. Gemessen: 1, und der
-// Meldetext nennt 7 - die zwei Lambda-Exits sind im Wirt
-// gelandet.
+procedure TTestMultipleExit.AnonMethodAssignedWithLocals_StaysOut;
+// Paket 9015 / Parser-Charge P2: Wirt 5 + 2 im zugewiesenen Lambda MIT
+// eigener var-Sektion. Bis P2 gemessen (Exe 8c3eac8f): 1 Fund, der
+// Meldetext nannte 7 - die zwei Lambda-Exits landeten im Wirt (ROT ohne
+// den Fix). Jetzt wie die Gegenprobe ohne var-Sektion: 0.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -175,17 +175,16 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1,
+    Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkMultipleExit),
-      'BEKANNTE GRENZE: eigene var-Sektion schiebt den Lambda-Rumpf in den Wirt');
+      'eigene var-Sektion: der Lambda-Rumpf bleibt RHS-Text, nicht Wirt');
   finally F.Free; end;
 end;
 
 procedure TTestMultipleExit.AnonMethodAssignedWithoutLocals_StaysOut;
-// DIE DISKRIMINIERENDE GEGENPROBE: Zeichen fuer Zeichen
-// dieselbe Fixture, nur ohne die eine var-Zeile.
-// Gemessen: 0. Damit ist die 1 darueber der var-Sektion
-// zuzuschreiben und nichts anderem.
+// GEGENPROBE: Zeichen fuer Zeichen dieselbe Fixture, nur ohne die
+// eine var-Zeile. Gemessen: 0 - schon vor P2; seit P2 gilt dasselbe
+// mit var-Sektion (Test darueber).
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +

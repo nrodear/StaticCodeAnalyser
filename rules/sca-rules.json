@@ -30,7 +30,8 @@
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
-      "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound"
+      "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound",
+      "FunctionNameRecursion"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -55,13 +56,13 @@
     "style": [
       "PublicMemberWithoutDoc", "NilComparison", "BeginEndRequired",
       "WithStatement", "ClassPerFile", "DfmHardcodedCaption",
-      "IfElseBegin"
+      "IfElseBegin", "FunctionNameAsResult"
     ],
     "default": [
       "*",
       "!PublicMemberWithoutDoc", "!NilComparison", "!BeginEndRequired",
       "!WithStatement", "!ClassPerFile", "!DfmHardcodedCaption",
-      "!IfElseBegin"
+      "!IfElseBegin", "!FunctionNameAsResult"
     ],
     "strict":  ["*", "UnusedUses"],
 
@@ -94,6 +95,9 @@
       "configKey": "[Detectors] LeakyClasses",
       "detectorUnit": "uLeakDetector2.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA001", "effect": "changes", "slug": "free-in-try-finally-block" }
+      ],
       "examples": {
         "bad":  "list := TStringList.Create;\nDoStuff(list);   // <-- exception here leaks list",
         "good": "list := TStringList.Create;\ntry\n  DoStuff(list);\nfinally\n  list.Free;\nend;"
@@ -115,6 +119,9 @@
       "cwe": ["CWE-390"],
       "detectorUnit": "uCodeSmells2.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA002", "effect": "changes", "slug": "add-raise-to-empty-except-block" }
+      ],
       "examples": {
         "bad":  "try DoStuff except end;",
         "good": "try DoStuff except on E: Exception do LogError(E.Message); end;"
@@ -139,6 +146,9 @@
       "anchor": "assign-or-call",
       "fixMode": "assisted",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA003", "effect": "template", "slug": "copy-parameterized-template-to-clipboard" }
+      ],
       "examples": {
         "bad":  "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=''' + UserName + '''';",
         "good": "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=:n';\nQuery.ParamByName('n').AsString := UserName;"
@@ -220,6 +230,9 @@
       "configKey": "[Detectors] UsesCheck",
       "detectorUnit": "uUnusedUses.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA007", "effect": "changes", "slug": "remove-unit-from-uses" }
+      ],
       "examples": {
         "bad":  "uses ..., MyUnusedHelper, ...;",
         "good": "uses\n  System.SysUtils, Vcl.Forms;\n\n// Or, if it must stay (initialization side effect, class registration):\nuses\n  System.SysUtils, Vcl.Forms,\n  MyUnusedHelper;   // registers its classes in its initialization section"
@@ -260,6 +273,9 @@
       "tags": ["memory", "exception-safety"],
       "detectorUnit": "uMissingFinally.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA009", "effect": "changes", "slug": "free-in-try-finally-block" }
+      ],
       "examples": {
         "bad":  "obj := TFoo.Create;\nobj.DoStuff;\nobj.Free;",
         "good": "obj := TFoo.Create;\ntry obj.DoStuff finally obj.Free end;"
@@ -301,6 +317,9 @@
       "cwe": ["CWE-561"],
       "detectorUnit": "uDeadCode.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA011", "effect": "same", "slug": "delete-unreachable-code-line" }
+      ],
       "examples": {
         "bad":  "Exit;\nWriteLn('never reached');",
         "good": "if Failed then\nbegin\n  WriteLn('failed');\n  Exit;\nend;\nWriteLn('reached');"
@@ -362,6 +381,9 @@
       "configKey": "[Detectors] MagicNumberTrivials",
       "detectorUnit": "uMagicNumbers.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA014", "effect": "same", "slug": "introduce-local-constant-for" }
+      ],
       "examples": {
         "bad":  "if RetryCount > 3 then ...",
         "good": "const MAX_RETRIES = 3;\nif RetryCount > MAX_RETRIES then ..."
@@ -421,6 +443,10 @@
       "tags": ["debug-code"],
       "detectorUnit": "uDebugOutput.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA017", "effect": "changes", "slug": "put-debug-output-in-ifdef-debug" },
+        { "id": "SCA017.2", "effect": "changes", "slug": "delete-debug-output" }
+      ],
       "examples": {
         "bad":  "WriteLn('here #3');",
         "good": "Logger.Debug('reached step 3');"
@@ -442,6 +468,9 @@
       "configKey": "[Detectors] DeepNestingMaxDepth",
       "detectorUnit": "uDeepNesting.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA018", "effect": "same", "slug": "turn-last-if-into-guard-clause-with-exit" }
+      ],
       "examples": {
         "bad":  "if a then\n  if b then\n    if c then\n      if d then DoStuff;",
         "good": "if not a then Exit;\nif not b then Exit;\nif not c then Exit;\nif d then DoStuff;"
@@ -481,6 +510,10 @@
       "tags": ["maintainability"],
       "detectorUnit": "uEmptyMethod.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA020", "effect": "same", "slug": "mark-empty-body-as-intentional" },
+        { "id": "SCA020.2", "effect": "changes", "slug": "raise-enotimplemented-in-empty-body" }
+      ],
       "examples": {
         "bad":  "procedure DoStuff;\nbegin\nend;",
         "good": "procedure DoStuff;\nbegin\n  raise ENotImplemented.Create('...');\nend;"
@@ -956,6 +989,9 @@
       "anchor": "assign",
       "fixMode": "auto",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA044", "effect": "same", "slug": "build-format-from-concatenation" }
+      ],
       "examples": {
         "bad":  "Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';",
         "good": "Msg := Format('User %s has %d open tickets', [Name, N]);"
@@ -995,6 +1031,10 @@
       "tags": ["loop", "typo"],
       "detectorUnit": "uReversedForRange.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA046", "effect": "changes", "slug": "replace-to-with-downto" },
+        { "id": "SCA046.2", "effect": "changes", "slug": "swap-loop-bounds" }
+      ],
       "examples": {
         "bad":  "for i := 10 to 1 do DoStuff(i);",
         "good": "for i := 10 downto 1 do DoStuff(i);"
@@ -1015,6 +1055,9 @@
       "tags": ["typo", "no-op"],
       "detectorUnit": "uSelfAssignment.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA047", "effect": "same", "slug": "remove-self-assignment-of" }
+      ],
       "examples": {
         "bad":  "FCount := FCount;",
         "good": "FCount := ACount;"
@@ -1131,6 +1174,9 @@
       "tags": ["dead-code", "locals"],
       "detectorUnit": "uUnusedLocal.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA053", "effect": "same", "slug": "remove-unused-variable" }
+      ],
       "examples": {
         "bad":  "var\n  Tmp: Integer;   // never used\nbegin\n  DoStuff;\nend;",
         "good": "begin\n  DoStuff;\nend;"
@@ -1151,6 +1197,9 @@
       "tags": ["dead-code", "api-design"],
       "detectorUnit": "uUnusedParameter.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA054", "effect": "same", "slug": "prefix-parameter-with-intentionally-unused" }
+      ],
       "examples": {
         "bad":  "procedure Process(const Data: TData; Mode: Integer);  // Mode never referenced",
         "good": "procedure Process(const Data: TData);"
@@ -1249,6 +1298,10 @@
       "tags": ["string-formatting", "i18n", "locale"],
       "detectorUnit": "uFormatMismatch.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA059", "effect": "same", "slug": "pass-formatsettings-explicitly" },
+        { "id": "SCA059.2", "effect": "changes", "slug": "pass-tformatsettings-invariant" }
+      ],
       "examples": {
         "bad":  "S := Format('%.2f', [Price]);",
         "good": "S := Format('%.2f', [Price], TFormatSettings.Invariant);"
@@ -1269,6 +1322,9 @@
       "tags": ["control-flow", "delphi-classic"],
       "detectorUnit": "uGotoStatement.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA060", "effect": "same", "slug": "replace-goto-with-exit" }
+      ],
       "examples": {
         "bad":  "label MyExit;\nbegin\n  if Failed then goto MyExit;\n  ...\n  MyExit:\nend;",
         "good": "if Failed then Exit;\n..."
@@ -1289,6 +1345,9 @@
       "tags": ["formatting", "style"],
       "detectorUnit": "uTabulationCharacter.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA061", "effect": "same", "slug": "replace-tabs-in-this-line-with-spaces" }
+      ],
       "examples": {
         "bad":  "procedure Foo;\nbegin\n<TAB>DoStuff;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
@@ -1329,6 +1388,9 @@
       "tags": ["formatting", "style"],
       "detectorUnit": "uTrailingWhitespace.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA063", "effect": "same", "slug": "remove-trailing-whitespace" }
+      ],
       "examples": {
         "bad":  "  DoStuff;   <-- trailing spaces",
         "good": "  DoStuff;"
@@ -1349,6 +1411,9 @@
       "tags": ["formatting", "style", "convention"],
       "detectorUnit": "uLowercaseKeyword.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA064", "effect": "same", "slug": "write-in-lowercase" }
+      ],
       "examples": {
         "bad":  "Procedure Foo;\nBegin\n  If X then DoStuff;\nEnd;",
         "good": "procedure Foo;\nbegin\n  if X then DoStuff;\nend;"
@@ -1369,6 +1434,9 @@
       "tags": ["suppression", "audit"],
       "detectorUnit": "uNoSonarMarker.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA065", "effect": "changes", "slug": "replace-nosonar-with-noinspection-all-marker" }
+      ],
       "examples": {
         "bad":  "Dispose(P); // NOSONAR - we know about this",
         "good": "// noinspection - covered by integration test\nDispose(P);"
@@ -1389,6 +1457,9 @@
       "tags": ["style", "convention"],
       "detectorUnit": "uEmptyArgumentList.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA066", "effect": "same", "slug": "remove-empty-parentheses" }
+      ],
       "examples": {
         "bad":  "MyProc();\nResult := MyFunc();",
         "good": "MyProc;\nResult := MyFunc;"
@@ -1428,6 +1499,9 @@
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uTrailingCommaArgList.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA068", "effect": "same", "slug": "remove-trailing-comma" }
+      ],
       "examples": {
         "bad":  "Excel.Workbooks.Open(FileName,);   // Excel: Variant\nExcel.ActiveWorkbook.SaveAs(NewName, );",
         "good": "Excel.Workbooks.Open(FileName);   // Excel: Variant\nExcel.ActiveWorkbook.SaveAs(NewName);"
@@ -1448,6 +1522,9 @@
       "tags": ["readability", "modern-delphi"],
       "detectorUnit": "uDigitGrouping.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA069", "effect": "same", "slug": "group-digits-with" }
+      ],
       "examples": {
         "bad":  "const TIMEOUT_MS = 1800000;\nconst MAX_BYTES = 10485760;",
         "good": "const TIMEOUT_MS = 1_800_000;\nconst MAX_BYTES = 10_485_760;"
@@ -1468,6 +1545,9 @@
       "tags": ["maintenance", "dead-code"],
       "detectorUnit": "uCommentedOutCode.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA070", "effect": "same", "slug": "delete-commented-out-code" }
+      ],
       "examples": {
         "bad":  "// X := 42;\n// if Active then Process;",
         "good": "// TODO: re-enable once issue #123 is fixed - see history"
@@ -1488,6 +1568,9 @@
       "tags": ["style", "structure"],
       "detectorUnit": "uUnitLevelKeywordIndent.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA071", "effect": "same", "slug": "move-keyword-to-column-1" }
+      ],
       "examples": {
         "bad":  "  implementation\n\n  procedure Foo; ...",
         "good": "implementation\n\nprocedure Foo; ..."
@@ -1508,6 +1591,9 @@
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uRedundantBoolean.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA072", "effect": "same", "slug": "remove-redundant-comparison-with-true-false" }
+      ],
       "examples": {
         "bad":  "if Active = True then ...\nif Disabled <> False then ...",
         "good": "if Active then ...\nif Disabled then ..."
@@ -1554,6 +1640,9 @@
       "tags": ["debuggability", "errors"],
       "detectorUnit": "uAssertMessage.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA074", "effect": "same", "slug": "use-condition-as-assert-message" }
+      ],
       "examples": {
         "bad":  "Assert(Items.Count > 0);",
         "good": "Assert(Items.Count > 0, 'caller must ensure non-empty Items');"
@@ -1574,6 +1663,9 @@
       "tags": ["style", "redundancy"],
       "detectorUnit": "uExplicitTObjectInheritance.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA075", "effect": "same", "slug": "remove-tobject-from-class-declaration" }
+      ],
       "examples": {
         "bad":  "type TFoo = class(TObject) ... end;",
         "good": "type TFoo = class ... end;"
@@ -1594,6 +1686,9 @@
       "tags": ["style", "diff-hygiene"],
       "detectorUnit": "uGroupedDeclaration.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA076", "effect": "same", "slug": "split-grouped-declaration" }
+      ],
       "examples": {
         "bad":  "var A, B, C: Integer;\nfield FX, FY: TPoint;",
         "good": "var A: Integer;\n    B: Integer;\n    C: Integer;"
@@ -1614,6 +1709,9 @@
       "tags": ["dead-code", "refactor"],
       "detectorUnit": "uEmptyBlock.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA077", "effect": "same", "slug": "replace-empty-with-do-begin-end-by-call" }
+      ],
       "examples": {
         "bad":  "if Active then begin end;",
         "good": "if Active then Activate;"
@@ -1653,6 +1751,9 @@
       "tags": ["style", "structure"],
       "detectorUnit": "uConsecutiveSection.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA079", "effect": "same", "slug": "merge-with-previous-section" }
+      ],
       "examples": {
         "bad":  "const A = 1;\nconst B = 2;",
         "good": "const\n  A = 1;\n  B = 2;"
@@ -1673,6 +1774,9 @@
       "tags": ["dead-code", "control-flow"],
       "detectorUnit": "uRedundantJump.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA080", "effect": "same", "slug": "remove-redundant" }
+      ],
       "examples": {
         "bad":  "procedure Foo;\nbegin\n  DoStuff;\n  Exit;\nend;",
         "good": "procedure Foo;\nbegin\n  DoStuff;\nend;"
@@ -1724,6 +1828,9 @@
       "tags": ["typo", "style"],
       "detectorUnit": "uSuperfluousSemicolon.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA082", "effect": "same", "slug": "remove-extra-semicolon" }
+      ],
       "examples": {
         "bad":  "DoStuff;;",
         "good": "DoStuff;"
@@ -1744,6 +1851,9 @@
       "tags": ["resource-leak", "refactor"],
       "detectorUnit": "uEmptyFinallyBlock.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA083", "effect": "same", "slug": "remove-empty-try-finally" }
+      ],
       "examples": {
         "bad":  "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\nend;",
         "good": "Stream := TFileStream.Create(P);\ntry\n  ...\nfinally\n  Stream.Free;\nend;"
@@ -1764,6 +1874,9 @@
       "tags": ["redundancy", "style"],
       "detectorUnit": "uAssignedAndAssignedNil.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA084", "effect": "same", "slug": "remove-redundant-comparison-with-nil" }
+      ],
       "examples": {
         "bad":  "if Assigned(Obj) and (Obj <> nil) then ...",
         "good": "if Assigned(Obj) then ..."
@@ -1784,6 +1897,9 @@
       "tags": ["idiom", "safety"],
       "detectorUnit": "uFreeAndNilHint.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA085", "effect": "same", "slug": "use-freeandnil" }
+      ],
       "examples": {
         "bad":  "Obj.Free;\nObj := nil;",
         "good": "FreeAndNil(Obj);"
@@ -1804,6 +1920,9 @@
       "tags": ["api-design", "bug-risk"],
       "detectorUnit": "uAvoidOut.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA086", "effect": "depends", "slug": "replace-out-with-var-for" }
+      ],
       "examples": {
         "bad":  "procedure Foo(out S: string);",
         "good": "procedure Foo(var S: string);"
@@ -1824,6 +1943,9 @@
       "tags": ["dead-code", "refactor"],
       "detectorUnit": "uEmptyVisibilitySection.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA087", "effect": "same", "slug": "remove-empty-visibility-section" }
+      ],
       "examples": {
         "bad":  "type TFoo = class\n  public\n  private\n    FX: Integer;\n  end;",
         "good": "type TFoo = class\n  private\n    FX: Integer;\n  end;"
@@ -1844,6 +1966,9 @@
       "tags": ["legacy", "modernization"],
       "detectorUnit": "uLegacyInitializationSection.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA088", "effect": "same", "slug": "replace-begin-with-initialization" }
+      ],
       "examples": {
         "bad":  "// at end of unit:\nbegin\n  RegisterClass(TFoo);\nend.",
         "good": "initialization\n  RegisterClass(TFoo);\nend."
@@ -1941,6 +2066,10 @@
       "tags": ["inheritance", "bug-risk"],
       "detectorUnit": "uTwiceInheritedCalls.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA093", "effect": "changes", "slug": "remove-second-duplicate-inherited-call" },
+        { "id": "SCA093.2", "effect": "changes", "slug": "remove-first-duplicate-inherited-call" }
+      ],
       "examples": {
         "bad":  "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\n  inherited;\nend;",
         "good": "procedure Foo;\nbegin\n  inherited;\n  DoStuff;\nend;"
@@ -1961,6 +2090,9 @@
       "tags": ["style", "redundancy"],
       "detectorUnit": "uRedundantParentheses.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA094", "effect": "same", "slug": "remove-redundant-inner-parentheses" }
+      ],
       "examples": {
         "bad":  "if ((Active)) then ...\nResult := ((42));",
         "good": "if Active then ...\nResult := 42;"
@@ -2000,6 +2132,9 @@
       "tags": ["inheritance", "initialization"],
       "detectorUnit": "uConstructorWithoutInherited.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA096", "effect": "depends", "slug": "call-first-in-constructor" }
+      ],
       "examples": {
         "bad":  "constructor TFoo.Create;\nbegin\n  FX := 0;\nend;",
         "good": "constructor TFoo.Create;\nbegin\n  inherited;\n  FX := 0;\nend;"
@@ -2020,6 +2155,9 @@
       "tags": ["inheritance", "memory-leak"],
       "detectorUnit": "uDestructorWithoutInherited.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA097", "effect": "depends", "slug": "call-inherited-last-in-destructor" }
+      ],
       "examples": {
         "bad":  "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\nend;",
         "good": "destructor TFoo.Destroy;\nbegin\n  FreeAndNil(FBar);\n  inherited;\nend;"
@@ -2040,6 +2178,9 @@
       "tags": ["simplification", "style"],
       "detectorUnit": "uRedundantConditional.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA098", "effect": "same", "slug": "assign-condition-to-directly" }
+      ],
       "examples": {
         "bad":  "if Active then Result := True else Result := False;",
         "good": "Result := Active;"
@@ -2060,6 +2201,9 @@
       "tags": ["style", "consistency"],
       "detectorUnit": "uIfElseBegin.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA099", "effect": "same", "slug": "put-branch-in-begin-end" }
+      ],
       "examples": {
         "bad":  "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\n  DoC;",
         "good": "if Active then\nbegin\n  DoA;\n  DoB;\nend\nelse\nbegin\n  DoC;\nend;"
@@ -2099,6 +2243,9 @@
       "tags": ["style", "bug-risk"],
       "detectorUnit": "uBeginEndRequired.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA101", "effect": "same", "slug": "put-branch-in-begin-end" }
+      ],
       "examples": {
         "bad":  "if Active then DoStuff;",
         "good": "if Active then\nbegin\n  DoStuff;\nend;"
@@ -2195,6 +2342,9 @@
       "tags": ["naming", "convention"],
       "detectorUnit": "uMethodName.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA106", "effect": "same", "slug": "write-method-name-as" }
+      ],
       "examples": {
         "bad":  "procedure doStuff;",
         "good": "procedure DoStuff;"
@@ -2255,6 +2405,9 @@
       "cwe": ["CWE-667"],
       "detectorUnit": "uLockWithoutTryFinally.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA109", "effect": "changes", "slug": "release-lock-in-try-finally-block" }
+      ],
       "examples": {
         "bad":  "FLock.Enter;\nDoWork;     // exception here leaves FLock held forever\nFLock.Leave;",
         "good": "FLock.Enter;\ntry\n  DoWork;\nfinally\n  FLock.Leave;\nend;"
@@ -2294,6 +2447,9 @@
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA111", "effect": "changes", "slug": "move-before-loop" }
+      ],
       "examples": {
         "bad":  "for i := 0 to High(Ids) do begin\n  Q.ParamByName('id').AsInteger := Ids[i];\n  Q.ExecSQL;\nend;",
         "good": "var P := Q.ParamByName('id');\nfor i := 0 to High(Ids) do begin\n  P.AsInteger := Ids[i];\n  Q.ExecSQL;\nend;"
@@ -2314,6 +2470,9 @@
       "tags": ["performance", "database"],
       "detectorUnit": "uPerfHotspots.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA112", "effect": "changes", "slug": "move-before-loop" }
+      ],
       "examples": {
         "bad":  "while not Q.Eof do begin\n  Total := Total + Q.FieldByName('Amount').AsCurrency;\n  Q.Next;\nend;",
         "good": "var Amt := Q.FieldByName('Amount');\nwhile not Q.Eof do begin\n  Total := Total + Amt.AsCurrency;\n  Q.Next;\nend;"
@@ -2334,6 +2493,9 @@
       "tags": ["concurrency", "deprecated"],
       "detectorUnit": "uConcurrencyExt.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA113", "effect": "same", "slug": "use-start-instead-of-resume" }
+      ],
       "examples": {
         "bad":  "MyThread := TWorker.Create(True);\nMyThread.Resume;",
         "good": "MyThread := TWorker.Create(True);\nMyThread.Start;"
@@ -2376,6 +2538,9 @@
       "owasp": ["A02:2021-Cryptographic Failures"],
       "detectorUnit": "uRestHttpSecurity.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA115", "effect": "changes", "slug": "use-https-instead-of-http" }
+      ],
       "examples": {
         "bad":  "Url := 'http://api.contoso-shop.de/v1/users';",
         "good": "Url := 'https://api.contoso-shop.de/v1/users';"
@@ -2417,6 +2582,9 @@
       "tags": ["documentation", "api-design"],
       "detectorUnit": "uPublicMemberWithoutDoc.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA117", "effect": "same", "slug": "insert-documentation-skeleton" }
+      ],
       "examples": {
         "bad":  "type\n  TFoo = class\n  public\n    procedure Run;\n  end;",
         "good": "type\n  TFoo = class\n  public\n    /// <summary>Starts the worker.</summary>\n    procedure Run;\n  end;"
@@ -2437,6 +2605,9 @@
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA118", "effect": "same", "slug": "rename-exception-class-to" }
+      ],
       "examples": {
         "bad":  "type\n  MyError = class(Exception);",
         "good": "type\n  EMyError = class(Exception);"
@@ -2457,6 +2628,9 @@
       "tags": ["naming", "convention"],
       "detectorUnit": "uNamingExt.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA119", "effect": "same", "slug": "rename-constant-to" }
+      ],
       "examples": {
         "bad":  "procedure Foo;\nconst\n  MaxRetries = 3;\nbegin ... end;",
         "good": "procedure Foo;\nconst\n  MAX_RETRIES = 3;\nbegin ... end;"
@@ -2477,6 +2651,9 @@
       "tags": ["exception", "error-handling", "sonardelphi"],
       "detectorUnit": "uMissingRaise.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA120", "effect": "changes", "slug": "raise-exception" }
+      ],
       "examples": {
         "bad":  "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    EArgumentOutOfRangeException.Create('x negative');  // never raised!\nend;",
         "good": "procedure Validate(x: Integer);\nbegin\n  if x < 0 then\n    raise EArgumentOutOfRangeException.Create('x negative');\nend;"
@@ -2497,6 +2674,9 @@
       "tags": ["function", "uninitialized", "sonardelphi"],
       "detectorUnit": "uRoutineResultAssigned.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA121", "effect": "changes", "slug": "initialize-result-with" }
+      ],
       "examples": {
         "bad":  "function GetCount(L: TList): Integer;\nbegin\n  if L = nil then\n    LogMessage('nil list');\n  // Result never set -> garbage\nend;",
         "good": "function GetCount(L: TList): Integer;\nbegin\n  Result := 0;\n  if L <> nil then\n    Result := L.Count;\nend;"
@@ -2517,6 +2697,9 @@
       "tags": ["exception", "error-handling", "stack-trace", "sonardelphi"],
       "detectorUnit": "uReRaiseException.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA122", "effect": "same", "slug": "use-raise-to-keep-original-stack-trace" }
+      ],
       "examples": {
         "bad":  "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise E;          // loses original trace\n  end;\nend;",
         "good": "try\n  RiskyCall;\nexcept\n  on E: EDivByZero do\n  begin\n    Log(E.Message);\n    raise;            // preserves trace\n  end;\nend;"
@@ -2537,6 +2720,9 @@
       "tags": ["memory", "destructor", "cast", "sonardelphi"],
       "detectorUnit": "uCastAndFree.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA123", "effect": "same", "slug": "remove-cast-to-before-free" }
+      ],
       "examples": {
         "bad":  "procedure Cleanup(L: TObject);\nbegin\n  TStringList(L).Free;     // cast has no effect on dispatch\nend;",
         "good": "procedure Cleanup(L: TObject);\nbegin\n  L.Free;                  // virtual Destroy resolves at runtime\nend;"
@@ -2576,6 +2762,9 @@
       "tags": ["inheritance", "dead-code", "sonardelphi"],
       "detectorUnit": "uInheritedMethodEmpty.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA125", "effect": "same", "slug": "remove-empty-override" }
+      ],
       "examples": {
         "bad":  "type\n  TFooSubclass = class(TFoo)\n  protected\n    procedure Paint; override;\n  end;\n\nprocedure TFooSubclass.Paint;\nbegin\n  inherited;     // adds nothing - drop this whole override\nend;",
         "good": "// Remove both the declaration and the implementation. The\n// parent's Paint is reached by normal virtual dispatch."
@@ -2596,6 +2785,9 @@
       "tags": ["convention", "nil", "sonardelphi"],
       "detectorUnit": "uNilComparison.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA126", "effect": "same", "slug": "use-assigned-instead-of-comparing-with-nil" }
+      ],
       "examples": {
         "bad":  "if Obj = nil then\n  Exit;\nif Obj <> nil then\n  Obj.DoStuff;",
         "good": "if not Assigned(Obj) then\n  Exit;\nif Assigned(Obj) then\n  Obj.DoStuff;"
@@ -2616,6 +2808,10 @@
       "tags": ["exception", "error-handling", "sonardelphi"],
       "detectorUnit": "uRaisingRawException.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA127", "effect": "changes", "slug": "raise-eargumentexception-instead-wrong-argument" },
+        { "id": "SCA127.2", "effect": "changes", "slug": "raise-einvalidopexception-instead-invalid-state" }
+      ],
       "examples": {
         "bad":  "if x < 0 then\n  raise Exception.Create('x is negative');",
         "good": "if x < 0 then\n  raise EArgumentOutOfRangeException.CreateFmt('x = %d', [x]);"
@@ -2636,6 +2832,10 @@
       "tags": ["locale", "i18n", "sonardelphi"],
       "detectorUnit": "uDateFormatSettings.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA128", "effect": "same", "slug": "pass-formatsettings-explicitly" },
+        { "id": "SCA128.2", "effect": "changes", "slug": "pass-tformatsettings-invariant" }
+      ],
       "examples": {
         "bad":  "var d := StrToDate(UserInput);     // breaks under EN locale\nWriteLn(DateToStr(Now));",
         "good": "var FS := TFormatSettings.Invariant;\nvar d := StrToDate(UserInput, FS);\nWriteLn(DateToStr(Now, FS));"
@@ -2694,6 +2894,9 @@
       "tags": ["control-flow", "side-effects", "performance", "sonardelphi"],
       "detectorUnit": "uIfThenShortCircuit.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA131", "effect": "changes", "slug": "replace-ifthen-with-if-then-else" }
+      ],
       "examples": {
         "bad":  "x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);\n//                            both calls run every time",
         "good": "if IsCacheHit then\n  x := FetchFromCache\nelse\n  x := FetchFromDb;"
@@ -2809,6 +3012,9 @@
       "tags": ["arithmetic", "integer-overflow", "sonar50"],
       "detectorUnit": "uIntegerOverflow.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA137", "effect": "changes", "slug": "cast-to-int64-before-multiplying" }
+      ],
       "examples": {
         "bad":  "var\n  BytesTotal: Int64;\n  SectorCount, SectorSize: Integer;\nbegin\n  BytesTotal := SectorCount * SectorSize;   // <- 32-bit overflow, then widen",
         "good": "BytesTotal := Int64(SectorCount) * SectorSize;\n// Cast one operand; the other is auto-promoted; multiplication is 64-bit."
@@ -2848,6 +3054,9 @@
       "tags": ["memory", "lifecycle", "sonar50"],
       "detectorUnit": "uFreeWithoutNil.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA139", "effect": "same", "slug": "use-freeandnil" }
+      ],
       "examples": {
         "bad":  "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  L.Free;             // <- L still points at freed memory\nend;\nWriteLn(L.Count);     // Use-After-Free",
         "good": "L := TStringList.Create;\ntry\n  L.Add('x');\nfinally\n  FreeAndNil(L);      // L is nil; further use raises loudly\nend;"
@@ -2944,6 +3153,9 @@
       "tags": ["floating-point", "precision", "sonar50"],
       "detectorUnit": "uFloatEquality.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA144", "effect": "changes", "slug": "use-instead-of-exact-comparison" }
+      ],
       "examples": {
         "bad":  "var Ratio: Double;\n...\nif Ratio = 0.5 then DoStuff;     // <- IEEE-754: almost never true after arithmetic",
         "good": "uses System.Math;\n...\nif SameValue(Ratio, 0.5, 1e-9) then DoStuff;"
@@ -3002,6 +3214,9 @@
       "tags": ["dead-code", "maintainability", "sonar50"],
       "detectorUnit": "uUnusedPrivateMethod.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA147", "effect": "same", "slug": "delete-unused-private-method" }
+      ],
       "examples": {
         "bad":  "TFoo = class\nprivate\n  procedure HelperA;            // <- never called\npublic\n  procedure DoStuff;\nend;",
         "good": "TFoo = class\npublic\n  procedure DoStuff;\nend;\n// or call HelperA from DoStuff to make the dependency explicit"
@@ -3047,6 +3262,9 @@
       "tags": ["oop", "refactoring", "sonar50"],
       "detectorUnit": "uCanBeClassMethod.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA148", "effect": "same", "slug": "make-static-class-method" }
+      ],
       "examples": {
         "bad":  "function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;          // only uses params, no Self\nend;",
         "good": "class function TMath.Add(A, B: Integer): Integer;\nbegin\n  Result := A + B;\nend;\n// Caller: TMath.Add(1, 2)   // no instance needed"
@@ -3067,6 +3285,9 @@
       "tags": ["polymorphism", "oop", "compiler-warning", "sonar50"],
       "detectorUnit": "uMissingOverride.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA149", "effect": "depends", "slug": "add-to-declaration" }
+      ],
       "examples": {
         "bad":  "TBase = class\n  procedure DoWork; virtual;\nend;\n\nTDerived = class(TBase)\n  procedure DoWork;          // <- shadows TBase.DoWork (W1010)\nend;",
         "good": "TDerived = class(TBase)\n  procedure DoWork; override;\nend;"
@@ -3087,6 +3308,9 @@
       "tags": ["control-flow", "dead-code", "sonar50"],
       "detectorUnit": "uBoolAlwaysTrue.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA150", "effect": "same", "slug": "remove-always-true-condition" }
+      ],
       "examples": {
         "bad":  "if Length(s) >= 0 then DoStuff;   // <- always True\nif Length(s) < 0 then DoOther;    // <- always False",
         "good": "if Length(s) > 0 then DoStuff;    // non-empty check\nif Length(s) = 0 then DoOther;    // empty check"
@@ -3145,6 +3369,9 @@
       "tags": ["concurrency", "mormot", "exception-safety", "sonar50"],
       "detectorUnit": "uUnpairedLock.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA153", "effect": "changes", "slug": "release-lock-in-try-finally-block" }
+      ],
       "examples": {
         "bad":  "FLocker.Lock;\nDoStuff;\nFLocker.UnLock;",
         "good": "FLocker.Lock;\ntry\n  DoStuff;\nfinally\n  FLocker.UnLock;\nend;"
@@ -3166,6 +3393,9 @@
       "tags": ["memory", "pointer", "mormot", "sonar50"],
       "detectorUnit": "uMoveSizeOfPointer.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA154", "effect": "changes", "slug": "use-sizeof-instead-of-pointer-size" }
+      ],
       "examples": {
         "bad":  "var Buf: array[0..255] of Byte; P: PByte;\nMove(Src^, P^, SizeOf(PByte));        // copies 8 bytes (pointer), not the buffer\nFillChar(P^, SizeOf(PInteger), 0);    // zeroes 8 bytes, not the integer",
         "good": "Move(Src^, P^, SizeOf(Byte) * Count);  // explicit element count\nFillChar(V, SizeOf(V), 0);             // matches the variable's size"
@@ -3212,6 +3442,9 @@
       "tags": ["memory-leak", "exception-safety", "mormot", "sonar50"],
       "detectorUnit": "uGetMemWithoutFreeMem.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA156", "effect": "changes", "slug": "free-buffer-in-try-finally-block" }
+      ],
       "examples": {
         "bad":  "GetMem(P, 1024);\nDoStuff(P);\nFreeMem(P);",
         "good": "GetMem(P, 1024);\ntry\n  DoStuff(P);\nfinally\n  FreeMem(P);\nend;"
@@ -3271,6 +3504,9 @@
       "tags": ["exception-handling", "silent-failure", "mormot", "sonar50"],
       "detectorUnit": "uEmptyOnHandler.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA159", "effect": "changes", "slug": "add-raise-to-empty-exception-handler" }
+      ],
       "examples": {
         "bad":  "try DoStuff; except\n  on E: EDatabaseError do ;\nend;",
         "good": "try DoStuff; except\n  on E: EDatabaseError do\n  begin\n    Logger.Error(E.Message);\n    raise;\n  end;\nend;"
@@ -3312,6 +3548,9 @@
       "tags": ["pointer", "win64", "truncation", "mormot", "sonar50"],
       "detectorUnit": "uPointerSubtraction.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA161", "effect": "changes", "slug": "replace-32-bit-casts-with-nativeint-nativeuint" }
+      ],
       "examples": {
         "bad":  "Diff := Cardinal(P1) - Cardinal(P2);   // upper 32 bits lost on Win64",
         "good": "Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast"
@@ -3374,6 +3613,9 @@
       "tags": ["dead-code", "maintainability", "sonardelphi"],
       "detectorUnit": "uUnusedRoutine.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA164", "effect": "same", "slug": "delete-unused-routine" }
+      ],
       "examples": {
         "bad":  "implementation\nprocedure InternalHelper;     // never called\nbegin\n  WriteLn('hi');\nend;\nend.",
         "good": "implementation\n// remove InternalHelper, or call it from somewhere,\n// or move it to interface if it should be exported"
@@ -3394,6 +3636,9 @@
       "tags": ["suppression", "maintainability", "hygiene"],
       "detectorUnit": "uSuppression.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA165", "effect": "same", "slug": "remove-ineffective-suppression-marker" }
+      ],
       "examples": {
         "bad":  "// noinspection MemoryLeak\nWriteLn('hello');   // no leak here - suppression never fires",
         "good": "// (Marker entfernt - das Tool flaggt diese Zeile nicht mehr.)\nWriteLn('hello');"
@@ -3435,6 +3680,9 @@
       "configKey": "",
       "detectorUnit": "uInsecureRandom.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA167", "effect": "changes", "slug": "call-randomize-in-initialization-section" }
+      ],
       "examples": {
         "bad":  "procedure DealCards;\nvar i: Integer;\nbegin\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;",
         "good": "procedure DealCards;\nvar i: Integer;\nbegin\n  Randomize;   // once, at startup\n  for i := 1 to 5 do\n    Players[i].Card := Random(52);\nend;"
@@ -3456,6 +3704,10 @@
       "configKey": "",
       "detectorUnit": "uDefaultCaseInCaseStatement.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA168", "effect": "same", "slug": "add-empty-else-branch" },
+        { "id": "SCA168.2", "effect": "changes", "slug": "add-else-branch-that-raises-exception" }
+      ],
       "examples": {
         "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
         "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EInvalidOpException.Create('Unhandled status');\nend;"
@@ -3477,6 +3729,9 @@
       "configKey": "",
       "detectorUnit": "uAssertWithSideEffect.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA169", "effect": "changes", "slug": "evaluate-condition-outside-assert" }
+      ],
       "examples": {
         "bad":  "Assert(InitializeSubsystem);   // Release build skips Init entirely",
         "good": "var Ok := InitializeSubsystem;\nAssert(Ok, 'subsystem init failed');"
@@ -3498,6 +3753,9 @@
       "configKey": "",
       "detectorUnit": "uConstStringParameter.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA170", "effect": "same", "slug": "declare-parameter-as-const" }
+      ],
       "examples": {
         "bad":  "function Hash(s: string): Integer;",
         "good": "function Hash(const s: string): Integer;"
@@ -3579,6 +3837,9 @@
       "configKey": "",
       "detectorUnit": "uTObjectListWithoutOwnership.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA174", "effect": "changes", "slug": "use-tobjectlist-so-list-frees-its-items" }
+      ],
       "examples": {
         "bad":  "L := TList<TFoo>.Create;\nL.Add(TFoo.Create);\nL.Free; // TFoo instance leaks",
         "good": "L := TObjectList<TFoo>.Create; // OwnsObjects=True default\nL.Add(TFoo.Create);\nL.Free; // item freed"
@@ -3680,6 +3941,9 @@
       "configKey": "",
       "detectorUnit": "uAttributeIgnoreWithoutReason.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA179", "effect": "same", "slug": "add-reason-to-ignore" }
+      ],
       "examples": {
         "bad":  "[Ignore]\nprocedure SomeTest;",
         "good": "[Ignore('TBD ticket #1234 - flaky on CI')]\nprocedure SomeTest;"
@@ -3701,6 +3965,9 @@
       "configKey": "",
       "detectorUnit": "uAttributeDuplicate.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA180", "effect": "same", "slug": "remove-duplicate-attribute" }
+      ],
       "examples": {
         "bad":  "[Test]\n[Test]\nprocedure Foo;",
         "good": "[Test]\nprocedure Foo;"
@@ -3722,6 +3989,9 @@
       "configKey": "",
       "detectorUnit": "uAttributeCategoryWithoutString.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA181", "effect": "same", "slug": "add-category-name-to-attribute" }
+      ],
       "examples": {
         "bad":  "[Category]\nprocedure Foo;",
         "good": "[Category('Slow')]\nprocedure Foo;"
@@ -3763,6 +4033,9 @@
       "configKey": "",
       "detectorUnit": "uAttributeMisalignment.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA183", "effect": "same", "slug": "remove-blank-line-after-attribute" }
+      ],
       "examples": {
         "bad":  "[Test]\n\nprocedure Foo;",
         "good": "[Test]\nprocedure Foo;"
@@ -3860,6 +4133,9 @@
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA188", "effect": "same", "slug": "remove-bidi-control-characters-as-code-in-strings" }
+      ],
       "examples": {
         "bad":  "// a comment containing U+202E can visually reorder the code that follows",
         "good": "// no bidirectional control characters anywhere in source"
@@ -3938,6 +4214,9 @@
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA192", "effect": "same", "slug": "remove-invisible-characters-as-code-in-strings" }
+      ],
       "examples": {
         "bad":  "// an identifier or string with an embedded U+200B is not what it looks like",
         "good": "// no zero-width / invisible characters in source"
@@ -3959,6 +4238,9 @@
       "cwe": ["CWE-1007"],
       "detectorUnit": "uSourceEncoding.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA193", "effect": "same", "slug": "write-name-in-ascii-letters" }
+      ],
       "examples": {
         "bad":  "var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin 'o'",
         "good": "var Login: string;  // all-ASCII identifier"
@@ -4019,6 +4301,9 @@
       ],
       "detectorUnit": "uManagedResultUninit.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA196", "effect": "changes", "slug": "initialize-result-first" }
+      ],
       "examples": {
         "bad": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];  // reads the CALLER's old array on first iteration\nend;",
         "good": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  Result := [];  // or: Result := nil; / SetLength(Result, 0);\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];\nend;"
@@ -4092,6 +4377,9 @@
       ],
       "detectorUnit": "uInterfaceGuid.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA197", "effect": "same", "slug": "insert-new-guid" }
+      ],
       "examples": {
         "bad": "type\n  IReportWriter = interface\n    procedure Write(const AText: string);\n  end;\n\n// elsewhere - does not compile:\nif Supports(Obj, IReportWriter, W) then",
         "good": "type\n  IReportWriter = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    procedure Write(const AText: string);\n  end;"
@@ -4191,6 +4479,9 @@
       ],
       "detectorUnit": "uParamNameMismatch.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA199", "effect": "changes", "slug": "use-parameter-name-from-sql" }
+      ],
       "examples": {
         "bad": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open\nQ.Open;",
         "good": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('customer_id').AsInteger := Id;\nQ.Open;"
@@ -4355,6 +4646,9 @@
       "cwe": ["CWE-193", "CWE-125"],
       "detectorUnit": "uLoopPastHighBound.pas",
       "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA203", "effect": "changes", "slug": "let-loop-run" }
+      ],
       "examples": {
         "bad": "for i := 0 to Names.Count do\n  WriteLn(Names[i]);   // Names[Names.Count] raises",
         "good": "for i := 0 to Names.Count - 1 do\n  WriteLn(Names[i]);"
@@ -4379,6 +4673,88 @@
           "case": "Known limits",
           "why": "The loop variable assigned in the body vetoes the finding. downto loops, bounds with further arithmetic (Count - 1, Pred(Count)), named indexed properties other than Items, Strings and Objects (RTID.ThreadIDs[i] while counting RTID.Count) and accesses through 'with' are not reported.",
           "example": "for i := 0 to RTID.Count do TID := RTID.ThreadIDs[i];  // not reported (false negative)"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+      ]
+    },
+    {
+      "id": "SCA204",
+      "kind": "FunctionNameAsResult",
+      "name": "Result assigned through the function name",
+      "shortDescription": "Function result set by assigning to the function name ('GetCount := ...') - the old Pascal form; Delphi writes Result",
+      "fullDescription": "Inside a function, 'GetCount := FItems.Count;' sets the result - the form Pascal had before Result existed. It works, but the same name means two different things in one body: on the left of ':=' it is the result variable, anywhere else it is a recursive call of the function (see SCA205). 'Result :=' says what is meant and cannot be mistaken for a call. Reported is an assignment to the bare function name at the start of a statement (also behind a case label) in the function's own body. Only where Result exists: in Delphi (not under {$X-}), and in Free Pascal in the modes delphi, delphiunicode and objfpc or with {$modeswitch result}; a file without {$mode} counts as Delphi in a Delphi scan and as unknown under --dialect=fpc. Style rule (hint): profiles strict and style, not default. reDelphix offers the replacement 'Result :='.",
+      "defaultSeverity": "Hint",
+      "type": "Code Smell",
+      "tags": ["style", "convention", "delphi-classic"],
+      "detectorUnit": "uFunctionNameResult.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA204", "effect": "same", "slug": "write-result-instead-of" }
+      ],
+      "examples": {
+        "bad": "function TList.GetCount: Integer;\nbegin\n  GetCount := FCount;\nend;",
+        "good": "function TList.GetCount: Integer;\nbegin\n  Result := FCount;\nend;"
+      },
+      "exceptions": [
+        {
+          "case": "No Result available",
+          "why": "In the Free Pascal modes fpc, tp, macpas and iso there is no Result unless {$modeswitch result} is set, and Delphi has none under {$X-} or {$EXTENDEDSYNTAX OFF} - assigning to the function name is the only way there. Under --dialect=fpc a file without {$mode} is skipped, because its mode comes from the project or the command line.",
+          "example": "{$mode fpc}\nfunction Twice(X: Integer): Integer;\nbegin\n  Twice := 2 * X;  // not reported\nend;"
+        },
+        {
+          "case": "The name may mean something else",
+          "why": "A parameter, local variable, constant, type or nested routine of the same name hides the result; a nested routine that names it may set the outer result itself; inside 'with Obj do' the object can have a member of that name (the assignment then sets the member); inside an anonymous method the outer result is out of reach. Such routines or spans are skipped.",
+          "example": "with Obj do\n  Total := 5;  // not reported - may be Obj.Total"
+        },
+        {
+          "case": "Elements of the result",
+          "why": "'GetRec.X := 5', 'GetArr[0] := 1' and 'GetP^ := 8' write into the result under Free Pascal's Delphi mode; for Delphi itself this is not verified, so these forms are left alone (deliberate false negative).",
+          "example": "GetRec.X := 5;  // not reported"
+        }
+      ],
+      "cleanCodeAttribute": "CONVENTIONAL",
+      "impacts": [
+        { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA205",
+      "kind": "FunctionNameRecursion",
+      "name": "Function name read in its own body is a recursive call",
+      "shortDescription": "'Total := Total + X' inside function Total: on the right the name is a recursive call, not the current result",
+      "fullDescription": "In Delphi the name of a function inside its own body is the result variable only on the left of ':='. Everywhere else - in an expression, a condition, Exit(Name) - it calls the function again. 'Total := Total + X;' therefore does not add X to the result built so far: it recurses, usually until the stack overflows. Free Pascal's objfpc and fpc modes read the result there instead, which is why ported code shows this pattern. Reported is the bare name (no parentheses, not behind a dot, not after inherited or @) in an expression of a function that also assigns to its own name - the author uses the name as a variable. It is an error when the function has no parameters and the body shows no deliberate recursion (no Name(), no call statement 'Name;', no Self.Name, no Name<T>) and the name is not a bare call argument; otherwise a warning (default parameters only, deliberate recursion next to it, bare argument). Only in Delphi mode: Delphi, or Free Pascal with {$mode delphi} / {$mode delphiunicode}. Fix: Result (or Name() when the recursion is intended).",
+      "defaultSeverity": "Error",
+      "type": "Bug",
+      "tags": ["recursion", "result", "stack-overflow", "fpc-port"],
+      "cwe": ["CWE-674"],
+      "detectorUnit": "uFunctionNameResult.pas",
+      "examples": {
+        "bad": "function Total: Integer;\nvar\n  I: Integer;\nbegin\n  Total := 0;\n  for I := 1 to 3 do\n    Total := Total + I;   // recursive call, not the sum\nend;",
+        "good": "function Total: Integer;\nvar\n  I: Integer;\nbegin\n  Result := 0;\n  for I := 1 to 3 do\n    Result := Result + I;\nend;"
+      },
+      "exceptions": [
+        {
+          "case": "The function writes Result",
+          "why": "Whoever writes Result knows the difference; the bare name is then how Delphi spells a parameterless recursive call - recursive-descent parsers ('Result := -ReadFactor'), retries ('Result := AddKeyStroke'), a function assigned to a procedure variable ('errno := Stub_errno'). Only functions that also assign to their own name are judged.",
+          "example": "function Factor: Integer;\nbegin\n  if Tok = '-' then begin Next; Result := -Factor; end  // not reported\n  else Result := Number;\nend;"
+        },
+        {
+          "case": "Mandatory parameters",
+          "why": "With a parameter that has no default, the bare name does not compile (not enough actual parameters) or calls another overload: in F(A) the expression 'F + A' calls F(). Neither is a hidden recursion.",
+          "example": "function F(A: Integer): Integer; overload;\nbegin\n  F := F + A;  // not reported - calls the overload F()\nend;"
+        },
+        {
+          "case": "Free Pascal objfpc/fpc modes",
+          "why": "There the bare name on the right reads the result - verified with fpc 3.2.2; the pattern is correct code in those modes. A file with any non-Delphi {$mode}, or without {$mode} under --dialect=fpc, is not reported.",
+          "example": "{$mode objfpc}\nTotal := Total + I;  // not reported - reads the result"
+        },
+        {
+          "case": "Compiler-error contexts and conditional code",
+          "why": "As the argument of Inc, Dec, SetLength and other var-parameter routines the name does not compile in Delphi mode. A compiler directive right before or after the name usually means two {$IFDEF} versions stand side by side. Neither is reported; of {$IFDEF}/{$ELSE} branches only one is read (FPC from the scan dialect, otherwise the first).",
+          "example": "Inc(Total);  // not reported - does not compile in Delphi mode"
         }
       ],
       "cleanCodeAttribute": "LOGICAL",

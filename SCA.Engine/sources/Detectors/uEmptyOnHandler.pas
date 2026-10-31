@@ -63,7 +63,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 class procedure TEmptyOnHandlerDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -93,8 +94,11 @@ begin
     // (z.B. `begin EndLogin := ...`) - `End` aus `EndLogin` wurde als leerer
     // Block fehlgelesen. \b nach `end` verlangt eine Wort/Nichtwort-Grenze
     // (`end;`, `end `, `end` am Ende) und schliesst `endXxx` aus.
-    RE := TRegEx.Create(
-      '(?is)\bon\s+(?:\w+\s*:\s*)?(\w+)\s+do\s*(?:;|begin\s*end\b\s*;?)');
+    // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+    // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+    // Compile). [roNotEmpty] = Default des Ein-Arg-TRegEx.Create.
+    RE := TRegExMatches.CachedEx(
+      '(?is)\bon\s+(?:\w+\s*:\s*)?(\w+)\s+do\s*(?:;|begin\s*end\b\s*;?)', [roNotEmpty]);
 
     for M in RE.Matches(Code) do
     begin

@@ -122,6 +122,11 @@ program reDelphix.Test;
 //                        auto/fest), Sprache der SCA, analyser.ini
 //   * uTestRdxTextMsgs - die gemeinsamen Texte aus uRdxText (Charge C1):
 //                        je Funktion en/de/fr, de = bisheriger Wortlaut
+//   * uTestRdxActionCore - der Kern des Anbieters (uRdxActionCore, E3):
+//                        Eintraege zu einem Fund gleich den Bausteinen,
+//                        die der Anbieter bis dahin selbst rief
+//                        (FixFor/AlternativeFixFor, Describe/FormatRewrite),
+//                        Sperre mit Grund, Parser-Fehler, Diagnose, uses
 //   Nacharbeit des Code-Reviews (Charge FB):
 //   * uTestRdxFormatGuards - Format()-Umformung: kein Literal ueber 255
 //                        Elemente (R2-02), kein Zeiger am Kettenanfang
@@ -210,9 +215,19 @@ program reDelphix.Test;
 //                                 letzten Index
 //   * uTestRdxInheritedEmptyFix - SCA125 leeres Override loeschen
 //                                 (Deklaration und Implementierung)
+//   * uTestRdxFuncNameFix       - SCA204 Result statt Funktionsname
 //   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
 //                                 (Charge B): Konstrukt unter dem Caret,
 //                                 Lokale Konstante, try/finally um Create
+//   * uTestRdxContextFormat     - C16 (Charge N): Format() aus Verkettung
+//                                 am Caret (dieselbe Kette wie SCA044)
+//   * uTestRdxContextIf         - C7/C8 (Charge C78): if umkehren,
+//                                 Waechter-Klausel, De Morgan, Vergleich
+//                                 drehen, if teilen/zusammenfuegen am Caret
+//   * uTestRdxSharedMap         - Charge P5: geteilte Code-Sicht
+//                                 (TRdxMappedLines, Acquire/Release) gleich
+//                                 der frischen; Plattenblick-Cache von
+//                                 FileReason/IncludeReason
 //
 // SPRACHE: der Hauptblock setzt die reDelphix-Texte fuer ALLE Tests auf
 // Deutsch (SetRdxLanguageOverride('de'), wie der FPC-Pruefstand) - die
@@ -222,7 +237,8 @@ program reDelphix.Test;
 //
 // Engine-Units kommen ueber den Suchpfad aus ..\..\SCA.Engine\sources
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus
-// ..\source. Kein ToolsAPI: uRdxEditor und uRdxProvider bleiben draussen.
+// ..\source. Kein ToolsAPI: uRdxEditor und uRdxProvider bleiben draussen -
+// den Ablauf des Anbieters ohne IDE prueft uTestRdxActionCore am Kern.
 //
 // LAUF: Debug und Release definieren TESTINSIGHT - GUI-Subsystem,
 // TestInsight.DUnitX.RunRegisteredTests, Exit-Code immer 0 (TestInsight
@@ -328,7 +344,14 @@ uses
   uRdxLookupHoistFix in '..\source\uRdxLookupHoistFix.pas',
   uRdxLoopBoundFix in '..\source\uRdxLoopBoundFix.pas',
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
+  uRdxPlacesRunner in '..\source\uRdxPlacesRunner.pas',
+  uRdxFuncNameFix in '..\source\uRdxFuncNameFix.pas',
+  uRdxCondExpr in '..\source\uRdxCondExpr.pas',
+  uRdxIfFixes in '..\source\uRdxIfFixes.pas',
+  uRdxCondFixes in '..\source\uRdxCondFixes.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
+  uRdxLog in '..\source\uRdxLog.pas',
+  uRdxActionCore in '..\source\uRdxActionCore.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxBench in 'uTestRdxBench.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -416,7 +439,11 @@ uses
   uTestRdxLookupHoistFix in 'uTestRdxLookupHoistFix.pas',
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
+  uTestRdxFuncNameFix in 'uTestRdxFuncNameFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
+  uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
+  uTestRdxContextIf in 'uTestRdxContextIf.pas',
+  uTestRdxSharedMap in 'uTestRdxSharedMap.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
@@ -437,7 +464,8 @@ uses
   uTestRdxIntroEdits in 'uTestRdxIntroEdits.pas',
   uTestRdxIntroContext in 'uTestRdxIntroContext.pas',
   uTestRdxTextMsgs in 'uTestRdxTextMsgs.pas',
-  uTestRdxText in 'uTestRdxText.pas';
+  uTestRdxText in 'uTestRdxText.pas',
+  uTestRdxActionCore in 'uTestRdxActionCore.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

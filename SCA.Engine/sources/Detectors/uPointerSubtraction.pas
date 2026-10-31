@@ -106,8 +106,12 @@ begin
   Result := False;
   if (VarName = '') or (BeforePos <= 1) then Exit;
   Before := Copy(Code, 1, BeforePos);   // Deklaration steht VOR der Nutzung
+  // Stack (Charge R4 2026-10-26): Listengruppe possessiv ('*+') - gierig
+  // 3 PCRE-8.45-Rahmen je Listenelement, Ueberlauf bei 1 MB ab ~1300
+  // Elementen hinter VarName. Gleiches Ergebnis: nach einem kuerzeren
+  // Listenende folgt nie ':'.
   RE := TRegEx.Create('(?i)\b' + VarName +
-        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*:\s*([A-Za-z_][A-Za-z0-9_]*)');
+        '\b\s*(?:,\s*[A-Za-z_]\w*\s*)*+:\s*([A-Za-z_][A-Za-z0-9_]*)');
   MC := RE.Matches(Before);
   if MC.Count = 0 then Exit;
   // naechstliegende (= letzte vor der Nutzung) Deklaration.

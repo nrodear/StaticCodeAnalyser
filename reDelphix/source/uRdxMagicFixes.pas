@@ -62,7 +62,10 @@ unit uRdxMagicFixes;
 //     eine alte Delphi-Projektdatei (.dof, .bdsproj, .bpr, .bpg) oder eine
 //     .dproj vor 10.3 (ProjectVersion < 18.5) - Major 3: CnWizards, JVCL
 //     und GExperts tragen keine Versionsweiche in der Unit, die Version
-//     steht im Projekt (FileReason) - und FPC-Weichen oder alte Spuren in
+//     steht im Projekt (FileReason), seit rwE29 auch ein Paket (.dpk) im
+//     Unterordner packages, das die Unit enthaelt und nach Ordnername bzw.
+//     LIBSUFFIX fuer ein aelteres Delphi ist (PackagesReason) - und
+//     FPC-Weichen oder alte Spuren in
 //     den Includes, auch ein Include, das nicht neben der Unit liegt
 //     (IncludeReason). Auf einem Netzpfad (UNC) bzw. Netzlaufwerk liest die
 //     Hilfe nichts von der Platte - der Menueaufbau laeuft im Hauptthread
@@ -121,11 +124,18 @@ unit uRdxMagicFixes;
 interface
 
 uses
+  System.Generics.Collections,   // TDictionary (TRdxDiskReasonCache)
   uRdxBufferMath, uRdxCodeMap;
 
 const
   // Der Name der Konstante ohne Nummer (wie im Labor: MagicNr01 ...).
   MAGIC_NAME_BASE = 'MagicNr';
+  // So viele .dpk-Koepfe liest FileReason je Aufruf hoechstens (Pakete,
+  // die die Unit enthalten, rwE29). Bleibt danach eine .dpk in einem alten
+  // oder unbekannten Paketordner ungelesen, sperrt FileReason - lieber keine
+  // Hilfe als eine falsche (Review e/HilfeFixB: in JVCL frass packages\c6
+  // mit 59 .dpk den Deckel, und d6/d7/d10 wurden nie gelesen).
+  MAX_PACKAGE_READS = 64;
 
 type
   // Was die Hilfe schreibt, die den Plattenblick braucht (FileReason,
@@ -138,8 +148,37 @@ type
   //                     wie die Inline-Konstante (FLOOR_INLINE_DECL;
   //                     Integration QFI3 - bis dahin haetten ihre Gruende
   //                     die Inline-Konstante genannt)
-  // FPC 3.2 kennt keines davon.
-  TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar);
+  //   lfFormatInvariant SCA128.2/SCA059.2 ', TFormatSettings.Invariant' -
+  //                     geprueft ab Delphi 10.3 (FLOOR_INLINE_DECL, wie im
+  //                     Planer uRdxFormatSettingsFix); Realworld-Test rwE29:
+  //                     Units aus Lazarus-Projekten (Rechnung.lpi), FPC-
+  //                     Weichen im Include (Img32.inc), Delphi-1-6-Projekte
+  //                     (GExperts)
+  //   lfFormatSettingsVar  SCA128/SCA059 ', FormatSettings' - die globale
+  //                     Variable ab Delphi XE (FLOOR_SETTINGS_VAR); FPC
+  //                     kennt sie (ab 2.6): Lazarus-Dateiart, -Projekt und
+  //                     FPC-Weiche im Include sperren hier NICHT (FpcKnows),
+  //                     nur alte Delphi-Projekte (rwE29: GExperts mit
+  //                     GExpert4.dof). IncludeReason fragt der Adapter fuer
+  //                     den Hauptweg seit dem Nico-Entscheid M1b
+  //                     (2026-10-30) ueber ProjectReason - nur ohne
+  //                     Projekt der Unit ab XE, nur Delphi-Weichen bis XE
+  //                     (R_INC_OLD), kein Grund fuer ein fehlendes Include.
+  //   lfExceptionClasses SCA127 EArgumentException/EInvalidOpException, seit
+  //                     dem Nachzug zu e/HilfeFixJ auch SCA020.2
+  //                     (ENotImplemented) und SCA168.2 (EInvalidOpException)
+  //                     - ab Delphi 2009 (FLOOR_EXCEPTION_CLASSES; Realworld-Test
+  //                     rwE30 Stufe 2, Nico-Entscheid "Sperre bei Beleg":
+  //                     GExperts fuer Delphi 3-6 mit .dof, CnWizards_D5..
+  //                     D2007 in Source\, CnDebugViewer.dpr mit .dof). FPC
+  //                     kennt alle drei. Hier ist der Normalfall modern: ein Deckel,
+  //                     der Pakete ungelesen laesst, und ein nicht
+  //                     gefundenes Include sind KEIN Beleg (MissingBlocks) -
+  //                     anders als fuer die Sprachmittel ab 10.3/11.
+  // FPC 3.2 kennt keines davon ausser lfFormatSettingsVar und
+  // lfExceptionClasses.
+  TRdxLateFeature = (lfInlineConst, lfDigitSeparator, lfInlineVar,
+    lfFormatInvariant, lfFormatSettingsVar, lfExceptionClasses);
 
   // Ergebnis des Planers (uRdxFixTable: MagicForm im Geruest TRdxFixFrame).
   //   Value  die Zahl aus der Meldung - Name im Menuetext; schon gesetzt,
@@ -165,9 +204,41 @@ type
     FileWide : Boolean;
   end;
 
+  // Plattenblick je Menueaufbau (Charge P5, Performance): FileReason liest
+  // je Aufruf bis zu PROJECT_LEVELS + 1 Verzeichnisse samt .dproj-Koepfen,
+  // IncludeReason jedes Include der Unit - und ein Menue fragt bis zu
+  // MAX_FINDINGS_PER_MENU Funde derselben Datei, dazu die Code-Aktion am
+  // Caret. Ist ein Cache aktiv (TRdxMagicFixes.UseDiskCache), merken sich
+  // beide darin ihr Ergebnis: FileReason den Teil hinter Dateiart und
+  // Netzpfad (beide Pruefungen laufen weiter je Aufruf, vor jedem Blick in
+  // den Cache) je Dateiname - genau so geschrieben, der Grund nennt das
+  // Verzeichnis -, Sprachmittel und reDelphix-Sprache; IncludeReason dazu
+  // je Code-Sicht (TRdxCodeMap.Serial: dieselbe Map, dieselben Includes -
+  // eine neue Map, auch nach einer Aenderung der Zeilen, ist ein neuer
+  // Eintrag). Ohne aktiven Cache (Vorgabe; alle Tests
+  // ausser denen des Caches) fragt jeder Aufruf die Platte wie bisher. Wie
+  // lange ein Ergebnis gilt, bestimmt der Besitzer mit Clear (uRdxProvider:
+  // ein Menueaufbau) - eine Aenderung auf der Platte innerhalb dieser Zeit
+  // sieht erst der naechste.
+  TRdxDiskReasonCache = class
+  private
+    FItems : TDictionary<string, string>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Clear;
+    function Count: Integer;
+  end;
+
   // Der Planer der Charge Q14 und seine Bausteine (s. Kopf).
   TRdxMagicFixes = class
   public
+    // Macht ACache zum Cache von FileReason und IncludeReason (nil: keiner,
+    // die Vorgabe) und liefert den bisherigen - der Aufrufer stellt ihn im
+    // finally wieder her. ACache bleibt im Besitz des Aufrufers.
+    class function UseDiskCache(
+      ACache: TRdxDiskReasonCache): TRdxDiskReasonCache; static;
+
     // Die Zahl aus der Meldung 'Magic number "200" in if condition - ...'
     // (zwischen den ersten beiden '"'): Ziffern, hoechstens ein '-' davor;
     // '' sonst.
@@ -219,9 +290,28 @@ type
     // von AFeature (FLOOR_INLINE_DECL.ProjectVersion 18.5 = Delphi 10.3,
     // FLOOR_DIGIT_SEP 19.3 = Delphi 11; ohne lesbare Version zaehlt sie
     // als alt) bzw. - ohne .dproj dort - eine alte Projektdatei (.dof,
-    // .bdsproj, .bpr, .bpg). Ein Netzpfad (UNC oder Netzlaufwerk,
-    // IsNetworkPath) wird nicht gelesen. '' oder der Grund - er nennt
-    // AFeature. Die FPC-Weiche IN der Datei prueft schon TargetAt.
+    // .bdsproj, .bpr, .bpg). Auf jeder dieser Ebenen dazu die .dpk im
+    // Unterordner packages (bzw. package) und eine Ebene darin, die die
+    // Unit enthalten: ist eine nach Ordnername ('d104', 'Sydney') bzw.
+    // {$LIBSUFFIX} fuer ein Delphi unter der Schwelle, sperrt sie (rwE29,
+    // PackagesReason; Ordner, deren Name schon eine Version ab der Schwelle
+    // belegt, liest sie nicht, alte vor unbekannten; hoechstens
+    // MAX_PACKAGE_READS Koepfe je Aufruf - bleibt danach eine .dpk in einem
+    // alten oder unbekannten Ordner ungelesen, sperrt sie auch). Ein
+    // Netzpfad (UNC oder Netzlaufwerk, IsNetworkPath) wird nicht gelesen.
+    // '' oder der Grund - er nennt AFeature. Die FPC-Weiche IN der Datei
+    // prueft schon TargetAt.
+    // Seit rwE30 Stufe 2 dazu je Projekt (PairsIn): ein Programm/Paket mit
+    // .dof, .cfg bzw. .bdsproj gleichen Namens ohne eigene .dproj zaehlt
+    // als alt, auch neben neuen .dproj anderer Projekte (CnDebugViewer.dpr
+    // neben CnDebugViewer64.dproj), und ein Programm ganz ohne Projektdatei
+    // neben einem Lazarus-Projekt als Doppel-Compiler-Projekt fuer altes
+    // Delphi (RechnungDelphi.dpr neben Rechnung.lpi). Fuer lfFormatInvariant
+    // widerlegt ein Paket, dessen Units Invariant ohne Weiche nutzen, seine
+    // Version (PackageUsesInvariant, loggerproRT.dpk in d100), und ein
+    // Programm, das die Unit enthaelt und die globale FormatSettings fuer
+    // Datum/Uhrzeit selbst einstellt, sperrt (SettingsProgramReason,
+    // HeidiSQL heidisql.dpr).
     class function FileReason(const AFileName: string;
       AFeature: TRdxLateFeature): string; static;
 
@@ -236,6 +326,83 @@ type
     // Hilfe dann nicht.
     class function IncludeReason(const AFileName: string; AMap: TRdxCodeMap;
       AFeature: TRdxLateFeature): string; static;
+
+    // Kennt FPC 3.2 das Sprachmittel? Dann sperren Lazarus-Dateiart,
+    // Lazarus-Projekt und FPC-Weiche im Include nicht (lfFormatSettingsVar
+    // und lfExceptionClasses).
+    class function FpcKnows(AFeature: TRdxLateFeature): Boolean; static;
+
+    // Ist ein ungelesener Rest ein Grund - der erschoepfte Paket-Deckel
+    // (R_PACKAGES_UNREAD), ein nicht gefundenes oder nicht lesbares Include
+    // (R_INC_UNSEEN), ein Netzpfad in ProjectReason? Ja, ausser fuer
+    // lfExceptionClasses: dort ist der Normalfall modern, und nur ein Beleg
+    // sperrt (Nico-Entscheid rwE30 Stufe 2, "Sperre bei Beleg").
+    class function MissingBlocks(AFeature: TRdxLateFeature): Boolean; static;
+
+    // Der Einstieg der Adapter (uRdxFixTable: SCA128/SCA059 und SCA127,
+    // rwE30 Stufe 2): der Plattenblick einer Unit samt Gegenbeweis. Beweist
+    // die Datei einen Compiler ab der Schwelle von AFeature
+    // (uRdxCompilerTraces.ModernProof - fuer ein Sprachmittel, das FPC nicht
+    // kennt, nur die Inline-Variable, die auch FPC ausschliesst) bzw. nutzt
+    // sie fuer lfFormatInvariant TFormatSettings.Invariant selbst ohne
+    // Weiche, fragt er die Platte nicht nach Compilern - fuer
+    // lfFormatInvariant aber weiter nach Programmen, die die globale
+    // FormatSettings selbst einstellen (SettingsWalkReason, Review
+    // e/HilfeFixG). Sonst - fuer lfFormatSettingsVar seit rwE31 Stufe 3,
+    // fuer lfFormatInvariant seit rwE32 Stufe 4 zuerst ein Kit-Include der
+    // Unit (KitIncludeReason; widerlegt nur durch ein Programm mit .dproj ab
+    // XE bzw. 10.3, das die Unit enthaelt, auch ohne Dateinamen geprueft) -
+    // FileReason und, mit AIncludes (fuer lfFormatInvariant mit einem
+    // solchen Projekt nur FPC-Weichen gelesener Includes, Review
+    // e/HilfeFixS) bzw. seit dem Nico-Entscheid M1b fuer
+    // lfFormatSettingsVar ohne Projekt der Unit ab XE, IncludeReason
+    // (fuer lfFormatInvariant widerlegt durch ein Paket der Unit, das
+    // Invariant nutzt, bzw. seit rwE31 Stufe 3 bei einer FMX-Unit durch
+    // Pakete nur ab 10.3 - PackageFloorProof).
+    // Seit rwE32 Stufe 4 fragt lfExceptionClasses das Kit-Include wie
+    // lfFormatSettingsVar (vorher im Planer); ein Projekt der Unit ab 2009
+    // widerlegt es und die Weichen der Includes - seit rwE33 Stufe 5 ein
+    // reines FPC-Projekt der Unit (FpcOnlyProjectProof) nur diese Weichen,
+    // nicht das Kit-Include (Review e/HilfeFixX).
+    // Netzpfad: fuer lfExceptionClasses kein Grund (MissingBlocks; das
+    // Kit-Include der Datei selbst sperrt dort weiter), sonst wie
+    // FileReason. '' oder der Grund.
+    class function ProjectReason(const AFileName: string; AMap: TRdxCodeMap;
+      AFeature: TRdxLateFeature; AIncludes: Boolean): string; static;
+  end;
+
+  // Die Delphi-Version eines Pakets als CompilerVersion (Delphi 7 = 15,
+  // 2009 = 20, XE = 22, 10.0 = 30, 10.4 = 34, 11 = 35, 13 = 37), -1 ohne
+  // Beleg - fuer FileReason (Pakete, die die Unit enthalten, rwE29); reine
+  // Textlogik, oeffentlich fuer die Tests (FPC-Pruefstand). Hat ein Beleg
+  // zwei Lesarten, gilt die HOECHSTE: alt ist ein Paket nur, wenn jede
+  // Lesart alt ist.
+  TRdxPackageVersion = class
+  public
+    // JEDI-Nummer J (DELPHIn; Paketversion J * 10): 5..10 = Delphi 5 bis
+    // 2006, 11 = 2007, 12 = 2009, 14..29 = 2010 bis 12, 37 = 13.
+    class function Jedi(J: Integer): Integer; static;
+    // Produktversion AMajor.AMinor: 10.0..10.4, 11, 12, 13.
+    class function Product(AMajor, AMinor: Integer): Integer; static;
+    // Eine Zahl wie in 'd104', 'D110', {$LIBSUFFIX '270'}: Paketversion
+    // (nur volle Zehner) oder Produkt ('104' = 10.4).
+    class function Number(N: Integer): Integer; static;
+    // Jahreszahl hinter 'D'/'Delphi' (2005, 2006, 2007, 2009, 2010).
+    class function Year(N: Integer): Integer; static;
+    // Der Name eines Paketordners: 'd104', 'D10_4', 'Delphi12.3',
+    // 'Delphi 11', 'Delphi_12', 'D2007', 'D7', 'DXE6', 'XE', 'c6'/'bcb6'
+    // (C++Builder 6 baut .pas mit dem Compiler von Delphi 6), 'RAD Studio
+    // 10.4', die Codenamen ('Sydney'). Eine Zahl zaehlt nur hinter 'd',
+    // 'delphi' (auch durch ' ', '_', '-' getrennt), 'xe', 'c'/'cb'/'bcb'
+    // bzw. als Haupt- und Unterversion hinter 'Studio' oder am
+    // Namensanfang - nicht 'v10.2', nicht 'Deluxe'. Mehrere Belege: der
+    // hoechste.
+    class function Folder(const AName: string): Integer; static;
+    // {$LIBSUFFIX 'nnn'} im Kopf einer .dpk (ALowText klein geschrieben),
+    // zwei oder drei Ziffern wie Number; -1 ohne oder bei 'AUTO',
+    // '$(Auto)'. AValue: der Wert.
+    class function LibSuffix(const ALowText: string;
+      out AValue: string): Integer; static;
   end;
 
 implementation
@@ -250,7 +417,7 @@ uses
   uRdxPaths,            // IsNetworkPath
   uRdxBlocks,           // IncludeChainReason, AllIncludes
   uRdxCompilerTraces,   // OldCompilerTrace, ScriptReason, FLOOR_INLINE_DECL,
-                        // FLOOR_DIGIT_SEP
+                        // FLOOR_DIGIT_SEP, FLOOR_SETTINGS_VAR
   uRdxText;             // _, MsgMovedSuffix, MsgByHand (E29)
 
 const
@@ -272,6 +439,31 @@ const
   LEGACY_EXTENSIONS: array[0..3] of string = ('.dof', '.bdsproj', '.bpr',
     '.bpg');
   DPROJ_EXTENSION = '.dproj';
+  // ... je Projekt (rwE30 Stufe 2, PairsIn): das Programm und seine
+  // Optionsdateien aelterer Delphi - .dof (Delphi 1-7), .cfg (dcc32-
+  // Optionen, die die IDE bis Delphi 2007 schrieb; neuere legen sie nur
+  // neben eine .dproj gleichen Namens), .bdsproj (BDS 2005/2006).
+  DPR_EXTENSION = '.dpr';
+  // FPC-Programme (FpcOnlyProgram, rwE32 Stufe 4): ein Lazarus-Projekt
+  // nennt seine Dateien so ('<Filename Value="Zip.dpr"/>', klein) ...
+  LPI_EXTENSION = '.lpi';
+  LPI_FILE_TAG = '<filename value="';
+  // ... und der Unit-Suchpfad einer .lpi (LpiCoversDir, rwE33 Stufe 5;
+  // IncludeFiles, UnitOutputDirectory, ObjectPath, Libraries zaehlen nicht).
+  LPI_UNIT_PATH_TAG = '<otherunitfiles value="';
+  // Weitere Spuren von Delphi bzw. C++Builder im Fenster, die nur
+  // FpcOnlyProjectProof liest (Review e/HilfeFixX): Projektgruppen und
+  // C++Builder-Projekte bzw. -Pakete.
+  DELPHI_HINT_EXTENSIONS: array[0..3] of string = ('.groupproj', '.bdsgroup',
+    '.cbproj', '.bpk');
+  // ... und Units, die nur FPC bzw. Lazarus mitbringen (klein).
+  FPC_ONLY_UNITS: array[0..7] of string = ('fpcadds', 'cmem', 'cthreads',
+    'cwstring', 'lazutf8', 'lazfileutils', 'lclintf', 'lcltype');
+  PAIR_OPTION_EXTENSIONS: array[0..2] of string = ('.dof', '.cfg',
+    '.bdsproj');
+  // ... davon die, die nur die alten IDEs schreiben (ModernProjectProof:
+  // neben einer .dproj gleichen Namens heisst eine .cfg nichts).
+  LEGACY_OPTION_EXTENSIONS: array[0..1] of string = ('.dof', '.bdsproj');
   // ... im Verzeichnis der Unit und so vielen darueber (Korpus: doublecmd-
   // Plugins eine Ebene, CnWizards_L4.lpk zwei Ebenen ueber den Units).
   PROJECT_LEVELS = 2;
@@ -279,6 +471,38 @@ const
   // ersten PropertyGroup.
   DPROJ_HEAD_BYTES = 65536;
   PROJECT_VERSION_TAG = '<ProjectVersion>';
+  // Pakete, die die Unit enthalten (PackagesReason, rwE29: DMVC baut
+  // sources\*.pas auch ueber packages\d100..d104\dmvcframeworkRT.dpk fuer
+  // Delphi 10.0-10.4; die .dproj dort tragen ProjectVersion 20.3, neu
+  // gespeichert - der Ordner und LIBSUFFIX nennen die Version). Gesucht
+  // wird je Ebene der Suche in einem Unterordner dieses Namens und eine
+  // Ebene tiefer; je Aufruf hoechstens MAX_PACKAGE_READS Koepfe (s.
+  // interface). Ordner, deren Name schon eine Version ab der Schwelle
+  // belegt, liest die Hilfe nicht; alte zuerst, dann unbekannte.
+  PACKAGE_DIRS: array[0..1] of string = ('packages', 'package');
+  DPK_EXTENSION = '.dpk';
+  LIBSUFFIX_TAG = '{$libsuffix ''';
+  // Die Units eines alten Pakets (PackageUsesInvariant, rwE30 Stufe 2):
+  // die in-Klausel im Kopf (klein), der gesuchte Text und wie viel ein Lauf
+  // davon liest (DMVC: 143 Units, 3,9 MB - die Invariant-Nutzer stehen ab
+  // der 39. Unit; erschoepft: keine Widerlegung, die Sperre bleibt).
+  DPK_IN_TAG = ' in ''';
+  INVARIANT_TEXT = 'tformatsettings.invariant';
+  MAX_PACKAGE_UNIT_BYTES = 8 * 1024 * 1024;
+  // So viele .dpr liest SettingsProgramReason je Lauf (erschoepft: kein
+  // Beleg).
+  MAX_PROGRAM_READS = 16;
+  // Codenamen in Ordnernamen, CompilerVersion = 30 + Index (Seattle = 10.0
+  // = 30 ... Florence = 13 = 37).
+  CODE_NAMES: array[0..7] of string = ('seattle', 'berlin', 'tokyo', 'rio',
+    'sydney', 'alexandria', 'athens', 'florence');
+  // Woerter vor einer Versionszahl im Ordnernamen (TRdxPackageVersion.
+  // Folder): Delphi, XE, C++Builder ('c6' = C++Builder 6), Studio vor
+  // Haupt- und Unterversion.
+  DELPHI_WORDS: array[0..1] of string = ('d', 'delphi');
+  XE_WORDS: array[0..2] of string = ('xe', 'dxe', 'delphixe');
+  CBUILDER_WORDS: array[0..2] of string = ('c', 'cb', 'bcb');
+  STUDIO_WORD = 'studio';
   // Programm und Bibliothek haben einen Hauptblock (MainBlockReason).
   MAIN_BLOCK_WORDS: array[0..1] of string = ('program', 'library');
   // Die Gruende sind englische msgids, uebersetzt mit _() in DIESER Unit
@@ -304,32 +528,60 @@ const
   // nicht' mit 'Zifferntrenner') liesse sich nicht uebersetzen. Die
   // Versionsnummer des Sprachmittels (10.3, 11) steht im Satz; die
   // ProjectVersion der Schwelle kommt aus FloorOf (%s).
-  // Reihenfolge je Array: lfInlineConst, lfDigitSeparator, lfInlineVar.
+  // Reihenfolge je Array: lfInlineConst, lfDigitSeparator, lfInlineVar,
+  // lfFormatInvariant, lfFormatSettingsVar. Die FPC-Saetze (R_FPC_FILE,
+  // R_LAZARUS, R_INC_FPC) zeigt lfFormatSettingsVar nie (FpcKnows) - dort
+  // steht derselbe Satz wie bei lfFormatInvariant (keine eigene msgid).
   R_FPC_FILE: array[TRdxLateFeature] of string = (
     'Lazarus/FPC file (%s) - FPC 3.2 has no inline constants',
     'Lazarus/FPC file (%s) - FPC 3.2 has no digit separators',
-    'Lazarus/FPC file (%s) - FPC 3.2 has no inline variables');
+    'Lazarus/FPC file (%s) - FPC 3.2 has no inline variables',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus/FPC file (%s) - FPC 3.2 has no TFormatSettings.Invariant');
   R_LAZARUS: array[TRdxLateFeature] of string = (
     'Lazarus project/package %s in the directory %s - the unit probably also '
       + 'builds with FPC, and FPC 3.2 has no inline constants',
     'Lazarus project/package %s in the directory %s - the unit probably also '
       + 'builds with FPC, and FPC 3.2 has no digit separators',
     'Lazarus project/package %s in the directory %s - the unit probably also '
-      + 'builds with FPC, and FPC 3.2 has no inline variables');
+      + 'builds with FPC, and FPC 3.2 has no inline variables',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant',
+    'Lazarus project/package %s in the directory %s - the unit probably also '
+      + 'builds with FPC, and FPC 3.2 has no TFormatSettings.Invariant');
   R_LEGACY: array[TRdxLateFeature] of string = (
     'old project file %s in the directory %s - the unit probably also builds '
       + 'with a Delphi before 10.3, which has no inline constants; %s',
     'old project file %s in the directory %s - the unit probably also builds '
       + 'with a Delphi before 11, which has no digit separators; %s',
     'old project file %s in the directory %s - the unit probably also builds '
-      + 'with a Delphi before 10.3, which has no inline variables; %s');
+      + 'with a Delphi before 10.3, which has no inline variables; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 10.3, and TFormatSettings.Invariant is only '
+      + 'checked from there on; %s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before XE, which has no global variable FormatSettings; '
+      + '%s',
+    'old project file %s in the directory %s - the unit probably also builds '
+      + 'with a Delphi before 2009, which lacks the exception classes '
+      + 'EArgumentException, EInvalidOpException and ENotImplemented; %s');
   R_OLD_DPROJ: array[TRdxLateFeature] of string = (
     'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
       + '= %s) - there are no inline constants there; %s',
     'project %s in the directory %s with ProjectVersion %s (before Delphi 11 '
       + '= %s) - there are no digit separators there; %s',
     'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
-      + '= %s) - there are no inline variables there; %s');
+      + '= %s) - there are no inline variables there; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 10.3 '
+      + '= %s) - TFormatSettings.Invariant is only checked from there on; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi XE '
+      + '= %s) - there is no global variable FormatSettings there; %s',
+    'project %s in the directory %s with ProjectVersion %s (before Delphi 2009 '
+      + '= %s) - the exception classes EArgumentException, EInvalidOpException '
+      + 'and ENotImplemented do not exist there; %s');
   R_NO_VERSION: array[TRdxLateFeature] of string = (
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
@@ -339,22 +591,145 @@ const
       + '11, which has no digit separators; %s',
     'project %s in the directory %s without a readable ProjectVersion (Delphi '
       + '2007 wrote none) - the unit probably also builds with a Delphi before '
-      + '10.3, which has no inline variables; %s');
+      + '10.3, which has no inline variables; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '10.3, and TFormatSettings.Invariant is only checked from there on; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + 'XE, which has no global variable FormatSettings; %s',
+    'project %s in the directory %s without a readable ProjectVersion (Delphi '
+      + '2007 wrote none) - the unit probably also builds with a Delphi before '
+      + '2009, which lacks the exception classes EArgumentException, '
+      + 'EInvalidOpException and ENotImplemented; %s');
+  // Ein Paket, das die Unit enthaelt (PackagesReason, rwE29): %s Paket,
+  // %s Verzeichnis, %s der Beleg (Ordnername 'd104' bzw. "LIBSUFFIX '104'"),
+  // %s MsgByHand.
+  R_OLD_PACKAGE: array[TRdxLateFeature] of string = (
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before 10.3 (%s), which has no inline constants; %s',
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before 11 (%s), which has no digit separators; %s',
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before 10.3 (%s), which has no inline variables; %s',
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before 10.3 (%s), and TFormatSettings.Invariant is only '
+      + 'checked from there on; %s',
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before XE (%s), which has no global variable FormatSettings; '
+      + '%s',
+    'package %s in the directory %s contains the unit and is meant for a '
+      + 'Delphi before 2009 (%s), which lacks the exception classes '
+      + 'EArgumentException, EInvalidOpException and ENotImplemented; %s');
+  // Der Deckel MAX_PACKAGE_READS ist erschoepft, in einem alten oder
+  // unbekannten Paketordner bleibt eine .dpk ungelesen (Review
+  // e/HilfeFixB): %s der Ordner, %d der Deckel, %s MsgByHand. Fuer
+  // lfExceptionClasses nie gezeigt (MissingBlocks: kein Beleg) - dort
+  // steht der Satz von lfFormatSettingsVar (keine eigene msgid).
+  R_PACKAGES_UNREAD: array[TRdxLateFeature] of string = (
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 10.3, which has '
+      + 'no inline constants; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 11, which has '
+      + 'no digit separators; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 10.3, which has '
+      + 'no inline variables; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before 10.3, and '
+      + 'TFormatSettings.Invariant is only checked from there on; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before XE, which has no '
+      + 'global variable FormatSettings; %s',
+    'package files in %s remain unread (the quick fix reads at most %d) - '
+      + 'one of them may build the unit with a Delphi before XE, which has no '
+      + 'global variable FormatSettings; %s');
   R_INC_FPC: array[TRdxLateFeature] of string = (
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
       + 'constants',
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no digit '
       + 'separators',
     'the include %s carries an FPC switch (line %d) - FPC 3.2 has no inline '
-      + 'variables');
+      + 'variables',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no '
+      + 'TFormatSettings.Invariant',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no '
+      + 'TFormatSettings.Invariant',
+    'the include %s carries an FPC switch (line %d) - FPC 3.2 has no '
+      + 'TFormatSettings.Invariant');
   R_INC_OLD: array[TRdxLateFeature] of string = (
     'the include %s shows traces of older compilers (%s, line %d) - an inline '
       + 'constant exists only from Delphi 10.3 on; %s',
     'the include %s shows traces of older compilers (%s, line %d) - digit '
       + 'separators exist only from Delphi 11 on; %s',
     'the include %s shows traces of older compilers (%s, line %d) - an inline '
-      + 'variable exists only from Delphi 10.3 on; %s');
+      + 'variable exists only from Delphi 10.3 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - '
+      + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - the global '
+      + 'variable FormatSettings exists only from Delphi XE on; %s',
+    'the include %s shows traces of older compilers (%s, line %d) - the '
+      + 'exception classes EArgumentException, EInvalidOpException and '
+      + 'ENotImplemented exist only from Delphi 2009 on; %s');
+  // Ein Programm ohne Projektdatei neben einem Lazarus-Projekt (rwE30 Stufe
+  // 2, PairsIn: RechnungDelphi.dpr neben Rechnung.lpi - ausdruecklich fuer
+  // Delphi 7 und FPC geschrieben): %s das Programm, %s das Lazarus-Projekt,
+  // %s das Verzeichnis, %s MsgByHand. Nur die Sprachmittel, die FPC kennt,
+  // sehen den Satz (sonst sperrt das Lazarus-Projekt zuerst) - die anderen
+  // tragen den von lfFormatSettingsVar (keine eigene msgid). Bis rwE33 Stufe
+  // 5 'written for FPC and an older Delphi, which has no global variable
+  // FormatSettings; von Hand' - FPC 3.2.2 hat die Variable, und das lose
+  // 'von Hand' steht jetzt in einem Satz (rgInvoiceItemEdit.pas:217).
+  R_DUAL_PROJECT: array[TRdxLateFeature] of string = (
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - the program is also meant for an older Delphi, and a '
+      + 'Delphi before XE has no global variable FormatSettings; adjust the '
+      + 'call %s',
+    'Delphi program %s without .dproj next to the Lazarus project %s in the '
+      + 'directory %s - written for FPC and an older Delphi, which lacks the '
+      + 'exception classes EArgumentException, EInvalidOpException and '
+      + 'ENotImplemented; %s');
+  // Ein Programm, das die Unit enthaelt, setzt die globale FormatSettings
+  // selbst (rwE30 Stufe 2, HeidiSQL packages\Delphi12.3\heidisql.dpr:
+  // 'FormatSettings.ShortDateFormat := ''yyyy/mm/dd'''): Invariant liefe
+  // daran vorbei - %s Programm, %s Verzeichnis, %s Feld, %d Zeile, %s
+  // MsgByHand. Nur lfFormatInvariant (SettingsProgramReason).
+  R_PROGRAM_SETTINGS = 'the program %s in the directory %s contains the unit '
+    + 'and sets the global FormatSettings itself (%s, line %d) - '
+    + 'TFormatSettings.Invariant would bypass these settings; %s';
   // UNC und Netzlaufwerk (uRdxPaths.IsNetworkPath, seit Charge B1-FD).
+  // Hauptweg SCA128/SCA059 (KitIncludeReason, rwE31 Stufe 3): derselbe Satz
+  // wie R_FS_OLD_VAR in uRdxFormatSettingsFix (eine msgid) - %s das
+  // Kit-Include, %d seine Zeile.
+  R_KIT_OLD_VAR = 'the file asks for old compilers (%s, line %d) - the global '
+    + 'variable FormatSettings exists from Delphi XE on';
+  // Dasselbe fuer die Ausnahmeklassen (lfExceptionClasses, rwE32 Stufe 4 -
+  // bis dahin sperrte das Kit-Include im Planer, R_RAWEXC_OLD): die Saetze
+  // des Plattenblicks nennen alle drei Klassen.
+  R_KIT_OLD_EXC = 'the file asks for old compilers (%s, line %d) - the '
+    + 'exception classes EArgumentException, EInvalidOpException and '
+    + 'ENotImplemented exist only from Delphi 2009 on';
+  // Alt-Weg SCA128.2/SCA059.2 (KitIncludeReason, rwE32 Stufe 4): derselbe
+  // Satz wie R_FS_OLD_INVARIANT in uRdxFormatSettingsFix (eine msgid).
+  R_KIT_OLD_INVARIANT = 'the file asks for old compilers (%s, line %d) - '
+    + 'TFormatSettings.Invariant is only checked from Delphi 10.3 on';
   R_NETWORK = 'network path %s - the quick fix reads no project or include '
     + 'files there (the menu is built in the main thread); %s';
   R_MAIN_BLOCK = 'the line is in the main block of the program or library '
@@ -369,6 +744,10 @@ function FloorOf(AFeature: TRdxLateFeature): TRdxCompilerFloor;
 begin
   if AFeature = lfDigitSeparator then
     Result := FLOOR_DIGIT_SEP
+  else if AFeature = lfFormatSettingsVar then
+    Result := FLOOR_SETTINGS_VAR
+  else if AFeature = lfExceptionClasses then
+    Result := FLOOR_EXCEPTION_CLASSES
   else
     Result := FLOOR_INLINE_DECL;
 end;
@@ -862,24 +1241,45 @@ type
   // Lazarus- und die erste alte Delphi-Projektdatei, die .dproj mit der
   // kleinsten ProjectVersion (Zehntel; -1 ohne lesbare Version) - bzw.
   // die erste vor 10.3, danach liest NoteProjectFile keine .dproj mehr.
+  // Seit rwE30 Stufe 2 dazu je Projekt (gleicher Name ohne Endung, PairsIn):
+  //   OldPair  die Optionsdatei (.dof, .cfg, .bdsproj) eines Projekts
+  //            (.dpr/.dpk) OHNE .dproj gleichen Namens - auch neben .dproj
+  //            anderer Projekte (CnDebugViewer.dpr/.dof/.cfg neben
+  //            CnDebugViewer64.dproj: der eine Bau ist Delphi 5-7);
+  //   LoneDpr  ein Programm (.dpr) ganz ohne Projektdatei gleichen Namens -
+  //            neben einem Lazarus-Projekt ein Doppel-Compiler-Projekt fuer
+  //            altes Delphi (RechnungDelphi.dpr neben Rechnung.lpi); seit
+  //            rwE32 Stufe 4 nicht, wenn es ein FPC-Programm ist
+  //            (FpcOnlyProgram: Hauptdatei einer .lpi, FPC-only-Units);
+  //   Programs die .dpr des Verzeichnisses (SettingsProgramReason).
+  // Bases/OptBases/DprojBases sammeln die Namen fuer PairsIn (klein),
+  // LazProjects die .lpi (FpcOnlyProgram), DelphiHint die erste Datei aus
+  // DELPHI_HINT_EXTENSIONS (FpcOnlyProjectProof).
   TRdxProjectFiles = record
-    Lazarus  : string;
-    Legacy   : string;
-    Dproj    : string;
-    DprojVer : Integer;
+    Lazarus    : string;
+    Legacy     : string;
+    Dproj      : string;
+    DprojVer   : Integer;
+    OldPair    : string;
+    LoneDpr    : string;
+    Programs   : TArray<string>;
+    Bases      : TArray<string>;
+    Opts       : TArray<string>;
+    DprojBases : TArray<string>;
+    LazProjects: TArray<string>;
+    DelphiHint : string;
   end;
 
-// Die ProjectVersion der .dproj APath in Zehnteln ('18.5' -> 185; nur die
-// erste Nachkommastelle); -1, wenn die Datei nicht lesbar ist oder keine
-// traegt (Delphi 2007 schrieb noch keine).
-function ProjectVersionOf(const APath: string): Integer;
+// Die ersten DPROJ_HEAD_BYTES der Datei APath als ANSI-Text; False, wenn
+// sie nicht lesbar ist. Bis rwE29 in ProjectVersionOf; seitdem liest auch
+// PackagesReason so die .dpk.
+function HeadText(const APath: string; out AText: string): Boolean;
 var
   FS    : TFileStream;
   Bytes : TBytes;
-  Text  : string;
-  P, i  : Integer;
 begin
-  Result := -1;
+  Result := False;
+  AText := '';
   try
     FS := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
     try
@@ -892,7 +1292,20 @@ begin
     on EStreamError do
       Exit;
   end;
-  Text := TEncoding.ANSI.GetString(Bytes);
+  AText := TEncoding.ANSI.GetString(Bytes);
+  Result := True;
+end;
+
+// Die ProjectVersion der .dproj APath in Zehnteln ('18.5' -> 185; nur die
+// erste Nachkommastelle); -1, wenn die Datei nicht lesbar ist oder keine
+// traegt (Delphi 2007 schrieb noch keine).
+function ProjectVersionOf(const APath: string): Integer;
+var
+  Text  : string;
+  P, i  : Integer;
+begin
+  Result := -1;
+  if not HeadText(APath, Text) then Exit;
   P := Pos(PROJECT_VERSION_TAG, Text);
   if P = 0 then Exit;
   i := P + Length(PROJECT_VERSION_TAG);
@@ -916,6 +1329,19 @@ var
   Ver : Integer;
 begin
   Ext := LowerCase(ExtractFileExt(AName));
+  // Die Namen fuer PairsIn (jede Datei, vor jedem Exit).
+  if (Ext = DPR_EXTENSION) or (Ext = DPK_EXTENSION) then
+    AddText(AFiles.Bases, LowerCase(ChangeFileExt(AName, '')));
+  if Ext = DPR_EXTENSION then
+    AddText(AFiles.Programs, AName);
+  if InList(Ext, PAIR_OPTION_EXTENSIONS) then
+    AddText(AFiles.Opts, AName);
+  if Ext = DPROJ_EXTENSION then
+    AddText(AFiles.DprojBases, LowerCase(ChangeFileExt(AName, '')));
+  if Ext = LPI_EXTENSION then
+    AddText(AFiles.LazProjects, AName);
+  if InList(Ext, DELPHI_HINT_EXTENSIONS) and (AFiles.DelphiHint = '') then
+    AFiles.DelphiHint := AName;
   if InList(Ext, LAZARUS_EXTENSIONS) then
   begin
     if AFiles.Lazarus = '' then
@@ -943,6 +1369,73 @@ begin
   end;
 end;
 
+// Ist das Programm APrg in ADir ein FPC-Programm (rwE32 Stufe 4, Nico-
+// Entscheid: ein FPC-only-Projekt ist kein Beleg fuer ein altes Delphi)?
+// Ja, wenn eine .lpi des Verzeichnisses (ALazProjects) es als Datei nennt
+// ('<Filename Value="Zip.dpr"/>' - in einem Lazarus-Projekt die
+// Hauptdatei; doublecmd plugins\wcx\zip\src, wdx\deb_wdx\src,
+// wcx\sevenzip\src) oder es eine Unit nur von FPC/Lazarus ausserhalb jeder
+// Weiche einbindet (FPC_ONLY_UNITS: 'FPCAdds', 'CMem' ...). PairsIn fragt
+// es nur fuer ein Programm ohne eigene Projektdatei.
+function FpcOnlyProgram(const ADir, APrg: string;
+  const ALazProjects: TArray<string>): Boolean;
+var
+  Lpi, Text, Key : string;
+  SL             : TStringList;
+  Map            : TRdxCodeMap;
+begin
+  Result := False;
+  Key := LPI_FILE_TAG + LowerCase(APrg) + '"';
+  for Lpi in ALazProjects do
+    if HeadText(IncludeTrailingPathDelimiter(ADir) + Lpi, Text)
+       and (Pos(Key, LowerCase(Text)) > 0) then
+      Exit(True);
+  if not HeadText(IncludeTrailingPathDelimiter(ADir) + APrg, Text) then
+    Exit;
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Text;
+    Map := TRdxCodeMap.Create(SL);
+    Result := UnconditionalUsesOf(Map, FPC_ONLY_UNITS) <> '';
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+// OldPair und LoneDpr aus den gesammelten Namen (s. TRdxProjectFiles): je
+// Projekt der erste Treffer in der Reihenfolge der Platte. ADir: das
+// Verzeichnis (FpcOnlyProgram liest dort .lpi und .dpr).
+procedure PairsIn(var AFiles: TRdxProjectFiles; const ADir: string);
+var
+  Base, Opt, Prg : string;
+  Paired         : Boolean;
+begin
+  for Opt in AFiles.Opts do
+  begin
+    Base := LowerCase(ChangeFileExt(Opt, ''));
+    if InList(Base, AFiles.Bases) and not InList(Base, AFiles.DprojBases) then
+    begin
+      AFiles.OldPair := Opt;
+      Break;
+    end;
+  end;
+  for Prg in AFiles.Programs do
+  begin
+    Base := LowerCase(ChangeFileExt(Prg, ''));
+    Paired := InList(Base, AFiles.DprojBases);
+    for Opt in AFiles.Opts do
+      Paired := Paired or (LowerCase(ChangeFileExt(Opt, '')) = Base);
+    if not Paired and not ((AFiles.Lazarus <> '')
+       and FpcOnlyProgram(ADir, Prg, AFiles.LazProjects)) then
+    begin
+      AFiles.LoneDpr := Prg;
+      Break;
+    end;
+  end;
+end;
+
 // Die Projektdateien in ADir (EIN Durchlauf ueber das Verzeichnis).
 function ProjectFilesIn(const ADir: string;
   AMinVersion: Integer): TRdxProjectFiles;
@@ -960,6 +1453,7 @@ begin
   finally
     FindClose(SR);
   end;
+  PairsIn(Result, ADir);
 end;
 
 // Die ProjectVersion in Zehnteln als Text ('185' -> '18.5').
@@ -970,7 +1464,10 @@ end;
 
 // Die Delphi-Projektdateien eines Verzeichnisses als Grund: eine .dproj
 // vor der Schwelle von AFeature bzw. - ohne .dproj - eine alte
-// Projektdatei; '' sonst.
+// Projektdatei; seit rwE30 Stufe 2 auch ein Projekt mit alter
+// Optionsdatei ohne eigene .dproj (OldPair, auch neben neuen .dproj) und
+// ein Programm ohne Projektdatei neben einem Lazarus-Projekt (LoneDpr);
+// '' sonst.
 function DelphiProjectReason(const AFiles: TRdxProjectFiles;
   const ADir: string; AFeature: TRdxLateFeature): string;
 var
@@ -988,33 +1485,570 @@ begin
   end
   else if AFiles.Legacy <> '' then
     Result := _(R_LEGACY[AFeature], [AFiles.Legacy, ADir, MsgByHand]);
+  if (Result = '') and (AFiles.OldPair <> '') then
+    Result := _(R_LEGACY[AFeature], [AFiles.OldPair, ADir, MsgByHand]);
+  if (Result = '') and (AFiles.LoneDpr <> '') and (AFiles.Lazarus <> '') then
+    Result := _(R_DUAL_PROJECT[AFeature], [AFiles.LoneDpr, AFiles.Lazarus,
+      ADir, MsgByHand]);
+end;
+
+// Traegt das Verzeichnis Delphi-Projektdateien, die DelphiProjectReason
+// liest (das NAECHSTE solche Verzeichnis entscheidet, ProjectWalkReason)?
+function HasDelphiProject(const AFiles: TRdxProjectFiles): Boolean;
+begin
+  Result := (AFiles.Dproj <> '') or (AFiles.Legacy <> '')
+    or (AFiles.OldPair <> '')
+    or ((AFiles.LoneDpr <> '') and (AFiles.Lazarus <> ''));
+end;
+
+{ ---- Pakete, die die Unit enthalten (rwE29) ---- }
+
+function MaxOf(A, B: Integer): Integer;
+begin
+  if A > B then
+    Result := A
+  else
+    Result := B;
+end;
+
+{ TRdxPackageVersion }
+
+class function TRdxPackageVersion.Jedi(J: Integer): Integer;
+begin
+  case J of
+    5..10:  Result := J + 8;    // Delphi 5 = 13 ... Delphi 2006 = 18
+    11:     Result := 18;       // Delphi 2007 (18.5)
+    12:     Result := 20;       // Delphi 2009
+    14..29: Result := J + 7;    // Delphi 2010 = 21 ... 11 = 35, 12 = 36
+    37:     Result := 37;       // Delphi 13 (Paketversion 370)
+  else
+    Result := -1;
+  end;
+end;
+
+class function TRdxPackageVersion.Product(AMajor, AMinor: Integer): Integer;
+begin
+  if (AMajor = 10) and (AMinor >= 0) and (AMinor <= 4) then
+    Result := 30 + AMinor
+  else if (AMajor >= 11) and (AMajor <= 13) then
+    Result := 24 + AMajor
+  else
+    Result := -1;
+end;
+
+// Zwei Lesarten - die hoechste zaehlt ('d110' ist bei DMVC Delphi 11, als
+// Paketversion Delphi 2007).
+class function TRdxPackageVersion.Number(N: Integer): Integer;
+begin
+  Result := -1;
+  if N mod 10 = 0 then
+    Result := Jedi(N div 10);
+  if N >= 100 then
+    Result := MaxOf(Result, Product(N div 10, N mod 10));
+end;
+
+class function TRdxPackageVersion.Year(N: Integer): Integer;
+begin
+  case N of
+    2005: Result := 17;
+    2006, 2007: Result := 18;
+    2009: Result := 20;
+    2010: Result := 21;
+  else
+    Result := -1;
+  end;
+end;
+
+// Die Buchstaben (a..z) direkt vor S[AAt], '' ohne.
+function LettersBefore(const S: string; AAt: Integer): string;
+var
+  j : Integer;
+begin
+  j := AAt - 1;
+  while (j >= 1) and CharInSet(S[j], ['a'..'z']) do
+    Dec(j);
+  Result := Copy(S, j + 1, AAt - j - 1);
+end;
+
+class function TRdxPackageVersion.Folder(const AName: string): Integer;
+var
+  S, Adj, Sep         : string;
+  i, j, k, Start      : Integer;
+  Digits, N1, N2, V   : Integer;
+  HasMinor, IsDelphi  : Boolean;
+begin
+  Result := -1;
+  S := LowerCase(AName);
+  i := 1;
+  while i <= Length(S) do
+  begin
+    if CharInSet(S[i], ['a'..'z']) then
+    begin
+      j := i;
+      while (j <= Length(S)) and CharInSet(S[j], ['a'..'z']) do
+        Inc(j);
+      Adj := Copy(S, i, j - i);
+      for k := 0 to High(CODE_NAMES) do
+        if Adj = CODE_NAMES[k] then
+          Result := MaxOf(Result, 30 + k);
+      // 'XE' als ganzes Wort ohne Ziffer dahinter: Delphi XE (22) - nicht
+      // das Ende von 'Deluxe'.
+      if InList(Adj, XE_WORDS)
+         and not ((j <= Length(S)) and CharInSet(S[j], ['0'..'9'])) then
+        Result := MaxOf(Result, 22);
+      i := j;
+      Continue;
+    end;
+    if not CharInSet(S[i], ['0'..'9']) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    // Das Wort davor: direkt anliegend (Adj) oder durch ' ', '_', '-'
+    // getrennt (Sep: 'Delphi 11', 'Delphi_12', 'RAD Studio 10.4').
+    Start := i;
+    Adj := LettersBefore(S, i);
+    Sep := '';
+    if (Adj = '') and (i > 2) and CharInSet(S[i - 1], [' ', '_', '-']) then
+      Sep := LettersBefore(S, i - 1);
+    N1 := 0;
+    Digits := 0;
+    while (i <= Length(S)) and CharInSet(S[i], ['0'..'9']) do
+    begin
+      if Digits < 4 then
+        N1 := N1 * 10 + Ord(S[i]) - Ord('0');
+      Inc(Digits);
+      Inc(i);
+    end;
+    N2 := 0;
+    HasMinor := (i < Length(S)) and CharInSet(S[i], ['.', '_'])
+      and CharInSet(S[i + 1], ['0'..'9']);
+    if HasMinor then
+    begin
+      Inc(i);
+      N2 := Ord(S[i]) - Ord('0');
+      while (i <= Length(S)) and CharInSet(S[i], ['0'..'9']) do
+        Inc(i);
+    end;
+    IsDelphi := InList(Adj, DELPHI_WORDS) or (Sep = DELPHI_WORDS[1]);
+    V := -1;
+    if InList(Adj, XE_WORDS) then
+    begin
+      if not HasMinor and (Digits = 1) and (N1 >= 2) and (N1 <= 8) then
+        V := 21 + N1;                    // XE2 = 23 ... XE8 = 29
+    end
+    else if InList(Adj, CBUILDER_WORDS) then
+    begin
+      if not HasMinor and (Digits = 1) and (N1 >= 5) and (N1 <= 6) then
+        V := N1 + 8;                     // C++Builder 5/6 = Delphi 5/6
+    end
+    else if HasMinor then
+    begin
+      if IsDelphi or (Sep = STUDIO_WORD)
+         or ((Adj = '') and (Sep = '') and (Start = 1)) then
+        V := Product(N1, N2);
+    end
+    else if IsDelphi then
+      case Digits of
+        1, 2: V := MaxOf(Jedi(N1), Product(N1, 0));
+        3:    V := Number(N1);
+        4:    V := Year(N1);
+      end;
+    Result := MaxOf(Result, V);
+  end;
+end;
+
+class function TRdxPackageVersion.LibSuffix(const ALowText: string;
+  out AValue: string): Integer;
+var
+  P, i : Integer;
+begin
+  Result := -1;
+  AValue := '';
+  P := Pos(LIBSUFFIX_TAG, ALowText);
+  if P = 0 then Exit;
+  i := P + Length(LIBSUFFIX_TAG);
+  while (i <= Length(ALowText)) and CharInSet(ALowText[i], ['0'..'9']) do
+    Inc(i);
+  AValue := Copy(ALowText, P + Length(LIBSUFFIX_TAG),
+    i - P - Length(LIBSUFFIX_TAG));
+  if (Length(AValue) >= 2) and (Length(AValue) <= 3)
+     and (i <= Length(ALowText)) and (ALowText[i] = '''') then
+    Result := Number(StrToInt(AValue));
+end;
+
+// Nennt die .dpk (Kopf klein geschrieben) die Unit-Datei ALowFile
+// ('mvcframework.objectpool.pas')? Gesucht wird die Form der in-Klausel
+// ('..\..\sources\X.pas'' bzw. ''X.pas'''): davor '\', '/' oder ''''.
+function DpkContains(const ALowText, ALowFile: string): Boolean;
+var
+  Key  : string;
+  P, i : Integer;
+begin
+  Result := False;
+  Key := ALowFile + '''';
+  i := 1;
+  while i + Length(Key) - 1 <= Length(ALowText) do
+  begin
+    P := Pos(Key, Copy(ALowText, i, MaxInt));
+    if P = 0 then Exit;
+    P := P + i - 1;
+    if (P = 1) or CharInSet(ALowText[P - 1], ['\', '/', '''']) then
+      Exit(True);
+    i := P + 1;
+  end;
+end;
+
+type
+  // Was ein Lauf des Plattenblicks liest (ProjectWalkReason), je mit
+  // Deckel: Paketkoepfe (MAX_PACKAGE_READS - erschoepft ein Grund, ausser
+  // fuer lfExceptionClasses), Programme (MAX_PROGRAM_READS) und die Units
+  // eines alten Pakets (MAX_PACKAGE_UNIT_BYTES; beides erschoepft: kein
+  // Beleg bzw. keine Widerlegung). Seen/Proven: die schon gelesenen Units
+  // (klein) und die davon mit TFormatSettings.Invariant - DMVC nennt
+  // dieselben Units in d100, d101 und d102.
+  TRdxWalkBudget = record
+    Packages  : Integer;
+    Programs  : Integer;
+    UnitBytes : Int64;
+    Seen      : TArray<string>;
+    Proven    : TArray<string>;
+  end;
+
+// Die Units einer .dpk ('X in ''..\src\X.pas''' im Kopf, klein): je der
+// Pfad relativ zu ADir aufgeloest.
+function DpkUnitPaths(const ADir, ALowText: string): TArray<string>;
+var
+  i, P, Q : Integer;
+  Path    : string;
+begin
+  Result := nil;
+  i := 1;
+  while True do
+  begin
+    P := Pos(DPK_IN_TAG, Copy(ALowText, i, MaxInt));
+    if P = 0 then Exit;
+    P := P + i - 1 + Length(DPK_IN_TAG);
+    Q := P;
+    while (Q <= Length(ALowText)) and (ALowText[Q] <> '''') do
+      Inc(Q);
+    Path := Copy(ALowText, P, Q - P);
+    if LowerCase(ExtractFileExt(Path)) = '.pas' then
+      AddText(Result, ExpandFileName(IncludeTrailingPathDelimiter(ADir) + Path));
+    i := Q + 1;
+  end;
+end;
+
+// Nutzt die Unit APath TFormatSettings.Invariant ausserhalb jedes
+// Bedingungsblocks (UnconditionalInvariantLine)? Gelesen nur bis zum
+// Deckel ABudget.UnitBytes; was nicht gelesen ist, beweist nichts.
+function UnitUsesInvariant(const APath: string;
+  var ABudget: TRdxWalkBudget): Boolean;
+var
+  Key   : string;
+  FS    : TFileStream;
+  Bytes : TBytes;
+  Text  : string;
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+begin
+  Key := LowerCase(APath);
+  if InList(Key, ABudget.Seen) then
+    Exit(InList(Key, ABudget.Proven));
+  Result := False;
+  if not FileExists(APath) then Exit;
+  try
+    FS := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+    try
+      if ABudget.UnitBytes + FS.Size > MAX_PACKAGE_UNIT_BYTES then Exit;
+      Inc(ABudget.UnitBytes, FS.Size);
+      SetLength(Bytes, FS.Size);
+      if Length(Bytes) > 0 then
+        SetLength(Bytes, FS.Read(Bytes[0], Length(Bytes)));
+    finally
+      FS.Free;
+    end;
+  except
+    on EStreamError do
+      Exit;
+  end;
+  AddText(ABudget.Seen, Key);
+  Text := TEncoding.ANSI.GetString(Bytes);
+  if Pos(INVARIANT_TEXT, LowerCase(Text)) = 0 then Exit;
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Text;
+    Map := TRdxCodeMap.Create(SL);
+    Result := UnconditionalInvariantLine(Map) > 0;
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  if Result then
+    AddText(ABudget.Proven, Key);
+end;
+
+// Widerlegt eine Unit der .dpk (Kopf klein ALowText im Ordner ADir) die
+// Versionssperre des Invariant-Wegs - nutzt sie TFormatSettings.Invariant
+// ohne Weiche, baut das Paket auf seinem alten Delphi mit Invariant
+// (rwE30 Stufe 2: loggerproRT.dpk in d100 mit LoggerPro.Renderers.pas,
+// dmvcframeworkRT.dpk mit MVCFramework.Serializer.Commons.pas)?
+function PackageUsesInvariant(const ADir, ALowText: string;
+  var ABudget: TRdxWalkBudget): Boolean;
+var
+  Path : string;
+begin
+  Result := False;
+  for Path in DpkUnitPaths(ADir, ALowText) do
+    if UnitUsesInvariant(Path, ABudget) then
+      Exit(True);
+end;
+
+// Die .dpk im Paketordner ADir (AFolderVersion: die Version aus seinem
+// Namen, -1 ohne), die die Unit ALowFile enthalten: ist eine fuer ein
+// aelteres Delphi als die Schwelle (Ordnername, LIBSUFFIX - der hebt nur
+// an; ohne beides die Projektdateien des Ordners wie DelphiProjectReason),
+// der Grund - fuer den Invariant-Weg nur, wenn keine Unit des Pakets
+// Invariant ohne Weiche nutzt (PackageUsesInvariant, rwE30 Stufe 2). Ist
+// der Deckel erschoepft und steht hier noch eine .dpk, auch - sie bleibt
+// ungelesen (R_PACKAGES_UNREAD; nicht fuer lfExceptionClasses,
+// MissingBlocks). '' sonst.
+function DpkDirReason(const ADir: string; AFolderVersion: Integer;
+  const ALowFile: string; AFeature: TRdxLateFeature;
+  var ABudget: TRdxWalkBudget): string;
+var
+  SR               : TSearchRec;
+  Text, Lib, Proof : string;
+  V, LibV          : Integer;
+begin
+  Result := '';
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0)
+         or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
+        Continue;
+      if ABudget.Packages >= MAX_PACKAGE_READS then
+      begin
+        if TRdxMagicFixes.MissingBlocks(AFeature) then
+          Result := _(R_PACKAGES_UNREAD[AFeature], [ADir, MAX_PACKAGE_READS,
+            MsgByHand]);
+        Exit;
+      end;
+      Inc(ABudget.Packages);
+      if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
+        Continue;
+      Text := LowerCase(Text);
+      if not DpkContains(Text, ALowFile) then Continue;
+      V := AFolderVersion;
+      Proof := ExtractFileName(ExcludeTrailingPathDelimiter(ADir));
+      LibV := TRdxPackageVersion.LibSuffix(Text, Lib);
+      if LibV > V then
+      begin
+        V := LibV;
+        Proof := 'LIBSUFFIX ''' + Lib + '''';
+      end;
+      if V < 0 then
+        Result := DelphiProjectReason(ProjectFilesIn(ADir,
+          FloorOf(AFeature).ProjectVersion), ADir, AFeature)
+      else if V < FloorOf(AFeature).Version then
+        Result := _(R_OLD_PACKAGE[AFeature], [SR.Name, ADir, Proof,
+          MsgByHand]);
+      if (Result <> '') and (AFeature = lfFormatInvariant)
+         and PackageUsesInvariant(ADir, Text, ABudget) then
+        Result := '';
+      if Result <> '' then Exit;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Die Paketordner unter APkg (APkg selbst und seine Unterordner), die
+// gelesen werden: ohne die, deren Name schon eine Version ab AFloor belegt
+// (Review e/HilfeFixB - sie koennen nur neu sein, LIBSUFFIX hebt nur an);
+// alte (AOld, Version im Namen) und unbekannte (AUnknown) getrennt, je in
+// der Reihenfolge der Platte. AAll: alle, auch die neuen (die Programme
+// darin, SettingsProgramReason).
+procedure CollectPackageDirs(const APkg: string; AFloor: Integer;
+  var AOld, AUnknown: TArray<string>; var AOldVer: TArray<Integer>;
+  var AAll: TArray<string>);
+var
+  SR   : TSearchRec;
+  Path : string;
+  V    : Integer;
+
+  procedure Note(const ADir: string; AVersion: Integer);
+  begin
+    AddText(AAll, ADir);
+    if AVersion >= AFloor then Exit;
+    if AVersion >= 0 then
+    begin
+      SetLength(AOld, Length(AOld) + 1);
+      AOld[High(AOld)] := ADir;
+      SetLength(AOldVer, Length(AOldVer) + 1);
+      AOldVer[High(AOldVer)] := AVersion;
+    end
+    else
+    begin
+      SetLength(AUnknown, Length(AUnknown) + 1);
+      AUnknown[High(AUnknown)] := ADir;
+    end;
+  end;
+
+begin
+  Note(APkg, TRdxPackageVersion.Folder(ExtractFileName(
+    ExcludeTrailingPathDelimiter(APkg))));
+  if FindFirst(IncludeTrailingPathDelimiter(APkg) + '*', faDirectory,
+       SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) = 0) or (SR.Name = '.')
+         or (SR.Name = '..') then
+        Continue;
+      Path := IncludeTrailingPathDelimiter(APkg) + SR.Name;
+      V := TRdxPackageVersion.Folder(SR.Name);
+      Note(Path, V);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Die .dpr in ADir (Dateinamen).
+function ProgramsIn(const ADir: string): TArray<string>;
+var
+  SR : TSearchRec;
+begin
+  Result := nil;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPR_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) = 0)
+         and (LowerCase(ExtractFileExt(SR.Name)) = DPR_EXTENSION) then
+        AddText(Result, SR.Name);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Ein Programm APrograms in ADir, das die Unit AFileName enthaelt (in-
+// Klausel wie DpkContains) und die globale FormatSettings selbst setzt
+// (uRdxCompilerTraces.GlobalSettingsWriteLine im Kopf der .dpr): der Grund
+// fuer den Invariant-Weg, '' sonst. Hoechstens MAX_PROGRAM_READS je Lauf;
+// danach: kein Beleg.
+function SettingsProgramReason(const ADir: string;
+  const APrograms: TArray<string>; const AFileName: string;
+  var ABudget: TRdxWalkBudget): string;
+var
+  Prg, Text, Field : string;
+  SL               : TStringList;
+  Map              : TRdxCodeMap;
+  Li               : Integer;
+begin
+  Result := '';
+  for Prg in APrograms do
+  begin
+    if ABudget.Programs >= MAX_PROGRAM_READS then Exit;
+    Inc(ABudget.Programs);
+    if not HeadText(IncludeTrailingPathDelimiter(ADir) + Prg, Text) then
+      Continue;
+    if not DpkContains(LowerCase(Text),
+         LowerCase(ExtractFileName(AFileName))) then
+      Continue;
+    SL := TStringList.Create;
+    Map := nil;
+    try
+      SL.Text := Text;
+      Map := TRdxCodeMap.Create(SL);
+      Li := GlobalSettingsWriteLine(Map, Field);
+    finally
+      Map.Free;
+      SL.Free;
+    end;
+    if Li > 0 then
+      Exit(_(R_PROGRAM_SETTINGS, [Prg, ADir, Field, Li, MsgByHand]));
+  end;
+end;
+
+// Pakete unter ADir (Unterordner PACKAGE_DIRS und eine Ebene darin), die
+// die Unit AFileName enthalten und fuer ein aelteres Delphi sind - bzw. ein
+// alter oder unbekannter Paketordner, den der Deckel nicht mehr liest. ''
+// oder der Grund. Erst die alten Ordner, dann die unbekannten. Fuer den
+// Invariant-Weg dazu die Programme in JEDEM dieser Ordner
+// (SettingsProgramReason; HeidiSQL packages\Delphi12.3\heidisql.dpr).
+function PackagesReason(const ADir, AFileName: string;
+  AFeature: TRdxLateFeature; var ABudget: TRdxWalkBudget): string;
+var
+  Pkg, LowFile      : string;
+  Old, Unknown, All : TArray<string>;
+  OldVer            : TArray<Integer>;
+  i, k              : Integer;
+begin
+  Result := '';
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  for i := 0 to High(PACKAGE_DIRS) do
+  begin
+    Pkg := IncludeTrailingPathDelimiter(ADir) + PACKAGE_DIRS[i];
+    if not DirectoryExists(Pkg) then Continue;
+    Old := nil;
+    Unknown := nil;
+    OldVer := nil;
+    All := nil;
+    CollectPackageDirs(Pkg, FloorOf(AFeature).Version, Old, Unknown, OldVer,
+      All);
+    for k := 0 to High(Old) do
+    begin
+      Result := DpkDirReason(Old[k], OldVer[k], LowFile, AFeature, ABudget);
+      if Result <> '' then Exit;
+    end;
+    for k := 0 to High(Unknown) do
+    begin
+      Result := DpkDirReason(Unknown[k], -1, LowFile, AFeature, ABudget);
+      if Result <> '' then Exit;
+    end;
+    if AFeature = lfFormatInvariant then
+      for k := 0 to High(All) do
+      begin
+        Result := SettingsProgramReason(All[k], ProgramsIn(All[k]), AFileName,
+          ABudget);
+        if Result <> '' then Exit;
+      end;
+  end;
 end;
 
 // Netzpfad: uRdxPaths.IsNetworkPath (UNC und Netzlaufwerk, seit Charge
 // B1-FD die eine Regel fuer Unit und Includes - bis dahin stand hier eine
 // eigene Kopie nur fuer UNC; seit Charge B2S-a ist '\\?\C:\..' lokal).
-class function TRdxMagicFixes.FileReason(const AFileName: string;
+// Die Projektdateien im Verzeichnis der Unit und bis PROJECT_LEVELS
+// darueber (der Plattenteil von FileReason, s. dort), je Ebene dazu die
+// Pakete in ihrem Unterordner packages (PackagesReason, rwE29) - '' oder
+// der Grund.
+function ProjectWalkReason(const AFileName: string;
   AFeature: TRdxLateFeature): string;
 var
-  Ext, Dir, Up : string;
-  Level        : Integer;
-  Files        : TRdxProjectFiles;
-  DelphiSeen   : Boolean;
+  Dir, Up    : string;
+  Level      : Integer;
+  Files      : TRdxProjectFiles;
+  DelphiSeen : Boolean;
+  Budget     : TRdxWalkBudget;
 begin
   Result := '';
-  if AFileName = '' then Exit;
-  Ext := LowerCase(ExtractFileExt(AFileName));
-  if InList(Ext, FPC_EXTENSIONS) then
-    Exit(_(R_FPC_FILE[AFeature], [Ext]));
-  if IsNetworkPath(AFileName) then
-    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
   Dir := ExtractFileDir(AFileName);
   DelphiSeen := False;
+  Budget := Default(TRdxWalkBudget);
   for Level := 0 to PROJECT_LEVELS do
   begin
     if Dir = '' then Exit;
     Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
-    if Files.Lazarus <> '' then
+    if (Files.Lazarus <> '') and not TRdxMagicFixes.FpcKnows(AFeature) then
       Exit(_(R_LAZARUS[AFeature], [Files.Lazarus, Dir]));
     // Das NAECHSTE Verzeichnis mit Delphi-Projektdateien entscheidet
     // (eine .dproj ab der Schwelle dort macht alte Dateien weiter oben
@@ -1023,12 +2057,795 @@ begin
     begin
       Result := DelphiProjectReason(Files, Dir, AFeature);
       if Result <> '' then Exit;
-      DelphiSeen := (Files.Dproj <> '') or (Files.Legacy <> '');
+      DelphiSeen := HasDelphiProject(Files);
     end;
+    // Ein Programm, das die Unit enthaelt und die globale FormatSettings
+    // selbst setzt (nur Invariant; rwE30 Stufe 2) - in jedem Verzeichnis
+    // des Fensters.
+    if AFeature = lfFormatInvariant then
+    begin
+      Result := SettingsProgramReason(Dir, Files.Programs, AFileName, Budget);
+      if Result <> '' then Exit;
+    end;
+    // Ein Paket, das die Unit enthaelt, baut sie - auf jeder Ebene, auch
+    // hinter einer .dproj ab der Schwelle (DMVC: sources\ ohne Projekt,
+    // packages\d100..d104 eine Ebene hoeher).
+    Result := PackagesReason(Dir, AFileName, AFeature, Budget);
+    if Result <> '' then Exit;
     Up := ExtractFileDir(Dir);
     if Up = Dir then Exit;
     Dir := Up;
   end;
+end;
+
+var
+  // Der aktive Cache des Plattenblicks (UseDiskCache), nil = keiner. Ohne
+  // Sperre: Anmelden, Nachschlagen und Abmelden laufen nur im
+  // IDE-Hauptthread (Gluehbirne, Menueaufbau; reDelphix startet keine
+  // Threads). Ein Aufruf von FileReason/IncludeReason aus einem anderen
+  // Thread braucht zuerst eine Sperre oder einen Cache je Thread.
+  GDiskCache : TRdxDiskReasonCache = nil;
+
+// Der Schluessel eines Eintrags: Art ('F' FileReason, 'I' IncludeReason),
+// Sprachmittel, reDelphix-Sprache (die Gruende sind uebersetzt), Dateiname
+// und - fuer IncludeReason - die Serial der Map, je mit #0 getrennt (in
+// keinem Dateinamen).
+function DiskKey(AKind: Char; AFeature: TRdxLateFeature;
+  const AFileName, ARest: string): string;
+begin
+  Result := AKind + IntToStr(Ord(AFeature)) + #0 + RdxLanguage + #0
+    + AFileName + #0 + ARest;
+end;
+
+class function TRdxMagicFixes.FileReason(const AFileName: string;
+  AFeature: TRdxLateFeature): string;
+var
+  Ext, Key : string;
+begin
+  Result := '';
+  if AFileName = '' then Exit;
+  Ext := LowerCase(ExtractFileExt(AFileName));
+  if InList(Ext, FPC_EXTENSIONS) and not FpcKnows(AFeature) then
+    Exit(_(R_FPC_FILE[AFeature], [Ext]));
+  // Das Netzpfad-Gate laeuft je Aufruf, vor dem Cache (Charge P5).
+  if IsNetworkPath(AFileName) then
+    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
+  if GDiskCache = nil then
+    Exit(ProjectWalkReason(AFileName, AFeature));
+  Key := DiskKey('F', AFeature, AFileName, '');
+  if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  Result := ProjectWalkReason(AFileName, AFeature);
+  GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
+class function TRdxMagicFixes.FpcKnows(AFeature: TRdxLateFeature): Boolean;
+begin
+  Result := (AFeature = lfFormatSettingsVar)
+    or (AFeature = lfExceptionClasses);
+end;
+
+class function TRdxMagicFixes.MissingBlocks(
+  AFeature: TRdxLateFeature): Boolean;
+begin
+  Result := AFeature <> lfExceptionClasses;
+end;
+
+// Die .dpk in ADir, die die Unit ALowFile enthalten und eine Unit, die
+// TFormatSettings.Invariant ohne Weiche nutzt (PackageUsesInvariant)?
+// Hoechstens bis zum Deckel ABudget.Packages - danach: nein.
+function DirProvesInvariant(const ADir, ALowFile: string;
+  var ABudget: TRdxWalkBudget): Boolean;
+var
+  SR   : TSearchRec;
+  Text : string;
+begin
+  Result := False;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0)
+         or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
+        Continue;
+      if ABudget.Packages >= MAX_PACKAGE_READS then Exit;
+      Inc(ABudget.Packages);
+      if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
+        Continue;
+      Text := LowerCase(Text);
+      if DpkContains(Text, ALowFile)
+         and PackageUsesInvariant(ADir, Text, ABudget) then
+        Exit(True);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Enthaelt ein Paket im Fenster der Unit (Unterordner packages bzw.
+// package und eine Ebene darin, im Verzeichnis der Unit und bis
+// PROJECT_LEVELS darueber - wie PackagesReason, jede Version) die Unit UND
+// eine Unit, die TFormatSettings.Invariant ohne Weiche nutzt? Dann kennt
+// jeder Compiler, der das Paket baut, Invariant - das widerlegt fuer den
+// Invariant-Weg auch die Spuren im Include (rwE30 Stufe 2: MVCFramework.
+// HttpSys.Response.pas:335 - dmvcframework.inc fragt 'CompilerVersion <=
+// 29', dmvcframeworkRT.dpk enthaelt MVCFramework.Serializer.Commons.pas mit
+// Invariant). Mit Cache (GDiskCache, Art 'V').
+function PackageInvariantProof(const AFileName: string): Boolean;
+var
+  Dir, Up, Pkg, LowFile, Key, Cached : string;
+  Level, i                          : Integer;
+  Old, Unknown, All                 : TArray<string>;
+  OldVer                            : TArray<Integer>;
+  Budget                            : TRdxWalkBudget;
+  D                                 : string;
+begin
+  Key := DiskKey('V', lfFormatInvariant, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Result := False;
+  Budget := Default(TRdxWalkBudget);
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Result then Break;
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if Result or not DirectoryExists(Pkg) then Continue;
+      Old := nil;
+      Unknown := nil;
+      OldVer := nil;
+      All := nil;
+      CollectPackageDirs(Pkg, MaxInt, Old, Unknown, OldVer, All);
+      for D in All do
+        if not Result then
+          Result := DirProvesInvariant(D, LowFile, Budget);
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'V';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+// Nur die Programme im Fenster von ProjectWalkReason (Verzeichnis der Unit
+// und bis PROJECT_LEVELS darueber, je dazu ihre Paketordner), die die Unit
+// enthalten und die globale FormatSettings selbst einstellen
+// (SettingsProgramReason) - '' oder der Grund. Fuer den Invariant-Weg auch
+// dann, wenn die Datei einen neueren Compiler beweist (ProjectReason; Review
+// e/HilfeFixG): der Gegenbeweis widerlegt Compiler, nicht die
+// Einstellungen eines Programms. Netzpfad: R_NETWORK wie FileReason. Mit
+// Cache (GDiskCache, Art 'P').
+function SettingsWalkReason(const AFileName: string): string;
+var
+  Dir, Up, Pkg, Key : string;
+  Level, i, k       : Integer;
+  Old, Unknown, All : TArray<string>;
+  OldVer            : TArray<Integer>;
+  Budget            : TRdxWalkBudget;
+begin
+  Result := '';
+  if IsNetworkPath(AFileName) then
+    Exit(_(R_NETWORK, [ExtractFileDir(AFileName), MsgByHand]));
+  Key := DiskKey('P', lfFormatInvariant, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Result) then
+    Exit;
+  Budget := Default(TRdxWalkBudget);
+  Dir := ExtractFileDir(AFileName);
+  Level := 0;
+  while (Result = '') and (Dir <> '') and (Level <= PROJECT_LEVELS) do
+  begin
+    Result := SettingsProgramReason(Dir, ProgramsIn(Dir), AFileName, Budget);
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if (Result <> '') or not DirectoryExists(Pkg) then Continue;
+      Old := nil;
+      Unknown := nil;
+      OldVer := nil;
+      All := nil;
+      CollectPackageDirs(Pkg, MaxInt, Old, Unknown, OldVer, All);
+      for k := 0 to High(All) do
+        if Result = '' then
+          Result := SettingsProgramReason(All[k], ProgramsIn(All[k]),
+            AFileName, Budget);
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+    Inc(Level);
+  end;
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
+
+// Traegt das Programm APrg unter AFiles eine .dof bzw. .bdsproj gleichen
+// Namens (LEGACY_OPTION_EXTENSIONS; ModernProjectProof, rwE32 Stufe 4)?
+function OldOptionsOf(const AFiles: TRdxProjectFiles;
+  const APrg: string): Boolean;
+var
+  Opt : string;
+begin
+  Result := False;
+  for Opt in AFiles.Opts do
+    if SameText(ChangeFileExt(Opt, ''), ChangeFileExt(APrg, ''))
+       and InList(LowerCase(ExtractFileExt(Opt)), LEGACY_OPTION_EXTENSIONS)
+    then
+      Exit(True);
+end;
+
+// Hauptweg SCA128/SCA059 (lfFormatSettingsVar, rwE31 Stufe 3): ist die
+// Unit Teil eines Delphi-Projekts ab der Schwelle? Das NAECHSTE Verzeichnis
+// im Fenster mit Delphi-Projektdateien (wie ProjectWalkReason) traegt keine
+// alte (DelphiProjectReason leer: jede .dproj ab der Schwelle, kein .dof-
+// Paar, kein Doppel-Compiler-Projekt), und ein Programm dort mit .dproj
+// gleichen Namens enthaelt die Unit (in-Klausel, DpkContains). Das
+// widerlegt ein Kit-Include der Unit: mORMot2 ex\ThirdPartyDemos\dmvc-ai\
+// 01-basicdemo_server\src\api.impl.pas:50 bindet mormot.defines.inc ein
+// (mORMot baut ab Delphi 7), gebaut wird sie aber nur von
+// 01-basicdemo_server.dpr mit .dproj (ProjectVersion 20.3, Delphi 12) -
+// der mORMot-Kern unter src\ hat kein solches Projekt und bleibt gesperrt.
+// Seit rwE32 Stufe 4 (die Ausnahmeklassen ab 2009 und der Alt-Weg
+// lfFormatInvariant ab 10.3 fragen hier auch) zaehlt ein
+// Programm nicht, das neben seiner .dproj eine .dof oder .bdsproj GLEICHEN
+// Namens traegt (OldOptionsOf) - es wird auch mit Delphi bis 2006 gebaut
+// (jvcl install\JVCLInstall: JVCLInstall.dof/.bdsproj/.dproj, das
+// Installationsprogramm uebersetzt jedes Delphi ab 6 selbst).
+// Netzpfad: nein (die Hilfe liest dort nichts). Mit Cache (GDiskCache, Art
+// 'K').
+function ModernProjectProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, LowFile, Prg, Text, Key, Cached : string;
+  Level                                     : Integer;
+  Files                                     : TRdxProjectFiles;
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('K', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if Dir = '' then Break;
+    Files := ProjectFilesIn(Dir, FloorOf(AFeature).ProjectVersion);
+    if HasDelphiProject(Files) then
+    begin
+      if DelphiProjectReason(Files, Dir, AFeature) = '' then
+        for Prg in Files.Programs do
+          if not Result
+             and InList(LowerCase(ChangeFileExt(Prg, '')), Files.DprojBases)
+             and not OldOptionsOf(Files, Prg)
+             and HeadText(IncludeTrailingPathDelimiter(Dir) + Prg, Text) then
+            Result := DpkContains(LowerCase(Text), LowFile);
+      Break;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'K';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+// Die Werte des Attributs hinter ATag in ALowText ('<otherunitfiles
+// value="a;b"' -> 'a;b'), je bis zum '"'.
+function TagValues(const ALowText, ATag: string): TArray<string>;
+var
+  Rest : string;
+  P, Q : Integer;
+begin
+  Result := nil;
+  Rest := ALowText;
+  P := Pos(ATag, Rest);
+  while P > 0 do
+  begin
+    Rest := Copy(Rest, P + Length(ATag), MaxInt);
+    Q := Pos('"', Rest);
+    if Q = 0 then Break;
+    AddText(Result, Copy(Rest, 1, Q - 1));
+    Rest := Copy(Rest, Q + 1, MaxInt);
+    P := Pos(ATag, Rest);
+  end;
+end;
+
+// Ein Pfad aus einer .lpi (klein, '/') ohne fuehrendes './' bzw.
+// '$(projpath)/' und ohne '/' am Ende.
+function LpiPath(const AEntry: string): string;
+const
+  PROJ_PATH = '$(projpath)/';
+begin
+  Result := Trim(AEntry);
+  if Copy(Result, 1, Length(PROJ_PATH)) = PROJ_PATH then
+    Delete(Result, 1, Length(PROJ_PATH));
+  if Copy(Result, 1, 2) = './' then
+    Delete(Result, 1, 2);
+  while (Result <> '') and (Result[Length(Result)] = '/') do
+    Delete(Result, Length(Result), 1);
+end;
+
+// Sucht die .lpi ALpi in ADir die Units im Verzeichnis AUnitDir? Ja, wenn es
+// ADir selbst ist (dort sucht Lazarus immer), wenn ein Eintrag des
+// Unit-Suchpfads dorthin fuehrt ('<OtherUnitFiles Value="fparchive;../sdk"/>')
+// oder die Units-Liste eine Datei dort nennt ('<Filename
+// Value="fparchive/abzipprc.pas"/>'). Andere Pfade der .lpi - IncludeFiles,
+// UnitOutputDirectory, ObjectPath, Libraries - zaehlen nicht (Review
+// e/HilfeFixX: 'UnitOutputDirectory="lib"' macht eine Unit in lib\ nicht
+// zum Teil des Projekts).
+function LpiCoversDir(const ADir, ALpi, AUnitDir: string): Boolean;
+var
+  Base, UnitBase, Rel, Text, Value, Entry : string;
+  P                                       : Integer;
+begin
+  Result := False;
+  Base := IncludeTrailingPathDelimiter(ADir);
+  UnitBase := IncludeTrailingPathDelimiter(AUnitDir);
+  if SameText(UnitBase, Base) then
+    Exit(True);
+  if not SameText(Copy(UnitBase, 1, Length(Base)), Base) then Exit;
+  Rel := LowerCase(ExcludeTrailingPathDelimiter(Copy(UnitBase,
+    Length(Base) + 1, MaxInt)));
+  Rel := StringReplace(Rel, '\', '/', [rfReplaceAll]);
+  if (Rel = '') or not HeadText(Base + ALpi, Text) then Exit;
+  Text := StringReplace(LowerCase(Text), '\', '/', [rfReplaceAll]);
+  for Value in TagValues(Text, LPI_UNIT_PATH_TAG) do
+  begin
+    Entry := Value + ';';
+    P := Pos(';', Entry);
+    while P > 0 do
+    begin
+      if LpiPath(Copy(Entry, 1, P - 1)) = Rel then
+        Exit(True);
+      Entry := Copy(Entry, P + 1, MaxInt);
+      P := Pos(';', Entry);
+    end;
+  end;
+  for Value in TagValues(Text, LPI_FILE_TAG) do
+  begin
+    Entry := LpiPath(Value);
+    P := LastDelimiter('/', Entry);
+    if (P > 0) and (LpiPath(Copy(Entry, 1, P - 1)) = Rel) then
+      Exit(True);
+  end;
+end;
+
+// Ausnahmeklassen (lfExceptionClasses, rwE33 Stufe 5): baut nur FPC die
+// Unit? Im Fenster von ProjectWalkReason (Verzeichnis der Unit und bis
+// PROJECT_LEVELS darueber) sucht eine .lpi die Unit (LpiCoversDir), und
+// nichts deutet auf Delphi: keine .dproj, keine alte Projekt- oder
+// Optionsdatei (.dof/.bdsproj/.bpr/.bpg/.cfg), keine Projektgruppe oder
+// C++Builder-Datei (.groupproj/.bdsgroup/.cbproj/.bpk, Review
+// e/HilfeFixX), keine .dpk, kein Paketordner (PACKAGE_DIRS, wie
+// PackagesReason) und jede .dpr ist ein FPC-Programm
+// (FpcOnlyProgram). Dann belegt die Delphi-Weiche eines Includes keinen
+// Compiler, der die Unit baut (Nico-Entscheid: ein FPC-only-Projekt ist kein
+// Beleg fuer ein altes Delphi - und ein altes Delphi baut es nicht); FPC
+// 3.2.2 kennt die drei Klassen (rtl\objpas\sysutils\sysutilh.inc).
+// doublecmd plugins\wcx\zip\src\fparchive\abzipprc.pas:212 (SCA127):
+// AbDefine.inc fragt im Zweig '{$IFNDEF FPC}' nach 'CompilerVersion < 15'
+// (Abbrevia-Erbe), gebaut wird die Unit nur von Zip.lpi (OtherUnitFiles
+// 'fparchive', Hauptdatei Zip.dpr mit FPCAdds). Netzpfad: nein. Mit Cache
+// (GDiskCache, Art 'Z').
+// Grenze (Review e/HilfeFixX): ein Delphi-Projekt AUSSERHALB des Fensters
+// sieht die Probe nicht (cnwizards AIAgentGUITest.dpr mit .dof bindet
+// '..\..\..\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas' ein) - darum
+// widerlegt sie nur die Weichen gewoehnlicher Includes, kein Kit-Include
+// (ProjectReason).
+function FpcOnlyProjectProof(const AFileName: string): Boolean;
+var
+  Dir, Up, UnitDir, Prg, Lpi, Key, Cached : string;
+  Level, i                                : Integer;
+  Files                                   : TRdxProjectFiles;
+  Covered, Delphi                         : Boolean;
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('Z', lfExceptionClasses, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Covered := False;
+  Delphi := False;
+  UnitDir := ExtractFileDir(AFileName);
+  Dir := UnitDir;
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Delphi then Break;
+    Files := ProjectFilesIn(Dir, FloorOf(lfExceptionClasses).ProjectVersion);
+    // Bases zaehlt jede .dpr und .dpk, Programs nur die .dpr.
+    Delphi := (Files.Dproj <> '') or (Files.Legacy <> '')
+      or (Files.DelphiHint <> '') or (Length(Files.Opts) > 0)
+      or (Length(Files.Bases) > Length(Files.Programs));
+    for i := 0 to High(PACKAGE_DIRS) do
+      Delphi := Delphi
+        or DirectoryExists(IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i]);
+    for Prg in Files.Programs do
+      Delphi := Delphi or not FpcOnlyProgram(Dir, Prg, Files.LazProjects);
+    for Lpi in Files.LazProjects do
+      Covered := Covered or LpiCoversDir(Dir, Lpi, UnitDir);
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  Result := Covered and not Delphi;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'Z';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+// SCA128/SCA059: ein Kit-Include der Unit (mormot.defines.inc, jvcl.inc ..
+// - uRdxCompilerTraces.OldCompilerTraceOf; der Planer prueft fuer den
+// Hauptweg seit rwE31 Stufe 3, fuer den Alt-Weg (lfFormatInvariant) seit
+// rwE32 Stufe 4 nur die Bedingungen der Datei) sperrt, ausser ein Projekt
+// der Unit ab der Schwelle von AFeature widerlegt es (AModern:
+// ModernProjectProof - Delphi XE, 2009 bzw. 10.3). Seit rwE32 Stufe 4 ebenso
+// fuer die Ausnahmeklassen (lfExceptionClasses, Projekt ab Delphi 2009):
+// pyscripter Source\JvDockSupportControl.pas:885 war wegen '{$I jvcl.inc}'
+// gesperrt, JvDockVIDStyle.pas:1603 daneben (dasselbe Include, 'for var'
+// beweist 10.3) angeboten - beide stehen in PyScripter.dpr mit .dproj 20.3.
+// '' oder der Grund.
+function KitIncludeReason(AMap: TRdxCodeMap; AFeature: TRdxLateFeature;
+  AModern: Boolean): string;
+var
+  Kit : string;
+  Li  : Integer;
+begin
+  Result := '';
+  Kit := OldCompilerTraceOf(AMap, FloorOf(AFeature), False, True, Li);
+  if (Kit = '') or AModern then
+    Exit;
+  case AFeature of
+    lfExceptionClasses: Result := _(R_KIT_OLD_EXC, [Kit, Li]);
+    lfFormatInvariant: Result := _(R_KIT_OLD_INVARIANT, [Kit, Li]);
+  else
+    Result := _(R_KIT_OLD_VAR, [Kit, Li]);
+  end;
+end;
+
+// Die Pruefung eines Includes fuer den Alt-Weg bei einem Projekt der Unit ab
+// 10.3 (TRdxIncludeTest, FpcIncludeReason): nur eine FPC-Weiche - '' oder
+// der Grund (derselbe wie in CompilerInInclude).
+function FpcInInclude(const AFile: string; ALines: TStrings;
+  AMap: TRdxCodeMap; const AArg: string): string;
+var
+  Li : Integer;
+begin
+  Result := '';
+  for Li := 0 to ALines.Count - 1 do
+    if LineLooksFpcAware(ALines[Li]) then
+      Exit(_(R_INC_FPC[lfFormatInvariant], [AFile, Li + 1]));
+end;
+
+// Alt-Weg SCA128.2/SCA059.2 mit einem Programm der Unit ab 10.3
+// (ModernProjectProof, Review e/HilfeFixS): das Projekt widerlegt die
+// Versionsweichen der Includes und ein nicht gefundenes Include, aber keine
+// FPC-Weiche in einem gelesenen - FPC 3.2 kennt TFormatSettings.Invariant in
+// keiner Version, und ein FPC-Projekt ausserhalb des Fensters (oder ohne
+// Projektdatei) sieht FileReason nicht. Die Weiche in der Datei selbst
+// sperrt der Planer ebenso ohne Blick aufs Projekt (R_FS_FPC). Bis zum
+// Review gab das Projekt eine Bibliotheks-Unit frei, deren '{$I lib.inc}'
+// '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}' traegt. Mit Cache (GDiskCache, Art
+// 'J').
+function FpcIncludeReason(const AFileName: string; AMap: TRdxCodeMap): string;
+var
+  Check : TRdxIncludeCheck;
+  Key   : string;
+begin
+  if GDiskCache <> nil then
+  begin
+    Key := DiskKey('J', lfFormatInvariant, AFileName, IntToStr(AMap.Serial));
+    if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  end;
+  Check.Test := FpcInInclude;
+  Check.Arg := '';
+  Check.MissingFmt := '';
+  Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
+end;
+
+
+// Der Ausgang von DirFloorVerdict: keine .dpk mit der Unit, nur solche ab
+// der Schwelle, mindestens eine alte bzw. unbekannte (oder der Deckel ist
+// erschoepft - keine Aussage).
+type
+  TRdxFloorVerdict = (fvNone, fvNew, fvOld);
+
+// Nennt der Ordnername eine Obergrenze ('Delphi 10.3-': 10.3 und davor)?
+// Dann belegt seine Zahl keine Mindestversion.
+function NamesUpperBound(const AName: string): Boolean;
+var
+  S : string;
+begin
+  S := Trim(AName);
+  Result := (S <> '') and (S[Length(S)] = '-');
+end;
+
+// Die .dpk in ADir, die die Unit ALowFile enthalten, gegen die Version
+// AFloor: ihre Version aus dem Ordnernamen bzw. {$LIBSUFFIX} (wie
+// DpkDirReason; ohne Beleg oder mit Obergrenze unbekannt).
+function DirFloorVerdict(const ADir, ALowFile: string; AFloor: Integer;
+  var ABudget: TRdxWalkBudget): TRdxFloorVerdict;
+var
+  SR        : TSearchRec;
+  Text, Lib : string;
+  V, LibV   : Integer;
+begin
+  Result := fvNone;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*' + DPK_EXTENSION,
+       faAnyFile, SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0)
+         or (LowerCase(ExtractFileExt(SR.Name)) <> DPK_EXTENSION) then
+        Continue;
+      if ABudget.Packages >= MAX_PACKAGE_READS then
+        Exit(fvOld);
+      Inc(ABudget.Packages);
+      if not HeadText(IncludeTrailingPathDelimiter(ADir) + SR.Name, Text) then
+        Exit(fvOld);
+      Text := LowerCase(Text);
+      if not DpkContains(Text, ALowFile) then Continue;
+      V := -1;
+      if not NamesUpperBound(ExtractFileName(
+           ExcludeTrailingPathDelimiter(ADir))) then
+        V := TRdxPackageVersion.Folder(ExtractFileName(
+          ExcludeTrailingPathDelimiter(ADir)));
+      LibV := TRdxPackageVersion.LibSuffix(Text, Lib);
+      if LibV > V then
+        V := LibV;
+      if V < AFloor then
+        Exit(fvOld);
+      Result := fvNew;
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Die Unterordner von ADir (eine Ebene).
+function SubDirsOf(const ADir: string): TArray<string>;
+var
+  SR : TSearchRec;
+begin
+  Result := nil;
+  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory,
+       SR) <> 0 then
+    Exit;
+  try
+    repeat
+      if ((SR.Attr and faDirectory) <> 0) and (SR.Name <> '.')
+         and (SR.Name <> '..') then
+        AddText(Result, IncludeTrailingPathDelimiter(ADir) + SR.Name);
+    until FindNext(SR) <> 0;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+// Invariant-Weg (rwE31 Stufe 3): bauen NUR Pakete ab der Schwelle von
+// AFeature die Unit? Gesucht wird wie PackagesReason im Fenster (Verzeichnis
+// der Unit und bis PROJECT_LEVELS darueber, je Unterordner packages bzw.
+// package), aber zwei Ebenen tief (python4delphi Packages\Delphi\Delphi
+// 10.4+\PythonFmx.dpk - PackagesReason sieht nur eine). Ja, wenn
+// mindestens eine .dpk die Unit enthaelt und jede davon ab der Schwelle ist
+// (Ordnername, LIBSUFFIX; ohne Beleg, mit Obergrenze 'Delphi 10.3-' oder
+// mit erschoepftem Deckel: nein). Mit Cache (GDiskCache, Art 'L').
+function PackageFloorProof(const AFileName: string;
+  AFeature: TRdxLateFeature): Boolean;
+var
+  Dir, Up, Pkg, LowFile, Key, Cached, D1, D2 : string;
+  Level, i                                   : Integer;
+  Budget                                     : TRdxWalkBudget;
+  Floor                                      : Integer;
+  Found, Old                                 : Boolean;
+
+  procedure Judge(const ADir: string);
+  begin
+    if Old then Exit;
+    case DirFloorVerdict(ADir, LowFile, Floor, Budget) of
+      fvNew: Found := True;
+      fvOld: Old := True;
+    end;
+  end;
+
+begin
+  Result := False;
+  if (AFileName = '') or IsNetworkPath(AFileName) then Exit;
+  Key := DiskKey('L', AFeature, AFileName, '');
+  if (GDiskCache <> nil) and GDiskCache.FItems.TryGetValue(Key, Cached) then
+    Exit(Cached <> '');
+  Budget := Default(TRdxWalkBudget);
+  Floor := FloorOf(AFeature).Version;
+  LowFile := LowerCase(ExtractFileName(AFileName));
+  Found := False;
+  Old := False;
+  Dir := ExtractFileDir(AFileName);
+  for Level := 0 to PROJECT_LEVELS do
+  begin
+    if (Dir = '') or Old then Break;
+    for i := 0 to High(PACKAGE_DIRS) do
+    begin
+      Pkg := IncludeTrailingPathDelimiter(Dir) + PACKAGE_DIRS[i];
+      if Old or not DirectoryExists(Pkg) then Continue;
+      Judge(Pkg);
+      for D1 in SubDirsOf(Pkg) do
+      begin
+        Judge(D1);
+        for D2 in SubDirsOf(D1) do
+          Judge(D2);
+      end;
+    end;
+    Up := ExtractFileDir(Dir);
+    if Up = Dir then Break;
+    Dir := Up;
+  end;
+  Result := Found and not Old;
+  if GDiskCache <> nil then
+  begin
+    Cached := '';
+    if Result then
+      Cached := 'L';
+    GDiskCache.FItems.AddOrSetValue(Key, Cached);
+  end;
+end;
+
+class function TRdxMagicFixes.ProjectReason(const AFileName: string;
+  AMap: TRdxCodeMap; AFeature: TRdxLateFeature; AIncludes: Boolean): string;
+var
+  Proof  : TRdxModernProof;
+  Modern : Boolean;
+begin
+  Result := '';
+  Modern := False;
+  Proof := ModernProof(AMap);
+  // Der Gegenbeweis (bzw. Invariant ohne Weiche) widerlegt nur die
+  // Compiler-Spuren; ein Programm, das die globale FormatSettings selbst
+  // einstellt, sperrt den Invariant-Weg weiter (Review e/HilfeFixG).
+  if (ProofCovers(Proof, FloorOf(AFeature))
+      and (FpcKnows(AFeature) or Proof.NoFpc))
+     or ((AFeature = lfFormatInvariant)
+         and (UnconditionalInvariantLine(AMap) > 0)) then
+  begin
+    if (AFeature = lfFormatInvariant) and (AFileName <> '') then
+      Result := SettingsWalkReason(AFileName);
+    Exit;
+  end;
+  // Ein Kit-Include der Unit (Hauptweg seit rwE31 Stufe 3, Alt-Weg und
+  // Ausnahmeklassen seit rwE32 Stufe 4 hier statt im Planer) - auch ohne
+  // Dateinamen (dann ohne Widerlegung). Die Ausnahmeklassen (Projekt der
+  // Unit ab 2009) auch auf einem Netzpfad (der Text der Datei ist der
+  // Beleg). Fuer den Alt-Weg widerlegt ein Projekt der Unit ab 10.3 auch die
+  // Includes (unten): mORMot2 dmvc-ai 01-basicdemo_server api.impl.pas:50 -
+  // Eintrag 1 galt per .dproj 20.3, Eintrag 2 sperrte mit 'bis Delphi 10.3
+  // (mormot.defines.inc)'.
+  if AFeature in [lfFormatSettingsVar, lfExceptionClasses,
+    lfFormatInvariant] then
+  begin
+    Modern := ModernProjectProof(AFileName, AFeature);
+    Result := KitIncludeReason(AMap, AFeature, Modern);
+    if Result <> '' then Exit;
+  end;
+  // Sonst kein Beleg auf einem Netzpfad: SCA127 liest dort nichts und
+  // sperrt nicht (die anderen Sprachmittel sperren dort, FileReason).
+  if not MissingBlocks(AFeature) and IsNetworkPath(AFileName) then Exit;
+  if AFileName = '' then Exit;
+  Result := FileReason(AFileName, AFeature);
+  // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): auch der
+  // Hauptweg liest die Includes - aber nur ohne Projekt der Unit ab XE
+  // (Modern). Es sperrt nur eine Delphi-Weiche bis XE (OldCompilerTrace mit
+  // FLOOR_SETTINGS_VAR); FPC-Weichen nicht (FpcKnows), ein nicht gefundenes
+  // oder nicht lesbares Include auch nicht (IncludeReason: kein Beleg).
+  // doublecmd Image32\source\Clipper2\Clipper.pas:657 - Clipper.inc fragt
+  // 'COMPILERVERSION < 14' (Delphi 6+), die globale FormatSettings gibt es
+  // erst ab XE.
+  // Ebenso fuer die Ausnahmeklassen (rwE32 Stufe 4): ein Projekt der Unit
+  // ab 2009 widerlegt auch die Weichen der Includes (FPC-Weichen sperren
+  // dort ohnehin nicht, FpcKnows - FPC 3.2.2 kennt die drei Klassen).
+  // Alt-Weg (rwE32 Stufe 4, gleiche Belegpruefung wie der Hauptweg): baut
+  // ein Programm mit .dproj ab 10.3 die Unit (Modern), liest er die Includes
+  // nur auf FPC-Weichen (unten) - ihre Versionsweichen gelten anderen
+  // Delphi-Compilern als diesem Projekt; ein
+  // Lazarus-Projekt oder eine alte Projektdatei im Fenster sperrt weiter
+  // (FileReason davor). Bis dahin sperrte ein nicht gefundenes Kit-Include
+  // (mormot.defines.inc liegt nicht neben api.impl.pas).
+  // Fuer die Ausnahmeklassen widerlegt seit rwE33 Stufe 5 auch ein reines
+  // FPC-Projekt der Unit (FpcOnlyProjectProof) die Delphi-Weichen der
+  // Includes - nur hier, nicht das Kit-Include oben (Review e/HilfeFixX):
+  // cnwizards Test\Lazarus\Program\AIAgent\AIAgentTestToolMocks.pas bindet
+  // CnPack.inc ein, neben ihr nur AIAgentTest.lpi - gebaut wird sie aber
+  // auch von Test\Delphi\Program\AIAgent\AIAgentGUITest.dpr mit .dof
+  // (Delphi bis 7), ausserhalb des Fensters. Ein Kit (CnPack, JVCL, JCL,
+  // Indy, mORMot) baut erklaertermassen auch mit altem Delphi.
+  if (Result = '') and AIncludes and (AFeature = lfExceptionClasses)
+     and not Modern then
+    Modern := FpcOnlyProjectProof(AFileName);
+  if (Result = '')
+     and ((AIncludes
+           and not ((AFeature in [lfExceptionClasses, lfFormatInvariant])
+                    and Modern))
+          or ((AFeature = lfFormatSettingsVar) and not Modern)) then
+  begin
+    Result := IncludeReason(AFileName, AMap, AFeature);
+    // Die Spuren im Include widerlegt ein Paket der Unit, das Invariant
+    // nutzt (die Projekt-Nachbarschaft nicht: ein Lazarus-Projekt oder
+    // eine .dof baut die Unit ohne das Paket).
+    if (Result <> '') and (AFeature = lfFormatInvariant)
+       and PackageInvariantProof(AFileName) then
+      Result := '';
+    // Eine FMX-Unit (kein FPC, ModernProof.NoFpc), die nur Pakete ab der
+    // Schwelle bauen: weder die FPC-Weiche noch die alten Versionen des
+    // Includes treffen sie (rwE31 Stufe 3, python4delphi WrapFmxTypes.pas -
+    // Definition.Inc, nur in Packages\Delphi\Delphi 10.4+\PythonFmx.dpk).
+    if (Result <> '') and (AFeature = lfFormatInvariant) and Proof.NoFpc
+       and PackageFloorProof(AFileName, AFeature) then
+      Result := '';
+  end;
+  // ... eine FPC-Weiche in einem gelesenen Include aber schon (Review
+  // e/HilfeFixS, FpcIncludeReason) - ausser die Datei schliesst FPC aus
+  // (Proof.NoFpc) oder ein Paket der Unit nutzt Invariant (wie oben).
+  if (Result = '') and AIncludes and (AFeature = lfFormatInvariant)
+     and Modern and not Proof.NoFpc then
+  begin
+    Result := FpcIncludeReason(AFileName, AMap);
+    if (Result <> '') and PackageInvariantProof(AFileName) then
+      Result := '';
+  end;
+end;
+
+class function TRdxMagicFixes.UseDiskCache(
+  ACache: TRdxDiskReasonCache): TRdxDiskReasonCache;
+begin
+  Result := GDiskCache;
+  GDiskCache := ACache;
+end;
+
+{ TRdxDiskReasonCache }
+
+constructor TRdxDiskReasonCache.Create;
+begin
+  inherited Create;
+  FItems := TDictionary<string, string>.Create;
+end;
+
+destructor TRdxDiskReasonCache.Destroy;
+begin
+  // Noch aktiv (ein vergessenes Wiederherstellen): abmelden, sonst laese
+  // der naechste FileReason freigegebenen Speicher.
+  if GDiskCache = Self then
+    GDiskCache := nil;
+  FItems.Free;
+  inherited;
+end;
+
+procedure TRdxDiskReasonCache.Clear;
+begin
+  FItems.Clear;
+end;
+
+function TRdxDiskReasonCache.Count: Integer;
+begin
+  Result := FItems.Count;
 end;
 
 // Die Pruefung eines Includes (TRdxIncludeTest): eine FPC-Weiche oder eine
@@ -1044,9 +2861,10 @@ var
 begin
   Result := '';
   Feature := TRdxLateFeature(StrToIntDef(AArg, Ord(lfInlineConst)));
-  for Li := 0 to ALines.Count - 1 do
-    if LineLooksFpcAware(ALines[Li]) then
-      Exit(_(R_INC_FPC[Feature], [AFile, Li + 1]));
+  if not TRdxMagicFixes.FpcKnows(Feature) then
+    for Li := 0 to ALines.Count - 1 do
+      if LineLooksFpcAware(ALines[Li]) then
+        Exit(_(R_INC_FPC[Feature], [AFile, Li + 1]));
   S := OldCompilerTrace(AMap, FloorOf(Feature), Li);
   if S <> '' then
     Result := _(R_INC_OLD[Feature], [AFile, S, Li, MsgByHand]);
@@ -1056,11 +2874,31 @@ class function TRdxMagicFixes.IncludeReason(const AFileName: string;
   AMap: TRdxCodeMap; AFeature: TRdxLateFeature): string;
 var
   Check : TRdxIncludeCheck;
+  Incs  : TArray<string>;
+  Key   : string;
 begin
+  // Die Map bestimmt die Includes (AllIncludes liest jedes Zeichen der
+  // Datei - im Messgeruest teurer als der Blick auf die Platte); dieselbe
+  // Map heisst dieselbe Serial.
+  if GDiskCache <> nil then
+  begin
+    Key := DiskKey('I', AFeature, AFileName, IntToStr(AMap.Serial));
+    if GDiskCache.FItems.TryGetValue(Key, Result) then Exit;
+  end;
+  Incs := AllIncludes(AMap);
   Check.Test := CompilerInInclude;
   Check.Arg := IntToStr(Ord(AFeature));
-  Check.MissingFmt := _(R_INC_UNSEEN);
-  Result := IncludeChainReason(AFileName, AllIncludes(AMap), Check);
+  // Ein Include, das nicht zu lesen ist, ist fuer lfExceptionClasses kein
+  // Beleg (MissingBlocks): das leere Muster gibt keinen Grund. Ebenso fuer
+  // lfFormatSettingsVar (Nico-Entscheid M1b: nur eine gelesene Weiche
+  // sperrt den Hauptweg).
+  if MissingBlocks(AFeature) and (AFeature <> lfFormatSettingsVar) then
+    Check.MissingFmt := _(R_INC_UNSEEN)
+  else
+    Check.MissingFmt := '';
+  Result := IncludeChainReason(AFileName, Incs, Check);
+  if GDiskCache <> nil then
+    GDiskCache.FItems.AddOrSetValue(Key, Result);
 end;
 
 end.

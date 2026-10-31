@@ -48,13 +48,78 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TUnusedUsesDetector = class
   public
+    // AContext (Charge P1, 2026-10-25): der Scan-Kontext liefert Zeilen-
+    // und Strip-Cache (ein Strip je Datei fuer alle Detektoren statt
+    // eines eigenen). nil -> Prozess-Cache und eigener Strip, dieselbe
+    // Antwort (Tests, reDelphix).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+
+    // ---- Suchtext-Bausteine (Charge P1, 2026-10-25) ----
+    // Tempo-Umbau ohne Verhaltensaenderung. Bis dahin pruefte H1 mit
+    // Pos(Praefix + '.', RawText) und H2 mit Pos(' ' + Id + ' ',
+    // WordText) - je Bezeichner ein Durchlauf ueber den GANZEN Suchtext
+    // (Quelltext + AST-Namen), bei ~25 Bezeichnern je gemappter Unit der
+    // groesste Posten des Strict-Laufs (laz ~4 s). Public und static,
+    // damit die Aequivalenz zur alten Pos-Form direkt testbar ist
+    // (uTestUnusedUsesSuchtext).
+
+    // Die Raw-Sicht eines (lowercase) Textes: jedes Zeichen ausser
+    // a..z, 0..9, '_' und '.' wird zu ' ' - zeichengenau die Abbildung,
+    // die CollectText und der Quelltext-Kanal frueher Zeichen fuer
+    // Zeichen anhingen. Die Laenge bleibt gleich.
+    class function RawSicht(const S: string): string; static;
+
+    // 1-basierte Positionen aller '.' in Text, aufsteigend.
+    class function PunktPositionen(const Text: string): TArray<Integer>; static;
+
+    // VERTRAG: = (Pos(Praefix + '.', Text) > 0), Punkte =
+    // PunktPositionen(Text). Also auch Treffer MITTEN im Wort
+    // ('myclasses.x' deckt 'classes') - das ist der alte H1-Vertrag,
+    // hier nur ohne Durchlauf je Praefix. Leeres Praefix: True gdw.
+    // Text einen Punkt hat.
+    class function PraefixVorPunkt(const Text: string;
+      const Punkte: TArray<Integer>; const Praefix: string): Boolean; static;
+
+    // Traegt jedes Wort von Text in Woerter ein - Woerter sind die
+    // maximalen Laeufe ohne ' ' und '.'. VERTRAG fuer einen Text, der
+    // leer ist oder mit ' ' beginnt und endet (der Suchtext in
+    // AnalyzeUnit ist das immer), und ein Id ohne Leerzeichen:
+    // Woerter.ContainsKey(Id) = (Pos(' ' + Id + ' ',
+    // Text.Replace('.', ' ')) > 0) - der alte H2-Vertrag auf dem
+    // WordText, der genau diese Ersetzung war. Seit Charge Q5 nur noch
+    // das Orakel von WoerterVorhanden (der Detektor ruft es nicht mehr).
+    class procedure SammleWoerter(const Text: string;
+      Woerter: TDictionary<string, Boolean>); static;
+
+    // Perf Charge Q5 (2026-10-25). VERTRAG: Result[k] = Woerter.
+    // ContainsKey(Ids[k]) mit Woerter aus SammleWoerter(Text) - Ids[k] ist
+    // ein maximaler Lauf ohne ' ' und '.' in Text. Ohne Kopie und
+    // Hash-Eintrag je Wort des Textes: EIN Lauf ueber den Text, je Wort
+    // ein Fachvergleich (Laenge, erstes Zeichen) gegen die wenigen Ids;
+    // Schluss, sobald alle gefunden sind. '' ist nie ein Wort.
+    class function WoerterVorhanden(const Text: string;
+      const Ids: TArray<string>): TArray<Boolean>; static;
+
+    // Perf Charge Q5: der AST-Teil des Suchtexts. VERTRAG: die Verkettung
+    // von ' ' + RawSicht(OhneLiterale(S).ToLower) + ' ' fuer jedes
+    // nichtleere S aus Name und TypeRef jedes Knotens ausser nkUsesItem,
+    // in Baumreihenfolge (vorher je Name so angehaengt). Gerechnet mit
+    // EINEM ToLower ueber die verkettete Rohform - string.ToLower
+    // (LCMapString LCMAP_LOWERCASE) bildet zeichenweise und laengentreu
+    // ab, das ' ' bleibt ' ' (Probe ueber alle BMP-Zeichen in sieben
+    // Locales, auch tr-TR).
+    class function AstSuchtext(Node: TAstNode): string; static;
+
+    // I2 (2026-09-20): der Inhalt der Stringliterale eines AST-Namens
+    // geblankt (Begruendung an CollectText). Bis Charge Q5 lokal in
+    // CollectText; public fuer den Vertragstest von AstSuchtext.
+    class function OhneLiterale(const S: string): string; static;
 
     // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
     // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
@@ -104,11 +169,13 @@ type
     // 2026-10-13; reDelphix in dieser Charge unveraendert).
     class function IdentsFor(const UnitLow: string): TArray<string>; static;
   private
-    // Baut zwei Corpus-Varianten:
-    //   RawText  - lowercase, Punkte erhalten (fuer H1: 'sysutils.')
-    //   WordText - lowercase, alle Nicht-Bezeichner durch Leerzeichen (fuer H2: ' tlist ')
+    // Sammelt die Rohform des AST-Teils: ' ' + OhneLiterale(S) + ' ' je
+    // nichtleerem Name/TypeRef (ausser nkUsesItem). Klein und Raw-Sicht
+    // macht AstSuchtext einmal fuer alles (Perf Charge Q5). Den frueheren
+    // zweiten Text WordText (dasselbe mit '.' -> ' ', fuer H2: ' tlist ')
+    // ersetzt seit Charge P1 die Wortmenge (heute WoerterVorhanden).
     class procedure CollectText(Node: TAstNode;
-      RawSB, WordSB: TStringBuilder); static;
+      RawSB: TStringBuilder); static;
 
     // Letzter Namensbestandteil: 'System.Classes' -> 'classes'
     class function ShortName(const QualName: string): string; static;
@@ -224,8 +291,205 @@ begin
   Result := False;
 end;
 
+class function TUnusedUsesDetector.RawSicht(const S: string): string;
+// Vertrag siehe Deklaration. Dieselbe Zeichenmenge wie das fruehere
+// CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) - CharInSet war fuer
+// Zeichen ab #$0100 und fuer #$80..#$FF ebenfalls False.
+var
+  i   : Integer;
+  Src : PChar;
+  Dst : PChar;
+  Ch  : Char;
+begin
+  SetLength(Result, Length(S));
+  if S = '' then Exit;
+  Src := PChar(S);
+  Dst := PChar(Result);
+  for i := 0 to Length(S) - 1 do
+  begin
+    Ch := Src[i];
+    if ((Ch >= 'a') and (Ch <= 'z')) or ((Ch >= '0') and (Ch <= '9')) or
+       (Ch = '_') or (Ch = '.') then
+      Dst[i] := Ch
+    else
+      Dst[i] := ' ';
+  end;
+end;
+
+class function TUnusedUsesDetector.PunktPositionen(
+  const Text: string): TArray<Integer>;
+var
+  i, n : Integer;
+  P    : PChar;
+begin
+  n := 0;
+  P := PChar(Text);
+  for i := 0 to Length(Text) - 1 do
+    if P[i] = '.' then Inc(n);
+  SetLength(Result, n);
+  n := 0;
+  for i := 0 to Length(Text) - 1 do
+    if P[i] = '.' then
+    begin
+      Result[n] := i + 1;
+      Inc(n);
+    end;
+end;
+
+class function TUnusedUsesDetector.PraefixVorPunkt(const Text: string;
+  const Punkte: TArray<Integer>; const Praefix: string): Boolean;
+// Pos(Praefix + '.', Text) > 0 heisst: an einer Punktposition d steht
+// direkt davor das Praefix, also Text[d - L .. d - 1] = Praefix mit
+// L = Length(Praefix) und d > L. Der Vergleich des letzten Zeichens
+// vorab spart den CompareMem fuer fast jeden Punkt.
+var
+  L    : Integer;
+  d    : Integer;
+  Letz : Char;
+begin
+  L := Length(Praefix);
+  if L = 0 then Exit(Length(Punkte) > 0);
+  Letz := Praefix[L];
+  for d in Punkte do
+    if (d > L) and (Text[d - 1] = Letz) and
+       CompareMem(PChar(Text) + (d - L - 1), PChar(Praefix),
+         L * SizeOf(Char)) then
+      Exit(True);
+  Result := False;
+end;
+
+class procedure TUnusedUsesDetector.SammleWoerter(const Text: string;
+  Woerter: TDictionary<string, Boolean>);
+var
+  i, n, Start : Integer;
+  P           : PChar;
+begin
+  n := Length(Text);
+  P := PChar(Text);
+  i := 0;
+  while i < n do
+  begin
+    while (i < n) and ((P[i] = ' ') or (P[i] = '.')) do Inc(i);
+    Start := i;
+    while (i < n) and (P[i] <> ' ') and (P[i] <> '.') do Inc(i);
+    if i > Start then
+      Woerter.AddOrSetValue(Copy(Text, Start + 1, i - Start), True);
+  end;
+end;
+
+class function TUnusedUsesDetector.WoerterVorhanden(const Text: string;
+  const Ids: TArray<string>): TArray<Boolean>;
+// Vertrag siehe Deklaration. Fach = (Ord(erstes Zeichen) * 7 + Laenge)
+// and 255 - fuer Id und Wort dieselbe Rechnung, jede Zeichenfolge hat ihr
+// Fach; die Gleichheit prueft danach Laenge und CompareMem.
+const
+  FAECHER = 256;
+var
+  Kopf     : array[0..FAECHER - 1] of Integer;
+  Naechst  : TArray<Integer>;
+  k, b     : Integer;
+  Offen    : Integer;   // noch nicht gefundene Ids (ohne '')
+  i, n     : Integer;
+  Start, L : Integer;
+  P        : PChar;
+begin
+  SetLength(Result, Length(Ids));
+  for k := 0 to High(Result) do
+    Result[k] := False;
+  if Length(Ids) = 0 then Exit;
+  for b := 0 to FAECHER - 1 do
+    Kopf[b] := -1;
+  SetLength(Naechst, Length(Ids));
+  Offen := 0;
+  for k := 0 to High(Ids) do
+  begin
+    Naechst[k] := -1;
+    if Ids[k] = '' then Continue;   // '' ist nie ein Wort
+    b := (Ord(Ids[k][1]) * 7 + Length(Ids[k])) and (FAECHER - 1);
+    Naechst[k] := Kopf[b];
+    Kopf[b] := k;
+    Inc(Offen);
+  end;
+  n := Length(Text);
+  P := PChar(Text);
+  i := 0;
+  while (i < n) and (Offen > 0) do
+  begin
+    while (i < n) and ((P[i] = ' ') or (P[i] = '.')) do Inc(i);
+    Start := i;
+    while (i < n) and (P[i] <> ' ') and (P[i] <> '.') do Inc(i);
+    L := i - Start;
+    if L = 0 then Continue;
+    k := Kopf[(Ord(P[Start]) * 7 + L) and (FAECHER - 1)];
+    while k >= 0 do
+    begin
+      if (not Result[k]) and (Length(Ids[k]) = L) and
+         CompareMem(PChar(Ids[k]), @P[Start], L * SizeOf(Char)) then
+      begin
+        Result[k] := True;
+        Dec(Offen);
+      end;
+      k := Naechst[k];
+    end;
+  end;
+end;
+
+class function TUnusedUsesDetector.OhneLiterale(const S: string): string;
+// I2 (2026-09-20): Inhalte von Stringliteralen ausblenden - Begruendung
+// an CollectText.
+var
+  i   : Integer;
+  InS : Boolean;
+  SB  : TStringBuilder;
+begin
+  if Pos('''', S) = 0 then Exit(S);   // Normalfall: nichts zu tun
+  SB := TStringBuilder.Create;
+  try
+    InS := False;
+    i := 1;
+    while i <= Length(S) do
+    begin
+      if S[i] = '''' then
+      begin
+        // Verdoppeltes '' INNERHALB eines Literals ist ein Zeichen
+        // des Literals, kein Ende - beide blanken und weiter.
+        if InS and (i < Length(S)) and (S[i + 1] = '''') then
+        begin
+          SB.Append('  ');
+          Inc(i, 2);
+          Continue;
+        end;
+        InS := not InS;
+        SB.Append(' ');
+      end
+      else if InS then
+        SB.Append(' ')
+      else
+        SB.Append(S[i]);
+      Inc(i);
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TUnusedUsesDetector.AstSuchtext(Node: TAstNode): string;
+// Vertrag siehe Deklaration.
+var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    CollectText(Node, SB);
+    Result := RawSicht(SB.ToString.ToLower);
+  finally
+    SB.Free;
+  end;
+end;
+
 class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
-  RawSB, WordSB: TStringBuilder);
+  RawSB: TStringBuilder);
 
   // I2 (2026-09-20): Inhalte von Stringliteralen ausblenden.
   //
@@ -245,74 +509,23 @@ class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
   //
   // GEMESSEN (i_messung_sca007): 394 Faelle im Delphi-Korpus, 29 im
   // Lazarus-Korpus, in denen der EINZIGE Nachweis aus einem Literal
-  // stammt - sie werden zu Funden.
-  function OhneLiterale(const S: string): string;
-  var
-    i   : Integer;
-    InS : Boolean;
-    SB  : TStringBuilder;
-  begin
-    if Pos('''', S) = 0 then Exit(S);   // Normalfall: nichts zu tun
-    SB := TStringBuilder.Create;
-    try
-      InS := False;
-      i := 1;
-      while i <= Length(S) do
-      begin
-        if S[i] = '''' then
-        begin
-          // Verdoppeltes '' INNERHALB eines Literals ist ein Zeichen
-          // des Literals, kein Ende - beide blanken und weiter.
-          if InS and (i < Length(S)) and (S[i + 1] = '''') then
-          begin
-            SB.Append('  ');
-            Inc(i, 2);
-            Continue;
-          end;
-          InS := not InS;
-          SB.Append(' ');
-        end
-        else if InS then
-          SB.Append(' ')
-        else
-          SB.Append(S[i]);
-        Inc(i);
-      end;
-      Result := SB.ToString;
-    finally
-      SB.Free;
-    end;
-  end;
-
+  // stammt - sie werden zu Funden. Die Ausblendung selbst steht seit
+  // Charge Q5 in OhneLiterale (public, Vertragstest von AstSuchtext).
+  //
+  // Perf Charge Q5 (2026-10-25): je Name nur noch die Rohform anhaengen;
+  // ToLower (ein LCMapString-Aufruf samt Kopie) und RawSicht laufen in
+  // AstSuchtext EINMAL ueber den ganzen AST-Teil statt je Name. Die
+  // Kinder per Index statt for-in (kein Enumerator-Objekt je Knoten).
   procedure Add(const S: string);
-  var
-    Low : string;
-    Ch  : Char;
   begin
     if S = '' then Exit;
-    Low := OhneLiterale(S).ToLower;
-    // Raw: lowercase, Punkte beibehalten, sonstiges durch Leerzeichen
     RawSB.Append(' ');
-    for Ch in Low do
-    begin
-      if CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) then
-        RawSB.Append(Ch)
-      else
-        RawSB.Append(' ');
-    end;
+    RawSB.Append(OhneLiterale(S));
     RawSB.Append(' ');
-    // Word: nur Bezeichner-Zeichen, alles andere -> Leerzeichen
-    WordSB.Append(' ');
-    for Ch in Low do
-    begin
-      if CharInSet(Ch, ['a'..'z', '0'..'9', '_']) then
-        WordSB.Append(Ch)
-      else
-        WordSB.Append(' ');
-    end;
-    WordSB.Append(' ');
   end;
 
+var
+  i : Integer;
 begin
   if not Assigned(Node) then Exit;
   // nkUsesItem-Knoten NICHT aufnehmen: der Unit-Name selbst soll
@@ -322,8 +535,8 @@ begin
     Add(Node.Name);
     Add(Node.TypeRef);
   end;
-  for var Child in Node.Children do
-    CollectText(Child, RawSB, WordSB);
+  for i := 0 to Node.Children.Count - 1 do
+    CollectText(Node.Children[i], RawSB);
 end;
 
 { ---- Bekannte Bezeichner pro Unit (H2) ---- }
@@ -341,6 +554,28 @@ class function TUnusedUsesDetector.KnownIdents(
 // die Schreibweise zu raten - zwei naheliegende 'Korrekturen' waeren
 // selbst tot gewesen (TMultiViewPanel und TThemeManager: je 0 Treffer).
 // Wer hier etwas ergaenzt, zaehlt den Bezeichner vorher am Korpus.
+//
+// D007 (2026-10-29, Nico-Entscheid nach dem KI-Realworld-Test: 47 von
+// 200 SCA007-Stichprobenfunden waren FP, fast alle aus Luecken dieser
+// Listen - mrOk/crHourGlass/TImageList fuer Controls, fsBold/clNone
+// fuer Graphics, TShortCut/TShiftState fuer Classes, CSIDL_* fuer
+// ShlObj, ...). Die mit "D007" markierten Bloecke sind die SICHTBAREN
+// Exporte der Unit, nicht ihre Deklarationsheimat: Vcl.Controls fuehrt
+// mrOk/TModalResult als Alias von System.UITypes neu, Vcl.Graphics
+// fsBold/clNone - fuer den Compiler sind sie damit Bezeichner DIESER
+// Unit. Herkunft: interface-Teile von Delphi 13 (Studio 37.0) und
+// FPC 3.2.2/LCL (der Kurzname deckt beide), beide IFDEF-Zweige.
+// Aufgenommen ist davon nur, was (a) im Korpus mindestens einen Fund
+// der Unit beseitigt, (b) NICHT auch von einer IsAlwaysNeeded-Unit
+// exportiert wird (TRect, TPoint, INFINITE, fmOpenRead bewiesen nichts
+// fuer Classes/SyncObjs), (c) kein Schluesselwort ist (Register) und
+// (d) im Korpus eindeutig ist - wenige Dateien fuehren das Wort ohne
+// eine exportierende Unit im uses (ToString, Mask, DbgS, IfThen,
+// TStack und die FMX-Enum-Elemente Text/Left/Platform blieben
+// deshalb draussen). Gemessen: 1.889 Eintraege, Nachbildung 5.423
+// Drops auf 26.209 SCA007-Funde, 0 Adds (Vertrag d007). Fehlt ein
+// Bezeichner, ist das ein FP-Erzeuger wie ein Tippfehler; ist einer
+// zu viel, ein FN - die Politik dieser Tabelle nimmt lieber den FN.
 begin
   Result := [];
 
@@ -354,7 +589,51 @@ begin
                'tbinaryreader','tbinarywriter','tencoding',
                'registerclass','findclass','getclass',
                'tcomponentiterator','tcomponentenumerator',
-               'tcollectionitem','townedcollection']
+               'tcollectionitem','townedcollection',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'allocatehwnd','axrcomponentonly','bdlefttoright',
+               'bdrighttoleft','bdrighttoleftnoalign','bintohex','bitshift',
+               'checksynchronize','cnremoved','componentplatformsattribute',
+               'csdesigning','csdestroying','csloading','deallocatehwnd',
+               'efcreateerror','efilererror','efopenerror',
+               'einvalidoperation','eoutofresources','ereaderror',
+               'estreamerror','estringlisterror','ethread','ewriteerror',
+               'fmcreate','freeobjectinstance','groupdescendentswith',
+               'hextobin','identtoint','ifpobserver','inttoident',
+               'invalidpoint','linestart','lnadded','lndeleted',
+               'makeobjectinstance','maxlistsize','opinsert','pfidlinux',
+               'pfidosx','pfidwindows','pidallplatforms','pidandroid',
+               'pidandroid32arm','pidandroid64arm','pidandroidarm32',
+               'pidandroidarm64','pidiosdevice','pidiosdevice32',
+               'pidiosdevice64','pidiossimulator','pidiossimulator32',
+               'pidiossimulator64','pidiossimulatorarm64','pidlinux32',
+               'pidlinux64','pidlinuxarm32','pidlinuxarm64','pidosx32',
+               'pidosx64','pidosxarm64','pidwin32','pidwin32arm','pidwin64',
+               'pidwin64x','pidwinarm32','pidwinarm64','pidwiniot32',
+               'pidwinnx32','pointsequal','ppointerlist','registerclasses',
+               'registercomponents','registernoicon','registernonactivex',
+               'scalt','scctrl','scnone','scshift','sobeginning','socurrent',
+               'soend','sofrombeginning','sofromcurrent','sofromend',
+               'soowned','soreference','ssalt','ssaltgr','sscaps','ssctrl',
+               'ssdouble','sshorizontal','sshyper','ssleft','ssmeta',
+               'ssmiddle','ssquad','ssright','ssshift','sssuper','sstouch',
+               'sstriple','tacenter','tactionevent','taleftjustify',
+               'talignment','tarightjustify','tbasicaction','tbidimode',
+               'tbits','tbufferedfilestream','tbytesstream',
+               'tcollectionitemclass','tcollectionnotification',
+               'tcomponentclass','tcustommemorystream','tdatamodule','tfiler',
+               'tfplist','tfpobservedoperation','tgetstrproc','thelpcontext',
+               'tidentmapentry','tinterfacedpersistent','tlistnotification',
+               'tlistsortcompare','tlistsortcomparefunc','toperation',
+               'townerstream','tparser','tpersistentclass','tphigher',
+               'tphighest','tpidle','tplower','tplowest','tpnormal',
+               'tpointerlist','tptimecritical','trawbytestringstream',
+               'treader','treaderproc','tseekorigin','tshiftstate',
+               'tshiftstateenum','tshortcut','tstream','tstreamadapter',
+               'tstreamreader','tstreamwriter','tstringwriter','ttextwriter',
+               'tthreadlist','tthreadmethod','tvaluetype','twndmethod',
+               'twriter','twriterproc','vaident','vaint16','vaint32',
+               'vaint64','vaint8','wakemainthread']
 
   else if UnitLow = 'system.generics.collections' then
     // TList<T>, TObjectList<T> und TArray<T> sind die haeufigsten Typen;
@@ -375,7 +654,17 @@ begin
                'arctan2','arcsin','arccos','tan','cot',
                'isnan','isinfinite','isinfinitevalue','sign',
                'divmod','max','min','hypot','ldexp','frexp',
-               'intpower','lnxp1','sincos','logn']
+               'intpower','lnxp1','sincos','logn',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'clearexceptions','comparevalue','degtorad','einvalidargument',
+               'ensurerange','exdenormalized','exinvalidop','exoverflow',
+               'exprecision','exunderflow','exzerodivide','getexceptionmask',
+               'getroundmode','inrange','maxdouble','maxsingle','minfloat',
+               'minintvalue','nan','neginfinity','pmdouble','pmextended',
+               'radtodeg','randg','randomrange','rmnearest','roundto',
+               'samevalue','sech','setexceptionmask','setprecisionmode',
+               'setroundmode','tfpuexceptionmask','totalvariance','variance',
+               'zerovalue']
 
   else if (UnitLow = 'system.strutils') or (UnitLow = 'strutils') then
     Result := ['posex','containsstr','startsstr','endsstr',
@@ -477,7 +766,12 @@ begin
 
   else if (UnitLow = 'system.contnrs') or (UnitLow = 'contnrs') then
     Result := ['tobjectlist','tcomponentlist','tclasslist',
-               'tobjectbucketlist','tqueuelist','tstacklist']
+               'tobjectbucketlist','tqueuelist','tstacklist',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'bl256','tbucketlist','tfpcustomhashtable','tfpdatahashtable',
+               'tfphashobjectlist','tfpobjecthashtable','tfpobjectlist',
+               'tfpstringhashtable','thtcustomnode','thtstringnode',
+               'tobjectqueue','tobjectstack']
 
   else if UnitLow = 'system.net.httpclient' then
     Result := ['thttpclient','thttpresponse','thttprequest',
@@ -505,15 +799,347 @@ begin
     Result := ['shellexecute','shellexecuteex','shfileinfo',
                'shgetfileinfo','shgetspecialfolderpatha',
                'shgetspecialfolderpath','shbrowseforfolder',
-               'tshellfolder','tshfileopstruct']
+               'tshellfolder','tshfileopstruct',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'aclo_currentdir','aclo_desktop','aclo_favorites',
+               'aclo_filesysdirs','aclo_filesysonly','aclo_mycomputer',
+               'aclo_none','bffm_initialized','bffm_setselectionw',
+               'bif_newdialogstyle','bif_nonewfolderbutton',
+               'bif_returnonlyfsdirs','cmf_explore','cmf_normal',
+               'commandlinetoargvw','csidl_appdata','csidl_common_appdata',
+               'csidl_common_desktopdirectory','csidl_common_documents',
+               'csidl_common_favorites','csidl_common_programs',
+               'csidl_common_startmenu','csidl_common_startup',
+               'csidl_common_templates','csidl_desktop',
+               'csidl_desktopdirectory','csidl_drives','csidl_favorites',
+               'csidl_flag_create','csidl_fonts','csidl_local_appdata',
+               'csidl_personal','csidl_programs','csidl_sendto',
+               'csidl_startmenu','csidl_startup','csidl_templates',
+               'dragacceptfiles','dragfinish','dragqueryfile',
+               'dragqueryfilea','dragqueryfilew','dragquerypoint',
+               'extractassociatedicon','extracticon','fd_accesstime',
+               'fd_createtime','fd_filesize','fd_writestime','findexecutable',
+               'fo_copy','fo_delete','fof_allowundo','fof_noconfirmation',
+               'fof_noconfirmmkdir','fof_noerrorui','fof_silent',
+               'gcs_helptext','hdrop','lpshellexecuteinfow','nif_guid',
+               'nif_icon','nif_info','nif_message','nif_state','nif_tip',
+               'niif_error','niif_icon_mask','niif_info','niif_none',
+               'niif_nosound','niif_warning','nim_add','nim_delete',
+               'nim_modify','nim_setfocus','nim_setversion','nin_balloonhide',
+               'nin_balloonshow','nin_balloontimeout','nin_balloonuserclick',
+               'nin_keyselect','nin_select','ninf_key','nis_hidden',
+               'nis_sharedicon','notifyicon_version','pfileinfo',
+               'pnotifyicondata','psockaddr_in6_lh','qitipf_useslowtip',
+               'see_mask_idlist','see_mask_nocloseprocess','sfgao_filesystem',
+               'sfgao_folder','sfgao_hidden','sfgao_storage','shard_pathw',
+               'shcne_mkdir','shcnf_path','shcontf_folders',
+               'shcontf_includehidden','shcontf_nonfolders','shcontf_storage',
+               'shell32','shell_notifyicon','shellabout','shellexecutea',
+               'shellexecuteexw','shfileoperation','shfileoperationw',
+               'shfileopstruct','shgdn_forparsing','shgdn_infolder',
+               'shgetfileinfow','shgetimagelist','shgetstockiconinfo',
+               'shgfi_displayname','shgfi_icon','shgfi_largeicon',
+               'shgfi_smallicon','shgfi_sysiconindex','shgfi_typename',
+               'shgfi_usefileattributes','shgsi_sysiconindex',
+               'shil_extralarge','shil_jumbo','shil_large','shil_small',
+               'shppfw_none','shstockiconid','shstockiconinfo',
+               'siid_drivenet','siid_error','siid_folder','siid_help',
+               'siid_info','siid_invalid','siid_mediablankcd','siid_shield',
+               'siid_warning','siid_zipfile','tnotifyicondata',
+               'tshellexecuteinfow','tshfileinfow','tshfileopstructw',
+               'tshstockiconinfo']
 
   else if (UnitLow = 'winapi.shlobj') or (UnitLow = 'shlobj') then
     Result := ['ishellfolder','ishellbrowser','ishellview',
-               'titemidlist','pidl','comdlg32','shgetfolder']
+               'titemidlist','pidl','comdlg32','shgetfolder',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'aclo_currentdir','aclo_desktop','aclo_favorites',
+               'aclo_filesysdirs','aclo_filesysonly','aclo_mycomputer',
+               'aclo_none','aco_autoappend','aco_autosuggest',
+               'aco_filterprefixes','aco_none','aco_rtlreading','aco_search',
+               'aco_updownkeydropslist','aco_usetab','bffm_enableok',
+               'bffm_initialized','bffm_selchanged','bffm_setselection',
+               'bffm_setselectionw','bffm_setstatustext',
+               'bif_browseforcomputer','bif_browseforprinter',
+               'bif_browseincludefiles','bif_browseincludeurls',
+               'bif_dontgobelowdomain','bif_editbox','bif_newdialogstyle',
+               'bif_nonewfolderbutton','bif_notranslatetargets',
+               'bif_returnfsancestors','bif_returnonlyfsdirs','bif_shareable',
+               'bif_statustext','bif_uahint','bif_usenewui','bif_validate',
+               'browseinfo','catid_commband','catid_deskband',
+               'catid_infoband','cfstr_filecontents','cfstr_filedescriptor',
+               'cfstr_filedescriptorw','cgid_deskband','clsid_aclhistory',
+               'clsid_aclistisf','clsid_aclmru','clsid_aclmulti',
+               'clsid_autocomplete','clsid_destinationlist',
+               'clsid_enumerableobjectcollection','clsid_fileopendialog',
+               'clsid_fileoperation','clsid_filesavedialog',
+               'clsid_progressdialog','clsid_shelllink','clsid_startmenupin',
+               'cmf_defaultonly','cmf_explore','cmf_normal',
+               'csidl_admintools','csidl_altstartup','csidl_appdata',
+               'csidl_bitbucket','csidl_cdburn_area',
+               'csidl_common_admintools','csidl_common_altstartup',
+               'csidl_common_appdata','csidl_common_desktopdirectory',
+               'csidl_common_documents','csidl_common_favorites',
+               'csidl_common_music','csidl_common_oem_links',
+               'csidl_common_pictures','csidl_common_programs',
+               'csidl_common_startmenu','csidl_common_startup',
+               'csidl_common_templates','csidl_common_video',
+               'csidl_computersnearme','csidl_connections','csidl_controls',
+               'csidl_cookies','csidl_desktop','csidl_desktopdirectory',
+               'csidl_drives','csidl_favorites','csidl_flag_create',
+               'csidl_fonts','csidl_history','csidl_internet',
+               'csidl_internet_cache','csidl_local_appdata',
+               'csidl_mydocuments','csidl_mymusic','csidl_mypictures',
+               'csidl_myvideo','csidl_nethood','csidl_network',
+               'csidl_personal','csidl_printers','csidl_printhood',
+               'csidl_profile','csidl_program_files',
+               'csidl_program_files_common','csidl_program_files_commonx86',
+               'csidl_program_filesx86','csidl_programs','csidl_recent',
+               'csidl_resources','csidl_resources_localized','csidl_sendto',
+               'csidl_startmenu','csidl_startup','csidl_system',
+               'csidl_systemx86','csidl_templates','csidl_windows',
+               'dbid_bandinfochanged','dbid_maximizeband','dbid_showonly',
+               'dbim_actual','dbim_bkcolor','dbim_integral','dbim_maxsize',
+               'dbim_minsize','dbim_modeflags','dbim_title','dbimf_bkcolor',
+               'dbimf_debossed','dbimf_normal','dbimf_variableheight',
+               'dsh_allowdropdescriptiontext','fd_linkui',
+               'fileopendialogoptions','fo_copy','fo_delete','fof_allowundo',
+               'fof_noconfirmation','fof_noconfirmmkdir','fof_noerrorui',
+               'fof_norecursion','fof_silent','fofx_nominimizebox',
+               'fos_allnonstorageitems','fos_allowmultiselect',
+               'fos_createprompt','fos_dontaddtorecent','fos_filemustexist',
+               'fos_forcefilesystem','fos_forcepreviewpaneon',
+               'fos_forceshowhidden','fos_hidepinnedplaces','fos_nochangedir',
+               'fos_nodereferencelinks','fos_noreadonlyreturn',
+               'fos_notestfilecreate','fos_novalidate','fos_overwriteprompt',
+               'fos_pathmustexist','fos_pickfolders','fos_shareaware',
+               'fos_strictfiletypes','gcs_helptext','gcs_validate','gcs_verb',
+               'getcurrentprocessexplicitappusermodelid','iaclist','iaclist2',
+               'iautocomplete','iautocomplete2','icontextmenu',
+               'icustomdestinationlist','idataobjectasynccapability',
+               'ideskband','idragsourcehelper2','ienumshellitems',
+               'ifiledialog','ifiledialogcontrolevents',
+               'ifiledialogcustomize','ifiledialogevents','ifileopendialog',
+               'ifileoperation','ifileoperationprogresssink',
+               'ifilesavedialog','iid_icustomdestinationlist',
+               'iid_ifiledialog','iid_ishellitem','iid_ishelllink',
+               'iid_ishelllinka','iid_itaskbarlist2','iid_itaskbarlist3',
+               'iid_itaskbarlist4','iinitializewithitem','iinputobject',
+               'iinputobjectsite','ilclone','ilcreatefrompath',
+               'ilcreatefrompathw','ilfree','iobjmgr',
+               'ioperationsprogressdialog','ipreviewhandler',
+               'iprogressdialog','ipropertydescriptionlist','ipropertystore',
+               'ishellextinit','ishellfolder2','ishellitem','ishellitemarray',
+               'ishelllink','ishelllinkw','istartmenupinnedlist',
+               'itaskbarlist','itaskbarlist2','itaskbarlist4','itemidlist',
+               'kdc_frequent','kdc_recent','kf_flag_create',
+               'lpshellflagstate','pcomdlg_filterspec','pdropfiles',
+               'pfde_overwrite_response','pfde_shareviolation_response',
+               'pfilegroupdescriptor','pitemidlist','progdlg_autotime',
+               'progdlg_nominimize','pthumbbutton',
+               'setcurrentprocessexplicitappusermodelid','sfgaof',
+               'shaddtorecentdocs','shard_appidinfo','shard_appidinfolink',
+               'shard_link','shard_path','shard_pathw','shardappidinfo',
+               'shardappidinfolink','shbrowseforfolder','shbrowseforfolderw',
+               'shchangenotify','shcne_assocchanged','shcne_create',
+               'shcne_delete','shcne_mkdir','shcne_rmdir','shcne_updatedir',
+               'shcnf_flush','shcnf_idlist','shcnf_path',
+               'shcreateitemfromidlist','shcreateitemfromparsingname',
+               'shcreateshellitemarrayfromidlists','shdodragdrop',
+               'shfindfiles','shgetfolderpathw','shgetidlistfromobject',
+               'shgetknownfolderpath','shgetmalloc','shgetpathfromidlist',
+               'shgetpathfromidlistw','shgetsettings',
+               'shgetspecialfolderlocation','shgetspecialfolderpath',
+               'shgetspecialfolderpathw','shgfp_type_current',
+               'shobjectproperties','shopenfolderandselectitems',
+               'shppfw_none','sid_iasyncoperation',
+               'sid_icustomdestinationlist','sid_ishellitem',
+               'sid_istartmenupinnedlist','sid_itaskbarlist',
+               'sid_itaskbarlist2','sid_itaskbarlist3','sigdn',
+               'sigdn_filesyspath','slgp_rawpath','slgp_uncpriority',
+               'slr_any_match','tbpf_error','tbpf_indeterminate',
+               'tbpf_noprogress','tbpf_normal','tbpf_paused','tbrowseinfo',
+               'tbrowseinfow','tcminvokecommandinfo','tcomdlg_filterspec',
+               'tdeskbandinfo','tfilegroupdescriptor','tshellflagstate']
 
   else if (UnitLow = 'winapi.commctrl') or (UnitLow = 'commctrl') then
     Result := ['ttbbutton','timagelist','ttvitem','tlvitem',
-               'initcommoncontrols','initcommoncontrolsex']
+               'initcommoncontrols','initcommoncontrolsex',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'bcm_getidealsize','bcm_getimagelist','bcm_setimagelist',
+               'bs_commandlink','bs_defcommandlink','bs_defsplitbutton',
+               'bs_splitbutton','button_getimagelist','button_getnote',
+               'button_getnotelength','button_imagelist',
+               'button_imagelist_align_center','ccs_adjustable',
+               'ccs_noparentalign','ccs_noresize','cdds_item',
+               'cdds_itemprepaint','cdds_prepaint','cdds_subitem',
+               'cdis_selected','cdrf_dodefault','cdrf_notifyitemdraw',
+               'cdrf_skipdefault','clr_default','clr_none','createtoolbarex',
+               'createupdowncontrol','datetime_getmonthcal',
+               'datetime_setsystemtime','datetimepick_class',
+               'defsubclassproc','dtm_getmonthcal','dtm_setformat',
+               'dtn_closeup','dtn_datetimechange','dtn_dropdown',
+               'dtn_userstring','em_getzoom','em_setzoom','gdt_valid',
+               'gdtr_max','gdtr_min','hdf_bitmap','hdf_bitmap_on_right',
+               'hdf_image','hdf_sortdown','hdf_sortup','hdi_bitmap',
+               'hdi_format','hdi_image','hdi_text','hdi_width',
+               'hdm_getimagelist','hdn_begintrack','hdn_endtrack','hdn_track',
+               'hds_fulldrag','header_getitem','header_setimagelist',
+               'header_setitem','hotkeyf_alt','hotkeyf_control',
+               'hotkeyf_shift','hpropsheetpage','htreeitem','i_imagenone',
+               'icc_tab_classes','ilc_color','ilc_color16','ilc_color24',
+               'ilc_color32','ilc_color4','ilc_color8','ilc_colorddb',
+               'ilc_mask','ilcf_swap','ild_blend50','ild_focus','ild_mask',
+               'ild_normal','ild_overlaymask','ild_selected',
+               'ild_transparent','ils_saturate','imagelist_add',
+               'imagelist_addicon','imagelist_addmasked',
+               'imagelist_begindrag','imagelist_copy','imagelist_create',
+               'imagelist_destroy','imagelist_dragenter',
+               'imagelist_dragleave','imagelist_dragmove',
+               'imagelist_dragshownolock','imagelist_draw','imagelist_drawex',
+               'imagelist_drawindirect','imagelist_enddrag',
+               'imagelist_extracticon','imagelist_geticon',
+               'imagelist_geticonsize','imagelist_getimagecount',
+               'imagelist_merge','imagelist_remove','imagelist_replace',
+               'imagelist_replaceicon','imagelist_setimagecount',
+               'indextooverlaymask','indextostateimagemask',
+               'listview_getcolumn','listview_getcolumnorderarray',
+               'listview_geteditcontrol','listview_getheader',
+               'listview_getitemrect','listview_getsubitemrect',
+               'listview_gettopindex','listview_hittest',
+               'listview_setbkcolor','listview_setcolumn',
+               'listview_setcolumnorderarray','listview_setitemstate',
+               'listview_settextbkcolor','listview_subitemhittest',
+               'lm_getidealheight','lm_getidealsize','lm_getitem',
+               'lm_hittest','lm_setitem','lpstr_textcallback','lptbbutton',
+               'lv_view_details','lv_view_icon','lv_view_list',
+               'lv_view_smallicon','lv_view_tile','lvcf_fmt',
+               'lvcfmt_bitmap_on_right','lvcfmt_image','lvga_header_center',
+               'lvga_header_left','lvga_header_right','lvgf_align',
+               'lvgf_groupid','lvgf_header','lvgmf_bordercolor',
+               'lvgmf_bordersize','lvgmf_none','lvgmf_textcolor','lvgroup',
+               'lvif_groupid','lvim_after','lvir_bounds','lvis_activating',
+               'lvis_cut','lvis_drophilited','lvm_deletecolumn',
+               'lvm_enablegroupview','lvm_first','lvm_getgroupmetrics',
+               'lvm_getheader','lvm_getinsertmarkcolor',
+               'lvm_getinsertmarkrect','lvm_gettileinfo',
+               'lvm_gettileviewinfo','lvm_insertcolumn','lvm_insertgroup',
+               'lvm_insertgroupsorted','lvm_insertmarkhittest',
+               'lvm_moveitemtogroup','lvm_removeallgroups','lvm_removegroup',
+               'lvm_setcolumn','lvm_setgroupinfo','lvm_setgroupmetrics',
+               'lvm_setimagelist','lvm_setinsertmark',
+               'lvm_setinsertmarkcolor','lvm_setitem','lvm_settileinfo',
+               'lvm_settileviewinfo','lvm_settilewidth','lvm_setview',
+               'lvm_sortgroups','lvn_endlabeledita','lvn_endlabeleditw',
+               'lvsil_normal','lvsil_small','lvtvif_autosize',
+               'lvtvif_fixedheight','lvtvif_fixedsize','lvtvif_fixedwidth',
+               'lvtvim_columns','lvtvim_labelmargin','lvtvim_tilesize',
+               'mchittestinfo','mcht_calendardate','mcht_calendardatenext',
+               'mcht_calendardateprev','mcht_calendarweeknum','mcht_titlebk',
+               'mcht_titlebtnnext','mcht_titlebtnprev','mcht_titlemonth',
+               'mcht_titleyear','mcht_todaylink','mcm_getcurrentview',
+               'mcm_getcursel','mcm_getmaxtodaywidth','mcm_getminreqrect',
+               'mcm_hittest','mcm_setcursel','mcm_setrange','mcmv_century',
+               'mcmv_decade','mcmv_month','mcmv_year','mcs_notoday',
+               'mcs_notodaycircle','mcs_weeknumbers','menuhelp',
+               'monthcal_getmaxtodaywidth','monthcal_getminreqrect',
+               'monthcal_setcursel','monthcal_setfirstdayofweek',
+               'nm_customdraw','nm_dblclk','nm_first','nm_killfocus',
+               'nm_rclick','nm_setfocus','nmcustomdraw','pbm_getbarcolor',
+               'pbm_getbkcolor','pbm_getpos','pbm_getrange','pbm_getstate',
+               'pbm_getstep','pbm_setbarcolor','pbm_setbkcolor',
+               'pbm_setmarquee','pbm_setpos','pbm_setrange32','pbm_setstate',
+               'pbm_stepit','pbs_marquee','pbs_smooth','pbs_smoothreverse',
+               'pbs_vertical','pbst_error','pbst_normal','pbst_paused',
+               'pbuttonimagelist','pfnlvgroupcompare','phdnotify',
+               'plvdispinfo','plvgroupmetrics','plvinsertgroupsorted',
+               'plvinsertmark','plvtileinfo','plvtileviewinfo',
+               'pnmcustomdraw','pnmcustomdrawinfo','pnmdatetimechange',
+               'pnmdatetimestring','pnmlistview','pnmlvcustomdraw',
+               'pnmtoolbar','pnmttdispinfo','pnmttdispinfoa','pnmttdispinfow',
+               'pnmupdown','ppbrange','progress_class','ptaskdialogconfig',
+               'ptvitemex','rebarclassname','removewindowsubclass',
+               'sb_getrect','sb_setbkcolor','sb_setparts','sb_settext',
+               'sb_settextw','sb_simple','sb_simpleid','sbars_sizegrip',
+               'sbt_noborders','sbt_ownerdraw','sbt_popout','sbt_rtlreading',
+               'setwindowsubclass','statusclassname','statusclassnamew',
+               'subclassproc','tabctrl_getitemrect','tabctrl_getrowcount',
+               'tabctrl_hittest','taglvgroupmetrics','taglvinsertgroupsorted',
+               'taglvinsertmark','taglvitema','taglvtileinfo',
+               'taglvtileviewinfo','taskdialog',
+               'taskdialog_common_button_flags','taskdialogindirect',
+               'tb_addbuttons','tb_addstring','tb_autosize','tb_buttoncount',
+               'tb_buttonstructsize','tb_deletebutton','tb_getbutton',
+               'tb_getbuttoninfo','tb_insertbutton','tb_setbuttoninfo',
+               'tbbutton','tbbuttoninfo','tbcd_channel','tbcd_tics',
+               'tbif_command','tbif_lparam','tbif_state','tbif_text',
+               'tbm_clearsel','tbm_getpos','tbm_getthumbrect',
+               'tbm_setlinesize','tbm_setpagesize','tbm_setpos',
+               'tbm_setrangemax','tbm_setrangemin','tbm_setselend',
+               'tbm_setselstart','tbm_settic','tbm_setticfreq','tbn_dropdown',
+               'tbs_autoticks','tbs_both','tbs_bottom','tbs_enableselrange',
+               'tbs_horz','tbs_noticks','tbs_reversed','tbs_top','tbs_vert',
+               'tbstate_checked','tbstate_enabled','tbstyle_autosize',
+               'tbstyle_button','tbstyle_dropdown','tcht_nowhere',
+               'tcht_onitem','tcht_onitemicon','tcht_onitemlabel',
+               'tcif_image','tcif_param','tcif_rtlreading','tcif_text',
+               'tcitem','tcm_adjustrect','tcm_deleteallitems',
+               'tcm_deleteitem','tcm_getcursel','tcm_getitem',
+               'tcm_getitemcount','tcm_highlightitem','tcm_hittest',
+               'tcm_insertitem','tcm_setcursel','tcm_setimagelist',
+               'tcm_setitem','tcm_setitemsize','tcn_selchange',
+               'tcn_selchanging','tcs_buttons','tcs_fixedwidth',
+               'tcs_flatbuttons','tcs_focusnever','tcs_hottrack',
+               'tcs_multiline','tcs_multiselect','tcs_ownerdrawfixed',
+               'tcs_raggedright','tcs_scrollopposite','tcs_tabs',
+               'td_error_icon','td_information_icon','td_shield_icon',
+               'td_warning_icon','tdcbf_cancel_button','tdcbf_close_button',
+               'tdcbf_no_button','tdcbf_ok_button','tdcbf_retry_button',
+               'tdcbf_yes_button','tdf_allow_dialog_cancellation',
+               'tdf_callback_timer','tdf_can_be_minimized',
+               'tdf_enable_hyperlinks','tdf_expand_footer_area',
+               'tdf_expanded_by_default','tdf_no_default_radio_button',
+               'tdf_no_set_foreground','tdf_position_relative_to_window',
+               'tdf_rtl_layout','tdf_show_marquee_progress_bar',
+               'tdf_show_progress_bar','tdf_size_to_content',
+               'tdf_use_command_links','tdf_use_command_links_no_icon',
+               'tdf_use_hicon_footer','tdf_use_hicon_main',
+               'tdf_verification_flag_checked','tdn_button_clicked',
+               'tdn_created','tdn_destroyed','tdn_dialog_constructed',
+               'tdn_expando_button_clicked','tdn_help',
+               'tdn_hyperlink_clicked','tdn_navigated',
+               'tdn_radio_button_clicked','tdn_timer',
+               'tdn_verification_clicked','tfnlvgroupcompare','thditem',
+               'timagelistdrawparams','tlvcolumn','tlvcompare','tlvgroup',
+               'tlvgroupmetrics','tlvhittestinfo','tlvinsertgroupsorted',
+               'tlvinsertmark','tlvitema','tlvtileinfo','tlvtileviewinfo',
+               'tnmcustomdrawinfo','toolbarclassname','toolinfo',
+               'tooltips_class','tpbrange','tpropsheetheader',
+               'tpropsheetheadera','tpropsheetheaderw','trackbar_class',
+               'treeview_getbkcolor','treeview_getnextsibling',
+               'treeview_getparent','treeview_gettextcolor',
+               'treeview_setbkcolor','treeview_settextcolor',
+               'treeview_sortchildrencb','ttaskdialog_button',
+               'ttaskdialogconfig','ttchittestinfo','ttcitem','ttf_idishwnd',
+               'ttm_addtool','ttm_adjustrect','ttm_pop','ttm_relayevent',
+               'ttn_needtext','ttn_needtexta','ttn_needtextw','ttoolinfo',
+               'tts_alwaystip','tts_balloon','ttvcompare','ttvsortcb',
+               'tudaccel','tv_first','tvgn_caret','tvgn_child',
+               'tvgn_drophilite','tvgn_firstvisible','tvgn_lastvisible',
+               'tvgn_next','tvgn_nextvisible','tvgn_parent','tvgn_previous',
+               'tvgn_previousvisible','tvgn_root','tvi_root','tvif_children',
+               'tvif_handle','tvif_image','tvif_selectedimage','tvif_state',
+               'tvif_text','tvis_cut','tvis_drophilited','tvis_expanded',
+               'tvis_focused','tvis_overlaymask','tvis_selected',
+               'tvis_stateimagemask','tvm_getitem','tvm_getitemrect',
+               'tvm_getlinecolor','tvm_getnextitem','tvm_setlinecolor',
+               'udm_getaccel','udm_getbuddy','udm_getpos','udm_getpos32',
+               'udm_setaccel','udm_setbase','udm_setbuddy','udm_setpos',
+               'udm_setpos32','udm_setrange32','udn_deltapos','uds_alignleft',
+               'uds_alignright','uds_arrowkeys','uds_horz','uds_hottrack',
+               'uds_nothousands','uds_setbuddyint','updown_classw',
+               'wc_button','wc_combobox','wc_edit','wc_listview',
+               'wc_tabcontrol']
 
   // == VCL-Einheiten ======================================================
 
@@ -521,7 +1147,73 @@ begin
     Result := ['tcontrol','twincontrol','tcontainercontrol','tcustomcontrol',
                'tcursor','tdragmode','tcontrolstate','tgraphiccontrol',
                'tdockzone','tanchorstyle','tconstraintsize',
-               'tcontrolactionlink','tscrollcontrol']
+               'tcontrolactionlink','tscrollcontrol',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'akbottom','akleft','akright','aktop','albottom','alclient',
+               'alcustom','alleft','alnone','alright','altop','asrbottom',
+               'asrcenter','asrleft','asrright','asrtop','bebottom','beleft',
+               'beright','betop','bidifliprect','bkflat','bknone','bsdialog',
+               'bsnone','bssingle','bssizeable','bssizetoolwin',
+               'bstoolwindow','bvlowered','bvnone','bvraised','canceldrag',
+               'ccllefttorightthentoptobottom','cclnone','ceftenabled',
+               'changebidimodealignment','cm_base','cm_bidimodechanged',
+               'cm_buttonpressed','cm_changed','cm_childkey',
+               'cm_colorchanged','cm_ctl3dchanged','cm_customstylechanged',
+               'cm_designhittest','cm_dialogchar','cm_dialogkey',
+               'cm_docwindowactivate','cm_drag','cm_enabledchanged',
+               'cm_enter','cm_exit','cm_focuschanged','cm_fontchanged',
+               'cm_getdatalink','cm_hittest','cm_mouseenter','cm_mouseleave',
+               'cm_parentcolorchanged','cm_parentfontchanged',
+               'cm_parentshowhintchanged','cm_recreatewnd','cm_release',
+               'cm_showingchanged','cm_syscolorchange','cm_textchanged',
+               'cm_themechanged','cm_uideactivate','cm_wantspecialkey',
+               'cn_command','cn_ctlcolormsgbox','cn_ctlcolorstatic',
+               'cn_drawitem','cn_hscroll','cn_keydown','cn_keyup',
+               'cn_measureitem','cn_notify','cn_vscroll','crappstart',
+               'crarrow','crcross','crdefault','crdrag','creationcontrol',
+               'crhandpoint','crhigh','crhourglass','crhsplit','cribeam',
+               'crlow','crmultidrag','crsanchoraligning','crsize',
+               'crsizenesw','crsizens','crsizenwse','crsizewe','crvsplit',
+               'csacceptscontrols','csalignmentneeded','cscapturemouse',
+               'csclicked','csclickevents','cscreating','cscustompaint',
+               'csdisplaydragimage','csdoubleclicks','csfixedheight',
+               'csfixedwidth','csfocusing','csframed','cslbuttondown',
+               'csneedsborderpaint','csnodesignvisible','csnofocus',
+               'csnostdevents','csopaque','csownedchildrennotselectable',
+               'cspaintcopy','csparentbackground','csquadclicks',
+               'csreadingstate','csrecreating','csreflector','csreplicatable',
+               'cssetcaption','cstripleclicks','cursortostring','dkdock',
+               'dkdrag','dmautomatic','dmdragdrop','dmdragenter',
+               'dmdragleave','dmdragmove','dmfindtarget','dmmanual',
+               'dohorizontal','dovertical','dsdragenter','dsdragleave',
+               'dsdragmove','findcontrol','finddragtarget','findlclcontrol',
+               'fsallnonsystemstayontop','fsborder','fsmdichild','fsmdiform',
+               'fsnormal','fsstayontop','fssurface','fssystemstayontop',
+               'getcapturecontrol','getkeyshiftstate','getlonghint',
+               'getshorthint','imdontcare','imopen','ispositiveresult',
+               'isvclcontrol','lapautoadjustfordpi',
+               'lapautoadjustwithouthorizontalscrolling','madefault',
+               'mbextra1','mbextra2','mbleft','mbmiddle','mbright','mouse',
+               'movewindoworg','mrabort','mrall','mrcancel','mrclose',
+               'mrignore','mrlast','mrno','mrnone','mrnotoall','mrok',
+               'mrretry','mryes','mryestoall','newstylecontrols','phintinfo',
+               'recreatewnd','seborder','seclient','sefont',
+               'setcapturecontrol','ssmodifier','talign','tanchorkind',
+               'tanchors','tbeveledge','tbeveledges','tborderstyle',
+               'tcanresizeevent','tcaption','tcmdesignhittest',
+               'tcmdialogchar','tcmdialogkey','tcmdrag','tcmenter','tcmexit',
+               'tcmgotfocus','tcmhittest','tcmmousewheel',
+               'tcmparentfontchanged','tcmwantspecialkey',
+               'tcontextpopupevent','tcontrolactionlinkclass',
+               'tcontrolborderstyle','tcontrolcanvas','tcontrolclass',
+               'tcreateparams','tcustomdata','tcustomlistcontrol',
+               'tdragdropevent','tdragimagelist','tdragimagelistresolution',
+               'tdragobject','tdragstate','tformborderstyle','tformstyle',
+               'tgetchildproc','thintinfo','thintwindow','thintwindowclass',
+               'timagelist','timagelisthelper','tkeyevent','tkeypressevent',
+               'tlayoutadjustmentpolicy','tmodalresult','tmousebutton',
+               'tmouseevent','tmousemoveevent','tstyleelements',
+               'twincontrolactionlink','twindowprocptr','twndmethod']
 
   else if (UnitLow = 'vcl.forms') or (UnitLow = 'forms') then
     Result := ['tform','tframe','tapplication','tscreen','tmonitor',
@@ -529,20 +1221,76 @@ begin
                'tbordericons','tcloseaction','tformstyle',
                'tposition','twindowstate','tshowaction',
                'tapplicationevents','thintwindow','tformclass',
-               'tscrollform','tcustomform']
+               'tscrollform','tcustomform',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'appactive','bihelp','biminimize','bisystemmenu','bsdialog',
+               'bsnone','bssingle','bstoolwindow','canone','createwidgetset',
+               'disabletaskwindows','enabletaskwindows','freewidgetset',
+               'fsnormal','fsstayontop','getdesignerform','getlonghint',
+               'getparentform','getshorthint','hintwindowclass',
+               'idesignerhook','isaccel','keyboardstatetoshiftstate',
+               'keydatatoshiftstate','keystoshiftstate',
+               'notifyapplicationuserinput','phintinfo','podesktopcenter',
+               'poownerformcenter','poscreencenter','rcon','sbgalways',
+               'sbgnever','sbgsystem','sbhorizontal','sbvertical',
+               'tborderstyle','tchangescalemessage','tclosequeryevent',
+               'tcmhintshow','tcontrolscrollbar','tcustomformclass',
+               'tcustomframe','tcustomframeclass','tdropfilesevent',
+               'tformborderstyle','tformstylehook','thintinfo',
+               'thintwindowclass','tidesigner','tmodalresult',
+               'tprocedureofobject','tscrollbarinc','tscrollbarkind',
+               'tscrollbox','tscrollingstylehook','tscrollingwincontrol',
+               'validparentform','wsmaximized',
+               // D007b (2026-10-30, rwE31 Stufe 3: caFree fehlte): die
+               // uebrigen TCloseAction-Werte. Vcl.Forms deklariert sie im
+               // interface als Konstanten (caNone = System.UITypes.
+               // TCloseAction.caNone usw., Delphi 12 und 13), LCL forms.pp
+               // als Aufzaehlung bzw. Konstanten.
+               'cafree','cahide','caminimize']
 
   else if (UnitLow = 'vcl.stdctrls') or (UnitLow = 'stdctrls') then
     Result := ['tlabel','tbutton','tedit','tmemo','tcombobox','tlistbox',
                'tcheckbox','tgroupbox','tscrollbar','tstatictext',
                'tradiobutton','tcustomlabel','tcustombutton','tcustomedit',
                'tcustommemo','tcustomcombobox','tcustomlistbox',
-               'tcustomcheckbox']
+               'tcustomcheckbox',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'cbchecked','cbgrayed','cbunchecked','csdropdown',
+               'csdropdownlist','csownerdrawfixed','csownerdrawvariable',
+               'cssimple','ecnormal','emnormal','empassword','iabottom',
+               'iacenter','ialeft','iaright','iatop','lbownerdrawfixed',
+               'lbownerdrawvariable','lbstandard','lbvirtual',
+               'lbvirtualownerdraw','sbsnone','sclinedown','sclineup',
+               'scpagedown','scpageup','scposition','ssautoboth',
+               'ssautohorizontal','ssautovertical','ssboth','sshorizontal',
+               'ssvertical','tbuttonactionlink','tbuttoncontrol',
+               'tcheckboxstate','tcomboboxstyle','tcustomcombo',
+               'tcustomcomboboxstrings','tcustomcomboboxstringsclass',
+               'tcustomgroupbox','tcustomscrollbar','tcustomstatictext',
+               'tdrawitemevent','techomode','teditcharcase','teditstylehook',
+               'timagealignment','timagemargins','tlbfinddataevent',
+               'tlbgetdataevent','tlbgetdataobjectevent','tlbottom',
+               'tlcenter','tlistboxstyle','tltop','tmeasureitemevent',
+               'tmemostylehook','tscrollcode','tscrollevent','tscrollstyle',
+               'tstaticborderstyle','ttextlayout']
 
   else if (UnitLow = 'vcl.extctrls') or (UnitLow = 'extctrls') then
     Result := ['tpanel','ttimer','timage','tshape','tsplitter','tradiogroup',
                'tscrollbox','tbevel','tpaintbox','tflowpanel',
                'tcolorbox','tcontrolbar','tgridpanel',
-               'tcustomgridpanel','tcustomflowpanel']
+               'tcustomgridpanel','tcustomflowpanel',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'bmnone','bsbottomline','bsbox','bsframe','bsleftline',
+               'bsrightline','bsspacer','bstopline','frame3d','lpbelow',
+               'lpright','naturalnumber','rsline','rspattern','sltid',
+               'slturl','stcircle','stellipse','strectangle','stroundrect',
+               'stroundsquare','stsquare','tbevelshape','tbevelstyle',
+               'tboundlabel','tbuttonededit','tcanresizeevent','tcheckgroup',
+               'tcustomcheckgroup','tcustomimage','tcustomlabelededit',
+               'tcustompanel','tcustomsplitter','tcustomtrayicon',
+               'tidletimer','tlabelededit','tlabelposition','tlinklabel',
+               'tnotebook','tpanelbevel','tresizestyle','tshapetype',
+               'tsyslinktype','ttrayicon']
 
   else if (UnitLow = 'vcl.grids') or (UnitLow = 'grids') then
     Result := ['tstringgrid','tdrawgrid','tgridoption','tdrawstate',
@@ -563,7 +1311,32 @@ begin
                'tpenstyle','tbrushstyle','tfontstyle',
                'clred','clblue','clgreen','clblack','clwhite','clsyscolor',
                'colortostring','stringtocolor','rgbtocolor',
-               'gettextextentpoint','tgraphicclass']
+               'gettextextentpoint','tgraphicclass',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'afdefined','amdontcare','amoff','amon','bsclear','bssolid',
+               'cl3ddkshadow','clactivecaption','claqua','clbtnface',
+               'clbtnhighlight','clbtnshadow','clbtntext','cldefault',
+               'cldkgray','clform','clfuchsia','clgradientinactivecaption',
+               'clgray','clgraytext','clhighlight','clhighlighttext',
+               'clhotlight','clinactiveborder','clinactivecaption','clinfobk',
+               'clinfotext','cllime','clltgray','clmaroon','clmenu',
+               'clmenutext','clnavy','clnone','clolive','clsilver','clteal',
+               'cltext','clwebdarkolivegreen','clwebdarkslategray','clwindow',
+               'clwindowframe','clwindowtext','clyellow','colortorgb',
+               'copypalette','createbitmapfromresourcename','crtext',
+               'dctbrush','deccolor','fpcolortotcolorref','fpdefault',
+               'fpfixed','fqdefault','fqnonantialiased','freememorycontexts',
+               'fsbold','fsitalic','fsstrikeout','fsunderline','inccolor',
+               'invertcolor','pf15bit','pf1bit','pf24bit','pf32bit','pf4bit',
+               'pf8bit','pfcustom','pfdevice','pixelformat_bpp','presource',
+               'psclear','psdash','psdot','psrunning','pssolid','screeninfo',
+               'tantialiasingmode','tbitmapimage','tcursorimage',
+               'tcustombitmap','tcustomicon','tfcenter','tfleft',
+               'tfontcharset','tfontdata','tfontstyles','tfsingleline',
+               'tfverticalcenter','tjpegimage','tjpegperformance','tlcenter',
+               'tltop','tmauto','tportableanymapgraphic',
+               'tportablenetworkgraphic','trasterimage','ttextformatflags',
+               'ttextlayout','ttextstyle','twicimage']
 
   else if (UnitLow = 'vcl.comctrls') or (UnitLow = 'comctrls') then
     Result := ['ttreeview','tlistview','tstatusbar','ttoolbar',
@@ -571,7 +1344,52 @@ begin
                'tprogressbar','ttrackbar','tupdown','ttoolbutton',
                'ttreenode','ttreenodes','tlistitem','tlistitems',
                'tlistcolumn','tlistcolumns','tstatuspanel','tstatuspanels',
-               'timageoptions']
+               'timageoptions',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'acoautoappend','acoautosuggest','acofilterprefixes',
+               'acortlreading','acosearch','acoupdownkeydropslist',
+               'acousetab','atdefaulttext','atselected','avicopyfile',
+               'avinone','btprev','cabackcolor','cabold','cacharset',
+               'cacolor','cadisabled','caface','cahidden','caitalic','calink',
+               'caoffset','caprotected','carevauthor','casize','castrikeout',
+               'casubscript','caunderline','caweight','cdsfocused','cdshot',
+               'cdsselected','checkcommoncontrol','comctlversionie4',
+               'csexcasesensitive','csexdropdown','csexdropdownlist',
+               'csexnoeditimage','csexnoeditimageindent','csexnosizelimit',
+               'csexpathwordbreak','csexsimple','dfshort','dmcombobox',
+               'dmupdown','dtaleft','dtaright','dtkdate','dtkdatetime',
+               'dtktime','emonthcalerror','getcomctlversion','gsbutton',
+               'gsdouble','gsgripper','gshorlines','gssimple','gsverlines',
+               'hshot','hsnormal','hspressed','htonicon','htonitem',
+               'htonlabel','ialeft','iatop','initcommoncontrol',
+               'nbcmultiline','nbcshowclosebuttons','nsbullet','nsnone',
+               'pbhorizontal','pbraised','pbserror','pbsnormal','pbspaused',
+               'pbstmarquee','pbstnormal','pbvertical','pnodeinfo',
+               'pricheditstreaminfo','psownerdraw','registercustompage',
+               'stmatchcase','sttext','stwholeword','tanimate',
+               'tautocompleteoption','tautocompleteoptions','tbsbutton',
+               'tbsdropdown','tcn_selchange','tcn_selchanging','tcomboboxex',
+               'tcomboboxexstyle','tcomboboxexstyleex','tcomboboxexstylehook',
+               'tcomboboxexstyles','tcomboexitem','tcomboexitems',
+               'tcommonavi','tconversion','tconversionclass','tcoolband',
+               'tcoolbar','tcustomcomboboxex','tcustomcoolbar',
+               'tcustomdrawstate','tcustomlistview','tcustompage',
+               'tcustompageclass','tcustomprogressbar','tcustomrichedit',
+               'tcustomtabcontrol','tcustomtrackbar','tcustomtreeview',
+               'tcustomupdown','tdatetimekind','tdatetimepicker',
+               'tdatetimepickerstylehook','tdtcalalignment','tdtdateformat',
+               'tdtdatemode','tdtparseinputevent','tgrabstyle',
+               'theadercontrol','theadersection','theadersections',
+               'theadersectionstate','thittests','tlistviewimagelist',
+               'tlistviewstylehook','tmonthcalendar','tnodeinfo',
+               'tnumberingstyle','tpagescroller','tparaattributes','tpbottom',
+               'tpleft','tpright','tprogressbarorientation','tptop',
+               'trhorizontal','tricheditprotectchange','tricheditresizeevent',
+               'tricheditsaveclipboard','tricheditstreaminfo','trvertical',
+               'tsauto','tsmanual','tsnone','tsorttype','tstabs',
+               'tstatuspanelbevel','ttabchangingevent','ttabgetimageevent',
+               'ttabposition','ttabstyle','ttextattributes','ttickstyle',
+               'ttrackbarorientation','tudbtntype','udvertical']
 
   else if (UnitLow = 'vcl.menus') or (UnitLow = 'menus') then
     Result := ['tmainmenu','tpopupmenu','tmenuitem','tshortcut',
@@ -586,7 +1404,10 @@ begin
 
   else if (UnitLow = 'vcl.actnlist') or (UnitLow = 'actnlist') then
     Result := ['tactionlist','taction','tcustomactionlist',
-               'tbasicaction','tactionclientitem','tcontainedaction']
+               'tbasicaction','tactionclientitem','tcontainedaction',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'registeractions','registeractionsproc','tactionevent',
+               'tcustomaction']
 
   else if (UnitLow = 'vcl.actns') or (UnitLow = 'actns') then
     Result := ['taction','tactionlist','tcustomaction','tcontrolaction',
@@ -685,7 +1506,10 @@ begin
   else if (UnitLow = 'system.syncobjs') or (UnitLow = 'syncobjs') then
     Result := ['tcriticalsection','tmutex','tevent','tsemaphore',
                'tconditionvariablecs','tconditionvariablemres',
-               'tlightweightevent','tspinlock']
+               'tlightweightevent','tspinlock',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'tcountdownevent','teventobject','tinterlocked',
+               'tlightweightmrew','tsynchroobject']
 
   else if (UnitLow = 'system.messaging') or (UnitLow = 'messaging') then
     Result := ['tmessagemanager','tmessage','tmsgreceivedevent',
@@ -762,7 +1586,10 @@ begin
 
   else if (UnitLow = 'fmx.controls') then
     Result := ['tcontrol','tcontainercontrol','tstyledcontrol',
-               'tcustomcontrol','tgraphiccontrol','tinteractiveobject']
+               'tcustomcontrol','tgraphiccontrol','tinteractiveobject',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'icontroltypesupportable','iscene','tcontent','tcontroltype',
+               'torientation','tstylebook','ttextsettingsinfo']
 
   else if (UnitLow = 'fmx.forms') then
     Result := ['tform','tcommonform','tapplication','tscreen',
@@ -863,7 +1690,18 @@ begin
   else if (UnitLow = 'winapi.activex') or (UnitLow = 'activex') then
     Result := ['iunknown','idispatch','tguid','ioleinplaceobject',
                'ioleobject','ioleclientsite','olecheck',
-               'createcomobject','cogettypes']
+               'createcomobject','cogettypes',
+               // D007b (2026-10-30, rwE31 Stufe 3: TOleEnum fehlte): die
+               // OLE-Typen aus dem interface von Winapi.ActiveX (Delphi 12
+               // und 13). Den Fund aendert das nicht - ActiveX steht in
+               // IsAlwaysNeeded -, aber die SCA007-Editorhilfe ordnet die
+               // Namen damit dieser Unit zu (reDelphix OtherUnitsIdents).
+               'polebool','polecmd','polecmdtext','poledate',
+               'poleinplaceframeinfo','polemenugroupwidths','polestr',
+               'polestrlist','poleverb','ppolestr','toldoleenum','tolebool',
+               'tolechar','tolecmd','tolecmdtext','tolecolor','toledate',
+               'toleenum','toleinplaceframeinfo','tolemenugroupwidths',
+               'tolestrlist','toleverb']
 
   else if (UnitLow = 'winapi.taskschd') or (UnitLow = 'taskschd') then
     Result := ['itaskscheduler','itaskservice','itask',
@@ -943,7 +1781,15 @@ begin
 
   else if (UnitLow = 'fmx.platform') then
     Result := ['iinterface','ifdtextinput','ifontmanager',
-               'imultitouch','igenericplatformservice']
+               'imultitouch','igenericplatformservice',
+               // D007 (2026-10-29): sichtbare Exporte, korpusbelegt
+               'ifmxdeviceservice','ifmxscreenservice',
+               'ifmxsystemappearanceservice','tapplicationevent',
+               'tapplicationeventdata','tapplicationeventmessage',
+               'tdevicefeature','tplatformservices','tpushdevicetokenmessage',
+               'tpushfailtoregistermessage','tpushnotificationdata',
+               'tpushremotenotificationmessage',
+               'tpushstartupnotificationmessage','tsystemthemekind']
 
   else if (UnitLow = 'system.bluetooth') then
     Result := ['tbluetooth','tbluetoothdevice','tbluetoothle',
@@ -973,21 +1819,36 @@ class function TUnusedUsesDetector.IdentsFor(
   const UnitLow: string): TArray<string>;
 // Vertrag siehe Deklaration. Der Rueckfall bleibt an IstRtlNamespace
 // gebunden - dort steht das WARUM (Alcinoe-FP der C-Charge).
+// Charge P1 (2026-10-25): fuer einen dotless Namen ist der Kurzname der
+// Name selbst - der zweite Durchlauf durch die else-if-Kette lieferte
+// dann dasselbe leere Ergebnis noch einmal und entfaellt.
+var
+  Kurz : string;
 begin
   Result := KnownIdents(UnitLow);
   if (Length(Result) = 0) and IstRtlNamespace(UnitLow) then
-    Result := KnownIdents(ShortName(UnitLow));
+  begin
+    Kurz := ShortName(UnitLow);
+    if Kurz <> UnitLow then
+      Result := KnownIdents(Kurz);
+  end;
 end;
 
 { ---- Oeffentliche API ---- }
 
 class procedure TUnusedUsesDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   UsesItems  : TList<TAstNode>;
-  RawSB, WordSB : TStringBuilder;
-  RawText    : string;   // lowercase mit Punkten: fuer H1
-  WordText   : string;   // lowercase nur Bezeichner: fuer H2
+  RawSB      : TStringBuilder;
+  RawText    : string;   // lowercase mit Punkten: fuer H1 und H2
+  Punkte     : TArray<Integer>;                // H1, lazy
+  PunkteDa   : Boolean;
+  Woerter    : TDictionary<string, Boolean>;   // H2, lazy: Id -> ist Wort
+  Bedarf     : TList<string>;
+  Da         : TArray<Boolean>;
+  ItemIdx, j : Integer;
   Reported   : TDictionary<string, Boolean>;
   Item       : TAstNode;
   UnitLow    : string;
@@ -998,12 +1859,11 @@ var
   SrcCached  : Boolean;
   LineFor    : TArray<Integer>;
   Gestript   : string;
-  Ch         : Char;
 begin
   RawSB  := TStringBuilder.Create;
-  WordSB := TStringBuilder.Create;
   try
-    CollectText(UnitNode, RawSB, WordSB);
+    // Perf Charge Q5: AST-Teil mit EINEM ToLower (Vertrag an AstSuchtext).
+    RawSB.Append(AstSuchtext(UnitNode));
 
     // D4 (2026-09-19, FP-Muster 2 der Recall-Freigabe-Stichprobe):
     // CollectText sieht nur AST-NAMEN (Node.Name/TypeRef) - eine
@@ -1011,8 +1871,8 @@ begin
     // HelpCommand in einer nested procedure, TFieldDataLink.Create,
     // Variant-Zuweisungen), fehlte im Suchtext, und die uses-Zeile
     // wurde trotz Nutzung gemeldet. ADDITIVER Quelltext-Kanal: der
-    // kommentar- UND string-gestrippte Dateitext wird an beide
-    // Suchtexte ANGEHAENGT. Strings gestrippt aus derselben Politik,
+    // kommentar- UND string-gestrippte Dateitext wird an den
+    // Suchtext ANGEHAENGT. Strings gestrippt aus derselben Politik,
     // aus der der AST-Weg Literale nie sah: ein Bezeichner IN einem
     // Literal ist kein Verwendungsnachweis. Mehr Suchtext kann Funde
     // nur ENTFERNEN, nie erzeugen - richtungssicher. Ist die Datei
@@ -1021,53 +1881,42 @@ begin
     // ihren Vertrag, und genau dafuer ist der Kanal ADDITIV statt
     // ersetzend.
     //
-    // OHNE Scan-Kontext (Review 2026-10-13): AnalyzeUnit hat keinen
-    // TAnalyzeContext-Parameter und ist in uStaticAnalyzer2 ueber AddD3
-    // registriert - der Adapter verwirft den Kontext. AcquireLines mit
-    // nil faellt auf den Prozess-Cache zurueck (dieselben Zeilen wie im
-    // Scan), nur der Strip-Slot des Kontexts bleibt ungenutzt: ein
-    // Strip je Datei mehr, keine andere Antwort. Der Umstieg auf den
-    // Kontext braucht den 4-Parameter-Vertrag (AddD statt AddD3) in
-    // uStaticAnalyzer2 - Muster uHardcodedIpAddress.
-    SrcLines := AcquireLines(FileName, SrcCached, nil);
+    // MIT Scan-Kontext seit Charge P1 (2026-10-25; Review 2026-10-13
+    // hatte den Umstieg vorgemerkt): registriert ueber AddD, Zeilen aus
+    // CtxFileTextCache (im Scan dasselbe Objekt wie der Prozess-Cache,
+    // uStaticAnalyzer2: Ctx.FileTextCache := gFileTextCache) und der
+    // Strip aus dem Strip-Slot des Kontexts - derselbe
+    // StripStringsAndComments(Lines, '~'), den die anderen Ganztext-
+    // Detektoren dieser Datei schon gerechnet haben. Ohne Kontext (nil)
+    // rechnet der Detektor selbst, mit derselben Antwort.
+    SrcLines := AcquireLines(FileName, SrcCached, CtxFileTextCache(AContext));
     if SrcLines <> nil then
     try
       Gestript := TDetectorUtils.StripStringsAndCommentsCached(
-        SrcLines, LineFor, nil, FileName).ToLower;
+        SrcLines, LineFor, AContext, FileName).ToLower;
       // F3 (2026-09-19): uses-Klauseln liefern keinen Nachweis -
       // Vertrag und FN-Muster an der Deklaration von BlankeUsesKlauseln.
       BlankeUsesKlauseln(Gestript);
       RawSB.Append(' ');
-      WordSB.Append(' ');
-      for Ch in Gestript do
-      begin
-        if CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) then
-          RawSB.Append(Ch)
-        else
-          RawSB.Append(' ');
-        if CharInSet(Ch, ['a'..'z', '0'..'9', '_']) then
-          WordSB.Append(Ch)
-        else
-          WordSB.Append(' ');
-      end;
+      RawSB.Append(RawSicht(Gestript));
       RawSB.Append(' ');
-      WordSB.Append(' ');
     finally
       ReleaseLines(SrcLines, SrcCached);
     end;
 
-    RawText  := RawSB.ToString;
-    WordText := WordSB.ToString;
+    RawText := RawSB.ToString;
   finally
     RawSB.Free;
-    WordSB.Free;
   end;
 
+  PunkteDa  := False;
+  Woerter   := nil;
   Reported  := TDictionary<string, Boolean>.Create;
   UsesItems := UnitNode.FindAll(nkUsesItem);
   try
-    for Item in UsesItems do
+    for ItemIdx := 0 to UsesItems.Count - 1 do
     begin
+      Item     := UsesItems[ItemIdx];
       UnitLow  := Item.Name.ToLower;
       ShortLow := ShortName(UnitLow);
 
@@ -1080,11 +1929,18 @@ begin
       Found := False;
 
       // -- H1: Qualifizierter Bezeichner ('sysutils.' im Raw-Text) --------
-      if (Pos(ShortLow + '.', RawText)  > 0) or
-         (Pos(UnitLow  + '.', RawText)  > 0) then
+      // = Pos(ShortLow + '.', RawText) > 0 oder Pos(UnitLow + '.', ...)
+      // (Vertrag an PraefixVorPunkt), ohne Durchlauf je Praefix.
+      if not PunkteDa then
+      begin
+        Punkte   := PunktPositionen(RawText);
+        PunkteDa := True;
+      end;
+      if PraefixVorPunkt(RawText, Punkte, ShortLow) or
+         PraefixVorPunkt(RawText, Punkte, UnitLow) then
         Found := True;
 
-      // -- H2: Bekannte Bezeichner im Word-Text ---------------------------
+      // -- H2: Bekannte Bezeichner als ganzes Wort -------------------------
       if not Found then
       begin
         // Kurznamen-Fallback NUR fuer RTL-Namespaces (C-Charge
@@ -1100,9 +1956,31 @@ begin
         // gemeldet -> lieber false negative als false positive.
         if Length(Idents) = 0 then Continue;
 
+        // Einmal je Datei: fuer die Bezeichner dieses und aller folgenden
+        // Eintraege, ob sie ein Wort des Suchtexts sind (Vertrag an
+        // WoerterVorhanden = SammleWoerter-Menge). Perf Charge Q5: statt
+        // ALLE Woerter der Datei zu kopieren und zu hashen (Charge P1)
+        // nur noch die wenigen gefragten - IdentsFor ist rein, jedes
+        // spaeter gefragte Id steht damit in der Tabelle.
+        if Woerter = nil then
+        begin
+          Bedarf := TList<string>.Create;
+          try
+            for j := ItemIdx to UsesItems.Count - 1 do
+              Bedarf.AddRange(IdentsFor(UsesItems[j].Name.ToLower));
+            Da := WoerterVorhanden(RawText, Bedarf.ToArray);
+            Woerter := TDictionary<string, Boolean>.Create;
+            for j := 0 to Bedarf.Count - 1 do
+              Woerter.AddOrSetValue(Bedarf[j], Da[j]);
+          finally
+            Bedarf.Free;
+          end;
+        end;
+
         for var Id in Idents do
         begin
-          if Pos(' ' + Id + ' ', WordText) > 0 then
+          var IstWort : Boolean;
+          if Woerter.TryGetValue(Id, IstWort) and IstWort then
           begin
             Found := True;
             Break;
@@ -1125,6 +2003,7 @@ begin
   finally
     UsesItems.Free;
     Reported.Free;
+    Woerter.Free;
   end;
 end;
 

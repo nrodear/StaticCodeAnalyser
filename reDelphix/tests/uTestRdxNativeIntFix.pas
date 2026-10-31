@@ -37,6 +37,11 @@ type
     [Test] procedure Number_Operand_NoHelp;
     [Test] procedure Chain_NoHelp;
     [Test] procedure Comment_Between_Casts_NoHelp;
+    // rwE29: Zweig einer Bitbreiten-Weiche; Differenz wieder auf 32 Bit
+    // gekappt (Hilfe wirkungslos, trug aber "aendert Verhalten").
+    [Test] procedure Bitness_Branch_NoHelp;
+    [Test] procedure Truncated_By_Outer_Cast_NoHelp;
+    [Test] procedure Truncated_By_Result_Type_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -72,6 +77,7 @@ const
   REASON_OPERAND = 'Cast(5)';
   REASON_CHAIN   = '- Integer(c)';
   REASON_NONCODE = 'Cast { } -';
+  REASON_WIN64   = 'WIN64';
   // Die Meldung des Detektors wird von der Hilfe nicht gelesen.
   MSG_161 = 'Cardinal/Cardinal subtraction on pointers truncates upper 32 '
     + 'bits on Win64 - use PtrUInt or NativeUInt';
@@ -221,6 +227,66 @@ procedure TTestRdxNativeIntFix.Comment_Between_Casts_NoHelp;
 begin
   AssertNoHelp(InUnit(['  Diff := Integer(P1) { Basis } - Integer(P2);']), 6,
     REASON_NONCODE);
+end;
+
+procedure TTestRdxNativeIntFix.Bitness_Branch_NoHelp;
+var
+  R : string;
+begin
+  // cnwizards CnScanners.pas:334 (minimiert): der Fund steht im {$ELSE}
+  // des {$IFDEF WIN64} - dort ist der 32-Bit-Cast richtig, die Hilfe machte
+  // beide Zweige gleich und brach den Bau unter Delphi 5-7. Ohne Fix
+  // angeboten (rot).
+  AssertNoHelp(InUnit(['{$IFDEF WIN64}',
+    '  FStream.Seek(NativeInt(FTokenPtr) - NativeInt(FBufPtr), 1);', '{$ELSE}',
+    '  FStream.Seek(Longint(FTokenPtr) - Longint(FBufPtr), 1);', '{$ENDIF}']),
+    9, REASON_WIN64);
+  // {$IF Defined(CPUX64)} und eine Weiche, die das ganze Stueck umfasst.
+  AssertNoHelp(InUnit(['{$IF Defined(CPUX64)}', '  Diff := 0;', '{$ELSE}',
+    '  Diff := Integer(P1) - Integer(P2);', '{$IFEND}']), 9, 'CPUX64');
+  AssertNoHelp(InUnit(['{$IFNDEF CPU64BITS}', '  Diff := Integer(P1) - Integer(P2);',
+    '{$ENDIF}']), 7, 'CPU64BITS');
+  // Gegenproben: eine andere Weiche, und eine Bitbreiten-Weiche, die vor
+  // der Zeile schon geschlossen ist.
+  Assert.AreEqual(InUnit(['{$IFDEF DEBUG}', '  Diff := NativeInt(P1) - NativeInt(P2);',
+      '{$ENDIF}']),
+    Fix(InUnit(['{$IFDEF DEBUG}', '  Diff := Integer(P1) - Integer(P2);',
+      '{$ENDIF}']), 7, R), R);
+  Assert.AreEqual(InUnit(['{$IFDEF WIN64}', '  X := 1;', '{$ENDIF}',
+      '  Diff := NativeInt(P1) - NativeInt(P2);']),
+    Fix(InUnit(['{$IFDEF WIN64}', '  X := 1;', '{$ENDIF}',
+      '  Diff := Integer(P1) - Integer(P2);']), 9, R), R);
+end;
+
+procedure TTestRdxNativeIntFix.Truncated_By_Outer_Cast_NoHelp;
+begin
+  // FastcodeStrCopyUnit.pas:255 und uPSDebugger.pas:238 (minimiert): der
+  // aeussere 32-Bit-Cast kappt die NativeInt-Differenz wieder - bitgleich.
+  // Ohne Fix angeboten (rot).
+  AssertNoHelp(InUnit(['  if LongWord(Integer(Src) - Integer(Dst)) >= 4 then Exit;']),
+    6, 'LongWord(...)');
+  AssertNoHelp(InUnit(['  P := FStack[Cardinal(Longint(FBase) - Longint(I) - 1)];']),
+    6, 'Cardinal(...)');
+end;
+
+procedure TTestRdxNativeIntFix.Truncated_By_Result_Type_NoHelp;
+var
+  R : string;
+begin
+  // JVCLHelpUtils.pas:677 / SynEditPrintHeaderFooter.pas:661 (minimiert):
+  // Vergleichsfunktion mit Integer-Ergebnis - die Differenz landet wieder
+  // in 32 Bit. Ohne Fix angeboten (rot).
+  AssertNoHelp(Join(['unit u;', 'interface', 'implementation',
+    'function IntegerSortCompare(Item1, Item2: Pointer): Integer;', 'begin',
+    '  Result := Integer(Item1) - Integer(Item2);', 'end;', 'end.']), 6,
+    'Result: Integer');
+  // Gegenprobe: ein NativeInt-Ergebnis haelt die volle Differenz.
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation',
+      'function Distance(Item1, Item2: Pointer): NativeInt;', 'begin',
+      '  Result := NativeInt(Item1) - NativeInt(Item2);', 'end;', 'end.']),
+    Fix(Join(['unit u;', 'interface', 'implementation',
+      'function Distance(Item1, Item2: Pointer): NativeInt;', 'begin',
+      '  Result := Integer(Item1) - Integer(Item2);', 'end;', 'end.']), 6, R), R);
 end;
 
 {$IFNDEF FPC}

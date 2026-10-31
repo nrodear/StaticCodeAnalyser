@@ -48,13 +48,9 @@ uses
   uRefactorInfo, uRdxBufferMath,
   uRdxScopeTable;   // TRdxProjectUnits (Index der Projekt-Units)
 
-const
-  // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
-  // Editor und Anbieter (Review nach Bereichen 2026-10-10, Nit 34). Hier
-  // und nicht in uRdxBufferMath: tools/i18n_extract.py loest nur
-  // Konstanten derselben Unit auf, und hier steht ein _(S_TOO_LONG).
-  S_TOO_LONG = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
+// Der Text zu EDITOR_MAX_COLUMN steht EINMAL fuer Editor und Kern in
+// uRdxText (MsgTooLongForEditor; Review nach Bereichen 2026-10-10, Nit 34) -
+// bis zur Probe-Charge E3 hier als S_TOO_LONG.
 
 type
   TRdxEditor = class
@@ -397,7 +393,7 @@ begin
       end;
       if not SpanFitsEditor(Lines, ASpan) then
       begin
-        AError := Format(_(S_TOO_LONG), [EDITOR_MAX_COLUMN]);
+        AError := MsgTooLongForEditor(EDITOR_MAX_COLUMN);
         Exit;
       end;
       Block := View.Block;

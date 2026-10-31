@@ -496,6 +496,14 @@ begin
     'FPC im Bezeichner');
   Assert.IsFalse(LineLooksFpcAware('{$R *.dfm}'), 'Ressourcen-Direktive');
   Assert.IsFalse(LineLooksFpcAware(''), 'leer');
+  // rwE32 Stufe 4 (jcl JclSysInfo.pas:240): eine mit '.' abgeschaltete
+  // Direktive ist ein Kommentar, keine Weiche - bis dahin nannte SCA128.2
+  // sie als FPC-Beleg. Gegenprobe: eine echte Weiche daneben zaehlt.
+  Assert.IsFalse(LineLooksFpcAware('{.$IFNDEF FPC}'), '{.$IFNDEF FPC}');
+  Assert.IsFalse(LineLooksFpcAware('{.$IF DEFINED(FPC)}'), '{.$IF DEFINED}');
+  Assert.IsFalse(LineLooksFpcAware('(*.$IFDEF FPC*)'), '(*.$IFDEF FPC*)');
+  Assert.IsTrue(LineLooksFpcAware('{.$IFDEF X} {$IFDEF FPC}'),
+    'abgeschaltet und echt');
 end;
 
 // Utf8Len zaehlt UTF-8-Bytes (Umlaut 2, Euro 3, Surrogatpaar 4);

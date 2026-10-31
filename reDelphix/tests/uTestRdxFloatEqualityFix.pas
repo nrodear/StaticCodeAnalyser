@@ -8,6 +8,12 @@ unit uTestRdxFloatEqualityFix;
 // Charge QF stand hier eine woertliche Kopie des Adapters). Die Fixtures der
 // ersten stehen in 'procedure Foo(Ratio: Double; Other: Double)', der Rumpf
 // beginnt auf Zeile 6 (LINE).
+//
+// Realwelt-Test rwE29 (Fehler TES5Edit wbDataFormat.pas:3315): prueft der
+// then-Zweig denselben Operanden mit Toleranz ('if Value <> 0.0 then if
+// SingleSameValue(Value, 0.0) then Value := 0.0'), ist der exakte Vergleich
+// Absicht - gesperrt (TolerantBranch_NoHelp, gegen 7d5de210 rot: dort
+// 'not IsZero(Value)' angeboten; die Gegenproben darin waren schon gruen).
 
 interface
 
@@ -31,6 +37,7 @@ type
     [Test] procedure CommentOrString_NoHelp;
     [Test] procedure TwiceOnLine_NoHelp;
     [Test] procedure GuardIdiom_NoHelp;
+    [Test] procedure TolerantBranch_NoHelp;
     [Test] procedure OwnFunction_NoHelp;
     [Test] procedure WithBefore_NoHelp;
     [Test] procedure DeclarationList_NoHelp;
@@ -39,6 +46,23 @@ type
     [Test] procedure TypeReason_ProvenFloats;
     [Test] procedure TypeReason_Refused;
     [Test] procedure ContextReason_LowAndWith;
+    // ---- Realwelt-Test rwE30 (Fix-Runde 2) ----
+    [Test] procedure OldCompilerBranch_NoHelp;
+    [Test] procedure WithClosedBefore_Help;
+    [Test] procedure WithFieldRecord_Help;
+    [Test] procedure WithOtherTargets_NoHelp;
+    [Test] procedure LocalType_NestedParam;
+    [Test] procedure TypeReason_SingleWithInteger;
+    // ---- Realwelt-Test rwE31 (Fix-Runde 3): exakte Sonderfaelle ----
+    [Test] procedure DivisorGuard_NoHelp;
+    [Test] procedure TextFastPath_NoHelp;
+    [Test] procedure StoredFunction_NoHelp;
+    [Test] procedure BaseFloatType_Aliases;
+    // ---- rwE32 Stufe 4 (Fix-Runde 4) ----
+    [Test] procedure OldCompilerFile_NoHelp;
+    // ---- Realwelt-Test rwE32 (Fix-Runde 4) ----
+    [Test] procedure DefaultOmission_NoHelp;
+    [Test] procedure RepeatedInChain_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -57,7 +81,7 @@ type
     // ---- Adapter ----
     [Test] procedure Adapter_HintAndName;
     [Test] procedure Adapter_LowConfidence_NoHelp;
-    [Test] procedure Adapter_NestedRoutine_TypeUnknown;
+    [Test] procedure Adapter_NestedRoutine_ParamProven;
     [Test] procedure Adapter_NoFile_NoHelp;
   end;
 {$ENDIF}
@@ -75,7 +99,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply, NewMap
+  uTestRdxTextKit;       // Join, Apply, NewMap, LineOf
 
 const
   LINE = 6;   // erste Rumpfzeile von Wrap
@@ -312,6 +336,33 @@ begin
       '0.5'));
 end;
 
+procedure TTestRdxFloatEqualityFix.TolerantBranch_NoHelp;
+begin
+  // TES5Edit (rwE29): fast-null Werte werden auf exakt 0 normalisiert - mit
+  // 'not IsZero(Ratio)' uebersprange der Zweig genau sie.
+  AssertRefused(Wrap(['  if Ratio <> 0.0 then',
+    '    if SingleSameValue(Ratio, 0.0) then', '      Ratio := 0.0;']), LINE,
+    'Ratio', '<>', '0.0', _(R_FLOAT_TOLERANT, ['Ratio <> 0.0', LINE + 1]));
+  // Im begin-Block, IsZero, auch hinter einem Aufruf davor.
+  AssertRefused(Wrap(['  if Ratio = Other then', '  begin', '    Work;',
+    '    if not IsZero(Other) then Exit;', '  end;']), LINE, 'Ratio', '=',
+    'Other', _(R_FLOAT_TOLERANT, ['Ratio = Other', LINE + 3]));
+  // Gegenproben: der Toleranzvergleich steht hinter dem Zweig (nach ';'
+  // bzw. im else-Zweig) oder nennt eine andere Variable - die Hilfe bleibt.
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then Work;',
+    '  if SameValue(Ratio, 0.0) then Work;']),
+    Applied(Wrap(['  if Ratio <> 0.0 then Work;',
+      '  if SameValue(Ratio, 0.0) then Work;']), LINE, 'Ratio', '<>', '0.0'));
+  Assert.AreEqual(Wrap(['  if IsZero(Ratio) then Work',
+    '  else if IsZero(Ratio) then Work;']),
+    Applied(Wrap(['  if Ratio = 0 then Work',
+      '  else if IsZero(Ratio) then Work;']), LINE, 'Ratio', '=', '0'));
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then',
+    '    if IsZero(Other) then Work;']),
+    Applied(Wrap(['  if Ratio <> 0 then', '    if IsZero(Other) then Work;']),
+      LINE, 'Ratio', '<>', '0'));
+end;
+
 procedure TTestRdxFloatEqualityFix.OwnFunction_NoHelp;
 var
   Src : string;
@@ -430,6 +481,428 @@ begin
     True, Msg('Ratio', '=', '0.5')));
   Assert.AreEqual(_(R_FLOAT_WITH, ['IsZero']),
     TRdxFloatEqualityFix.ContextReason(False, True, Msg('Ratio', '=', '0')));
+end;
+
+{ ---- Realwelt-Test rwE30 (Fix-Runde 2) ---- }
+
+procedure TTestRdxFloatEqualityFix.OldCompilerBranch_NoHelp;
+var
+  R, Src : string;
+begin
+  // jvcl JvSimpleXml.pas:252: nur Delphi 5 und aelter sehen den Zweig, dort
+  // gibt es Math.IsZero nicht.
+  Assert.AreEqual('', PlanAt(Wrap(['{$IFNDEF COMPILER6_UP}',
+    '  if Ratio = 0 then Work;', '{$ENDIF}']), LINE + 1,
+    Msg('Ratio', '=', '0'), R));
+  Assert.IsTrue(Pos('{$IFNDEF COMPILER6_UP}', R) > 0, R);
+  // Gegenprobe: der Zweig fuer moderne Compiler.
+  Src := Wrap(['{$IFDEF COMPILER6_UP}', '  if Ratio = 0 then Work;',
+    '{$ENDIF}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE + 1, 'Ratio', '=', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.WithClosedBefore_Help;
+var
+  Src : string;
+begin
+  // issrc Resample.pas:65, Img32.SVG.Reader.pas:1398: die with-Anweisungen
+  // der Routine sind vor dem Vergleich zu Ende.
+  Src := Wrap(['  with Pt do', '  begin', '    X := 1;', '  end;',
+    '  with Pt do Y := 2;', '  if Ratio = 0.5 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0.5', 'SameValue(Ratio, 0.5)',
+    []), Applied(Src, LINE + 5, 'Ratio', '=', '0.5'));
+end;
+
+const
+  // Img32.SVG.Path.pas: TArcInfo, ein Record nur mit Feldern.
+  ARC_UNIT: array[0..18] of string = ('unit t;', 'interface', 'type',
+    '  TArcInfo = record', '    rec         : TRectD;',
+    '    startPos    : TPointD;', '    rectAngle   : double;',
+    '    sweepClockW : Boolean;', '  end;', 'implementation',
+    'procedure Foo(const fArcInfo: TArcInfo; Ratio: Double);', 'begin',
+    '  with fArcInfo do', '  begin', '    if rectAngle <> 0 then Work;',
+    '    if Ratio = 0.5 then Work;', '  end;', 'end;', 'end.');
+
+procedure TTestRdxFloatEqualityFix.WithFieldRecord_Help;
+var
+  Src, LT, RT : string;
+  Map         : TRdxCodeMap;
+  InWith      : Boolean;
+begin
+  Src := Join(ARC_UNIT);
+  Assert.AreEqual(StringReplace(Src, 'rectAngle <> 0', 'not IsZero(rectAngle)',
+    []), Applied(Src, 15, 'rectAngle', '<>', '0'));
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0.5', 'SameValue(Ratio, 0.5)',
+    []), Applied(Src, 16, 'Ratio', '=', '0.5'), 'kein Feld - bindet aussen');
+  // Der Adapter bekommt den Feldtyp bzw. nichts (dann DeclaredTypeOf).
+  Map := NewMap(Src);
+  try
+    TRdxFloatEqualityFix.WithMemberTypes(Map, 15,
+      Msg('rectAngle', '<>', '0'), InWith, LT, RT);
+    Assert.IsTrue(InWith);
+    Assert.AreEqual('double', LT);
+    Assert.AreEqual('', RT);
+    TRdxFloatEqualityFix.WithMemberTypes(Map, 16, Msg('Ratio', '=', '0.5'),
+      InWith, LT, RT);
+    Assert.IsTrue(InWith);
+    Assert.AreEqual('', LT);
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFloatEqualityFix.WithOtherTargets_NoHelp;
+var
+  Src : string;
+begin
+  // Ein Record mit Methode, ein Feld namens IsZero, ein Pfad als Ziel, ein
+  // Klassentyp: das with kann an mehr als Felder binden.
+  Src := StringReplace(Join(ARC_UNIT), '    sweepClockW : Boolean;',
+    '    function Area: Double;', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '    sweepClockW : Boolean;',
+    '    IsZero : Boolean;', []);
+  // (das Feld IsZero faengt schon die Sperre 'eigenes IsZero')
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_OWN, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '  with fArcInfo do',
+    '  with Self.fArcInfo do', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+  Src := StringReplace(Join(ARC_UNIT), '  TArcInfo = record',
+    '  TArcInfo = class', []);
+  AssertRefused(Src, 15, 'rectAngle', '<>', '0', _(R_FLOAT_WITH, ['IsZero']));
+end;
+
+procedure TTestRdxFloatEqualityFix.LocalType_NestedParam;
+var
+  Src : string;
+  Map : TRdxCodeMap;
+begin
+  // jcl JclGraphics.pas:822: SinC verdeckt den gleichnamigen Parameter.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    'function Lanczos3Filter(Value: Double): Single;',
+    '  function SinC(Value: Single): Single;', '  begin',
+    '    if Value <> 0.0 then Result := Value', '    else Result := 1;',
+    '  end;', 'begin', '  Result := SinC(Value);', 'end;', 'end.']);
+  Map := NewMap(Src);
+  try
+    Assert.AreEqual('single', TRdxFloatEqualityFix.LocalType(Map, 7, 'Value'));
+    Assert.AreEqual('double', TRdxFloatEqualityFix.LocalType(Map, 11, 'Value'));
+    Assert.AreEqual('', TRdxFloatEqualityFix.LocalType(Map, 7, 'Other'));
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFloatEqualityFix.TypeReason_SingleWithInteger;
+begin
+  // CEF4Delphi uCEFBufferPanel.pas:1675 'SameValue(TempScale, 1)', Single:
+  // eine ganze Zahl waehlt die Single-Ueberladung.
+  Assert.AreEqual('', TRdxFloatEqualityFix.TypeReason('TempScale', 'single',
+    '1', ''));
+  Assert.AreEqual('', TRdxFloatEqualityFix.TypeReason('100', '', 'S',
+    'single'));
+  // Gegenprobe: eine Zahl mit Punkt bleibt gesperrt (TypeReason_Refused).
+  Assert.AreEqual(_(R_FLOAT_SINGLE, ['S', '1.0']),
+    TRdxFloatEqualityFix.TypeReason('S', 'single', '1.0', ''));
+end;
+
+procedure TTestRdxFloatEqualityFix.DivisorGuard_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl JvgUtils.pas:1516 (CalcMathString): jede von 0 verschiedene Zahl
+  // ist ein gueltiger Divisor - IsZero(Single) meldete fuer 1/0.00005
+  // 'Division durch Null'.
+  AssertRefused(Wrap(['  if Ratio <> 0 then', '    Other := Other / Ratio',
+    '  else', '    Work;']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0', 'Ratio', LINE + 1]));
+  // JvPaintFX.pas:264 / Jans JvResample.pas:223 'function SinC': geklammerte
+  // Bedingung, Division im begin-Block; auch durch eine Klammer mit ihm.
+  AssertRefused(Wrap(['  if (Ratio <> 0.0) then', '  begin',
+    '    Ratio := Ratio * Pi;', '    Other := Sin(Ratio) / Ratio', '  end',
+    '  else', '    Other := 1;']), LINE, 'Ratio', '<>', '0.0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0.0', 'Ratio', LINE + 3]));
+  AssertRefused(Wrap(['  if Ratio <> 0.0 then Other := Sin(Ratio * Pi) / '
+    + '(Ratio * Pi);']), LINE, 'Ratio', '<>', '0.0',
+    _(R_FLOAT_DIVISOR, ['Ratio <> 0.0', 'Ratio', LINE]));
+  // jvcl JvCalc.pas:508: '=' mit der Division im else-Zweig ...
+  AssertRefused(Wrap(['  if Ratio = 0 then Work else Other := 1.0 / Ratio;']),
+    LINE, 'Ratio', '=', '0', _(R_FLOAT_DIVISOR, ['Ratio = 0', 'Ratio', LINE]));
+  // ... bzw. hinter einem Sprung im Rest des Blocks.
+  AssertRefused(Wrap(['  if Ratio = 0 then', '    Exit;',
+    '  Other := Other div Ratio;']), LINE, 'Ratio', '=', '0',
+    _(R_FLOAT_DIVISOR, ['Ratio = 0', 'Ratio', LINE + 2]));
+  // Gegenproben: keine Division durch den Operanden, die Division hinter
+  // dem if ohne Sprung, eine Division durch etwas anderes - die Hilfe
+  // bleibt.
+  Assert.AreEqual(Wrap(['  if not IsZero(Ratio) then', '    Other := Other * '
+    + 'Ratio', '  else', '    Work;']), Applied(Wrap(['  if Ratio <> 0 then',
+    '    Other := Other * Ratio', '  else', '    Work;']), LINE, 'Ratio', '<>',
+    '0'));
+  Src := Wrap(['  if Ratio = 0 then', '    Work;', '  Other := Other / Ratio;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Other := Ratio / Other;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.TextFastPath_NoHelp;
+var
+  Src : string;
+begin
+  // mormot.core.text.pas:6069 DoubleToString: mit IsZero wuerde jeder Wert
+  // unter 1E-12 still zu '0'.
+  AssertRefused(Wrap(['  if Ratio = 0 then', '    result := ''0''', '  else',
+    '    Work;']), LINE, 'Ratio', '=', '0',
+    _(R_FLOAT_TEXT, ['Ratio = 0', LINE + 1]));
+  // '<>': der Text steht im else-Zweig; Exit mit einem Zeichen-Literal.
+  AssertRefused(Wrap(['  if Ratio <> 0 then Work else Exit(#48);']), LINE,
+    'Ratio', '<>', '0', _(R_FLOAT_TEXT, ['Ratio <> 0', LINE]));
+  // Gegenproben: der Zweig fuer 0 setzt keinen String, der String steht im
+  // Zweig fuer 'nicht 0' - die Hilfe bleibt.
+  Src := Wrap(['  if Ratio = 0 then Caption := Other else Caption := ''x'';']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Caption := ''x'';']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+end;
+
+// Eine Klasse mit 'property Opacity .. AStored' und der Funktion
+// StoreOpacity; der Vergleich steht auf Zeile 14.
+function StoredUnit(const AStored: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'type', '  TFoo = class',
+    '  private', '    FOpacity: Single;', '    function StoreOpacity: Boolean;',
+    '  published', '    property Opacity: Single read FOpacity write FOpacity'
+    + AStored + ';', '  end;', 'implementation',
+    'function TFoo.StoreOpacity: Boolean;', 'begin',
+    '  Result := FOpacity <> 1;', 'end;', 'end.']);
+end;
+
+procedure TTestRdxFloatEqualityFix.StoredFunction_NoHelp;
+var
+  Src : string;
+begin
+  // Dev-Cpp FMX.SVGIconImage.pas:244 StoreOpacity: mit SameValue wuerde ein
+  // Wert nahe 1 nicht gespeichert und kaeme beim Laden als genau 1 zurueck.
+  AssertRefused(StoredUnit(' stored StoreOpacity'), 14, 'FOpacity', '<>', '1',
+    _(R_FLOAT_STORED, ['FOpacity <> 1', 'StoreOpacity']));
+  // Gegenprobe: keine Property nennt die Funktion mit 'stored'.
+  Src := StoredUnit('');
+  Assert.AreEqual(StringReplace(Src, 'FOpacity <> 1',
+    'not SameValue(FOpacity, 1)', []), Applied(Src, 14, 'FOpacity', '<>', '1'));
+end;
+
+// rwE31 (Dev-Cpp SVG.pas:3988, minimiert): 'X, Y: TFloat' mit 'TFloat =
+// single' in SVGTypes.pas (uses, gleiches Verzeichnis) - bis dahin 'als
+// tfloat deklariert - nicht Single ..'. Dazu die Alias-Kette der Datei
+// selbst. Gegenproben: ohne Datei, ein Alias nur im implementation-Teil,
+// verschiedene Typen in {$IFDEF}-Zweigen (mormot TSynExtended); eine
+// spaetere Unit, die den Typ nur benutzt, verdeckt nicht, eine, die ihn
+// neu deklariert, schon.
+procedure TTestRdxFloatEqualityFix.BaseFloatType_Aliases;
+var
+  Dir, Src, Main : string;
+  Map            : TRdxCodeMap;
+begin
+  Dir := NewTempDir('rdx_sca144a_');
+  try
+    WriteText(Dir + 'rdxtypes.pas', Join(['unit rdxtypes;', 'interface',
+      'type', '  TFloat = single;', '  {$IFDEF X}', '  TReal = extended;',
+      '  {$ELSE}', '  TReal = double;', '  {$ENDIF}', 'implementation', 'type',
+      '  THidden = double;', 'end.']));
+    WriteText(Dir + 'rdxuser.pas', Join(['unit rdxuser;', 'interface',
+      'type', '  TPoint2 = record X, Y: TFloat; end;', 'implementation',
+      'end.']));
+    WriteText(Dir + 'rdxnew.pas', Join(['unit rdxnew;', 'interface', 'type',
+      '  TFloat = double;', 'implementation', 'end.']));
+    Main := Dir + 'main.pas';
+    Src := Join(['unit main;', 'interface', 'uses', '  rdxtypes, rdxuser;',
+      'type', '  TLocal = TFloat2;', '  TFloat2 = double;', 'implementation',
+      'end.']);
+    Map := NewMap(Src);
+    try
+      Assert.AreEqual('single', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'Alias aus der Unit daneben');
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tlocal'), 'Alias-Kette der Datei');
+      Assert.AreEqual('tfloat', TRdxFloatEqualityFix.BaseFloatType(Map, '',
+        'tfloat'), 'ohne Datei');
+      Assert.AreEqual('thidden', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'thidden'), 'nur im implementation-Teil');
+      Assert.AreEqual('treal', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'treal'), 'Zweige mit verschiedenen Typen');
+    finally
+      Map.Free;
+    end;
+    Map := NewMap(StringReplace(Src, 'rdxtypes, rdxuser;',
+      'rdxtypes, rdxnew;', []));
+    try
+      Assert.AreEqual('double', TRdxFloatEqualityFix.BaseFloatType(Map, Main,
+        'tfloat'), 'die spaetere Unit gilt');
+    finally
+      Map.Free;
+    end;
+  finally
+    RemoveTree(Dir);
+  end;
+end;
+
+{ ---- rwE32 Stufe 4 (Fix-Runde 4) ---- }
+
+// Eine Unit mit AHead zwischen interface und implementation, die
+// Fixture-Routine dahinter (der Rumpf ab der Zeile von ABody[0]).
+function HeadUnit(const AHead, ABody: array of string): string;
+begin
+  Result := Join(['unit t;', 'interface']) + #13#10;
+  if Length(AHead) > 0 then
+    Result := Result + Join(AHead) + #13#10;
+  Result := Result + Join(['implementation',
+    'procedure Foo(Ratio: Double; Other: Double);', 'begin']) + #13#10
+    + Join(ABody) + #13#10 + Join(['end;', 'end.']);
+end;
+
+procedure TTestRdxFloatEqualityFix.OldCompilerFile_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl tests\archive\jvcl\source\JvSpin.pas:2157/2168/2188: die Unit fragt
+  // '{$IFDEF COMPILER4_UP}' (baut also mit Delphi 3), Math.IsZero gibt es
+  // erst ab Delphi 6. Bis Fix-Runde 3 (cc2cb0eb) sperrte hier nur zufaellig
+  // PlanUses (uses-Klausel mit Direktiven).
+  Src := HeadUnit(['uses', '  {$IFDEF COMPILER4_UP} ImgList, {$ENDIF}',
+    '  Classes;'], ['  if Ratio <> 0 then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> 0'), 'Ratio', '<>', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 4, 'IsZero']));
+  // jvcl tests\RxLib\Source\JvSpin.pas:1144: '{$IFNDEF VER90}' (Delphi 2).
+  Src := HeadUnit(['{$IFNDEF VER90}', 'uses Classes;', '{$ENDIF}'],
+    ['  if Ratio <> Other then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> Other'), 'Ratio', '<>', 'Other',
+    _(R_FLOAT_OLD, ['VER90', 3, 'SameValue']));
+  // cnwizards Tool\CnDebugViewer\CnMsgFiler.pas:505: '{$IFDEF COMPILER6_UP}'
+  // im uses - wer nach Delphi 6 fragt, baut mit Delphi 5.
+  Src := HeadUnit(['uses', '  Classes, SysUtils,', '{$IFDEF COMPILER6_UP}',
+    '  Variants,', '{$ENDIF}', '  TypInfo;'], ['  if Ratio <> 0 then Work;']);
+  AssertRefused(Src, LineOf(Src, 'Ratio <> 0'), 'Ratio', '<>', '0',
+    _(R_FLOAT_OLD, ['COMPILER6_UP', 5, 'IsZero']));
+  // Gegenproben: die Stelle im Zweig fuer Delphi 6 und neuer ...
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IF CompilerVersion >= 14}', '  if Ratio = 0 then Work;', '{$IFEND}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFNDEF COMPILER6_UP}', '  Work;', '{$ELSE}', '  if Ratio = 0 then Work;',
+    '{$ENDIF}']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // (Review e/HilfeFixP) ... aber nicht ein Zweig, dessen Symbol nur mit
+  // der Zahl beginnt: 'DELPHI7OROLDER' (JvGnugettext.pas) gilt gerade fuer
+  // die alten Compiler (ebenso 'DELPHI2007OROLDER') - ohne den Nachzug als
+  // "ab Delphi 7" bzw. "ab 2007" gelesen und angeboten (rot).
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFDEF DELPHI7OROLDER}', '  if Ratio = 0 then Work;', '{$ENDIF}']);
+  AssertRefused(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 3, 'IsZero']));
+  Src := HeadUnit(['{$IFDEF COMPILER4_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['{$IFDEF DELPHI2007OROLDER}', '  if Ratio = 0 then Work;', '{$ENDIF}']);
+  AssertRefused(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0',
+    _(R_FLOAT_OLD, ['COMPILER4_UP', 3, 'IsZero']));
+  // ... eine Frage erst nach Delphi 7 ...
+  Src := HeadUnit(['{$IFDEF COMPILER7_UP}', 'uses Classes;', '{$ENDIF}'],
+    ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // ... ein Kit-Include allein (seine Versionsleiter belegt kein Delphi 5) ...
+  Src := HeadUnit(['{$I jvcl.inc}'], ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+  // ... und der Gegenbeweis (RTL-Namensraum ohne Weiche: Delphi XE2).
+  Src := HeadUnit(['uses System.Classes;', '{$IFDEF COMPILER4_UP}',
+    '{$DEFINE X}', '{$ENDIF}'], ['  if Ratio = 0 then Work;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LineOf(Src, 'Ratio = 0'), 'Ratio', '=', '0'));
+end;
+
+{ ---- Realwelt-Test rwE32 (Fix-Runde 4, Gruppe Q) ---- }
+
+procedure TTestRdxFloatEqualityFix.DefaultOmission_NoHelp;
+var
+  Src : string;
+begin
+  // cnwizards CnMsgFiler.pas:505 WriteFloatProp: mit 'not IsZero(Value)'
+  // kaeme |v| < 1E-12 nicht mehr in die XML-Datei und beim Laden als 0
+  // zurueck. Ohne den Fix: 'if not IsZero(Ratio) then' angeboten.
+  AssertRefused(Wrap(['  if Ratio <> 0 then', '    InternalWriteText(Other, '
+    + 'CnXMLRealToStr(Ratio));']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_SINK, ['Ratio <> 0', 'InternalWriteText', LINE + 1]));
+  // CEF4Delphi uCEFChromiumCore.pas:7539: geklammert, Methode, Set-Verb.
+  AssertRefused(Wrap(['  if (Ratio <> 0) then', '    TempParams.SetDouble('
+    + '''ratio'', Ratio);']), LINE, 'Ratio', '<>', '0',
+    _(R_FLOAT_SINK, ['Ratio <> 0', 'SetDouble', LINE + 1]));
+  // doublecmd dcxmlconfig.pas:407: gegen einen Vorgabe-Parameter.
+  AssertRefused(Wrap(['  if Ratio <> Other then AddValue(Node, Ratio);']),
+    LINE, 'Ratio', '<>', 'Other',
+    _(R_FLOAT_SINK, ['Ratio <> Other', 'AddValue', LINE]));
+  // Gegenproben - die Hilfe bleibt: ein Aufruf ohne Schreib-Verb
+  // (Img32.SVG.Path.pas:657, 'ok'), 'set' mitten im Namensteil (Offset),
+  // ein begin-Block (uqtwsbuttons.pas:70, 'ok'), der Operand nicht unter
+  // den Argumenten, '=' statt '<>'.
+  Src := Wrap(['  if Ratio <> 0 then', '    RotatePoint(Sp, Pt2, -Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then Offset(Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then', '  begin', '    WriteValue(Ratio);',
+    '  end;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio <> 0 then WriteValue(Other);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio <> 0', 'not IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '<>', '0'));
+  Src := Wrap(['  if Ratio = 0 then WriteValue(Ratio);']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 0', 'IsZero(Ratio)', []),
+    Applied(Src, LINE, 'Ratio', '=', '0'));
+end;
+
+procedure TTestRdxFloatEqualityFix.RepeatedInChain_NoHelp;
+var
+  Src : string;
+begin
+  // jvcl MakePNG pngimage.pas:4081 (eigene Power): der Exponent-Teil ist
+  // nach 'if Exponent = 0.0' tot - IsZero machte ihn lebendig, Power(2,
+  // 1E-20) gaebe 0 statt ~1. Ohne den Fix: '(IsZero(Ratio))' angeboten.
+  AssertRefused(Wrap(['  if Ratio = 0.0 then', '    Other := 1.0',
+    '  else if (Other = 0) or (Ratio = 0) then Other := 0', '  else',
+    '    Other := Exp(Ratio);']), LINE + 2, 'Ratio', '=', '0',
+    _(R_FLOAT_REPEATED, ['Ratio = 0', LINE]));
+  // Ueber ein Glied dazwischen und einen begin-Block, Seiten vertauscht und
+  // geklammert, '<>' (dort immer wahr).
+  AssertRefused(Wrap(['  if (0 = Ratio) then', '  begin', '    Other := 1;',
+    '  end', '  else if Other > 1 then', '    Other := 2',
+    '  else if Ratio <> 0 then', '    Work;']), LINE + 6, 'Ratio', '<>', '0',
+    _(R_FLOAT_REPEATED, ['Ratio <> 0', LINE]));
+  // Gegenproben - die Hilfe bleibt: ein anderer Wert davor, '<>' davor,
+  // ein eigenes if hinter ';', ein if im else-Block (kein else-if).
+  Src := Wrap(['  if Ratio = 0 then', '    Other := 0', '  else if Ratio = 1 then',
+    '    Other := 1;']);
+  Assert.AreEqual(StringReplace(Src, 'Ratio = 1', 'SameValue(Ratio, 1)', []),
+    Applied(Src, LINE + 2, 'Ratio', '=', '1'));
+  Src := Wrap(['  if Ratio <> 0 then', '    Work', '  else if Ratio = 0 then',
+    '    Other := 1;']);
+  Assert.AreEqual(StringReplace(Src, 'if Ratio = 0', 'if IsZero(Ratio)', []),
+    Applied(Src, LINE + 2, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio = 0 then Other := 1;', '  if Ratio = 0 then Work;']);
+  Assert.AreEqual(Wrap(['  if Ratio = 0 then Other := 1;',
+    '  if IsZero(Ratio) then Work;']), Applied(Src, LINE + 1, 'Ratio', '=', '0'));
+  Src := Wrap(['  if Ratio = 0 then', '    Other := 1', '  else', '  begin',
+    '    if Ratio = 0 then Work;', '  end;']);
+  Assert.AreEqual(Wrap(['  if Ratio = 0 then', '    Other := 1', '  else',
+    '  begin', '    if IsZero(Ratio) then Work;', '  end;']),
+    Applied(Src, LINE + 4, 'Ratio', '=', '0'));
 end;
 
 {$IFNDEF FPC}
@@ -663,16 +1136,28 @@ begin
   Assert.IsTrue(O.Enabled, O.Reason);
 end;
 
-procedure TTestRdxFloatEqualityDetector.Adapter_NestedRoutine_TypeUnknown;
+procedure TTestRdxFloatEqualityDetector.Adapter_NestedRoutine_ParamProven;
 var
   O : TRdxFixOutcome;
 begin
-  // In einer verschachtelten Routine liefert DeclaredTypeOf '' - ohne
-  // Beweis keine Hilfe.
+  // In einer verschachtelten Routine liefert DeclaredTypeOf '' - seit
+  // rwE30 beweist der Text den Parameter ('function SinC(Value: Single)'
+  // in Lanczos3Filter, JclGraphics.pas:822). Bis dahin: keine Hilfe.
   O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
     'uses System.Math;', 'procedure Foo;', '  procedure Inner(Ratio: Double);',
     '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
     '  Inner(1);', 'end;', 'end.']));
+  Assert.IsTrue(O.Enabled, O.Reason);
+  // Gegenprobe: ein Name, den keine umschliessende Routine deklariert,
+  // bleibt unbewiesen. Die Deklaration in der Nachbar-Routine Other braucht
+  // der Detektor (er sammelt Float-Variablen nur nach 'Name: Double' -
+  // ohne sie gaebe es keinen Fund und PlanFirst schluege fehl, Review
+  // e/HilfeFixI); Inner sieht sie nicht.
+  O := PlanFirst(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Math;', 'procedure Other(Ratio: Double);', 'begin',
+    'end;', 'procedure Foo;', '  procedure Inner;',
+    '  begin', '    if Ratio = 0.5 then Work;', '  end;', 'begin',
+    '  Inner;', 'end;', 'end.']));
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.AreEqual(_(R_FLOAT_UNKNOWN, ['Ratio']), O.Reason);
 end;

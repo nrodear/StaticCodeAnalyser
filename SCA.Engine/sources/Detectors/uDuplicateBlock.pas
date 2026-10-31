@@ -90,6 +90,18 @@ type
     Sites     : string;
   end;
 
+var
+  // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
+  // der beiden Kandidaten-Listen in AnalyzeUnit EINMAL je Prozess
+  // (initialization) und jedem Create mitgegeben. TList<T>.Create ohne
+  // Comparer ruft fuer Record-T TComparer<T>._Default, und das fragt in der
+  // Delphi-12-RTL bei JEDEM Aufruf per TRttiContext die RTTI nach einem
+  // '='-Operator ab (Delphi 13 nicht mehr) - hier je Datei zweimal.
+  // VERHALTENSNEUTRAL: derselbe Default-Comparer; die Listen rufen nie
+  // IndexOf/Contains/Remove, und beide Sort-Aufrufe geben ihren eigenen
+  // Comparer mit (der Listen-Comparer bleibt ungenutzt).
+  GDupCandidateComparer : IComparer<TDupCandidate>;
+
 const
   TRIVIAL_LINES : array[0..11] of string = (
     '', 'begin', 'end', 'end;', 'else', 'then', 'do',
@@ -505,8 +517,8 @@ begin
   if Lines = nil then Exit;
   Hashes    := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
   SiteLines := TList<Integer>.Create;
-  Cands    := TList<TDupCandidate>.Create;
-  Runs     := TList<TDupCandidate>.Create;
+  Cands    := TList<TDupCandidate>.Create(GDupCandidateComparer);
+  Runs     := TList<TDupCandidate>.Create(GDupCandidateComparer);
   try
     if Lines.Count < MinBlk * 2 then Exit;
 
@@ -687,5 +699,9 @@ begin
     ReleaseLines(Lines, Cached);
   end;
 end;
+
+initialization
+  // Perf Charge R3: s. GDupCandidateComparer.
+  GDupCandidateComparer := TComparer<TDupCandidate>.Default;
 
 end.

@@ -38,6 +38,15 @@ type
     [Test] procedure SectionAndKey_MatchCaseInsensitively;
     [Test] procedure UnchangedValue_LeavesFileUntouched;
     [Test] procedure BoolAndInteger_UseTheSameShapeAsBefore;
+    // ---- 2026-10-28: UpdateFile meldet, ob das Schreiben gelang ----
+    [Test] procedure UpdateFile_ReadOnlyFile_ReportsFailure;
+    [Test] procedure UpdateFile_UnchangedValue_ReportsSuccess;
+    // ---- 2026-10-28: die frueheren TIniFile-Schreiber ----
+    [Test] procedure UiTheme_Write_KeepsCommentsAndExample;
+    [Test] procedure EditorDfmTarget_Write_KeepsCommentsAndExample;
+    // ---- 2026-10-28: Laden - ANSI-Bestand und gesperrte Datei ----
+    [Test] procedure AnsiFileWithoutBom_KeepsContentAndConvertsUmlaut;
+    [Test] procedure FileLockedWhileLoading_IsNotOverwritten;
     // ---- J1 (2026-09-20): Default der Overlay-Position ----
     [Test] procedure OverlayPosition_DefaultIsBelow;
   end;
@@ -45,7 +54,8 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, uRepoSettings;
+  System.SysUtils, System.Classes, System.IOUtils, uRepoSettings,
+  uEditorCommand;   // TEditorCommand - Abschnitt/Schluessel/Wert wie PersistDfmTarget
 
 const
   // Ausschnitt im Stil der echten analyser.ini: Erklaerblock, Wert,
@@ -71,6 +81,35 @@ const
   // falsche Antwort.
   KEY_LANG = 'Language';
   CLIP_SET = 'ClipboardOnClick=2';
+  // [Editor]-Ausschnitt im Stil der Vorlage (DEFAULT_INI_CONTENT).
+  EDITOR_SAMPLE =
+    '[Editor]'#13#10 +
+    '; DfmTarget (string, default: ide)'#13#10 +
+    ';   ide    = Delphi IDE'#13#10 +
+    ';   viewer = built-in text viewer'#13#10 +
+    'DfmTarget=ide'#13#10 +
+    ';DfmTarget=viewer'#13#10 +
+    ''#13#10 +
+    '[UI]'#13#10 +
+    'Language=de'#13#10;
+  // ANSI-Datei ohne BOM: zwischen ANSI_HEAD und ANSI_TAIL steht das rohe
+  // Byte $FC (CP1252 'ue') - als Byte geschrieben, damit der Test nicht von
+  // der Codepage der Quelldatei abhaengt.
+  ANSI_HEAD =
+    '[Editor]'#13#10 +
+    '; ExternalEditor (string)'#13#10 +
+    'ExternalEditor=C:\Users\J';
+  ANSI_TAIL =
+    'rgen\code.exe'#13#10 +
+    ''#13#10 +
+    '[UI]'#13#10 +
+    '; Theme (string, default: system)'#13#10 +
+    'Theme=system'#13#10 +
+    ';Theme=dark'#13#10 +
+    ''#13#10 +
+    '[Rules]'#13#10 +
+    '; Profil-Erklaerung'#13#10 +
+    'Profile=default'#13#10;
 
 procedure TTestIniComments.Setup;
 begin
@@ -82,6 +121,13 @@ procedure TTestIniComments.TearDown;
 begin
   if TFile.Exists(FPath) then
   begin
+    // Der Schreibschutz-Test laesst die Datei schreibgeschuetzt zurueck -
+    // ohne das Zuruecksetzen scheiterte das Loeschen.
+    // TFileAttribute.faNormal/faReadOnly sind 'platform' (nur Windows) -
+    // die Tests laufen nur dort; Muster wie uStaticFiles (faSymLink).
+    {$WARN SYMBOL_PLATFORM OFF}
+    TFile.SetAttributes(FPath, [TFileAttribute.faNormal]);
+    {$WARN SYMBOL_PLATFORM ON}
     TFile.Delete(FPath);
   end;
 end;
@@ -291,6 +337,201 @@ begin
   Assert.IsTrue(HasLine('OverlayTextOnly=1'));
   Assert.IsTrue(HasLine('OverlayShowOnHover=0'));
   Assert.IsTrue(HasLine(CLIP_SET));
+end;
+
+{ ---- 2026-10-28: UpdateFile meldet, ob das Schreiben gelang ------- }
+
+procedure TTestIniComments.UpdateFile_ReadOnlyFile_ReportsFailure;
+// TRepoSettings.QuickWriteStr sagt "False, wenn nicht schreibbar" zu und
+// reicht dafuer das Ergebnis von UpdateFile durch. Bis 2026-10-28 schluckte
+// UpdateFile den Schreibfehler ohne Rueckmeldung, und QuickWriteStr meldete
+// bei schreibgeschuetzter analyser.ini Erfolg. Geprueft am Helfer selbst:
+// QuickWriteStr schreibt in die APPDATA-INI, und die fasst kein Test an.
+var
+  Ini    : TCommentPreservingIni;
+  Before : string;
+  Ok     : Boolean;
+begin
+  Given(SAMPLE);
+  Before := Content;
+  {$WARN SYMBOL_PLATFORM OFF}
+  TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  {$WARN SYMBOL_PLATFORM ON}
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', KEY_LANG, 'en');
+    Ok := Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsFalse(Ok, 'ein gescheitertes Schreiben muss False liefern');
+  Assert.AreEqual(Before, Content, 'und die Datei ist unberuehrt');
+end;
+
+procedure TTestIniComments.UpdateFile_UnchangedValue_ReportsSuccess;
+// Gegenstueck: ohne Aenderung gibt es nichts zu scheitern. Auch eine
+// schreibgeschuetzte Datei liefert dann True - sonst meldete der Dialekt-
+// Schalter "nicht schreibbar", wenn man den bereits aktiven Wert waehlt.
+var
+  Ini : TCommentPreservingIni;
+  Ok  : Boolean;
+begin
+  Given(SAMPLE);
+  {$WARN SYMBOL_PLATFORM OFF}
+  TFile.SetAttributes(FPath, [TFileAttribute.faReadOnly]);
+  {$WARN SYMBOL_PLATFORM ON}
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', KEY_LANG, 'de');   // derselbe Wert
+    Ok := Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(Ok, 'unveraendert ist kein Fehlschlag');
+end;
+
+{ ---- 2026-10-28: die frueheren TIniFile-Schreiber ------------------ }
+// TAppTheme.PersistMode ([UI] Theme) und TForm2.PersistDfmTarget
+// ([Editor] DfmTarget) schrieben bis 2026-10-28 ueber TIniFile und
+// schreiben jetzt ueber TRepoSettings.QuickWriteStr. Beide Schreiber
+// selbst sind hier nicht pruefbar: sie zielen auf die APPDATA-INI, die
+// kein Test anfasst, und PersistDfmTarget steckt in der Form. Geprueft
+// wird deshalb der Helfer, ueber den QuickWriteStr schreibt - mit genau
+// dem Abschnitt, Schluessel und Wert, den die beiden uebergeben.
+
+procedure TTestIniComments.UiTheme_Write_KeepsCommentsAndExample;
+var
+  Ini : TCommentPreservingIni;
+begin
+  Given(SAMPLE);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', 'Theme', 'dark');   // ModeToStr(atmDark)
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(HasLine('; Theme (string, default: system)'),
+    'der Erklaerblock zu Theme bleibt stehen');
+  Assert.IsTrue(HasLine(';Theme=dark'),
+    'das auskommentierte Beispiel bleibt ein Kommentar');
+  Assert.IsTrue(HasLine('Theme=dark'), 'der Wert muss ankommen');
+  Assert.IsFalse(HasLine('Theme=system'), 'der alte Wert ist ersetzt');
+  Assert.IsTrue(HasLine('; Sprache der Oberflaeche.'),
+    'Kommentare anderer Schluessel in [UI] bleiben');
+end;
+
+procedure TTestIniComments.EditorDfmTarget_Write_KeepsCommentsAndExample;
+var
+  Ini : TCommentPreservingIni;
+  SL  : TStringList;
+begin
+  Given(EDITOR_SAMPLE);
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString(TEditorCommand.INI_SECTION, TEditorCommand.KEY_DFMTARGET,
+      TEditorCommand.DfmTargetToStr(dtViewer));
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+  Assert.IsTrue(HasLine('; DfmTarget (string, default: ide)'),
+    'der Erklaerblock zu DfmTarget bleibt stehen');
+  Assert.IsTrue(HasLine(';   viewer = built-in text viewer'));
+  Assert.IsTrue(HasLine(';DfmTarget=viewer'),
+    'das auskommentierte Beispiel bleibt ein Kommentar');
+  Assert.IsFalse(HasLine('DfmTarget=ide'), 'der alte Wert ist ersetzt');
+  SL := TStringList.Create;
+  try
+    SL.Text := Content;
+    Assert.IsTrue(SL.IndexOf('DfmTarget=viewer') > SL.IndexOf('[Editor]'),
+      'der Wert steht in [Editor]');
+    Assert.IsTrue(SL.IndexOf('DfmTarget=viewer') < SL.IndexOf('[UI]'),
+      'und nicht in der folgenden Sektion');
+  finally
+    SL.Free;
+  end;
+end;
+
+{ ---- 2026-10-28: Laden - ANSI-Bestand und gesperrte Datei ---------- }
+// Bis 2026-10-28 schluckte der Konstruktor JEDEN Ladefehler und begann mit
+// einer leeren Liste; das naechste UpdateFile schrieb die Datei dann mit
+// genau den neuen Schluesseln neu - alles andere war weg.
+
+procedure TTestIniComments.AnsiFileWithoutBom_KeepsContentAndConvertsUmlaut;
+// TEncoding.UTF8 liest strikt und wirft bei einem ANSI-Umlaut ohne BOM
+// EEncodingError. Ohne den ANSI-Rueckfall blieb die Liste leer, und die
+// Datei bestand danach nur noch aus [UI] Theme=dark - die Pruefungen auf
+// ExternalEditor, die Kommentare und [Rules] wuerden rot.
+var
+  Ini   : TCommentPreservingIni;
+  Head  : TBytes;
+  Bytes : TBytes;
+  Ue    : string;
+  Raw   : TBytes;
+  Ok    : Boolean;
+begin
+  Head  := TEncoding.ASCII.GetBytes(ANSI_HEAD);
+  // Platzhalter '?' an die Stelle des Umlauts, dann das rohe Byte setzen.
+  Bytes := TEncoding.ASCII.GetBytes(ANSI_HEAD + '?' + ANSI_TAIL);
+  Bytes[Length(Head)] := $FC;
+  TFile.WriteAllBytes(FPath, Bytes);
+  // Das Zeichen, das die ANSI-Codepage dieses Rechners aus $FC macht -
+  // genau so liest TMemIniFile die Datei.
+  Ue := TEncoding.Default.GetString(Bytes, Length(Head), 1);
+
+  Ini := TCommentPreservingIni.Create(FPath);
+  try
+    Ini.WriteString('UI', 'Theme', 'dark');
+    Ok := Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  Assert.IsTrue(Ok, 'eine ANSI-Datei ist ladbar, das Schreiben gelingt');
+  Assert.IsTrue(HasLine('ExternalEditor=C:\Users\J' + Ue + 'rgen\code.exe'),
+    'der Umlaut ist erhalten und als UTF-8 zurueckzulesen');
+  Assert.IsTrue(HasLine('; ExternalEditor (string)'), 'Kommentare bleiben');
+  Assert.IsTrue(HasLine('; Theme (string, default: system)'));
+  Assert.IsTrue(HasLine(';Theme=dark'), 'das Beispiel bleibt ein Kommentar');
+  Assert.IsTrue(HasLine('Theme=dark'), 'der Wert muss ankommen');
+  Assert.IsFalse(HasLine('Theme=system'));
+  Assert.IsTrue(HasLine('[Rules]'), 'andere Abschnitte bleiben');
+  Assert.IsTrue(HasLine('Profile=default'));
+  Raw := TFile.ReadAllBytes(FPath);
+  Assert.IsTrue((Length(Raw) >= 3) and (Raw[0] = $EF) and (Raw[1] = $BB)
+    and (Raw[2] = $BF), 'zurueckgeschrieben wird UTF-8 mit BOM');
+end;
+
+procedure TTestIniComments.FileLockedWhileLoading_IsNotOverwritten;
+// Die Datei ist gesperrt, waehrend der Konstruktor laedt (Editor,
+// Virenscanner, ein zweiter Prozess), und frei, wenn UpdateFile schreibt.
+// Bewusst NICHT die Sperre ueber die ganze Laufzeit: dann scheiterte auch
+// das Schreiben, und UpdateFile lieferte False schon ohne diesen Fix -
+// der Test bewiese nichts. So aber schrieb der alte Stand die Datei mit
+// nur 'Language=en' neu und lieferte True: beide Pruefungen waeren rot.
+var
+  Ini    : TCommentPreservingIni;
+  Lock   : TFileStream;
+  Before : string;
+  Ok     : Boolean;
+begin
+  Given(SAMPLE);
+  Before := Content;
+  Lock := TFileStream.Create(FPath, fmOpenRead or fmShareExclusive);
+  try
+    Ini := TCommentPreservingIni.Create(FPath);   // Laden scheitert an der Sperre
+  finally
+    Lock.Free;
+  end;
+  try
+    Ini.WriteString('UI', KEY_LANG, 'en');
+    Ok := Ini.UpdateFile;                          // Datei ist jetzt frei
+  finally
+    Ini.Free;
+  end;
+  Assert.IsFalse(Ok, 'nicht geladen heisst nicht geschrieben - und gemeldet');
+  Assert.AreEqual(Before, Content, 'die Datei ist unveraendert');
 end;
 
 { ---- J1 (2026-09-20): Default der Overlay-Position ---------------- }

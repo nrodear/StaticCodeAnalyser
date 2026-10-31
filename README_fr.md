@@ -17,7 +17,7 @@ autonome existe en version 32 bits et 64 bits. Les projets **Lazarus / Free Pasc
 sont analysés nativement par l'application autonome et la CLI — même moteur, mêmes
 règles, selon le dialecte : projets `.lpi`/`.lpk`, unités `.pp`/`.lpr` et fiches
 `.lfm` ([détails](#lazarus--free-pascal-fpc)).
-Analyse basée sur l'AST avec **203 règles** : 179 contrôles
+Analyse basée sur l'AST avec **205 règles** : 181 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -64,7 +64,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 ## Fonctions principales
 
-### 1. Analyse statique de code (203 règles — 179 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
+### 1. Analyse statique de code (205 règles — 181 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
 
 **Contrôles AST Pascal (~130)** : **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -276,7 +276,7 @@ Référence du résolveur de configuration : [docs/sonar-config.md](docs/sonar-c
 
 ---
 
-## Ce qui est détecté (203 règles — 179 Pascal + 23 DFM + 1 INI)
+## Ce qui est détecté (205 règles — 181 Pascal + 23 DFM + 1 INI)
 
 Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 

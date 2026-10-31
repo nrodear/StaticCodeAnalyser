@@ -131,7 +131,8 @@ implementation
 uses
   uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.RegularExpressions, System.IOUtils,
-  uDetectorUtils, uFileTextCache;
+  uDetectorUtils, uFileTextCache,
+  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 // Liest die zur PAS-Datei gehoerende DFM (gleicher Pfad mit .dfm-Extension)
 // und extrahiert alle Event-Handler-Werte. Pattern:
@@ -163,7 +164,10 @@ begin
     // Datei-IO-Fehler -> wie "keine DFM"
     Exit;
   end;
-  RE := TRegEx.Create(HANDLER_RE, [roMultiLine]);
+  // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache
+  // (je Thread einmal statt je Datei neu: TPerlRegEx + pcre_maketables +
+  // Compile). Gleiches Muster, gleiche Optionen.
+  RE := TRegExMatches.CachedEx(HANDLER_RE, [roMultiLine]);
   for M in RE.Matches(DfmText) do
   begin
     Name := LowerCase(M.Groups[1].Value);
