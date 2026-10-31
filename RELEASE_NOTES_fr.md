@@ -43,7 +43,9 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   sont exportés, et `sonar-scan.ps1` utilise le jeu de règles de l'IDE
   (d'après le modèle `ide-fast`, 21 règles : voir la migration). Les
   projets existants verront des issues apparaître et se déplacer.
-- **Dans l'IDE :** l'overlay s'ouvre sous la ligne du résultat, et le menu
+- **Dans l'IDE :** les nouvelles installations ouvrent l'overlay sous la
+  ligne du résultat (un `analyser.ini` existant issu du modèle indique
+  encore `OverlayPosition=sameline` ; remplacez-le par `below`), et le menu
   d'actions est deux fois moins large, sans rien perdre.
 - **La documentation suit le code.** Le README et les manuels sont
   débarrassés des chemins morts, des raccourcis disparus et des chiffres

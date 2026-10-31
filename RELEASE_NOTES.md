@@ -36,8 +36,10 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   `sonar-scan.ps1` uses the rule set of the IDE (from the template
   `ide-fast`, 21 rules: see the migration notes). Existing projects see
   issues appear and move.
-- **In the IDE:** the overlay opens below the finding line, and the
-  action menu is half as wide with nothing lost.
+- **In the IDE:** new installations open the overlay below the finding
+  line (an existing `analyser.ini` from the template still says
+  `OverlayPosition=sameline`; change it to `below`), and the action menu
+  is half as wide with nothing lost.
 - **Documentation follows the code.** README and manuals lost dead paths,
   keyboard shortcuts that no longer exist and outdated numbers.
 
