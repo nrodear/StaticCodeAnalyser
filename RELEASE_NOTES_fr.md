@@ -44,6 +44,9 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   Les projets existants verront des issues apparaître et se déplacer.
 - **Dans l'IDE :** l'overlay s'ouvre sous la ligne du résultat, et le menu
   d'actions est deux fois moins large, sans rien perdre.
+- **La documentation suit le code.** Le README et les manuels sont
+  débarrassés des chemins morts, des raccourcis disparus et des chiffres
+  dépassés.
 
 ---
 

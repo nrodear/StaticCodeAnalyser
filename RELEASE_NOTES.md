@@ -37,6 +37,8 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   issues appear and move.
 - **In the IDE:** the overlay opens below the finding line, and the
   action menu is half as wide with nothing lost.
+- **Documentation follows the code.** README and manuals lost dead paths,
+  keyboard shortcuts that no longer exist and outdated numbers.
 
 ---
 

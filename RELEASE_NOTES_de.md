@@ -41,6 +41,8 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   Projekte sehen Issues auftauchen und wandern.
 - **In der IDE:** das Overlay öffnet unter der Fundzeile, und das
   Aktionsmenü ist halb so breit, ohne dass etwas verloren geht.
+- **Die Doku folgt dem Code.** README und Handbücher sind von toten
+  Pfaden, entfallenen Tastenkürzeln und überholten Zahlen befreit.
 
 ---
 
