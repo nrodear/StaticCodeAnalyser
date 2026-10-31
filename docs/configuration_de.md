@@ -80,9 +80,23 @@ Lauf, in dem sie angegeben werden.
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `File` | String | _(leer)_ | Baseline-JSON. Relative Pfade loesen gegen die Scan-Wurzel auf; leer = `.sca`-Standardort. |
+| `File` | String | _(leer)_ | Baseline-JSON. Ein relativer Pfad löst gegen das Verzeichnis des Projekts oder der Gruppe auf, sonst gegen die Scan-Wurzel; die CLI fällt auf das Arbeitsverzeichnis zurück, wenn die Datei nur dort liegt, und sagt das. Leer = `.sca`-Standardort. |
 | `OnlyNew` | Bool | `False` | Nur Funde anzeigen, die nicht in der Baseline stehen. |
 | `PathInFingerprint` | Bool | `False` | Den Relativpfad in den Fingerprint aufnehmen - trennt gleichnamige Dateien in verschiedenen Ordnern. |
+
+**Eine Baseline zählt.** Die Datei hält je Fund einen Eintrag, und jeder
+Eintrag deckt höchstens einen Fund: zwei Einträge mit demselben
+Fingerprint decken zwei Funde, ein dritter ist neu. Einträge greifen in
+drei Durchgängen, jeder wird einmal verbraucht: Fingerprint und
+Kontext-Hash, dann der Kontext-Hash allein, dann der Fingerprint allein.
+Wo eine Datei mehr Funde einer Art hat als die Baseline Einträge, gelten
+die übrigen also als neu.
+
+**Funde außerhalb einer Routine** haben eine leere Methode, und die
+Methode gehört zum Fingerprint. Eine Baseline von vor v0.9.19 trifft sie
+über ihren Kontext-Hash weiter, solange die Zeilen um sie herum
+unverändert sind; eine Baseline ohne Kontext-Hashes zeigt sie einmal als
+neu.
 
 ### Welche Schwellwerte sich aendern lassen, ohne eine Baseline zu entwerten
 
@@ -134,8 +148,9 @@ welche Funde *gemeldet* werden, nie welche davon die Baseline bereits
 Der eine Fall, den die ausgenommenen fuenf nicht auseinanderhalten
 koennen: bei SCA012, SCA018, SCA022 und SCA176 teilen sich zwei
 gleichnamige Methoden einer Datei - Overloads, oder derselbe Name in zwei
-Klassen einer Unit - einen einzigen Baseline-Eintrag. Auf dem
-Referenzkorpus mit 783.105 Funden betrifft das **183 bis 185 von 37.990
+Klassen einer Unit - einen Fingerprint. Jede behält ihren eigenen
+Baseline-Eintrag, die Zählung stimmt also; nur sagen die Einträge nicht,
+welche Methode welche ist. Auf dem Referenzkorpus mit 783.105 Funden betrifft das **183 bis 185 von 37.990
 Funden (0,49 %) bei `PathInFingerprint=1`** und **rund 1.450 (3,8 %) im
 Standardmodus**, wo das Datei-Token der blosse Dateiname ist und
 gleichnamige Dateien in verschiedenen Ordnern es sich teilen (der Korpus

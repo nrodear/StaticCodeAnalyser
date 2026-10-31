@@ -125,7 +125,7 @@ dann gezielt überschreiben.
 | `IncludeDefines` | `Boolean` | `{$I}`-Include-Dateien für ihre `{$DEFINE}`-Wirkung lesen. `Init` setzt `True`; `False` = Include-blind (CLI `--no-include-defines`). Scan-Sicht wie `IfdefDefines`. |
 | `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) oder `dlFpc` (`uSCAConsts`): `dlFpc` sammelt beim Verzeichnis-Walk zusätzlich `*.pp` und ergänzt bei nicht leerem `IfdefDefines` `FPC` und `LCL`. Bei `.lpi`/`.lpk`/`.lpg`-Projekt-Scopes erzwungen `dlFpc`. Scan-Sicht wie `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML mit Custom-Rules (`''`=keine). |
-| `BaselinePath` | `string` | Funde gegen Baseline-JSON filtern (`''`=aus). |
+| `BaselinePath` | `string` | Funde gegen Baseline-JSON filtern (`''`=aus). Jeder Eintrag deckt höchstens einen Fund. |
 | `WriteBaselinePath` | `string` | Aktuelle Funde als neue Baseline schreiben. |
 | `ApplyRepoIni` | `Boolean` | `analyser.ini` voll laden+anwenden (wie der CLI). |
 | `MinSeverityName` | `string` | INI-Modus: Override `'error'`/`'warning'`/`'hint'`. |
@@ -217,7 +217,7 @@ Jeder Befund:
 | Member | Typ / Rückgabe | Bedeutung |
 |--------|----------------|-----------|
 | `FileName` | `string` | Quelldatei. |
-| `MethodName` | `string` | Methode/Routine (falls bekannt). |
+| `MethodName` | `string` | Routine, in deren Zeilen der Fund liegt; leer außerhalb einer Routine und bei Funden in einer Formulardatei. |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Zeile (String-Feld + Integer-Helper). |
 | `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Letzte Zeile des Befund-Bereichs. `EndLine = 0` (Default) = einzeilig; `SpanEnd` lesen (geklemmt, nie kleiner als die Startzeile) statt des Rohfelds. Ein Bereich ändert nur, wie viel Fläche ein Fund markiert, nie die Zahl der Funde. |
 | `MissingVar` / `Message` | `string` | Detailmeldung (`Message` = Alias). |
