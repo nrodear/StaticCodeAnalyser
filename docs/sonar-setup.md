@@ -295,6 +295,23 @@ SonarDelphi.
    `-JsonPath` ist nötig, wenn der Report nicht als `sca-findings.json` im
    `-ProjectPath` liegt.
 
+   Die Vorprüfung läuft auch mit `-DryRun` und sagt vorab, was der Scanner
+   verwerfen wird. Sie warnt je Grund mit Dateien, Findings und Beispielen,
+   bricht aber nie ab:
+
+   ```
+   Report:   1015 files, 1015 found under ProjectPath
+   Report:   309 of 1015 found files will be dropped by the scanner
+   WARNING: 106 report files (1067 findings) match sonar.exclusions, ...
+   WARNING: 135 report files (1421 findings) are in embedded git repos the scanner does not see ...: dunitx (105), infra-probe (23), BuildLogStats (7)
+   WARNING: 68 report files (302 findings) are gitignored in their repo, ...
+   ```
+
+   Jede Datei zählt einmal, geprüft wird in der Reihenfolge des Scanners: erst
+   die Ausschlussmuster, dann Git. Fehlt `git` oder ist `-ProjectPath` kein
+   Git-Repo, entfällt der Git-Teil, und eine Zeile `SCM check skipped: ...` sagt
+   das.
+
    Die `.cmd` setzt `-DisableDelphi`. SonarDelphi läuft also nicht mit und
    braucht keine Einstellungen.
 
@@ -311,16 +328,24 @@ SonarDelphi.
 
 ### Grenzen
 
-- **Ein Project Key je Analyse-Ordner.** Das Skript nimmt den Key immer aus der
-  INI. Eine Analyse aus einem anderen Ordner ersetzt den Stand im Projekt.
+- **Ein Project Key je Analyse-Ordner.** Das Skript nimmt den Key aus
+  `SONAR_PROJECT_KEY`, sonst aus der INI. Eine Analyse aus einem anderen Ordner
+  ersetzt den Stand im Projekt.
 - **Oberordner.** Wird ein Oberordner analysiert, landet auch der Quellcode aller
   Unterprojekte im Sonar-Projekt.
 - **Ausschlüsse.** Die Standard-Ausschlüsse von `sonar-upload.ps1`
   (`**/lib/**`, `**/DUnitX-*/**` usw.) verwerfen Findings in diesen Pfaden.
-- **Eingebettete Git-Repos.** Beobachtung aus einem Testlauf über einen
-  Oberordner: Findings aus drei eingebetteten Repos wurden nicht importiert, die
-  aus einem als Submodul eingebundenen Repo schon. Die Ursache ist nicht
-  bestätigt.
+- **Eingebettete Git-Repos.** Ein Unterordner mit eigenem `.git`, der im Index
+  des Eltern-Repos nicht als Gitlink steht, ist für den Scanner unsichtbar: seine
+  Dateien zählen als `files ignored because of scm ignore settings`, ihre
+  Findings gehen verloren. Ein als Gitlink eingetragenes Repo wird dagegen
+  gescannt, samt seiner eigenen `.gitignore`. Belegt ist das über den Abgleich
+  der Scanner-Zähler in einem Lauf über einen Oberordner: 3 eingebettete Repos
+  fehlten, 1 Gitlink-Repo war vollständig da. Das Scanner-Log nennt keine
+  Einzeldateien; die Vorprüfung von `sonar-upload.ps1` tut das je Repo.
+- **Gitignorierte Dateien.** Sie fehlen ebenfalls, auch wenn SCA sie analysiert
+  hat. Das betrifft auch die `.gitignore` in Unterordnern und im Repo hinter
+  einem Gitlink.
 
 ---
 
@@ -381,7 +406,8 @@ curl -u $env:SONAR_TOKEN: -X POST `
 Sonar findet die Dateien aus dem Report nicht im Scan-Ordner. Der Scanner muss
 in dem Ordner laufen, über den die Analyse lief (`sonar-upload.ps1 -ProjectPath`,
 siehe [Sonar-Projekt einrichten](#sonar-projekt-einrichten)). Einzelne Dateien
-fallen außerdem durch Ausschlüsse weg, siehe [Grenzen](#grenzen).
+fallen außerdem durch Ausschlüsse, `.gitignore` oder eingebettete Git-Repos weg,
+siehe [Grenzen](#grenzen). `sonar-upload.ps1 -DryRun` nennt sie vorab je Grund.
 
 **`Path to Delphi standardlibrary is invalid`** — Das Java-Plugin SonarDelphi
 sucht die Delphi-Standardbibliothek und bricht den Scanner ab. Ohne Angabe nimmt
