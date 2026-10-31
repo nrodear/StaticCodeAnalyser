@@ -8,6 +8,27 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [v0.9.19] - TBD - Fixes at the finding, Lazarus in the scan, and a baseline that counts
+
+### Upgrade notes
+
+What can change on an existing setup, in one place. The details follow in the sections below. No project code has to change, but a CI gate can turn red on code that did not change.
+
+- **Setup and GetIt: the plugin no longer applies quick-fixes** - the four fixes built into v0.9.18 (SCA066, SCA072, SCA084, SCA085) moved to the new reDelphix package, together with the much larger set described below. Setup and GetIt do not ship reDelphix, and it does not load next to the plugin they install. There `Ctrl+Alt+F` reports that there is no quick fix; the standalone GUI no longer has the shortcut, and "Copy AI prompt" no longer prepends a fixed line. reDelphix needs Delphi 12 (Win32), a build from source and the plugin variant `StaticCodeAnalyser.IDE.d12`.
+- **New findings on unchanged code** - SCA199, SCA200, SCA201, SCA202, SCA203 and SCA205 are on in the `default` profile, and SCA202, SCA203 and SCA205 can report Error. SCA125 reports for the first time, and SCA003, SCA026, SCA055 and SCA120 gained new Error findings. The parser now reads routines in `program` and `library` files, the DFM parser reads forms with dotted references (`PopupMenu = dm.Pop`), and damaged UTF-8 files are analysed instead of skipped.
+- **SCA007 in the CLI** - with `--profile strict` or `[Detectors] UsesCheck=1` the CLI now really runs SCA007: new findings, longer runs, possibly another exit code.
+- **SCA001 levels move** - the new variant `proven-leak` reports as Error, `return-value-not-freed` drops from Warning to Hint. Fingerprints stay the same.
+- **Baselines** - the file format is unchanged, but each entry now covers one finding: findings that one entry used to hide show up as new. The method of a finding outside a routine is now empty, which changes its fingerprint; baselines with a `contextHash` still match while the lines around the finding are unchanged. Reworded rule messages (see "Changed message texts"), SCA006 findings and merged SCA070 regions can show as new once; with a context hash they still match while the code around them is unchanged.
+- **Scan scope** - a target named with `--file`, `--project` or `--project-group` below a path such as `tests/` or `demos/` is no longer filtered away, so it delivers findings and can change the exit code. CLI runs without `--dialect` now read `[Scan] Dialect` from `analyser.ini`: pass the switch in CI. A relative `[Baseline] File=` is resolved against the project first.
+- **`--diff` and `--branch` without changes** - the requested reports are now written, empty, with exit code 0, and replace older files.
+- **SARIF readers** - `artifactLocation.uri` is percent-encoded, absolute paths are `file://` URIs, and relative locations carry `uriBaseId: "SRCROOT"`. Fingerprints stay the same. Own scripts must decode the value and strip the scheme.
+- **JSON, CSV, HTML** - `--report-json` adds `ruleId`, `ruleID` stays and is deprecated. A CSV field that starts with `=`, `+`, `-`, `@`, tab or CR gets a leading apostrophe. HTML reports list the editor helps of each rule, `--html-no-editor-help` leaves them out. Readers of `--time-detectors` should expect the new format with a closing `Timing format: 2` line.
+- **Sonar** - issues that were dropped before appear as new, issues of binary DFMs move to file level, and custom rules change name and impact. The impact severities BLOCKER and INFO need SonarQube 10.8 or later, and SCA026 carries BLOCKER. `sonar-scan.ps1` now reports the rule set of the IDE with test fixtures, so its findings differ from before.
+- **Code that uses the engine** - the runtime packages are now `SCA.Engine290.bpl` and `SCA.SharedUI290.bpl` under Delphi 12, `TExporterHtml.Run` takes `THtmlReportOptions`, and `uQuickFix`, `TSourceLineEdit.ReplaceLine` and `ReadLine` are gone.
+- **stderr** - a self-built CLI with a stack reserve below 32 MB prints a warning on stderr, also with `--quiet`. Scripts that treat stderr as a failure will see it; release builds are not affected.
+
 ### Added
 - **reDelphix: new IDE package that offers quick-fixes and refactorings at SCA findings** (Delphi 12, Win32, `reDelphix\reDelphix.d12.dpk`; requires the plugin variant B `StaticCodeAnalyser.IDE.d12` instead of the monolith `StaticCodeAnalyser.Plugin.d12`) - the actions appear behind a separator in the context menu of a finding (dock grid and editor) and in a light bulb at the caret line of the editor (there only the executable quick-fixes; a disabled entry names its reason in brackets). Every action re-checks the finding against the current editor buffer, compares each range with the text the menu was built on before writing and writes in one undo step - never into a file. `reDelphix/QUICKFIXES.md` lists every action with its menu texts (en/de/fr), effect, locks and an example.
 - **reDelphix: refactorings and helpers at a finding** - "Build Format() from concatenation" for SCA044 (compile rule: an operand of unknown type counts when the concatenation compiles; `System.SysUtils` is added to uses when missing), "Copy parameterized template to clipboard" for SCA003, "uses: X -> Scope.X" (one entry or all entries of a clause, context menu only), "Suppress here / in this file" (`// noinspection`), "Remove ineffective suppression marker" for SCA165 and "Show location".
