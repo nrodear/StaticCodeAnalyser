@@ -274,7 +274,7 @@ cela :
   cette installation ; relancer le setup plus tard remplace
   l'enregistrement de développement.
 
-Les étapes figurent dans [HowTo_Build_fr.md](HowTo_Build_fr.md#53-optionnel-installer-redelphix-actions-de-code).
+Les étapes figurent dans [HowTo_Build_fr.md](HowTo_Build_fr.md#53-optionnel--installer-redelphix-actions-de-code).
 Sans reDelphix, le plugin fonctionne normalement : `Ctrl+Alt+F` signale
 que le paquet n'est pas chargé, `Ctrl+Alt+S` insère toujours le marqueur
 de suppression.
