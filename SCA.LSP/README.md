@@ -2,8 +2,6 @@
 
 Minimaler Language-Server-Protocol-Server als **vierter Consumer** der
 SCA-Engine-Facade `uEngineApi` (neben IDE-Plugin, CLI und Form-GUI).
-Konzeptgrundlage: `Doku_06_CLI_LSP_Reporting.md`, LSP-Abschnitt
-(Konzept_LSP.md / Konzept_LspSchicht.md).
 
 ## Was Inkrement 0 kann
 
@@ -14,16 +12,16 @@ Konzeptgrundlage: `Doku_06_CLI_LSP_Reporting.md`, LSP-Abschnitt
 | Analyse | Buffer-Text → `TAnalysisSession.Run` mit `ssSource` (In-Memory-Pfad der Engine, volle Per-File-Pipeline inkl. Suppression), Profil `ide-fast` (`uLspDiagnostics`) |
 | Mapping | `TLeakFinding` → LSP-Diagnostic: Zeile 1-basiert → 0-basiert, `severity` (lsError→1, lsWarning→2, lsHint→4), `code` = `ResolvedRuleId` (SCAxxx), `source` = `sca`, `message` = Befundmeldung |
 
-**Bewusst NICHT enthalten** (spätere Phasen laut Doku_06): Debounce für
+**Bewusst NICHT enthalten** (spätere Phasen): Debounce für
 `didChange`, Cancellation, `workspace/configuration`, CodeActions/QuickFixes,
 Hover, Workspace-Scan, Pull-Diagnostics.
 
-## Bekannte Lücke E3 — Spaltenfeld (dokumentiert, nicht gelöst)
+## Bekannte Lücke — Spaltenfeld (dokumentiert, nicht gelöst)
 
 `TLeakFinding` hat **kein Spaltenfeld** (`StartCol`/`EndCol`/`EndLine`) —
-Engine-Änderung **E3** in Doku_06, dort als größter Einzel-Hebel für die
-LSP-Qualität geführt (nützt auch SARIF `region.startColumn` und die
-Plugin-Overlays). Bis E3 umgesetzt ist:
+die Engine-Änderung dafür ist der größte Einzel-Hebel für die
+LSP-Qualität (nützt auch SARIF `region.startColumn` und die
+Plugin-Overlays). Bis dahin:
 
 * Spalte konstant **1** (LSP `character: 0`),
 * Range = **ganze Zeile** (`end.character = 2147483647`, der Client clippt
@@ -37,8 +35,8 @@ UTF-16-Code-Unit-Offsets.
 
 Das Projekt ist wie `SCA.CLI.Demo` als **Package-Consumer** aufgesetzt
 (`DCC_UsePackage SCA.Engine` — keine Engine-Quelltexte im Suchpfad).
-Der Architektur-Entscheid Static-Link vs. Package ist laut Doku_06 (Punkt 11)
-offen; für die Distribution spricht die Doku für Static-Link — bei Bedarf
+Der Architektur-Entscheid Static-Link vs. Package ist offen; für die
+Distribution spricht Static-Link — bei Bedarf
 das Projekt später umstellen.
 
 1. Delphi 12 öffnen, `StaticCodeAnalyser.d12.groupproj` laden (oder
