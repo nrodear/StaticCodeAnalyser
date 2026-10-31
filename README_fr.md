@@ -267,12 +267,12 @@ cela :
 - **Delphi 12, Win32.** `reDelphix/reDelphix.d12.dpk` vise l'IDE 32 bits
   de Delphi 12. Il n'existe pas encore de paquet pour Delphi 13.
 - **La variante B du plugin au lieu du monolithe.** reDelphix est lié à
-  `SCA.Engine.bpl`, le jeu de paquets de développement (`SCA.Engine`,
+  `SCA.Engine290.bpl`, le jeu de paquets de développement (`SCA.Engine`,
   `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`) doit donc être installé.
   Le monolithe qu'installent le setup et GetIt contient lui-même le moteur,
   et les deux ne peuvent pas être chargés côte à côte. Retirez d'abord
-  cette installation ; relancer le setup plus tard remplace
-  l'enregistrement de développement.
+  cette installation. Avant de relancer le setup, retirez `reDelphix.d12`
+  sous Composant > Installer des packages : le setup ne le retire pas.
 
 Les étapes figurent dans [HowTo_Build_fr.md](HowTo_Build_fr.md#53-optionnel--installer-redelphix-actions-de-code).
 Sans reDelphix, le plugin fonctionne normalement : `Ctrl+Alt+F` signale

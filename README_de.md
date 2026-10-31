@@ -256,12 +256,13 @@ enthalten es nicht; es wird aus den Quellen gebaut. Das braucht:
 - **Delphi 12, Win32.** `reDelphix/reDelphix.d12.dpk` zielt auf die
   32-Bit-IDE von Delphi 12. Für Delphi 13 gibt es noch kein Paket.
 - **Plugin-Variante B statt des Monolithen.** reDelphix linkt gegen
-  `SCA.Engine.bpl`, deshalb muss der Dev-Paketsatz (`SCA.Engine`,
+  `SCA.Engine290.bpl`, deshalb muss der Dev-Paketsatz (`SCA.Engine`,
   `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`) installiert sein. Der
   Monolith, den Setup und GetIt installieren, enthält die Engine selbst,
   und beide lassen sich nicht nebeneinander laden. Diese Installation
-  also zuerst entfernen; ein späterer Setup-Lauf ersetzt die
-  Dev-Registrierung wieder.
+  also zuerst entfernen. Vor einem erneuten Setup-Lauf `reDelphix.d12`
+  unter Komponente > Packages installieren entfernen: Das Setup entfernt
+  es nicht.
 
 Die Schritte stehen in [HowTo_Build_de.md](HowTo_Build_de.md#53-optional-redelphix-installieren-code-aktionen).
 Ohne reDelphix läuft das Plugin wie gewohnt: `Strg+Alt+F` meldet, dass

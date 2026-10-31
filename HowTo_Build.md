@@ -229,8 +229,9 @@ reDelphix adds quick fixes and refactorings to the plugin (see the
 setup, GetIt and the ZIPs do not contain it, so this is the only way to
 get it. It needs Delphi 12, Win32, and the dev set from 5.1 and 5.2: it
 links against `SCA.Engine`, and that package cannot be loaded next to
-the monolith from the setup or GetIt. Remove such an installation first;
-a later run of the setup replaces the dev registration.
+the monolith from the setup or GetIt. Remove such an installation first.
+Before running the setup again, remove `reDelphix.d12` under
+**Component → Install Packages**: the setup does not remove it.
 
 1. Complete 5.1 and 5.2, and check that `reDelphix.d12` is on
    **Windows 32-bit** too.

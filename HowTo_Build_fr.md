@@ -246,8 +246,9 @@ Le setup, GetIt et les ZIP ne le contiennent pas : c'est donc le seul
 moyen de l'obtenir. Il nécessite Delphi 12, Win32, et le jeu de
 développement de 5.1 et 5.2 : il est lié à `SCA.Engine`, et ce paquet ne
 peut pas être chargé à côté du monolithe du setup ou de GetIt. Retirez
-d'abord une telle installation ; relancer le setup plus tard remplace
-l'enregistrement de développement.
+d'abord une telle installation. Avant de relancer le setup, retirez
+`reDelphix.d12` sous **Composant → Installer des packages** : le setup
+ne le retire pas.
 
 1. Terminez 5.1 et 5.2, et vérifiez que `reDelphix.d12` est lui aussi
    sur **Windows 32-bit**.

@@ -82,11 +82,12 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
   nicht, es wird aus den Quellen gebaut - nur fuer Delphi 12, Win32.
 * **Plugin-Variante B**: `StaticCodeAnalyser.IDE.d12` (requires `SCA.Engine`,
   `SCA.SharedUI`) muss installiert sein, nicht der Monolith
-  `StaticCodeAnalyser.Plugin.d12`. reDelphix linkt gegen `SCA.Engine.bpl`;
+  `StaticCodeAnalyser.Plugin.d12`. reDelphix linkt gegen `SCA.Engine290.bpl`;
   neben dem Monolithen liesse sich die Engine nicht laden (doppelte Units).
   Setup und GetIt installieren den Monolithen: eine solche Installation
-  zuerst entfernen, ein spaeterer Setup-Lauf ersetzt die Registrierung
-  von Variante B wieder.
+  zuerst entfernen. Vor einem erneuten Setup-Lauf `reDelphix.d12` unter
+  Komponente > Packages installieren entfernen: Das Setup entfernt es
+  nicht.
 * SCA-Stand mit Quellstellen-Dienst (AH2 `uSourcePlaces`) und Registry
   "Aktionen am Fund" (AH6 `uFindingActions`, mit `fakNavigate` und
   `fakSuppress`), `SCA.Engine.dcp` im Dcp-Verzeichnis der IDE.

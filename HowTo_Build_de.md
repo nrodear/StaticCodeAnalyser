@@ -236,8 +236,9 @@ Setup, GetIt und die ZIPs enthalten es nicht, dies ist also der einzige
 Weg dorthin. Es braucht Delphi 12, Win32, und den Dev-Satz aus 5.1 und
 5.2: es linkt gegen `SCA.Engine`, und dieses Paket lässt sich nicht
 neben dem Monolithen aus Setup oder GetIt laden. So eine Installation
-also zuerst entfernen; ein späterer Setup-Lauf ersetzt die
-Dev-Registrierung wieder.
+also zuerst entfernen. Vor einem erneuten Setup-Lauf `reDelphix.d12`
+unter **Komponente → Packages installieren** entfernen: Das Setup
+entfernt es nicht.
 
 1. 5.1 und 5.2 abschließen und prüfen, dass auch `reDelphix.d12` auf
    **Windows 32-bit** steht.
