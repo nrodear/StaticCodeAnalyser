@@ -1,4 +1,53 @@
-﻿# Release 0.9.18 — Error signifie prouvé, une référence qui tient, et un seul rapport de résultats
+﻿# Release 0.9.19 — Corriger au résultat, Lazarus dans l'analyse, et une référence qui compte
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
+
+Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
+([deutsch](docs/releases/v0.9.19_de.md)).
+
+- **reDelphix : corriger un résultat là où on le lit.** Un nouveau
+  paquet IDE propose des quick-fixes pour 96 règles, dans l'ampoule et
+  dans le menu contextuel du résultat, ainsi que neuf actions de code au
+  curseur, en anglais, en allemand et en français. Chaque action
+  revérifie d'abord le tampon de l'éditeur et écrit en une seule étape
+  d'annulation, jamais dans un fichier. Il faut Delphi 12 (Win32), une
+  compilation depuis les sources et la variante de plugin
+  `StaticCodeAnalyser.IDE.d12`.
+- **Setup et GetIt ne livrent pas reDelphix.** Le plugin qu'ils
+  installent perd les quatre quick-fixes de la v0.9.18 (SCA066, SCA072,
+  SCA084, SCA085) : `Ctrl+Alt+F` indique désormais qu'il n'y a pas de
+  quick-fix.
+- **Lazarus et Free Pascal sont une vraie cible d'analyse.**
+  `--dialect=fpc` ou `auto`, unités `.pp`/`.lpr`, formulaires `.lfm`,
+  `.lpi`/`.lpk`/`.lpg` comme périmètre de projet, `[Scan] Dialect` dans
+  `analyser.ini`.
+- **Les références comptent.** Chaque entrée couvre au plus un résultat,
+  et la CLI, la GUI et l'IDE marquent les mêmes résultats comme nouveaux.
+  **Rupture pour les gates CI :** les résultats qu'une entrée masquait
+  apparaissent comme nouveaux.
+- **Sept nouvelles règles, 205 au total :** noms `ParamByName` erronés,
+  adresses IP en dur dans le code et les fichiers `.ini`, `not` et `and`
+  avant une comparaison, boucle `for` qui dépasse d'un indice, et nom de
+  fonction à la place de `Result`. SCA202, SCA203 et SCA205 peuvent
+  signaler Error.
+- **Des règles qui lisent plus et affirment moins.** SCA001 reçoit le
+  niveau `proven-leak` comme seul Error, SCA007 s'exécute réellement dans
+  la CLI, SCA125 signale pour la première fois, et les formulaires avec
+  `PopupMenu = dm.Pop` ne sont plus ignorés.
+- **Des rapports fiables.** Les URI SARIF sont des URI valides, les champs
+  CSV sont protégés contre l'injection de formules, les fichiers de
+  rapport sont écrits de façon atomique, et `--diff`/`--branch` écrivent
+  toujours le rapport demandé.
+- **Un export Sonar conforme au serveur.** Chaque issue correspond à un
+  fichier et à une ligne que SonarQube connaît, les résultats plafonnés
+  sont exportés, et `sonar-scan.ps1` utilise le jeu de règles de l'IDE.
+  Les projets existants verront des issues apparaître et se déplacer.
+- **Dans l'IDE :** l'overlay s'ouvre sous la ligne du résultat, et le menu
+  d'actions est deux fois moins large, sans rien perdre.
+
+---
+
+# Précédemment — Release 0.9.18 — Error signifie prouvé, une référence qui tient, et un seul rapport de résultats
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 
