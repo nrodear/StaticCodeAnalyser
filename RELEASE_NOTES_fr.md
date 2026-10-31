@@ -1,4 +1,4 @@
-﻿# Release 0.9.19 — Corriger au résultat, Lazarus dans l'analyse, et une référence qui compte
+﻿# Release 0.9.19 — Corriger directement depuis le résultat, Lazarus dans l'analyse, et une référence qui compte
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 
@@ -15,15 +15,15 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   `StaticCodeAnalyser.IDE.d12`.
 - **Setup et GetIt ne livrent pas reDelphix.** Le plugin qu'ils
   installent perd les quatre quick-fixes de la v0.9.18 (SCA066, SCA072,
-  SCA084, SCA085) : `Ctrl+Alt+F` indique désormais qu'il n'y a pas de
-  quick-fix.
+  SCA084, SCA085) : `Ctrl+Alt+F` affiche désormais « Quick-Fix : le
+  package reDelphix n'est pas chargé ».
 - **Lazarus et Free Pascal sont une vraie cible d'analyse.**
   `--dialect=fpc` ou `auto`, unités `.pp`/`.lpr`, formulaires `.lfm`,
   `.lpi`/`.lpk`/`.lpg` comme périmètre de projet, `[Scan] Dialect` dans
   `analyser.ini`.
 - **Les références comptent.** Chaque entrée couvre au plus un résultat,
   et la CLI, la GUI et l'IDE marquent les mêmes résultats comme nouveaux.
-  **Rupture pour les gates CI :** les résultats qu'une entrée masquait
+  **Rupture pour les portes CI :** les résultats qu'une entrée masquait
   apparaissent comme nouveaux.
 - **Sept nouvelles règles, 205 au total :** noms `ParamByName` erronés,
   adresses IP en dur dans le code et les fichiers `.ini`, `not` et `and`

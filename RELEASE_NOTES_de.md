@@ -14,8 +14,8 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   `StaticCodeAnalyser.IDE.d12`.
 - **Setup und GetIt liefern reDelphix nicht aus.** Das dort installierte
   Plugin verliert die vier Quick-Fixes aus v0.9.18 (SCA066, SCA072,
-  SCA084, SCA085): `Strg+Alt+F` meldet jetzt, dass es keinen Quick-Fix
-  gibt.
+  SCA084, SCA085): `Strg+Alt+F` meldet jetzt „Quick-Fix: das Package
+  reDelphix ist nicht geladen".
 - **Lazarus und Free Pascal sind ein echtes Scan-Ziel.** `--dialect=fpc`
   oder `auto`, `.pp`/`.lpr`-Units, `.lfm`-Formulare, `.lpi`/`.lpk`/`.lpg`
   als Projekt-Umfang, `[Scan] Dialect` in der `analyser.ini`.
