@@ -5,12 +5,13 @@ Findet Memory-Leaks, Code-Smells, Sicherheitsluecken und Wartbarkeits-Probleme.
 
 🇬🇧 [English version](BRANCH_CHANGES.md) · 🇫🇷 [Version française](BRANCH_CHANGES_fr.md)
 
-Das Repository enthaelt zwei Komponenten:
+Das Repository enthält drei Komponenten:
 
 | Komponente | Zweck | Pfad |
 |------------|-------|------|
 | **Standalone-EXE** | Stand-alone-Tool zum Analysieren von Verzeichnissen | `StaticCodeAnalyserForm/` |
 | **IDE-Plugin** | Dockbares Tool-Fenster in der Delphi-IDE | `StaticCodeAnalyserIDE/` |
+| **reDelphix** | Optionales IDE-Paket mit Code-Aktionen, aus den Quellen gebaut | `reDelphix/` |
 
 ---
 
@@ -20,10 +21,10 @@ Das Repository enthaelt zwei Komponenten:
 - **Sonar-Style Stat-Tiles** ueber dem Grid: Fehler / Warnungen / Hinweise / Bugs / Code-Duplikate / Code-Quality als Letter-Grade **A–E** (Rohscore + Breakdown im Tooltip)
 - **Severity-Filter** + **Typ-Filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help-Panel rechts** mit "Vorher/Nachher"-Code-Beispielen je Befund
-- **Claude-AI-Prompt-Generator** — Klick auf eine Zeile legt einen kompletten Markdown-Block in die Zwischenablage
+- **Claude-AI-Prompt-Generator** — **Copy AI prompt** im Kontextmenü legt einen kompletten Markdown-Block in die Zwischenablage
 - **VCS-Branch-Mode** — analysiert nur in der Branch geaenderte Dateien (siehe unten)
-- **Suppression** ueber `// SCA: ignore` Kommentare
-- **Export** als CSV / JSON / Jira / HTML
+- **Suppression** über `// noinspection`-Kommentare
+- **Export** als SARIF / Sonar / CSV / JSON / Jira / HTML
 - **Theme-Aware** — folgt dem aktiven Delphi-IDE-Theme (Light/Dark/Mountain Mist/Carbon)
 - **Recent-Pfade** persistiert pro Session
 - **Ignore-Liste** unter `%APPDATA%\StaticCodeAnalyser\ignore.txt`
@@ -32,9 +33,9 @@ Das Repository enthaelt zwei Komponenten:
 
 ## Komponenten im Detail
 
-### 1. Standalone-EXE — `analyser.d12.dpr`
+### 1. Standalone-EXE — `StaticCodeAnalyser.d12.dpr`
 
-Eigenstaendiges Programm, kompiliert via `analyser.d12.dproj`. Bietet:
+Eigenständiges Programm, kompiliert via `StaticCodeAnalyser.d12.dproj`. Bietet:
 - Verzeichnis-Scan
 - Einzeldatei-Analyse
 - CSV-Export
@@ -42,13 +43,13 @@ Eigenstaendiges Programm, kompiliert via `analyser.d12.dproj`. Bietet:
 
 Bauen:
 ```
-Open analyser.d12.dproj in Delphi 12 -> Project -> Build
+Open StaticCodeAnalyser.d12.dproj in Delphi -> Project -> Build
 ```
 
 ### 2. IDE-Plugin — `StaticCodeAnalyser.IDE.d12.dpk`
 
 Designtime-Paket mit dockbarem Tool-Fenster. Wird ueber das Menue
-**Tools / Static Code Analysis Tool for Delphi** oder **Ansicht / Static Code Analysis Tool for Delphi**
+**Tools / Static Code Analysis** oder **Ansicht / Static Code Analysis**
 aufgerufen.
 
 Zusaetzliche Funktionen gegenueber Standalone:
@@ -74,7 +75,7 @@ Open StaticCodeAnalyser.IDE.d12.dproj -> Project -> Install
 Vollstaendige Liste mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen)
 in [`DETECTORS_de.md`](DETECTORS_de.md).
 
-Aktueller Stand (v0.9.16): **198 Regeln (175 Pascal + 23 DFM)** — Sonar-Katalog + SonarDelphi-Migration (SCA120-152) + DFM-Detektoren + Naming/Formatting (SCA060-119) + Bonus.
+Aktueller Stand: **205 Regeln (181 Pascal + 23 DFM + 1 INI)** — Sonar-Katalog + SonarDelphi-Migration (SCA120-152) + DFM-Detektoren + Naming/Formatting (SCA060-119) + Bonus.
 
 Schwerpunkte:
 
@@ -223,8 +224,12 @@ SvnExe=
 Befunde lassen sich pro Zeile unterdruecken:
 
 ```pascal
-x := 1 / y;  // SCA: ignore (DivByZero geprueft - y kommt aus Validation)
+// noinspection DivByZero
+x := 1 / y;
 ```
+
+Der Marker gilt für die nächste Zeile; die weiteren Formen stehen in der
+[README](README_de.md#suppression).
 
 Auch ganze Dateien koennen ueber `%APPDATA%\StaticCodeAnalyser\ignore.txt`
 ausgeschlossen werden — eine Datei (oder ein Pfad-Glob) pro Zeile.
@@ -246,8 +251,9 @@ Dein Repo hat keinen Default-Branch unter dem ueblichen Namen. Setze in
 
 ### Befunde fehlen die du erwartest
 
-- **Datei-Endung**: nur `.pas`-Dateien werden analysiert. `.dpr`/`.dpk`
-  werden noch nicht erfasst (Erweiterung moeglich)
+- **Datei-Endung**: nur `.pas`-Dateien werden analysiert (im fpc-Dialekt
+  auch `.pp` und `.lpr`). `.dpr`/`.dpk` werden noch nicht erfasst
+  (Erweiterung möglich)
 - **Submodule**: `git status` erfasst Submodul-interne Aenderungen nicht
   — separat im Submodul-Ordner scannen
 - **Test-Filter**: Tests werden standardmaessig ausgeschlossen. Setze
@@ -273,12 +279,12 @@ Liefert UTF-8 statt escaped Sequenzen.
 
 | Ziel | Schritt |
 |------|---------|
-| Standalone-EXE | `analyser.d12.dproj` oeffnen → Project → Build |
+| Standalone-EXE | `StaticCodeAnalyser.d12.dproj` öffnen → Project → Build |
 | IDE-Plugin (empfohlen) | Release-Setup `StaticCodeAnalyserSetup-<Version>.exe` ausfuehren, oder GetIt Local Package laden (`StaticCodeAnalyser-v<V>-getit-manifest.zip`) |
 | IDE-Plugin (Selbstbau) | `StaticCodeAnalyser.IDE.d12.dproj` oeffnen → Project → Install |
 
-Plattform: **Win32** — das Plugin laeuft in der 32-Bit-IDE von Delphi
-12.0–12.3 (die 64-Bit-IDE von 12.3 wird noch nicht unterstuetzt).
+Plattform: das Plugin läuft in der 32-Bit-IDE von Delphi 12.0–12.3 und
+in beiden IDEs von Delphi 13, 32- und 64-Bit.
 
 ---
 
@@ -286,12 +292,13 @@ Plattform: **Win32** — das Plugin laeuft in der 32-Bit-IDE von Delphi
 
 ```
 StaticCodeAnalyser/
-├── StaticCodeAnalyserForm/         # Standalone-EXE + Detector-Code
-│   ├── sources/                    # Detektoren, Parser, Theme-Helper
+├── StaticCodeAnalyserForm/         # Standalone-EXE
+│   ├── sources/                    # Formulare und Konsolen-Runner
 │   ├── resources/                  # Test-Pascal-Dateien fuer Detector-Test
 │   ├── tests/                      # Unit-Tests
-│   └── analyser.d12.dproj          # Standalone-Projekt
+│   └── StaticCodeAnalyser.d12.dproj # Standalone-Projekt
 ├── SCA.Engine/
+│   ├── sources/                    # Detektoren, Parser, Exporte
 │   └── SCA.Engine.dpk              # Engine-Paket (Dev-Satz)
 ├── SCA.SharedUI/
 │   └── SCA.SharedUI.dpk            # Shared-UI-Paket (Dev-Satz)
@@ -300,6 +307,7 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + Dockable-Form-Wrapper
 │   ├── StaticCodeAnalyser.IDE.d12.dpk       # Designtime-Paket (Dev-Satz)
 │   └── StaticCodeAnalyser.Plugin.d12.dpk    # Release-Monolith-Paket
+├── reDelphix/                      # Optionales IDE-Paket mit Code-Aktionen
 ├── docs/                           # Mockups, Skizzen
 └── DETECTORS_de.md                 # Vollstaendiger Detektor-Katalog mit Status
 ```
