@@ -283,8 +283,8 @@ What can change on an existing setup, in one place. The details follow in the se
 ### Installer and packages
 
 - **Runtime packages carry the RTL suffix** - `SCA.Engine` and `SCA.SharedUI` now build as `SCA.Engine290.bpl` and `SCA.SharedUI290.bpl` under Delphi 12 (`370` under Delphi 13). Both Bpl folders are on the PATH and runtime packages resolve over it, so Delphi 12 could load the Delphi 13 build and fail at IDE start. The design-time packages keep their names, because the IDE loads them by full path, and the Known Packages entries of the standard install do not change. **What changes:** code that uses the engine as a runtime package loads `SCA.Engine290.bpl`, and the old `SCA.Engine.bpl` and `SCA.SharedUI.bpl` in the Delphi 12 Bpl folder can be deleted.
-- **Installer and GetIt ship the same plugin as before** - both still install the single `StaticCodeAnalyser.Plugin.d12.bpl`; `tools/package-release.ps1` is unchanged. reDelphix is not part of them and is built from source together with the plugin variant `StaticCodeAnalyser.IDE.d12`. **What changes:** installed from there, the plugin has no quick-fixes, and `Ctrl+Alt+F` reports "Quick-Fix: the reDelphix package is not loaded".
-- **Release archive** - the docs and scripts zip now also holds `examples/ShowcaseDemo`, because it packs `examples\` completely.
+- **Installer and GetIt ship the same plugin as before** - both still install the single `StaticCodeAnalyser.Plugin.d12.bpl`. reDelphix is not part of them and is built from source together with the plugin variant `StaticCodeAnalyser.IDE.d12`. **What changes:** installed from there, the plugin has no quick-fixes, and `Ctrl+Alt+F` reports "Quick-Fix: the reDelphix package is not loaded".
+- **Release archive** - the docs and scripts zip now also holds `examples/ShowcaseDemo`, because it packs `examples\` completely. It takes the release notes of the version it packs, where it always held those of v0.9.17, and adds `reDelphix/QUICKFIXES.md`, `reDelphix/README.md` and what the README and the release notes link to: the older release notes, the configuration and profile pages, the images of the README and `LICENSE`.
 
 ---
 
