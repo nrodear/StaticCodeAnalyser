@@ -40,8 +40,9 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   toujours le rapport demandé.
 - **Un export Sonar conforme au serveur.** Chaque issue correspond à un
   fichier et à une ligne que SonarQube connaît, les résultats plafonnés
-  sont exportés, et `sonar-scan.ps1` utilise le jeu de règles de l'IDE.
-  Les projets existants verront des issues apparaître et se déplacer.
+  sont exportés, et `sonar-scan.ps1` utilise le jeu de règles de l'IDE
+  (d'après le modèle `ide-fast`, 21 règles : voir la migration). Les
+  projets existants verront des issues apparaître et se déplacer.
 - **Dans l'IDE :** l'overlay s'ouvre sous la ligne du résultat, et le menu
   d'actions est deux fois moins large, sans rien perdre.
 - **La documentation suit le code.** Le README et les manuels sont

@@ -33,7 +33,8 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   and `--diff`/`--branch` always write the requested report.
 - **Sonar export that fits the server.** Every issue matches a file and
   a line SonarQube knows, capped findings are exported, and
-  `sonar-scan.ps1` uses the rule set of the IDE. Existing projects see
+  `sonar-scan.ps1` uses the rule set of the IDE (from the template
+  `ide-fast`, 21 rules: see the migration notes). Existing projects see
   issues appear and move.
 - **In the IDE:** the overlay opens below the finding line, and the
   action menu is half as wide with nothing lost.
