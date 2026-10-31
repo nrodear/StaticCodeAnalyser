@@ -14,7 +14,7 @@ override. Works with both SonarQube Server and SonarCloud.
 
 | Script | What it does |
 |---|---|
-| [`sonar-scan.ps1`](sonar-scan.ps1)     | Runs `analyser.exe --sonar-export` and produces `sca-findings.json`. Auto-deploys the rule catalog to `%APPDATA%` on first run, decodes the exit code into a human-readable verdict, validates the output file. |
+| [`sonar-scan.ps1`](sonar-scan.ps1)     | Runs `analyser.exe --sonar-export` and produces `sca-findings.json`. Auto-deploys the rule catalog to `%APPDATA%` on first run, decodes the exit code into a human-readable verdict, validates the output file. Uses the IDE rule profile (`[Rules] IdeProfile`) and keeps test fixtures; `-RuleProfile` and `-HideTestFixtures` override that. |
 | [`sonar-upload.ps1`](sonar-upload.ps1) | Decrypts the DPAPI token from `analyser.ini`, reads host/project from `[Sonar]`, runs `sonar-scanner` with the right `-D` flags. Supports `-DryRun` and `-DisableDelphi`. |
 
 ---

@@ -278,9 +278,23 @@ SonarDelphi.
    `[OK]` und am Ende `Sonar connection healthy.` melden, siehe
    [Beispiel-Output](#beispiel-health-check-output).
 
-6. **Report schreiben.** Analyse laufen lassen, dann im Export-Menü
-   [„Sonar: write Generic Issue report (all findings)..."](#sonar-write-generic-issue-report-all-findings-im-export-menü)
-   wählen. Der Eintrag schreibt nur eine Datei und sendet nichts.
+6. **Report schreiben.** Reports für Sonar kommen aus der CLI, der Lauf sendet
+   nichts:
+
+   ```cmd
+   powershell -ExecutionPolicy Bypass -File StaticCodeAnalyserForm\scripts\sonar-scan.ps1 -ProjectPath <repo>
+   ```
+
+   Das Skript nimmt das Regel-Profil der IDE (`[Rules] IdeProfile` aus der
+   `analyser.ini`) und behält Test-Fixtures im Report, damit dieselben Findings
+   entstehen wie in der IDE. `-RuleProfile` und `-HideTestFixtures` weichen davon
+   ab. Einen unbekannten Profilnamen lehnt das Skript ab, die EXE selbst würde
+   damit ohne Fehler andere Regeln anwenden.
+
+   **Warum nicht aus dem Export-Menü:** GUI und CLI schreiben bei gleichen
+   Findings unterschiedliche Regel-Metadaten (Beschreibung,
+   `cleanCodeAttribute`, Impacts). Ein Wechsel des Wegs ändert in Sonar deshalb
+   Severities und Ratings, obwohl sich am Code nichts geändert hat.
 
 7. **Hochladen.** Im SCA-Repo in `cmd` zuerst als Probelauf, dann ohne `-DryRun`:
 
@@ -303,7 +317,7 @@ SonarDelphi.
    Report:   1015 files, 1015 found under ProjectPath
    Report:   309 of 1015 found files will be dropped by the scanner
    WARNING: 106 report files (1067 findings) match sonar.exclusions, ...
-   WARNING: 135 report files (1421 findings) are in embedded git repos the scanner does not see ...: dunitx (105), infra-probe (23), BuildLogStats (7)
+   WARNING: 135 report files (1421 findings) are in embedded git repos the scanner does not see ...: lib-a (105), tool-b (23), tool-c (7)
    WARNING: 68 report files (302 findings) are gitignored in their repo, ...
    ```
 
@@ -328,11 +342,15 @@ SonarDelphi.
 
 ### Grenzen
 
-- **Ein Project Key je Analyse-Ordner.** Das Skript nimmt den Key aus
+- **Pro Git-Repo ein Sonar-Projekt.** Das Skript nimmt den Key aus
   `SONAR_PROJECT_KEY`, sonst aus der INI. Eine Analyse aus einem anderen Ordner
   ersetzt den Stand im Projekt.
-- **Oberordner.** Wird ein Oberordner analysiert, landet auch der Quellcode aller
-  Unterprojekte im Sonar-Projekt.
+- **Kein Scan eines Repos aus dem Elternordner.** Wird ein Oberordner analysiert,
+  landet auch der Quellcode aller Unterprojekte im Sonar-Projekt, und für die
+  Dateien eines eingebundenen Repos fehlt die Blame-Information. Sonar setzt dann
+  das Analysedatum als Entstehungsdatum, und jedes Issue dieser Dateien zählt als
+  neuer Code. Das Zeichen dafür ist die Warnung
+  `Missing blame information for N files`.
 - **Ausschlüsse.** Die Standard-Ausschlüsse von `sonar-upload.ps1`
   (`**/lib/**`, `**/DUnitX-*/**` usw.) verwerfen Findings in diesen Pfaden.
 - **Eingebettete Git-Repos.** Ein Unterordner mit eigenem `.git`, der im Index
