@@ -58,6 +58,8 @@ from the release assets.
 | [../BRANCH_CHANGES.md](../BRANCH_CHANGES.md) | The Branch-Changes feature: Git/SVN detection, Tortoise compatibility, configuration, troubleshooting. |
 | [../installer/README_Installer.md](../installer/README_Installer.md) | Building and running the plugin installer. |
 | [../getit/README_GetIt.md](../getit/README_GetIt.md) | GetIt local package - manifest contracts and lessons. |
+| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the optional package with the code actions: prerequisites, building, behaviour. Not part of the setup or GetIt; the [README](../README.md#code-actions-redelphix-optional-ide-package) has the short version. In German. |
+| [../reDelphix/QUICKFIXES.md](../reDelphix/QUICKFIXES.md) | Every code action with its menu texts (en/de/fr), effect, locks and an example. In German. |
 
 ## Embedding the engine
 

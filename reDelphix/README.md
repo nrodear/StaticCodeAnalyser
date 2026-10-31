@@ -82,10 +82,15 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
 
 ## Voraussetzungen in der IDE
 
+* **Nicht im Release**: Setup, GetIt-Paket und ZIPs enthalten reDelphix
+  nicht, es wird aus den Quellen gebaut - nur fuer Delphi 12, Win32.
 * **Plugin-Variante B**: `StaticCodeAnalyser.IDE.d12` (requires `SCA.Engine`,
   `SCA.SharedUI`) muss installiert sein, nicht der Monolith
   `StaticCodeAnalyser.Plugin.d12`. reDelphix linkt gegen `SCA.Engine.bpl`;
   neben dem Monolithen liesse sich die Engine nicht laden (doppelte Units).
+  Setup und GetIt installieren den Monolithen: eine solche Installation
+  zuerst entfernen, ein spaeterer Setup-Lauf ersetzt die Registrierung
+  von Variante B wieder.
 * SCA-Stand mit Quellstellen-Dienst (AH2 `uSourcePlaces`) und Registry
   "Aktionen am Fund" (AH6 `uFindingActions`, mit `fakNavigate` und
   `fakSuppress`), `SCA.Engine.dcp` im Dcp-Verzeichnis der IDE.
@@ -104,7 +109,8 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
 
 Das Package ist Teil von `StaticCodeAnalyser.d12.groupproj` und liegt im
 SCA-Repo unter `reDelphix\`. In der Gruppe steht es nach dem IDE-Plugin;
-danach folgen TestProject, reDelphix.Test und RdxCorpusProbe. Es haengt von
+danach folgen TestProject, reDelphix.Test, RdxCorpusProbe und
+RdxActionProbe. Es haengt von
 `SCA.Engine` ab (das Package bindet `SCA.Engine.dcp`); die Gruppe traegt
 das als Abhaengigkeit, ein einzelnes "Erzeugen" von `reDelphix_d12` baut
 die Engine also vorher. DCUs landen wie bei den anderen Projekten in
@@ -351,12 +357,9 @@ Bei einer Fehlermeldung zuerst dort nachsehen.
 Die Texte von reDelphix - Menuetexte, Hinweise, Gruende ausgegrauter
 Eintraege, Meldungen - erscheinen in der Sprache der SCA-Oberflaeche
 (Entscheid E29): englische msgids ueber `uRdxText._()`, Uebersetzungen in
-`i18n\de.po` und `i18n\fr.po` wie in der SCA. Uebersetzt sind bisher die
-Menuetexte und ein Teil der Meldungen (Diagnosen des Anbieters,
-Spaltengrenze und Pufferende im Editor); Hinweise und Gruende der Hilfen
-und die uebrigen Meldungen stehen noch deutsch im Quelltext. Die
-Umstellung laeuft in Gruppen je Unit; Charge C1 legt das Fundament: die
-gemeinsamen Texte in `uRdxText` und das Gate `tools\rdx_i18n_gate.py`
+`i18n\de.po` und `i18n\fr.po` wie in der SCA. Die Units enthalten keinen
+deutschen Text mehr ausserhalb der `.po`; das haelt das Gate
+`tools\rdx_i18n_gate.py` fest, die gemeinsamen Texte stehen in `uRdxText`
 (siehe "Texte umstellen").
 
 Eigene Einstellungen stehen in `%APPDATA%\StaticCodeAnalyser\redelphix.ini`,
