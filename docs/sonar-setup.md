@@ -5,6 +5,8 @@ SonarCloud liefern. Wir konkurrieren nicht mit
 [SonarDelphi](https://github.com/integrated-application-development/sonar-delphi) —
 unsere Findings (mORMot-Leaks, DFM-Detektoren, sonarfremde Smells wie
 `ConcatToFormat` / `TautologicalBoolExpr`) ergänzen den SonarDelphi-Report.
+SonarDelphi ist dabei optional: SCA-Findings kommen auch ohne das Plugin ins
+Projekt.
 
 ---
 
@@ -34,7 +36,11 @@ sonar-scanner
 ```
 
 Im Sonar-Dashboard erscheinen die SCA-Findings unter Issues als
-`external_static-code-analyser:SCA<NNN>` neben den SonarDelphi-Findings.
+`external_static-code-analyser:SCA<NNN>`, neben den SonarDelphi-Findings,
+falls das Plugin mitläuft.
+
+Ohne `sonar-project.properties` und ohne SonarDelphi geht es über
+`sonar-upload.ps1`, siehe [Sonar-Projekt einrichten](#sonar-projekt-einrichten).
 
 ---
 
@@ -241,6 +247,83 @@ sonar.externalIssuesReportPaths=.sonar/external/
 
 ---
 
+## Sonar-Projekt einrichten
+
+Der Weg für SCA-Findings in ein neues SonarQube-Projekt, von oben nach unten
+abzuarbeiten. Er nutzt `sonar-upload.ps1` und läuft ohne das Java-Plugin
+SonarDelphi.
+
+1. **Voraussetzungen prüfen.** Der Server ist erreichbar und
+   `<host>/api/system/status` meldet `UP`. `sonar-scanner` ist installiert,
+   siehe `sonarHowto.md`, Abschnitt 0.1.
+
+2. **Projekt anlegen.** Im Web-UI *Create Project* → *manually*. Der Key muss
+   dem `ProjectKey` in der SCA-Konfiguration entsprechen. In den Project
+   Settings auf dem Server sind für diesen Weg keine Einträge nötig.
+
+3. **Token erzeugen.** Unter *My Account* → *Security* einen **User Token**
+   (`squ_...`) generieren. Der Name muss je Benutzer eindeutig sein, der Wert
+   wird nur einmal angezeigt. Badge-Token (`sqb_...` aus *Project Information*)
+   taugen nicht für Analysen; `--sonar-test` meldet damit `{"valid":false}`.
+
+4. **SCA konfigurieren.** Auf der
+   [Options-Seite](#tools--options--third-party--sonar-integration) Host,
+   Project Key und Bearer Token eintragen. Steht im Token-Feld der Platzhalter
+   oder ist es leer, bleibt der alte Token erhalten: zum Ersetzen das Feld
+   leeren und den neuen Wert einfügen. `sonar-upload.ps1` nimmt wie das
+   Werkzeug zuerst `SONAR_HOST_URL`, `SONAR_PROJECT_KEY` und `SONAR_TOKEN` aus
+   der Umgebung und für alles Übrige die `analyser.ini`.
+
+5. **Verbindung testen.** `analyser.exe --sonar-test` muss alle Stufen mit
+   `[OK]` und am Ende `Sonar connection healthy.` melden, siehe
+   [Beispiel-Output](#beispiel-health-check-output).
+
+6. **Report schreiben.** Analyse laufen lassen, dann im Export-Menü
+   [„Sonar: write Generic Issue report (all findings)..."](#sonar-write-generic-issue-report-all-findings-im-export-menü)
+   wählen. Der Eintrag schreibt nur eine Datei und sendet nichts.
+
+7. **Hochladen.** Im SCA-Repo in `cmd` zuerst als Probelauf, dann ohne `-DryRun`:
+
+   ```cmd
+   StaticCodeAnalyserForm\scripts\sonar-upload.cmd -ProjectPath <analyse-ordner> -JsonPath <analyse-ordner>\sca-findings.json -DryRun
+   StaticCodeAnalyserForm\scripts\sonar-upload.cmd -ProjectPath <analyse-ordner> -JsonPath <analyse-ordner>\sca-findings.json
+   ```
+
+   **`-ProjectPath` muss der Ordner sein, über den die Analyse lief.** Die Pfade
+   im Report sind relativ zu diesem Ordner. Existiert keiner davon, bricht das
+   Skript vor dem Scan ab; existiert nur ein Teil, warnt es und läuft weiter.
+   `-JsonPath` ist nötig, wenn der Report nicht als `sca-findings.json` im
+   `-ProjectPath` liegt.
+
+   Die `.cmd` setzt `-DisableDelphi`. SonarDelphi läuft also nicht mit und
+   braucht keine Einstellungen.
+
+8. **Ergebnis prüfen.** `Upload complete` beweist keinen Import. Entscheidend
+   sind diese Zeilen im Scanner-Log:
+
+   ```
+   Imported N issues in M files
+   External issues ignored for N unknown files, including: ...
+   ```
+
+   Danach verarbeitet der Server die Analyse noch kurz im Hintergrund, erst dann
+   erscheinen die Issues im Dashboard.
+
+### Grenzen
+
+- **Ein Project Key je Analyse-Ordner.** Das Skript nimmt den Key immer aus der
+  INI. Eine Analyse aus einem anderen Ordner ersetzt den Stand im Projekt.
+- **Oberordner.** Wird ein Oberordner analysiert, landet auch der Quellcode aller
+  Unterprojekte im Sonar-Projekt.
+- **Ausschlüsse.** Die Standard-Ausschlüsse von `sonar-upload.ps1`
+  (`**/lib/**`, `**/DUnitX-*/**` usw.) verwerfen Findings in diesen Pfaden.
+- **Eingebettete Git-Repos.** Beobachtung aus einem Testlauf über einen
+  Oberordner: Findings aus drei eingebetteten Repos wurden nicht importiert, die
+  aus einem als Submodul eingebundenen Repo schon. Die Ursache ist nicht
+  bestätigt.
+
+---
+
 ## MQR (Multi-Quality-Rating)
 
 Jede SCA-Rule trägt im Catalog [`rules/sca-rules.json`](../rules/sca-rules.json):
@@ -280,6 +363,12 @@ fährt hoch. ~60s warten und retry.
 Web-UI rotieren (User > My Account > Security > Generate Tokens), neuen Wert
 in der INI / Env oder per CLI setzen.
 
+**`[FAIL] Token validation: 200` mit `{"valid":false}`** — Der Server akzeptiert
+den Token nicht, nennt aber keinen Grund. Möglich sind ein Badge-Token
+(`sqb_...`) oder ein Wert, den dieser Server nicht (mehr) kennt. Neuen User
+Token erzeugen und in den IDE-Optionen das Token-Feld erst leeren, sonst bleibt
+der alte Wert stehen.
+
 **`[FAIL] Project access: not found`** — Project existiert nicht oder Token
 hat keine Browse-Permission. Anlegen via Web-UI oder per API:
 
@@ -287,6 +376,19 @@ hat keine Browse-Permission. Anlegen via Web-UI oder per API:
 curl -u $env:SONAR_TOKEN: -X POST `
   "$env:SONAR_HOST_URL/api/projects/create?project=my-delphi-project&name=My+Delphi+Project"
 ```
+
+**`Imported 0 issues` oder `External issues ignored for N unknown files`** —
+Sonar findet die Dateien aus dem Report nicht im Scan-Ordner. Der Scanner muss
+in dem Ordner laufen, über den die Analyse lief (`sonar-upload.ps1 -ProjectPath`,
+siehe [Sonar-Projekt einrichten](#sonar-projekt-einrichten)). Einzelne Dateien
+fallen außerdem durch Ausschlüsse weg, siehe [Grenzen](#grenzen).
+
+**`Path to Delphi standardlibrary is invalid`** — Das Java-Plugin SonarDelphi
+sucht die Delphi-Standardbibliothek und bricht den Scanner ab. Ohne Angabe nimmt
+es `C:\Program Files (x86)\Embarcadero\Studio\22.0` und `VER350`. Entweder ohne
+Plugin hochladen (`sonar-upload.ps1 -DisableDelphi`, die `sonar-upload.cmd` setzt
+das schon) oder `sonar.delphi.installationPath` und
+`sonar.delphi.compilerVersion` auf die installierte Delphi-Version setzen.
 
 **SARIF + Sonar-Generic gleichzeitig** — Sonar dedupliziert die beiden nicht.
 Genau **ein** Report-Format auswählen (entweder
@@ -305,7 +407,8 @@ Diese Implementierung deckt **todo-sonar.md Phase 0 + A + B + C + D**:
 - ✅ Generic Issue Export (`--sonar-export`)
 - ✅ Project-Properties-Template (`--sonar-init`)
 - ✅ Tools>Options Sonar-Seite
-- ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue)
+- ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue): schreibt nur Dateien, der
+  Upload läuft separat über `sonar-scanner` bzw. `sonar-upload.ps1`
 - ❌ Pull-Mode für IDE — **nicht Teil des Produkts**. Die Engine (`uSonarPull`)
   war seit v0.9.1 implementiert, bekam nie eine UI-Anbindung und wurde 2026-08
   entfernt; sie steckte als ausgehender HTTP-Client mit Bearer-Token in jeder
