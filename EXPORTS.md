@@ -280,9 +280,13 @@ new-code period.
     others now reach Sonar (reference corpus: +726 issues). Only a
     downgrade you configured yourself (`[PathOverrides]`) keeps a finding
     out; `--sonar-keep-downgraded` still brings those back.
-- **Capped rules carry the capped severity.** A rule whose findings the
-  policy caps gets the capped severity as its impact — SCA004 arrives as
-  SECURITY/MEDIUM instead of BLOCKER, SCA001 as RELIABILITY/MEDIUM. With
+- **Capped rules carry the capped severity.** The impact follows the
+  findings of the run: if even the strongest finding of a rule is capped,
+  the rule gets that severity as its impact — SCA004 without a proven
+  finding arrives as SECURITY/MEDIUM instead of BLOCKER, SCA202 as
+  RELIABILITY/MEDIUM. One finding at full severity keeps the catalog
+  impacts for the whole rule, because Sonar has a severity per rule only;
+  the impact can therefore change from run to run, the issues stay. With
   `[Rules] EvidenceTiering=0` the catalog impacts stay.
 - **Binary forms on file level.** Issues in binary `.dfm` files, and
   issues on a line beyond the end of the file, now have no line. Before,

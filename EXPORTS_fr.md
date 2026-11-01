@@ -305,10 +305,14 @@ apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
     référence : +726 issues). Seule une rétrogradation que vous avez
     configurée vous-même (`[PathOverrides]`) reste dehors ;
     `--sonar-keep-downgraded` la ramène toujours.
-- **Les règles plafonnées portent la sévérité plafonnée.** Une règle dont
-  la politique plafonne les constats reçoit la sévérité plafonnée comme
-  impact — SCA004 arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA001 en
-  RELIABILITY/MEDIUM. Avec `[Rules] EvidenceTiering=0`, les impacts du
+- **Les règles plafonnées portent la sévérité plafonnée.** L'impact suit
+  les constats de l'analyse : si même le constat le plus fort d'une règle
+  est plafonné, la règle reçoit cette sévérité comme impact — SCA004 sans
+  constat prouvé arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA202 en
+  RELIABILITY/MEDIUM. Un seul constat de pleine sévérité garde les impacts
+  du catalogue pour toute la règle, car Sonar ne connaît la sévérité que
+  par règle ; l'impact peut donc changer d'une analyse à l'autre, les
+  issues restent. Avec `[Rules] EvidenceTiering=0`, les impacts du
   catalogue restent.
 - **Fiches binaires au niveau fichier.** Les issues dans des fichiers
   `.dfm` binaires, et celles sur une ligne au-delà de la fin du fichier,

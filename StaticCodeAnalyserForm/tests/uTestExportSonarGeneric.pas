@@ -240,7 +240,7 @@ end;
 
 procedure TTestExportSonarGeneric.RuleHasMqrFields;
 // Katalog-Impacts unveraendert - dafuer OHNE Evidenz-Politik: mit ihr deckelt
-// KindCappedMeta SCA001 (Konfidenz medium) auf MEDIUM, das prueft
+// RunCappedMeta SCA001 (Konfidenz medium) auf MEDIUM, das prueft
 // uTestExportSonarRoundtrip.CappedErrorRule_IsExportedWithCappedImpact.
 var
   Findings : TObjectList<TLeakFinding>;

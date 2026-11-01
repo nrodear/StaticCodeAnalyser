@@ -291,11 +291,14 @@ New-Code-Periode als *geschlossen* plus *neu*.
     SCA003, SCA004 u. a. kommen jetzt in Sonar an (Referenzkorpus: +726
     Issues). Draußen bleibt nur, was per eigener
     Konfiguration herabgestuft ist (`[PathOverrides]`); `--sonar-keep-downgraded` holt auch das zurück.
-- **Gedeckelte Regeln tragen die gedeckelte Schwere.** Eine Regel, deren
-  Funde die Politik deckelt, bekommt die gedeckelte Schwere als Impact —
-  SCA004 kommt als SECURITY/MEDIUM statt BLOCKER an, SCA001 als
-  RELIABILITY/MEDIUM. Mit `[Rules] EvidenceTiering=0` bleiben die
-  Katalog-Impacts.
+- **Gedeckelte Regeln tragen die gedeckelte Schwere.** Der Impact folgt
+  den Funden des Laufs: Ist selbst der stärkste Fund einer Regel gedeckelt,
+  bekommt die Regel diese Schwere als Impact — SCA004 ohne belegten Fund
+  kommt als SECURITY/MEDIUM statt BLOCKER an, SCA202 als
+  RELIABILITY/MEDIUM. Ein Fund mit voller Schwere hält die ganze Regel auf
+  den Katalog-Impacts, denn Sonar kennt die Schwere nur je Regel; der
+  Impact kann also von Lauf zu Lauf wechseln, die Issues bleiben. Mit
+  `[Rules] EvidenceTiering=0` bleiben die Katalog-Impacts.
 - **Binäre Formulare auf Dateiebene.** Issues in binären `.dfm`-Dateien
   und Issues auf einer Zeile hinter dem Dateiende tragen jetzt keine Zeile
   mehr. Vorher konnte so eine Zeile den Scanner abbrechen lassen (*„N is

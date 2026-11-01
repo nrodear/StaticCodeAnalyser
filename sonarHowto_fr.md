@@ -83,6 +83,11 @@ Après une mise à jour du catalogue dans le dépôt : recopier. (Voir
 [docs/sonar-config.md](docs/sonar-config.md) pour l'ordre de recherche
 complet.)
 
+L'EXE ne charge qu'un seul catalogue : le premier `rules\sca-rules.json` depuis
+son propre dossier jusqu'à huit niveaux au-dessus, et cette copie seulement s'il
+n'y en a aucun. Un EXE dans le dépôt ignore la copie : un profil ajouté là est
+inconnu.
+
 ---
 
 ## 1. Configuration Sonar pour l'EXE autonome
