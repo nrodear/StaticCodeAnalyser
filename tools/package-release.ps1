@@ -20,6 +20,7 @@
 #   .\tools\package-release.ps1 -Version 0.9.10 -OutDir C:\temp\rel
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipSource
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipInstaller   (ohne Setup-EXE)
+#   .\tools\package-release.ps1 -Version 0.9.19 -DryRun          (nur Vorbedingungen)
 #
 # Danach:
 #   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip <OutDir>\*.exe
@@ -34,15 +35,23 @@ param(
 
   [switch]$SkipSource,
 
-  # Laesst den Inno-Setup-Schritt aus (z.B. solange die Monolith-BPL auf
-  # dieser Maschine nicht gebaut ist). Default ist STRIKT: fehlende
-  # Voraussetzungen brechen ab statt still ein Release ohne Installer zu
-  # erzeugen - gleiche Philosophie wie die Versions-/Stack-Wachposten.
+  # Laesst den Inno-Setup-Schritt und damit die Paketsatz-Vorbedingungen
+  # aus (z.B. solange der Paketsatz auf dieser Maschine nicht gebaut ist).
+  # Default ist STRIKT: fehlende Voraussetzungen brechen ab statt still ein
+  # Release ohne Installer zu erzeugen - gleiche Philosophie wie die
+  # Versions-/Stack-Wachposten.
   [switch]$SkipInstaller,
 
-  # Laesst die GetIt-Artefakte aus (plugin-getit.zip + finalisierte
-  # .getit.json). Braucht wie der Installer die gebaute Monolith-BPL.
-  [switch]$SkipGetIt
+  # GetIt ist fuer das Paketsatz-Release ausgesetzt (E7): Laufzeit-BPLs
+  # brauchen einen Ladeweg, den die Manifest-Actions nicht ausdruecken
+  # koennen. Daher Default AN. -SkipGetIt:$false erzeugt die Artefakte
+  # aus dem Monolithen und braucht dessen gebaute BPL; das ist kein
+  # Releaseweg, sondern ein Rest bis zum Loeschen des Monolithen.
+  [switch]$SkipGetIt = $true,
+
+  # Prueft nur die Vorbedingungen (Gates + 12 BPLs) und endet danach. Legt
+  # nichts an und raeumt nichts. Die EXEs prueft erst der echte Lauf.
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +71,140 @@ function Get-StackReserveMB([string]$Path) {
   } else {
     throw "Keine PE-Datei: $Path (magic=0x$($magic.ToString('X')))"
   }
+}
+
+function Get-PeMachine([string]$Path) {
+  # COFF-Feld Machine, 4 Byte hinter der PE-Signatur. 0 = keine PE-Datei.
+  $bytes = [System.IO.File]::ReadAllBytes($Path)
+  if ($bytes.Length -lt 0x40) { return 0 }
+  $peOff = [BitConverter]::ToInt32($bytes, 0x3C)
+  if (($peOff -lt 0) -or (($peOff + 6) -gt $bytes.Length)) { return 0 }
+  if ([BitConverter]::ToUInt32($bytes, $peOff) -ne 0x4550) { return 0 }
+  return [BitConverter]::ToUInt16($bytes, $peOff + 4)
+}
+
+function Invoke-Gate([string]$Script, [string[]]$GateArgs) {
+  # Mit ErrorActionPreference=Stop koennte eine stderr-Zeile des Gates das
+  # Skript ohne Meldung beenden; hier entscheidet allein der Exit-Code.
+  $alt = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & python (Join-Path $PSScriptRoot $Script) @GateArgs | Out-Host
+    return $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $alt
+  }
+}
+
+# ---- Paketsatz: 4 Pakete x 3 Schienen = 12 BPLs -----------------------------
+# Laufzeitpakete tragen den Compiler-Suffix (LIBSUFFIX AUTO), die beiden
+# Design-Pakete nicht. Win32 und Win64 unter D13 heissen gleich und liegen
+# nur in verschiedenen Ordnern; die PE-Machine ist die einzige Stelle, an
+# der eine Verwechslung vor der Auslieferung auffaellt. Define ist der Name,
+# unter dem ISCC den Quellordner bekommt.
+$studio = Join-Path $env:PUBLIC 'Documents\Embarcadero\Studio'
+$schienen = @(
+  @{ Name = 'D12 Win32'; Define = 'SCABplSourceDir';       Suffix = '290'
+     Dir  = (Join-Path $studio '23.0\Bpl');       Machine = 0x014C },
+  @{ Name = 'D13 Win32'; Define = 'SCABplSourceDirD13';    Suffix = '370'
+     Dir  = (Join-Path $studio '37.0\Bpl');       Machine = 0x014C },
+  @{ Name = 'D13 Win64'; Define = 'SCABplSourceDirD13X64'; Suffix = '370'
+     Dir  = (Join-Path $studio '37.0\Bpl\Win64'); Machine = 0x8664 }
+)
+$pakete = @(
+  @{ Name = 'SCA.Engine';                 Laufzeit = $true  },
+  @{ Name = 'SCA.SharedUI';               Laufzeit = $true  },
+  @{ Name = 'StaticCodeAnalyser.IDE.d12'; Laufzeit = $false },
+  @{ Name = 'reDelphix.d12';              Laufzeit = $false }
+)
+
+# ---- Vorbedingungen ---------------------------------------------------------
+# Stehen VOR allem anderen: ein Abbruch hier hat noch nichts angelegt,
+# geraeumt oder gepatcht. Es wird alles geprueft und erst dann abgebrochen -
+# so nennt ein Lauf alle Befunde, nicht nur den ersten.
+$befunde = New-Object System.Collections.Generic.List[string]
+if ((-not $SkipInstaller) -or $DryRun) {
+  if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    throw 'python nicht gefunden - die Gates sind Vorbedingung des Releases.'
+  }
+
+  # Quelltext-Vertraege des Satzes, gegen genau diese Version.
+  if ((Invoke-Gate 'package_set_gate.py' @('--version', $Version)) -ne 0) {
+    $befunde.Add('package_set_gate.py ist rot (Ausgabe oben).')
+  }
+  # DCP aelter als seine Quelle: die BPL zeigt dann den alten Stand, auch
+  # wenn ihre Version stimmt.
+  if ((Invoke-Gate 'stale_artifacts_check.py' @('--release')) -ne 0) {
+    $befunde.Add('stale_artifacts_check.py --release ist rot (Ausgabe oben).')
+  }
+
+  $verRegex = '^' + [regex]::Escape($Version) + '(\.|$)'
+  ''
+  '{0,-10} {1,-32} {2,-20} {3,-5} {4}' -f 'Schiene', 'BPL', 'Version', 'PE', 'Zustand'
+  foreach ($s in $schienen) {
+    foreach ($p in $pakete) {
+      $datei = if ($p.Laufzeit) { "$($p.Name)$($s.Suffix).bpl" } else { "$($p.Name).bpl" }
+      $f = Join-Path $s.Dir $datei
+      $was = "$($s.Name) ${datei}"
+
+      if (-not (Test-Path $f)) {
+        '{0,-10} {1,-32} {2,-20} {3,-5} {4}' -f $s.Name, $datei, '-', '-', 'FEHLT'
+        $befunde.Add("$was fehlt: $f")
+        continue
+      }
+
+      # Die BPL traegt die Version zweimal, als String und als Zahlen
+      # (VS_FIXEDFILEINFO). Beide muessen stimmen; verglichen wird das
+      # Gebaute, nicht die dproj.
+      $vi = (Get-Item $f).VersionInfo
+      $text = if ($vi.FileVersion) { $vi.FileVersion } else { '(leer)' }
+      $zahl = '{0}.{1}.{2}.{3}' -f $vi.FileMajorPart, $vi.FileMinorPart,
+                                   $vi.FileBuildPart, $vi.FilePrivatePart
+      $alsText = if ($text -eq $zahl) { $text } else { "$text/$zahl" }
+      $zustand = @()
+      if (($text -notmatch $verRegex) -or ($zahl -notmatch $verRegex)) {
+        $zustand += 'VERSION'
+        $befunde.Add("$was hat VERSIONINFO $alsText, erwartet $Version.0.")
+      }
+
+      $machine = Get-PeMachine $f
+      $alsMachine = '{0:X4}' -f [int]$machine
+      if ($machine -ne $s.Machine) {
+        $zustand += 'BITBREITE'
+        $befunde.Add(('{0} hat PE-Machine {1}, erwartet {2:X4}.' -f `
+          $was, $alsMachine, [int]$s.Machine))
+      }
+
+      $meldung = if ($zustand.Count) { $zustand -join ' + ' } else { 'ok' }
+      '{0,-10} {1,-32} {2,-20} {3,-5} {4}' -f $s.Name, $datei, $alsText, $alsMachine, $meldung
+    }
+  }
+  ''
+}
+
+# Nur -SkipGetIt:$false. Der Paketsatz kennt keinen GetIt-Ladeweg, daher der
+# Monolith; siehe den Parameter oben.
+$bpl = Join-Path $studio '23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
+if (-not $SkipGetIt) {
+  if (-not (Test-Path $bpl)) {
+    $befunde.Add("Monolith-BPL fuer GetIt fehlt: $bpl")
+  } elseif ((Get-Item $bpl).VersionInfo.FileVersion -notmatch ('^' + [regex]::Escape($Version))) {
+    $befunde.Add("Monolith-BPL fuer GetIt hat nicht die Version ${Version}: $bpl")
+  }
+}
+
+if ($befunde.Count -gt 0) {
+  throw ("Release abgebrochen, {0} Befund(e):`n  - {1}`n" -f $befunde.Count,
+         ($befunde -join "`n  - ")) +
+        ('Paketsatz in der IDE bauen (Release), je Schiene in dieser Reihenfolge: ' +
+         'SCA.Engine, SCA.SharedUI, StaticCodeAnalyser.IDE.d12, reDelphix.d12. ' +
+         'Schienen: D12 Win32, D13 Win32, D13 Win64. ' +
+         'Ohne Installer: -SkipInstaller. Es wurde nichts angelegt oder veraendert.')
+}
+
+if ($DryRun) {
+  "Trockenlauf gruen: Gates und 12 BPLs passen zu $Version. Nichts angelegt oder veraendert."
+  return
 }
 
 $outPath = Join-Path $repo $OutDir
@@ -255,47 +398,10 @@ foreach ($sentinel in @('EXPORTS.md', 'sonarHowto.md',
 "{0,-6} {1} Doku-Dateien + examples ({2} Eintraege)  ->  {3}" -f `
   'docs', $docItems.Count, $names.Count, (Split-Path $docZip -Leaf)
 
-# ---- Gemeinsame Voraussetzung Installer + GetIt: die Monolith-BPL ----------
-# Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
-# passen (faengt "vergessen zu bauen" ab).
-$bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
-if ((-not $SkipInstaller) -or (-not $SkipGetIt)) {
-  if (-not (Test-Path $bpl)) {
-    throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
-           'in der IDE bauen (Release/Win32) oder -SkipInstaller -SkipGetIt verwenden.')
-  }
-  $bplVer = (Get-Item $bpl).VersionInfo.FileVersion
-  if ($bplVer -notmatch ('^' + [regex]::Escape($Version))) {
-    throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
-           'VerInfo der Plugin-dproj nachziehen + neu bauen.')
-  }
-
-  # Seit 2026-08-23 packt das Setup auch die Delphi-13-Schiene (BDS 37.0),
-  # Win32 und Win64 getrennt - die 64-bit-IDE laedt NIE eine 32-bit-BPL.
-  # Ohne diese Pruefung braeche erst ISCC ab, und zwar mit einer Meldung
-  # ueber einen fehlenden Quellpfad statt ueber ein nicht gebautes Projekt.
-  $bpl37 = 'C:\Users\Public\Documents\Embarcadero\Studio\37.0\Bpl'
-  $bplD13 = [ordered]@{
-    'D13 Win32' = Join-Path $bpl37 'StaticCodeAnalyser.Plugin.d12.bpl'
-    'D13 Win64' = Join-Path $bpl37 'Win64\StaticCodeAnalyser.Plugin.d12.bpl'
-  }
-  foreach ($k in $bplD13.Keys) {
-    $f = $bplD13[$k]
-    if (-not (Test-Path $f)) {
-      throw ("Monolith-BPL fuer $k fehlt: $f - " +
-             'StaticCodeAnalyser.Plugin.d12.dproj in Delphi 13 bauen ' +
-             '(Release, Win32 UND Win64).')
-    }
-    $v = (Get-Item $f).VersionInfo.FileVersion
-    if ($v -notmatch ('^' + [regex]::Escape($Version))) {
-      throw ("Plugin-BPL $k hat VERSIONINFO '$v', erwartet $Version.*.")
-    }
-  }
-}
-
-# ---- IDE-Plugin-Installer (Inno Setup, Monolith-BPL) -----------------------
-# Installer P2 (2026-08-14): das Setup registriert die Monolith-BPL per-user
-# in der D12-IDE (HKCU Known Packages) - Details in installer\README_Installer.md.
+# ---- IDE-Plugin-Installer (Inno Setup, Paketsatz) ---------------------------
+# Das Setup verteilt die vier BPLs je Schiene per-user - Details in
+# installer\README_Installer.md. Die Quellordner kommen von hier, damit
+# Pruefung und Verpackung garantiert dieselben Dateien meinen.
 if (-not $SkipInstaller) {
   $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
   if ($isccCmd) {
@@ -309,18 +415,23 @@ if (-not $SkipInstaller) {
   }
 
   $iss = Join-Path $repo 'installer\StaticCodeAnalyserSetup.iss'
-  & $iscc ('/DSCAVersion=' + $Version + '.0') ('/O' + $OutDir) $iss | Out-Null
+  $isccArgs = @('/DSCAVersion=' + $Version + '.0')
+  foreach ($s in $schienen) { $isccArgs += ('/D' + $s.Define + '=' + $s.Dir) }
+  $isccArgs += ('/O' + $OutDir)
+  $isccArgs += $iss
+  & $iscc @isccArgs | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen (Exit $LASTEXITCODE)." }
 
   $setupExe = Join-Path $OutDir "StaticCodeAnalyserSetup-$Version.0.exe"
   if (-not (Test-Path $setupExe)) {
     throw "Setup-EXE fehlt nach ISCC: $setupExe. Abbruch."
   }
-  "{0,-6} Plugin-BPL v{1}  ->  {2}" -f `
-    'setup', $bplVer, (Split-Path $setupExe -Leaf)
+  "{0,-6} Paketsatz v{1} (12 BPLs)  ->  {2}" -f `
+    'setup', $Version, (Split-Path $setupExe -Leaf)
 }
 
 # ---- GetIt-Artefakte (P3.3/3.4, 2026-08-15) --------------------------------
+# AUSGESETZT (E7), Default -SkipGetIt; siehe Parameter oben.
 # Erzeugt (a) das Payload-ZIP fuer den GetIt-Paketmanager (Monolith-BPL +
 # LICENSE + Logo im WURZELVERZEICHNIS - exakt das Layout, das die
 # InstallIDEPackage-Action im Manifest referenziert) und (b) zwei
@@ -330,7 +441,9 @@ if (-not $SkipInstaller) {
 #                        Tests VOR dem Release-Upload)
 # WICHTIG: "Modified" steuert die GetIt-Update-Erkennung (nicht "Version") -
 # es wird hier auf die Paketier-Zeit gesetzt.
-if (-not $SkipGetIt) {
+if ($SkipGetIt) {
+  "{0,-6} ausgesetzt (E7), keine Artefakte" -f 'getit'
+} else {
   $getitTpl = Join-Path $repo 'getit\StaticCodeAnalyser-D12.getit.json'
   $license  = Join-Path $repo 'LICENSE'
   $logo     = Join-Path $repo 'getit\sca_logo_128.png'

@@ -28,7 +28,7 @@ faellt sonst erst beim Kunden oder beim Handtest auf:
       designide; ohne Sperre endet der Bau in einem E2202 ohne Plattform).
   (6) VerInfo Win32 == Win64 == Release-Version, Keys UND Zahlenfelder.
       R8 aus dem Konzept: die Engine-Win64-BPL hatte gar keine VERSIONINFO,
-      und die Zahlenfelder standen zwei Releases hinter dem Keys-String.
+      und die Zahlenfelder standen ein Release hinter dem Keys-String.
 
 Kommentare zaehlen nicht: die .dpk-Koepfe erwaehnen {$RUNONLY}, LIBSUFFIX
 und designide im Fliesstext. Geprueft wird nur, was der Compiler sieht.
