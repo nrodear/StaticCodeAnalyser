@@ -8,8 +8,13 @@ GET ab:
   /api/issues/search?componentKeys=<key>&rules=external_<engine>:<id>...
                                             (Paging p/ps, je Regel, falls
                                              > 10.000 Treffer)
+  /api/issues/search?componentKeys=<key>&facets=rules
+                                            (Regeln mit Issues; die Facette
+                                             kappt, Summe gegen paging.total)
   /api/rules/search?include_external=true&repositories=external_<engine>
                                             (Regel-Metadaten)
+  /api/rules/search?include_external=true   (nur wenn die Summe sonst nicht
+                                             aufgeht, > 10.000 Issues)
 
 Vergleicht je Schluessel (ruleId, filePath, startLine) als Multimenge:
   FEHLT     - im Export, nicht auf dem Server
@@ -29,7 +34,8 @@ Aufruf:
          [--engine static-code-analyser] [--all-statuses] [--max-list 25]
          [--json abgleich.json]
   python sca_sonar_reconcile.py --selftest
-Exit-Code: 0 = deckungsgleich, 1 = Abweichungen, 3 = Aufruf-/Verbindungsfehler.
+Exit-Code: 0 = deckungsgleich, 1 = Abweichungen oder Abgleich nicht vollstaendig
+belegt (WARNUNG in der Ausgabe), 3 = Aufruf-/Verbindungsfehler.
 """
 
 import argparse
@@ -192,21 +198,107 @@ def fetch_issues(srv, project_key, rule_keys, branch, all_statuses, log):
     return out
 
 
-def fetch_engine_issues_unfiltered(srv, project_key, engine, branch, all_statuses):
-    """Anzahl aller Issues des Projekts je Regel-Key der Engine (Facette)."""
-    params = {'componentKeys': project_key, 'ps': 1, 'facets': 'rules'}
-    if branch:
-        params['branch'] = branch
-    if not all_statuses:
-        params['resolved'] = 'false'
-    resp = srv.get('/api/issues/search', params)
-    res = collections.Counter()
+def total_of(resp):
+    return resp.get('paging', {}).get('total', resp.get('total', 0))
+
+
+def rule_facet(resp):
+    res = {}
     for f in resp.get('facets', []):
         if f.get('property') == 'rules':
             for v in f.get('values', []):
-                if v.get('val', '').startswith('external_%s:' % engine):
-                    res[v['val']] = v.get('count', 0)
+                res[v.get('val', '')] = v.get('count', 0)
     return res
+
+
+def count_rules(srv, base, rule_keys):
+    """Issues je Regel-Key, paketweise; paging.total jedes Pakets ist die Probe.
+
+    Die Facette ist "sticky": sie ignoriert den rules-Filter und zeigt weiter
+    die haeufigsten Regeln des Projekts, die gewaehlten nur zusaetzlich. Darum
+    zaehlen hier nur die Werte des Pakets, und passt ihre Summe nicht zu
+    paging.total, wird geteilt - bei einem einzelnen Key IST total die Anzahl."""
+    res = collections.Counter()
+
+    def query(keys):
+        resp = srv.get('/api/issues/search',
+                       dict(base, ps=1, facets='rules', rules=','.join(keys)))
+        total = total_of(resp)
+        if total == 0:
+            return
+        if len(keys) == 1:
+            res[keys[0]] = total
+            return
+        facet = rule_facet(resp)
+        found = {k: facet[k] for k in keys if facet.get(k)}
+        if sum(found.values()) == total:
+            res.update(found)
+            return
+        half = len(keys) // 2
+        query(keys[:half])
+        query(keys[half:])
+
+    # Pakete wie in fetch_issues (URL-Laenge)
+    keys = sorted(rule_keys)
+    for i in range(0, len(keys), 40):
+        query(keys[i:i + 40])
+    return res
+
+
+def fetch_all_rule_keys(srv):
+    """Regel-Keys des ganzen Servers, hoechstens die ersten ES_LIMIT."""
+    res = []
+    p = 1
+    while True:
+        resp = srv.get('/api/rules/search', {'include_external': 'true', 'ps': PAGE_SIZE,
+                                             'p': p, 'f': 'repo'})
+        res.extend(r['key'] for r in resp.get('rules', []))
+        if p * PAGE_SIZE >= min(total_of(resp), ES_LIMIT):
+            return res
+        p += 1
+
+
+def fetch_engine_issues_unfiltered(srv, project_key, engine, branch, all_statuses,
+                                   known_keys, log):
+    """Anzahl aller Issues des Projekts je Regel-Key der Engine.
+
+    Die Facette kappt: sie nennt nur die haeufigsten Regeln des Projekts
+    (Sonar: Facet.MAX_FACET_SIZE = 100), fremde Engines eingerechnet. Beleg ist
+    deshalb nicht die Grenze, sondern die Summe: erst wenn alle gezaehlten
+    Regeln zusammen paging.total ergeben, fehlt keine.
+      1. Facette ohne Filter - reicht, wenn sie schon aufgeht.
+      2. bis ES_LIMIT Treffer: alle Issues lesen; findet auch Altregeln, die
+         nicht mehr im Regelbestand stehen, mit ihrem Key.
+      3. darueber: known_keys und die Facette paketweise zaehlen, geht das
+         nicht auf, auch den Regelbestand des Servers (die fremden Regeln).
+    Bleibt ein Rest, sind es Altregeln ohne bekannten Key: WARNUNG ueber log,
+    main meldet dann nicht deckungsgleich."""
+    base = {'componentKeys': project_key}
+    if branch:
+        base['branch'] = branch
+    if not all_statuses:
+        base['resolved'] = 'false'
+    resp = srv.get('/api/issues/search', dict(base, ps=1, facets='rules'))
+    total = total_of(resp)
+    counts = collections.Counter(rule_facet(resp))
+    if sum(counts.values()) != total:
+        if total <= ES_LIMIT:
+            counts = collections.Counter()
+            for p in range(1, (total + PAGE_SIZE - 1) // PAGE_SIZE + 1):
+                resp = srv.get('/api/issues/search', dict(base, ps=PAGE_SIZE, p=p))
+                counts.update(it.get('rule', '') for it in resp.get('issues', []))
+        else:
+            asked = set(known_keys) | set(counts)
+            counts = count_rules(srv, base, asked)
+            if sum(counts.values()) != total:
+                counts.update(count_rules(srv, base, set(fetch_all_rule_keys(srv)) - asked))
+    rest = total - sum(counts.values())
+    if rest:
+        log('WARNUNG: Vollstaendigkeit nicht belegt: %d von %d Issues des Projekts gehoeren '
+            'zu keiner bekannten Regel (Altregeln?) - Engine-Issues koennen fehlen'
+            % (rest, total))
+    pre = 'external_%s:' % engine
+    return collections.Counter({k: n for k, n in counts.items() if k.startswith(pre) and n})
 
 
 def fetch_rules(srv, engine):
@@ -371,12 +463,53 @@ def render(rep, server_info, max_list):
                    '"deprecated format" pruefen).')
     for rid, t in rep['rules'][:max_list * 4]:
         out.append('    %s: %s' % (rid, t))
+    out.extend(rep.get('incomplete', []))
     return '\n'.join(out)
 
 
 # ---------------------------------------------------------------------------
 # Selbsttest (ohne Netz)
 # ---------------------------------------------------------------------------
+
+class _FakeSonar:
+    """Ersatz fuer Server.get: Facette wie bei Sonar sticky und gekappt.
+
+    selected=True: gewaehlte Regeln stehen zusaetzlich in der Facette (so
+    arbeitet Sonar), False: nur die haeufigsten - der schlechtere Fall."""
+    CAP = 100
+
+    def __init__(self, counts, rules, selected=True):
+        self.issues = [{'rule': k, 'component': 'p:src/%s.pas' % k.split(':')[-1], 'line': i + 1,
+                        'message': 'm'}
+                       for k, n in sorted(counts.items()) for i in range(n)]
+        self.rules = sorted(rules)
+        self.selected = selected
+        self.calls = []
+
+    def get(self, path, params=None, raw=False):
+        params = params or {}
+        self.calls.append((path, params))
+        ps, p = params.get('ps', 100), params.get('p', 1)
+        if p * ps > ES_LIMIT:
+            raise RuntimeError('HTTP 400 bei GET %s: p*ps > %d' % (path, ES_LIMIT))
+        if path == '/api/rules/search':
+            repo = params.get('repositories')
+            keys = [k for k in self.rules if not repo or k.startswith(repo + ':')]
+            return {'total': len(keys), 'rules': [{'key': k} for k in keys[(p - 1) * ps:p * ps]]}
+        wanted = params.get('rules', '').split(',') if 'rules' in params else None
+        hits = [it for it in self.issues if wanted is None or it['rule'] in wanted]
+        res = {'paging': {'total': len(hits)}, 'issues': [dict(it) for it in hits[(p - 1) * ps:p * ps]],
+               'components': [{'key': it['component'], 'path': it['component'][2:]}
+                              for it in hits[(p - 1) * ps:p * ps]]}
+        if 'facets' in params:
+            all_counts = collections.Counter(it['rule'] for it in self.issues)
+            values = dict(all_counts.most_common(self.CAP))
+            if self.selected:
+                values.update({k: all_counts[k] for k in wanted or []})
+            res['facets'] = [{'property': 'rules', 'values': [
+                {'val': k, 'count': n} for k, n in values.items()]}]
+        return res
+
 
 def _selftest():
     ok = True
@@ -423,6 +556,55 @@ def _selftest():
     check(any(r[0] == 'R1' and 'impacts' in r[1] for r in rep['rules']), 'Impact-Abweichung R1')
     check(any(r[0] == 'R2' for r in rep['rules']), 'R2 fehlt auf dem Server')
     print(render(rep, 'selftest', 3))
+
+    # Facetten-Kappung: 150 Engine-Regeln, dazu seltene fremde und eine Altregel
+    eng = {pre + 'R%03d' % i: 20 - i // 10 for i in range(150)}
+    fremd = {'text:F%02d' % i: 1 for i in range(30)}
+    alt = {pre + 'ALT': 1}
+    regeln = list(eng) + list(fremd)
+
+    def zaehle(fake, known=(), branch=None, alle=False):
+        warn = []
+        return (fetch_engine_issues_unfiltered(fake, 'p', 'e', branch, alle, known, warn.append),
+                warn)
+
+    fake = _FakeSonar(dict(eng, **fremd), regeln)
+    plain = [k for k in rule_facet(fake.get('/api/issues/search', {'ps': 1, 'facets': 'rules'}))
+             if k.startswith(pre)]
+    check(len(plain) == 100, 'Kappung nachgestellt: die Facette allein zeigt %d von 150 Regeln'
+          % len(plain))
+    res, warn = zaehle(fake, eng)
+    check(res == collections.Counter(eng) and not warn, '<= 10.000: alle 150 Regeln richtig gezaehlt')
+    fake = _FakeSonar(dict(eng, **alt), list(eng))
+    res, warn = zaehle(fake)
+    check(res[pre + 'ALT'] == 1 and len(res) == 151 and not warn,
+          '<= 10.000: Altregel ausserhalb des Regelbestands mit Key gefunden')
+    gross = {k: n * 10 for k, n in eng.items()}
+    for selected in (True, False):
+        fake = _FakeSonar(dict(gross, **fremd), regeln, selected)
+        res, warn = zaehle(fake, gross)
+        check(res == collections.Counter(gross) and not warn,
+              '> 10.000: alle 150 Regeln, fremde ueber den Regelbestand (selected=%s)' % selected)
+    fake = _FakeSonar(dict(gross, **alt), list(gross))
+    res, warn = zaehle(fake, gross)
+    check(len(res) == 150 and len(warn) == 1 and '1 von' in warn[0],
+          '> 10.000: Altregel ohne Key wird als WARNUNG gemeldet')
+    check('WARNUNG' in render(dict(rep, incomplete=warn), 'selftest', 3),
+          'WARNUNG steht in der Ausgabe')
+    fake = _FakeSonar({pre + 'R1': 5, 'text:F1': 2}, [])
+    res, warn = zaehle(fake)
+    check(res == {pre + 'R1': 5} and not warn and len(fake.calls) == 1,
+          'ungekappte Facette: eine Abfrage, fremde Regeln bleiben draussen')
+    fake = _FakeSonar(dict(gross, **alt), list(gross))
+    zaehle(fake, gross, branch='dev')
+    issue_calls = [c[1] for c in fake.calls if c[0] == '/api/issues/search']
+    check(len(issue_calls) > 1 and all(c.get('branch') == 'dev' and c.get('resolved') == 'false'
+                                       for c in issue_calls),
+          'branch und resolved=false in jeder Issue-Abfrage')
+    fake = _FakeSonar(dict(eng, **fremd), regeln)
+    zaehle(fake, alle=True)
+    check(not any('resolved' in c[1] for c in fake.calls), '--all-statuses: kein resolved-Filter')
+
     print('SELBSTTEST ' + ('BESTANDEN' if ok else 'FEHLGESCHLAGEN'))
     return 0 if ok else 1
 
@@ -452,21 +634,28 @@ def main(argv=None):
     exp_rules, exp_issues, engines = load_export(a.report)
     engine = a.engine or (engines.most_common(1)[0][0] if engines else 'static-code-analyser')
     srv = Server(a.host, token, a.insecure, a.cafile)
-    log = lambda m: print(m, file=sys.stderr)  # noqa: E731
+    incomplete = []
+
+    def log(m):
+        print(m, file=sys.stderr)
+        incomplete.append(m)
+
     try:
         version = srv.get('/api/server/version', raw=True).strip()
+        srv_rules = fetch_rules(srv, engine)
         rule_keys = ['external_%s:%s' % (engine, r) for r in exp_rules]
         facet = fetch_engine_issues_unfiltered(srv, a.project_key, engine, a.branch,
-                                               a.all_statuses)
+                                               a.all_statuses, set(rule_keys) | set(srv_rules),
+                                               log)
         # auch Regeln, die nur auf dem Server vorkommen (alte Laeufe)
         rule_keys = sorted(set(rule_keys) | set(facet))
         srv_issues = fetch_issues(srv, a.project_key, rule_keys, a.branch,
                                   a.all_statuses, log)
-        srv_rules = fetch_rules(srv, engine)
     except (RuntimeError, urllib.error.URLError, OSError) as e:
         print('Verbindungs-/Abfragefehler: %s' % e, file=sys.stderr)
         return 3
     rep = compare(exp_rules, exp_issues, srv_issues, srv_rules, engine, a.max_list)
+    rep['incomplete'] = incomplete
     info = '%s  SonarQube %s  Projekt %s%s  Engine %s  (%d GET-Abfragen)' % (
         a.host, version, a.project_key, (' Branch ' + a.branch) if a.branch else '',
         engine, srv.calls)
@@ -477,8 +666,9 @@ def main(argv=None):
                        'missing': rep['missing'], 'extra': rep['extra'],
                        'diff': dict(rep['diff']),
                        'diffSamples': {k: v for k, v in rep['diff_samples'].items()},
-                       'rules': rep['rules']}, fh, ensure_ascii=False, indent=1)
-    bad = rep['missing'] or rep['extra'] or rep['diff'] or rep['rules']
+                       'rules': rep['rules'], 'incomplete': incomplete}, fh,
+                      ensure_ascii=False, indent=1)
+    bad = rep['missing'] or rep['extra'] or rep['diff'] or rep['rules'] or incomplete
     return 1 if bad else 0
 
 

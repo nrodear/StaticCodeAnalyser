@@ -4,12 +4,13 @@
   KOPIEREN in ein Delphi-Projekt-.dproj (vor dem schliessenden </Project>):
   - Der Target laeuft als Pre-Build-Step und stoppt den Build bei
     Findings ab Severity Warning (konfigurierbar ueber FailOn-Variable).
-  - Schlaegt 'gracefully' fehl wenn die analyser.exe noch nicht gebaut
-    ist - der Hauptbuild laeuft normal weiter (siehe ContinueOnError).
-  - Sucht analyser.exe in dieser Reihenfolge:
+  - Schlaegt 'gracefully' fehl wenn die StaticCodeAnalyser.d12.exe noch
+    nicht gebaut ist - der Hauptbuild laeuft normal weiter (siehe
+    ContinueOnError).
+  - Sucht StaticCodeAnalyser.d12.exe in dieser Reihenfolge:
       1. $(SCAExePath) - Env-Variable / per /p:SCAExePath=... ueberschrieben
-      2. ..\tools\sca\analyser.d12.exe (Repo-Konvention)
-      3. $(BDS)\bin\..\sca\analyser.d12.exe (Studio-Install)
+      2. ..\tools\sca\StaticCodeAnalyser.d12.exe (Repo-Konvention)
+      3. $(BDS)\bin\..\sca\StaticCodeAnalyser.d12.exe (Studio-Install)
 
   ====================================================================
   ENTWEDER (a) das Snippet unten in dein .dproj nach <Import .../>
@@ -26,7 +27,7 @@
 
   <PropertyGroup>
     <!-- Default-Werte; per /p:SCAExePath=... ueberschreibbar. -->
-    <SCAExePath Condition="'$(SCAExePath)' == ''">..\tools\sca\analyser.d12.exe</SCAExePath>
+    <SCAExePath Condition="'$(SCAExePath)' == ''">..\tools\sca\StaticCodeAnalyser.d12.exe</SCAExePath>
     <SCABaseline Condition="'$(SCABaseline)' == ''">sca.baseline.json</SCABaseline>
     <SCAFailOn Condition="'$(SCAFailOn)' == ''">warning</SCAFailOn>
     <SCAProfile Condition="'$(SCAProfile)' == ''">default</SCAProfile>
@@ -36,9 +37,9 @@
   </PropertyGroup>
 
   <!--
-    PreBuild-Hook: laeuft vor jedem Build. Wenn analyser.exe nicht
-    existiert -> Skip mit Hinweis (kein Build-Bruch). Wenn ein Befund
-    >= SCAFailOn auftaucht -> Build bricht ab.
+    PreBuild-Hook: laeuft vor jedem Build. Wenn StaticCodeAnalyser.d12.exe
+    nicht existiert -> Skip mit Hinweis (kein Build-Bruch). Wenn ein
+    Befund >= SCAFailOn auftaucht -> Build bricht ab.
   -->
   <Target Name="SCAAnalyse" BeforeTargets="Build"
           Condition="'$(SCAEnabled)' == 'true' and Exists('$(SCAExePath)')">
@@ -62,7 +63,7 @@
   -->
   <Target Name="SCAAnalyseSkipped" BeforeTargets="Build"
           Condition="'$(SCAEnabled)' == 'true' and !Exists('$(SCAExePath)')">
-    <Message Text="SCA SKIP: analyser.exe not found at '$(SCAExePath)'. Build continues. Set /p:SCAExePath=... or place analyser.d12.exe under ..\tools\sca\."
+    <Message Text="SCA SKIP: StaticCodeAnalyser.d12.exe not found at '$(SCAExePath)'. Build continues. Set /p:SCAExePath=... or place StaticCodeAnalyser.d12.exe under ..\tools\sca\."
              Importance="high" />
   </Target>
 

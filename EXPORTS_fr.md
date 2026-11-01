@@ -9,15 +9,15 @@ le produire, et les six workflows que les équipes pratiquent réellement.
 
 Les flux de travail ont été vérifiés contre des binaires compilés
 (v0.9.14 et suivants) ; les sections sur le rapport d'atelier décrivent
-l'état 0.9.18. Là où un chemin est aujourd'hui cassé, c'est indiqué —
+l'état 0.9.19. Là où un chemin est aujourd'hui cassé, c'est indiqué —
 contournement compris.
 
 ---
 
 ## La première chose à savoir
 
-`analyser.exe` est **un seul binaire à deux modes**. Lancé sans
-arguments, il démarre l'interface graphique ; dès que le premier
+`StaticCodeAnalyser.d12.exe` est **un seul binaire à deux modes**. Lancé
+sans arguments, il démarre l'interface graphique ; dès que le premier
 argument commence par `-`, il bascule en CLI sans interface. « GUI
 uniquement » ne signifie donc jamais « programme différent », mais
 *inaccessible depuis un script*.
@@ -143,6 +143,13 @@ que SARIF et l'export Sonar — et `ruleID` est le nom antérieur à
 0.9.19, conservé pour ne pas casser les lecteurs existants. Même
 valeur dans les deux ; préférer `ruleId`, `ruleID` est déprécié.
 
+**Méthode vide.** La méthode d'un résultat (CSV, JSON, HTML, atelier,
+référence) n'est renseignée que si la ligne se trouve dans une routine.
+Un résultat sur un commentaire, une déclaration de classe ou dans un
+fichier de fiche a une méthode vide. C'est nouveau en 0.9.19 et change
+l'empreinte de ces résultats ; une référence avec `contextHash` les
+reconnaît tant que les lignes autour restent inchangées.
+
 ---
 
 ## Workflow 1 — Gate CI : faire échouer le build sur les nouveaux résultats
@@ -153,11 +160,17 @@ d'aujourd'hui pour que le build de demain ne se plaigne que de ce qui a
 
 ```bash
 # une seule fois, pour consigner l'état actuel
-analyser.exe --path . --write-baseline .sca/sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --write-baseline .sca/sca.baseline.json
 
 # à chaque build
-analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+StaticCodeAnalyser.d12.exe --path . --baseline .sca/sca.baseline.json \
+  --report-sarif build/sca.sarif
 ```
+
+**Une entrée de référence couvre un résultat.** Depuis 0.9.19, la référence
+compte : deux entrées de même empreinte couvrent deux résultats, un
+troisième est nouveau. Avant, une entrée masquait tous les résultats de
+cette empreinte ; ces résultats apparaissent donc comme nouveaux.
 
 Les codes de sortie sont gradués : `0` propre, non nul quand des
 résultats subsistent après le filtre de référence.
@@ -187,8 +200,8 @@ chose. `--write-baseline auto` écrit au même emplacement `.sca`, la
 paire se passe donc de chemins codés en dur :
 
 ```bash
-analyser.exe --path . --write-baseline auto        # une seule fois
-analyser.exe --path . --baseline-scan y            # à chaque build
+StaticCodeAnalyser.d12.exe --path . --write-baseline auto    # une seule fois
+StaticCodeAnalyser.d12.exe --path . --baseline-scan y        # à chaque build
 ```
 
 `--baseline-scan n` est le contraire explicite : tourner sans référence
@@ -223,7 +236,8 @@ nouveau tout l'arriéré. Pour rafraîchir, écrivez une référence fraîche
 ## Workflow 2 — Revue de pull request : seulement ce qui a changé
 
 ```bash
-analyser.exe --path . --diff main...HEAD --report-html build/review.html
+StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
+  --report-html build/review.html
 ```
 
 `--branch` utilise l'ensemble des fichiers modifiés selon le
@@ -248,24 +262,17 @@ pas d'API publique d'ingestion pour les issues externes. SCA écrit le
 fichier, et `sonar-scanner` l'achemine.
 
 ```bash
-analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --base-dir . \
+  --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
-> **⚠️ Cassé dans le ZIP livré — à lire avant d'essayer.** L'archive de
-> release ne contient que l'EXE. Sans `rules/sca-rules.json` à côté, le
-> catalogue de règles retombe sur un substitut intégré qui émet `type`
-> au lieu de `cleanCodeAttribute` + `impacts`, et **SonarQube rejette
-> le rapport entier** (vérifié contre les vrais validateurs du
-> scanner-engine : 10.7 signale *missing mandatory field
-> 'cleanCodeAttribute'*, 2025.x *missing mandatory field 'severity'*).
-> L'exécution a l'air réussie et le fichier est écrit — seul le tableau
-> de bord reste vide.
->
-> **Contournement :** copier le dossier `rules/` du dépôt à côté de
-> l'EXE. Avec le catalogue présent, l'export est validé sur toutes les
-> générations de moteur testées. Un `rules/sca-rules.json` corrompu
-> dégrade de la même manière, tout aussi silencieusement.
+Guide rapide avec les erreurs à éviter : [sonarHowto_fr.md](sonarHowto_fr.md).
+
+> **Gardez `rules/sca-rules.json` à côté de l'EXE.** Le ZIP de release le
+> contient. Sans lui, le catalogue de règles retombe sur un substitut
+> intégré : le rapport reste valide, mais ses règles portent des attributs
+> et des impacts grossiers au lieu des valeurs du catalogue.
 
 Les chemins du rapport sont relatifs à `--base-dir` (défaut :
 `--path`) ; lancez donc l'export avec la même racine que celle
@@ -305,10 +312,14 @@ apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
     référence : +726 issues). Seule une rétrogradation que vous avez
     configurée vous-même (`[PathOverrides]`) reste dehors ;
     `--sonar-keep-downgraded` la ramène toujours.
-- **Les règles plafonnées portent la sévérité plafonnée.** Une règle dont
-  la politique plafonne les constats reçoit la sévérité plafonnée comme
-  impact — SCA004 arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA001 en
-  RELIABILITY/MEDIUM. Avec `[Rules] EvidenceTiering=0`, les impacts du
+- **Les règles plafonnées portent la sévérité plafonnée.** L'impact suit
+  les constats de l'analyse : si même le constat le plus fort d'une règle
+  est plafonné, la règle reçoit cette sévérité comme impact — SCA004 sans
+  constat prouvé arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA202 en
+  RELIABILITY/MEDIUM. Un seul constat de pleine sévérité garde les impacts
+  du catalogue pour toute la règle, car Sonar ne connaît la sévérité que
+  par règle ; l'impact peut donc changer d'une analyse à l'autre, les
+  issues restent. Avec `[Rules] EvidenceTiering=0`, les impacts du
   catalogue restent.
 - **Fiches binaires au niveau fichier.** Les issues dans des fichiers
   `.dfm` binaires, et celles sur une ligne au-delà de la fin du fichier,
@@ -324,8 +335,9 @@ apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
   le JSON directement prennent le moteur dans `rules[].engineId`.
 - **Version minimale du serveur.** Les sévérités d'impact BLOCKER et INFO
   exigent SonarQube 10.8 ou plus récent (Server 2025.x, Community Build).
-  Sur 10.3–10.7, un rapport qui les contient est invalide ; SCA026 porte
-  toujours BLOCKER.
+  Sur 10.3–10.7, un rapport qui les contient est invalide. SCA026 porte
+  toujours BLOCKER, SCA004 dès qu'une analyse a un résultat prouvé (un
+  motif de jeton connu).
 
 Sonar résout `filePath` par rapport à `sonar.projectBaseDir` (le dossier
 du `sonar-project.properties`), et non par rapport à `sonar.sources` —
@@ -334,7 +346,7 @@ donnez ce dossier à `--base-dir`.
 ## Workflow 4 — Code scanning GitHub / Azure
 
 ```bash
-analyser.exe --path . --base-dir . --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --base-dir . --report-sarif sca.sarif
 ```
 
 Le SARIF porte des `partialFingerprints` (hachage de ligne +
@@ -419,7 +431,6 @@ Liste honnête, état v0.9.14 — tout a été reproduit :
 
 | Domaine | Comportement |
 |---|---|
-| Export Sonar depuis le ZIP de release | rejeté par SonarQube ; livrer `rules/` à côté de l'EXE |
 | Rafraîchir la référence avec les deux options | tronque la référence aux seuls nouveaux résultats |
 | `--write-baseline` avec un simple nom de fichier | n'écrit pas |
 | Exports JSON | UTF-8 **avec** BOM — corrigé après v0.9.14, désormais sans BOM |
@@ -427,8 +438,6 @@ Liste honnête, état v0.9.14 — tout a été reproduit :
 | Empreintes de référence | les unités homonymes de dossiers différents partagent par défaut un même espace de noms — désactivable avec `--baseline-path-fingerprint y` (voir ci-dessous) |
 | Fichiers source illisibles | comptés différemment dans la console, SARIF/Sonar/HTML et la référence |
 | `--parallel` | déterministe depuis le 2026-08-20 (identique octet pour octet aux exécutions sérielles), mais sans gain de vitesse - la phase préalable sérielle domine |
-| `--sonar-insecure` | n'accepte pas les certificats auto-signés (il n'active que TLS 1.1) |
-| `--sonar-test` dans un dépôt étranger | un `sonar-project.properties` dans le dépôt scanné remplace votre hôte — votre jeton part là-bas |
 
 ---
 

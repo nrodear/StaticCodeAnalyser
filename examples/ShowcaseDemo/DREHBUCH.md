@@ -2,10 +2,10 @@
 
 Video-Skript für das Projekt `examples/ShowcaseDemo` (englischer Überblick:
 [README.md](README.md)). Ablauf: Installation, Projekt öffnen, Scan, dann
-Datei für Datei die Funde und die Code-Aktionen von reDelphix. Jede der 106
-Code-Aktionen (92 Quick-Fixes der Tabelle, ihre 8 zweiten Einträge, 6
-Aktionen des Anbieters) ist mindestens an einer Stelle angeboten – die
-Tabelle am Ende nennt sie.
+Datei für Datei die Funde und die Code-Aktionen von reDelphix. 106 der 107
+Code-Aktionen (92 der 93 Quick-Fixes der Tabelle, ihre 8 zweiten Einträge,
+6 Aktionen des Anbieters) sind mindestens an einer Stelle angeboten – die
+Tabelle am Ende nennt sie. Nur der Quick-Fix von SCA204 hat keine Stelle.
 
 Zeilennummern gelten für den unveränderten Stand (`git checkout
 examples/ShowcaseDemo`). Sie verschieben sich mit jeder Hilfe, die Zeilen
@@ -40,13 +40,12 @@ einfügt oder löscht – darum die Grundregel unten.
 ## Szene 0: Vorbereitung (vor der Aufnahme)
 
 1. Delphi 12 Athens (Win32-IDE) oder Delphi 13 Florence.
-2. SCA als **Plugin-Variante B** und reDelphix installieren: Projektgruppe
-   `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe erzeugen, dann
-   `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im Projekt-Manager
-   **Installieren** (Details: `reDelphix/README.md`, Abschnitte
-   „Voraussetzungen in der IDE“ und „Bauen und installieren“). Nicht den
-   Monolithen `StaticCodeAnalyser.Plugin.d12` – neben ihm lädt reDelphix
-   nicht.
+2. SCA und reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
+   ausführen, die Komponente reDelphix bleibt angehakt. Aus den Quellen geht
+   es auch: Projektgruppe `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe
+   erzeugen, dann `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im
+   Projekt-Manager **Installieren** (Details: `reDelphix/README.md`, Abschnitte
+   „Voraussetzungen in der IDE“ und „Bauen und installieren“).
 3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitt `[Rules]`:
 
    ```ini
@@ -316,9 +315,8 @@ die Code-Aktionen am Caret, auch auf einer Zeile ohne Fund. Stellen im Demo:
 Nachgewiesen mit der reDelphix-Angebotsprobe (echter Code von
 `uRdxFixTable`, `uRdxFixRunner`, `uRdxRecipeRunner` und aller Planer unter
 FPC 3.2.2, SCA044 über `RdxCorpusProbe.exe`) auf dem SARIF des Laufs
-`--profile strict --min-severity hint`, `MinConfidence=low`, Stand
-reDelphiX 49ab918f (Funde nachgemessen mit der Exe 5575bd42 und der
-SCA068-Stelle in Zeile 122). **106 von 106 angeboten.** Status **ja** = der echte
+`--profile strict --min-severity hint`, `MinConfidence=low`. **106 von 107
+angeboten**, es fehlt SCA204. Status **ja** = der echte
 reDelphix-Code hat allein entschieden; **ja\*** = angeboten, eine Typ-,
 with- oder Baumfrage an die Engine (`DeclaredTypeOf`, `InWithBlock`,
 uses-Klauseln) hat dabei ein Probe-Orakel beantwortet – alle 19 Antworten

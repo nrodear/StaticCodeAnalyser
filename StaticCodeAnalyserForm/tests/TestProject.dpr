@@ -113,8 +113,6 @@ uses
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
   uTestExportHtml in 'uTestExportHtml.pas',
   uTestExportHtmlRowAttrs in 'uTestExportHtmlRowAttrs.pas',
-  uTestSonarConfig in 'uTestSonarConfig.pas',
-  uTestSonarTokenStorage in 'uTestSonarTokenStorage.pas',
   // Die CLI-Unit liegt ausserhalb des Test-Suchpfads (..\sources\Console
   // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',

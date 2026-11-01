@@ -6,12 +6,12 @@ Ce guide vous accompagne sur tout le chemin, de « je n'ai rien » à
 
 Vous obtiendrez à la fin :
 - l'**application Windows autonome** (`StaticCodeAnalyser.d12.exe`)
-- le **plugin IDE** (chargé dans Delphi 12 à chaque ouverture)
+- le **plugin IDE** (chargé dans Delphi à chaque ouverture)
 
 > **Compiler est facultatif.** Les releases GitHub livrent des zips EXE
-> prêts à l'emploi (Win32/Win64), un EXE d'installation pour le plugin
-> IDE et un paquet GetIt — voir le démarrage rapide du README. Ce
-> document s'adresse à ceux qui veulent compiler depuis les sources.
+> prêts à l'emploi (Win32/Win64) et un EXE d'installation pour le
+> plugin IDE — voir le démarrage rapide du README. Ce document
+> s'adresse à ceux qui veulent compiler depuis les sources.
 
 🇬🇧 [English version](HowTo_Build.md) · 🇩🇪 [Deutsche Fassung](HowTo_Build_de.md)
 
@@ -31,10 +31,12 @@ Vous obtiendrez à la fin :
 ## 1. Installer Delphi 12 (RAD Studio)
 
 Il vous faut **Delphi 12 Athens** (aussi appelé RAD Studio 12) — l'une
-des versions 12.0–12.3. Le plugin tourne dans l'IDE 32 bits (l'IDE
-64 bits de 12.3 n'est pas encore pris en charge) ; Delphi 13 est prévu
-mais pas encore pris en charge, Delphi 11 et antérieurs ne sont pas
-pris en charge. La **Community Edition gratuite** suffit.
+des versions 12.0–12.3 — ou **Delphi 13 Florence**. Delphi 12 n'a qu'un
+IDE 32 bits ; Delphi 13 a un IDE 32 bits et un IDE 64 bits, et le plugin
+tourne dans les deux. Delphi 11 et antérieurs ne sont pas pris en charge.
+Ce guide suit le chemin de Delphi 12 : sous Delphi 13, les chemins
+indiquent `37.0` au lieu de `23.0`, et le suffixe des paquets est `370`
+au lieu de `290`. La **Community Edition gratuite** suffit.
 
 1. Allez sur https://www.embarcadero.com/products/delphi/starter.
 2. Cliquez sur **« Download Free Trial »** ou **« Community Edition »**.
@@ -76,8 +78,12 @@ supposons `D:\projects\StaticCodeAnalyser`.
 
 ## 3. Ouvrir le groupe de projets dans Delphi
 
-Le projet est livré comme **groupe de projets** contenant 4
-sous-projets (moteur, UI partagée, application autonome, plugin IDE).
+Le projet est livré comme **groupe de projets** avec le moteur, l'UI
+partagée, l'application autonome et le plugin IDE, plus le paquet
+optionnel reDelphix, une démo CLI, les projets de test et deux sondes.
+Delphi 13 utilise les mêmes fichiers de projet.
+`StaticCodeAnalyser.d13.64bit.groupproj` les regroupe pour l'IDE 64 bits,
+mais sans reDelphix.
 
 1. Dans Delphi, cliquez sur le menu **File → Open Project**.
 2. Naviguez vers `D:\projects\StaticCodeAnalyser`.
@@ -85,13 +91,14 @@ sous-projets (moteur, UI partagée, application autonome, plugin IDE).
    **« Delphi project group (`*.groupproj`) »**.
 4. Choisissez `StaticCodeAnalyser.d12.groupproj` et cliquez sur **Open**.
 
-À droite, vous voyez maintenant la fenêtre **Project Manager** avec
-ces sous-projets :
+À droite, vous voyez maintenant la fenêtre **Project Manager**. Ces
+sous-projets comptent ici :
 
 - `SCA.Engine` — le moteur d'analyse.
 - `SCA.SharedUI` — composants UI communs à l'autonome et au plugin.
 - `StaticCodeAnalyser.d12` — l'EXE autonome.
 - `StaticCodeAnalyser.IDE.d12` — le plugin IDE (un paquet BPL).
+- `reDelphix.d12` — les actions de code optionnelles (section 5.3).
 
 Delphi affiche le sous-projet **actif** en **gras** vert. Vous
 changerez de projet actif au fil des étapes ci-dessous.
@@ -160,16 +167,27 @@ démarrage.
 
 > **Raccourci :** si vous voulez seulement *utiliser* le plugin, cette
 > section est inutile — les releases livrent un **EXE d'installation**
-> (`StaticCodeAnalyserSetup-<Version>.exe`) et un **paquet GetIt
-> local** ; les deux installent le paquet monolithique de release
-> (`StaticCodeAnalyser.Plugin.d12.dpk`, un seul `.bpl`, pas de paquets
-> moteur séparés). Les étapes ci-dessous compilent le jeu de
-> développement de trois paquets depuis les sources.
+> (`StaticCodeAnalyserSetup-<Version>.exe`) qui installe `SCA.Engine`,
+> `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12` et `reDelphix.d12` pour
+> chaque version de Delphi trouvée. Les étapes ci-dessous compilent les
+> mêmes paquets depuis les sources.
+
+> **Votre propre compilation et le setup ne cohabitent pas dans un même
+> IDE.** Avant de compiler pour un IDE que le setup dessert, désinstallez
+> le setup ou décochez-y cet IDE : son dossier vient en tête du réglage
+> PATH de l'IDE, qui chargerait donc le moteur installé au lieu du vôtre.
+> À l'inverse, le setup remplace les enregistrements de votre compilation
+> dans chaque IDE coché et le signale ; ajoutez ensuite de nouveau les
+> paquets comme en 5.2 et 5.3. Un monolithe de la version 0.9.18 ou
+> antérieure (`StaticCodeAnalyser.Plugin.d12`) ne peut pas être chargé à
+> côté de ces paquets : retirez-le d'abord sous **Composant → Installer
+> des packages**.
 
 ### 5.1 Compiler le plugin
 
-Le plugin tourne dans l'**IDE 32 bits** (l'IDE 64 bits de 12.3 n'est
-pas encore pris en charge). Le plugin doit donc être en 32 bits.
+Un plugin a la bitness de son IDE. Delphi 12 n'a qu'un **IDE 32 bits**,
+le plugin doit donc y être en 32 bits. Pour l'IDE 64 bits de Delphi 13,
+il est compilé en Win64.
 
 1. Dans le Project Manager, dépliez `StaticCodeAnalyser.IDE.d12`.
 2. Dépliez **Target Platforms**.
@@ -198,12 +216,12 @@ pas encore pris en charge). Le plugin doit donc être en 32 bits.
 > Ce sont des paquets d'exécution ; depuis le 2026-08-23 leur `.dpk` porte
 > `{$RUNONLY}`. Sans cette directive, l'IDE considère un paquet comme
 > paquet d'exécution ET de conception et l'installe en lui-même après
-> chaque compilation. Si le monolithe posé par le setup est enregistré en
-> plus, Delphi 13 refuse le plugin avec « contient l'unité
-> 'uLocalization', qui est également contenue dans le paquet
-> 'SCA.Engine' ». Un SEUL paquet s'installe :
-> `StaticCodeAnalyser.IDE.d12` de ce jeu — ou le monolithe du setup,
-> jamais les deux à la fois.
+> chaque compilation. Si un monolithe de la version 0.9.18 ou antérieure
+> est enregistré en plus, Delphi 13 refuse le plugin avec « contient
+> l'unité 'uLocalization', qui est également contenue dans le paquet
+> 'SCA.Engine' ». Seuls les deux paquets de conception s'installent,
+> `StaticCodeAnalyser.IDE.d12` et, en option, `reDelphix.d12` : depuis
+> votre compilation ou depuis le setup, jamais les deux à la fois.
 
 Vous avez maintenant trois fichiers `.bpl` dans
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\` :
@@ -230,6 +248,60 @@ Après le redémarrage, l'IDE affiche une nouvelle fenêtre ancrable :
 Si l'entrée de menu manque, le plugin n'a pas pu se charger. Regardez
 dans **View → Window List…** ou lisez attentivement les erreurs de
 l'écran de démarrage.
+
+### 5.3 Optionnel : installer reDelphix (actions de code)
+
+reDelphix ajoute au plugin des quick-fixes et des refactorisations (voir
+le [README](README_fr.md#actions-de-code--redelphix-paquet-ide-optionnel)).
+Le setup le livre : cette section ne sert donc que pour votre propre
+compilation. Il nécessite le jeu de développement de 5.1 et 5.2, car il
+est lié à `SCA.Engine`.
+
+1. Terminez 5.1 et 5.2, et vérifiez que `reDelphix.d12` est sur la même
+   plateforme que les autres paquets (Delphi 12 : **Windows 32-bit**).
+2. **Clic droit** sur `reDelphix.d12` dans le Project Manager → **Build**,
+   puis → **Install**.
+3. Ouvrez une unité et analysez-la. Une ampoule apparaît sur la ligne du
+   curseur d'un résultat doté d'un quick-fix, et le menu contextuel d'un
+   résultat liste les actions après un séparateur.
+
+Après une modification de `reDelphix\data\unitscopes.txt`, nettoyez et
+recompilez le paquet : l'IDE ne remarque pas la table modifiée.
+
+### 5.4 Compiler le jeu de paquets de release (mainteneurs)
+
+Une release livre 12 BPL : ces quatre paquets sur trois cibles, à partir
+des mêmes fichiers de projet, en configuration Release. Les BPL arrivent
+sous `C:\Users\Public\Documents\Embarcadero\Studio\` :
+
+| Cible | IDE | Plateforme | Dossier |
+|---|---|---|---|
+| D12 Win32 | Delphi 12 | Win32 | `23.0\Bpl` |
+| D13 Win32 | Delphi 13 | Win32 | `37.0\Bpl` |
+| D13 Win64 | Delphi 13 | Win64 | `37.0\Bpl\Win64` |
+
+1. Fusionnez d'abord, puis compilez **depuis le checkout de la release**.
+   `tools\package-release.ps1` prend les gates, les sources et les EXE de
+   son propre checkout et s'arrête si un DCP y est plus ancien que sa
+   source.
+2. Sur chaque cible, compilez dans cet ordre : `SCA.Engine`,
+   `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`. Compilez
+   aussi l'EXE autonome pour Win32 et Win64 (section 4). Un paquet se lie
+   aux DCP de ses dépendances : qui recompile un paquet recompile aussi les
+   suivants, même sans changement de source. « Tout construire » du
+   groupe de projets respecte cet ordre.
+3. Vérifiez le résultat sans rien créer :
+
+   ```powershell
+   .\tools\package-release.ps1 -Version <Version> -DryRun
+   ```
+
+   Cela lance `tools\package_set_gate.py` et
+   `tools\stale_artifacts_check.py --release` et contrôle chacune des
+   12 BPL : présente, VERSIONINFO égale à la version, bonne architecture.
+
+L'exécution complète et ses options :
+[installer/README_Installer.md](installer/README_Installer.md).
 
 ---
 
@@ -279,8 +351,9 @@ par défaut).
 ### 6.5 Enregistrer le rapport
 
 Utilisez les boutons **Export** (en haut à droite) pour enregistrer en
-**HTML**, **JSON**, **SARIF** (pour SonarQube), ou copiez dans le
-presse-papiers pour Jira/Markdown.
+**HTML**, **JSON**, **CSV**, **SARIF** (pour GitHub Code Scanning), le
+rapport **Sonar** (pour SonarQube), ou copiez dans le presse-papiers pour
+Jira/Markdown.
 
 ---
 
@@ -319,10 +392,11 @@ la gouttière.
 
 ### 7.5 Masquer les faux positifs
 
-Clic droit sur un résultat → **Suppress avec `// noinspection`**. Le
-plugin écrit au-dessus de la ligne un commentaire qui masque
+Sélectionnez un résultat et appuyez sur **Ctrl+Alt+S**. Le plugin écrit
+au-dessus de la ligne un commentaire `// noinspection` qui masque
 exactement cette règle à cet endroit. Le résultat disparaît à la
-prochaine analyse.
+prochaine analyse. Avec reDelphix, le menu contextuel du résultat
+propose la même chose.
 
 ### 7.6 Conseil au survol
 
@@ -340,7 +414,7 @@ quoi ressemble la correction.
 | **L'entrée de menu du plugin manque après le redémarrage** | Mauvaise plateforme (vous avez compilé Win64 au lieu de Win32) ou mauvais chemin dans `Tools → Options → Packages`. |
 | **L'autonome plante après quelques secondes sur un gros projet** | Patch de taille de pile non appliqué. Relancez `tools\patch-stack-size.ps1`. |
 | **L'EXE se plaint « file not found » au lancement** | Vous avez déplacé l'EXE hors de son dossier `Output\…`. Remettez-le en place, ou copiez les fichiers `.dcu`/`.bpl` avec lui. |
-| **« Cannot find SCA.Engine290.bpl »** au chargement du plugin | Le plugin voit `SCA.Engine290.bpl` via le chemin de recherche Delphi. Compilez `SCA.Engine` pour la même plateforme (Win32) et la même configuration (Release). |
+| **« Cannot find SCA.Engine290.bpl »** au chargement du plugin | Le chargeur Windows cherche `SCA.Engine290.bpl` via le PATH, pas à côté du plugin. Compilation maison : compilez `SCA.Engine` pour la même plateforme (Win32) et la même configuration (Release). Setup : relancez-le, il rétablit son entrée dans le réglage PATH de l'IDE. |
 | **Identificateur non déclaré alors qu'il figure bien dans les sources** | Un paquet prend cette unité dans le **DCP** d'un autre paquet, pas dans les sources. Si ce DCP est plus ancien que les sources, vous compilez contre l'ancien état — et le compilateur désigne l'appel, pas le fichier périmé. Lancez `python tools\stale_artifacts_check.py`, puis recompilez dans l'ordre `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 
 ---
@@ -351,12 +425,13 @@ quoi ressemble la correction.
   `%APPDATA%\StaticCodeAnalyser\`. Vous pouvez régler `Profile=`
   (quelles règles s'exécutent), `MinSeverity=`, `MinConfidence=`, etc.
   Le fichier est commenté.
-- **Se connecter à SonarQube :** voir [sonarHowto_fr.md](sonarHowto_fr.md).
+- **Envoyer les résultats vers SonarQube :** voir [sonarHowto_fr.md](sonarHowto_fr.md).
 - **Lancer depuis la ligne de commande / la CI :** voir la sortie
   `--help` de l'EXE autonome. Options utiles : `--profile`,
   `--report-sarif`, `--quiet`, `--time-detectors`.
-- **Essayer l'interface en allemand :** dans la fenêtre de
-  l'analyseur, passez la langue sur **Deutsch** dans la barre d'outils.
+- **Essayer l'interface en allemand ou en français :** dans
+  l'application autonome, menu hamburger → **Language** ; dans le plugin,
+  **Tools → Options → Third Party → Static Code Analyser**.
 
 ---
 

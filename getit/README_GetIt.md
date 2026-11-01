@@ -1,10 +1,51 @@
 # GetIt-Paket (Vorlage, Stand 2026-08-14)
 
+## Status: fuer 0.9.19 ausgesetzt
+
+Seit 0.9.19 liefert das Setup den Paketsatz (`SCA.Engine<suffix>`,
+`SCA.SharedUI<suffix>`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`) statt
+des Monolithen. Dieser Satz laesst sich ueber GetIt nicht installieren:
+
+- **Action 7/8 kann den Ladeweg nicht ausdruecken.** Beide Actions
+  registrieren je ein Design-Package. Die Laufzeitpakete sind `{$RUNONLY}` und
+  duerfen nicht in die Known Packages, und der Windows-Loader sucht `requires`
+  nie im Ordner der Design-BPL, also auch nicht im entpackten Paketordner. Das
+  Setup loest das mit seinem Ordner vorn im IDE-PATH-Override
+  (`HKCU\Software\Embarcadero\BDS\<ver>\Environment Variables\PATH`).
+- **Registry-Actions koennen diesen Override nicht sicher ergaenzen.** Der Wert
+  ist geteilt, InterBase traegt dort `...\IDE_spoof;$(PATH)`. Actions 24/25
+  setzen oder loeschen einen Wert als Ganzes und koennen ihn nicht lesen und
+  fortschreiben: Setzen wuerde fremde Segmente ueberschreiben, Loeschen beim
+  Uninstall sie mit entfernen. Das ist aus den Namen der Actions abgeleitet;
+  an GetIt getestet wurden sie nie.
+
+Folgen:
+
+- `tools\package-release.ps1` erzeugt die GetIt-Artefakte nur noch mit
+  `-SkipGetIt:$false`; Default ist aussetzen.
+- `StaticCodeAnalyser-D12.getit.json` bleibt als Vorlage auf dem Stand 0.9.18
+  (Monolith) und taugt nicht fuer den Paketsatz. Das Feld `_Ausgesetzt` macht
+  das in der Datei selbst sichtbar. GetIt hat es nie gesehen; vor einer
+  Wiederaufnahme muss es raus, die Toleranz des Mappers ist unbekannt.
+- Wer 0.9.18 aus GetIt installiert hat, wechselt ueber das Setup. Es entfernt
+  die Monolith-Registrierung, auch mit `%Makro%`-Wertnamen, und meldet das. Die
+  Paketdateien im GetIt-Katalog fasst es nicht an.
+
+Alles Folgende beschreibt den Stand bis 0.9.18 und bleibt als Grundlage fuer
+eine Wiederaufnahme stehen. Die braucht einen Ladeweg, den GetIt selbst
+ausdruecken kann.
+
+## Vorlage
+
 `StaticCodeAnalyser-D12.getit.json` ist die **Vorlage** fuer das lokale
 GetIt-Paket (RAD Studio: GetIt-Dialog -> "Load Local Package") und
 zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
 (getitnow.embarcadero.com/submit). Format: "GetIt Local Files"
 (vereinfachtes Server-Format; DocWiki "Local GetIt Packages").
+
+Das Paket enthaelt nur den Monolithen `StaticCodeAnalyser.Plugin.d12.bpl`,
+reDelphix ist nicht dabei (es braucht den Dev-Satz, siehe `HowTo_Build.md`,
+Abschnitt 5.3).
 
 ## Feld-Vertraege
 

@@ -1,10 +1,9 @@
 # VarNameProject - Testprojekt "Lokale Konstante einfuehren"
 
 Zweck: klaeren, wie reDelphix einen NEUEN Namen erfragt, ohne Dialog -
-so wie ReSharper "Introduce Variable" (Nico 2026-10-11, Entscheid E17 im
-Konzept "Editorhilfen ohne Fund" - seit 2026-10-11 heissen sie Code-Aktionen,
-zu einem Fund Quick-Fix, ohne Fund Refactoring; diese hier hiess "Lokale
-Variable einfuehren" und heisst seit Entscheid E26 (2026-10-13) **"Lokale
+so wie ReSharper "Introduce Variable" (Code-Aktionen: zu einem Fund
+Quick-Fix, ohne Fund Refactoring; diese hier hiess "Lokale
+Variable einfuehren" und heisst jetzt **"Lokale
 Konstante einfuehren"**: die Deklaration ist `const MagicNr01 = 42;`, keine
 Variable - siehe "Entscheide" und die Kompilierprobe):
 

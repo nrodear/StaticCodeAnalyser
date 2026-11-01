@@ -1,348 +1,59 @@
-﻿# Sonar-HowTo (Standalone-EXE)
+﻿# Sonar-Kurzanleitung
 
 🇬🇧 [English version](sonarHowto.md) · 🇫🇷 [Version française](sonarHowto_fr.md)
 
-Schritt-für-Schritt-Anleitung um SCA-Findings per **Standalone-EXE** in eine
-SonarQube-Instanz zu pushen. Kein IDE-Plugin nötig.
+SCA schreibt seine Funde in eine Datei und sendet nichts. `sonar-scanner` trägt diese Datei zum Server. Server, Scanner, Token und Quality Gates beschreibt die [offizielle Sonar-Dokumentation](#offizielle-dokumentation).
 
-**Getestet mit**: SonarQube Community Build 26.5+ (Sonar 10+, MQR-Modus).
-SCA-Findings werden als External Issues über das Generic Issue Format
-importiert und stehen neben den built-in Findings des Default-Quality-
-Profile **Sonar Way** — kein Konflikt, kein Override. Funktioniert sowohl
-mit SonarQube Server als auch SonarCloud.
+## 1. Bericht schreiben
 
-> **Nicht abgedeckt**: das Aufsetzen des SonarQube-Servers selbst (Docker /
-> Project anlegen / User+Token in der Web-UI). Voraussetzung: du hast einen
-> laufenden Server, einen User mit Token und ein Project mit Browse-
-> Permission. Falls noch nicht: siehe [docs/sonar-setup.md](docs/sonar-setup.md)
-> Abschnitt "Troubleshooting" und die offizielle SonarQube-Doku.
-
----
-
-## 0. Voraussetzungen — einmalig
-
-### 0.1 Sonar-Scanner installieren
-
-Offizielle Quelle: https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/scanners/sonarscanner/
-
-Direkter Download (Windows x64):
-https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/
-
-**Quick-Install via PowerShell**:
+Im Projektordner ausführen:
 
 ```powershell
-# Aktuelle Version ggf. anpassen
-$ver = "6.2.1.4610"
-Invoke-WebRequest `
-  "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$ver-windows-x64.zip" `
-  -OutFile "$env:TEMP\sonar-scanner.zip"
-Expand-Archive "$env:TEMP\sonar-scanner.zip" -DestinationPath C:\Tools -Force
-Rename-Item "C:\Tools\sonar-scanner-$ver-windows-x64" "C:\Tools\sonar-scanner"
-
-# PATH erweitern (dauerhaft fuer den User)
-[Environment]::SetEnvironmentVariable("PATH",
-  "$env:PATH;C:\Tools\sonar-scanner\bin", "User")
+StaticCodeAnalyser.d12.exe --path . --sonar-export sca.json --profile default
 ```
 
-**Neues PowerShell-Fenster öffnen** damit der PATH greift, dann verifizieren:
+GUI und IDE schreiben dasselbe Format mit *Export > Sonar: write Generic Issue report (all findings)...*: immer die ganze Analyse, egal was das Grid zeigt. *Sonar: write selected as external issue* schreibt je markiertem Fund eine Datei nach `.sonar\external\`; dafür `sonar.externalIssuesReportPaths=.sonar/external/` setzen.
 
-```powershell
-sonar-scanner --version
-```
+## 2. Scanner einrichten
 
-Sollte etwas wie `INFO: SonarScanner CLI 6.2.1.4610` ausgeben. Seit Version 5
-bringt der Scanner ein **eigenes JRE** mit — du brauchst kein extra Java zu
-installieren.
-
-### 0.2 Standalone-EXE bauen
-
-`StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` in Delphi 12 öffnen,
-auf `Win32 / Release` umstellen, **Build**.
-
-Ergebnis: `StaticCodeAnalyserForm\Win32\Release\StaticCodeAnalyser.d12.exe`.
-
-### 0.3 Catalog persistent ablegen (empfohlen)
-
-`rules\sca-rules.json` ist die Datenquelle für `cleanCodeAttribute` und
-`impacts` pro Rule (Sonar MQR-Mode). Standardmäßig sucht der EXE den Catalog
-relativ zum eigenen Verzeichnis. Wenn du den Scan später aus beliebigen
-Working-Directories startest, leg eine User-Copy an — dort findet die EXE
-ihn immer:
-
-```powershell
-$dst = "$env:APPDATA\StaticCodeAnalyser\rules"
-New-Item -ItemType Directory -Force $dst | Out-Null
-Copy-Item "D:\git-demos\delphi\StaticCodeAnalyser\rules\sca-rules.json" `
-          "$dst\sca-rules.json" -Force
-```
-
-Bei Catalog-Updates im Repo: Copy nachziehen. (Siehe
-[docs/sonar-config.md](docs/sonar-config.md) für die volle Lookup-Reihenfolge.)
-
----
-
-## 1. Sonar-Konfiguration für die Standalone-EXE
-
-Du hast drei Wege, der EXE die Verbindungsdaten zu geben — wähle einen,
-nicht mischen. A und B stehen für sich; C setzt voraus, dass die INI
-schon existiert (siehe dort) — ein wirklich plugin-freies Setup nimmt
-also A oder B.
-
-### Variante A — CLI-Flags pro Lauf
-
-```powershell
-analyser.exe --sonar-test `
-  --sonar-host http://sonar.company.com:9000 `
-  --sonar-token squ_xxxxxxxxxx `
-  --sonar-project my-delphi-project
-```
-
-Schnell für Tests / CI-Pipelines. Vorsicht: Token landet in der Shell-
-History.
-
-### Variante B — Environment-Variablen
-
-```powershell
-$env:SONAR_HOST_URL    = "http://sonar.company.com:9000"
-$env:SONAR_TOKEN       = "squ_xxxxxxxxxx"
-$env:SONAR_PROJECT_KEY = "my-delphi-project"
-
-analyser.exe --sonar-test
-```
-
-Empfohlen für CI (Secret-Stores liefern die Variablen).
-
-### Variante C — analyser.ini mit DPAPI-Token
-
-Die Standalone-EXE **liest** `%APPDATA%\StaticCodeAnalyser\analyser.ini`,
-schreibt dort aber nie ein Token hinein — es gibt keinen CLI-Schalter
-dafür. Die Datei muss vorher von woanders kommen:
-
-- **IDE-Plugin** — *Tools > Optionen > Static Code Analysis > Sonar*, Host
-  / Projekt / Token eintragen, Speichern. Das ist die einzige Stelle im
-  Produkt, die ein Token DPAPI-verschlüsselt ablegt. Bequem, wenn das
-  Plugin ohnehin installiert ist — auf einer plugin-freien Maschine
-  entfällt diese Variante damit.
-- **Von Hand** — die `[Sonar]`-Section selbst schreiben und den
-  `[SonarTokens]`-Eintrag mit PowerShell erzeugen:
-
-```powershell
-$ini = "$env:APPDATA\StaticCodeAnalyser\analyser.ini"
-Add-Type -AssemblyName System.Security
-$enc = [System.Security.Cryptography.ProtectedData]::Protect(
-  [Text.Encoding]::UTF8.GetBytes("squ_xxxxxxxxxx"), $null, "CurrentUser")
-$hex = ($enc | ForEach-Object { $_.ToString("x2") }) -join ""
-@"
-[Sonar]
-HostUrl=http://sonar.company.com:9000
-ProjectKey=my-delphi-project
-TokenRef=ide-default
-
-[SonarTokens]
-ide-default=$hex
-"@ | Set-Content $ini -Encoding utf8
-```
-
-Danach braucht kein Lauf mehr Flags:
-
-```powershell
-analyser.exe --sonar-test
-```
-
-DPAPI bindet die Datei an dieses Windows-Konto — eine Kopie ist auf einem
-anderen Rechner oder unter einem anderen Benutzer wertlos. Ein Tresor ist
-es nicht: jedes Programm, das *als du* läuft, entschlüsselt genauso. Für
-CI nimm Variante B.
-
-Beginnt ein Eintrag mit `PT:`, ist er reines Base64 und nicht
-verschlüsselt (der Nicht-Windows-Fallback). Die EXE liest auch solche
-Einträge und warnt dann.
-
----
-
-## 2. Verbindung testen
-
-```powershell
-analyser.exe --sonar-test
-```
-
-Erwarteter Output (alle vier Stufen grün):
-
-```
-Sonar config:
-  host    = http://sonar.company.com:9000   (CLI --sonar-host)
-  project = my-delphi-project               (analyser.ini)
-  token   = (42 chars from CLI --sonar-token)
-
-[OK]   DNS resolution: sonar.company.com -> 10.0.0.42
-[OK]   HTTP /api/system/status: UP
-[OK]   Token validation: valid
-[OK]   Project access: my-delphi-project (visible)
-Sonar connection healthy.
-```
-
-Bei Fehlern: die `[FAIL]`-Zeile beschreibt die Ursache (DNS, Server-Status,
-Token, oder Project-Permission).
-
----
-
-## 3. Findings erzeugen
-
-### 3.1 (Optional) sonar-project.properties anlegen
-
-```powershell
-cd D:\path\to\your\repo
-analyser.exe --sonar-init
-```
-
-Schreibt eine Vorlage in `sonar-project.properties` — anpassen:
+`sonar-project.properties` im selben Ordner:
 
 ```properties
 sonar.projectKey=my-delphi-project
-sonar.projectName=My Delphi Project
 sonar.sources=.
-sonar.sourceEncoding=UTF-8
-sonar.exclusions=**/*.dcu,**/*.bpl,**/lib/**,**/Win32/**,**/Win64/**
-sonar.externalIssuesReportPaths=sca-findings.json
+sonar.externalIssuesReportPaths=sca.json
 ```
 
-Die Datei landet ins VCS (Token gehört nicht rein — der kommt zur Laufzeit
-via Env-Var oder DPAPI-INI).
+SARIF geht auch: mit `--report-sarif sca.sarif` schreiben und `sonar.sarifReportPaths=sca.sarif` setzen. Nur eines von beiden nutzen, Sonar dedupliziert sie nicht.
 
-Alternative: nimm jeden Aufruf alle Werte per `-D` mit (siehe Schritt 4
-unten). Dann brauchst du keine `sonar-project.properties`.
-
-### 3.2 Analyse + Export
+## 3. Scanner starten
 
 ```powershell
-analyser.exe `
-  --path D:\path\to\your\repo `
-  --full `
-  --base-dir D:\path\to\your\repo `
-  --sonar-export D:\path\to\your\repo\sca-findings.json
-```
-
-Wichtig:
-- `--full` = rekursiver Scan (Branch-Mode wäre `--branch` — nur VCS-Diff)
-- `--base-dir` = damit die Dateipfade im JSON **relativ** zum Repo-Root sind,
-  nicht absolut. Sonst findet Sonar die Files nicht zum Anzeigen
-- `--sonar-export <file>` schreibt das Sonar-Generic-Issue-Format-JSON
-- Optional dazu: `--quiet` unterdrückt Per-Finding-Output (nur Summary am
-  Ende)
-
-Output am Ende:
-```
-Sonar Generic report written: D:\path\to\your\repo\sca-findings.json
-Findings: 529 (Errors: 18, Warnings: 30, Hints: 481)
-```
-
----
-
-## 4. Push mit sonar-scanner
-
-### Variante 1 — mit `sonar-project.properties`
-
-```powershell
-$env:SONAR_TOKEN = "squ_xxxxxxxxxx"
-cd D:\path\to\your\repo
+$env:SONAR_HOST_URL = "https://sonar.example.com"
+$env:SONAR_TOKEN = "<dein Token>"
 sonar-scanner
 ```
 
-Scanner liest `sonar-project.properties` automatisch.
+`ANALYSIS SUCCESSFUL` beweist den Import nicht. Maßgeblich sind im Scanner-Log `Imported N issues in M files` und `External issues ignored for N unknown files`.
 
-### Variante 2 — alle Parameter inline
+## Fehler, die sich vermeiden lassen
 
-```powershell
-$env:SONAR_TOKEN = "squ_xxxxxxxxxx"
-cd D:\path\to\your\repo
+- **Ein Sonar-Projekt je Git-Repository.** Ein Scan aus dem Elternordner zieht alle Unterprojekte mit, und Dateien eingebetteter Repositories haben keine Blame-Daten: Jedes ihrer Issues zählt als neuer Code (`Missing blame information for N files`).
+- **Bericht und Scanner im selben Ordner.** Die Pfade im Bericht sind relativ zum Projektverzeichnis (`--base-dir`, Vorgabe `--path`), und Sonar löst sie gegen den Ordner der `sonar-project.properties` auf. Sonst verwirft es sie als unbekannte Dateien.
+- **Verworfene Dateien.** Funde in Dateien, die `sonar.exclusions` treffen, in gitignorierten Dateien und in einem Unterordner mit eigenem `.git`, den das Eltern-Repository nicht als Submodul führt, gehen verloren, auch wenn SCA sie analysiert hat.
+- **Gleicher Regelsatz.** Die IDE nimmt `[Rules] IdeProfile`, und `--profile default` blendet Test-Fixtures aus (`--show-test-fixtures` behält sie). Ein unbekannter Profilname ergibt keinen Fehler, der Lauf scannt mit anderen Regeln.
+- **Aufruf stabil halten.** Der Bericht hängt am Regelsatz des Laufs, an dessen Funden und an `--sonar-keep-downgraded` (nur CLI). Profil und Schalter nicht zwischen Läufen wechseln, sonst ändern sich Issues, Severities und Ratings in Sonar, obwohl der Code gleich blieb.
+- **Exit-Code in der Pipeline.** Funde beenden einen Lauf mit Exit 1 bis 3. Damit der Scanner-Schritt trotzdem läuft, `--fail-on none` ergänzen; Werkzeugfehler bleiben Exit 99.
+- **SonarDelphi.** Bricht das Plugin den Scanner mit `Path to Delphi standardlibrary is invalid` ab, `sonar.delphi.installationPath` und `sonar.delphi.compilerVersion` setzen.
 
-sonar-scanner `
-  "-Dsonar.host.url=http://sonar.company.com:9000" `
-  "-Dsonar.projectKey=my-delphi-project" `
-  "-Dsonar.projectName=My Delphi Project" `
-  "-Dsonar.sources=." `
-  "-Dsonar.sourceEncoding=UTF-8" `
-  "-Dsonar.exclusions=**/*.dcu,**/*.bpl,**/lib/**,**/Win32/**,**/Win64/**" `
-  "-Dsonar.externalIssuesReportPaths=sca-findings.json"
-```
+## Severity und Impact
 
-Erwarteter Output endet mit:
-```
-INFO  ANALYSIS SUCCESSFUL, you can find the results at:
-      http://sonar.company.com:9000/dashboard?id=my-delphi-project
-INFO  EXECUTION SUCCESS
-INFO  Total time: 22.081s
-```
+- **Sonar kennt die Severity je Regel, nicht je Fund.** Der Impact einer Regel folgt dem stärksten Fund des Laufs: Hat die Evidenz-Politik alle gedeckelt, trägt die Regel die gedeckelte Schwere (Warning: höchstens MEDIUM). Ein Fund mit voller Schwere hält die Katalog-Impacts. Der Impact kann also von Lauf zu Lauf wechseln, die Issues bleiben. `[Rules] EvidenceTiering=0` behält die Katalog-Impacts.
+- **Funde, die du per `[PathOverrides]` herabgestuft hast, fehlen im Bericht,** denn sie kämen in voller Schwere an. `--sonar-keep-downgraded` exportiert sie (nur CLI). Einmal entscheiden: Was den Bericht verlässt, zählt als behoben, was hinzukommt, als neu.
+- **BLOCKER braucht SonarQube 10.8 oder neuer.** SCA026 trägt ihn immer, SCA004 bei einem belegten Fund. Auf 10.3 bis 10.7 ist ein solcher Bericht ungültig.
 
-Erster Lauf dauert länger (Sonar lädt Sprach-Plugins nach). Folge-Läufe
-~10–30 s je nach Anzahl Files.
+## Offizielle Dokumentation
 
----
-
-## 5. All-in-one Skript (Beispiel)
-
-Speichere als `push-to-sonar.ps1` im Repo-Root und ruf es per Aufgabe oder
-manuell auf:
-
-```powershell
-# push-to-sonar.ps1
-$ErrorActionPreference = "Stop"
-
-$exe = "D:\git-demos\delphi\StaticCodeAnalyser\StaticCodeAnalyserForm\Win32\Release\StaticCodeAnalyser.d12.exe"
-$repo = $PSScriptRoot
-$json = Join-Path $repo "sca-findings.json"
-
-# DPAPI-Token aus analyser.ini laden
-Add-Type -AssemblyName System.Security
-$ini = Get-Content "$env:APPDATA\StaticCodeAnalyser\analyser.ini" -Raw -Encoding UTF8
-$tokenHex = ([regex]::Match($ini, '(?m)^ide-default=(.+)$')).Groups[1].Value.Trim()
-$bytes = [byte[]]::new($tokenHex.Length / 2)
-for ($i = 0; $i -lt $tokenHex.Length; $i += 2) {
-  $bytes[$i / 2] = [Convert]::ToByte($tokenHex.Substring($i, 2), 16)
-}
-$env:SONAR_TOKEN = [System.Text.Encoding]::UTF8.GetString(
-  [System.Security.Cryptography.ProtectedData]::Unprotect(
-    $bytes, $null, "CurrentUser"))
-
-try {
-  # 1. Analyse + Export
-  & $exe --path $repo --full --base-dir $repo --sonar-export $json --quiet
-  if ($LASTEXITCODE -ge 99) { throw "SCA failed (exit $LASTEXITCODE)" }
-
-  # 2. Push
-  Push-Location $repo
-  try {
-    & sonar-scanner   # liest sonar-project.properties
-    if ($LASTEXITCODE -ne 0) { throw "sonar-scanner failed (exit $LASTEXITCODE)" }
-  } finally {
-    Pop-Location
-  }
-} finally {
-  Remove-Item Env:SONAR_TOKEN -ErrorAction SilentlyContinue
-}
-```
-
----
-
-## Troubleshooting
-
-| Symptom | Ursache | Fix |
-|---|---|---|
-| `[FAIL] DNS resolution` | Host nicht erreichbar, Tippfehler in URL | URL prüfen, ping Host |
-| `[FAIL] HTTP /api/system/status: 503` | Server bootet noch | ~60 s warten, retry |
-| `[FAIL] Token validation: 401` | Token ungültig / abgelaufen | Neuen Token im Sonar erzeugen |
-| `[FAIL] Project access: not found` | Project existiert nicht | In Sonar anlegen (Web-UI) |
-| `[FAIL] Project access: 403` (Project exists) | Browse-Permission fehlt | Project Permissions → User Browse-Recht geben |
-| `Failed to parse report: either type, impacts or both should be provided` | Stale Standalone-EXE ohne Catalog | EXE neu bauen (siehe 0.2), Catalog in APPDATA (0.3) |
-| Issues in Sonar fehlen | `--base-dir` falsch → absolute Pfade | `--base-dir` == `--path` setzen |
-| sonar-scanner nicht gefunden | PATH nicht aktiv | Neues Shell-Fenster |
-| Sonar zeigt Files als "Empty" | `sonar.exclusions` greift zu breit | Exclusions in `sonar-project.properties` prüfen |
-
----
-
-## Referenzen
-
-- [docs/sonar-setup.md](docs/sonar-setup.md) — vollständiger Setup-Guide (inkl. IDE-Plugin und CI-Beispiele)
-- [docs/sonar-config.md](docs/sonar-config.md) — Resolver-Pfade (CLI > Env > Properties > INI)
-- [Sonar-Scanner-Dokumentation](https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/scanners/sonarscanner/)
-- [Sonar Generic Issue Format](https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/importing-external-issues/generic-issue-import-format/)
+- [SonarScanner CLI](https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/scanners/sonarscanner/): Installation, Token, Server-URL
+- [Generic Issue Import Format](https://docs.sonarsource.com/sonarqube-server/latest/analyzing-source-code/importing-external-issues/generic-issue-import-format/)
+- [Quality Gates](https://docs.sonarsource.com/sonarqube-server/latest/quality-standards-administration/managing-quality-gates/introduction-to-quality-gates/)

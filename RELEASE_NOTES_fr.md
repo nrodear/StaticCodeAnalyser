@@ -1,4 +1,71 @@
-﻿# Release 0.9.18 — Error signifie prouvé, une référence qui tient, et un seul rapport de résultats
+﻿# Release 0.9.19 — Corriger directement depuis le résultat, Lazarus dans l'analyse, et une référence qui compte
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
+
+Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
+([deutsch](docs/releases/v0.9.19_de.md)).
+
+- **reDelphix : corriger un résultat là où on le lit.** Cette nouvelle
+  fonction de SCA propose des quick-fixes pour 96 règles, dans l'ampoule et
+  dans le menu contextuel du résultat, ainsi que neuf actions de code au
+  curseur, en anglais, en allemand et en français. Chaque action
+  revérifie d'abord le tampon de l'éditeur et écrit en une seule étape
+  d'annulation, jamais dans un fichier. Le setup l'installe pour
+  Delphi 12 et pour les IDE 32 et 64 bits de Delphi 13 ; il est
+  présélectionné et décochable.
+- **GetIt est suspendu pour la 0.9.19 : si vous utilisez GetIt, prenez le
+  setup.** Le setup installe désormais un jeu de quatre paquets par IDE au
+  lieu d'une seule BPL, et ce jeu ne peut pas s'installer via GetIt.
+  Lancez le nouveau setup par-dessus la v0.9.18 : il retire l'ancien
+  plugin, y compris une installation GetIt, et le signale. Son dossier
+  passe en tête du réglage PATH de l'IDE ; la désinstallation ne retire
+  que cette entrée. Avec reDelphix, un plugin installé garde ses
+  quick-fixes et `Ctrl+Alt+F`.
+- **Les réglages Sonar et le test de connexion disparaissent. SCA écrit
+  le fichier, `sonar-scanner` l'envoie. Les options `--sonar-test`,
+  `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,
+  `--sonar-branch`, `--sonar-insecure` et `--sonar-config` sont retirées :
+  un appel de pipeline qui les utilise échoue. `sonar-scan.ps1` et
+  `sonar-upload.ps1` disparaissent aussi : appelez `sonar-scanner`
+  vous-même, voir [sonarHowto_fr.md](sonarHowto_fr.md). `[Sonar]` et
+  `[SonarTokens]` dans `analyser.ini` sont ignorés et peuvent être
+  supprimés.**
+- **Lazarus et Free Pascal sont une vraie cible d'analyse.**
+  `--dialect=fpc` ou `auto`, unités `.pp`/`.lpr`, formulaires `.lfm`,
+  `.lpi`/`.lpk`/`.lpg` comme périmètre de projet, `[Scan] Dialect` dans
+  `analyser.ini`.
+- **Les références comptent.** Chaque entrée couvre au plus un résultat,
+  et la CLI, la GUI et l'IDE marquent les mêmes résultats comme nouveaux.
+  **Rupture pour les portes CI :** les résultats qu'une entrée masquait
+  apparaissent comme nouveaux.
+- **Sept nouvelles règles, 205 au total :** noms `ParamByName` erronés,
+  adresses IP en dur dans le code et les fichiers `.ini`, `not` et `and`
+  avant une comparaison, boucle `for` qui dépasse d'un indice, et nom de
+  fonction à la place de `Result`. SCA202, SCA203 et SCA205 peuvent
+  signaler Error.
+- **Des règles qui lisent plus et affirment moins.** SCA001 reçoit le
+  niveau `proven-leak` comme seul Error, SCA007 s'exécute réellement dans
+  la CLI, SCA125 signale pour la première fois, et les formulaires avec
+  `PopupMenu = dm.Pop` ne sont plus ignorés.
+- **Des rapports fiables.** Les URI SARIF sont des URI valides, les champs
+  CSV sont protégés contre l'injection de formules, les fichiers de
+  rapport sont écrits de façon atomique, et `--diff`/`--branch` écrivent
+  toujours le rapport demandé.
+- **Un export Sonar conforme au serveur.** Chaque issue correspond à un
+  fichier et à une ligne que SonarQube connaît, et les résultats plafonnés
+  sont exportés. L'impact d'une règle suit les résultats de l'analyse.
+  Les projets existants verront des issues apparaître et se déplacer.
+- **Dans l'IDE :** les nouvelles installations ouvrent l'overlay sous la
+  ligne du résultat (un `analyser.ini` existant issu du modèle indique
+  encore `OverlayPosition=sameline` ; remplacez-le par `below`), et le menu
+  d'actions est deux fois moins large, sans rien perdre.
+- **La documentation suit le code.** Le README et les manuels sont
+  débarrassés des chemins morts, des raccourcis disparus et des chiffres
+  dépassés.
+
+---
+
+# Précédemment — Release 0.9.18 — Error signifie prouvé, une référence qui tient, et un seul rapport de résultats
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 

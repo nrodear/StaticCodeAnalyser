@@ -8,7 +8,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Qui
 ## Lesehilfe
 
 - **Quick-Fix** behebt den Fund: Glühbirne im Editor (nur verfügbare Hilfen), Kontextmenü des Funds im Editor und im Dock-Grid (dort auch ausgegraut, der Grund steht im Hinweis). **Strg+Alt+F** im Dock-Grid führt die erste verfügbare Hilfe aus, die nicht gekennzeichnet ist.
-- **Ändert Verhalten** (Entscheid E2): der Menütext endet auf `(changes behavior)` (de `(ändert Verhalten)`, fr `(modifie le comportement)`). Eine solche Hilfe läuft nur über Menü oder Glühbirne, nie über Strg+Alt+F.
+- **Ändert Verhalten:** der Menütext endet auf `(changes behavior)` (de `(ändert Verhalten)`, fr `(modifie le comportement)`). Eine solche Hilfe läuft nur über Menü oder Glühbirne, nie über Strg+Alt+F.
 - **Navigation** führt nur hin: Kontextmenü und Dock-Grid, nicht die Glühbirne.
 - **Refactoring** formt um, behebt den Fund aber nicht: nur Kontextmenü und Dock-Grid, je Menü einmal.
 - **Unterdrücken** setzt einen Marker: Kontextmenü, Dock-Grid und **Strg+Alt+S**; in der Glühbirne nur, wenn es zum Fund auch eine Hilfe gibt.
@@ -2151,7 +2151,7 @@ Nachher:
 |---|---|---|
 | `Put the branch in begin..end` | `Zweig in begin..end setzen` | `Mettre la branche dans begin..end` |
 
-**Wirkung:** Setzt die Anweisung hinter dem `else` des einen `end else` der Fundzeile in `begin..end` (Entscheid E7, bedeutungsgleich). `end else if` und `end else begin` zählen nicht mit. Die Form wie bei SCA101.
+**Wirkung:** Setzt die Anweisung hinter dem `else` des einen `end else` der Fundzeile in `begin..end` (bedeutungsgleich). `end else if` und `end else begin` zählen nicht mit. Die Form wie bei SCA101.
 
 **Nicht angeboten**
 
@@ -2195,7 +2195,7 @@ Nachher:
 |---|---|---|
 | `Put the branch in begin..end` | `Zweig in begin..end setzen` | `Mettre la branche dans begin..end` |
 
-**Wirkung:** Setzt die Anweisung hinter `then`/`else`/`do` an der Spalte aus der Meldung in `begin..end` (Entscheid E7, bedeutungsgleich). Hinter dem `else` eines case oder except kommt die ganze Anweisungsliste in den Block. Wem ein `else` gehört, entscheidet eine Rückwärtssuche wie der Compiler (dangling else). `begin` und `end` stehen in eigenen Zeilen, wenn die Anweisung auf der Zeile des Schlüsselworts steht oder allein auf ihren Zeilen, sonst inline.
+**Wirkung:** Setzt die Anweisung hinter `then`/`else`/`do` an der Spalte aus der Meldung in `begin..end` (bedeutungsgleich). Hinter dem `else` eines case oder except kommt die ganze Anweisungsliste in den Block. Wem ein `else` gehört, entscheidet eine Rückwärtssuche wie der Compiler (dangling else). `begin` und `end` stehen in eigenen Zeilen, wenn die Anweisung auf der Zeile des Schlüsselworts steht oder allein auf ihren Zeilen, sonst inline.
 
 **Nicht angeboten**
 

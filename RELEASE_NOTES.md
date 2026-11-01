@@ -1,4 +1,63 @@
-﻿# Release 0.9.18 — Error means proven, a baseline that holds, and one findings report
+﻿# Release 0.9.19 — Fixes at the finding, Lazarus in the scan, and a baseline that counts
+
+🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
+
+Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
+([deutsch](docs/releases/v0.9.19_de.md)).
+
+- **reDelphix: repair a finding where you read it.** This new feature
+  of SCA offers quick-fixes for 96 rules in the light bulb and the finding's
+  context menu, plus nine code actions at the caret, in English, German
+  and French. Every action re-checks the editor buffer first and writes
+  one undo step, never into a file. The Setup installs it for Delphi 12
+  and for the 32-bit and 64-bit IDE of Delphi 13; it is preselected and can
+  be unticked.
+- **GetIt is suspended for 0.9.19: if you use GetIt, take the Setup.** The
+  Setup now installs a set of four packages per IDE instead of one BPL,
+  and that set cannot be installed through GetIt. Run the new Setup over
+  v0.9.18: it removes the old plugin, also a GetIt install, and says so.
+  Its folder goes to the front of the IDE's PATH setting; uninstalling
+  removes only that entry. With reDelphix, an installed plugin keeps its
+  quick-fixes and `Ctrl+Alt+F`.
+- **Sonar settings and the connection check are gone. SCA writes the
+  file, `sonar-scanner` sends it. The switches `--sonar-test`,
+  `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,
+  `--sonar-branch`, `--sonar-insecure` and `--sonar-config` are removed,
+  so a pipeline call with one of them fails. `sonar-scan.ps1` and
+  `sonar-upload.ps1` are gone too: call `sonar-scanner` yourself, see
+  [sonarHowto.md](sonarHowto.md). `[Sonar]` and `[SonarTokens]` in
+  `analyser.ini` are ignored and can be deleted.**
+- **Lazarus and Free Pascal are a real scan target.** `--dialect=fpc` or
+  `auto`, `.pp`/`.lpr` units, `.lfm` forms, `.lpi`/`.lpk`/`.lpg` as
+  project scope, `[Scan] Dialect` in `analyser.ini`.
+- **Baselines count.** Each entry covers at most one finding, and the
+  CLI, GUI and IDE mark the same findings as new. **Breaking for CI
+  gates:** findings that one entry used to hide show up as new.
+- **Seven new rules, 205 in total:** wrong `ParamByName` names, hardcoded
+  IP addresses in code and `.ini` files, `not` and `and` before a
+  comparison, a `for` loop one index too far, and a function name used
+  in place of `Result`. SCA202, SCA203 and SCA205 can report Error.
+- **Rules read more and claim less.** SCA001 gets the `proven-leak` level
+  as its only Error, SCA007 really runs in the CLI, SCA125 reports for
+  the first time, and forms with `PopupMenu = dm.Pop` are no longer
+  skipped.
+- **Reports you can rely on.** SARIF URIs are valid URIs, CSV fields are
+  safe against formula injection, report files are written atomically,
+  and `--diff`/`--branch` always write the requested report.
+- **Sonar export that fits the server.** Every issue matches a file and
+  a line SonarQube knows, and capped findings are exported. The impact
+  of a rule follows the findings of the run. Existing projects see
+  issues appear and move.
+- **In the IDE:** new installations open the overlay below the finding
+  line (an existing `analyser.ini` from the template still says
+  `OverlayPosition=sameline`; change it to `below`), and the action menu
+  is half as wide with nothing lost.
+- **Documentation follows the code.** README and manuals lost dead paths,
+  keyboard shortcuts that no longer exist and outdated numbers.
+
+---
+
+# Previously — Release 0.9.18 — Error means proven, a baseline that holds, and one findings report
 
 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

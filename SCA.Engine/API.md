@@ -10,7 +10,7 @@ knowing the internal units.
 > Runnable minimal example: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
 - **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` reads `.dproj`/`.groupproj` for the project scopes; no VCL/FMX dependency)
-- **Version:** 0.9.18 (`uSCAConsts.SCA_VERSION`)
+- **Version:** 0.9.19 (`uSCAConsts.SCA_VERSION`)
 - **Scope:** 205 rules (rule IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
 
 ---
@@ -123,7 +123,7 @@ then override selectively.
 | `IncludeDefines` | `Boolean` | Read `{$I}` include files for their `{$DEFINE}` effect. `Init` sets `True`; `False` = include-blind (CLI `--no-include-defines`). Scan view like `IfdefDefines`. |
 | `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) or `dlFpc` (`uSCAConsts`): `dlFpc` also collects `*.pp` in directory walks and, with a non-empty `IfdefDefines`, adds `FPC` and `LCL`. Forced to `dlFpc` for `.lpi`/`.lpk`/`.lpg` project scopes. Scan view like `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML with custom rules (`''`=none). |
-| `BaselinePath` | `string` | Filter findings against a baseline JSON (`''`=off). |
+| `BaselinePath` | `string` | Filter findings against a baseline JSON (`''`=off). Each entry covers at most one finding. |
 | `WriteBaselinePath` | `string` | Write current findings as a new baseline. |
 | `ApplyRepoIni` | `Boolean` | Load + fully apply `analyser.ini` (like the CLI). |
 | `MinSeverityName` | `string` | INI mode: override `'error'`/`'warning'`/`'hint'`. |
@@ -215,7 +215,7 @@ Each finding:
 | Member | Type / return | Meaning |
 |--------|---------------|---------|
 | `FileName` | `string` | Source file. |
-| `MethodName` | `string` | Method/routine (if known). |
+| `MethodName` | `string` | Routine whose lines contain the finding; empty outside a routine and for findings in a form file. |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Line (string field + integer helper). |
 | `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Last line of the finding's range. `EndLine = 0` (default) = single line; read `SpanEnd` (clamped, never below the start line) instead of the raw field. A range changes only how much a finding marks, never the number of findings. |
 | `MissingVar` / `Message` | `string` | Detail message (`Message` = alias). |

@@ -139,6 +139,12 @@ Die übernommenen Profile landen in der eigenen `profiles.json`. Danach
 verhalten sie sich wie selbst angelegte - einschließlich
 `--profile <Name>` auf der Kommandozeile.
 
+Das Repository bringt eine solche Datei mit:
+`reDelphix/data/profile-code-aktionen.json` enthält das Profil
+`code-aktionen`, die Regeln mit einer Code-Aktion des optionalen Pakets
+reDelphix plus `FileReadError`. Es gehört nicht zu den eingebauten
+Profilen und muss importiert werden.
+
 ## Eine Regel in der Liste finden
 
 Beide Listen im Profil-Fenster - die Regeln des Profils und die Auswahl

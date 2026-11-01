@@ -14,12 +14,43 @@ die Aufrufstelle, nicht auf das veraltete Artefakt.
 
     python tools/stale_artifacts_check.py
     python tools/stale_artifacts_check.py --clean-commands
+    python tools/stale_artifacts_check.py --release
+
+--release prueft nur, was ausgeliefert wird: die vier Pakete des
+Paketsatzes auf den drei Schienen. Der Monolith wird dafuer nicht mehr
+gebaut, und D12 Win64 ist keine Schiene (keine 64-Bit-IDE); beide stuenden
+sonst fuer immer auf VERALTET und sperrten jedes Release
+(package-release.ps1). Die PATH-Warnungen entfallen dort ebenfalls: sie
+gelten dem Dev-Bau, nicht dem Release.
+
+Dazu verlangt --release je Schiene die Bau-Reihenfolge: kein DCP darf
+aelter sein als ein DCP, gegen das sein Paket linkt (Engine <= SharedUI
+<= IDE, Engine <= reDelphix). Wer nur die Engine neu baut, sieht sonst
+ueberall "ok" und liefert Pakete aus, die gegen die alte Engine gelinkt
+sind.
+
+Quelle ist mehr als .pas: auch .inc, .dfm und .rc samt der Datei, die eine
+.rc einbindet, in den Quellordnern und neben der .dpk, dazu die .dproj.
+
+Zwei Ausnahmen, beide gemessen am 2026-11-01:
+
+* .res ist keine Quelle im Zeitvergleich. Jeder Bau schreibt die Projekt-
+  .res, sca_branding.res und unitscopes.res neu, in derselben Sekunde wie
+  sein DCP. Mit drei Schienen waere sie immer juenger als die DCPs der
+  beiden zuerst gebauten, und kein Release wuerde je gruen. Geprueft wird
+  deshalb: keine .res juenger als das juengste DCP ihres Pakets. Das faengt
+  eine von Hand neu erzeugte .res, ohne beim Schienenwechsel anzuschlagen.
+* Die Zeit einer .dproj ist ihr letzter Commit, solange sie unveraendert
+  ist. Nach jedem IDE-Bau kommt sie per git checkout zurueck, und das setzt
+  die Dateizeit neu, ohne dass sich etwas geaendert haette. Eine
+  uncommittete Aenderung zaehlt mit ihrer Dateizeit.
 
 EXIT  0 alles aktueller als die Quelle | 1 veraltete Artefakte | 2 Fehler
 """
 import io
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -43,7 +74,13 @@ PACKAGES = (
      'StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk'),
     ('StaticCodeAnalyser.Plugin.d12',
      'StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.dpk'),
+    ('reDelphix.d12',                 'reDelphix/reDelphix.d12.dpk'),
 )
+
+# Nur fuer --release: der Monolith liegt bis zu seiner Entfernung noch im
+# Repo, ausgeliefert wird er nicht mehr.
+NICHT_AUSGELIEFERT = ('StaticCodeAnalyser.Plugin.d12',)
+RELEASE_SCHIENEN = (('D12', 'Win32'), ('D13', 'Win32'), ('D13', 'Win64'))
 
 
 def dproj_of(dpk_rel, gen):
@@ -140,7 +177,7 @@ def pfad_kollision():
 
 
 def bpl_gewinner():
-    """Welche gleichnamige BPL findet der Loader zuerst?
+    r"""Welche gleichnamige BPL findet der Loader zuerst?
 
     Die PATH-Warnung darunter galt bisher nur dem Compiler. Am 2026-08-24
     hat dieselbe Reihenfolge den IDE-LOADER getroffen: das D12-Plugin
@@ -192,25 +229,178 @@ def when(ts):
     return time.strftime('%Y-%m-%d %H:%M', time.localtime(ts))
 
 
-def newest_source(dpk_rel):
-    """Juengste Quelldatei eines Pakets: die .dpk selbst plus alles aus
-    ihrer contains-Klausel."""
+def sekunde(ts):
+    # Die Pakete einer Schiene entstehen innerhalb einer Minute.
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))
+
+
+def ohne_kommentare(text):
+    """Pascal-Text ohne Kommentare, Strings bleiben stehen.
+
+    Die requires-Klausel von SCA.SharedUI traegt einen langen Kommentar
+    mit Semikolons und dem Wort designide.
+    """
+    return re.sub(r"('[^'\n]*')|//[^\n]*|\{.*?\}|\(\*.*?\*\)",
+                  lambda m: m.group(1) or ' ', text, flags=re.S)
+
+
+def eigene_requires(dpk_rel):
+    """Die Pakete aus PACKAGES, die in der requires-Klausel stehen."""
+    t = ohne_kommentare(io.open(os.path.join(REPO, dpk_rel),
+                                encoding='utf-8-sig').read())
+    m = re.search(r'\brequires\b(.*?);', t, re.S | re.I)
+    if not m:
+        return []
+    namen = {n.strip().lower() for n in m.group(1).split(',')}
+    return [name for name, _d in PACKAGES if name.lower() in namen]
+
+
+def bau_reihenfolge(rows):
+    """Pakete, die aelter sind als ein Paket, gegen das sie linken.
+
+    Liefert [(IDE, Plattform, Paket, DCP-Zeit, Abhaengigkeit, deren Zeit)].
+    Gleiche Zeit ist erlaubt: der Bau schreibt mit Sekundengenauigkeit.
+    Ein fehlendes DCP meldet die Tabelle bereits.
+    """
+    zeit = {(r[0], r[1], r[2]): r[3] for r in rows if r[3] is not None}
+    dpk_von = dict(PACKAGES)
+    out = []
+    for (label, plat, name), art in sorted(zeit.items()):
+        for dep in eigene_requires(dpk_von[name]):
+            dep_zeit = zeit.get((label, plat, dep))
+            if dep_zeit is not None and art < dep_zeit:
+                out.append((label, plat, name, art, dep, dep_zeit))
+    return out
+
+
+def quell_ordner(dpk_rel):
+    """Die Ordner eines Pakets: neben der .dpk plus die seiner Units."""
     base = os.path.dirname(os.path.join(REPO, dpk_rel))
     text = io.open(os.path.join(REPO, dpk_rel), encoding='utf-8-sig').read()
-    newest, who = os.path.getmtime(os.path.join(REPO, dpk_rel)), dpk_rel
+    ordner = {os.path.normpath(base)}
     for rel in re.findall(r"in\s+'([^']+\.pas)'", text):
         f = os.path.join(base, rel.replace(chr(92), os.sep))
+        ordner.add(os.path.normpath(os.path.dirname(f)))
+    return sorted(ordner)
+
+
+def dateien_mit(ordner, endungen):
+    for o in ordner:
+        if os.path.isdir(o):
+            for n in os.listdir(o):
+                if n.lower().endswith(endungen):
+                    yield os.path.join(o, n)
+
+
+def rc_nutzlast(rc):
+    """Dateien, die eine .rc einbindet; Pfade sind relativ zur .rc."""
+    t = ohne_kommentare(io.open(rc, encoding='utf-8-sig',
+                                errors='replace').read())
+    for rel in re.findall(r'"([^"]+)"', t):
+        f = os.path.normpath(os.path.join(os.path.dirname(rc),
+                                          rel.replace(chr(92), os.sep)))
+        if os.path.isfile(f):
+            yield f
+
+
+def rc_dateien(dpk_rel, dproj):
+    """Die .rc der Quellordner plus die <RcCompile>-Eintraege der .dproj."""
+    rcs = set(dateien_mit(quell_ordner(dpk_rel), ('.rc',)))
+    if dproj:
+        voll = os.path.join(REPO, dproj)
+        for rel in re.findall(r'<RcCompile Include="([^"]+)"',
+                              io.open(voll, encoding='utf-8-sig').read()):
+            f = os.path.normpath(os.path.join(os.path.dirname(voll),
+                                              rel.replace(chr(92), os.sep)))
+            if os.path.isfile(f):
+                rcs.add(f)
+    return sorted(rcs)
+
+
+def dproj_zeit(rel):
+    """Commit-Zeit einer unveraenderten .dproj, sonst ihre Dateizeit.
+
+    Warum nicht einfach die Dateizeit: siehe Kopf dieses Werkzeugs. Ohne
+    Git (Kopie, Archiv) bleibt nur die Dateizeit.
+    """
+    git = ['git', '-C', REPO]
+    try:
+        offen = subprocess.run(git + ['status', '--porcelain', '--', rel],
+                               capture_output=True, text=True, check=True)
+        if not offen.stdout.strip():
+            ct = subprocess.run(git + ['log', '-1', '--format=%ct', '--', rel],
+                                capture_output=True, text=True, check=True)
+            if ct.stdout.strip():
+                return float(ct.stdout.strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        pass
+    return os.path.getmtime(os.path.join(REPO, rel))
+
+
+def newest_source(dpk_rel):
+    """Juengste Quelle eines Pakets, ohne .res (siehe juengste_res)."""
+    base = os.path.dirname(os.path.join(REPO, dpk_rel))
+    text = io.open(os.path.join(REPO, dpk_rel), encoding='utf-8-sig').read()
+    dateien = [os.path.join(REPO, dpk_rel)]
+    dateien += [os.path.join(base, rel.replace(chr(92), os.sep))
+                for rel in re.findall(r"in\s+'([^']+\.pas)'", text)]
+    dateien += dateien_mit(quell_ordner(dpk_rel), ('.inc', '.dfm'))
+    dproj = dproj_of(dpk_rel, None)
+    for rc in rc_dateien(dpk_rel, dproj):
+        dateien.append(rc)
+        dateien.extend(rc_nutzlast(rc))
+
+    newest, who = 0.0, dpk_rel
+    for f in dateien:
         if os.path.isfile(f):
             t = os.path.getmtime(f)
             if t > newest:
                 newest, who = t, os.path.relpath(f, REPO)
+    if dproj:
+        t = dproj_zeit(dproj)
+        if t > newest:
+            newest, who = t, dproj
     return newest, who
 
 
+def juengste_res(dpk_rel):
+    """Juengste .res des Pakets als (Zeit, Pfad), sonst None.
+
+    Die Projekt-.res der anderen Pakete bleiben aussen vor: IDE und Monolith
+    teilen sich den Ordner.
+    """
+    fremd = {os.path.basename(d)[:-4].lower() + '.res'
+             for _n, d in PACKAGES if d != dpk_rel}
+    beste = None
+    for f in dateien_mit(quell_ordner(dpk_rel), ('.res',)):
+        if os.path.basename(f).lower() not in fremd:
+            t = os.path.getmtime(f)
+            if beste is None or t > beste[0]:
+                beste = (t, os.path.relpath(f, REPO))
+    return beste
+
+
+def res_nach_dem_bau(rows):
+    """Pakete mit einer .res, die juenger ist als jedes ihrer DCPs.
+
+    Liefert [(Paket, Zeit der .res, Pfad, juengstes DCP)].
+    """
+    dpk_von, out = dict(PACKAGES), []
+    for name in sorted({r[2] for r in rows if r[3] is not None}):
+        juengstes = max(r[3] for r in rows if r[2] == name and r[3] is not None)
+        res = juengste_res(dpk_von[name])
+        if res and res[0] > juengstes:
+            out.append((name, res[0], res[1], juengstes))
+    return out
+
+
 def main():
+    nur_release = '--release' in sys.argv
     rows, stale, fehlend = [], 0, 0
     for name, dpk in PACKAGES:
         if not os.path.isfile(os.path.join(REPO, dpk)):
+            continue
+        if nur_release and name in NICHT_AUSGELIEFERT:
             continue
         src_ts, src_who = newest_source(dpk)
         for ver, label in STUDIOS:
@@ -218,6 +408,8 @@ def main():
             if not os.path.isdir(root):
                 continue
             for plat in erwartete_plattformen(dpk, label):
+                if nur_release and (label, plat) not in RELEASE_SCHIENEN:
+                    continue
                 sub = '' if plat == 'Win32' else plat
                 dcp = os.path.join(root, 'Dcp', sub, name + '.dcp')
                 if not os.path.isfile(dcp):
@@ -232,7 +424,7 @@ def main():
                 stale += bad
                 rows.append((label, plat, name, art, src_ts, src_who, bad))
 
-    kol = pfad_kollision()
+    kol = {} if nur_release else pfad_kollision()
     if len(kol) > 1:
         print('WARNUNG: Bpl-Ordner BEIDER Generationen stehen im PATH.')
         for label in sorted(kol):
@@ -250,7 +442,7 @@ def main():
         print('     nicht stehen - dann entscheidet allein der PATH.')
         print()
 
-    doppelt = bpl_gewinner()
+    doppelt = {} if nur_release else bpl_gewinner()
     if doppelt:
         print('ROT: %d BPL-Name(n) liegen MEHRFACH im PATH.' % len(doppelt))
         print('Der Loader nimmt den ersten Treffer - die anderen sind tot:')
@@ -266,6 +458,9 @@ def main():
         print('Keine gebauten Paket-Artefakte gefunden - nichts zu pruefen.')
         return 0
 
+    reihenfolge = bau_reihenfolge(rows) if nur_release else []
+    res_neu = res_nach_dem_bau(rows)
+
     print('%-4s %-11s %-30s %-16s %-16s' %
           ('IDE', 'Plattform', 'Paket', 'DCP gebaut', 'Quelle zuletzt'))
     for label, plat, name, art, src, who, bad in rows:
@@ -274,7 +469,7 @@ def main():
               % (label, plat, name, '-' if art is None else when(art),
                  when(src), zustand))
 
-    if not stale and not fehlend:
+    if not stale and not fehlend and not reihenfolge and not res_neu:
         print('\nGRUEN: jedes DCP ist juenger als seine Quelle.')
         return 0
 
@@ -317,16 +512,32 @@ def main():
             print('  (nichts gefunden)')
 
     print()
-    print('ROT: %d Artefakt(e) FEHLEN, %d sind aelter als die Quelle.'
-          % (fehlend, stale))
-    print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
-    print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
-    print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
-    print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/Plugin.')
-    for label, plat, name, art, src, who, bad in rows:
-        if bad:
-            print('  %s %s %s: juengste Quelle ist %s (%s)'
-                  % (label, plat, name, who, when(src)))
+    if stale or fehlend:
+        print('ROT: %d Artefakt(e) FEHLEN, %d sind aelter als die Quelle.'
+              % (fehlend, stale))
+        print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
+        print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
+        print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
+        print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/reDelphix/Plugin.')
+        for label, plat, name, art, src, who, bad in rows:
+            if bad:
+                print('  %s %s %s: juengste Quelle ist %s (%s)'
+                      % (label, plat, name, who, when(src)))
+    if reihenfolge:
+        print('ROT: %d Mal ist ein Paket aelter als ein Paket, gegen das es'
+              ' linkt.' % len(reihenfolge))
+        print('Es ist gegen den alten Stand gelinkt: neu bauen, auch ohne'
+              ' Quellaenderung.')
+        for label, plat, name, art, dep, dep_zeit in reihenfolge:
+            print('  %s %s %s (%s) ist aelter als %s (%s)'
+                  % (label, plat, name, sekunde(art), dep, sekunde(dep_zeit)))
+    if res_neu:
+        print('ROT: %d Paket(e) haben eine .res, die juenger ist als jedes'
+              ' ihrer DCPs.' % len(res_neu))
+        print('Sie steckt in keiner gebauten BPL: neu bauen.')
+        for name, zeit, pfad, dcp in res_neu:
+            print('  %s: %s (%s), juengstes DCP %s'
+                  % (name, pfad, sekunde(zeit), sekunde(dcp)))
     return 1
 
 

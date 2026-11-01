@@ -10,6 +10,8 @@ pipelines. Pick the one that matches your stack — they're independent.
 | `pr-comment-bot.ps1`     | Posts a Markdown comment on the PR with only NEW findings |
 | `msbuild-sca-target.xml` | MSBuild target snippet to embed SCA as pre-build step into a `.dproj` |
 
+The examples expect the EXE as `tools\sca\StaticCodeAnalyser.d12.exe`.
+
 ---
 
 ## Common flags
@@ -19,7 +21,7 @@ All of these examples build on the new CLI flags. Cheat-sheet:
 | Flag | Purpose |
 |---|---|
 | `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. A run that hit read errors never drops below exit 4 — only `--fail-on=none` returns 0 there. |
-| `--baseline <file>` | Drop findings whose fingerprint matches a known entry in `<file>`. Only NEW findings count. |
+| `--baseline <file>` | Drop findings covered by an entry in `<file>`, each entry covering at most one finding. Only NEW findings count. |
 | `--write-baseline <file>` | Write the current findings as the new baseline. Run on `main` after the team accepts the current state. |
 
 Fingerprint = `SHA256(filename | kindname | methodname | detail)`. Stable
@@ -56,7 +58,7 @@ baseline gate commented out next to it.
 
 ```bash
 # One-time setup on main (after team accepts current state):
-analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --full --write-baseline sca.baseline.json
 git add sca.baseline.json
 git commit -m "ci: capture SCA baseline"
 
@@ -68,7 +70,7 @@ between baseline and current state doesn't grow unbounded — but refresh
 it in its **own** run:
 
 ```bash
-analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --full --write-baseline sca.baseline.json
 ```
 
 **Never combine `--baseline old --write-baseline new` in one run.** The
@@ -184,7 +186,7 @@ adding `<Property...>` in the `.dproj`):
 
 | Property | Default | Effect |
 |---|---|---|
-| `SCAExePath` | `..\tools\sca\analyser.d12.exe` | Where to find the analyser EXE |
+| `SCAExePath` | `..\tools\sca\StaticCodeAnalyser.d12.exe` | Where to find the analyser EXE |
 | `SCABaseline` | `sca.baseline.json` | Drop known findings if file exists |
 | `SCAFailOn` | `warning` | Severity to fail at (`error` / `warning` / `hint` / `none`) |
 | `SCAProfile` | `default` | Rule-profile name from `rules/sca-rules.json` |
@@ -202,7 +204,8 @@ msbuild MyApp.dproj /p:SCAScope='--diff origin/main..HEAD'
 msbuild MyApp.dproj /p:SCAEnabled=false
 ```
 
-The target prints `SCA SKIP: analyser.exe not found at '...'` and lets the
+The target prints
+`SCA SKIP: StaticCodeAnalyser.d12.exe not found at '...'` and lets the
 build continue if the EXE is missing — useful for developers who haven't
 installed the tooling yet, while CI is gated.
 
@@ -216,7 +219,7 @@ Code-Scanning by adding both export flags in the same run:
 ```yaml
 - name: Analyse + export both formats
   run: |
-    .\tools\sca\analyser.d12.exe `
+    .\tools\sca\StaticCodeAnalyser.d12.exe `
       --path . --full `
       --report-sarif sca.sarif `
       --sonar-export sca.sonar.json `
@@ -226,5 +229,5 @@ Code-Scanning by adding both export flags in the same run:
 SARIF goes to GitHub via the upload-sarif action; the Sonar JSON gets
 picked up by `sonar-scanner` via
 `sonar.externalIssuesReportPaths=sca.sonar.json` in your
-`sonar-project.properties`. See [docs/sonar-setup.md](../../docs/sonar-setup.md)
-for the full Sonar story.
+`sonar-project.properties`. See the short guide in
+[sonarHowto.md](../../sonarHowto.md).

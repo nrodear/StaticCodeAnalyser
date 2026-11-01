@@ -612,7 +612,7 @@
     },
     "IfElseBegin": {
       "titel": "else-Zweig in begin..end setzen",
-      "was": "Setzt die Anweisung hinter dem `else` des einen `end else` der Fundzeile in `begin..end` (Entscheid E7, bedeutungsgleich). `end else if` und `end else begin` zählen nicht mit. Die Form wie bei SCA101.",
+      "was": "Setzt die Anweisung hinter dem `else` des einen `end else` der Fundzeile in `begin..end` (bedeutungsgleich). `end else if` und `end else begin` zählen nicht mit. Die Form wie bei SCA101.",
       "nichtAngeboten": [
         "ein bedingter Ausdruck (Delphi 13: `X := if A then B else C`)",
         "eine Struktur, eine anonyme Methode oder eine Inline-Deklaration in der Anweisung",
@@ -637,7 +637,7 @@
     },
     "BeginEndRequired": {
       "titel": "Zweig in begin..end setzen",
-      "was": "Setzt die Anweisung hinter `then`/`else`/`do` an der Spalte aus der Meldung in `begin..end` (Entscheid E7, bedeutungsgleich). Hinter dem `else` eines case oder except kommt die ganze Anweisungsliste in den Block. Wem ein `else` gehört, entscheidet eine Rückwärtssuche wie der Compiler (dangling else). `begin` und `end` stehen in eigenen Zeilen, wenn die Anweisung auf der Zeile des Schlüsselworts steht oder allein auf ihren Zeilen, sonst inline.",
+      "was": "Setzt die Anweisung hinter `then`/`else`/`do` an der Spalte aus der Meldung in `begin..end` (bedeutungsgleich). Hinter dem `else` eines case oder except kommt die ganze Anweisungsliste in den Block. Wem ein `else` gehört, entscheidet eine Rückwärtssuche wie der Compiler (dangling else). `begin` und `end` stehen in eigenen Zeilen, wenn die Anweisung auf der Zeile des Schlüsselworts steht oder allein auf ihren Zeilen, sonst inline.",
       "nichtAngeboten": [
         "ein bedingter Ausdruck (Delphi 13: `X := if A then B else C`)",
         "eine Struktur, eine anonyme Methode oder eine Inline-Deklaration in der Anweisung",

@@ -44,17 +44,18 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 | Capability | Details |
 |------------|---------|
-| 🐛 **Bug detection** | 178 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) — **199 total**, delivered by 158 pipeline registrations |
+| 🐛 **Bug detection** | 181 Pascal rules run against every `.pas` file (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM rules against every `.dfm` (dead event handlers, hard-coded DB credentials, circular master-detail, unused components, …) and one rule for `.ini` files — **205 total**, delivered by 162 pipeline registrations |
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath, HardcodedIpAddress (also in .ini files); **Unicode safety** — Trojan Source / bidirectional-override (CVE-2021-42574), invisible / zero-width characters, BOM / UTF-8 encoding integrity |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
 | 🤖 **Claude AI prompt** | Copy AI prompt (context menu) → a complete Markdown block with code context + before/after is copied to the clipboard; copy-on-click is opt-in via `[UI] ClipboardOnClick` |
 | 📊 **Sonar-style dashboard** | Stat tiles above the grid: Errors / Warnings / Hints / Bugs / Vulnerabilities / Code Quality as a letter grade **A–E** (Sonar-style; raw score + breakdown in the tooltip) |
 | 🎯 **Filter & sort** | Severity dropdown, type dropdown, live search box, clickable column headers |
-| 📤 **Export** | SARIF, Sonar Generic Issue, self-contained HTML report and baseline JSON from the CLI; CSV, JSON, Jira wiki markup and clipboard hand-off from the GUI — formats, workflows and limits in [EXPORTS.md](EXPORTS.md) |
+| 📤 **Export** | SARIF, Sonar Generic Issue, self-contained HTML report, CSV, JSON and baseline JSON from the CLI and the GUI; Jira wiki markup and clipboard hand-off from the GUI — formats, workflows and limits in [EXPORTS.md](EXPORTS.md) |
 | 🔇 **Suppression** | `// noinspection MemoryLeak` per line, plus `ignore.txt` for whole files |
 | 🌓 **Theme aware** | Follows the active IDE theme automatically (Light / Dark / Mountain Mist / Carbon) |
 | 💡 **Before/after help** | Every detector has a paired "wrong way / right way" code example in the help panel |
+| 🔧 **Code actions** | Optional package [reDelphix](#code-actions-redelphix-optional-ide-package): quick fixes at findings and refactorings in the editor, part of the setup |
 
 ---
 
@@ -62,7 +63,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 
 ### 1. Static code analysis (205 rules — 181 Pascal + 23 DFM + 1 INI, Sonar taxonomy)
 
-**Pascal AST checks (~130)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
+**Pascal AST checks (~160)**: **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
 MissingRaise, RoutineResultUnassigned, ReRaiseException,
 InstanceInvokedConstructor, CharToCharPointerCast, UnicodeToAnsiCast,
@@ -118,30 +119,29 @@ different workflow. Pick by where you sit in the day:
 | Use case | IDE plugin | Standalone EXE (GUI) | CLI (same EXE) |
 |---|:---:|:---:|:---:|
 | **Inline review while coding** — see Bug/Vuln markers next to the line you just wrote | ✅ live grid + 3 px editor stripe + hover-overlay | — | — |
-| **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` | — | — |
-| **Navigate findings with the keyboard** | ✅ `Ctrl+Alt+↑/↓` between findings | grid + arrow keys | — |
+| **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` or light bulb, needs [reDelphix](#code-actions-redelphix-optional-ide-package) | — | — |
+| **Navigate findings with the keyboard** | ✅ grid + arrow keys, the editor follows | grid + arrow keys | — |
 | **Suppress a false positive on this line** | ✅ `Ctrl+Alt+S` adds `// noinspection RuleName` | manual | manual |
 | **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ context menu → clipboard (or opt-in row-click) | ✅ context menu → clipboard (or opt-in row-click) | — |
 | **Branch-changes only** — analyse files touched since `main` / current SVN diff | ✅ branch-button | ✅ branch-button | ✅ `--branch` or `--diff <ref>` |
-| **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click **▶ Analyse** | ✅ `analyser.exe <folder>` |
+| **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click **▶ Analyse** | ✅ `StaticCodeAnalyser.d12.exe --path <folder>` |
 | **Run as a pre-commit hook** | — | — | ✅ `--min-severity error --quiet --fail-on error`, exit code reflects severity |
 | **Run in CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, SARIF upload step |
 | **Get findings into SonarQube / SonarCloud** (SCA writes the file, `sonar-scanner` imports it) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — see [EXPORTS.md](EXPORTS.md#workflow-3--sonarqube-dashboard) |
 | **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | ✅ Export → HTML | ✅ `--report-html <file>` |
-| **Generate a Claude review prompt** for the whole batch (Tech-Lead workflow) | ✅ Export → Claude prompt | row-click → clipboard | — |
-| **CSV / JSON / Jira export** of findings | ✅ Export menu | ✅ Export menu | — (GUI only) |
+| **CSV / JSON export** of findings | ✅ Export menu | ✅ Export menu | ✅ `--report-csv <file>`, `--report-json <file>` |
+| **Jira export** of findings | ✅ Export menu | ✅ Export menu | — (GUI only) |
 | **Nightly full-repo scan** + diff-against-baseline | — | ✅ schedule via Task Scheduler | ✅ schedule via `cron` / `schtasks` |
 | **Auto-analyse on file save** (Live-Watch) | ✅ opt-in, see [Live-Watch](#live-watch-ide-plugin-only--%EF%B8%8F-risky) | — | — |
-| **Author / edit custom rules** (RegEx via `[CustomRules]` ini) | ✅ Tools → Options | ✅ Settings dialog | edit `analyser.ini` directly |
-| **Configure detector thresholds** (`LongMethod_MaxLines`, …) | ✅ Settings | ✅ Settings | edit `analyser.ini` |
-| **Switch UI language** (EN / DE) | ✅ Tools → Options | ✅ Settings | n/a (CLI is EN-only) |
+| **Author / edit custom rules** (YAML file, `[Detectors] CustomRulesFile`) | ✅ edit `analyser.ini` | ✅ edit `analyser.ini` | ✅ `--custom-rules <yml>` or `analyser.ini` |
+| **Configure detector thresholds** (`LongMethodMaxBodyLines`, …) | ✅ Settings | ✅ Settings | edit `analyser.ini` |
+| **Switch UI language** (EN / DE / FR) | ✅ Tools → Options | ✅ hamburger menu → Language | n/a (CLI is EN-only) |
 | **Pick a rule-set profile** (`ide-fast`, `default`, `strict`) | ✅ profile combo | ✅ profile combo | ✅ `--profile <name>` |
-| **Configurable keyboard shortcuts** (cnpack-style: capture key → store in INI) | ✅ Settings → Hotkeys | — | — |
 
 ### Which deployment fits which role
 
 **Developer at the keyboard** → IDE plugin. Tightest feedback loop:
-inline markers, jump-to-line, Quick-Fix-in-place, Ctrl+Alt navigation,
+inline markers, jump-to-line, Quick-Fix-in-place with reDelphix,
 clipboard-to-Claude. The plugin shares the SAME engine + rule catalog
 + FixHints as the other two — what you see is what CI will see.
 
@@ -152,12 +152,14 @@ a different machine, overnight batch on a build server with no Delphi
 seat, sharing the EXE with a non-Delphi engineer for one-off audit.
 
 **CI pipeline / pre-commit hook / scheduled task** → CLI mode of the same
-EXE. No GUI, exit code reflects severity via `--fail-on <level>` (0 =
-clean / below threshold, 1 = threshold exceeded). Exports available in
-CLI: SARIF (`--report-sarif <file>`) for GitHub Code-Scanning / Azure
-Pipelines, Sonar-Generic JSON (`--sonar-export <file>`) for SonarQube
-imports. HTML and Claude-prompt exports are GUI-only. Branch-changes
-filter (`--branch` for git current branch vs `main`, or `--diff <ref>`
+EXE. No GUI, the exit code grades the result and `--fail-on <level>` sets
+the threshold (0 = clean / below threshold; the tiers are listed under
+[CI/CD integration](#cicd-integration)). Exports available in CLI: SARIF
+(`--report-sarif <file>`) for GitHub Code-Scanning / Azure Pipelines,
+Sonar-Generic JSON (`--sonar-export <file>`) for SonarQube imports, an
+HTML report (`--report-html <file>`), CSV (`--report-csv <file>`) and
+JSON (`--report-json <file>`). The AI prompt and the Jira text are
+GUI-only. Branch-changes filter (`--branch` for git current branch vs `main`, or `--diff <ref>`
 for an arbitrary base) lets PR builds analyse only what the diff
 touched.
 
@@ -170,7 +172,7 @@ suppressed in the IDE stays suppressed in CI.
 
 ## Quick start
 
-1. **Install** the plugin — three routes, in recommended order:
+1. **Install** the plugin — two routes, in recommended order:
    - **Setup EXE** (recommended): download
      `StaticCodeAnalyserSetup-<Version>.exe` from the GitHub releases and
      run it. Per-user install, no admin rights required.
@@ -185,11 +187,21 @@ suppressed in the IDE stays suppressed in CI.
      | Delphi 13 (64-bit IDE) | `bpl\d13x64` | `BDS\37.0\Known Packages x64` |
 
      Only the ticked entries are installed, and unticking a previously
-     installed one removes it — file and registration. The setup also
+     installed one removes it — files, registration and PATH entry. Each
+     ticked IDE gets the plugin, its two runtime packages and
+     [reDelphix](#code-actions-redelphix-optional-ide-package), which is
+     preselected and can be unticked. So that the IDE finds the runtime
+     packages, the setup puts its folder at the front of the IDE's PATH
+     setting (**Tools > Options > IDE > Environment Variables**); existing
+     entries stay, and uninstalling removes only this folder. The setup also
      verifies that no Delphi IDE is running, cleans up conflicting
      registrations of the development package set, offers a
      German/English language choice, shows the MIT license page and
      creates a Start-menu uninstall entry.
+
+     **Updating from 0.9.18:** run the new setup. It removes the former
+     single-BPL plugin (`StaticCodeAnalyser.Plugin.d12`) from all IDEs, also
+     one installed from GetIt, and says so in a message.
    - **Build it yourself**: open
      `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
      run **Build**, then **Install** (right-click the package in Project
@@ -197,15 +209,11 @@ suppressed in the IDE stays suppressed in CI.
      the menu and pick the package). Without the install step the plugin
      compiles but never appears in the IDE menu. Full instructions in
      [HowTo_Build.md](HowTo_Build.md).
-   - **GetIt local package**: download the release asset
-     `StaticCodeAnalyser-v<V>-getit-manifest.zip`, unpack it, then in the
-     GetIt Package Manager choose **Load Local Package** (bottom of the
-     dialog; requires an active Update Subscription). The payload
-     `...-plugin-getit.zip` is fetched by GetIt itself from the URL inside
-     the manifest — both are attached to the release. This route installs
-     the Delphi 12 plugin.
-2. In Delphi: **View → Static Code Analysis Tool for Delphi** — the
-   dockable window shows up.
+
+   **GetIt** is suspended for 0.9.19: the package set cannot be installed
+   through GetIt. If you use GetIt, take the setup.
+2. In Delphi: **View → Static Code Analysis** — the dockable window
+   shows up.
 3. Pick a project path → click **▶ Analyse**.
 
 For incremental scans of branch-changed files only, see
@@ -220,7 +228,7 @@ ships five artifacts:
 
 | Artifact | What it is |
 |---|---|
-| `StaticCodeAnalyserSetup-<V>.exe` | **IDE plugin installer.** Per-user, no admin rights. Picks the target IDEs from what it finds — Delphi 12 (32-bit) and Delphi 13 (32-bit and 64-bit). |
+| `StaticCodeAnalyserSetup-<V>.exe` | **IDE plugin installer.** Per-user, no admin rights. Picks the target IDEs from what it finds — Delphi 12 (32-bit) and Delphi 13 (32-bit and 64-bit) — and brings reDelphix along. |
 | `StaticCodeAnalyser-v<V>-Win32.zip` | **Standalone EXE, 32-bit**, with the rule catalogue. Stack reserve patched to 32 MB — needed for deep ASTs on large code bases. |
 | `StaticCodeAnalyser-v<V>-Win64.zip` | **Standalone EXE, 64-bit.** Use this one for large corpora; the address space is the limit that matters there. |
 | `StaticCodeAnalyser-v<V>-source.zip` | **Sources** as of the release tag. |
@@ -228,6 +236,39 @@ ships five artifacts:
 
 The plugin and the standalone EXE share the same engine and the same
 rule catalogue; they differ only in how you drive them.
+
+---
+
+## Code actions: reDelphix (optional IDE package)
+
+**reDelphix** is an optional design-time package that adds code actions
+to the IDE plugin. At a finding it offers quick fixes — for 96 of the 205
+rules, for example `FreeAndNil(X)`, `try/finally` around a release or
+`Format()` instead of a concatenation — through a light bulb at the caret
+line, the context menu of the finding (editor and findings grid) and
+`Ctrl+Alt+F` in the grid. Without a finding, the editor context menu
+offers refactorings at the caret, such as inverting an `if`. Every action
+checks the current editor buffer first and writes only into the editor,
+as one undo step, never into a file. An action that changes behaviour
+says so in its menu text and never runs through `Ctrl+Alt+F`.
+
+**The setup installs it.** reDelphix is a component of the setup for every
+IDE the setup serves, including the 64-bit IDE of Delphi 13. It is
+preselected; untick it if you do not want it. The ZIPs do not contain it.
+
+You can also build it from source. That takes the dev package set
+(`SCA.Engine`, `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`), because
+reDelphix links against `SCA.Engine`. Remove a setup installation for that
+IDE first.
+
+The steps are in [HowTo_Build.md](HowTo_Build.md#53-optional-install-redelphix-code-actions).
+Without reDelphix the plugin works as usual: `Ctrl+Alt+F` reports that
+the package is not loaded, `Ctrl+Alt+S` still inserts the suppression
+marker.
+
+Every action with its menu texts, effect, locks and an example:
+[reDelphix/QUICKFIXES.md](reDelphix/QUICKFIXES.md). Development notes:
+[reDelphix/README.md](reDelphix/README.md). Both are in German.
 
 ---
 
@@ -244,23 +285,16 @@ checks like `TautologicalBoolExpr`, `ConcatToFormat`, `WithStatement`).
 > no override. Works with both SonarQube Server and SonarCloud.
 
 ```powershell
-# Configure once (IDE: Tools > Options > Sonar Integration, or CLI):
-analyser.exe --sonar-test `
-  --sonar-host http://localhost:9000 `
-  --sonar-token squ_xxxxx `
-  --sonar-project my-delphi-project
-
 # Run analysis and emit Generic Issue Format for sonar-scanner
-analyser.exe --path . --full --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --sonar-export sca.json --profile default
 sonar-scanner   # picks up via sonar.externalIssuesReportPaths
 ```
 
 Each rule carries SonarQube MQR fields (`cleanCodeAttribute` + `impacts`) so
-findings show up correctly in the MQR dashboard. Token-storage in the IDE
-uses Windows DPAPI (Current-User-Scope) — no plaintext secrets in `analyser.ini`.
+findings show up correctly in the MQR dashboard.
 
-Full setup: [docs/sonar-setup.md](docs/sonar-setup.md). Config-resolver
-reference: [docs/sonar-config.md](docs/sonar-config.md).
+SCA only writes the file. Short guide: [sonarHowto.md](sonarHowto.md);
+server, scanner and tokens are covered by the official Sonar documentation.
 
 ---
 
@@ -387,8 +421,8 @@ the tile's tooltip.
 - **Severity / type dropdowns**: narrow the grid down to a single category.
 - **Profile dropdown**: switch the active rule-set on the fly. Bundled
   profiles: `ide-fast` (IDE default — bugs + vulns only), `default`
-  (everything except the seven pure-convention rules), `strict` (really
-  everything), `style` (exactly those seven), `security` (vulns + hotspots
+  (everything except the eight pure-convention rules), `strict` (really
+  everything), `style` (exactly those eight), `security` (vulns + hotspots
   only), `bugs-only`, `code-quality`, `dfm-only`. Profiles
   live in `rules/sca-rules.json` under `profiles` and the dropdown is
   populated from there — drop your own profile in the JSON and it
@@ -406,7 +440,7 @@ the tile's tooltip.
 | **Double-click / Enter** | Open the file in the IDE, jump to the finding line, paint the line marker |
 | **Ctrl+Alt+F** | **Apply the quick fix** of the finding — the first available code action of the reDelphix package, the same one the light bulb offers (in-place via IOTAEditWriter after checking the buffer, one Ctrl+Z step). Code actions marked "(changes behavior)" run only from the menu or the light bulb. Needs reDelphix; the status bar reports the result or why there is no quick fix. |
 | **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>` (with reDelphix an existing marker gets the rule added). Next analysis run filters the finding. Ctrl+Z to revert. |
-| **F3 / Shift+F3** | Next / previous finding in the grid |
+| **Arrow keys, Page Up/Down, Home/End** | Move through the grid; once the selection rests, the editor jumps to the finding |
 | **Hover (file column)** | Tooltip with the full file path (100 ms delay) |
 | **Click a column header** | Sort by that column |
 | **3 px stripe on the left edge** of the grid row | Severity accent (red / orange / green / blue) |
@@ -425,6 +459,9 @@ bar / tab the panel auto-hides and the grid takes the full width
 | **JSON** | `.json` | The filtered grid view as an array (the menu caption says so) |
 | **CSV** | `.csv` | Excel-friendly (semicolon-separated) |
 | **HTML report** | `.html` | Self-contained workbench report — search, filters, top-lists, sortable columns, side drawer with source excerpt and rule documentation. Suggested file name `sca_codereview_YYYY-MM-DD.html`. See below |
+| **SARIF** | `.sarif` | All findings, for GitHub Code Scanning and other SARIF consumers |
+| **Sonar** | `.json` | All findings as a Sonar Generic Issue report for `sonar-scanner` |
+| **Detector info** | `.html` | The rule catalogue as an HTML page |
 | **Jira** | Clipboard | Wiki markup ready to paste into a Jira ticket (filtered to one file) |
 | **Clipboard** | Clipboard | Plain text with before/after (filtered to one file) |
 
@@ -439,7 +476,8 @@ It opens with the health rating, the stat tiles and two top-lists
 ("where does it hurt?"), followed by search, the file and rule
 dropdowns and the type / severity / confidence chips. A click on a
 finding opens a **side drawer** with the source excerpt, the location
-and the documentation for that rule. Page header, filter bar and column
+and the documentation for that rule, including the reDelphix code
+actions the rule has (see [below](#code-actions-redelphix-optional-ide-package)). Page header, filter bar and column
 row pin below one another as you scroll, so you always see what you are
 filtering and which column you are reading.
 
@@ -453,8 +491,8 @@ drawer opens, and the search text is read off the row instead of being
 written out a second time. Together that is roughly half of what the
 same report used to weigh.
 
-> The CLI's `--report-html` is a **different** report and unchanged —
-> see [EXPORTS.md](EXPORTS.md).
+> The CLI's `--report-html` is a **different** report — see
+> [EXPORTS.md](EXPORTS.md).
 
 ### File-Findings panel (per-file dock)
 
@@ -479,29 +517,19 @@ file you are working on.
 
 ## Language / localisation
 
-The UI source language is **English**. UI strings are wrapped with the
-`_('…')` macro from `uLocalization.pas`, which routes through dxgettext
-(GNU gettext for Delphi) when activated.
+The UI source language is **English**; German and French ship with it.
+UI strings are wrapped with `_('…')` from `uLocalization.pas`, which looks
+them up in the `.po` translations with a small parser of its own. There
+is no external library, and the translations are compiled in, so a bare
+copy of the EXE shows German or French as well.
 
 ### Switching the language
 
-| State | Effect |
-|-------|--------|
-| **Default (no dxgettext)** | UI displays the source strings as-is — English |
-| **dxgettext activated, no `SetLanguage` call** | UI follows system locale via `gnugettext.UseLanguageFromSysLocale` |
-| **`uLocalization.SetLanguage('de')`** | UI switches to German via `i18n/de.po` |
-| **`uLocalization.SetLanguage('fr')`** | UI switches to French via `i18n/fr.po` |
-| **`uLocalization.SetLanguage('en')`** | UI forced to English |
-
-To set the language at startup, call `SetLanguage` early in
-`TAnalyserDockableForm.FrameCreated` (IDE plugin) or in the standalone's
-`TForm2.FormCreate`:
-
-```pascal
-uses uLocalization;
-
-SetLanguage('de');   // 'de' / 'en' / 'fr' / '' (= system default)
-```
+| Where | How |
+|-------|-----|
+| **IDE plugin** | **Tools → Options → Third Party → Static Code Analyser** |
+| **Standalone EXE** | Hamburger menu → **Language**. Filter row, path row, grid header and the Analyse button switch at once, the remaining captions after a restart |
+| **`analyser.ini`** | `[UI] Language` = `en`, `de` or `fr`. Empty or unknown means English; the system locale is not read |
 
 ### Where translations live
 
@@ -511,30 +539,12 @@ SetLanguage('de');   // 'de' / 'en' / 'fr' / '' (= system default)
 | `i18n/de.po` | German translation |
 | `i18n/fr.po` | French translation |
 | `i18n/en.po` | English baseline (identity) |
-| `locale/<lang>/LC_MESSAGES/default.mo` | Compiled binary, loaded at runtime |
+| `SCA.Engine/sources/Common/uLocalizationPo.inc` | Compiled-in copy, generated from the `.po` files |
 
 The `.po` files are plain text and Git-friendly; edit them with
-[poEdit](https://poedit.net/) or a regular editor.
-
-### Activating dxgettext (one-time setup)
-
-Without dxgettext installed, the wrapper is a passthrough — every `_()`
-call returns the source string unchanged, so the UI stays English no
-matter what `SetLanguage` is called with.
-
-To get real translations:
-
-1. Clone <https://github.com/sjrd/dxgettext>
-2. Add the `dxgettext/Source/` folder to `DCC_UnitSearchPath` of the
-   IDE plugin and the standalone EXE
-3. Add `{$DEFINE USE_GETTEXT}` in the `.dpk` (or in **Project Options →
-   Conditional Defines**)
-4. Compile every `.po` to `.mo`:
-   ```
-   msgfmt i18n/de.po -o locale/de/LC_MESSAGES/default.mo
-   msgfmt i18n/fr.po -o locale/fr/LC_MESSAGES/default.mo
-   ```
-5. Place the `locale/` folder next to the BPL/EXE
+[poEdit](https://poedit.net/) or a regular editor. A `.po` in an `i18n\`
+folder next to the EXE or BPL takes precedence over the compiled-in
+copy, so a translation can be tried without a rebuild.
 
 The translations themselves are the `.po` files under
 [i18n/](i18n/) — that is the single source. After editing one, run
@@ -618,12 +628,15 @@ exclusive (invalid combinations exit with code 99):
   root of the resolved list. Also valid with `--branch`/`--diff`.
 
 ```powershell
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --report-sarif sca.sarif
-analyser.d12.exe --project-group D:\repo\All.groupproj --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project-group D:\repo\All.groupproj `
+  --report-sarif sca.sarif
 
 # Project-only analysis, but index the whole repo so "unused" verdicts
 # see consumers outside the project:
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --index-root D:\repo
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --index-root D:\repo
 ```
 
 Two things to know:
@@ -667,11 +680,12 @@ click **Branch-Changes**. The analyser determines:
 
 **CLI**:
 ```powershell
-analyser.d12.exe --path D:\my-git-repo --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-git-repo --branch `
+  --report-sarif sca.sarif
 
 # Optional: narrow the rule-set via profile + minimum severity
-analyser.d12.exe --path . --profile security --report-sarif sec.sarif
-analyser.d12.exe --path . --profile bugs-only --min-severity warning
+StaticCodeAnalyser.d12.exe --path . --profile security --report-sarif sec.sarif
+StaticCodeAnalyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
 > **First run: if you get `0 findings`, check the filter line.** With the
@@ -703,6 +717,7 @@ branches. Three switches control the behaviour:
 | `--ifdef-aware` | The explicit form of the default — a documenting no-op since 2026-09-05. |
 | `--define X[,Y,Z]` | Replace the default define set with your own. |
 | `--no-ifdef-aware` | Opt out: parse **all** branches (the pre-2026-09-05 behaviour). Wins over `--ifdef-aware` regardless of the order on the command line. |
+| `--no-include-defines` | Do not read `{$I}` includes for the `{$DEFINE}`s they contain. Reading them is the default since 2026-09-06; `--include-defines` is its explicit form. |
 
 `--ifdef-aware` without `--define` keeps the default set above — it
 does **not** run with an empty set. If your build uses different
@@ -710,7 +725,7 @@ defines, pass them explicitly; the failure mode of a wrong set is not
 an error message, it is silently missing findings:
 
 ```powershell
-analyser.d12.exe --path . --full `
+StaticCodeAnalyser.d12.exe --path . --full `
   --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MY_FEATURE
 ```
 
@@ -733,19 +748,20 @@ rules, dialect-aware:
 
 ### Full switch reference
 
-`analyser.d12.exe --help` (also `-h`, `-?`, `/?`) prints every switch with
-its explanation and exits 0, so it is safe to call from a script.
-`--version` prints the version alone. Both are the authoritative list —
-this README covers the switches in the context of a task, the help text
-covers all of them.
+`StaticCodeAnalyser.d12.exe --help` (also `-h`, `-?`, `/?`) prints every
+switch with its explanation and exits 0, so it is safe to call from a
+script. `--version` prints the version alone. Both are the authoritative
+list — this README covers the switches in the context of a task, the help
+text covers all of them, including diagnostics such as `--gate-stats` (hit
+count per false-positive filter after the scan).
 
 `--profile <name>` accepts any profile from `rules/sca-rules.json`
 (bundled: `default`, `strict`, `style`, `ide-fast`, `security`,
 `bugs-only`, `code-quality`, `dfm-only`). **`default` deliberately leaves out
-seven pure-convention rules** — public-member docs, `Assigned()` vs `<> nil`,
+eight pure-convention rules** — public-member docs, `Assigned()` vs `<> nil`,
 `begin..end` on single-statement branches, asymmetric `begin..end` around
-`if`/`else`, `with`, one-class-per-unit and hardcoded DFM captions. They
-are correct findings, but they are conventions,
+`if`/`else`, `with`, one-class-per-unit, hardcoded DFM captions and the
+function name instead of `Result`. They are correct findings, but they are conventions,
 and together they were 48 % of everything a newcomer saw. `--profile style`
 turns exactly those on; `--profile strict` turns on everything. `--min-severity hint|warning|error` skips
 detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
@@ -780,17 +796,20 @@ the next `svn commit`.
 
 **CLI**:
 ```powershell
-analyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
 ```
 
 **`analyser.ini` settings for SVN**:
 ```ini
 [Repo]
-BaseBranch=trunk            ; SVN: typically trunk (informational, no real diff)
-IncludeWorkingTree=1        ; include uncommitted changes
+; SVN: typically trunk (informational, no real diff)
+BaseBranch=trunk
+; include uncommitted changes
+IncludeWorkingTree=1
 
 [Paths]
-SvnExe=C:\custom\svn\bin\svn.exe   ; empty = auto: PATH + TortoiseSVN
+; empty = auto: PATH + TortoiseSVN
+SvnExe=C:\custom\svn\bin\svn.exe
 ```
 
 **Auto-detected SVN paths**:
@@ -811,9 +830,11 @@ VCS-independent — it just reads files. Recommended workflow for
 2. Reference it in `analyser.ini`:
    ```ini
    [Detectors]
-   CustomRulesFile=analyser-rules.yml   ; relative to project root
+   ; relative to the project root
+   CustomRulesFile=analyser-rules.yml
    ```
-3. Plugin/GUI loads it automatically on the next analysis run
+3. Plugin/GUI loads it automatically on the next analysis run; on the
+   command line `--custom-rules <yml>` names the file directly
 
 This way each project carries **its own ruleset in the repo** —
 team-shared, versioned, reviewable in PR/MR diffs.
@@ -823,10 +844,11 @@ team-shared, versioned, reviewable in PR/MR diffs.
 **GitHub Actions** (Git): see template [`examples/ci/github-actions-sca.yml`](examples/ci/github-actions-sca.yml).
 SARIF upload appears as inline annotations in PRs.
 
-**GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern —
-make the tool available in the pipeline image, run `analyser.exe
---path . --branch --report-sarif sca.sarif`, attach the artifact or
-process further (SARIF plugins available for most CI systems).
+**GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern — make the
+tool available in the pipeline image, run
+`StaticCodeAnalyser.d12.exe --path . --branch --report-sarif sca.sarif`,
+attach the artifact or process further (SARIF plugins available for most
+CI systems).
 
 **SVN pre-commit hook** (server-side, Linux):
 ```bash
@@ -836,7 +858,7 @@ REPOS="$1"
 TXN="$2"
 
 # Adjust tool path and working-copy mirror
-ANALYSER=/opt/sca/analyser.d12.exe
+ANALYSER=/opt/sca/StaticCodeAnalyser.d12.exe
 WC=/tmp/sca-precommit-$TXN
 
 svn export "$REPOS" "$WC" -r "$TXN" --quiet
@@ -887,7 +909,9 @@ wall time is the *serial pre-phase* (parsing, symbol and type indexes),
 which the switch does not touch. The stderr notice says the same.
 
 So the recommendation stays "leave it off" — but for a different reason
-than before: not because it hurts, but because it gains nothing.
+than before: not because it hurts, but because it gains nothing. For
+experiments, `--parallel-workers <n>` sets the worker count (0 or left
+out: the CPU cores, capped at the number of files).
 
 <details>
 <summary>What used to be broken (history, fixed since 2026-08-20)</summary>
@@ -956,15 +980,12 @@ tabs to another file changes nothing; clicking **📄 File** again moves the
 watch to the new file. Bulk paths (**▶ Analyse**, **Branch changes**)
 explicitly deactivate the watch. There is no INI flag for this.
 
-> ⚠️ **Infinite-loop risk.** There is currently **no re-entrancy guard** for
-> overlapping worker spawns. If the worker takes longer than the edit debounce
-> (1000 ms) and the user keeps typing, the worker backlog will grow rather
-> than shrink. Additionally (Delphi-version dependent), an editor repaint
-> following a findings update can be re-interpreted as `Modified` — edit/save
-> paths can then re-trigger each other. The only safety today is the
-> generation counter (drops _late_ results, but does not prevent overlapping
-> spawns). Add a re-entrancy guard + hard cap before broader use
-> (`TODO.md` -> _Single-File-Live-Watch_).
+> ⚠️ **Infinite-loop risk.** A re-entrancy guard allows at most one watch
+> worker at a time, and a generation counter drops _late_ results. There is
+> no watchdog and no hard cap yet: if a worker hangs, the guard blocks further
+> runs without saying so. Additionally (Delphi-version dependent), an editor
+> repaint following a findings update can be re-interpreted as `Modified` —
+> edit/save paths can then re-trigger each other.
 
 ---
 
@@ -983,14 +1004,22 @@ DoSomethingRisky;
 // suppress every check on the next line
 ```
 
-Recognised category names (one per registered detector — single source of
-truth is `KIND_META` in `uSCAConsts.pas`):
+`// noinspection-file MemoryLeak, NilDeref` silences the named rules in the
+whole file; in an `.ini` file the markers start with `;`.
+
+The name after `noinspection` is the kind name of the rule, as it appears
+in the profile window and in [DETECTORS.md](DETECTORS.md) (single source
+of truth is `KIND_META` in `uSCAConsts.pas`). Common ones:
 
 `MemoryLeak`, `EmptyExcept`, `SQLInjection`, `HardcodedSecret`,
 `FormatMismatch`, `FileReadError`, `UnusedUses`, `NilDeref`,
 `MissingFinally`, `DivByZero`, `DeadCode`, `LongMethod`, `LongParamList`,
 `MagicNumber`, `DuplicateString`, `HardcodedPath`, `DebugOutput`,
 `DeepNesting`, `TodoComment`, `EmptyMethod`, `DuplicateBlock`, `All`.
+
+`All` does not cover `HardcodedSecret`, `SQLInjection`, `CommandInjection`,
+`DfmHardcodedDbCreds`, `DfmSqlFromUserInput`, `InsecureCryptoAlgorithm` and
+`UnusedSuppression`: these must be named explicitly.
 
 ---
 
@@ -1032,11 +1061,11 @@ the standard TComponent-owner pattern as no-leak:
 ## Architecture
 
 ```
-StaticCodeAnalyserIDE/                 IDE expert packages: dev set
+StaticCodeAnalyserIDE/                 IDE expert package; the release
+                                       ships it as a package set
                                        (SCA.Engine.dpk + SCA.SharedUI.dpk +
-                                       StaticCodeAnalyser.IDE.d12.dpk) and
-                                       release monolith
-                                       (StaticCodeAnalyser.Plugin.d12.dpk)
+                                       StaticCodeAnalyser.IDE.d12.dpk +
+                                       reDelphix.d12.dpk)
   uIDEExpert.pas                       Wizard registration (IOTAMenuWizard)
   uIDEAnalyserForm.pas                 Dockable window (TFrame) - main shell:
                                        filters, stats grid, sort, export,
@@ -1046,15 +1075,12 @@ StaticCodeAnalyserIDE/                 IDE expert packages: dev set
   uIDEMessages.pas                     Hand-off into the IDE Messages tab
   uIDEWatchMode.pas                    Single-file live watch (Current file)
                                        save 300 ms / edit 1000 ms debounced
-                                       ⚠️ no re-entrancy guard - see README
-  uIDEStatsTiles.pas                   Sonar-style tile row builder
-  uIDEHelpPanel.pas                    Right-side help panel with before/after,
-                                       auto-hide when docked
+                                       ⚠️ risky - see README
   uIDEEditorIntegration.pas            ToolsAPI wrappers: current .pas file,
                                        project dir, OpenFileAtLine
   uIDEStatusBar.pas                    Three-panel status bar
                                        (findings / progress / mode)
-  uIDEThemeIntegration.pas             IDE-theme notifier + ApplyTheme refresh
+  uIDETheme.pas                        IDE-theme notifier + ApplyTheme refresh
   uIDEAnalyseProgress.pas              Busy-state controller
                                        (Begin/EndRun, Cancel-flag)
 
@@ -1068,7 +1094,7 @@ SCA.Engine/sources/                    Analysis engine (shared by standalone, ID
     uCollectValues.pas                 AST literal-value collection
 
     uAnalyserTypes.pas                 TFindingSeverity enum + conversions
-    uLocalization.pas                  dxgettext wrapper (_('…') macro)
+    uLocalization.pas                  Translation (_('…')), reads the .po files
 
   Parsing/
     uLexer.pas                         Tokeniser, watchdog (200k tokens)
@@ -1077,7 +1103,7 @@ SCA.Engine/sources/                    Analysis engine (shared by standalone, ID
     uAstNode.pas                       AST with FindAll / FindFirst lookup
 
   Infrastructure/
-    uStaticAnalyzer2.pas               Orchestrates the ~130 Pascal detectors per file
+    uStaticAnalyzer2.pas               Orchestrates the ~160 Pascal detectors per file
     uStaticFiles.pas                   Recursive file scan, tick callback,
                                        cancel support, symlink protection
     uIgnoreList.pas                    ignore.txt + test filter
@@ -1123,10 +1149,16 @@ SCA.SharedUI/sources/                  UI pieces shared by EXE and IDE plugin
   uExportMenu.pas                      Export dropdown (JSON/CSV/HTML/
                                        Sonar/Jira/rule catalog)
   uRecentPaths.pas                     recent.ini handling
+  uIDEStatsTiles.pas                   Sonar-style tile row builder
+  uIDEHelpPanel.pas                    Right-side help panel with before/after,
+                                       auto-hide when docked
 
 StaticCodeAnalyserForm/sources/        Standalone front-end
   UI/                                  Forms, options dialog, panels
   Console/uConsoleRunner.pas           CLI (--path, --report-*, exit codes)
+
+reDelphix/                             Optional IDE package with the code
+                                       actions, see reDelphix/README.md
 ```
 
 ### Data flow
@@ -1134,7 +1166,7 @@ StaticCodeAnalyserForm/sources/        Standalone front-end
 ```
 File → Lexer → Parser2 → AST (TAstNode)
                             │
-                            ├── 21 detectors run in parallel (try/except per detector)
+                            ├── detectors run one by one (try/except per detector)
                             │       each emits TLeakFinding
                             │
                             └── TSuppression strips noinspection markers
@@ -1156,7 +1188,7 @@ For a typical 1 000-unit repository:
 | Folder scan | — | 1–3 s |
 | Lexer | ~5–15 ms | ~10 s |
 | Parser2 | ~10–50 ms | ~30 s |
-| ~130 Pascal detectors | ~10–60 ms | ~50 s |
+| ~160 Pascal detectors | ~10–60 ms | ~50 s |
 | DFM parser + 23 DFM detectors (per `.dfm`) | ~5–20 ms | ~5–10 s |
 | Suppression sweep | — | <1 s |
 | **Total** | **~30–100 ms** | **~60–90 s** |
@@ -1179,7 +1211,7 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 - **MAX_DEPTH = 32**: protection against symlink loops.
 - **Cancel any time**: `EAbort` propagates cleanly through every layer.
 - **Per-detector try/except**: a crashing detector never blocks any of
-  the other 154.
+  the other 161.
 
 ---
 
@@ -1188,8 +1220,8 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 ```
 StaticCodeAnalyserForm/tests/
   TestProject.dpr                      DUnitX runner
-  uTest<DetectorName>.pas              one file per detector, 205 files
-                                       in total — 3095 tests across 229
+  uTest<DetectorName>.pas              one file per detector, 286 files
+                                       in total — 5777 tests across 356
                                        fixtures
   uTestFindingHelper.pas               shared harness (FindingsOf /
                                        FindingsOfFile / FindingsViaPipeline)
@@ -1224,8 +1256,9 @@ actually sees.
 | Target | Win32 | Win64 |
 |--------|-------|-------|
 | **IDE plugin** (`StaticCodeAnalyser.IDE.d12.dpk`) | ✅ required | ✅ **under Delphi 13 only** — a design-time package inherits the bitness of its IDE, and only Delphi 13 has a 64-bit one. Under Delphi 12 a Win64 build fails on the missing `designide`; the `.dpk` catches that with a readable message |
-| **Standalone EXE / CLI** (`analyser.d12.dproj`) | ✅ | ✅ |
-| **Test suite** (`TestProject.dproj`) | ✅ | _add platform if needed_ |
+| **Standalone EXE / CLI** (`StaticCodeAnalyser.d12.dproj`) | ✅ | ✅ |
+| **Test suite** (`TestProject.dproj`) | ✅ | ✅ |
+| **reDelphix** (`reDelphix.d12.dpk`) | ✅ | ✅ **under Delphi 13 only**, like the IDE plugin |
 
 The standalone EXE compiles cleanly for both `Win32` and `Win64` —
 both targets pass through the same detector engine and emit the
@@ -1238,10 +1271,11 @@ larger heap (relevant only on multi-GB scans).
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| **Standalone EXE** | `StaticCodeAnalyserForm/analyser.d12.dproj` | Folder/file scan outside the IDE |
-| **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (dev set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`; releases ship the monolith `StaticCodeAnalyser.Plugin.d12.dpk`) | Main feature — dockable tool window with the full feature set |
+| **Standalone EXE** | `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` | Folder/file scan outside the IDE |
+| **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (package set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`, the same in dev and in a release) | Main feature — dockable tool window with the full feature set |
+| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (part of the package set, can be unticked in the setup) | Optional — quick fixes and refactorings in the editor |
 
-Both share the analysis engine in `SCA.Engine/sources/`.
+Standalone EXE and IDE plugin share the analysis engine in `SCA.Engine/sources/`.
 
 ---
 

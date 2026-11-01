@@ -1458,7 +1458,7 @@ def render(model, po):
       'Hilfen), Kontextmenü des Funds im Editor und im Dock-Grid (dort auch '
       'ausgegraut, der Grund steht im Hinweis). **Strg+Alt+F** im Dock-Grid '
       'führt die erste verfügbare Hilfe aus, die nicht gekennzeichnet ist.')
-    a('- **Ändert Verhalten** (Entscheid E2): der Menütext endet auf %s '
+    a('- **Ändert Verhalten:** der Menütext endet auf %s '
       '(de %s, fr %s). Eine solche Hilfe läuft %s.'
       % (code_span(suffix['en']),
          code_span(suffix['de']) if suffix['de'] else '**%s**' % FEHLT,

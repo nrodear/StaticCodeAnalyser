@@ -2,10 +2,11 @@
 
 A small VCL order manager (Delphi 12/13, Win32/Win64) that is written to be
 **scanned, not shipped**: five units with about 160-220 findings of the
-Static Code Analyser (SCA), and for **every** reDelphix code action (92
-quick fixes of the fix table, their 8 second entries and the 6 provider
-actions) at least one finding where the action is offered. It is the
-material for the demo video; the German script is [DREHBUCH.md](DREHBUCH.md).
+Static Code Analyser (SCA). For 92 of the 93 reDelphix quick fixes of the
+fix table, their 8 second entries and the 6 provider actions it holds at
+least one finding where the action is offered; only SCA204 has no such
+spot. It is the material for the demo video; the German script is
+[DREHBUCH.md](DREHBUCH.md).
 
 The code compiles (warnings and hints are expected and part of the show),
 but the bugs are real: the application is not meant to run against a
@@ -39,10 +40,7 @@ database.
    StaticCodeAnalyser.d12.exe --path examples\ShowcaseDemo --full --profile strict --min-severity hint --report-html demo.html
    ```
 
-Findings measured with the reDelphiX build 5575bd42 plus the commit that
-moved the SCA068 spot into the unused Variant routine `OpenInExcel`
-(uLegacyImport.pas:122, adds one SCA164), counted per profile and
-confidence floor:
+Findings counted per profile and confidence floor:
 
 | Profile / MinConfidence | medium | low |
 |---|---:|---:|
