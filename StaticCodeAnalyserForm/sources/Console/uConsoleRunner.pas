@@ -1,14 +1,14 @@
 ﻿unit uConsoleRunner;
 
-// Headless CLI-Mode fuer analyser.d12.exe. Nicht-interaktiv, fuer
+// Headless CLI-Mode fuer StaticCodeAnalyser.d12.exe. Nicht-interaktiv, fuer
 // CI/CD-Pipelines (GitHub Actions, GitLab CI, Jenkins, lokale
 // Pre-Commit-Hooks).
 //
 // Aufruf-Beispiele:
-//   analyser.exe --path D:\repo --full --report-sarif sca.sarif
-//   analyser.exe --path D:\repo --branch --report-sarif sca.sarif
-//   analyser.exe --file MeineUnit.pas --quiet
-//   analyser.exe --help
+//   StaticCodeAnalyser.d12.exe --path D:\repo --full --report-sarif sca.sarif
+//   StaticCodeAnalyser.d12.exe --path D:\repo --branch --report-sarif sca.sarif
+//   StaticCodeAnalyser.d12.exe --file MeineUnit.pas --quiet
+//   StaticCodeAnalyser.d12.exe --help
 //
 // Exit-Code-Konvention (klassisch fuer SCA-Tools):
 //   0  = keine Findings (clean)
@@ -718,8 +718,9 @@ begin
   WriteLn(SCA_TOOLNAME, ' v', SCA_VERSION, ' - Headless CLI');
   WriteLn('');
   WriteLn('Usage:');
-  WriteLn('  analyser.exe --path <dir> [--full|--branch] [--report-sarif <file>]');
-  WriteLn('  analyser.exe --file <path.pas> [--report-sarif <file>]');
+  WriteLn('  StaticCodeAnalyser.d12.exe --path <dir> [--full|--branch]');
+  WriteLn('      [--report-sarif <file>]');
+  WriteLn('  StaticCodeAnalyser.d12.exe --file <path.pas> [--report-sarif <file>]');
   WriteLn('');
   WriteLn('  Switches with a value accept both --key=value and --key value.');
   WriteLn('  Switches without one (--full, --quiet, ...) reject a value:');

@@ -16,10 +16,10 @@ workaround.
 
 ## The one thing to know first
 
-`analyser.exe` is **one binary with two modes**. It starts the GUI when
-launched without arguments, and switches to headless CLI as soon as the
-first argument begins with `-`. So "GUI only" never means "different
-program" — it means *not reachable from a script*.
+`StaticCodeAnalyser.d12.exe` is **one binary with two modes**. It starts
+the GUI when launched without arguments, and switches to headless CLI as
+soon as the first argument begins with `-`. So "GUI only" never means
+"different program" — it means *not reachable from a script*.
 
 ---
 
@@ -150,10 +150,11 @@ tomorrow's build only complains about what was added.
 
 ```bash
 # once, to record the status quo
-analyser.exe --path . --write-baseline .sca/sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --write-baseline .sca/sca.baseline.json
 
 # in every build
-analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+StaticCodeAnalyser.d12.exe --path . --baseline .sca/sca.baseline.json \
+  --report-sarif build/sca.sarif
 ```
 
 **A baseline entry covers one finding.** Since 0.9.19 the baseline counts:
@@ -185,8 +186,8 @@ meaning anything. `--write-baseline auto` writes to the same `.sca`
 location, so the pair needs no hard-coded paths:
 
 ```bash
-analyser.exe --path . --write-baseline auto        # once
-analyser.exe --path . --baseline-scan y            # every build
+StaticCodeAnalyser.d12.exe --path . --write-baseline auto    # once
+StaticCodeAnalyser.d12.exe --path . --baseline-scan y        # every build
 ```
 
 `--baseline-scan n` is the explicit opposite: run without a baseline even
@@ -217,7 +218,8 @@ baseline from a clean run without `--baseline`.
 ## Workflow 2 — Pull-request review: only what changed
 
 ```bash
-analyser.exe --path . --diff main...HEAD --report-html build/review.html
+StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
+  --report-html build/review.html
 ```
 
 `--branch` uses the VCS's changed-file set (Git and SVN auto-detected),
@@ -239,7 +241,8 @@ public ingest API for external issues. SCA writes the file, and
 `sonar-scanner` carries it in.
 
 ```bash
-analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --base-dir . \
+  --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
@@ -316,7 +319,7 @@ give `--base-dir` that folder.
 ## Workflow 4 — GitHub / Azure code scanning
 
 ```bash
-analyser.exe --path . --base-dir . --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --base-dir . --report-sarif sca.sarif
 ```
 
 The SARIF carries `partialFingerprints` (line hash + contextHash), so

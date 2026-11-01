@@ -15,8 +15,10 @@ unit uBaseline;
 // Commit-Historie (git log --grep=Fingerprint).
 //
 // Anwendung (typisch in CI):
-//   Erst-Lauf:  analyser.exe --full --path repo --write-baseline sca.baseline.json
-//   Folge-Lauf: analyser.exe --branch --path repo --baseline sca.baseline.json
+//   Erst-Lauf:  StaticCodeAnalyser.d12.exe --full --path repo
+//                 --write-baseline sca.baseline.json
+//   Folge-Lauf: StaticCodeAnalyser.d12.exe --branch --path repo
+//                 --baseline sca.baseline.json
 //
 // Mit --baseline werden die Findings entfernt, die ein Baseline-Eintrag
 // deckt - jeder Eintrag hoechstens einen (zaehlend seit 2026-10-30, s.

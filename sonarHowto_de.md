@@ -9,7 +9,7 @@ SCA schreibt seine Funde in eine Datei und sendet nichts. `sonar-scanner` trägt
 Im Projektordner ausführen:
 
 ```powershell
-analyser.exe --path . --sonar-export sca.json --profile default
+StaticCodeAnalyser.d12.exe --path . --sonar-export sca.json --profile default
 ```
 
 GUI und IDE schreiben dasselbe Format mit *Export > Sonar: write Generic Issue report (all findings)...*: immer die ganze Analyse, egal was das Grid zeigt. *Sonar: write selected as external issue* schreibt je markiertem Fund eine Datei nach `.sonar\external\`; dafür `sonar.externalIssuesReportPaths=.sonar/external/` setzen.

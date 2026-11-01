@@ -10,9 +10,7 @@ pipelines. Pick the one that matches your stack — they're independent.
 | `pr-comment-bot.ps1`     | Posts a Markdown comment on the PR with only NEW findings |
 | `msbuild-sca-target.xml` | MSBuild target snippet to embed SCA as pre-build step into a `.dproj` |
 
-The examples expect the EXE as `tools\sca\analyser.d12.exe`. The release
-ZIPs contain it as `StaticCodeAnalyser.d12.exe`: rename it, or adjust the
-path.
+The examples expect the EXE as `tools\sca\StaticCodeAnalyser.d12.exe`.
 
 ---
 
@@ -60,7 +58,7 @@ baseline gate commented out next to it.
 
 ```bash
 # One-time setup on main (after team accepts current state):
-analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --full --write-baseline sca.baseline.json
 git add sca.baseline.json
 git commit -m "ci: capture SCA baseline"
 
@@ -72,7 +70,7 @@ between baseline and current state doesn't grow unbounded — but refresh
 it in its **own** run:
 
 ```bash
-analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --full --write-baseline sca.baseline.json
 ```
 
 **Never combine `--baseline old --write-baseline new` in one run.** The
@@ -188,7 +186,7 @@ adding `<Property...>` in the `.dproj`):
 
 | Property | Default | Effect |
 |---|---|---|
-| `SCAExePath` | `..\tools\sca\analyser.d12.exe` | Where to find the analyser EXE |
+| `SCAExePath` | `..\tools\sca\StaticCodeAnalyser.d12.exe` | Where to find the analyser EXE |
 | `SCABaseline` | `sca.baseline.json` | Drop known findings if file exists |
 | `SCAFailOn` | `warning` | Severity to fail at (`error` / `warning` / `hint` / `none`) |
 | `SCAProfile` | `default` | Rule-profile name from `rules/sca-rules.json` |
@@ -206,7 +204,8 @@ msbuild MyApp.dproj /p:SCAScope='--diff origin/main..HEAD'
 msbuild MyApp.dproj /p:SCAEnabled=false
 ```
 
-The target prints `SCA SKIP: analyser.exe not found at '...'` and lets the
+The target prints
+`SCA SKIP: StaticCodeAnalyser.d12.exe not found at '...'` and lets the
 build continue if the EXE is missing — useful for developers who haven't
 installed the tooling yet, while CI is gated.
 
@@ -220,7 +219,7 @@ Code-Scanning by adding both export flags in the same run:
 ```yaml
 - name: Analyse + export both formats
   run: |
-    .\tools\sca\analyser.d12.exe `
+    .\tools\sca\StaticCodeAnalyser.d12.exe `
       --path . --full `
       --report-sarif sca.sarif `
       --sonar-export sca.sonar.json `

@@ -129,7 +129,7 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 | **Supprimer un faux positif sur cette ligne** | ✅ `Ctrl+Alt+S` insère `// noinspection RuleName` | manuel | manuel |
 | **Confier un résultat à Claude AI** — prompt Markdown avec contexte de code | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | — |
 | **Modifications de branche uniquement** — analyser les fichiers touchés depuis `main` / le diff SVN courant | ✅ bouton branche | ✅ bouton branche | ✅ `--branch` ou `--diff <ref>` |
-| **Analyser un projet hors de Delphi** (RAD non installé / machine batch) | — | ✅ choisir un dossier, cliquer sur **▶ Analyse** | ✅ `analyser.exe --path <dossier>` |
+| **Analyser un projet hors de Delphi** (RAD non installé / machine batch) | — | ✅ choisir un dossier, cliquer sur **▶ Analyse** | ✅ `StaticCodeAnalyser.d12.exe --path <dossier>` |
 | **Exécuter comme hook pre-commit** | — | — | ✅ `--min-severity error --quiet --fail-on error`, le code de sortie reflète la sévérité |
 | **Exécuter en CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, étape d'upload SARIF |
 | **Envoyer les résultats vers SonarQube / SonarCloud** (SCA écrit le fichier, `sonar-scanner` l'importe) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — voir [EXPORTS_fr.md](EXPORTS_fr.md#workflow-3--tableau-de-bord-sonarqube) |
@@ -240,10 +240,6 @@ fournit cinq artefacts :
 Le plugin et l'EXE autonome partagent le même moteur et le même
 catalogue de règles ; seule la façon de les piloter diffère.
 
-L'EXE des deux ZIP s'appelle `StaticCodeAnalyser.d12.exe`. Les exemples
-en ligne de commande de cette documentation l'abrègent en `analyser.exe`
-ou `analyser.d12.exe` : utilisez le vrai nom, ou renommez le fichier.
-
 ---
 
 ## Actions de code : reDelphix (paquet IDE optionnel)
@@ -302,7 +298,7 @@ des contrôles étrangers à Sonar comme `TautologicalBoolExpr`,
 
 ```powershell
 # Lancer l'analyse et produire le Generic Issue Format pour sonar-scanner
-analyser.exe --path . --sonar-export sca.json --profile default
+StaticCodeAnalyser.d12.exe --path . --sonar-export sca.json --profile default
 sonar-scanner   # le lit via sonar.externalIssuesReportPaths
 ```
 
@@ -653,12 +649,15 @@ mutuellement (les combinaisons invalides terminent avec le code 99) :
   de la liste résolue. Également valable avec `--branch`/`--diff`.
 
 ```powershell
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --report-sarif sca.sarif
-analyser.d12.exe --project-group D:\repo\All.groupproj --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project-group D:\repo\All.groupproj `
+  --report-sarif sca.sarif
 
 # Analyse limitée au projet, mais indexation du dépôt entier pour que les
 # verdicts « unused » voient les consommateurs hors du projet :
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --index-root D:\repo
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --index-root D:\repo
 ```
 
 Deux choses à savoir :
@@ -704,11 +703,12 @@ puis cliquer sur **Branch-Changes**. L'analyseur détermine :
 
 **CLI** :
 ```powershell
-analyser.d12.exe --path D:\my-git-repo --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-git-repo --branch `
+  --report-sarif sca.sarif
 
 # Optionnel : restreindre le jeu de règles via profil + sévérité minimale
-analyser.d12.exe --path . --profile security --report-sarif sec.sarif
-analyser.d12.exe --path . --profile bugs-only --min-severity warning
+StaticCodeAnalyser.d12.exe --path . --profile security --report-sarif sec.sarif
+StaticCodeAnalyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
 > **Premier lancement : si vous obtenez `0 findings`, vérifiez la ligne de
@@ -750,7 +750,7 @@ erroné n'est pas un message d'erreur, mais des résultats qui manquent
 en silence :
 
 ```powershell
-analyser.d12.exe --path . --full `
+StaticCodeAnalyser.d12.exe --path . --full `
   --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MA_FONCTION
 ```
 
@@ -773,13 +773,13 @@ mêmes règles, avec prise en compte du dialecte :
 
 ### Référence complète des options
 
-`analyser.d12.exe --help` (aussi `-h`, `-?`, `/?`) imprime chaque option
-avec son explication et sort avec 0, il est donc sans danger de l'appeler
-depuis un script. `--version` imprime seulement la version. Les deux sont
-la liste faisant foi — ce README couvre les options dans le contexte d'une
-tâche, le texte d'aide les couvre toutes, y compris les diagnostics comme
-`--gate-stats` (nombre de déclenchements par filtre de faux positifs après
-le scan).
+`StaticCodeAnalyser.d12.exe --help` (aussi `-h`, `-?`, `/?`) imprime
+chaque option avec son explication et sort avec 0, il est donc sans danger
+de l'appeler depuis un script. `--version` imprime seulement la version.
+Les deux sont la liste faisant foi — ce README couvre les options dans le
+contexte d'une tâche, le texte d'aide les couvre toutes, y compris les
+diagnostics comme `--gate-stats` (nombre de déclenchements par filtre de
+faux positifs après le scan).
 
 `--profile <name>` accepte n'importe quel profil de `rules/sca-rules.json`
 (fournis : `default`, `strict`, `style`, `ide-fast`, `security`,
@@ -826,7 +826,7 @@ dans le prochain `svn commit`.
 
 **CLI** :
 ```powershell
-analyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
 ```
 
 **Réglages `analyser.ini` pour SVN** :
@@ -874,9 +874,10 @@ partagé par l'équipe, versionné, relisible dans les diffs de PR/MR.
 L'upload SARIF apparaît en annotations en ligne dans les PR.
 
 **GitLab CI / Jenkins / TeamCity / Azure DevOps** : même schéma — rendre
-l'outil disponible dans l'image du pipeline, lancer `analyser.exe
---path . --branch --report-sarif sca.sarif`, joindre l'artefact ou le
-traiter plus loin (des plugins SARIF existent pour la plupart des CI).
+l'outil disponible dans l'image du pipeline, lancer
+`StaticCodeAnalyser.d12.exe --path . --branch --report-sarif sca.sarif`,
+joindre l'artefact ou le traiter plus loin (des plugins SARIF existent
+pour la plupart des CI).
 
 **Hook pre-commit SVN** (côté serveur, Linux) :
 ```bash
@@ -886,7 +887,7 @@ REPOS="$1"
 TXN="$2"
 
 # Ajuster le chemin de l'outil et le miroir de la copie de travail
-ANALYSER=/opt/sca/analyser.d12.exe
+ANALYSER=/opt/sca/StaticCodeAnalyser.d12.exe
 WC=/tmp/sca-precommit-$TXN
 
 svn export "$REPOS" "$WC" -r "$TXN" --quiet

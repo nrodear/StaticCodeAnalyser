@@ -124,7 +124,7 @@ different workflow. Pick by where you sit in the day:
 | **Suppress a false positive on this line** | ✅ `Ctrl+Alt+S` adds `// noinspection RuleName` | manual | manual |
 | **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ context menu → clipboard (or opt-in row-click) | ✅ context menu → clipboard (or opt-in row-click) | — |
 | **Branch-changes only** — analyse files touched since `main` / current SVN diff | ✅ branch-button | ✅ branch-button | ✅ `--branch` or `--diff <ref>` |
-| **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click **▶ Analyse** | ✅ `analyser.exe --path <folder>` |
+| **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click **▶ Analyse** | ✅ `StaticCodeAnalyser.d12.exe --path <folder>` |
 | **Run as a pre-commit hook** | — | — | ✅ `--min-severity error --quiet --fail-on error`, exit code reflects severity |
 | **Run in CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, SARIF upload step |
 | **Get findings into SonarQube / SonarCloud** (SCA writes the file, `sonar-scanner` imports it) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — see [EXPORTS.md](EXPORTS.md#workflow-3--sonarqube-dashboard) |
@@ -231,10 +231,6 @@ ships five artifacts:
 The plugin and the standalone EXE share the same engine and the same
 rule catalogue; they differ only in how you drive them.
 
-The EXE in both ZIPs is called `StaticCodeAnalyser.d12.exe`. The
-command-line examples in this documentation shorten it to `analyser.exe`
-or `analyser.d12.exe`: use the real name, or rename the file.
-
 ---
 
 ## Code actions: reDelphix (optional IDE package)
@@ -288,7 +284,7 @@ checks like `TautologicalBoolExpr`, `ConcatToFormat`, `WithStatement`).
 
 ```powershell
 # Run analysis and emit Generic Issue Format for sonar-scanner
-analyser.exe --path . --sonar-export sca.json --profile default
+StaticCodeAnalyser.d12.exe --path . --sonar-export sca.json --profile default
 sonar-scanner   # picks up via sonar.externalIssuesReportPaths
 ```
 
@@ -630,12 +626,15 @@ exclusive (invalid combinations exit with code 99):
   root of the resolved list. Also valid with `--branch`/`--diff`.
 
 ```powershell
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --report-sarif sca.sarif
-analyser.d12.exe --project-group D:\repo\All.groupproj --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --project-group D:\repo\All.groupproj `
+  --report-sarif sca.sarif
 
 # Project-only analysis, but index the whole repo so "unused" verdicts
 # see consumers outside the project:
-analyser.d12.exe --project D:\repo\MyApp\MyApp.dproj --index-root D:\repo
+StaticCodeAnalyser.d12.exe --project D:\repo\MyApp\MyApp.dproj `
+  --index-root D:\repo
 ```
 
 Two things to know:
@@ -679,11 +678,12 @@ click **Branch-Changes**. The analyser determines:
 
 **CLI**:
 ```powershell
-analyser.d12.exe --path D:\my-git-repo --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-git-repo --branch `
+  --report-sarif sca.sarif
 
 # Optional: narrow the rule-set via profile + minimum severity
-analyser.d12.exe --path . --profile security --report-sarif sec.sarif
-analyser.d12.exe --path . --profile bugs-only --min-severity warning
+StaticCodeAnalyser.d12.exe --path . --profile security --report-sarif sec.sarif
+StaticCodeAnalyser.d12.exe --path . --profile bugs-only --min-severity warning
 ```
 
 > **First run: if you get `0 findings`, check the filter line.** With the
@@ -723,7 +723,7 @@ defines, pass them explicitly; the failure mode of a wrong set is not
 an error message, it is silently missing findings:
 
 ```powershell
-analyser.d12.exe --path . --full `
+StaticCodeAnalyser.d12.exe --path . --full `
   --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MY_FEATURE
 ```
 
@@ -746,11 +746,11 @@ rules, dialect-aware:
 
 ### Full switch reference
 
-`analyser.d12.exe --help` (also `-h`, `-?`, `/?`) prints every switch with
-its explanation and exits 0, so it is safe to call from a script.
-`--version` prints the version alone. Both are the authoritative list —
-this README covers the switches in the context of a task, the help text
-covers all of them, including diagnostics such as `--gate-stats` (hit
+`StaticCodeAnalyser.d12.exe --help` (also `-h`, `-?`, `/?`) prints every
+switch with its explanation and exits 0, so it is safe to call from a
+script. `--version` prints the version alone. Both are the authoritative
+list — this README covers the switches in the context of a task, the help
+text covers all of them, including diagnostics such as `--gate-stats` (hit
 count per false-positive filter after the scan).
 
 `--profile <name>` accepts any profile from `rules/sca-rules.json`
@@ -794,7 +794,7 @@ the next `svn commit`.
 
 **CLI**:
 ```powershell
-analyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path D:\my-svn-wc --branch --report-sarif sca.sarif
 ```
 
 **`analyser.ini` settings for SVN**:
@@ -842,10 +842,11 @@ team-shared, versioned, reviewable in PR/MR diffs.
 **GitHub Actions** (Git): see template [`examples/ci/github-actions-sca.yml`](examples/ci/github-actions-sca.yml).
 SARIF upload appears as inline annotations in PRs.
 
-**GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern —
-make the tool available in the pipeline image, run `analyser.exe
---path . --branch --report-sarif sca.sarif`, attach the artifact or
-process further (SARIF plugins available for most CI systems).
+**GitLab CI / Jenkins / TeamCity / Azure DevOps**: same pattern — make the
+tool available in the pipeline image, run
+`StaticCodeAnalyser.d12.exe --path . --branch --report-sarif sca.sarif`,
+attach the artifact or process further (SARIF plugins available for most
+CI systems).
 
 **SVN pre-commit hook** (server-side, Linux):
 ```bash
@@ -855,7 +856,7 @@ REPOS="$1"
 TXN="$2"
 
 # Adjust tool path and working-copy mirror
-ANALYSER=/opt/sca/analyser.d12.exe
+ANALYSER=/opt/sca/StaticCodeAnalyser.d12.exe
 WC=/tmp/sca-precommit-$TXN
 
 svn export "$REPOS" "$WC" -r "$TXN" --quiet
