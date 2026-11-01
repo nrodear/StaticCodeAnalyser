@@ -67,7 +67,8 @@
 ; (voller Pfad), und {app}\bpl\<schiene> kommt vorn in den IDE-eigenen Override
 ; HKCU\Software\Embarcadero\BDS\<bds>\Environment Variables\PATH. Am 2026-10-28
 ; gemessen: die IDE uebernimmt ihn vor dem Laden der Known Packages, auch
-; bin64\bds.exe, und der 64-bit-Loader ueberspringt gleichnamige 32-bit-Dateien.
+; bin64\bds.exe, und beide Loader ueberspringen gleichnamige BPLs der falschen
+; Bitbreite.
 
 ; Quellordner der gebauten BPLs (Build-Maschine; per ISCC /D ueberschreibbar):
 ;   iscc /DSCABplSourceDir="D:\pfad\zu\bpls" StaticCodeAnalyserSetup.iss
@@ -617,17 +618,26 @@ end;
 
 // RegWriteStringValue erhaelt REG_EXPAND_SZ (Inno-Hilfe), RegQueryStringValue
 // liest beide Typen; der Werttyp eines vorhandenen Werts bleibt also.
+// Fehlt der HKCU-Wert, gilt die Vorlage der Delphi-Installation aus HKLM
+// (32-bit-Sicht) als Ausgangswert. Sonst gingen ihre Segmente verloren, denn
+// der neue HKCU-Wert verdeckt sie.
 function SetzeOverrideSegment(const AEnvKey, AOrdner: string): Boolean;
 var
   Alt, Neu: string;
+  Vorhanden: Boolean;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Alt) then
-    Alt := '';
+  Vorhanden := RegQueryStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Alt);
+  if not Vorhanden then
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE_32, AEnvKey, 'PATH', Alt) then
+      Alt := '';
   Neu := OverrideMitSegment(Alt, SchienenOrdner(AOrdner));
-  Result := (Neu = Alt)
+  Result := (Vorhanden and (Neu = Alt))
     or RegWriteStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Neu);
 end;
 
+// Eine aus HKLM entstandene HKCU-Kopie bleibt ohne unser Segment stehen: ob
+// sie vorher schon da war, ist nicht unterscheidbar, und sie wirkt wie die
+// Vorlage.
 procedure EntferneOverrideSegment(const AEnvKey, AOrdner: string);
 var
   Alt, Neu: string;
@@ -646,6 +656,14 @@ begin
     RegWriteStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Neu);
 end;
 
+// Ein Dialog hielte einen Silent-Lauf an, bis jemand klickt; dort genuegt das Log.
+procedure MeldeFehler(const AText: string; const ASilent: Boolean);
+begin
+  Log(AText);
+  if not ASilent then
+    MsgBox(AText, mbError, MB_OK);
+end;
+
 function InitializeSetup: Boolean;
 begin
   Result := True;
@@ -655,15 +673,26 @@ begin
   // beschrieben werden, entscheiden die Check:-Ausdruecke je Eintrag.
   if not IsAnySupportedIdeInstalled then
   begin
-    MsgBox(CustomMessage('NoDelphi12'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('NoDelphi12'), WizardSilent);
     Result := False;
     Exit;
   end;
   if IsDelphiIdeRunning then
   begin
-    MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('IdeRunning'), WizardSilent);
     Result := False;
   end;
+end;
+
+// Zweiter Blick unmittelbar vor dem Schreiben: eine waehrend des Wizards
+// gestartete IDE haelt die BPLs fest. Der Text stoppt Setup auf der
+// Vorbereiten-Seite. Silent zeigt Inno ihn als Dialog (gemessen), deshalb
+// faengt NextButtonClick diesen Fall vorher ab.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsDelphiIdeRunning then
+    Result := CustomMessage('IdeRunning');
 end;
 
 // ---------------------------------------------------------------------------
@@ -775,13 +804,20 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  // Silent-Gegenstueck zu PrepareToInstall: ein False beendet Setup ohne Dialog.
+  if (CurPageID = wpReady) and WizardSilent and IsDelphiIdeRunning then
+  begin
+    MeldeFehler(CustomMessage('IdeRunning'), True);
+    Result := False;
+    Exit;
+  end;
   if CurPageID <> wpSelectComponents then
     Exit;
   if not (WizardIsComponentSelected('d12')
        or WizardIsComponentSelected('d13')
        or WizardIsComponentSelected('d13x64')) then
   begin
-    MsgBox(CustomMessage('NoComponent'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('NoComponent'), WizardSilent);
     Result := False;
   end;
 end;
@@ -802,11 +838,13 @@ end;
 // Upgrade von 0.9.18: die gespeicherte Auswahl kennt reDelphix noch nicht.
 // Inno uebernimmt bei Typ "custom" die alte Liste, die neue Komponente waere
 // dann womoeglich nicht vorgewaehlt. Eine echte Abwahl steht dagegen in der
-// Liste und bleibt unangetastet.
+// Liste und bleibt unangetastet, /COMPONENTS= legt die Auswahl selbst fest.
 procedure WaehleRedelphixBeimUpgradeVor;
 var
   Gewaehlt, Abgewaehlt: string;
 begin
+  if Pos('/COMPONENTS=', Uppercase(GetCmdTail)) > 0 then
+    Exit;
   if not RegQueryStringValue(HKEY_CURRENT_USER, UNINSTALL_KEY,
        'Inno Setup: Selected Components', Gewaehlt) then
     Exit;
@@ -998,6 +1036,14 @@ begin
     EntferneDatei(BplPfad(AOrdner, RDX_BPL_NAME));
   end;
 
+  // Override VOR jeder Bereinigung: ohne ihn laedt der Paketsatz nicht, und
+  // eine Dev-Registrierung waere dann der einzige lauffaehige Stand.
+  if not SetzeOverrideSegment(AEnvKey, AOrdner) then
+  begin
+    MeldeFehler(FmtMessage(CustomMessage('OverrideFail'), [AEnvKey]), WizardSilent);
+    Exit;
+  end;
+
   // Koexistenz-Check, aber NUR fuer angehakte Komponenten. Einen Registry-
   // Zweig, den wir gar nicht bespielen, fasst das Setup nicht an - dort darf
   // der Nutzer seinen Dev-Satz behalten.
@@ -1009,9 +1055,6 @@ begin
   // stumm blockieren.
   RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, BplPfad(AOrdner, IDE_BPL_NAME));
   RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, BplPfad(AOrdner, RDX_BPL_NAME));
-
-  if not SetzeOverrideSegment(AEnvKey, AOrdner) then
-    Hinweis(FmtMessage(CustomMessage('OverrideFail'), [AEnvKey]));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -1029,8 +1072,8 @@ begin
 
   // d13x64 VOR d13: beide teilen sich EINEN Override, jedes Einsetzen landet
   // vorn, also steht d13 am Ende vor d13x64 - wie Bpl vor Bpl\Win64 im System-
-  // PATH. Gemessen ist nur, dass der 64-bit-Loader die 32-bit-Datei
-  // ueberspringt; die 32-bit-IDE soll ihre Fassung gleich als erste finden.
+  // PATH. Beide Loader ueberspringen die falsche Bitbreite (gemessen), die
+  // feste Folge haelt nur den Wert stabil.
   if WizardIsComponentSelected('d13x64') then
     RichteSchieneEin('d13x64', KNOWN_PACKAGES_37X64, DISABLED_PKGS_37X64, ENV_VARS_37)
   else
@@ -1049,7 +1092,7 @@ begin
   Result := True;
   if IsDelphiIdeRunning then
   begin
-    MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('IdeRunning'), UninstallSilent);
     Result := False;
   end;
 end;
