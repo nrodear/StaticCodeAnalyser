@@ -1,6 +1,6 @@
 # reDelphix - Source Refactor fuer den Static Code Analyser
 
-IDE-Package (Delphi 12, Win32), das an Funden des SCA-Plugins Aktionen
+IDE-Package (Delphi 12 Win32, Delphi 13 Win32 und Win64), das an Funden des SCA-Plugins Aktionen
 anbietet: `Format()` aus einer Verkettung bilden, parametrisierte
 SQL-Vorlage, `uses`-Eintraege qualifizieren, die Quick-Fixes
 `FreeAndNil(X)`, `Assigned()`, `(TObject)` entfernen, Assert-Meldung,
@@ -78,16 +78,19 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
 
 ## Voraussetzungen in der IDE
 
-* **Nicht im Release**: Setup, GetIt-Paket und ZIPs enthalten reDelphix
-  nicht, es wird aus den Quellen gebaut - nur fuer Delphi 12, Win32.
-* **Plugin-Variante B**: `StaticCodeAnalyser.IDE.d12` (requires `SCA.Engine`,
-  `SCA.SharedUI`) muss installiert sein, nicht der Monolith
-  `StaticCodeAnalyser.Plugin.d12`. reDelphix linkt gegen `SCA.Engine290.bpl`;
-  neben dem Monolithen liesse sich die Engine nicht laden (doppelte Units).
-  Setup und GetIt installieren den Monolithen: eine solche Installation
-  zuerst entfernen. Vor einem erneuten Setup-Lauf `reDelphix.d12` unter
-  Komponente > Packages installieren entfernen: Das Setup entfernt es
-  nicht.
+* **Im Setup enthalten**: seit 0.9.19 liefert das Setup reDelphix als
+  vorgewaehlte, abwaehlbare Komponente fuer Delphi 12 Win32 sowie Delphi 13
+  Win32 und Win64. Die ZIPs enthalten es nicht, GetIt ist fuer 0.9.19
+  ausgesetzt.
+* **Eigener Bau**: `StaticCodeAnalyser.IDE.d12` (requires `SCA.Engine`,
+  `SCA.SharedUI`) muss installiert sein. reDelphix linkt gegen
+  `SCA.Engine290.bpl` bzw. `SCA.Engine370.bpl`; neben einem Monolithen
+  `StaticCodeAnalyser.Plugin.d12` aus Version 0.9.18 oder aelter liesse sich
+  die Engine nicht laden (doppelte Units). Eine Setup-Installation fuer
+  diese IDE zuerst entfernen: ihr Ordner steht vorn im IDE-PATH, sonst laedt
+  die IDE die installierte Engine statt der eigenen. Ein Setup-Lauf ersetzt
+  umgekehrt die Registrierungen eines eigenen Baus in jeder angehakten IDE,
+  auch die von `reDelphix.d12`, und meldet das.
 * SCA-Stand mit Quellstellen-Dienst (`uSourcePlaces`) und Registry
   "Aktionen am Fund" (`uFindingActions`, mit `fakNavigate` und
   `fakSuppress`), `SCA.Engine.dcp` im Dcp-Verzeichnis der IDE.
@@ -104,8 +107,9 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
 
 ## Bauen und installieren
 
-Das Package ist Teil von `StaticCodeAnalyser.d12.groupproj` und liegt im
-SCA-Repo unter `reDelphix\`. In der Gruppe steht es nach dem IDE-Plugin;
+Das Setup installiert das Package fertig, dieser Abschnitt gilt dem
+eigenen Bau. Das Package ist Teil von `StaticCodeAnalyser.d12.groupproj`
+und liegt im SCA-Repo unter `reDelphix\`. In der Gruppe steht es nach dem IDE-Plugin;
 danach folgen TestProject, reDelphix.Test, RdxCorpusProbe und
 RdxActionProbe. Es haengt von
 `SCA.Engine` ab (das Package bindet `SCA.Engine.dcp`); die Gruppe traegt
@@ -1546,8 +1550,9 @@ kommt, Exit-Code 3 (sonst 0; 1 Abbruch, 2 Aufruf). Deshalb der
 
 ## Grenzen (Stand 2026-10-15)
 
-* Nur Delphi 12 / Win32. Fuer Delphi 13 (64-Bit-IDE) braucht es ein zweites
-  Paket mit Win64-Ziel.
+* Unter Delphi 12 nur Win32: dort gibt es kein `designide` fuer Win64, die
+  .dpk bricht den Versuch mit `{$MESSAGE FATAL}` ab. Delphi 13 baut dasselbe
+  Paket fuer Win32 und Win64.
 * Die Scope-Aufloesung bildet die VORGABE-Listen der Unit-Scopes nach; ein
   Projekt mit eigener `DCC_Namespace`-Liste wird nicht gelesen. Wo die
   Reihenfolge System/Vcl entscheiden wuerde (heute nur `Skia`), wird

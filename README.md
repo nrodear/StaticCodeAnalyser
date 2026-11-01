@@ -55,7 +55,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 | 🔇 **Suppression** | `// noinspection MemoryLeak` per line, plus `ignore.txt` for whole files |
 | 🌓 **Theme aware** | Follows the active IDE theme automatically (Light / Dark / Mountain Mist / Carbon) |
 | 💡 **Before/after help** | Every detector has a paired "wrong way / right way" code example in the help panel |
-| 🔧 **Code actions** | Optional package [reDelphix](#code-actions-redelphix-optional-ide-package): quick fixes at findings and refactorings in the editor, built from source |
+| 🔧 **Code actions** | Optional package [reDelphix](#code-actions-redelphix-optional-ide-package): quick fixes at findings and refactorings in the editor, part of the setup |
 
 ---
 
@@ -172,7 +172,7 @@ suppressed in the IDE stays suppressed in CI.
 
 ## Quick start
 
-1. **Install** the plugin — three routes, in recommended order:
+1. **Install** the plugin — two routes, in recommended order:
    - **Setup EXE** (recommended): download
      `StaticCodeAnalyserSetup-<Version>.exe` from the GitHub releases and
      run it. Per-user install, no admin rights required.
@@ -187,11 +187,21 @@ suppressed in the IDE stays suppressed in CI.
      | Delphi 13 (64-bit IDE) | `bpl\d13x64` | `BDS\37.0\Known Packages x64` |
 
      Only the ticked entries are installed, and unticking a previously
-     installed one removes it — file and registration. The setup also
+     installed one removes it — files, registration and PATH entry. Each
+     ticked IDE gets the plugin, its two runtime packages and
+     [reDelphix](#code-actions-redelphix-optional-ide-package), which is
+     preselected and can be unticked. So that the IDE finds the runtime
+     packages, the setup puts its folder at the front of the IDE's PATH
+     setting (**Tools > Options > IDE > Environment Variables**); existing
+     entries stay, and uninstalling removes only this folder. The setup also
      verifies that no Delphi IDE is running, cleans up conflicting
      registrations of the development package set, offers a
      German/English language choice, shows the MIT license page and
      creates a Start-menu uninstall entry.
+
+     **Updating from 0.9.18:** run the new setup. It removes the former
+     single-BPL plugin (`StaticCodeAnalyser.Plugin.d12`) from all IDEs, also
+     one installed from GetIt, and says so in a message.
    - **Build it yourself**: open
      `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
      run **Build**, then **Install** (right-click the package in Project
@@ -199,13 +209,9 @@ suppressed in the IDE stays suppressed in CI.
      the menu and pick the package). Without the install step the plugin
      compiles but never appears in the IDE menu. Full instructions in
      [HowTo_Build.md](HowTo_Build.md).
-   - **GetIt local package**: download the release asset
-     `StaticCodeAnalyser-v<V>-getit-manifest.zip`, unpack it, then in the
-     GetIt Package Manager choose **Load Local Package** (bottom of the
-     dialog; requires an active Update Subscription). The payload
-     `...-plugin-getit.zip` is fetched by GetIt itself from the URL inside
-     the manifest — both are attached to the release. This route installs
-     the Delphi 12 plugin.
+
+   **GetIt** is suspended for 0.9.19: the package set cannot be installed
+   through GetIt. If you use GetIt, take the setup.
 2. In Delphi: **View → Static Code Analysis** — the dockable window
    shows up.
 3. Pick a project path → click **▶ Analyse**.
@@ -222,7 +228,7 @@ ships five artifacts:
 
 | Artifact | What it is |
 |---|---|
-| `StaticCodeAnalyserSetup-<V>.exe` | **IDE plugin installer.** Per-user, no admin rights. Picks the target IDEs from what it finds — Delphi 12 (32-bit) and Delphi 13 (32-bit and 64-bit). |
+| `StaticCodeAnalyserSetup-<V>.exe` | **IDE plugin installer.** Per-user, no admin rights. Picks the target IDEs from what it finds — Delphi 12 (32-bit) and Delphi 13 (32-bit and 64-bit) — and brings reDelphix along. |
 | `StaticCodeAnalyser-v<V>-Win32.zip` | **Standalone EXE, 32-bit**, with the rule catalogue. Stack reserve patched to 32 MB — needed for deep ASTs on large code bases. |
 | `StaticCodeAnalyser-v<V>-Win64.zip` | **Standalone EXE, 64-bit.** Use this one for large corpora; the address space is the limit that matters there. |
 | `StaticCodeAnalyser-v<V>-source.zip` | **Sources** as of the release tag. |
@@ -246,18 +252,14 @@ checks the current editor buffer first and writes only into the editor,
 as one undo step, never into a file. An action that changes behaviour
 says so in its menu text and never runs through `Ctrl+Alt+F`.
 
-**It is not part of a release.** The setup, the GetIt package and the
-ZIPs do not contain it; you build it from source. That takes:
+**The setup installs it.** reDelphix is a component of the setup for every
+IDE the setup serves, including the 64-bit IDE of Delphi 13. It is
+preselected; untick it if you do not want it. The ZIPs do not contain it.
 
-- **Delphi 12, Win32.** `reDelphix/reDelphix.d12.dpk` targets the 32-bit
-  IDE of Delphi 12. There is no package for Delphi 13 yet.
-- **Plugin variant B instead of the monolith.** reDelphix links against
-  `SCA.Engine290.bpl`, so the dev package set (`SCA.Engine`, `SCA.SharedUI`,
-  `StaticCodeAnalyser.IDE.d12`) must be installed. The monolith that the
-  setup and GetIt install contains the engine itself, and the two cannot
-  be loaded side by side. Remove that installation first. Before running
-  the setup again, remove `reDelphix.d12` under Component > Install
-  Packages: the setup does not remove it.
+You can also build it from source. That takes the dev package set
+(`SCA.Engine`, `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`), because
+reDelphix links against `SCA.Engine`. Remove a setup installation for that
+IDE first.
 
 The steps are in [HowTo_Build.md](HowTo_Build.md#53-optional-install-redelphix-code-actions).
 Without reDelphix the plugin works as usual: `Ctrl+Alt+F` reports that
@@ -1059,11 +1061,11 @@ the standard TComponent-owner pattern as no-leak:
 ## Architecture
 
 ```
-StaticCodeAnalyserIDE/                 IDE expert packages: dev set
+StaticCodeAnalyserIDE/                 IDE expert package; the release
+                                       ships it as a package set
                                        (SCA.Engine.dpk + SCA.SharedUI.dpk +
-                                       StaticCodeAnalyser.IDE.d12.dpk) and
-                                       release monolith
-                                       (StaticCodeAnalyser.Plugin.d12.dpk)
+                                       StaticCodeAnalyser.IDE.d12.dpk +
+                                       reDelphix.d12.dpk)
   uIDEExpert.pas                       Wizard registration (IOTAMenuWizard)
   uIDEAnalyserForm.pas                 Dockable window (TFrame) - main shell:
                                        filters, stats grid, sort, export,
@@ -1256,7 +1258,7 @@ actually sees.
 | **IDE plugin** (`StaticCodeAnalyser.IDE.d12.dpk`) | ✅ required | ✅ **under Delphi 13 only** — a design-time package inherits the bitness of its IDE, and only Delphi 13 has a 64-bit one. Under Delphi 12 a Win64 build fails on the missing `designide`; the `.dpk` catches that with a readable message |
 | **Standalone EXE / CLI** (`StaticCodeAnalyser.d12.dproj`) | ✅ | ✅ |
 | **Test suite** (`TestProject.dproj`) | ✅ | ✅ |
-| **reDelphix** (`reDelphix.d12.dpk`) | ✅ Delphi 12 only | — |
+| **reDelphix** (`reDelphix.d12.dpk`) | ✅ | ✅ **under Delphi 13 only**, like the IDE plugin |
 
 The standalone EXE compiles cleanly for both `Win32` and `Win64` —
 both targets pass through the same detector engine and emit the
@@ -1270,8 +1272,8 @@ larger heap (relevant only on multi-GB scans).
 | Component | Path | Purpose |
 |-----------|------|---------|
 | **Standalone EXE** | `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` | Folder/file scan outside the IDE |
-| **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (dev set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`; releases ship the monolith `StaticCodeAnalyser.Plugin.d12.dpk`) | Main feature — dockable tool window with the full feature set |
-| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (needs the dev set, not in a release) | Optional — quick fixes and refactorings in the editor |
+| **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (package set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`, the same in dev and in a release) | Main feature — dockable tool window with the full feature set |
+| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (part of the package set, can be unticked in the setup) | Optional — quick fixes and refactorings in the editor |
 
 Standalone EXE and IDE plugin share the analysis engine in `SCA.Engine/sources/`.
 
