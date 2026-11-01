@@ -9,9 +9,6 @@
         <!-- Ressourcen (RC-Files, Bitmaps, sonstige Build-Inputs) -->
         <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\resources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
 
-        <!-- Build-Hilfsskripte (validate-i18n.js, sca-rules JSON-Validator etc.) -->
-        <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\scripts;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-
         <!-- DUnitX-Test-Units (TFindingHelper + alle uTest*.pas) -->
         <DCC_UnitSearchPath>..\StaticCodeAnalyserForm\tests;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
 

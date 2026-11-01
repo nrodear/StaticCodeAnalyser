@@ -7,10 +7,9 @@
 #  Was NICHT reinkommt: Build-Artefakte, IDE-User-State, Backups.
 # =====================================================================
 
-# ---- Sonar push artifacts ----
-# sonar-scan.ps1 / sonar-upload.ps1 schreiben Reports + Logs neben sich.
-# Inhalt ist run-spezifisch und kann gross werden (MB) - nicht ins VCS.
-StaticCodeAnalyserForm/scripts/*.log
+# ---- Sonar-Artefakte ----
+# Sonar-Bericht und Arbeitsordner des Scanners sind run-spezifisch und
+# koennen gross werden (MB) - nicht ins VCS.
 sca-findings.json
 .sonar/
 .scannerwork/
@@ -196,7 +195,7 @@ tools/perf_analyse.md
 
 # ---- SCA Run-Outputs in Repo-Root ----
 # sca-*.sarif / .log / .html / .err - run-spezifische Outputs der Standalone-
-# EXE und der Test-Pipelines (sca-realworld-scan.ps1, sonar-scan.ps1 etc).
+# EXE und der Test-Pipelines (sca-realworld-scan.ps1 etc).
 # Stueckgut, MB-gross, nicht ins VCS.
 /sca-*.sarif
 /sca-*.log
