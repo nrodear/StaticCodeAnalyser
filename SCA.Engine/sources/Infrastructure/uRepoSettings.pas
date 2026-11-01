@@ -109,11 +109,11 @@ type
   ///   Bewusst NICHT unterstuetzt: Loeschen von Schluesseln und Sektionen.
   ///   Kein Aufrufer loescht: TRepoSettings.Save schreibt eine feste Liste
   ///   von Schluesseln, TRepoSettings.QuickWriteStr genau einen (dahinter
-  ///   [Scan] Dialect, [Editor] DfmTarget, [UI] Theme), dazu die
-  ///   Sonar-Token- und Sonar-Optionen-Schreiber und das Properties-Panel
-  ///   des IDE-Plugins. Jeder Schluessel-Schreiber der analyser.ini geht
-  ///   ueber diese Klasse - TIniFile/TMemIniFile schreiben die Datei
-  ///   nicht. (Anders schreiben nur EnsureConfigExists - die Vorlage, wenn
+  ///   [Scan] Dialect, [Editor] DfmTarget, [UI] Theme), dazu das
+  ///   Properties-Panel des IDE-Plugins. Jeder Schluessel-Schreiber der
+  ///   analyser.ini geht ueber diese Klasse - TIniFile/TMemIniFile
+  ///   schreiben die Datei nicht. (Anders schreiben nur
+  ///   EnsureConfigExists - die Vorlage, wenn
   ///   es noch keine Datei gibt - und EnsureSection, das einen fehlenden
   ///   Vorlagenblock byte-genau anhaengt.)
   ///
@@ -601,9 +601,9 @@ implementation
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ClassPerFile, CyclomaticComplexity, DuplicateString, EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
 // ClassPerFile (2026-08-21): TCommentPreservingIni steht bewusst hier und
 // nicht in einer eigenen Unit. Entstanden ist sie fuer TRepoSettings.Save;
-// inzwischen schreiben auch QuickWriteStr, uSonarConfig, uIDESonarOptions
-// und uIDEFindingsPropertiesForm darueber (Liste an der Deklaration) - alle
-// binden uRepoSettings ohnehin ein. Eine eigene Unit haette Eintraege in
+// inzwischen schreiben auch QuickWriteStr und uIDEFindingsPropertiesForm
+// darueber (Liste an der Deklaration) - alle binden uRepoSettings ohnehin
+// ein. Eine eigene Unit haette Eintraege in
 // vier Projektdateien verlangt (Engine- und Plugin-dpk/dproj) und braechte
 // den Aufrufern nichts.
 // Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
@@ -1260,68 +1260,7 @@ const
     '; Upper bound for grade D; anything above falls to grade E.'#13#10 +
     'GradeDMax=500'#13#10 +
     ';GradeDMax=200'#13#10 +
-    ';GradeDMax=1000'#13#10 +
-    ';'#13#10 +
-    '; ------------------------------------------------------------'#13#10 +
-    ';  [Sonar] - SonarQube / SonarCloud connection'#13#10 +
-    '; ------------------------------------------------------------'#13#10 +
-    ';'#13#10 +
-    '; Used by the connection check only (`--sonar-test`, "Test Connection" in'#13#10 +
-    '; the IDE) and by `--sonar-init`, which writes a sonar-project.properties'#13#10 +
-    '; from these values. None of it influences the analysis or any detector.'#13#10 +
-    ';'#13#10 +
-    '; THIS SECTION HAS THE LOWEST PRIORITY of the four configuration sources.'#13#10 +
-    '; A CLI flag, an environment variable (SONAR_HOST_URL, SONAR_TOKEN,'#13#10 +
-    '; SONAR_PROJECT_KEY, SONAR_ORGANIZATION, SONAR_BRANCH) and - for the'#13#10 +
-    '; project key, organisation and branch - a sonar-project.properties in the'#13#10 +
-    '; scanned repository all win over it. `--sonar-test` prints which source'#13#10 +
-    '; supplied each value.'#13#10 +
-    ';'#13#10 +
-    '; THE TOKEN IS NOT IN THIS SECTION. It lives encrypted in [SonarTokens]'#13#10 +
-    '; and is written by the options page or `--sonar-token`; on Windows it is'#13#10 +
-    '; protected per user and machine, so a copied analyser.ini is useless'#13#10 +
-    '; elsewhere. Write it by hand and it will not decrypt. Prefer the'#13#10 +
-    '; SONAR_TOKEN environment variable when you do not want it on disk at all.'#13#10 +
-    ''#13#10 +
-    '[Sonar]'#13#10 +
-    ''#13#10 +
-    '; HostUrl (string, default: empty)'#13#10 +
-    '; Base URL of the server. The connection check sends the token to exactly'#13#10 +
-    '; this host as a bearer header - point it somewhere wrong and the secret'#13#10 +
-    '; goes there. That is why a sonar.host.url found in the scanned'#13#10 +
-    '; repository is deliberately ignored.'#13#10 +
-    'HostUrl='#13#10 +
-    ';HostUrl=https://sonarcloud.io'#13#10 +
-    ';HostUrl=https://sonar.example.internal'#13#10 +
-    ''#13#10 +
-    '; ProjectKey (string, default: empty)'#13#10 +
-    '; The project on the server that the check looks up.'#13#10 +
-    'ProjectKey='#13#10 +
-    ';ProjectKey=my-org_my-project'#13#10 +
-    ''#13#10 +
-    '; Organization (string, default: empty)'#13#10 +
-    '; SonarCloud tenant key. Without it SonarCloud answers 400 and the check'#13#10 +
-    '; reports "project not found" although the project exists.'#13#10 +
-    'Organization='#13#10 +
-    ';Organization=my-org'#13#10 +
-    ''#13#10 +
-    '; Branch (string, default: empty)'#13#10 +
-    '; Branch name for the project lookup and for --sonar-init.'#13#10 +
-    'Branch='#13#10 +
-    ';Branch=main'#13#10 +
-    ''#13#10 +
-    '; Insecure (bool 0/1, default: 0)'#13#10 +
-    '; 1 skips TLS certificate validation for the connection check. For a'#13#10 +
-    '; server with a self-signed certificate - it weakens exactly the'#13#10 +
-    '; transport that carries the token, so leave it at 0 unless you know why.'#13#10 +
-    'Insecure=0'#13#10 +
-    ';Insecure=1'#13#10 +
-    ''#13#10 +
-    '; TokenRef (string, default: empty)'#13#10 +
-    '; Name of the entry in [SonarTokens] that holds the encrypted token.'#13#10 +
-    '; Lets one INI carry several tokens.'#13#10 +
-    'TokenRef='#13#10 +
-    ';TokenRef=sonarcloud'#13#10;
+    ';GradeDMax=1000'#13#10;
 
 constructor TRepoSettings.Create;
 begin

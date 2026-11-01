@@ -2,7 +2,7 @@
   "version": "1",
   "pathFingerprint": false,
   "createdAt": "2026-08-07T23:56:36",
-  "count": 1093,
+  "count": 1089,
   "findings": [
     {
       "file": "udetectorutils.pas",
@@ -6690,42 +6690,6 @@
       "line": "1600",
       "fingerprint": "423ba7c81d520a1b1f9076c1bfc2deafbe378f43980e487355eb5ac26a3369be",
       "contextHash": "v1:3e0e684d1aec688bdf74ac87e1572ff70ff0092dbdb42ae2df6999c406f84046"
-    },
-    {
-      "file": "usonarconfig.pas",
-      "kind": "CognitiveComplexity",
-      "method": "HexToBytes",
-      "detail": "Cognitive complexity 21 (limit: 15) - nested control flow is hard to follow. Refactor by extracting helper methods or inverting guard conditions.",
-      "line": "230",
-      "fingerprint": "63d4dd09a4e2c1f58425d4a8fb1f772041b93d6aca8617b2c29c27e7d10b00a2",
-      "contextHash": "v1:dbcbc8aa0b66cb81961a5a81f1863fe4cae27ea9177da5fcd4bed6d9be0713cf"
-    },
-    {
-      "file": "usonarconfig.pas",
-      "kind": "CognitiveComplexity",
-      "method": "TSonarConfigResolver.ReadFromIni",
-      "detail": "Cognitive complexity 18 (limit: 15) - nested control flow is hard to follow. Refactor by extracting helper methods or inverting guard conditions.",
-      "line": "305",
-      "fingerprint": "9ae211e0094e0981a6201411a3d0c3927ed412d67e376fd811c8e1de97963ccd",
-      "contextHash": "v1:f5854c71f2056b15e63e1c0629b69b98105f3d20b0f04e24c5fd8269cf90df43"
-    },
-    {
-      "file": "usonarconfig.pas",
-      "kind": "CognitiveComplexity",
-      "method": "TSonarConfigResolver.ReadFromProjectProps",
-      "detail": "Cognitive complexity 26 (limit: 15) - nested control flow is hard to follow. Refactor by extracting helper methods or inverting guard conditions.",
-      "line": "381",
-      "fingerprint": "e825fb77d54efbfa099384e797810e6ee09a99298e0b052d3b119ac881c99898",
-      "contextHash": "v1:7754c4dd744356eb3beb3295866d61842b8834776e28b7fddf1bfce38b313407"
-    },
-    {
-      "file": "usonarconfig.pas",
-      "kind": "CognitiveComplexity",
-      "method": "TSonarHealthCheck.Run",
-      "detail": "Cognitive complexity 35 (limit: 15) - nested control flow is hard to follow. Refactor by extracting helper methods or inverting guard conditions.",
-      "line": "641",
-      "fingerprint": "166b0b57b6ee8046b140ed62908d4e14eda2bb4b018e2242e8e28503a5c543eb",
-      "contextHash": "v1:a3cc9f4bbcad84916402b5ae37b6db2a1e78e9fe9f36fec1ff8e8aed5f3d76bf"
     },
     {
       "file": "usonarpull.pas",
