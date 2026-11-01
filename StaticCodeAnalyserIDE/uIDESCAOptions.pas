@@ -148,7 +148,7 @@ implementation
 uses
   uIDETheme,           // TIDETheme.Apply + Subscribe
   uIDEToolbar,         // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
-  uIDEColors,          // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
+  uIDEColors,          // IDE_FG_DIM - semantische Theme-Farbe
   uIDELineHighlighter, // RefreshTextOnlyHintCache + Repaint nach dem Speichern
   uAnalyserTheme;      // TEditorColorScheme + Parse/ToStr
 
@@ -162,7 +162,6 @@ const
   // Layout-Konstanten - frueher Inner-Const-Block in BuildControls. Auf
   // Unit-Ebene gezogen, damit die BuildXxxSection-Methoden alle dieselben
   // Werte sehen ohne Parameter-Schleifen.
-  // GROUP_W=540 deckungsgleich mit uIDESonarOptions (konsistente Breite).
   MARGIN_LEFT  = 16;
   MARGIN_TOP   = 12;
   GROUP_W      = 540;
@@ -196,8 +195,8 @@ begin
   // + alle Kind-Controls existieren).
   HookMouseWheel(FScroll);
   // Background: theme-abhaengig via TIDETheme.OptionsFrameBg (Dark = kuratierter
-  // Ton, Light = System-Window-Farbe) - identisch zur Sonar-Options-Page. Bugfix
-  // 2026-07-15: vorher hartcodiert dunkel -> Page im hellen Theme faelschlich dunkel.
+  // Ton, Light = System-Window-Farbe). Bugfix 2026-07-15: vorher hartcodiert
+  // dunkel -> Page im hellen Theme faelschlich dunkel.
   Self.ParentColor      := False;
   Self.ParentBackground := False;
   Self.Color            := TIDETheme.OptionsFrameBg;

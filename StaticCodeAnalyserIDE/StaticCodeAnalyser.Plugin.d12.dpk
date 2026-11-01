@@ -402,7 +402,6 @@ contains
   uIDELifecycle in 'uIDELifecycle.pas',
   uIDEAddInOptionsBase in 'uIDEAddInOptionsBase.pas',
   uIDESCAOptions in 'uIDESCAOptions.pas' {SCAOptionsFrame: TFrame},
-  uIDESonarOptions in 'uIDESonarOptions.pas' {SonarOptionsFrame: TFrame},
   uIDEAnalyseRunner in 'uIDEAnalyseRunner.pas';
 
 end.

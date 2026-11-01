@@ -87,7 +87,7 @@ var
   // DAS Verzeichnis der UI-Elemente (A.3). Gebaut und gefuellt in
   // Register, freigegeben in finalization. Sein RegisterAll ist die EINE
   // Stelle, an der die Oberflaeche des Plugins entsteht - die Liste der
-  // Elemente steht in uIDEAnalyserForm.AddUiElements (zehn) und
+  // Elemente steht in uIDEAnalyserForm.AddUiElements (elf) und
   // AddExpertUiElements unten (vier).
   //
   // Der ABBAU (A.4) laeuft ueber TeardownUiElements: Worker-Join als
@@ -340,8 +340,8 @@ end;
 
 procedure AddExpertUiElements(ARegistry: TUiElementRegistry);
 // Die vier Elemente dieser Unit bzw. der Nachbar-Units, SortKeys in der
-// am 2026-08-10 gemessenen Reihenfolge hinter den zehn Elementen aus
-// uIDEAnalyserForm.AddUiElements (deren Schluessel enden bei 100).
+// am 2026-08-10 gemessenen Reihenfolge hinter den elf Elementen aus
+// uIDEAnalyserForm.AddUiElements (deren Schluessel enden bei 90).
 const
   SK_FINDINGS_PROPS = 110;
   SK_PACKAGE_WIZARD = 120;
@@ -382,7 +382,7 @@ end;
 
 procedure Register;
 // Seit A.3 die EINE Stelle, an der die Plugin-Oberflaeche entsteht:
-// vierzehn Elemente, sortiert nach SortKey, jedes einzeln gekapselt.
+// fuenfzehn Elemente, sortiert nach SortKey, jedes einzeln gekapselt.
 // Die Reihenfolge ist die am 2026-08-10 gemessene (Messung 0.5).
 var
   Order : string;
@@ -394,7 +394,7 @@ begin
 
   // Waechter gegen doppeltes BEFUELLEN, nicht nur doppeltes Erzeugen: die
   // IDE ruft Register vertragsgemaess genau einmal pro Paketladen, aber
-  // ein zweiter Aufruf wuerde alle vierzehn Elemente erneut adden und
+  // ein zweiter Aufruf wuerde alle fuenfzehn Elemente erneut adden und
   // registrieren - doppeltes Dockfenster, doppelter Menuepunkt. Der
   // Einzeiler macht aus der Annahme eine Zusicherung; der Protokolleintrag
   // macht den Verstoss sichtbar statt ihn still zu schlucken.

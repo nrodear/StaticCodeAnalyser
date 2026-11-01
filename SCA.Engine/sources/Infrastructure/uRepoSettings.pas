@@ -1208,7 +1208,7 @@ const
     ';   SharedUiHooks, DockForm, LineHighlighter, EditorBulb,'#13#10 +
     ';   AnnotationOverlay, WatchMode, WarmUpCaches, ViewMenuItem,'#13#10 +
     ';   EditorContextMenu, EditorContextActions, OptionsPageSCA,'#13#10 +
-    ';   OptionsPageSonar, FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
+    ';   FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
     '; PackageWizard is deliberately NOT switchable - it carries the'#13#10 +
     '; teardown of every other element on unload.'#13#10 +
     '; Dependent degradation: DockForm=0 also removes the View menu entry;'#13#10 +
