@@ -29,11 +29,28 @@ aelter sein als ein DCP, gegen das sein Paket linkt (Engine <= SharedUI
 ueberall "ok" und liefert Pakete aus, die gegen die alte Engine gelinkt
 sind.
 
+Quelle ist mehr als .pas: auch .inc, .dfm und .rc samt der Datei, die eine
+.rc einbindet, in den Quellordnern und neben der .dpk, dazu die .dproj.
+
+Zwei Ausnahmen, beide gemessen am 2026-11-01:
+
+* .res ist keine Quelle im Zeitvergleich. Jeder Bau schreibt die Projekt-
+  .res, sca_branding.res und unitscopes.res neu, in derselben Sekunde wie
+  sein DCP. Mit drei Schienen waere sie immer juenger als die DCPs der
+  beiden zuerst gebauten, und kein Release wuerde je gruen. Geprueft wird
+  deshalb: keine .res juenger als das juengste DCP ihres Pakets. Das faengt
+  eine von Hand neu erzeugte .res, ohne beim Schienenwechsel anzuschlagen.
+* Die Zeit einer .dproj ist ihr letzter Commit, solange sie unveraendert
+  ist. Nach jedem IDE-Bau kommt sie per git checkout zurueck, und das setzt
+  die Dateizeit neu, ohne dass sich etwas geaendert haette. Eine
+  uncommittete Aenderung zaehlt mit ihrer Dateizeit.
+
 EXIT  0 alles aktueller als die Quelle | 1 veraltete Artefakte | 2 Fehler
 """
 import io
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -256,19 +273,125 @@ def bau_reihenfolge(rows):
     return out
 
 
-def newest_source(dpk_rel):
-    """Juengste Quelldatei eines Pakets: die .dpk selbst plus alles aus
-    ihrer contains-Klausel."""
+def quell_ordner(dpk_rel):
+    """Die Ordner eines Pakets: neben der .dpk plus die seiner Units."""
     base = os.path.dirname(os.path.join(REPO, dpk_rel))
     text = io.open(os.path.join(REPO, dpk_rel), encoding='utf-8-sig').read()
-    newest, who = os.path.getmtime(os.path.join(REPO, dpk_rel)), dpk_rel
+    ordner = {os.path.normpath(base)}
     for rel in re.findall(r"in\s+'([^']+\.pas)'", text):
         f = os.path.join(base, rel.replace(chr(92), os.sep))
+        ordner.add(os.path.normpath(os.path.dirname(f)))
+    return sorted(ordner)
+
+
+def dateien_mit(ordner, endungen):
+    for o in ordner:
+        if os.path.isdir(o):
+            for n in os.listdir(o):
+                if n.lower().endswith(endungen):
+                    yield os.path.join(o, n)
+
+
+def rc_nutzlast(rc):
+    """Dateien, die eine .rc einbindet; Pfade sind relativ zur .rc."""
+    t = ohne_kommentare(io.open(rc, encoding='utf-8-sig',
+                                errors='replace').read())
+    for rel in re.findall(r'"([^"]+)"', t):
+        f = os.path.normpath(os.path.join(os.path.dirname(rc),
+                                          rel.replace(chr(92), os.sep)))
+        if os.path.isfile(f):
+            yield f
+
+
+def rc_dateien(dpk_rel, dproj):
+    """Die .rc der Quellordner plus die <RcCompile>-Eintraege der .dproj."""
+    rcs = set(dateien_mit(quell_ordner(dpk_rel), ('.rc',)))
+    if dproj:
+        voll = os.path.join(REPO, dproj)
+        for rel in re.findall(r'<RcCompile Include="([^"]+)"',
+                              io.open(voll, encoding='utf-8-sig').read()):
+            f = os.path.normpath(os.path.join(os.path.dirname(voll),
+                                              rel.replace(chr(92), os.sep)))
+            if os.path.isfile(f):
+                rcs.add(f)
+    return sorted(rcs)
+
+
+def dproj_zeit(rel):
+    """Commit-Zeit einer unveraenderten .dproj, sonst ihre Dateizeit.
+
+    Warum nicht einfach die Dateizeit: siehe Kopf dieses Werkzeugs. Ohne
+    Git (Kopie, Archiv) bleibt nur die Dateizeit.
+    """
+    git = ['git', '-C', REPO]
+    try:
+        offen = subprocess.run(git + ['status', '--porcelain', '--', rel],
+                               capture_output=True, text=True, check=True)
+        if not offen.stdout.strip():
+            ct = subprocess.run(git + ['log', '-1', '--format=%ct', '--', rel],
+                                capture_output=True, text=True, check=True)
+            if ct.stdout.strip():
+                return float(ct.stdout.strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        pass
+    return os.path.getmtime(os.path.join(REPO, rel))
+
+
+def newest_source(dpk_rel):
+    """Juengste Quelle eines Pakets, ohne .res (siehe juengste_res)."""
+    base = os.path.dirname(os.path.join(REPO, dpk_rel))
+    text = io.open(os.path.join(REPO, dpk_rel), encoding='utf-8-sig').read()
+    dateien = [os.path.join(REPO, dpk_rel)]
+    dateien += [os.path.join(base, rel.replace(chr(92), os.sep))
+                for rel in re.findall(r"in\s+'([^']+\.pas)'", text)]
+    dateien += dateien_mit(quell_ordner(dpk_rel), ('.inc', '.dfm'))
+    dproj = dproj_of(dpk_rel, None)
+    for rc in rc_dateien(dpk_rel, dproj):
+        dateien.append(rc)
+        dateien.extend(rc_nutzlast(rc))
+
+    newest, who = 0.0, dpk_rel
+    for f in dateien:
         if os.path.isfile(f):
             t = os.path.getmtime(f)
             if t > newest:
                 newest, who = t, os.path.relpath(f, REPO)
+    if dproj:
+        t = dproj_zeit(dproj)
+        if t > newest:
+            newest, who = t, dproj
     return newest, who
+
+
+def juengste_res(dpk_rel):
+    """Juengste .res des Pakets als (Zeit, Pfad), sonst None.
+
+    Die Projekt-.res der anderen Pakete bleiben aussen vor: IDE und Monolith
+    teilen sich den Ordner.
+    """
+    fremd = {os.path.basename(d)[:-4].lower() + '.res'
+             for _n, d in PACKAGES if d != dpk_rel}
+    beste = None
+    for f in dateien_mit(quell_ordner(dpk_rel), ('.res',)):
+        if os.path.basename(f).lower() not in fremd:
+            t = os.path.getmtime(f)
+            if beste is None or t > beste[0]:
+                beste = (t, os.path.relpath(f, REPO))
+    return beste
+
+
+def res_nach_dem_bau(rows):
+    """Pakete mit einer .res, die juenger ist als jedes ihrer DCPs.
+
+    Liefert [(Paket, Zeit der .res, Pfad, juengstes DCP)].
+    """
+    dpk_von, out = dict(PACKAGES), []
+    for name in sorted({r[2] for r in rows if r[3] is not None}):
+        juengstes = max(r[3] for r in rows if r[2] == name and r[3] is not None)
+        res = juengste_res(dpk_von[name])
+        if res and res[0] > juengstes:
+            out.append((name, res[0], res[1], juengstes))
+    return out
 
 
 def main():
@@ -336,6 +459,7 @@ def main():
         return 0
 
     reihenfolge = bau_reihenfolge(rows) if nur_release else []
+    res_neu = res_nach_dem_bau(rows)
 
     print('%-4s %-11s %-30s %-16s %-16s' %
           ('IDE', 'Plattform', 'Paket', 'DCP gebaut', 'Quelle zuletzt'))
@@ -345,7 +469,7 @@ def main():
               % (label, plat, name, '-' if art is None else when(art),
                  when(src), zustand))
 
-    if not stale and not fehlend and not reihenfolge:
+    if not stale and not fehlend and not reihenfolge and not res_neu:
         print('\nGRUEN: jedes DCP ist juenger als seine Quelle.')
         return 0
 
@@ -407,6 +531,13 @@ def main():
         for label, plat, name, art, dep, dep_zeit in reihenfolge:
             print('  %s %s %s (%s) ist aelter als %s (%s)'
                   % (label, plat, name, sekunde(art), dep, sekunde(dep_zeit)))
+    if res_neu:
+        print('ROT: %d Paket(e) haben eine .res, die juenger ist als jedes'
+              ' ihrer DCPs.' % len(res_neu))
+        print('Sie steckt in keiner gebauten BPL: neu bauen.')
+        for name, zeit, pfad, dcp in res_neu:
+            print('  %s: %s (%s), juengstes DCP %s'
+                  % (name, pfad, sekunde(zeit), sekunde(dcp)))
     return 1
 
 
