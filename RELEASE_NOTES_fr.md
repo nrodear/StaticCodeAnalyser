@@ -10,13 +10,17 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   dans le menu contextuel du résultat, ainsi que neuf actions de code au
   curseur, en anglais, en allemand et en français. Chaque action
   revérifie d'abord le tampon de l'éditeur et écrit en une seule étape
-  d'annulation, jamais dans un fichier. Il faut Delphi 12 (Win32), une
-  compilation depuis les sources et la variante de plugin
-  `StaticCodeAnalyser.IDE.d12`.
-- **Setup et GetIt ne livrent pas reDelphix.** Le plugin qu'ils
-  installent perd les quatre quick-fixes de la v0.9.18 (SCA066, SCA072,
-  SCA084, SCA085) : `Ctrl+Alt+F` affiche désormais « Quick-Fix : le
-  package reDelphix n'est pas chargé ».
+  d'annulation, jamais dans un fichier. Le setup l'installe pour
+  Delphi 12 et pour les IDE 32 et 64 bits de Delphi 13 ; il est
+  présélectionné et décochable.
+- **GetIt est suspendu pour la 0.9.19 : si vous utilisez GetIt, prenez le
+  setup.** Le setup installe désormais un jeu de quatre paquets par IDE au
+  lieu d'une seule BPL, et ce jeu ne peut pas s'installer via GetIt.
+  Lancez le nouveau setup par-dessus la v0.9.18 : il retire l'ancien
+  plugin, y compris une installation GetIt, et le signale. Son dossier
+  passe en tête du réglage PATH de l'IDE ; la désinstallation ne retire
+  que cette entrée. Avec reDelphix, un plugin installé garde ses
+  quick-fixes et `Ctrl+Alt+F`.
 - **Les réglages Sonar et le test de connexion disparaissent. SCA écrit
   le fichier, `sonar-scanner` l'envoie. Les options `--sonar-test`,
   `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,

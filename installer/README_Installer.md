@@ -244,7 +244,7 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 1 | Frische VM, D12 installiert, Non-Admin-Konto | Setup laeuft ohne UAC-Prompt durch; vier BPLs unter `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`; `Known Packages`-Werte nur fuer `StaticCodeAnalyser.IDE.d12.bpl` und `reDelphix.d12.bpl`, Wertdaten nicht leer; `{app}\bpl\d12` vorn im IDE-PATH-Override |
 | 2 | IDE-Start nach Install | Plugin laedt (Splash/About-Branding sichtbar, Tools-Menue-Eintrag da); kein "Can't load package"; Engine und SharedUI laden aus `{app}\bpl\d12` |
 | 3 | Setup starten, waehrend bds.exe laeuft | Setup bricht mit klarer Meldung ab (kein Teil-Install) |
-| 3b | Maschine OHNE unterstuetzte IDE (weder BDS 23.0 noch 37.0, oder RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "weder Delphi 12 noch Delphi 13 gefunden" ab; keine Dateien, keine Registry-Werte |
+| 3b | Maschine OHNE unterstuetzte IDE (weder BDS 23.0 noch 37.0, oder RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "Es wurde weder Delphi 12 (BDS 23.0) noch Delphi 13 (BDS 37.0) auf diesem System gefunden" ab; keine Dateien, keine Registry-Werte |
 | 4 | Dev-Maschine mit registriertem Dev-Satz (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existieren nur noch die Install-Pfad-Eintraege; IDE laedt das Plugin genau einmal |
 | 5 | Vorher per "Can't load package → Nein" deaktiviert (Disabled Packages) | Setup raeumt den Disabled-Eintrag; Plugin laedt nach Neustart wieder |
 | 6 | Update ueber Bestand (Paketsatz installiert, auch dasselbe Setup zweimal) | BPLs + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag je Design-BPL; Override-Segment genau einmal |

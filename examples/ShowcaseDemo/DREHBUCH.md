@@ -40,13 +40,12 @@ einfügt oder löscht – darum die Grundregel unten.
 ## Szene 0: Vorbereitung (vor der Aufnahme)
 
 1. Delphi 12 Athens (Win32-IDE) oder Delphi 13 Florence.
-2. SCA als **Plugin-Variante B** und reDelphix installieren: Projektgruppe
-   `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe erzeugen, dann
-   `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im Projekt-Manager
-   **Installieren** (Details: `reDelphix/README.md`, Abschnitte
-   „Voraussetzungen in der IDE“ und „Bauen und installieren“). Nicht den
-   Monolithen `StaticCodeAnalyser.Plugin.d12` – neben ihm lädt reDelphix
-   nicht.
+2. SCA und reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
+   ausführen, die Komponente reDelphix bleibt angehakt. Aus den Quellen geht
+   es auch: Projektgruppe `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe
+   erzeugen, dann `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im
+   Projekt-Manager **Installieren** (Details: `reDelphix/README.md`, Abschnitte
+   „Voraussetzungen in der IDE“ und „Bauen und installieren“).
 3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitt `[Rules]`:
 
    ```ini
