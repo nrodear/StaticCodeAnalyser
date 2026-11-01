@@ -513,7 +513,7 @@ procedure TFindingExportMenu.DoExportSonarGeneric(Sender: TObject);
 //
 // Vorher wurde FDisplayed exportiert - das hatte den User-Filter mit
 // drin. Resultat: wenn jemand z.B. nach "Errors" gefiltert hatte, wurden
-// im Sonar-Push nur die Errors gepusht und die Warnings/Hints fehlten.
+// im Sonar-Export nur die Errors geschrieben und die Warnings/Hints fehlten.
 var
   Dlg     : TSaveDialog;
   BaseDir : string;
@@ -566,7 +566,7 @@ begin
   if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
   if BaseDir = '' then
   begin
-    FOnStatus(_('Sonar push needs a project directory (run analysis first).'));
+    FOnStatus(_('Sonar export needs a project directory (run analysis first).'));
     Exit;
   end;
   Grid := FGetGrid;
@@ -600,21 +600,21 @@ begin
 
   if Length(Sel) = 0 then
   begin
-    FOnStatus(_('Sonar push: select at least one finding first.'));
+    FOnStatus(_('Sonar export: select at least one finding first.'));
     Exit;
   end;
 
   try
     // Der Ordner wird von WriteIndividual geleert - das muss in der Meldung
     // stehen, sonst wundert sich der Nutzer ueber verschwundene Dateien aus
-    // einem frueheren Push. Der Grund steht in uSonarPush.ClearExternalDir.
+    // einem frueheren Export. Der Grund steht in uSonarPush.ClearExternalDir.
     Cnt := TSonarPush.WriteIndividual(Sel, BaseDir, BaseDir);
     FOnStatus(Format(
-      _('Sonar push: .sonar\external\ now holds exactly these %d issue file(s) ' +
-        '- files from earlier pushes were removed.'), [Cnt]));
+      _('Sonar export: .sonar\external\ now holds exactly these %d issue file(s) ' +
+        '- files from earlier exports were removed.'), [Cnt]));
   except
     on E: Exception do
-      FOnStatus(_('Sonar push failed: ') + E.Message);
+      FOnStatus(_('Sonar export failed: ') + E.Message);
   end;
 end;
 

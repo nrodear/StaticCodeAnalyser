@@ -3581,23 +3581,20 @@ msgid "Sonar export"
 msgstr ""
 
 #: SCA.SharedUI/sources/uExportMenu.pas:547
+#: SCA.SharedUI/sources/uExportMenu.pas:617
 msgid "Sonar export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:617
-msgid "Sonar push failed: "
-msgstr ""
-
 #: SCA.SharedUI/sources/uExportMenu.pas:569
-msgid "Sonar push needs a project directory (run analysis first)."
+msgid "Sonar export needs a project directory (run analysis first)."
 msgstr ""
 
 #: SCA.SharedUI/sources/uExportMenu.pas:613
-msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
+msgid "Sonar export: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier exports were removed."
 msgstr ""
 
 #: SCA.SharedUI/sources/uExportMenu.pas:603
-msgid "Sonar push: select at least one finding first."
+msgid "Sonar export: select at least one finding first."
 msgstr ""
 
 #: SCA.SharedUI/sources/uExportMenu.pas:543

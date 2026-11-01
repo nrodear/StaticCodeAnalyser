@@ -119,11 +119,10 @@ foreach ($p in $platforms) {
   }
 
   # 4. Der Regelkatalog MUSS mit ins Archiv. Ohne rules\sca-rules.json
-  #    neben der EXE faellt TRuleCatalog auf den einkompilierten Notbehelf
-  #    zurueck - und der Sonar-Export wird dann von SonarQube komplett
-  #    verworfen (2026-08-08 am v0.9.14-ZIP nachgewiesen: Lauf gruen,
-  #    Datei geschrieben, Dashboard leer). Der Katalog speist ausserdem
-  #    tool.driver.version im SARIF und die FixHints.
+  #    neben der EXE faellt TRuleCatalog auf den einkompilierten Stand
+  #    zurueck: der Sonar-Export bleibt gueltig, traegt aber grobe
+  #    Attribute und Impacts statt der Katalogwerte. Der Katalog speist
+  #    ausserdem tool.driver.version im SARIF und die FixHints.
   $rules = Join-Path $repo 'rules\sca-rules.json'
   if (-not (Test-Path $rules)) { throw "Regelkatalog fehlt: $rules" }
 

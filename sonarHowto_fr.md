@@ -42,7 +42,7 @@ sonar-scanner
 - **Rapport et scanner dans le même dossier.** Les chemins du rapport sont relatifs au dossier du projet (`--base-dir`, par défaut `--path`), et Sonar les résout depuis le dossier de `sonar-project.properties`. Sinon, il les écarte comme fichiers inconnus.
 - **Fichiers écartés.** Les résultats dans des fichiers visés par `sonar.exclusions`, dans des fichiers gitignorés et dans un sous-dossier ayant son propre `.git` que le dépôt parent ne suit pas comme sous-module sont perdus, même si SCA les a analysés.
 - **Même jeu de règles.** L'IDE utilise `[Rules] IdeProfile`, et `--profile default` masque les fixtures de test (`--show-test-fixtures` les garde). Un nom de profil inconnu ne donne aucune erreur, l'analyse s'exécute avec d'autres règles.
-- **Rester sur une seule voie.** La GUI et la CLI écrivent des métadonnées de règle différentes. Changer de voie modifie les sévérités et les notes dans Sonar alors que le code n'a pas changé.
+- **Garder la même configuration.** Le rapport dépend du jeu de règles de l'analyse, de ses résultats et de `--sonar-keep-downgraded` (CLI uniquement). Ne changez ni le profil ni les options entre deux analyses, sinon les issues, les sévérités et les notes changent dans Sonar alors que le code est resté le même.
 - **Code de sortie dans un pipeline.** Des résultats terminent l'analyse avec le code 1 à 3. Pour que l'étape du scanner s'exécute quand même, ajoutez `--fail-on none` ; les erreurs d'outil restent en code 99.
 - **SonarDelphi.** Si le plugin arrête le scanner avec `Path to Delphi standardlibrary is invalid`, définissez `sonar.delphi.installationPath` et `sonar.delphi.compilerVersion`.
 

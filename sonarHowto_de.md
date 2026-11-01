@@ -42,7 +42,7 @@ sonar-scanner
 - **Bericht und Scanner im selben Ordner.** Die Pfade im Bericht sind relativ zum Projektverzeichnis (`--base-dir`, Vorgabe `--path`), und Sonar löst sie gegen den Ordner der `sonar-project.properties` auf. Sonst verwirft es sie als unbekannte Dateien.
 - **Verworfene Dateien.** Funde in Dateien, die `sonar.exclusions` treffen, in gitignorierten Dateien und in einem Unterordner mit eigenem `.git`, den das Eltern-Repository nicht als Submodul führt, gehen verloren, auch wenn SCA sie analysiert hat.
 - **Gleicher Regelsatz.** Die IDE nimmt `[Rules] IdeProfile`, und `--profile default` blendet Test-Fixtures aus (`--show-test-fixtures` behält sie). Ein unbekannter Profilname ergibt keinen Fehler, der Lauf scannt mit anderen Regeln.
-- **Bei einem Weg bleiben.** GUI und CLI schreiben unterschiedliche Regel-Metadaten. Ein Wechsel ändert in Sonar Severities und Ratings, obwohl sich der Code nicht geändert hat.
+- **Aufruf stabil halten.** Der Bericht hängt am Regelsatz des Laufs, an dessen Funden und an `--sonar-keep-downgraded` (nur CLI). Profil und Schalter nicht zwischen Läufen wechseln, sonst ändern sich Issues, Severities und Ratings in Sonar, obwohl der Code gleich blieb.
 - **Exit-Code in der Pipeline.** Funde beenden einen Lauf mit Exit 1 bis 3. Damit der Scanner-Schritt trotzdem läuft, `--fail-on none` ergänzen; Werkzeugfehler bleiben Exit 99.
 - **SonarDelphi.** Bricht das Plugin den Scanner mit `Path to Delphi standardlibrary is invalid` ab, `sonar.delphi.installationPath` und `sonar.delphi.compilerVersion` setzen.
 

@@ -1385,17 +1385,11 @@ msgstr "Silent-Modus"
 msgid "Sonar export failed: "
 msgstr "Sonar-Export fehlgeschlagen: "
 
-msgid "Sonar push failed: "
-msgstr "Sonar-Push fehlgeschlagen: "
+msgid "Sonar export needs a project directory (run analysis first)."
+msgstr "Sonar-Export braucht ein Projektverzeichnis (zuerst analysieren)."
 
-msgid "Sonar push needs a project directory (run analysis first)."
-msgstr "Sonar-Push braucht ein Projektverzeichnis (zuerst analysieren)."
-
-msgid "Sonar push: select at least one finding first."
-msgstr "Sonar-Push: zuerst mindestens einen Befund auswaehlen."
-
-msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"
-msgstr "Sonar-Push: %d Issue-Datei(en) nach .sonar\\external\\ geschrieben"
+msgid "Sonar export: select at least one finding first."
+msgstr "Sonar-Export: zuerst mindestens einen Befund auswaehlen."
 
 msgid "Sonar report saved: %s"
 msgstr "Sonar-Report gespeichert: %s"
@@ -2010,8 +2004,8 @@ msgstr "DFM-Viewer"
 msgid "More than %d files found - scan cancelled."
 msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
 
-msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
-msgstr "Sonar-Push: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Pushes wurden entfernt."
+msgid "Sonar export: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier exports were removed."
+msgstr "Sonar-Export: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Exporte wurden entfernt."
 
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unverändert."

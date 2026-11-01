@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7029 Zeilen, 335996 Bytes
-  CPoLines_de: array[0..7028] of string = (
+  // i18n\de.po - 7023 Zeilen, 335802 Bytes
+  CPoLines_de: array[0..7022] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1402,17 +1402,11 @@ const
     'msgid "Sonar export failed: "',
     'msgstr "Sonar-Export fehlgeschlagen: "',
     '',
-    'msgid "Sonar push failed: "',
-    'msgstr "Sonar-Push fehlgeschlagen: "',
+    'msgid "Sonar export needs a project directory (run analysis first)."',
+    'msgstr "Sonar-Export braucht ein Projektverzeichnis (zuerst analysieren)."',
     '',
-    'msgid "Sonar push needs a project directory (run analysis first)."',
-    'msgstr "Sonar-Push braucht ein Projektverzeichnis (zuerst analysieren)."',
-    '',
-    'msgid "Sonar push: select at least one finding first."',
-    'msgstr "Sonar-Push: zuerst mindestens einen Befund auswaehlen."',
-    '',
-    'msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"',
-    'msgstr "Sonar-Push: %d Issue-Datei(en) nach .sonar\\external\\ geschrieben"',
+    'msgid "Sonar export: select at least one finding first."',
+    'msgstr "Sonar-Export: zuerst mindestens einen Befund auswaehlen."',
     '',
     'msgid "Sonar report saved: %s"',
     'msgstr "Sonar-Report gespeichert: %s"',
@@ -2027,8 +2021,8 @@ const
     'msgid "More than %d files found - scan cancelled."',
     'msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."',
     '',
-    'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
-    'msgstr "Sonar-Push: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Pushes wurden entfernt."',
+    'msgid "Sonar export: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier exports were removed."',
+    'msgstr "Sonar-Export: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Exporte wurden entfernt."',
     '',
     'msgid "Settings could not be reloaded - baseline filter unchanged."',
     'msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unver'#$00E4'ndert."',
@@ -7318,8 +7312,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7025 Zeilen, 349572 Bytes
-  CPoLines_fr: array[0..7024] of string = (
+  // i18n\fr.po - 7019 Zeilen, 349378 Bytes
+  CPoLines_fr: array[0..7018] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -8715,17 +8709,11 @@ const
     'msgid "Sonar export failed: "',
     'msgstr "'#$00C9'chec de l''export Sonar : "',
     '',
-    'msgid "Sonar push failed: "',
-    'msgstr "'#$00C9'chec du push Sonar : "',
+    'msgid "Sonar export needs a project directory (run analysis first)."',
+    'msgstr "L''export Sonar n'#$00E9'cessite un r'#$00E9'pertoire de projet (lancer d''abord une analyse)."',
     '',
-    'msgid "Sonar push needs a project directory (run analysis first)."',
-    'msgstr "Le push Sonar n'#$00E9'cessite un r'#$00E9'pertoire de projet (lancer d''abord une analyse)."',
-    '',
-    'msgid "Sonar push: select at least one finding first."',
-    'msgstr "Push Sonar : s'#$00E9'lectionnez d''abord au moins un r'#$00E9'sultat."',
-    '',
-    'msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"',
-    'msgstr "Push Sonar : %d fichier(s) d''issue '#$00E9'crit(s) dans .sonar\\external\\"',
+    'msgid "Sonar export: select at least one finding first."',
+    'msgstr "Export Sonar : s'#$00E9'lectionnez d''abord au moins un r'#$00E9'sultat."',
     '',
     'msgid "Sonar report saved: %s"',
     'msgstr "Rapport Sonar enregistr'#$00E9' : %s"',
@@ -9328,8 +9316,8 @@ const
     'msgid "More than %d files found - scan cancelled."',
     'msgstr "Plus de %d fichiers trouv'#$00E9's - analyse annul'#$00E9'e."',
     '',
-    'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
-    'msgstr "Envoi Sonar : .sonar\\external\\ contient d'#$00E9'sormais exactement ces %d fichier(s) de probl'#$00E8'mes - les fichiers des envois pr'#$00E9'c'#$00E9'dents ont '#$00E9't'#$00E9' supprim'#$00E9's."',
+    'msgid "Sonar export: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier exports were removed."',
+    'msgstr "Export Sonar : .sonar\\external\\ contient d'#$00E9'sormais exactement ces %d fichier(s) de probl'#$00E8'mes - les fichiers des exports pr'#$00E9'c'#$00E9'dents ont '#$00E9't'#$00E9' supprim'#$00E9's."',
     '',
     'msgid "Settings could not be reloaded - baseline filter unchanged."',
     'msgstr "Impossible de recharger les param'#$00E8'tres - filtre de r'#$00E9'f'#$00E9'rence inchang'#$00E9'."',
