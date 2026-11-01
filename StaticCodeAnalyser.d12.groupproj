@@ -19,7 +19,7 @@
             <Dependencies/>
         </Projects>
         <Projects Include="reDelphix\reDelphix.d12.dproj">
-            <Dependencies>SCA.Engine\SCA.Engine.dproj</Dependencies>
+            <Dependencies/>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.dproj">
             <Dependencies/>
@@ -86,13 +86,13 @@
     <Target Name="StaticCodeAnalyser_IDE_d12:Make">
         <MSBuild Projects="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj" Targets="Make"/>
     </Target>
-    <Target Name="reDelphix_d12" DependsOnTargets="SCA_Engine">
+    <Target Name="reDelphix_d12">
         <MSBuild Projects="reDelphix\reDelphix.d12.dproj"/>
     </Target>
-    <Target Name="reDelphix_d12:Clean" DependsOnTargets="SCA_Engine:Clean">
+    <Target Name="reDelphix_d12:Clean">
         <MSBuild Projects="reDelphix\reDelphix.d12.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="reDelphix_d12:Make" DependsOnTargets="SCA_Engine:Make">
+    <Target Name="reDelphix_d12:Make">
         <MSBuild Projects="reDelphix\reDelphix.d12.dproj" Targets="Make"/>
     </Target>
     <Target Name="TestProject">
