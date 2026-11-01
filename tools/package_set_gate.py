@@ -328,6 +328,12 @@ def pruefe_verinfo(geparst, soll, befunde):
                 if ist != soll:
                     befunde.append((6, '%s %s: Keys %s=%s, Soll %s'
                                     % (name, bed, feld, ist, soll)))
+            # Comments=Release x.y.z (Datum) landet ebenso in der BPL. Beim
+            # Bump auf 0.9.19 blieb der Key zunaechst auf 0.9.18 stehen.
+            m = re.search(r'(?:^|;)Comments=Release ([\d.]+)', keys)
+            if m and m.group(1) + '.0' != soll:
+                befunde.append((6, '%s %s: Keys Comments nennt Release %s, '
+                                'Soll %s' % (name, bed, m.group(1), soll[:-2])))
         # Eine Cfg-Gruppe erbt nicht nur, sie ueberschreibt: stuende dort ein
         # eigener Wert, baute die IDE ihn, und die Pruefung oben waere gruen.
         for bed, block in re.findall(
