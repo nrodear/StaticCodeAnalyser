@@ -10,7 +10,7 @@ knowing the internal units.
 > Runnable minimal example: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
 - **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` reads `.dproj`/`.groupproj` for the project scopes; no VCL/FMX dependency)
-- **Version:** 0.9.18 (`uSCAConsts.SCA_VERSION`)
+- **Version:** 0.9.19 (`uSCAConsts.SCA_VERSION`)
 - **Scope:** 205 rules (rule IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
 
 ---

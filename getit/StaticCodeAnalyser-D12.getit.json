@@ -1,4 +1,5 @@
 {
+	"_Ausgesetzt": "Kanal fuer 0.9.19 ausgesetzt. Diese Vorlage beschreibt den Monolithen bis 0.9.18 und gilt nicht fuer den Paketsatz: der Ladeweg der Laufzeitpakete ist mit Action 7/8 nicht ausdrueckbar, und Registry-Actions koennen den geteilten IDE-PATH-Override nicht sicher ergaenzen. Begruendung in README_GetIt.md; vor einer Wiederaufnahme dieses Feld entfernen.",
 	"Id": "StaticCodeAnalyserD12",
 	"Name": "Static Code Analyser for Delphi",
 	"Version": "0.9.18",

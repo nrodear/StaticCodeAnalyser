@@ -9,12 +9,16 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   of SCA offers quick-fixes for 96 rules in the light bulb and the finding's
   context menu, plus nine code actions at the caret, in English, German
   and French. Every action re-checks the editor buffer first and writes
-  one undo step, never into a file. It needs Delphi 12 (Win32), a build
-  from source and the plugin variant `StaticCodeAnalyser.IDE.d12`.
-- **Setup and GetIt do not ship reDelphix.** The plugin they install
-  loses the four quick-fixes of v0.9.18 (SCA066, SCA072, SCA084,
-  SCA085): `Ctrl+Alt+F` now reports "Quick-Fix: the reDelphix package is
-  not loaded".
+  one undo step, never into a file. The Setup installs it for Delphi 12
+  and for the 32-bit and 64-bit IDE of Delphi 13; it is preselected and can
+  be unticked.
+- **GetIt is suspended for 0.9.19: if you use GetIt, take the Setup.** The
+  Setup now installs a set of four packages per IDE instead of one BPL,
+  and that set cannot be installed through GetIt. Run the new Setup over
+  v0.9.18: it removes the old plugin, also a GetIt install, and says so.
+  Its folder goes to the front of the IDE's PATH setting; uninstalling
+  removes only that entry. With reDelphix, an installed plugin keeps its
+  quick-fixes and `Ctrl+Alt+F`.
 - **Sonar settings and the connection check are gone. SCA writes the
   file, `sonar-scanner` sends it. The switches `--sonar-test`,
   `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,

@@ -53,9 +53,10 @@ Win32-Library-Path adden.
 | Build-Target | Plattform | Voraussetzung |
 |---|---|---|
 | SCA.Engine290.bpl | Win32 + Win64 | rtl, nichts extern |
-| SCA.SharedUI290.bpl | **nur Win32** | rtl, vcl, designide (IDE-only) |
+| SCA.SharedUI290.bpl | Win32 + Win64 | rtl, vcl, vclwinx, SCA.Engine |
 | StaticCodeAnalyser.d12.exe (Standalone) | Win32 + Win64 | nichts extern |
-| StaticCodeAnalyser.IDE.d12.bpl | **nur Win32** | rtl, vcl, designide |
+| StaticCodeAnalyser.IDE.d12.bpl | Win32; Win64 **nur unter Delphi 13** | rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI |
+| reDelphix.d12.bpl | Win32; Win64 **nur unter Delphi 13** | rtl, vcl, designide, SCA.Engine |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (siehe unten) |
 
 Die Group baut mit "Alle Projekte erzeugen" jedes Projekt der Gruppe auf

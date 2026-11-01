@@ -1,7 +1,8 @@
 ﻿; =============================================================================
-; StaticCodeAnalyserSetup.iss  —  Inno Setup 6.x, Installer P1 (nur D12-Schiene)
-; Referenz: Welle 1, 2026-07-25
+; StaticCodeAnalyserSetup.iss  —  Inno Setup 6.x, Paketsatz fuer drei IDE-Schienen
+; Referenz: Welle 1, 2026-07-25; Paketsatz ab 0.9.19
 ; Grundlage: Doku_05_IDE_Plugin.md (Installer-Abschnitt) + Konzept_IdePluginInstaller_2026-07-23
+;            + Konzept_AuslieferungPaketsatz_2026-10-28
 ;
 ; Leitplanken (aus der Doku, bindend):
 ;   * Per-User: HKCU + %LOCALAPPDATA%\Programs\StaticCodeAnalyser — NIE elevieren
@@ -12,15 +13,18 @@
 ;   * Privacy ist Existenzgrund: der Installer baut KEINE Netzverbindung auf —
 ;     kein Update-Check, keine Telemetrie, kein Download. Dieses Skript enthaelt
 ;     bewusst keinerlei Netz-Funktionalitaet.
-;   * D12 = BDS 23.0 (Win32-IDE). D13 = BDS 37.0 (geblockt, s. Platzhalter unten).
+;   * D12 = BDS 23.0 (Win32-IDE). D13 = BDS 37.0 (Win32- und Win64-IDE).
+;   * Der IDE-PATH-Override ist ein GETEILTER Wert: nur das eigene Segment
+;     einfuegen oder entfernen, nie den Wert ersetzen.
 ; =============================================================================
 
 ; --- Versionsstand ------------------------------------------------------------
-; SECHS Stellen tragen die Version, alle muessen zusammenpassen:
+; Diese Stellen tragen die Version, alle muessen zusammenpassen:
 ;   uSCAConsts.SCA_VERSION + SCA_VERSION_FULL
 ;   rules/sca-rules.json  ->  tool.version
 ;   StaticCodeAnalyser.d12.dproj      VerInfo_Keys + VerInfo_Release
-;   StaticCodeAnalyser.IDE.d12.dproj  VerInfo_Keys + VerInfo_Release
+;   die vier Paket-dproj (SCA.Engine, SCA.SharedUI, StaticCodeAnalyser.IDE.d12,
+;   reDelphix.d12)  VerInfo_Keys + numerische Felder, je Win32 UND Win64
 ;   uIDEExpert.PLUGIN_VERSION  (Titel im IDE-Fenster)
 ;   diese Datei
 ; Der frueher hier vermerkte Drift ist behoben: seit 0.9.10 stimmen die
@@ -31,7 +35,7 @@
 ; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
 ; die Version zentral, der Default hier dient nur dem Hand-Compile.
 #ifndef SCAVersion
-  #define SCAVersion    "0.9.18.0"
+  #define SCAVersion    "0.9.19.0"
 #endif
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
@@ -47,27 +51,28 @@
 #define SCAGitHubUrl    "https://github.com/nrodear/StaticCodeAnalyser"
 
 ; --- Quell-BPLs ---------------------------------------------------------------
-; RELEASE-ZIEL laut Konzept P1: Monolith-BPL "StaticCodeAnalyser.Plugin.d12.bpl"
-; (requires nur rtl/vcl/vclwinx/designide/xmlrtl). Diese dpk existiert im Repo
-; NOCH NICHT — im Repo existiert aktuell nur der Dev-3-Package-Satz:
-;   StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj
-;     -> MainSource StaticCodeAnalyser.IDE.d12.dpk
-;     -> BPL:  StaticCodeAnalyser.IDE.d12.bpl
-;     -> requires: rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI
-;   SCA.Engine\SCA.Engine.dpk          -> SCA.Engine290.bpl
-;   SCA.SharedUI\SCA.SharedUI.dpk      -> SCA.SharedUI290.bpl
-; Die dproj setzt KEIN DCC_BplOutput -> BPLs landen im D12-Standard-BPL-Ordner
-; (C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl).
+; Ausgeliefert wird seit 0.9.19 der Paketsatz, den auch der Dev-Bau erzeugt.
+; Vier BPLs je Schiene:
+;   SCA.Engine<suffix>.bpl          Laufzeitpaket ({$RUNONLY})
+;   SCA.SharedUI<suffix>.bpl        Laufzeitpaket ({$RUNONLY})
+;   StaticCodeAnalyser.IDE.d12.bpl  Design-Paket, requires Engine + SharedUI
+;   reDelphix.d12.bpl               Design-Paket, requires Engine; abwaehlbar
+; Die dproj setzen KEIN DCC_BplOutput -> BPLs landen im Standard-BPL-Ordner
+; der jeweiligen IDE (Studio\<bds>\Bpl, Win64 in Bpl\Win64). Die Generation
+; steckt im Ordner, auch "d12" im Namen der Design-Pakete gilt fuer beide.
 ;
-; Umschalter: seit 2026-08-14 existiert die Monolith-dpk im Repo
-; (StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d12.dpk) - SCA_MONOLITH
-; ist damit der Release-Default: es wird NUR die eine BPL installiert.
-; Fuer die Dev-3-BPL-Uebergangsvariante per ISCC-Kommandozeile ohne dieses
-; Define bauen (Zeile auskommentieren).
-#define SCA_MONOLITH
+; Ladeweg (L3): Der Windows-Loader loest requires ueber bds.exe-Verzeichnis,
+; System32 und PATH auf, NIE im Ordner der Design-BPL, und ein RUNONLY-Paket
+; darf nicht in die Known Packages. Deshalb stehen nur die Design-BPLs dort
+; (voller Pfad), und {app}\bpl\<schiene> kommt vorn in den IDE-eigenen Override
+; HKCU\Software\Embarcadero\BDS\<bds>\Environment Variables\PATH. Am 2026-10-28
+; gemessen: die IDE uebernimmt ihn vor dem Laden der Known Packages, auch
+; bin64\bds.exe, und beide Loader ueberspringen gleichnamige BPLs der falschen
+; Bitbreite.
 
 ; Quellordner der gebauten BPLs (Build-Maschine; per ISCC /D ueberschreibbar):
 ;   iscc /DSCABplSourceDir="D:\pfad\zu\bpls" StaticCodeAnalyserSetup.iss
+; D13 entsprechend: SCABplSourceDirD13, SCABplSourceDirD13X64.
 #ifndef SCABplSourceDir
   #define SCABplSourceDir "C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl"
 #endif
@@ -77,24 +82,21 @@
   #define SCARepoRoot "..\"
 #endif
 
-#ifdef SCA_MONOLITH
-  #define SCAPluginBpl "StaticCodeAnalyser.Plugin.d12.bpl"
-#else
-  #define SCAPluginBpl "StaticCodeAnalyser.IDE.d12.bpl"
-#endif
+#define SCAIdeBpl      "StaticCodeAnalyser.IDE.d12.bpl"
+#define SCARdxBpl      "reDelphix.d12.bpl"
+; Altlast bis 0.9.18, nur noch fuer die Upgrade-Bereinigung:
+#define SCAMonolithBpl "StaticCodeAnalyser.Plugin.d12.bpl"
 
 ; Versions-Suffix der LAUFZEITpakete (Q1, 2026-09-21). Die beiden .dpk
-; tragen {$LIBSUFFIX AUTO}; unter D12 haengt der Compiler damit "290"
-; an. Grund: beide Bpl-Ordner stehen im PATH, und ein Laufzeitpaket
-; wird IMMER darueber aufgeloest - gleichnamige BPLs zweier
-; Generationen liessen D12 die Fassung von D13 laden (belegt am
-; 2026-09-19 und 2026-09-20, beide Male roter IDE-Start).
-; Die Plugin-BPL oben bleibt OHNE Suffix: sie steht mit vollem Pfad in
+; tragen {$LIBSUFFIX AUTO}; der Compiler haengt damit je Generation
+; "290" bzw. "370" an, Win32 und Win64 gleich. Grund: beide Bpl-Ordner
+; stehen im PATH, und ein Laufzeitpaket wird IMMER darueber aufgeloest -
+; gleichnamige BPLs zweier Generationen liessen D12 die Fassung von D13
+; laden (belegt am 2026-09-19 und 2026-09-20, beide Male roter IDE-Start).
+; Die Design-BPLs bleiben OHNE Suffix: sie stehen mit vollem Pfad in
 ; den Known Packages, dort sucht der Loader nicht.
-; Fuer einen D13-Zweig ist hier "370" zu setzen.
-#ifndef SCARtlSuffix
-  #define SCARtlSuffix "290"
-#endif
+#define SCASuffixD12 "290"
+#define SCASuffixD13 "370"
 
 ; BDS-Registry-Schluessel D12 (HKCU):
 #define BDS23Key        "Software\Embarcadero\BDS\23.0"
@@ -114,7 +116,7 @@
 ;     keines davon, ToolsAPI.dcu fehlt ebenfalls.
 ;
 ; Der Versuch endet mit "E2202 Package 'designide' wird benoetigt, konnte
-; aber nicht gefunden werden". Die Plugin-dpk faengt das inzwischen mit
+; aber nicht gefunden werden". Beide Design-dpk fangen das inzwischen mit
 ; einer verstaendlichen {$MESSAGE FATAL}-Zeile ab.
 ;
 ; Fuer Delphi 13 gilt das Gegenteil - siehe den Block direkt darunter.
@@ -141,8 +143,8 @@
   #define KnownPackages37 BDS37Key + "\Known Packages"
   #define DisabledPkgs37  BDS37Key + "\Disabled Packages"
   ; Quellordner der D13-BPLs. Ein Projektsatz baut beide Generationen; die
-  ; Generation steckt im Zielordner der IDE, nicht im Dateinamen - deshalb
-  ; heisst die Monolith-BPL hier wie unter D12.
+  ; Generation steckt im Zielordner der IDE und im Suffix der Laufzeitpakete
+  ; - die Design-BPLs heissen hier wie unter D12.
   #ifndef SCABplSourceDirD13
     #define SCABplSourceDirD13 "C:\Users\Public\Documents\Embarcadero\Studio\37.0\Bpl"
   #endif
@@ -176,10 +178,12 @@ PrivilegesRequired=lowest
 OutputBaseFilename=StaticCodeAnalyserSetup-{#SCAVersion}
 Compression=lzma2
 SolidCompression=yes
-; Nur Windows, 32/64-Bit-OS egal (BPL selbst ist Win32 fuer die D12-Win32-IDE):
+; Nur Windows, 32/64-Bit-OS egal: das Setup selbst laeuft als 32-bit-Prozess,
+; welche BPLs es ablegt, haengt allein von den gewaehlten Schienen ab.
 ArchitecturesAllowed=x86compatible x64compatible
 UninstallDisplayName={#SCAAppName}
-UninstallDisplayIcon={app}\bpl\d12\{#SCAPluginBpl}
+; Nicht auf eine BPL zeigen: jede Schiene ist abwaehlbar, die Datei fehlte dann.
+UninstallDisplayIcon={uninstallexe}
 ; Kein Neustart noetig; IDE-Prozess-Check passiert im [Code]-Teil:
 CloseApplications=no
 ; Sprachauswahl IMMER anbieten (Nutzer-Feedback 2026-08-15: bei englischer
@@ -199,12 +203,16 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 ; Privacy-Zusicherung sichtbar im Setup (Doku: EULA + Installer-UI sichern das zu):
 de.PrivacyNote=Dieses Setup und das Plugin bauen niemals Netzwerkverbindungen auf: kein Update-Check, keine Telemetrie, kein AI/LLM-Egress.
 en.PrivacyNote=This setup and the plugin never open network connections: no update check, no telemetry, no AI/LLM egress.
-de.IdeRunning=Die Delphi-12-IDE (bds.exe, BDS 23.0) scheint zu laufen. Bitte alle Delphi-12-Instanzen schliessen und das Setup erneut starten.
-en.IdeRunning=The Delphi 12 IDE (bds.exe, BDS 23.0) appears to be running. Please close all Delphi 12 instances and restart setup.
+de.IdeRunning=Eine Delphi-IDE (bds.exe) scheint zu laufen. Bitte alle Delphi-Instanzen schliessen und erneut starten.
+en.IdeRunning=A Delphi IDE (bds.exe) appears to be running. Please close all Delphi instances and start again.
 de.NoDelphi12=Es wurde weder Delphi 12 (BDS 23.0) noch Delphi 13 (BDS 37.0) auf diesem System gefunden. Das Plugin unterstuetzt Delphi 12.0-12.3 (32-bit-IDE) sowie Delphi 13 (32- und 64-bit-IDE); aeltere Versionen werden nicht unterstuetzt. Das Setup wird beendet, es wird nichts installiert.
 en.NoDelphi12=Neither Delphi 12 (BDS 23.0) nor Delphi 13 (BDS 37.0) was found on this system. The plugin supports Delphi 12.0-12.3 (32-bit IDE) and Delphi 13 (32-bit and 64-bit IDE); older versions are not supported. Setup will close without installing anything.
-de.DevBplWarn=In "Known Packages" (BDS 23.0) ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%n%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
-en.DevBplWarn=A developer registration of the plugin with a different path already exists in "Known Packages" (BDS 23.0):%n%n%1%n%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
+de.DevBplWarn=Unter "%2" ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
+en.DevBplWarn=A developer registration of the plugin with a different path already exists under "%2":%n%n%1%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
+de.MonolithWarn=Die fruehere Einzel-BPL des Plugins war noch registriert:%n%n%1%nDer Eintrag wurde entfernt: der neue Paketsatz enthaelt dieselben Units, beide zusammen liessen die IDE beim Start scheitern.
+en.MonolithWarn=The former single-BPL plugin was still registered:%n%n%1%nThe entry has been removed: the new package set contains the same units, and having both would make the IDE fail at startup.
+de.OverrideFail=Der PATH-Eintrag der IDE konnte nicht geschrieben werden (%1). Ohne ihn laedt das Plugin beim IDE-Start nicht.
+en.OverrideFail=The IDE's PATH entry could not be written (%1). Without it the plugin will not load when the IDE starts.
 de.DonateBtn=PayPal-Spende
 en.DonateBtn=PayPal Donate
 de.StarBtn=Stern auf GitHub
@@ -228,6 +236,8 @@ de.CompD13=Delphi 13 Florence (32-bit-IDE)
 en.CompD13=Delphi 13 Florence (32-bit IDE)
 de.CompD13X64=Delphi 13 Florence (64-bit-IDE)
 en.CompD13X64=Delphi 13 Florence (64-bit IDE)
+de.CompRedelphix=reDelphix: Quick-Fixes im Editor (fuer alle gewaehlten Delphi-Versionen)
+en.CompRedelphix=reDelphix: quick fixes in the editor (for all selected Delphi versions)
 de.NoComponent=Bitte mindestens eine Delphi-Version auswaehlen - sonst wird kein Plugin installiert.
 en.NoComponent=Please select at least one Delphi version - otherwise no plugin is installed.
 
@@ -245,6 +255,8 @@ de.ReadyNo2=Delphi 11 und aelter  -  nicht unterstuetzt
 en.ReadyNo2=Delphi 11 and older  -  not supported
 de.ReadyNote=Hinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:
 en.ReadyNote=Note: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:
+de.ReadyPath=Das Setup traegt seinen Paketordner vorn in die PATH-Einstellung der gewaehlten IDEs ein (Tools > Optionen > IDE > Umgebungsvariablen), sonst findet die IDE die Plugin-Pakete nicht. Bestehende Eintraege bleiben erhalten, die Deinstallation nimmt nur diesen Ordner wieder heraus.
+en.ReadyPath=Setup adds its package folder to the front of the PATH setting of the selected IDEs (Tools > Options > IDE > Environment Variables); without it the IDE cannot find the plugin packages. Existing entries stay in place, uninstalling removes only this folder.
 
 [Messages]
 ; Privacy-Hinweis auf der Willkommensseite ergaenzen:
@@ -260,49 +272,54 @@ Name: "custom"; Description: "{cm:TypeCustom}"; Flags: iscustom
 ; installierte IDE steht damit gar nicht erst zur Auswahl - besser als ein
 ; Haken, der ins Leere fuehrt.
 ; Types: full -> in der Voreinstellung sind alle gefundenen angehakt.
+; disablenouninstallwarning: Innos Warnung "wird nicht deinstalliert" waere
+; hier falsch, CurStepChanged entfernt Abgewaehltes restlos.
 Name: "d12";    Description: "{cm:CompD12}";    Types: full custom; \
-  Check: IsDelphi12Installed
+  Flags: disablenouninstallwarning; Check: IsDelphi12Installed
 Name: "d13";    Description: "{cm:CompD13}";    Types: full custom; \
-  Check: IsDelphi13Installed
+  Flags: disablenouninstallwarning; Check: IsDelphi13Installed
 Name: "d13x64"; Description: "{cm:CompD13X64}"; Types: full custom; \
-  Check: IsDelphi13X64Available
+  Flags: disablenouninstallwarning; Check: IsDelphi13X64Available
+; Gilt fuer alle gewaehlten Schienen; das Plugin haengt nicht von reDelphix ab.
+Name: "redelphix"; Description: "{cm:CompRedelphix}"; Types: full custom; \
+  Flags: disablenouninstallwarning
 
 [Files]
-; --- D12-BPL(s) ---------------------------------------------------------------
-#ifdef SCA_MONOLITH
-; Release-Variante: EINE Monolith-BPL — loest laut Doku PATH-, Kollisions-,
-; Koexistenz- und Portable-Problem gleichzeitig (requires nur IDE-eigene Pakete,
-; die der Loader im bds.exe-Verzeichnis findet).
-Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; \
+; Vier BPLs je Schiene, Components statt Check: nur schreiben, wenn die
+; jeweilige IDE wirklich da und gewaehlt ist. Ohne das landen Dateien und
+; HKCU-Werte in einer toten BDS-Schiene.
+; --- D12 (BDS 23.0) -----------------------------------------------------------
+Source: "{#SCABplSourceDir}\SCA.Engine{#SCASuffixD12}.bpl"; DestDir: "{app}\bpl\d12"; \
   Flags: ignoreversion; Components: d12
-#else
-; Dev-3-BPL-Variante (aktueller Repo-Stand). WICHTIG (Doku-Lehre): der Windows-
-; Loader loest requires per Modulname ueber bds.exe-Dir -> System32 -> PATH,
-; NICHT im BPL-Verzeichnis. Deshalb werden SCA.Engine/SCA.SharedUI ebenfalls in
-; "Known Packages" registriert (volle Pfade): die IDE laedt sie dann selbst,
-; und bereits geladene Module loest der Loader per Modulname auf. Die
-; Registry-Enumeration liefert die Werte pfad-alphabetisch, "...\SCA.*" kommt
-; vor "...\StaticCodeAnalyser.*" — die Abhaengigkeiten sind also zuerst da.
-; Das ist eine dokumentierte Uebergangsloesung bis zur Monolith-BPL (P1-Ziel).
-Source: "{#SCABplSourceDir}\SCA.Engine{#SCARtlSuffix}.bpl";   DestDir: "{app}\bpl\d12"; Flags: ignoreversion
-Source: "{#SCABplSourceDir}\SCA.SharedUI{#SCARtlSuffix}.bpl"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
-Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
-#endif
+Source: "{#SCABplSourceDir}\SCA.SharedUI{#SCASuffixD12}.bpl"; DestDir: "{app}\bpl\d12"; \
+  Flags: ignoreversion; Components: d12
+Source: "{#SCABplSourceDir}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d12"; \
+  Flags: ignoreversion; Components: d12
+Source: "{#SCABplSourceDir}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d12"; \
+  Flags: ignoreversion; Components: d12 and redelphix
 
-
-; --- D13-BPLs -----------------------------------------------------------------
-; Check: nur schreiben, wenn die jeweilige IDE wirklich da ist. Ohne das
-; landen Dateien und HKCU-Werte in einer toten BDS-Schiene - dieselbe
-; Ueberlegung wie bei IsDelphi12Installed.
+; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
-Source: "{#SCABplSourceDirD13}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13"; \
+Source: "{#SCABplSourceDirD13}\SCA.Engine{#SCASuffixD13}.bpl"; DestDir: "{app}\bpl\d13"; \
   Flags: ignoreversion; Components: d13
+Source: "{#SCABplSourceDirD13}\SCA.SharedUI{#SCASuffixD13}.bpl"; DestDir: "{app}\bpl\d13"; \
+  Flags: ignoreversion; Components: d13
+Source: "{#SCABplSourceDirD13}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d13"; \
+  Flags: ignoreversion; Components: d13
+Source: "{#SCABplSourceDirD13}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d13"; \
+  Flags: ignoreversion; Components: d13 and redelphix
 #endif
 #ifdef SCA_D13_X64
 ; Die 64-bit-IDE laedt NIE eine 32-bit-BPL. Eigener Build, eigener Ordner,
-; gleicher Dateiname - unterschieden wird ueber den Pfad in der Registry.
-Source: "{#SCABplSourceDirD13X64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13x64"; \
+; gleiche Dateinamen - unterschieden wird ueber den Pfad.
+Source: "{#SCABplSourceDirD13X64}\SCA.Engine{#SCASuffixD13}.bpl"; DestDir: "{app}\bpl\d13x64"; \
   Flags: ignoreversion; Components: d13x64
+Source: "{#SCABplSourceDirD13X64}\SCA.SharedUI{#SCASuffixD13}.bpl"; DestDir: "{app}\bpl\d13x64"; \
+  Flags: ignoreversion; Components: d13x64
+Source: "{#SCABplSourceDirD13X64}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d13x64"; \
+  Flags: ignoreversion; Components: d13x64
+Source: "{#SCABplSourceDirD13X64}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d13x64"; \
+  Flags: ignoreversion; Components: d13x64 and redelphix
 #endif
 
 ; --- Regelkatalog -------------------------------------------------------------
@@ -334,100 +351,75 @@ Name: "{userprograms}\Static Code Analyser for Delphi\Uninstall Static Code Anal
   Filename: "{uninstallexe}"
 
 [Registry]
-; HKCU-Registrierung fuer die D12-IDE (BDS 23.0, Win32).
+; HKCU-Registrierung, je Schiene die beiden Design-BPLs. Die Laufzeitpakete
+; gehoeren NIE hierher ({$RUNONLY}), sie findet die IDE ueber den PATH-Override,
+; den CurStepChanged setzt.
 ; Wertname = voller BPL-Pfad, Wertdaten = Beschreibung (NIE leer!).
 ; uninsdeletevalue: Inno deinstalliert in umgekehrter Installationsreihenfolge,
 ; d.h. diese Registry-Werte verschwinden VOR den Dateien (Doku-Grundsatz);
 ; zusaetzlich raeumt CurUninstallStepChanged (usUninstall) als Gurt+Hosentraeger.
-#ifndef SCA_MONOLITH
+; --- D12 (BDS 23.0, Win32) ----------------------------------------------------
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.Engine{#SCARtlSuffix}.bpl"; \
-  ValueData: "Static Code Analyser - Engine"; Flags: uninsdeletevalue
-Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.SharedUI{#SCARtlSuffix}.bpl"; \
-  ValueData: "Static Code Analyser - Shared UI"; Flags: uninsdeletevalue
-#endif
-Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
+  ValueName: "{app}\bpl\d12\{#SCAIdeBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
   Flags: uninsdeletevalue; Components: d12
+Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
+  ValueName: "{app}\bpl\d12\{#SCARdxBpl}"; \
+  ValueData: "reDelphix - Source Refactor for Static Code Analyser"; \
+  Flags: uninsdeletevalue; Components: d12 and redelphix
 
 ; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
 Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
-  ValueName: "{app}\bpl\d13\{#SCAPluginBpl}"; \
+  ValueName: "{app}\bpl\d13\{#SCAIdeBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
   Flags: uninsdeletevalue; Components: d13
+Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
+  ValueName: "{app}\bpl\d13\{#SCARdxBpl}"; \
+  ValueData: "reDelphix - Source Refactor for Static Code Analyser"; \
+  Flags: uninsdeletevalue; Components: d13 and redelphix
 #endif
 #ifdef SCA_D13_X64
 Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
-  ValueName: "{app}\bpl\d13x64\{#SCAPluginBpl}"; \
+  ValueName: "{app}\bpl\d13x64\{#SCAIdeBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; \
   Flags: uninsdeletevalue; Components: d13x64
+Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
+  ValueName: "{app}\bpl\d13x64\{#SCARdxBpl}"; \
+  ValueData: "reDelphix - Source Refactor for Static Code Analyser (64-bit IDE)"; \
+  Flags: uninsdeletevalue; Components: d13x64 and redelphix
 #endif
-
-; =============================================================================
-; --- D13-PLATZHALTER (wartet auf den Projektsatz, NICHT auf die IDE) ---------
-; D13 "Florence" = BDS 37.0 (Nummernsprung 23.0 -> 37.0 ist real, NIE rechnen),
-; Package-Suffix 370, Win32 + Win64-IDE. Fuer die 64-bit-IDE gilt:
-;   * 32-bit-BPL laedt NIE in der 64-bit-IDE -> eigene Win64-BPL noetig.
-;   * Registrierung unter "Known Packages x64" (64-bit-Erkennung via "App x64").
-; RICHTIGSTELLUNG 2026-08-22: hier stand "kein Delphi 13 auf der
-; Build-Maschine". Das ist falsch und war es vermutlich schon eine Weile -
-; die Registry fuehrt HKCU\SOFTWARE\Embarcadero\BDS.0 mit RootDir
-; Studio.0, Edition "Starter", "App x64" = bin64ds.exe und den
-; Schluesseln "Known Packages" UND "Known Packages x64"; der Dev-BPL-Satz
-; ist dort bereits fuer Win32 und Win64 gebaut. Der Blocker war ein
-; Phantom, und drei weitere Dokumente haben ihre eigenen Blocker daraus
-; abgeleitet.
-; Was WIRKLICH fehlt, bevor dieser Block scharf gestellt wird: der
-; Projektsatz-Entscheid (LIBSUFFIX AUTO gegen Versionssuffix im
-; Dateinamen - heute traegt KEIN einziges dpk/dproj eine
-; LIBSUFFIX-Direktive) und eine Win64-faehige Plugin-Projektdatei; das
-; ausgelieferte Monolith-Paket steht auf TargetedPlatforms=1.
-; Offen bleibt fuer den GetIt-Local-Package-Test allein die Edition
-; "Starter" - ob die dafuer reicht, ist ungeprueft.
-;
-; Aktivierung erst nach P2 (.d13-Projektsatz VER370, Win32+Win64-Builds,
-; Pflicht-Smoke uIDEAnnotationOverlay + Tools-Menue-Suche).
-;
-;#define BDS37Key           "Software\Embarcadero\BDS\37.0"
-;#define KnownPackages37    BDS37Key + "\Known Packages"
-;#define KnownPackages37x64 BDS37Key + "\Known Packages x64"
-;
-;[Files]  (in obige Sektion integrieren, Components-gesteuert d13/d13x64)
-;Source: "{#SCABplSourceDir}\StaticCodeAnalyser.Plugin.d13.bpl";  DestDir: "{app}\bpl\d13";    Flags: ignoreversion
-;Source: "{#SCABplSourceDir}\StaticCodeAnalyser.Plugin.d13x64.bpl"; DestDir: "{app}\bpl\d13x64"; Flags: ignoreversion
-;
-;[Registry]  (in obige Sektion integrieren)
-;Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
-;  ValueName: "{app}\bpl\d13\StaticCodeAnalyser.Plugin.d13.bpl"; \
-;  ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; Flags: uninsdeletevalue
-;Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
-;  ValueName: "{app}\bpl\d13x64\StaticCodeAnalyser.Plugin.d13x64.bpl"; \
-;  ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; Flags: uninsdeletevalue
-; =============================================================================
 
 [Code]
 // ---------------------------------------------------------------------------
 // Welle 1, 2026-07-25 — [Code]-Teil: IDE-Prozess-Check, Koexistenz-Check gegen
-// Dev-BPLs, Disabled-Packages-Bereinigung, Uninstall-Reihenfolge.
+// Dev-BPLs, Disabled-Packages-Bereinigung, Uninstall-Reihenfolge; seit 0.9.19
+// IDE-PATH-Override und Upgrade-Bereinigung des Monolithen.
 // KEINERLEI Netzwerkzugriff (Privacy-Gate).
 // ---------------------------------------------------------------------------
 
 const
   KNOWN_PACKAGES_23    = 'Software\Embarcadero\BDS\23.0\Known Packages';
   DISABLED_PACKAGES_23 = 'Software\Embarcadero\BDS\23.0\Disabled Packages';
+  ENV_VARS_23          = 'Software\Embarcadero\BDS\23.0\Environment Variables';
   KNOWN_PACKAGES_37    = 'Software\Embarcadero\BDS\37.0\Known Packages';
   DISABLED_PACKAGES_37 = 'Software\Embarcadero\BDS\37.0\Disabled Packages';
   KNOWN_PACKAGES_37X64 = 'Software\Embarcadero\BDS\37.0\Known Packages x64';
   DISABLED_PKGS_37X64  = 'Software\Embarcadero\BDS\37.0\Disabled Packages x64';
-  PLUGIN_BPL_NAME      = '{#SCAPluginBpl}';
+  ENV_VARS_37          = 'Software\Embarcadero\BDS\37.0\Environment Variables';
+  // Inno legt hier die Auswahl des letzten Laufs ab; GUID = AppId oben.
+  UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
+    '{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}_is1';
+  IDE_BPL_NAME      = '{#SCAIdeBpl}';
+  RDX_BPL_NAME      = '{#SCARdxBpl}';
+  MONOLITH_BPL_NAME = '{#SCAMonolithBpl}';
+  SUFFIX_D12        = '{#SCASuffixD12}';
+  SUFFIX_D13        = '{#SCASuffixD13}';
 
-// Laeuft die Delphi-12-IDE? Erkennung ueber das IDE-Hauptfenster (Klasse
+// Laeuft eine Delphi-IDE? Erkennung ueber das IDE-Hauptfenster (Klasse
 // TAppBuilder) — bewusst ohne Prozess-APIs/WMI, bleibt lowest-privilege.
-// Grenze: unterscheidet nicht zwischen BDS-Versionen; bei parallel laufendem
-// D13 warnt der Check konservativ mit (akzeptiert fuer P1, nur D12-Schiene).
+// Unterscheidet nicht zwischen BDS-Versionen; das passt, das Setup fasst
+// mehrere Schienen an.
 function IsDelphiIdeRunning: Boolean;
 begin
   Result := FindWindowByClassName('TAppBuilder') <> 0;
@@ -499,25 +491,55 @@ begin
   Result := IsDelphi12Installed or IsDelphi13Installed;
 end;
 
-// Gehoert der BPL-Dateiname zur SCA-Familie? Im Monolith-Modus zaehlen
-// auch die ALT-Registrierungen des Dev-3-Package-Satzes dazu: die
-// Monolith-BPL enthaelt dieselben Units — bleibt ein alter
-// SCA.Engine-/SCA.SharedUI-/IDE.d12-Eintrag stehen, wirft die IDE beim
-// Start "enthaelt die Unit ..., die auch im Package ... enthalten ist"
+// AStamm + Versions-Ziffern + .bpl? Trifft SCA.Engine.bpl, SCA.Engine290.bpl
+// und SCA.Engine370.bpl, aber kein fremdes SCA.EngineTools.bpl.
+function IsPaketMitSuffix(const FileName, AStamm: string): Boolean;
+var
+  Rest: string;
+  I: Integer;
+begin
+  Result := False;
+  if CompareText(Copy(FileName, 1, Length(AStamm)), AStamm) <> 0 then
+    Exit;
+  if CompareText(Copy(FileName, Length(FileName) - 3, 4), '.bpl') <> 0 then
+    Exit;
+  Rest := Copy(FileName, Length(AStamm) + 1,
+    Length(FileName) - Length(AStamm) - 4);
+  for I := 1 to Length(Rest) do
+    if (Rest[I] < '0') or (Rest[I] > '9') then
+      Exit;
+  Result := True;
+end;
+
+// Gehoert der BPL-Dateiname zur SCA-Familie? Jede Registrierung dieser
+// Familie ausserhalb des Installationsordners ist eine Koexistenz-Gefahr:
+// Monolith und Paketsatz enthalten dieselben Units, und eine Dev-BPL neben
+// der installierten laedt die Engine doppelt. Die IDE wirft dann beim Start
+// "enthaelt die Unit ..., die auch im Package ... enthalten ist"
 // (2026-08-15 auf dem Zweit-PC real passiert, via GetIt-Install).
 function IsScaFamilyBpl(const FileName: string): Boolean;
 begin
-  Result := (CompareText(FileName, PLUGIN_BPL_NAME) = 0)
-#ifdef SCA_MONOLITH
-    or (CompareText(FileName, 'StaticCodeAnalyser.IDE.d12.bpl') = 0)
-    or (CompareText(FileName, 'SCA.Engine.bpl') = 0)
-    or (CompareText(FileName, 'SCA.SharedUI.bpl') = 0)
-#endif
-  ;
+  Result := IsPaketMitSuffix(FileName, 'SCA.Engine')
+    or IsPaketMitSuffix(FileName, 'SCA.SharedUI')
+    or (CompareText(FileName, IDE_BPL_NAME) = 0)
+    or (CompareText(FileName, RDX_BPL_NAME) = 0)
+    or (CompareText(FileName, MONOLITH_BPL_NAME) = 0);
+end;
+
+// Voller Installationspfad einer Schiene bzw. einer BPL darin.
+function SchienenOrdner(const AOrdner: string): string;
+begin
+  Result := ExpandConstant('{app}\bpl\') + AOrdner;
+end;
+
+function BplPfad(const AOrdner, ABpl: string): string;
+begin
+  Result := AddBackslash(SchienenOrdner(AOrdner)) + ABpl;
 end;
 
 // Sammelt alle "Known Packages"-Wertnamen (= volle BPL-Pfade), die auf eine
-// unserer BPL-Dateinamen enden, aber NICHT auf den Installationspfad zeigen.
+// unserer BPL-Dateinamen enden, aber NICHT auf die beiden installierten
+// Design-BPLs dieser Schiene zeigen.
 // Das sind Dev-/Alt-Registrierungen (z.B. Public-Documents-Bpl) —
 // Koexistenz-Gefahr: dieselbe Unit darf nicht doppelt laden.
 // Fremde Registrierungen der SCA-Familie in EINEM Registry-Zweig sammeln.
@@ -528,7 +550,7 @@ end;
 // aus einem IDE-Bau registriert, das Setup legte den Monolithen daneben,
 // und Delphi 13 verweigerte den Dienst mit "enthaelt die Unit
 // 'uLocalization', die auch im Package 'SCA.Engine' enthalten ist".
-procedure CollectForeignPluginEntries(const AKey, InstalledPath: string;
+procedure CollectForeignPluginEntries(const AKey, AOrdner: string;
   Entries: TStringList);
 var
   Names: TArrayOfString;
@@ -540,9 +562,106 @@ begin
     begin
       N := Names[I];
       if IsScaFamilyBpl(ExtractFileName(N)) and
-         (CompareText(N, InstalledPath) <> 0) then
+         (CompareText(N, BplPfad(AOrdner, IDE_BPL_NAME)) <> 0) and
+         (CompareText(N, BplPfad(AOrdner, RDX_BPL_NAME)) <> 0) then
         Entries.Add(N);
     end;
+end;
+
+// ---------------------------------------------------------------------------
+// IDE-PATH-Override (Ladeweg L3). Der Wert ist GETEILT, InterBase steht dort
+// z.B. mit ...\IDE_spoof;$(PATH). Deshalb nur das eigene Segment bewegen und
+// alles andere Zeichen fuer Zeichen stehen lassen.
+// ---------------------------------------------------------------------------
+
+function IstGleichesSegment(const A, B: string): Boolean;
+begin
+  Result := AnsiLowercase(RemoveBackslash(Trim(A)))
+          = AnsiLowercase(RemoveBackslash(Trim(B)));
+end;
+
+function OverrideOhneSegment(const AWert, ASegment: string): string;
+var
+  Teile: TArrayOfString;
+  I, Behalten: Integer;
+begin
+  Result := '';
+  Behalten := 0;
+  Teile := StringSplit(AWert, [';'], stAll);
+  for I := 0 to GetArrayLength(Teile) - 1 do
+    if not IstGleichesSegment(Teile[I], ASegment) then
+    begin
+      if Behalten > 0 then
+        Result := Result + ';';
+      Result := Result + Teile[I];
+      Behalten := Behalten + 1;
+    end;
+end;
+
+// Immer entnehmen und vorn einsetzen: das haelt den Wert bei Doppelinstallation
+// stabil und holt das Segment nach vorn, falls ein anderes Werkzeug davor kam.
+function OverrideMitSegment(const AWert, ASegment: string): string;
+begin
+  Result := OverrideOhneSegment(AWert, ASegment);
+  // Ohne $(PATH) verloere die IDE ihren geerbten Suchpfad.
+  if Trim(Result) = '' then
+    Result := '$(PATH)';
+  Result := ASegment + ';' + Result;
+end;
+
+// Bleibt nach dem Entfernen nur das, was das Setup selbst angelegt haette,
+// ist der Ausgangszustand "kein Wert" wiederhergestellt.
+function IstLeererOverride(const AWert: string): Boolean;
+begin
+  Result := (Trim(AWert) = '') or (CompareText(Trim(AWert), '$(PATH)') = 0);
+end;
+
+// RegWriteStringValue erhaelt REG_EXPAND_SZ (Inno-Hilfe), RegQueryStringValue
+// liest beide Typen; der Werttyp eines vorhandenen Werts bleibt also.
+// Fehlt der HKCU-Wert, gilt die Vorlage der Delphi-Installation aus HKLM
+// (32-bit-Sicht) als Ausgangswert. Sonst gingen ihre Segmente verloren, denn
+// der neue HKCU-Wert verdeckt sie.
+function SetzeOverrideSegment(const AEnvKey, AOrdner: string): Boolean;
+var
+  Alt, Neu: string;
+  Vorhanden: Boolean;
+begin
+  Vorhanden := RegQueryStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Alt);
+  if not Vorhanden then
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE_32, AEnvKey, 'PATH', Alt) then
+      Alt := '';
+  Neu := OverrideMitSegment(Alt, SchienenOrdner(AOrdner));
+  Result := (Vorhanden and (Neu = Alt))
+    or RegWriteStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Neu);
+end;
+
+// Eine aus HKLM entstandene HKCU-Kopie bleibt ohne unser Segment stehen: ob
+// sie vorher schon da war, ist nicht unterscheidbar, und sie wirkt wie die
+// Vorlage.
+procedure EntferneOverrideSegment(const AEnvKey, AOrdner: string);
+var
+  Alt, Neu: string;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Alt) then
+    Exit;
+  Neu := OverrideOhneSegment(Alt, SchienenOrdner(AOrdner));
+  if Neu = Alt then
+    Exit;     // nicht unser Segment drin -> der Wert geht uns nichts an
+  if IstLeererOverride(Neu) then
+  begin
+    RegDeleteValue(HKEY_CURRENT_USER, AEnvKey, 'PATH');
+    RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, AEnvKey);
+  end
+  else
+    RegWriteStringValue(HKEY_CURRENT_USER, AEnvKey, 'PATH', Neu);
+end;
+
+// Ein Dialog hielte einen Silent-Lauf an, bis jemand klickt; dort genuegt das Log.
+procedure MeldeFehler(const AText: string; const ASilent: Boolean);
+begin
+  Log(AText);
+  if not ASilent then
+    MsgBox(AText, mbError, MB_OK);
 end;
 
 function InitializeSetup: Boolean;
@@ -554,15 +673,26 @@ begin
   // beschrieben werden, entscheiden die Check:-Ausdruecke je Eintrag.
   if not IsAnySupportedIdeInstalled then
   begin
-    MsgBox(CustomMessage('NoDelphi12'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('NoDelphi12'), WizardSilent);
     Result := False;
     Exit;
   end;
   if IsDelphiIdeRunning then
   begin
-    MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('IdeRunning'), WizardSilent);
     Result := False;
   end;
+end;
+
+// Zweiter Blick unmittelbar vor dem Schreiben: eine waehrend des Wizards
+// gestartete IDE haelt die BPLs fest. Der Text stoppt Setup auf der
+// Vorbereiten-Seite. Silent zeigt Inno ihn als Dialog (gemessen), deshalb
+// faengt NextButtonClick diesen Fall vorher ab.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsDelphiIdeRunning then
+    Result := CustomMessage('IdeRunning');
 end;
 
 // ---------------------------------------------------------------------------
@@ -619,7 +749,8 @@ begin
           + CustomMessage('ReadyNo1') + NewLine
           + CustomMessage('ReadyNo2') + NewLine + NewLine
           + CustomMessage('ReadyNote') + NewLine
-          + '{#SCAGitHubUrl}' + NewLine;
+          + '{#SCAGitHubUrl}' + NewLine + NewLine
+          + CustomMessage('ReadyPath') + NewLine;
   if MemoComponentsInfo <> '' then
     Result := Result + NewLine + MemoComponentsInfo + NewLine;
   if MemoDirInfo <> '' then
@@ -658,7 +789,8 @@ begin
     + RtfPar(CustomMessage('ReadyNo1')) + '\par '
     + RtfPar(CustomMessage('ReadyNo2')) + '\par \par '
     + RtfPar(CustomMessage('ReadyNote')) + '\par '
-    + RtfPar('{#SCAGitHubUrl}') + '\par ';
+    + RtfPar('{#SCAGitHubUrl}') + '\par \par '
+    + RtfPar(CustomMessage('ReadyPath')) + '\par ';
   if GMemoCompInfo <> '' then
     Result := Result + '\par ' + RtfPar(GMemoCompInfo) + '\par ';
   if GMemoDirInfo <> '' then
@@ -672,13 +804,20 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  // Silent-Gegenstueck zu PrepareToInstall: ein False beendet Setup ohne Dialog.
+  if (CurPageID = wpReady) and WizardSilent and IsDelphiIdeRunning then
+  begin
+    MeldeFehler(CustomMessage('IdeRunning'), True);
+    Result := False;
+    Exit;
+  end;
   if CurPageID <> wpSelectComponents then
     Exit;
   if not (WizardIsComponentSelected('d12')
        or WizardIsComponentSelected('d13')
        or WizardIsComponentSelected('d13x64')) then
   begin
-    MsgBox(CustomMessage('NoComponent'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('NoComponent'), WizardSilent);
     Result := False;
   end;
 end;
@@ -696,11 +835,33 @@ begin
     GReadyRich.Visible := False;
 end;
 
+// Upgrade von 0.9.18: die gespeicherte Auswahl kennt reDelphix noch nicht.
+// Inno uebernimmt bei Typ "custom" die alte Liste, die neue Komponente waere
+// dann womoeglich nicht vorgewaehlt. Eine echte Abwahl steht dagegen in der
+// Liste und bleibt unangetastet, /COMPONENTS= legt die Auswahl selbst fest.
+procedure WaehleRedelphixBeimUpgradeVor;
+var
+  Gewaehlt, Abgewaehlt: string;
+begin
+  if Pos('/COMPONENTS=', Uppercase(GetCmdTail)) > 0 then
+    Exit;
+  if not RegQueryStringValue(HKEY_CURRENT_USER, UNINSTALL_KEY,
+       'Inno Setup: Selected Components', Gewaehlt) then
+    Exit;
+  if not RegQueryStringValue(HKEY_CURRENT_USER, UNINSTALL_KEY,
+       'Inno Setup: Deselected Components', Abgewaehlt) then
+    Abgewaehlt := '';
+  if Pos('redelphix', Lowercase(Gewaehlt + ',' + Abgewaehlt)) = 0 then
+    WizardSelectComponents('redelphix');
+end;
+
 procedure InitializeWizard;
 var
   Btn: TNewButton;
   NextLeft: Integer;
 begin
+  WaehleRedelphixBeimUpgradeVor;
+
   // Ready-Memo: Inno-Default ist WordWrap AUS + horizontaler Scrollbalken -
   // die Hinweis-Saetze der Versions-Uebersicht liefen damit aus dem Bild
   // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen
@@ -749,108 +910,181 @@ begin
   Btn.OnClick := @StarButtonClick;
 end;
 
+// Meldung im Wizard; ein Silent-Lauf darf an keinem Dialog haengen bleiben,
+// dort steht der Text nur im Log.
+procedure Hinweis(const AText: string);
+begin
+  Log(AText);
+  if not WizardSilent then
+    MsgBox(AText, mbInformation, MB_OK);
+end;
+
 // Fremde SCA-Registrierungen eines Zweigs entfernen und den Nutzer
 // darueber unterrichten. Stillschweigend loeschen waere hier falsch: es
 // ist SEINE Dev-Registrierung, die verschwindet.
-procedure RaeumeFremdeRegistrierungen(const AKey, AInstalledPath: string);
+procedure RaeumeFremdeRegistrierungen(const AKey, AOrdner: string);
 var
   Foreign: TStringList;
   I: Integer;
-  N: string;
 begin
   Foreign := TStringList.Create;
   try
-    CollectForeignPluginEntries(AKey, AInstalledPath, Foreign);
+    CollectForeignPluginEntries(AKey, AOrdner, Foreign);
+    if Foreign.Count > 0 then
+      Hinweis(FmtMessage(CustomMessage('DevBplWarn'), [Foreign.Text, AKey]));
     for I := 0 to Foreign.Count - 1 do
-    begin
-      N := Foreign[I];
-      MsgBox(FmtMessage(CustomMessage('DevBplWarn'), [N]), mbInformation, MB_OK);
-      RegDeleteValue(HKEY_CURRENT_USER, AKey, N);
-    end;
+      RegDeleteValue(HKEY_CURRENT_USER, AKey, Foreign[I]);
   finally
     Foreign.Free;
   end;
 end;
 
-// Eine Variante restlos entfernen: Registrierung, Datei, Ordner.
+// Monolith-Werte eines Zweigs entfernen. Es zaehlt der Dateiname, nicht der
+// Pfad: GetIt schreibt seine Wertnamen re-tokenisiert als %Makro%\...bpl.
+procedure EntferneMonolithWerte(const AKey: string; Treffer: TStringList);
+var
+  Names: TArrayOfString;
+  I: Integer;
+begin
+  if RegGetValueNames(HKEY_CURRENT_USER, AKey, Names) then
+    for I := 0 to GetArrayLength(Names) - 1 do
+      if CompareText(ExtractFileName(Names[I]), MONOLITH_BPL_NAME) = 0 then
+      begin
+        RegDeleteValue(HKEY_CURRENT_USER, AKey, Names[I]);
+        if Treffer.IndexOf(Names[I]) < 0 then
+          Treffer.Add(Names[I]);
+      end;
+end;
+
+procedure EntferneDatei(const APfad: string);
+begin
+  if FileExists(APfad) then
+    DeleteFile(APfad);
+end;
+
+// Upgrade-Bereinigung vom Monolithen bis 0.9.18, ueber ALLE drei Schienen,
+// auch abgewaehlte: er enthaelt dieselben Units wie der Paketsatz, und ein
+// uebersehener Rest legt die IDE beim Start lahm. Die Datei eines GetIt-Pakets
+// bleibt im Katalog liegen, sie gehoert GetIt; unsere eigene wird geloescht.
+procedure RaeumeMonolith;
+var
+  Treffer: TStringList;
+begin
+  Treffer := TStringList.Create;
+  try
+    EntferneMonolithWerte(KNOWN_PACKAGES_23, Treffer);
+    EntferneMonolithWerte(DISABLED_PACKAGES_23, Treffer);
+    EntferneMonolithWerte(KNOWN_PACKAGES_37, Treffer);
+    EntferneMonolithWerte(DISABLED_PACKAGES_37, Treffer);
+    EntferneMonolithWerte(KNOWN_PACKAGES_37X64, Treffer);
+    EntferneMonolithWerte(DISABLED_PKGS_37X64, Treffer);
+    EntferneDatei(BplPfad('d12', MONOLITH_BPL_NAME));
+    EntferneDatei(BplPfad('d13', MONOLITH_BPL_NAME));
+    EntferneDatei(BplPfad('d13x64', MONOLITH_BPL_NAME));
+    if Treffer.Count > 0 then
+      Hinweis(FmtMessage(CustomMessage('MonolithWarn'), [Treffer.Text]));
+  finally
+    Treffer.Free;
+  end;
+end;
+
+procedure EntferneRegistrierung(const APfad, AKnownKey, ADisabledKey: string);
+begin
+  RegDeleteValue(HKEY_CURRENT_USER, AKnownKey, APfad);
+  RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, APfad);
+end;
+
+procedure EntferneRegistrierungen(const AOrdner, AKnownKey, ADisabledKey: string);
+begin
+  EntferneRegistrierung(BplPfad(AOrdner, IDE_BPL_NAME), AKnownKey, ADisabledKey);
+  EntferneRegistrierung(BplPfad(AOrdner, RDX_BPL_NAME), AKnownKey, ADisabledKey);
+  EntferneRegistrierung(BplPfad(AOrdner, MONOLITH_BPL_NAME), AKnownKey, ADisabledKey);
+end;
+
+// Eine Variante restlos entfernen: Registrierung, Override-Segment, Dateien,
+// Ordner.
 //
 // WOZU: Inno installiert eine abgewaehlte Komponente nicht - es entfernt
 // sie aber auch NICHT, wenn sie aus einem frueheren Lauf noch daliegt.
 // Wer das Setup erneut startet und eine Delphi-Version aushakt, haette
 // sonst weiterhin BPL und Registry-Eintrag: abgewaehlt waere nicht
 // deinstalliert, und die IDE wuerde das Plugin weiter laden.
-procedure EntferneVariante(const AOrdner, AKnownKey, ADisabledKey: string);
-var
-  Datei, Ordner: string;
+procedure EntferneVariante(const AOrdner, ASuffix, AKnownKey, ADisabledKey,
+  AEnvKey: string);
 begin
-  Ordner := ExpandConstant('{app}\bpl\') + AOrdner;
-  Datei  := AddBackslash(Ordner) + PLUGIN_BPL_NAME;
-  // Registry zuerst, Datei danach - dieselbe Reihenfolge wie bei der
+  // Registry zuerst, Dateien danach - dieselbe Reihenfolge wie bei der
   // Deinstallation. Eine registrierte, aber fehlende BPL laesst die IDE
   // bei jedem Start scheitern.
-  RegDeleteValue(HKEY_CURRENT_USER, AKnownKey, Datei);
-  RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, Datei);
-  if FileExists(Datei) then
-    DeleteFile(Datei);
-  RemoveDir(Ordner);       // wirkt nur, wenn leer - genau so gewollt
+  EntferneRegistrierungen(AOrdner, AKnownKey, ADisabledKey);
+  EntferneOverrideSegment(AEnvKey, AOrdner);
+  EntferneDatei(BplPfad(AOrdner, IDE_BPL_NAME));
+  EntferneDatei(BplPfad(AOrdner, RDX_BPL_NAME));
+  EntferneDatei(BplPfad(AOrdner, 'SCA.SharedUI' + ASuffix + '.bpl'));
+  EntferneDatei(BplPfad(AOrdner, 'SCA.Engine' + ASuffix + '.bpl'));
+  RemoveDir(SchienenOrdner(AOrdner));   // wirkt nur, wenn leer - genau so gewollt
 end;
 
-// Einen Disabled-Eintrag abraeumen. Hatte der Nutzer das Plugin frueher
-// per "Can't load package -> Nein" deaktiviert, blockiert der Eintrag
-// eine frische Installation stumm.
-procedure LoeseBlockade(const AOrdner, ADisabledKey: string);
-var
-  Datei: string;
+// Eine angehakte Schiene fertigstellen; Dateien und Known-Packages-Werte hat
+// Inno zu diesem Zeitpunkt schon geschrieben.
+procedure RichteSchieneEin(const AOrdner, AKnownKey, ADisabledKey, AEnvKey: string);
 begin
-  Datei := ExpandConstant('{app}\bpl\' + AOrdner + '\') + PLUGIN_BPL_NAME;
-  if RegValueExists(HKEY_CURRENT_USER, ADisabledKey, Datei) then
-    RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, Datei);
+  // Abwahl von reDelphix: die Schiene bleibt, das Segment auch (Engine und
+  // SharedUI brauchen es weiter).
+  if not WizardIsComponentSelected('redelphix') then
+  begin
+    EntferneRegistrierung(BplPfad(AOrdner, RDX_BPL_NAME), AKnownKey, ADisabledKey);
+    EntferneDatei(BplPfad(AOrdner, RDX_BPL_NAME));
+  end;
+
+  // Override VOR jeder Bereinigung: ohne ihn laedt der Paketsatz nicht, und
+  // eine Dev-Registrierung waere dann der einzige lauffaehige Stand.
+  if not SetzeOverrideSegment(AEnvKey, AOrdner) then
+  begin
+    MeldeFehler(FmtMessage(CustomMessage('OverrideFail'), [AEnvKey]), WizardSilent);
+    Exit;
+  end;
+
+  // Koexistenz-Check, aber NUR fuer angehakte Komponenten. Einen Registry-
+  // Zweig, den wir gar nicht bespielen, fasst das Setup nicht an - dort darf
+  // der Nutzer seinen Dev-Satz behalten.
+  RaeumeFremdeRegistrierungen(AKnownKey, AOrdner);
+
+  // Disabled-Packages-Bereinigung: hatte der User ein Paket frueher per
+  // "Can't load package -> Nein" deaktiviert (IDE-Selbstheilung), bliebe
+  // der Disabled-Eintrag bestehen und wuerde die frische Installation
+  // stumm blockieren.
+  RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, BplPfad(AOrdner, IDE_BPL_NAME));
+  RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, BplPfad(AOrdner, RDX_BPL_NAME));
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  InstalledPath, N: string;
-  Foreign: TStringList;
-  I: Integer;
 begin
-  if CurStep = ssPostInstall then
-  begin
-    // 0) Abgewaehlte Varianten entfernen - siehe EntferneVariante.
-    if not WizardIsComponentSelected('d12') then
-      EntferneVariante('d12', KNOWN_PACKAGES_23, DISABLED_PACKAGES_23);
-    if not WizardIsComponentSelected('d13') then
-      EntferneVariante('d13', KNOWN_PACKAGES_37, DISABLED_PACKAGES_37);
-    if not WizardIsComponentSelected('d13x64') then
-      EntferneVariante('d13x64', KNOWN_PACKAGES_37X64, DISABLED_PKGS_37X64);
+  if CurStep <> ssPostInstall then
+    Exit;
 
-    InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
+  RaeumeMonolith;
 
-    // 1) Koexistenz-Check je Schiene, aber NUR fuer angehakte Komponenten.
-    //    Einen Registry-Zweig, den wir gar nicht bespielen, fasst das Setup
-    //    nicht an - dort darf der Nutzer seinen Dev-Satz behalten.
-    if WizardIsComponentSelected('d12') then
-      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_23,
-        ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME);
-    if WizardIsComponentSelected('d13') then
-      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_37,
-        ExpandConstant('{app}\bpl\d13\') + PLUGIN_BPL_NAME);
-    if WizardIsComponentSelected('d13x64') then
-      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_37X64,
-        ExpandConstant('{app}\bpl\d13x64\') + PLUGIN_BPL_NAME);
+  if WizardIsComponentSelected('d12') then
+    RichteSchieneEin('d12', KNOWN_PACKAGES_23, DISABLED_PACKAGES_23, ENV_VARS_23)
+  else
+    EntferneVariante('d12', SUFFIX_D12, KNOWN_PACKAGES_23,
+      DISABLED_PACKAGES_23, ENV_VARS_23);
 
-    // 2) Disabled-Packages-Bereinigung: hatte der User das Plugin frueher per
-    //    "Can't load package -> Nein" deaktiviert (IDE-Selbstheilung), bliebe
-    //    der Disabled-Eintrag bestehen und wuerde die frische Installation
-    //    stumm blockieren.
-    if RegValueExists(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath) then
-      RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
-    // Dasselbe fuer die beiden D13-Schienen - bisher gab es das nur fuer
-    // D12, obwohl die IDE dort genauso deaktiviert.
-    if WizardIsComponentSelected('d13') then
-      LoeseBlockade('d13', DISABLED_PACKAGES_37);
-    if WizardIsComponentSelected('d13x64') then
-      LoeseBlockade('d13x64', DISABLED_PKGS_37X64);
-  end;
+  // d13x64 VOR d13: beide teilen sich EINEN Override, jedes Einsetzen landet
+  // vorn, also steht d13 am Ende vor d13x64 - wie Bpl vor Bpl\Win64 im System-
+  // PATH. Beide Loader ueberspringen die falsche Bitbreite (gemessen), die
+  // feste Folge haelt nur den Wert stabil.
+  if WizardIsComponentSelected('d13x64') then
+    RichteSchieneEin('d13x64', KNOWN_PACKAGES_37X64, DISABLED_PKGS_37X64, ENV_VARS_37)
+  else
+    EntferneVariante('d13x64', SUFFIX_D13, KNOWN_PACKAGES_37X64,
+      DISABLED_PKGS_37X64, ENV_VARS_37);
+
+  if WizardIsComponentSelected('d13') then
+    RichteSchieneEin('d13', KNOWN_PACKAGES_37, DISABLED_PACKAGES_37, ENV_VARS_37)
+  else
+    EntferneVariante('d13', SUFFIX_D13, KNOWN_PACKAGES_37,
+      DISABLED_PACKAGES_37, ENV_VARS_37);
 end;
 
 function InitializeUninstall: Boolean;
@@ -858,42 +1092,25 @@ begin
   Result := True;
   if IsDelphiIdeRunning then
   begin
-    MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
+    MeldeFehler(CustomMessage('IdeRunning'), UninstallSilent);
     Result := False;
   end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  InstalledPath: string;
-  InstalledPathD13: string;
 begin
   // usUninstall feuert VOR dem Loeschen der Dateien -> hier raeumen wir die
   // Registry-Werte explizit (Doku-Grundsatz "Registry vor Dateien"), auch wenn
   // uninsdeletevalue dieselbe Reihenfolge bereits garantiert (Gurt+Hosentraeger,
-  // deckt zudem manuell verschobene/duplizierte Eintraege ab).
+  // deckt zudem manuell verschobene/duplizierte Eintraege ab). Alle Schienen,
+  // unabhaengig von der Auswahl - loeschen, was nicht existiert, ist folgenlos.
   if CurUninstallStep = usUninstall then
   begin
-    InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
-    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, InstalledPath);
-    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
-    // D13, beide IDE-Bitness-Schienen. Gurt und Hosentraeger neben
-    // uninsdeletevalue - loeschen, was nicht existiert, ist folgenlos.
-    InstalledPathD13 := ExpandConstant('{app}\bpl\d13\') + PLUGIN_BPL_NAME;
-    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_37, InstalledPathD13);
-    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_37, InstalledPathD13);
-    InstalledPathD13 := ExpandConstant('{app}\bpl\d13x64\') + PLUGIN_BPL_NAME;
-    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_37X64, InstalledPathD13);
-    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PKGS_37X64, InstalledPathD13);
-#ifndef SCA_MONOLITH
-    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));
-    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.SharedUI.bpl'));
-    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));
-    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.SharedUI.bpl'));
-#endif
+    EntferneOverrideSegment(ENV_VARS_23, 'd12');
+    EntferneOverrideSegment(ENV_VARS_37, 'd13');
+    EntferneOverrideSegment(ENV_VARS_37, 'd13x64');
+    EntferneRegistrierungen('d12', KNOWN_PACKAGES_23, DISABLED_PACKAGES_23);
+    EntferneRegistrierungen('d13', KNOWN_PACKAGES_37, DISABLED_PACKAGES_37);
+    EntferneRegistrierungen('d13x64', KNOWN_PACKAGES_37X64, DISABLED_PKGS_37X64);
   end;
 end;

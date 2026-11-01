@@ -56,9 +56,9 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>17</VerInfo_Release>
+        <VerInfo_Release>19</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin, Monolith);FileVersion=0.9.18.0;InternalName=StaticCodeAnalyser.Plugin;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.Plugin.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.18.0;Comments=Release 0.9.18 (2026-09-10)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin, Monolith);FileVersion=0.9.19.0;InternalName=StaticCodeAnalyser.Plugin;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.Plugin.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.19.0;Comments=Release 0.9.19</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
@@ -68,9 +68,9 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>17</VerInfo_Release>
+        <VerInfo_Release>19</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin, Monolith);FileVersion=0.9.18.0;InternalName=StaticCodeAnalyser.Plugin;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.Plugin.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.18.0;Comments=Release 0.9.18 (2026-09-10)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin, Monolith);FileVersion=0.9.19.0;InternalName=StaticCodeAnalyser.Plugin;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.Plugin.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.19.0;Comments=Release 0.9.19</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">

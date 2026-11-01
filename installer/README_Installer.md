@@ -10,22 +10,22 @@ Klick öffnet den Standard-Browser, das Setup selbst bleibt netzfrei):
   `/DSCADonateUrl=...` überschreibbar, leer = Button ausgeblendet)
 - **Star on GitHub** → `https://github.com/nrodear/StaticCodeAnalyser`
 
-**Unterstützungs-Matrix Delphi-IDE-Versionen** (Stand 2026-08-23;
+**Unterstützungs-Matrix Delphi-IDE-Versionen** (Stand 0.9.19;
 BPLs sind compiler-versionsgebunden — eine D12-BPL lädt NUR in BDS 23.0):
 
-| Delphi | BDS | IDE-Bitness | Plugin-BPL | Registry-Schlüssel (HKCU) | Setup-Stand |
+| Delphi | BDS | IDE-Bitness | Paketsatz (vier BPLs) | Registry-Schlüssel (HKCU) | Setup-Stand |
 |---|---|---|---|---|---|
 | ≤ 11 Alexandria | ≤ 22.0 | 32-bit | — | — | **NICHT unterstützt** (bewusste Entscheidung: Editor-Integration nutzt die RAD-Studio-12-ToolsAPI; D11 im Konzept 2026-07-23 abgelehnt) |
-| 12.0–12.2 Athens | 23.0 | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32) | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT — aktueller Release-Weg** |
-| 12.3 Athens | 23.0 | 32-bit-IDE | dieselbe Win32-BPL | wie oben | **UNTERSTÜTZT** (die 32-bit-IDE von 12.3 ist identisch registriert) |
+| 12.0–12.2 Athens | 23.0 | 32-bit | `SCA.Engine290`, `SCA.SharedUI290`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12` (Win32), Ziel `{app}\bpl\d12` | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT** |
+| 12.3 Athens | 23.0 | 32-bit-IDE | dieselben Win32-BPLs | wie oben | **UNTERSTÜTZT** (die 32-bit-IDE von 12.3 ist identisch registriert) |
 | 12.x Athens | 23.0 | **64-bit-IDE** | — | — | **GIBT ES NICHT.** Delphi 12 bringt keine 64-bit-IDE mit: kein `23.0\bin64\bds.exe`, keine `dcl*`-BPL in `bin64`, und `designide` existiert nur für Win32 (`23.0\lib\win64\release` hat 96 DCPs, designide ist keines davon). Ein Win64-Entwurfszeitpaket lässt sich dort nicht einmal bauen. Der frühere `/DSCA_D12_X64`-Zweig ist am 2026-08-23 entfernt worden |
-| 13 Florence | **37.0** (Nummernsprung!) | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32), Ziel `{app}\bpl\d13` | `...\BDS\37.0\Known Packages` | **UNTERSTÜTZT** seit 0.9.17 |
-| 13 Florence | 37.0 | **64-bit-IDE** | dieselbe .dpk, Win64 gebaut, Ziel `{app}\bpl\d13x64` | `...\BDS\37.0\Known Packages x64` | **UNTERSTÜTZT** seit 0.9.17. Unterschieden wird über den Zielordner, nicht über den Dateinamen — EIN Projektsatz baut beide Generationen |
+| 13 Florence | **37.0** (Nummernsprung!) | 32-bit | `SCA.Engine370`, `SCA.SharedUI370`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12` (Win32), Ziel `{app}\bpl\d13` | `...\BDS\37.0\Known Packages` | **UNTERSTÜTZT** seit 0.9.17 |
+| 13 Florence | 37.0 | **64-bit-IDE** | dieselben Dateinamen, Win64 gebaut, Ziel `{app}\bpl\d13x64` | `...\BDS\37.0\Known Packages x64` | **UNTERSTÜTZT** seit 0.9.17. Unterschieden wird über den Zielordner, nicht über den Dateinamen — EIN Projektsatz baut beide Generationen |
 
 Warum keine älteren Versionen: neben der ToolsAPI-Grenze ist jede BPL an
 ihre Compiler-Version gebunden — Unterstützung einer weiteren Delphi-
-Version heißt immer: eigener Projektsatz, eigener Build, eigene
-Registry-Schiene. Ungetestete Schienen werden nicht ins Setup
+Version heißt immer: eigener Build, eigene Registry-Schiene, eigener
+Ordner im IDE-PATH. Ungetestete Schienen werden nicht ins Setup
 aufgenommen (lieber ehrlich „nicht unterstützt" als still kaputt).
 
 
@@ -36,70 +36,100 @@ aufgenommen (lieber ehrlich „nicht unterstützt" als still kaputt).
 
 ## 1. Was zu bauen ist (in der IDE — kein msbuild/dcc32, kein RemoteDelphi)
 
-Ziel-IDE: **Delphi 12 (BDS 23.0), Plattform Win32, Konfiguration Release**.
+Ausgeliefert wird seit 0.9.19 der **Paketsatz**, den auch der Dev-Bau erzeugt:
+vier Pakete auf drei Schienen, zusammen 12 BPLs, Konfiguration **Release**.
 
-### Variante A — Release-Ziel (Default seit 2026-08-14)
+Je Schiene in dieser Reihenfolge bauen:
 
-Monolith-Package `StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d12.dpk`
-(+ .dproj; requires nur `rtl, vcl, vclwinx, designide, xmlrtl`; enthaelt
-ALLE 268 Units von Engine + SharedUI + IDE). In der IDE als
-**Release/Win32** bauen — die BPL landet im D12-Standard-BPL-Ordner.
-`SCA_MONOLITH` ist im `.iss` seit 2026-08-14 AKTIV (Release-Default).
-WICHTIG: Die Monolith-BPL nie zusammen mit dem Dev-3-Package-Satz in
-derselben IDE registrieren (gleiche Units doppelt) — auf der Dev-Maschine
-bleibt der 3er-Satz, die Monolith-BPL wird nur GEBAUT, nicht registriert;
-der Installer-Koexistenz-Check schuetzt Endanwender-Maschinen.
+| # | Projekt | erzeugte BPL | Art |
+|---|---------|--------------|-----|
+| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine<suffix>.bpl` | Laufzeitpaket (`{$RUNONLY}`) |
+| 2 | `SCA.SharedUI\SCA.SharedUI.dproj` | `SCA.SharedUI<suffix>.bpl` | Laufzeitpaket (`{$RUNONLY}`), requires Engine |
+| 3 | `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj` | `StaticCodeAnalyser.IDE.d12.bpl` | Design-Paket, requires Engine + SharedUI |
+| 4 | `reDelphix\reDelphix.d12.dproj` | `reDelphix.d12.bpl` | Design-Paket, requires Engine |
 
-Warum Monolith: der Windows-Loader loest `requires` per Modulname ueber
-bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis.
-Drei separate BPLs in einem privaten Installationsordner sind daher nicht
-direkt ladbar.
+Die drei Schienen, BPL-Ausgabeort jeweils unter
+`C:\Users\Public\Documents\Embarcadero\Studio\`:
 
-Das Setup liefert reDelphix nicht mit: das Paket linkt gegen `SCA.Engine`
-und lässt sich neben dem Monolithen nicht laden. Wer es nutzt, baut den
-Dev-Satz selbst (`HowTo_Build.md`, Abschnitt 5.3); ein Setup-Lauf ersetzt
-dessen Registrierung.
+| Schiene | IDE | Suffix | BPL-Ausgabeort | ISCC-Define |
+|---|---|---|---|---|
+| D12 Win32 | Delphi 12 (BDS 23.0) | `290` | `23.0\Bpl` | `SCABplSourceDir` |
+| D13 Win32 | Delphi 13 (BDS 37.0) | `370` | `37.0\Bpl` | `SCABplSourceDirD13` |
+| D13 Win64 | Delphi 13 (BDS 37.0) | `370` | `37.0\Bpl\Win64` | `SCABplSourceDirD13X64` |
 
-### Variante B — Dev-3-BPL-Satz (nur noch per Kommandozeile ohne SCA_MONOLITH)
+EIN Projektsatz baut alle drei Schienen, dieselben `.dproj` in beiden IDEs;
+auch `d12` im Namen der Design-Pakete gilt fuer beide Generationen. Die dproj
+setzen **kein** `DCC_BplOutput`, die BPLs landen im Standardordner der
+jeweiligen IDE (genau dorthin zeigen die `.iss`-Defaults). Win64 unter Delphi
+12 faengt `{$MESSAGE FATAL}` in beiden Design-dpk ab.
 
-Der Dev-3-Package-Satz, in dieser Reihenfolge in der IDE bauen (Release/Win32):
+**Nach dem Merge aus dem Release-Checkout bauen.** `package-release.ps1` nimmt
+Gates, Quellen und EXEs aus dem Checkout, in dem es liegt, und
+`tools\stale_artifacts_check.py --release` bricht ab, sobald dort eine Quelle
+juenger ist als ihr DCP. Ein Bau vor dem Merge oder aus einem anderen Worktree
+zeigt ausserdem nicht den Stand, der getaggt wird.
 
-| # | Projekt | dpk | erzeugte BPL |
-|---|---------|-----|--------------|
-| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine.dpk` | `SCA.Engine290.bpl` |
-| 2 | `SCA.SharedUI\SCA.SharedUI.dpk` | `SCA.SharedUI.dpk` | `SCA.SharedUI290.bpl` |
-| 3 | `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj` | `StaticCodeAnalyser.IDE.d12.dpk` | `StaticCodeAnalyser.IDE.d12.bpl` |
+### Warum der Paketsatz einen eigenen Ladeweg braucht
 
-BPL-Ausgabeort: die dproj setzt **kein** `DCC_BplOutput` → die BPLs landen im
-D12-Standardordner `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl`
-(genau dorthin zeigt der `.iss`-Default `SCABplSourceDir`).
+Der Windows-Loader loest `requires` per Modulname ueber
+bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis, und
+ein `{$RUNONLY}`-Paket darf nicht in die Known Packages. Deshalb stehen nur die
+beiden Design-BPLs dort (voller Pfad), und das Setup legt `{app}\bpl\<schiene>`
+vorn in den IDE-eigenen Override
+`HKCU\Software\Embarcadero\BDS\<bds>\Environment Variables\PATH`. Gemessen: die
+IDE uebernimmt ihn vor dem Laden der Known Packages, auch `bin64\bds.exe`, und
+beide Loader ueberspringen gleichnamige BPLs der falschen Bitbreite.
 
-Der `.iss` registriert in Variante B **alle drei** BPLs mit vollem Pfad in
-`Known Packages`; die IDE laedt Engine/SharedUI dadurch selbst, bevor die
-Plugin-BPL ihre `requires` aufloest (Registry-Enumeration ist pfad-
-alphabetisch: `SCA.*` vor `StaticCodeAnalyser.*`). Das ist eine dokumentierte
-**Uebergangsloesung** — Release-Kanal bleibt die Monolith-BPL.
+Bis 0.9.18 ging das Setup diesen Weg nicht und lieferte den Monolithen
+`StaticCodeAnalyser.Plugin.d12` (eine BPL mit den Units von Engine, SharedUI und
+IDE-Paket, ohne reDelphix). Der liegt noch im Repo, gehoert aber nicht mehr zum
+Release. Das Setup kennt ihn nur noch, um Reste zu entfernen (Abschnitt 3);
+`monolith_parity_gate.py` und der Pfad `-SkipGetIt:$false` sind Altlast fuer
+Entwickler.
 
 ### Vor dem Release (Checkliste aus der Doku)
 
 - **Versions-Sync** (Doku Punkt 3): `uSCAConsts.SCA_VERSION`,
-  `uIDEExpert.PLUGIN_VERSION`, dproj-`VerInfo` synchronisieren (der
+  `uIDEExpert.PLUGIN_VERSION`, dproj-`VerInfo` synchronisieren, bei den vier
+  Paket-dproj je Win32 UND Win64, Keys und numerische Felder (der
   fruehere 0/9/4-vs-0.9.8.0-Drift ist historisch, seit 0.9.10 behoben);
   danach `#define SCAVersion` im `.iss` nachziehen.
+  `tools\package_set_gate.py --version <v>` prueft die Paket-dproj.
 - Verwaisten `SCA.Refactor.bpl`-Eintrag in der Dev-Registry bereinigen
-  (Doku Punkt 4) — der Koexistenz-Check des Setups fasst nur Plugin-BPL-Namen an.
-- Frischeste-Binaries-Check: User wechselt Win32/Win64 — sicherstellen, dass
-  die neueste BPL wirklich aus einem Win32-Release-Build stammt.
+  (Doku Punkt 4) — der Koexistenz-Check des Setups fasst nur die SCA-Familie
+  an (Abschnitt 3), `SCA.Refactor` gehoert nicht dazu.
+- Frischeste-Binaries-Check: User wechselt Win32/Win64 — gleichnamige BPLs
+  unterscheidet nur der Ordner. `package-release.ps1` prueft deshalb je BPL
+  die PE-Machine.
 
 ## 2. Inno-Compile-Schritt
 
 Voraussetzung: **Inno Setup 6.x** (ISCC.exe im PATH oder voller Pfad).
 
 **Regelweg seit 2026-08-14: `tools\package-release.ps1` baut das Setup
-mit** (Schritt "setup": prueft die BPL-VERSIONINFO gegen die Release-
-Version, ruft ISCC mit `/DSCAVersion=<Version>.0` und legt
-`StaticCodeAnalyserSetup-<Version>.0.exe` zu den uebrigen Assets in
-`release-artifacts\`; Opt-out per `-SkipInstaller`).
+mit** (Schritt "setup": ruft ISCC mit `/DSCAVersion=<Version>.0` und den drei
+Quellordnern und legt `StaticCodeAnalyserSetup-<Version>.0.exe` zu den
+uebrigen Assets in `release-artifacts\`).
+
+Vorbedingungen, die vor jedem Dateizugriff laufen. Das Skript sammelt alle
+Befunde und bricht erst dann ab; angelegt oder geraeumt ist bis dahin nichts:
+
+- `tools\package_set_gate.py --version <Version>`: jede Unit in genau einem
+  Paket, requires-Graph, Pakettyp in `.dpk` und `.dproj`, LIBSUFFIX nur an
+  RUNONLY-Paketen, Plattformen + Win64-Sperre, VerInfo == Release-Version.
+- `tools\stale_artifacts_check.py --release`: jedes DCP der vier Pakete auf
+  den drei Schienen ist juenger als seine Quelle.
+- Je BPL der 12: vorhanden, VERSIONINFO als Text und als Zahlen gleich der
+  Release-Version, PE-Machine passend zur Schiene (014C bzw. 8664).
+
+Schalter:
+
+- `-DryRun`: nur diese Vorbedingungen, danach Ende. Die EXEs prueft erst der
+  echte Lauf.
+- `-SkipInstaller`: laesst den Setup-Schritt und die Vorbedingungen aus.
+- `-SkipGetIt` ist Default, GetIt ist fuer 0.9.19 ausgesetzt
+  (`getit\README_GetIt.md`). `-SkipGetIt:$false` nimmt den Monolithen, braucht
+  dessen gebaute BPL und ist kein Releaseweg.
 
 Hand-Compile weiterhin moeglich:
 
@@ -111,11 +141,9 @@ iscc StaticCodeAnalyserSetup.iss
 Optionen:
 
 ```bat
-:: abweichender BPL-Quellordner (z. B. dedizierter Release-Staging-Ordner):
-iscc /DSCABplSourceDir="D:\release\bpl" StaticCodeAnalyserSetup.iss
-
-:: Monolith-Variante, sobald StaticCodeAnalyser.Plugin.d12.bpl existiert:
-iscc /DSCA_MONOLITH StaticCodeAnalyserSetup.iss
+:: abweichende BPL-Quellordner (z. B. dedizierter Release-Staging-Ordner):
+iscc /DSCABplSourceDir="D:\release\d12" /DSCABplSourceDirD13="D:\release\d13" ^
+     /DSCABplSourceDirD13X64="D:\release\d13x64" StaticCodeAnalyserSetup.iss
 ```
 
 Output: `installer\Output\StaticCodeAnalyserSetup-<Version>.exe`.
@@ -129,37 +157,88 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 ## 3. Was der Installer tut
 
 - **Per-User, nie elevated** (`PrivilegesRequired=lowest`): Dateien nach
-  `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\<variante>\`, Registrierung
+  `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\<schiene>\`, Registrierung
   unter `HKCU\Software\Embarcadero\BDS\<gen>\Known Packages` (Wertname =
-  voller BPL-Pfad, Wertdaten nie leer). Drei Ziele seit 0.9.17:
+  voller BPL-Pfad, Wertdaten nie leer). Drei Ziele seit 0.9.17, je Ziel vier
+  BPLs seit 0.9.19:
 
-  | Variante | Datei nach | Registry-Zweig |
-  |---|---|---|
-  | Delphi 12, 32-Bit-IDE | `bpl\d12` | `BDS\23.0\Known Packages` |
-  | Delphi 13, 32-Bit-IDE | `bpl\d13` | `BDS\37.0\Known Packages` |
-  | Delphi 13, 64-Bit-IDE | `bpl\d13x64` | `BDS\37.0\Known Packages x64` |
+  | Schiene | Dateien nach | Registry-Zweig | PATH-Override |
+  |---|---|---|---|
+  | Delphi 12, 32-Bit-IDE | `bpl\d12` | `BDS\23.0\Known Packages` | `BDS\23.0\Environment Variables`, Wert `PATH` |
+  | Delphi 13, 32-Bit-IDE | `bpl\d13` | `BDS\37.0\Known Packages` | `BDS\37.0\Environment Variables`, Wert `PATH` |
+  | Delphi 13, 64-Bit-IDE | `bpl\d13x64` | `BDS\37.0\Known Packages x64` | derselbe Wert wie die 32-Bit-IDE |
+
+  In den Known Packages stehen nur `StaticCodeAnalyser.IDE.d12.bpl` und
+  `reDelphix.d12.bpl`, nie die Laufzeitpakete.
+- **IDE-PATH-Override**: das Setup setzt `{app}\bpl\<schiene>` vorn in den
+  Wert. Er ist geteilt (InterBase traegt dort z. B. `...\IDE_spoof;$(PATH)`):
+  nur das eigene Segment wird bewegt, alles andere bleibt Zeichen fuer
+  Zeichen. Das Segment wird immer entnommen und vorn eingesetzt, eine
+  Doppelinstallation aendert den Wert also nicht. Fehlt der Wert in HKCU, ist
+  die Vorlage der Delphi-Installation der Ausgangswert
+  (`HKLM\SOFTWARE\WOW6432Node\Embarcadero\BDS\<bds>\Environment Variables\PATH`,
+  also die 32-Bit-Sicht); der neue HKCU-Wert uebernimmt ihre Segmente, HKLM
+  selbst bleibt unberuehrt. Fehlt auch sie, entsteht `<segment>;$(PATH)`. Unter
+  BDS 37.0 teilen sich beide Schienen den Wert, `bpl\d13` steht vor
+  `bpl\d13x64`. Der Override wird VOR der Koexistenz-Bereinigung geschrieben.
+  Scheitert das, meldet das Setup es, im Silent-Lauf im Log, und laesst die
+  Dev-Registrierungen dieser Schiene stehen: ohne den Eintrag laedt das Plugin
+  beim IDE-Start nicht.
+- **reDelphix als eigene Komponente** (`redelphix`): vorgewaehlt, abwaehlbar,
+  gilt fuer alle gewaehlten Schienen; das IDE-Paket haengt nicht davon ab.
+  Die Abwahl entfernt je Schiene die Registrierung (Known + Disabled) und
+  `reDelphix.d12.bpl`, Laufzeitpakete und Override bleiben. Kennt die von Inno
+  gespeicherte Auswahl reDelphix noch nicht (Upgrade von 0.9.18), waehlt das
+  Setup es vor; eine echte Abwahl aus einem spaeteren Lauf bleibt bestehen, und
+  `/COMPONENTS=` auf der Kommandozeile legt die Auswahl selbst fest.
+- **Monolith-Bereinigung beim Upgrade**: Reste von
+  `StaticCodeAnalyser.Plugin.d12.bpl` aus einer Installation bis 0.9.18 werden
+  entfernt, die Known- und Disabled-Werte aller drei Zweige, auch abgewaehlter,
+  und die Datei im eigenen `bpl\<schiene>`. Es zaehlt der Dateiname, nicht der
+  Pfad; so faellt auch die Registrierung eines GetIt-Pakets mit
+  `%Makro%`-Wertnamen. Dessen Dateien im GetIt-Katalog bleiben liegen.
+  Treffer meldet das Setup in einem Hinweis.
 
 - **Versionsauswahl auf einer eigenen Wizard-Seite**: Das Setup listet nur
   die Varianten, deren IDE es auf dem Rechner tatsaechlich findet - jeder
   `[Components]`-Eintrag traegt eine `Check:`-Bedingung. Installiert wird
   ausschliesslich das Angehakte. Wer eine zuvor installierte Variante
-  aushakt, wird sie los: Registrierung, Datei, Ordner - in dieser
-  Reihenfolge. Eine leere Auswahl blockt `NextButtonClick` mit Meldung ab,
-  statt ein Setup ohne Wirkung durchlaufen zu lassen.
-- **IDE-Prozess-Check** vor Install und Uninstall (TAppBuilder-Fenster).
-- **Koexistenz-Check, je Registry-Zweig einzeln**: eine vorhandene
-  Dev-Registrierung derselben Plugin-BPL unter anderem Pfad wird gemeldet
-  und entfernt (verhindert Doppel-Laden). Geprueft wird nur in den Zweigen
+  aushakt, wird sie los: Registrierung, Override-Segment, Dateien, Ordner -
+  in dieser Reihenfolge. Eine Auswahl ohne Delphi-Version blockt
+  `NextButtonClick` mit Meldung ab, statt ein Setup ohne Wirkung durchlaufen
+  zu lassen.
+- **IDE-Prozess-Check** (TAppBuilder-Fenster) beim Start von Setup und
+  Uninstall und noch einmal unmittelbar vor dem Schreiben: `PrepareToInstall`
+  stoppt das Setup auf der Vorbereiten-Seite, wenn die IDE erst waehrend des
+  Wizards gestartet wurde. Im Silent-Lauf zeigt Inno diesen Text als Dialog
+  (gemessen), dort endet das Setup deshalb schon beim simulierten Weiter der
+  Ready-Seite, ohne Dialog und mit dem Text im Log.
+- **Koexistenz-Check, je Registry-Zweig einzeln**: eine Registrierung der
+  SCA-Familie (`SCA.Engine*` und `SCA.SharedUI*` mit oder ohne Versionssuffix,
+  `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`, Monolith) unter anderem Pfad
+  wird gemeldet und entfernt (verhindert Doppel-Laden). Wer nach der
+  Deinstallation wieder einen eigenen Bau nutzt, traegt ihn neu ein
+  (`HowTo_Build.md`, 5.2 und 5.3). Geprueft wird nur in den Zweigen
   angehakter Varianten - einen Zweig, den das Setup gar nicht bespielt,
   fasst es auch nicht an. *Bis 2026-08-23 lief dieser Check fest gegen
   `BDS\23.0` und sah die D13-Schiene deshalb nicht; genau daran ist das
   Plugin unter Delphi 13 gescheitert.*
 - **Disabled-Packages-Bereinigung**: ein frueherer "Can't load package →
-  Nein"-Eintrag wuerde die frische Installation sonst stumm blockieren.
+  Nein"-Eintrag wuerde die frische Installation sonst stumm blockieren. Gilt
+  fuer beide Design-BPLs.
+- **Meldungen im Silent-Lauf**: Koexistenz-, Monolith- und Override-Meldungen
+  stehen dort nur im Log, ebenso die Abbrueche von Setup und Uninstall (keine
+  unterstuetzte IDE, IDE laeuft, keine Delphi-Version gewaehlt). Kein Dialog
+  haelt den Lauf an; das Log braucht `/LOG` bzw. `/LOG=<datei>`.
 - **Deinstallation**: Registry-Werte werden VOR den Dateien entfernt
   (`uninsdeletevalue` + expliziter `usUninstall`-Handler), und zwar in
   allen drei Zweigen - unabhaengig davon, was diese Installation gesetzt
-  hat. `[UninstallDelete]` raeumt danach `bpl\d12`, `bpl\d13`,
+  hat. Der Handler nimmt auch die Override-Segmente heraus, und nur diese:
+  fremde Segmente bleiben. Bleibt vom Wert nichts oder nur `$(PATH)` uebrig,
+  verschwindet er, der Schluessel mit, wenn er dann leer ist. Bleibt mehr
+  uebrig, etwa die aus HKLM uebernommenen Segmente, bleibt der HKCU-Wert ohne
+  unser Segment stehen: ob er vorher schon da war, ist nicht unterscheidbar.
+  `[UninstallDelete]` raeumt danach `bpl\d12`, `bpl\d13`,
   `bpl\d13x64` und den dann leeren `bpl`-Ordner ab.
 - **Privacy-Gate**: keinerlei Netzwerk-Code; Zusicherung steht sichtbar auf
   der Willkommensseite (de/en).
@@ -170,28 +249,37 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 - **Startmenue-Eintrag fuer den Deinstaller** (unins000.exe war sonst
   unauffindbar).
 - **Ready-Seite** mit Versions-Matrix; die installierbare Version ist
-  fett hervorgehoben (TRichEditViewer + RTF, Memo als Fallback).
+  fett hervorgehoben (TRichEditViewer + RTF, Memo als Fallback). Darunter
+  der Hinweis auf den PATH-Eintrag (Tools > Optionen > IDE >
+  Umgebungsvariablen) und die gewaehlten Komponenten.
 
 ## 4. Testmatrix (aus Konzept §9)
 
 | # | Umgebung / Szenario | Erwartung |
 |---|---------------------|-----------|
-| 1 | Frische VM, D12 installiert, Non-Admin-Konto | Setup laeuft ohne UAC-Prompt durch; BPL unter `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`; `Known Packages`-Wert vorhanden, Wertdaten nicht leer |
-| 2 | IDE-Start nach Install | Plugin laedt (Splash/About-Branding sichtbar, Tools-Menue-Eintrag da); kein "Can't load package" |
+| 1 | Frische VM, D12 installiert, Non-Admin-Konto | Setup laeuft ohne UAC-Prompt durch; vier BPLs unter `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`; `Known Packages`-Werte nur fuer `StaticCodeAnalyser.IDE.d12.bpl` und `reDelphix.d12.bpl`, Wertdaten nicht leer; `{app}\bpl\d12` vorn im IDE-PATH-Override |
+| 2 | IDE-Start nach Install | Plugin laedt (Splash/About-Branding sichtbar, Tools-Menue-Eintrag da); kein "Can't load package"; Engine und SharedUI laden aus `{app}\bpl\d12` |
 | 3 | Setup starten, waehrend bds.exe laeuft | Setup bricht mit klarer Meldung ab (kein Teil-Install) |
-| 3b | Maschine OHNE Delphi 12 (kein BDS 23.0 bzw. RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "Delphi 12 wurde nicht gefunden" ab; keine Dateien, keine Registry-Werte |
-| 4 | Dev-Maschine mit manuell registrierter Dev-BPL (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existiert nur noch der Install-Pfad-Eintrag; IDE laedt das Plugin genau einmal |
+| 3a | IDE erst starten, wenn der Wizard offen ist, dann Installieren | Setup stoppt auf der Vorbereiten-Seite mit derselben Meldung, nichts geschrieben |
+| 3b | Maschine OHNE unterstuetzte IDE (weder BDS 23.0 noch 37.0, oder RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "Es wurde weder Delphi 12 (BDS 23.0) noch Delphi 13 (BDS 37.0) auf diesem System gefunden" ab; keine Dateien, keine Registry-Werte |
+| 4 | Dev-Maschine mit registriertem Dev-Satz (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existieren nur noch die Install-Pfad-Eintraege; IDE laedt das Plugin genau einmal |
 | 5 | Vorher per "Can't load package → Nein" deaktiviert (Disabled Packages) | Setup raeumt den Disabled-Eintrag; Plugin laedt nach Neustart wieder |
-| 6 | Update ueber Bestand (aeltere Version installiert) | BPL + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag; keine Duplikate |
-| 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0 |
-| 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
+| 6 | Update ueber Bestand (Paketsatz installiert, auch dasselbe Setup zweimal) | BPLs + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag je Design-BPL; Override-Segment genau einmal |
+| 6b | Upgrade vom 0.9.18-Monolithen, aus Setup und aus GetIt, alle drei Schienen | Hinweis erscheint; Monolith-Werte (Known + Disabled) weg, eigene Monolith-Datei weg; IDE-Start ohne "enthaelt die Unit ..."; reDelphix war vorgewaehlt |
+| 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0; Hinweise nur im Log |
+| 7b | Silent mit offener IDE, Setup und Uninstall | Lauf endet ohne Dialog mit Exit-Code ungleich 0, Grund im `/LOG` |
+| 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), Override ohne unser Segment mit allen fremden Segmenten (aus HKLM entstanden: HKCU-Kopie bleibt), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
-| 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine290.bpl`/`SCA.SharedUI290.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
+| 10 | reDelphix am Fund | Gluehbirne erscheint, Quick-Fix schreibt, Strg+Z macht ihn rueckgaengig; Aktionen im Kontextmenue des Dock-Grids |
+| 11 | reDelphix abwaehlen (Setup erneut) | `reDelphix.d12.bpl` und seine Registry-Werte weg, Plugin laedt weiter, Override bleibt |
+| 12 | Eine Schiene abwaehlen (Setup erneut) | Dateien, Known-, Disabled-Werte und Override-Segment dieser Schiene weg |
+| 13 | D12 und D13 gleichzeitig offen | jede IDE laedt ihre 290- bzw. 370-Fassung |
+| 14 | Fremdbau: `SCA.CLI.Demo` samt Engine selbst gebaut, IDE neu starten | Plugin laedt weiter aus `{app}\bpl\<schiene>` |
 
-Die Tabelle ist an der D12-Schiene entstanden; zwischen den Varianten
-unterscheiden sich Registry-Zweig und Zielordner, der Ablauf nicht. Am
-2026-08-23 hat der User alle drei Varianten von Hand durchgespielt,
-Installation und Deinstallation je sauber.
+Die Tabelle ist an der D12-Schiene entstanden; zwischen den Schienen
+unterscheiden sich Registry-Zweig, Zielordner und Suffix, der Ablauf nicht.
+Der Handdurchlauf vom 2026-08-23 ueber alle drei Schienen galt dem Monolithen;
+fuer den Paketsatz wird die Matrix vor dem Release neu durchgespielt.
 
 Manuelle Verifikation gehoert dem User am gebauten Plugin (Doku-Leitplanke:
 Plugin-Interaktion ist nicht headless verifizierbar).
@@ -201,11 +289,13 @@ Plugin-Interaktion ist nicht headless verifizierbar).
 - **D13 (BDS 37.0) ist seit 0.9.17 ausgeliefert**, 32- und 64-Bit.
   *Hier standen bis 2026-08-24 eine "auskommentierte Platzhalter-Sektion"
   und zwei offene Punkte. Beide sind entschieden:* der Projektsatz bleibt
-  **einer** - kein `LIBSUFFIX`, unterschieden wird ueber den Zielordner
-  (`bpl\d12` / `bpl\d13` / `bpl\d13x64`), nicht ueber den Dateinamen; und
-  `StaticCodeAnalyser.Plugin.d12.dproj` steht auf `TargetedPlatforms=3`,
-  baut also Win32 und Win64 aus derselben Projektdatei. Ungeprueft bleibt
-  allein, ob die Edition "Starter" fuer den GetIt-Lokaltest genuegt.
+  **einer**. Die Laufzeitpakete tragen `{$LIBSUFFIX AUTO}` (`290` bzw. `370`,
+  Win32 und Win64 gleich), die Design-Pakete keinen Suffix; die Bitbreite
+  unterscheidet der Zielordner (`bpl\d13` / `bpl\d13x64`). Alle vier `.dproj`
+  stehen auf `TargetedPlatforms=3`, bauen also Win32 und Win64 aus derselben
+  Projektdatei.
+- **GetIt ist fuer 0.9.19 ausgesetzt**: der Paketsatz laesst sich darueber
+  nicht installieren, Begruendung in `getit\README_GetIt.md`.
 - **Eine 64-Bit-IDE von Delphi 12 gibt es nicht.** Gemessen, nicht
   vermutet: unter `Studio\23.0` fehlt `bin64\bds.exe`, dort liegen 0
   `dcl*`-BPLs, und `designide` existiert fuer Win64 ueberhaupt nicht (96
