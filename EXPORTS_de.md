@@ -15,10 +15,10 @@ später); die Abschnitte zum Workbench-Bericht beschreiben den Stand
 
 ## Das Wichtigste vorweg
 
-`analyser.exe` ist **ein Binary mit zwei Modi**. Ohne Argumente startet
-die GUI; sobald das erste Argument mit `-` beginnt, läuft es headless
-als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
-*aus einem Skript nicht erreichbar*.
+`StaticCodeAnalyser.d12.exe` ist **ein Binary mit zwei Modi**. Ohne
+Argumente startet die GUI; sobald das erste Argument mit `-` beginnt,
+läuft es headless als CLI. „Nur in der GUI" heißt also nie „anderes
+Programm", sondern *aus einem Skript nicht erreichbar*.
 
 ---
 
@@ -154,10 +154,11 @@ damit der Build von morgen nur über Neues meckert.
 
 ```bash
 # einmalig, um den Ist-Zustand festzuschreiben
-analyser.exe --path . --write-baseline .sca/sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --write-baseline .sca/sca.baseline.json
 
 # in jedem Build
-analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+StaticCodeAnalyser.d12.exe --path . --baseline .sca/sca.baseline.json \
+  --report-sarif build/sca.sarif
 ```
 
 **Ein Baseline-Eintrag deckt einen Fund.** Seit 0.9.19 zählt die Baseline:
@@ -191,8 +192,8 @@ bedeuten. `--write-baseline auto` schreibt an dieselbe `.sca`-Stelle, das
 Paar kommt also ohne fest verdrahtete Pfade aus:
 
 ```bash
-analyser.exe --path . --write-baseline auto        # einmalig
-analyser.exe --path . --baseline-scan y            # in jedem Build
+StaticCodeAnalyser.d12.exe --path . --write-baseline auto    # einmalig
+StaticCodeAnalyser.d12.exe --path . --baseline-scan y        # in jedem Build
 ```
 
 `--baseline-scan n` ist das ausdrückliche Gegenteil: ohne Baseline
@@ -225,7 +226,8 @@ Baseline aus einem Lauf **ohne** `--baseline` schreiben.
 ## Workflow 2 — Pull-Request-Review: nur das Geänderte
 
 ```bash
-analyser.exe --path . --diff main...HEAD --report-html build/review.html
+StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
+  --report-html build/review.html
 ```
 
 `--branch` nimmt die geänderten Dateien aus der Versionsverwaltung (Git
@@ -249,7 +251,8 @@ keine öffentliche Schnittstelle, um externe Issues entgegenzunehmen. SCA
 schreibt die Datei, `sonar-scanner` trägt sie hinein.
 
 ```bash
-analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --base-dir . \
+  --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
@@ -329,7 +332,7 @@ der `sonar-project.properties`), nicht relativ zu `sonar.sources` —
 ## Workflow 4 — GitHub-/Azure-Code-Scanning
 
 ```bash
-analyser.exe --path . --base-dir . --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --base-dir . --report-sarif sca.sarif
 ```
 
 Das SARIF trägt `partialFingerprints` (Zeilen-Hash + contextHash), damit

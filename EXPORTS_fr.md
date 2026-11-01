@@ -16,8 +16,8 @@ contournement compris.
 
 ## La première chose à savoir
 
-`analyser.exe` est **un seul binaire à deux modes**. Lancé sans
-arguments, il démarre l'interface graphique ; dès que le premier
+`StaticCodeAnalyser.d12.exe` est **un seul binaire à deux modes**. Lancé
+sans arguments, il démarre l'interface graphique ; dès que le premier
 argument commence par `-`, il bascule en CLI sans interface. « GUI
 uniquement » ne signifie donc jamais « programme différent », mais
 *inaccessible depuis un script*.
@@ -160,10 +160,11 @@ d'aujourd'hui pour que le build de demain ne se plaigne que de ce qui a
 
 ```bash
 # une seule fois, pour consigner l'état actuel
-analyser.exe --path . --write-baseline .sca/sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --write-baseline .sca/sca.baseline.json
 
 # à chaque build
-analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+StaticCodeAnalyser.d12.exe --path . --baseline .sca/sca.baseline.json \
+  --report-sarif build/sca.sarif
 ```
 
 **Une entrée de référence couvre un résultat.** Depuis 0.9.19, la référence
@@ -199,8 +200,8 @@ chose. `--write-baseline auto` écrit au même emplacement `.sca`, la
 paire se passe donc de chemins codés en dur :
 
 ```bash
-analyser.exe --path . --write-baseline auto        # une seule fois
-analyser.exe --path . --baseline-scan y            # à chaque build
+StaticCodeAnalyser.d12.exe --path . --write-baseline auto    # une seule fois
+StaticCodeAnalyser.d12.exe --path . --baseline-scan y        # à chaque build
 ```
 
 `--baseline-scan n` est le contraire explicite : tourner sans référence
@@ -235,7 +236,8 @@ nouveau tout l'arriéré. Pour rafraîchir, écrivez une référence fraîche
 ## Workflow 2 — Revue de pull request : seulement ce qui a changé
 
 ```bash
-analyser.exe --path . --diff main...HEAD --report-html build/review.html
+StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
+  --report-html build/review.html
 ```
 
 `--branch` utilise l'ensemble des fichiers modifiés selon le
@@ -260,7 +262,8 @@ pas d'API publique d'ingestion pour les issues externes. SCA écrit le
 fichier, et `sonar-scanner` l'achemine.
 
 ```bash
-analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --base-dir . \
+  --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
@@ -343,7 +346,7 @@ donnez ce dossier à `--base-dir`.
 ## Workflow 4 — Code scanning GitHub / Azure
 
 ```bash
-analyser.exe --path . --base-dir . --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --base-dir . --report-sarif sca.sarif
 ```
 
 Le SARIF porte des `partialFingerprints` (hachage de ligne +
