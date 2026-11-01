@@ -29,6 +29,8 @@ faellt sonst erst beim Kunden oder beim Handtest auf:
   (6) VerInfo Win32 == Win64 == Release-Version, Keys UND Zahlenfelder.
       R8 aus dem Konzept: die Engine-Win64-BPL hatte gar keine VERSIONINFO,
       und die Zahlenfelder standen ein Release hinter dem Keys-String.
+      Dazu tool.version im Regelkatalog: das Feld steht in den Kopfzeilen
+      der HTML-Workbench und stand fuenf Releases auf 0.9.14.
 
 Kommentare zaehlen nicht: die .dpk-Koepfe erwaehnen {$RUNONLY}, LIBSUFFIX
 und designide im Fliesstext. Geprueft wird nur, was der Compiler sieht.
@@ -42,6 +44,7 @@ Ohne --version gilt uSCAConsts.SCA_VERSION als Release-Version.
 EXIT  0 stimmig | 1 Abweichung | 2 Aufruffehler
 """
 import io
+import json
 import os
 import re
 import sys
@@ -72,6 +75,7 @@ PAKETE = (
 EIGENE_PRAEFIXE = ('sca.', 'staticcodeanalyser', 'redelphix')
 
 CONSTS = 'SCA.Engine/sources/Common/uSCAConsts.pas'
+KATALOG = 'rules/sca-rules.json'
 
 
 def abbruch(meldung):
@@ -328,8 +332,9 @@ def pruefe_verinfo(geparst, soll, befunde):
                 if ist != soll:
                     befunde.append((6, '%s %s: Keys %s=%s, Soll %s'
                                     % (name, bed, feld, ist, soll)))
-            # Comments=Release x.y.z (Datum) landet ebenso in der BPL. Beim
-            # Bump auf 0.9.19 blieb der Key zunaechst auf 0.9.18 stehen.
+            # Comments=Release x.y.z landet ebenso in der BPL. Beim Bump auf
+            # 0.9.19 blieb der Key zunaechst auf 0.9.18 stehen. Bewusst ohne
+            # Datum: ein spaeteres Release-Datum braucht keinen Neubau.
             m = re.search(r'(?:^|;)Comments=Release ([\d.]+)', keys)
             if m and m.group(1) + '.0' != soll:
                 befunde.append((6, '%s %s: Keys Comments nennt Release %s, '
@@ -343,6 +348,18 @@ def pruefe_verinfo(geparst, soll, befunde):
                 if tag_wert(block, 'VerInfo_' + tag) is not None:
                     befunde.append((6, '%s %s ueberschreibt VerInfo_%s'
                                     % (name, bed, tag)))
+
+
+def pruefe_katalog(repo, soll, befunde):
+    """(6) tool.version im Regelkatalog == Release-Version.
+
+    Nicht verwechseln mit der Wurzel-"version" (Katalogversion, basedOn der
+    Overlays): die zaehlt unabhaengig vom Release.
+    """
+    ist = (json.loads(lies(repo, KATALOG)).get('tool') or {}).get('version')
+    if ist != soll[:-2]:
+        befunde.append((6, '%s: tool.version=%s, Soll %s'
+                        % (KATALOG, ist, soll[:-2])))
 
 
 def release_version(repo, befunde, vorgabe):
@@ -395,6 +412,7 @@ def main():
     pruefe_suffix(geparst, befunde)
     pruefe_plattformen(geparst, befunde)
     pruefe_verinfo(geparst, soll, befunde)
+    pruefe_katalog(repo, soll, befunde)
 
     print('Paketsatz: %s = %d Units, Release-Version %s'
           % (' + '.join('%s %d' % (p[0], len(geparst[p[0]]['units']))
@@ -402,7 +420,7 @@ def main():
              sum(len(geparst[p[0]]['units']) for p in PAKETE), soll))
     titel = ((1, 'Unit in genau einem Paket'), (2, 'requires-Graph'),
              (3, 'Pakettyp .dpk/.dproj'), (4, 'LIBSUFFIX nur an RUNONLY'),
-             (5, 'Plattformen + Win64-Sperre'), (6, 'VerInfo == Release'))
+             (5, 'Plattformen + Win64-Sperre'), (6, 'Versionen == Release'))
     for nr, text in titel:
         eigene = [b for n, b in befunde if n == nr]
         print('  (%d) %-27s %s' % (nr, text,
