@@ -117,7 +117,7 @@ Les 205 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA111](SCA111.md) | ParamByName(...) appelé dans une boucle | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) appelé dans une boucle | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](SCA113.md) | TThread.Resume est obsolète | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](SCA114.md) | TThread libéré sans Terminate+WaitFor | Error | Bug | `uConcurrencyExt.pas` |
+| [SCA114](SCA114.md) | TThread libéré par FreeAndNil - vérifier l'arrêt | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](SCA115.md) | URL HTTP en clair | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](SCA116.md) | Vérification TLS désactivée | Error | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](SCA117.md) | Membre public sans commentaire de documentation | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |

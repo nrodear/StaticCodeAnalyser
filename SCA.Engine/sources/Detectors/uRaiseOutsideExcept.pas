@@ -6,7 +6,7 @@ unit uRaiseOutsideExcept;
 //   procedure Foo;
 //   begin
 //     if x < 0 then
-//       raise;                     // <-- AV: keine aktuelle Exception
+//       raise;                     // <-- kein Handler: Compilerfehler E2145
 //   end;
 //
 // Korrekt:
@@ -27,10 +27,10 @@ unit uRaiseOutsideExcept;
 //     end;
 //   end;
 //
-// Folge: bare `raise;` ohne aktive Exception loest eine Access Violation
-// im RTL aus (System._Raise sucht ein NIL-Exception-Objekt). Der Caller
-// bekommt also eine AV statt der gewollten Exception - der Stack-Trace
-// fuehrt zur falschen Stelle und das echte Problem bleibt unklar.
+// Folge: Delphi lehnt diese Form mit E2145 ab ('Re-raising an exception
+// only allowed in exception handler'), FPC mit
+// parser_e_no_reraise_possible. Der Text der Regel beschreibt deshalb
+// die Compilermeldung, kein Laufzeitverhalten.
 //
 // Erkennung (AST):
 //   Parser legt `raise;` als nkRaise mit Name='raise' ab; `raise <expr>;`
@@ -120,7 +120,7 @@ begin
         F.MethodName := MethodName;
         F.LineNumber := IntToStr(Cur.Nd.Line);
         F.MissingVar :=
-          'Bare `raise;` outside an except/on handler raises NIL - Access Violation';
+          'Bare `raise;` outside an except/on handler - Delphi (E2145) and FPC reject this form';
         F.SetKind(fkRaiseOutsideExcept);
         Results.Add(F);
       end;

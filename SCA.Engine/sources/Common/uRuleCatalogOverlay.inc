@@ -711,9 +711,10 @@ const
     // SCA114
     (
       RuleID   : 'SCA114';
-      Name     : 'TThread ohne Terminate+WaitFor freigegeben';
-      ShortDesc: '`FreeAndNil(MyThread)` ohne vorheriges `Terminate; WaitFor` - der Worker l' + #$00E4 +
-        'uft m' + #$00F6 + 'glicherweise noch'
+      Name     : 'TThread per FreeAndNil freigegeben - Beendigung pr' + #$00FC + 'fen';
+      ShortDesc: '`FreeAndNil(MyThread)` ohne nahes `Terminate` - ein Pr' + #$00FC +
+        'fhinweis, kein bewiesener Defekt: `TThread.Destroy` beendet den Thread selbst; `Execute`, den Thread-Destruktor und `FreeOnTerminate` pr' +
+        #$00FC + 'fen'
     ),
     // SCA115
     (
@@ -841,9 +842,9 @@ const
     (
       RuleID   : 'SCA133';
       Name     : 'Blankes raise au' + #$00DF + 'erhalb eines except/on-Handlers';
-      ShortDesc: '`raise;` ohne Exception-Ausdruck funktioniert nur INNERHALB eines except-Handlers (erneutes Ausl' +
-        #$00F6 + 'sen) - au' + #$00DF + 'erhalb l' + #$00F6 +
-        'st es NIL aus und erzeugt eine Access Violation'
+      ShortDesc: '`raise;` ohne Exception-Ausdruck ist nur INNERHALB eines except-Handlers g' + #$00FC +
+        'ltig (erneutes Ausl' + #$00F6 + 'sen) - ' + #$00FC +
+        'berall sonst lehnen Delphi (E2145) und FPC es ab'
     ),
     // SCA134
     (
@@ -893,7 +894,7 @@ const
     (
       RuleID   : 'SCA140';
       Name     : 'Methode hat zu viele Exit-Anweisungen';
-      ShortDesc: 'Eine Methode mit mehr als 3 Exit-Aufrufen hat zu viele R' + #$00FC +
+      ShortDesc: 'Eine Methode mit mehr als 6 Exit-Aufrufen hat zu viele R' + #$00FC +
         'cksprungpfade - schwer zu lesen, schwer zu testen, leicht einen zu ' + #$00FC + 'bersehen'
     ),
     // SCA141
@@ -2095,9 +2096,12 @@ const
     // SCA114
     (
       RuleID   : 'SCA114';
-      Name     : 'TThread lib' + #$00E9 + 'r' + #$00E9 + ' sans Terminate+WaitFor';
-      ShortDesc: '`FreeAndNil(MyThread)` sans `Terminate; WaitFor` pr' + #$00E9 +
-        'alable - le thread de travail tourne peut-' + #$00EA + 'tre encore'
+      Name     : 'TThread lib' + #$00E9 + 'r' + #$00E9 + ' par FreeAndNil - v' + #$00E9 + 'rifier l''arr' +
+        #$00EA + 't';
+      ShortDesc: '`FreeAndNil(MyThread)` sans `Terminate` ' + #$00E0 + ' proximit' + #$00E9 +
+        ' - une indication ' + #$00E0 + ' v' + #$00E9 + 'rifier, pas un d' + #$00E9 + 'faut prouv' +
+        #$00E9 + ' : `TThread.Destroy` arr' + #$00EA + 'te lui-m' + #$00EA + 'me le thread ; v' +
+        #$00E9 + 'rifier `Execute`, le destructeur du thread et `FreeOnTerminate`'
     ),
     // SCA115
     (
@@ -2229,9 +2233,8 @@ const
     (
       RuleID   : 'SCA133';
       Name     : 'raise nu hors d''un gestionnaire except/on';
-      ShortDesc: '`raise;` sans expression ne fonctionne qu''a l''Int' + #$00E9 +
-        'rieur d''un gestionnaire except (relev' + #$00E9 + 'e) - a l''ext' + #$00E9 + 'rieur il l' +
-        #$00E8 + 've NIL et provoque une violation d''acc' + #$00E8 + 's'
+      ShortDesc: '`raise;` sans expression d''exception n''est valide qu''' + #$00E0 + ' l''int' + #$00E9 +
+        'rieur d''un gestionnaire except (pour relancer l''exception) - ailleurs, Delphi (E2145) et FPC le refusent'
     ),
     // SCA134
     (
@@ -2284,9 +2287,9 @@ const
     (
       RuleID   : 'SCA140';
       Name     : 'La m' + #$00E9 + 'thode a trop d''instructions Exit';
-      ShortDesc: 'Une m' + #$00E9 +
-        'thode avec plus de 3 appels a Exit a trop de chemins de sortie - difficile ' + #$00E0 +
-        ' lire, difficile ' + #$00E0 + ' tester, facile d''en oublier un'
+      ShortDesc: 'Une m' + #$00E9 + 'thode avec plus de 6 appels ' + #$00E0 +
+        ' Exit a trop de chemins de sortie - difficile ' + #$00E0 + ' lire, difficile ' + #$00E0 +
+        ' tester, facile d''en oublier un'
     ),
     // SCA141
     (

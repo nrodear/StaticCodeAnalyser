@@ -456,8 +456,8 @@
       "shortDescription": "`MyThread.Resume` - utiliser `MyThread.Start` (depuis Delphi 2010)"
     },
     "SCA114": {
-      "name": "TThread libéré sans Terminate+WaitFor",
-      "shortDescription": "`FreeAndNil(MyThread)` sans `Terminate; WaitFor` préalable - le thread de travail tourne peut-être encore"
+      "name": "TThread libéré par FreeAndNil - vérifier l'arrêt",
+      "shortDescription": "`FreeAndNil(MyThread)` sans `Terminate` à proximité - une indication à vérifier, pas un défaut prouvé : `TThread.Destroy` arrête lui-même le thread ; vérifier `Execute`, le destructeur du thread et `FreeOnTerminate`"
     },
     "SCA115": {
       "name": "URL HTTP en clair",
@@ -533,7 +533,7 @@
     },
     "SCA133": {
       "name": "raise nu hors d'un gestionnaire except/on",
-      "shortDescription": "`raise;` sans expression ne fonctionne qu'a l'Intérieur d'un gestionnaire except (relevée) - a l'extérieur il lève NIL et provoque une violation d'accès"
+      "shortDescription": "`raise;` sans expression d'exception n'est valide qu'à l'intérieur d'un gestionnaire except (pour relancer l'exception) - ailleurs, Delphi (E2145) et FPC le refusent"
     },
     "SCA134": {
       "name": "Variable utilisee après Free / FreeAndNil",
@@ -561,7 +561,7 @@
     },
     "SCA140": {
       "name": "La méthode a trop d'instructions Exit",
-      "shortDescription": "Une méthode avec plus de 3 appels a Exit a trop de chemins de sortie - difficile à lire, difficile à tester, facile d'en oublier un"
+      "shortDescription": "Une méthode avec plus de 6 appels à Exit a trop de chemins de sortie - difficile à lire, difficile à tester, facile d'en oublier un"
     },
     "SCA141": {
       "name": "L'implementation de la classe dépasse 500 lignes",

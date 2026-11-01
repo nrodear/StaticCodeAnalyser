@@ -117,7 +117,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA111](SCA111.md) | ParamByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](SCA113.md) | TThread.Resume ist veraltet | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](SCA114.md) | TThread ohne Terminate+WaitFor freigegeben | Error | Bug | `uConcurrencyExt.pas` |
+| [SCA114](SCA114.md) | TThread per FreeAndNil freigegeben - Beendigung prüfen | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](SCA115.md) | HTTP-URL im Klartext | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](SCA116.md) | TLS-Prüfung abgeschaltet | Error | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](SCA117.md) | Public-Member ohne Doku-Kommentar | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |

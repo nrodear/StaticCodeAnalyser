@@ -117,7 +117,7 @@ All 205 detector rules. Click an ID for full details.
 | [SCA111](SCA111.md) | ParamByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](SCA113.md) | TThread.Resume is deprecated | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](SCA114.md) | TThread destroyed without Terminate+WaitFor | Error | Bug | `uConcurrencyExt.pas` |
+| [SCA114](SCA114.md) | TThread freed with FreeAndNil - review shutdown | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](SCA115.md) | Plaintext HTTP URL | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](SCA116.md) | TLS verification disabled | Error | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](SCA117.md) | Public member missing doc comment | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |

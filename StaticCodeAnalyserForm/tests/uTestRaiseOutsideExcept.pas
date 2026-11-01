@@ -146,7 +146,7 @@ end;
 procedure TTestRaiseOutsideExcept.BareRaise_InsideExceptElse_NotReported;
 // Real-World FP-Audit 2026-07-12 (SCA133): der 'else'-Default-Handler eines
 // except-Blocks IST Teil des Handlers - die aktuelle Exception ist aktiv, ein
-// bare 'raise;' dort ist ein gueltiger Re-Raise, kein NIL-Raise. Frueher
+// bare 'raise;' dort ist ein gueltiger Re-Raise. Frueher
 // entkamen die else-Statements dem nkExceptBlock (Parser stoppte bei tkKwElse).
 const SRC =
   'unit t; implementation'#13#10 +

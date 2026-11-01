@@ -5,8 +5,12 @@ unit uConcurrencyExt;
 //   * fkThreadResumeDeprecated           - TThread.Resume seit D2010
 //                                          deprecated, TThread.Start nutzen
 //   * fkTThreadDestroyWithoutTerminate   - FreeAndNil(MyThread)
-//                                          ohne vorheriges Terminate; WaitFor;
-//                                          -> Worker laeuft weiter, AV-Risiko
+//                                          ohne nahes Terminate oder WaitFor.
+//                                          Pruefhinweis, kein Defektbeweis:
+//                                          TThread.Destroy beendet den Thread
+//                                          selbst. Zu pruefen bleiben Execute
+//                                          (Terminated), Destruktor der
+//                                          Thread-Klasse, FreeOnTerminate.
 //                                          BEWUSSTE GRENZE (Voll-Review
 //                                          2026-09-12, Major 47): die nackte
 //                                          '.Free'-Form wird NICHT geprueft -
@@ -395,7 +399,7 @@ var
   // Typ UND jede Klasse aus einem `<Ident> := T<Klasse>.Create`-Konstruktor-
   // Call (JvTimer haelt `FTimerThread: TThread`, instanziiert aber die lokale
   // TJvTimerThread). Honoriert eine davon Terminated, ist FreeAndNil sicher.
-  // Bewusst 'irgendeine' statt 'alle': lieber ein FN als ein Error-Tier-FP.
+  // Bewusst 'irgendeine' statt 'alle': lieber ein FN als ein FP.
   var
     Mt : TMatch;
   begin
@@ -507,7 +511,7 @@ var
       end;
   end;
 
-  // SCA114: FreeAndNil/Free ohne Terminate+WaitFor davor.
+  // SCA114: FreeAndNil ohne Terminate oder WaitFor davor.
   procedure PruefeFreeOhneTerminate;
   var
     M : TMatch;   // E1019: die for-in-Variable MUSS lokal zur Schleifen-Routine sein
@@ -601,7 +605,7 @@ var
         // FP-Gate (a) (Real-World-Audit 2026-07-31, FP-Klasse 'alternativer
         // Beendigungs-Nachweis'): `TerminateThread(<Ident>.Handle, 0)` im
         // LookBack-Fenster ist ein Hard-Kill des Workers - haesslich, aber der
-        // gemeldete Zustand ('worker may still be running') trifft nicht zu.
+        // Thread laeuft danach nicht mehr, der Hinweis haette keinen Anlass.
         // Vorbild-FP: cnwizards CnWizUpgradeFrm finalization.
         if TRegEx.IsMatch(Snippet,
              '(?i)\bTerminateThread\s*\(\s*' + TRegEx.Escape(Ident) + '\b') then
@@ -625,11 +629,13 @@ var
         if ThreadHonorsTerminated(Ident, DeclaredType) then Continue;
 
         Emit(fkTThreadDestroyWithoutTerminate,
-          Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
-                 'If %s is a TThread descendant the worker may still be ' +
-                 'running -> AV / heap corruption. If it isnt a thread, ' +
+          Format('FreeAndNil(%s) without a nearby %s.Terminate - a review hint, ' +
+                 'not a proven defect. TThread.Destroy ends the thread itself. ' +
+                 'Check that Execute honors Terminated, that the thread ' +
+                 'destructor frees its fields only after the thread has ended, ' +
+                 'and whether FreeOnTerminate is set. If %s is not a thread, ' +
                  'suppress with // noinspection TThreadDestroyWithoutTerminate',
-                 [Ident, Ident, Ident, Ident]),
+                 [Ident, Ident, Ident]),
           M.Index);
       end;
   end;

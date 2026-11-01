@@ -1470,10 +1470,26 @@ const
     // SCA114
     (
       RuleID   : 'SCA114';
-      Name     : 'TThread destroyed without Terminate+WaitFor';
-      ShortDesc: '`FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run';
-      BadEx    : '// inside an OnClick:' + #13#10 + 'FreeAndNil(FWorker);  // FWorker.Execute still running?';
-      GoodEx   : 'FWorker.Terminate;' + #13#10 + 'FWorker.WaitFor;' + #13#10 + 'FreeAndNil(FWorker);';
+      Name     : 'TThread freed with FreeAndNil - review shutdown';
+      ShortDesc: '`FreeAndNil(MyThread)` with no nearby `Terminate` - a review hint, not a proven defect: `TThread.Destroy` ends the thread itself; check `Execute`, the thread''s destructor and `FreeOnTerminate`';
+      BadEx    : 'type' + #13#10 + '  TWorkerThread = class(TThread)' + #13#10 + '  protected' + #13#10 +
+        '    procedure Execute; override;' + #13#10 + '  end;' + #13#10 + #13#10 + 'var' + #13#10 +
+        '  FWorkerThread: TWorkerThread;' + #13#10 + #13#10 + 'procedure TWorkerThread.Execute;' +
+        #13#10 + 'begin' + #13#10 + '  RunLongJob;                 // never looks at Terminated' +
+        #13#10 + 'end;' + #13#10 + #13#10 + 'procedure TMainForm.BtnStopClick(Sender: TObject);' +
+        #13#10 + 'begin' + #13#10 +
+        '  FreeAndNil(FWorkerThread);  // waits until RunLongJob has returned' + #13#10 + 'end;';
+      GoodEx   : 'type' + #13#10 + '  TWorkerThread = class(TThread)' + #13#10 + '  private' + #13#10 +
+        '    FQueue: TList;' + #13#10 + '  protected' + #13#10 + '    procedure Execute; override;' +
+        #13#10 + '  public' + #13#10 + '    destructor Destroy; override;' + #13#10 + '  end;' +
+        #13#10 + #13#10 + 'var' + #13#10 + '  FWorkerThread: TWorkerThread;' + #13#10 + #13#10 +
+        'procedure TWorkerThread.Execute;' + #13#10 + 'begin' + #13#10 + '  while not Terminated do' +
+        #13#10 + '    DoStep;' + #13#10 + 'end;' + #13#10 + #13#10 +
+        'destructor TWorkerThread.Destroy;' + #13#10 + 'begin' + #13#10 +
+        '  inherited;                  // ends the thread first' + #13#10 +
+        '  FreeAndNil(FQueue);         // Execute no longer runs' + #13#10 + 'end;' + #13#10 +
+        #13#10 + 'procedure TMainForm.BtnStopClick(Sender: TObject);' + #13#10 + 'begin' + #13#10 +
+        '  FreeAndNil(FWorkerThread);  // Destroy ends the thread itself' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -1741,10 +1757,9 @@ const
     (
       RuleID   : 'SCA133';
       Name     : 'Bare raise outside an except/on handler';
-      ShortDesc: '`raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation';
+      ShortDesc: '`raise;` without an exception expression is only valid *inside* an except handler (re-raise) - Delphi (E2145) and FPC reject it anywhere else';
       BadEx    : 'procedure Foo(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
-        '    raise;             // <- no current exception -> AV inside System._Raise' + #13#10 +
-        'end;';
+        '    raise;             // <- not inside a handler: compiler error E2145' + #13#10 + 'end;';
       GoodEx   : 'procedure Foo(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
         '    raise EArgumentException.CreateFmt(''x = %d (must be >= 0)'', [x]);' + #13#10 + 'end;';
       Anchor   : '';
@@ -1854,17 +1869,21 @@ const
     (
       RuleID   : 'SCA140';
       Name     : 'Method has too many Exit statements';
-      ShortDesc: 'A method with more than 3 Exit calls has too many return paths - hard to read, hard to test, easy to miss one';
+      ShortDesc: 'A method with more than 6 Exit calls has too many return paths - hard to read, hard to test, easy to miss one';
       BadEx    : 'function Find(Id: Integer): TUser;' + #13#10 + 'begin' + #13#10 +
         '  if Id < 0 then begin Result := nil; Exit; end;' + #13#10 +
         '  if not Db.Connected then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsLocked(Id) then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsArchived(Id) then begin Result := nil; Exit; end;' + #13#10 +
         '  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;' + #13#10 +
-        '  Result := Cache.Get(Id);' + #13#10 + '  Exit;                              // 4. Exit' +
+        '  Result := Cache.Get(Id);' + #13#10 + '  Exit;                              // 7th Exit' +
         #13#10 + 'end;';
       GoodEx   : 'function Find(Id: Integer): TUser;' + #13#10 + 'begin' + #13#10 + '  Result := nil;' +
-        #13#10 + '  if (Id < 0) or not Db.Connected then Exit;' + #13#10 + '  if Cache.Has(Id) then' +
-        #13#10 + '    Result := Cache.Get(Id)' + #13#10 + '  else' + #13#10 +
-        '    Result := DbLoad(Id);' + #13#10 + 'end;';
+        #13#10 + '  if (Id < 0) or not Db.Connected then Exit;' + #13#10 +
+        '  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;' + #13#10 +
+        '  if Cache.Has(Id) then' + #13#10 + '    Result := Cache.Get(Id)' + #13#10 + '  else' +
+        #13#10 + '    Result := DbLoad(Id);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;

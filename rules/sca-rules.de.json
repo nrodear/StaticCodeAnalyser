@@ -456,8 +456,8 @@
       "shortDescription": "`MyThread.Resume` - `MyThread.Start` verwenden (seit Delphi 2010)"
     },
     "SCA114": {
-      "name": "TThread ohne Terminate+WaitFor freigegeben",
-      "shortDescription": "`FreeAndNil(MyThread)` ohne vorheriges `Terminate; WaitFor` - der Worker läuft möglicherweise noch"
+      "name": "TThread per FreeAndNil freigegeben - Beendigung prüfen",
+      "shortDescription": "`FreeAndNil(MyThread)` ohne nahes `Terminate` - ein Prüfhinweis, kein bewiesener Defekt: `TThread.Destroy` beendet den Thread selbst; `Execute`, den Thread-Destruktor und `FreeOnTerminate` prüfen"
     },
     "SCA115": {
       "name": "HTTP-URL im Klartext",
@@ -533,7 +533,7 @@
     },
     "SCA133": {
       "name": "Blankes raise außerhalb eines except/on-Handlers",
-      "shortDescription": "`raise;` ohne Exception-Ausdruck funktioniert nur INNERHALB eines except-Handlers (erneutes Auslösen) - außerhalb löst es NIL aus und erzeugt eine Access Violation"
+      "shortDescription": "`raise;` ohne Exception-Ausdruck ist nur INNERHALB eines except-Handlers gültig (erneutes Auslösen) - überall sonst lehnen Delphi (E2145) und FPC es ab"
     },
     "SCA134": {
       "name": "Variable nach Free / FreeAndNil verwendet",
@@ -561,7 +561,7 @@
     },
     "SCA140": {
       "name": "Methode hat zu viele Exit-Anweisungen",
-      "shortDescription": "Eine Methode mit mehr als 3 Exit-Aufrufen hat zu viele Rücksprungpfade - schwer zu lesen, schwer zu testen, leicht einen zu übersehen"
+      "shortDescription": "Eine Methode mit mehr als 6 Exit-Aufrufen hat zu viele Rücksprungpfade - schwer zu lesen, schwer zu testen, leicht einen zu übersehen"
     },
     "SCA141": {
       "name": "Klassenimplementierung überschreitet 500 Zeilen",

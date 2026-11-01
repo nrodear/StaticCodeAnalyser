@@ -50,7 +50,7 @@ bleibt die kanonische maschinenlesbare Liste.
 | 12 | SCA136 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | ✅ | `uLeakInConstructor` |
 | 13 | — | **MissingDestructor: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben | ✅ | `uFieldLeak` |
 | 14 | SCA137 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | ✅ | `uIntegerOverflow` (nur Int64-Ziel) |
-| 15 | — | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | ✅ | `uRaiseOutsideExcept` |
+| 15 | — | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – von Delphi (E2145) und FPC abgelehnt | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
@@ -83,7 +83,7 @@ bleibt die kanonische maschinenlesbare Liste.
 | 31 | SCA138 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
 | 32 | SCA014 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
 | 33 | SCA146 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
-| 34 | SCA140 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
+| 34 | SCA140 | **MultipleExit: Mehr als 6 Exit-Punkte** | Methode enthält mehr als 6 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
 | 35 | SCA141 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | ✅ | `uLargeClass` |
 
 ---
@@ -380,7 +380,7 @@ Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; je
 | SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` in einer Schleife - linearer Lookup pro Iteration | Hint | Code Smell | ✅ | `uPerfHotspots` |
 | SCA112 | **FieldByNameInLoop** | `DataSet.FieldByName('x').AsXxx` in einer Schleife - linearer Lookup pro Zeile | Hint | Code Smell | ✅ | `uPerfHotspots` |
 | SCA113 | **ThreadResumeDeprecated** | `MyThread.Resume` - `MyThread.Start` verwenden (seit Delphi 2010) | Warning | Code Smell | ✅ | `uConcurrencyExt` |
-| SCA114 | **TThreadDestroyWithoutTerminate** | `FreeAndNil(MyThread)` ohne vorheriges `Terminate; WaitFor` - der Worker kann noch laufen | Error | Bug | ✅ | `uConcurrencyExt` |
+| SCA114 | **TThreadDestroyWithoutTerminate** | `FreeAndNil(MyThread)` ohne nahes `Terminate` - ein Prüfhinweis, kein bewiesener Defekt: `TThread.Destroy` beendet den Thread selbst; `Execute`, den Thread-Destruktor und `FreeOnTerminate` prüfen | Hint | Bug | ✅ | `uConcurrencyExt` |
 | SCA115 | **HttpInsteadOfHttps** | `'http://...'`-Literal für einen Remote-Endpunkt - MITM-anfällig | Warning | Security Hotspot | ✅ | `uRestHttpSecurity` |
 | SCA116 | **DisabledTlsVerification** | Leere `SecureProtocols`, `IgnoreCertificateErrors := True` oder `OnVerifyPeer := nil` | Error | Vulnerability | ✅ | `uRestHttpSecurity` |
 | SCA117 | **PublicMemberWithoutDoc** | Public-Methode oder -Property im `interface`-Abschnitt ohne Doku-Kommentar direkt darüber | Hint | Code Smell | ✅ | `uPublicMemberWithoutDoc` |
@@ -395,7 +395,7 @@ Spätere Wellen: Security/Injection, Suppression-Maschinerie, die Unused-Code-Fa
 
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
-| SCA133 | **RaiseOutsideExcept** | `raise;` ohne Exception-Ausdruck funktioniert nur *innerhalb* eines except-Handlers (Re-Raise) - außerhalb raist es NIL und erzeugt eine Access Violation | Error | Bug | ✅ | `uRaiseOutsideExcept` |
+| SCA133 | **RaiseOutsideExcept** | `raise;` ohne Exception-Ausdruck ist nur *innerhalb* eines except-Handlers gültig (Re-Raise) - überall sonst lehnen Delphi (E2145) und FPC es ab | Error | Bug | ✅ | `uRaiseOutsideExcept` |
 | SCA147 | **UnusedPrivateMethod** | Eine private Methode, die von keiner anderen Methode der Unit referenziert wird, ist toter Code - löschen oder anbinden | Hint | Code Smell | ✅ | `uUnusedPrivateMethod` |
 | SCA162 | **InsecureCryptoAlgorithm** | Algorithmus-Name ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') oder Wrapper-Klasse (THashMD5, TIdHashSHA1, ...) referenziert - anfällig für Kollisions-/Known-Plaintext-Angriffe | Warning | Vulnerability | ✅ | `uInsecureCryptoAlgorithm` |
 | SCA163 | **CommandInjection** | ShellExecute / CreateProcess / WinExec mit `+` in den Argumenten - ist ein Operand user-kontrolliert, wird daraus ein Command-Injection-Vektor | Error | Vulnerability | ✅ | `uCommandInjection` |

@@ -2508,21 +2508,21 @@
     {
       "id": "SCA114",
       "kind": "TThreadDestroyWithoutTerminate",
-      "name": "TThread destroyed without Terminate+WaitFor",
-      "shortDescription": "`FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run",
-      "fullDescription": "Destroying a TThread instance whose Execute is still running causes the destructor to wait via TThread.Free's implicit WaitFor - but if Execute does not honor the Terminated flag, the destructor blocks forever (UI hang), and during that wait the application can hit AVs as half-destroyed state is observed. The safe pattern is `MyThread.Terminate; MyThread.WaitFor; FreeAndNil(MyThread);` (or use FreeOnTerminate=True and never Free manually). Heuristic: matches FreeAndNil(<id>) without `<id>.Terminate` and `<id>.WaitFor` in the preceding ~10 lines. Suppress with `// noinspection TThreadDestroyWithoutTerminate` for non-thread classes.",
-      "defaultSeverity": "Error",
+      "name": "TThread freed with FreeAndNil - review shutdown",
+      "shortDescription": "`FreeAndNil(MyThread)` with no nearby `Terminate` - a review hint, not a proven defect: `TThread.Destroy` ends the thread itself; check `Execute`, the thread's destructor and `FreeOnTerminate`",
+      "fullDescription": "Review hint, not a proven defect. `TThread.Destroy` ends the thread itself: it calls `Terminate`, resumes a suspended thread and waits until `Execute` has returned, so `FreeAndNil(MyThread)` on its own is safe. Check three things at the reported line. Does `Execute` honor `Terminated`? If not, the destructor waits until `Execute` returns by itself. Does a destructor of the thread class free fields that `Execute` uses only after `inherited`? Its body runs before `TThread.Destroy` ends the thread. Is `FreeOnTerminate` set? Such a thread frees itself when `Execute` ends, so it must not be freed from outside as well. An extra `WaitFor` adds nothing: it does not return for a thread created suspended and never started. Heuristic: reports `FreeAndNil(<id>)` when `<id>` has a thread type (the declared or constructed type ends in `Thread` or derives from TThread in the same file; if no type resolves, the identifier contains `thread`) and the preceding ~500 characters (about 10 lines) contain neither `<id>.Terminate` nor `<id>.WaitFor`. No finding after `TerminateThread(<id>`, under a positive `if <id>.Finished` guard, or when an `Execute` of the thread class in the same unit references `Terminated`. The bare `.Free` form is not checked, and the detector only runs on files that mention `TThread`, `.Synchronize`, `.Resume`, `.Queue`, `ParamByName` or `FieldByName`. Suppress with `// noinspection TThreadDestroyWithoutTerminate` for non-thread classes.",
+      "defaultSeverity": "Hint",
       "type": "Bug",
       "tags": ["concurrency", "lifecycle"],
       "cwe": ["CWE-364"],
       "detectorUnit": "uConcurrencyExt.pas",
       "examples": {
-        "bad":  "// inside an OnClick:\nFreeAndNil(FWorker);  // FWorker.Execute still running?",
-        "good": "FWorker.Terminate;\nFWorker.WaitFor;\nFreeAndNil(FWorker);"
+        "bad":  "type\n  TWorkerThread = class(TThread)\n  protected\n    procedure Execute; override;\n  end;\n\nvar\n  FWorkerThread: TWorkerThread;\n\nprocedure TWorkerThread.Execute;\nbegin\n  RunLongJob;                 // never looks at Terminated\nend;\n\nprocedure TMainForm.BtnStopClick(Sender: TObject);\nbegin\n  FreeAndNil(FWorkerThread);  // waits until RunLongJob has returned\nend;",
+        "good": "type\n  TWorkerThread = class(TThread)\n  private\n    FQueue: TList;\n  protected\n    procedure Execute; override;\n  public\n    destructor Destroy; override;\n  end;\n\nvar\n  FWorkerThread: TWorkerThread;\n\nprocedure TWorkerThread.Execute;\nbegin\n  while not Terminated do\n    DoStep;\nend;\n\ndestructor TWorkerThread.Destroy;\nbegin\n  inherited;                  // ends the thread first\n  FreeAndNil(FQueue);         // Execute no longer runs\nend;\n\nprocedure TMainForm.BtnStopClick(Sender: TObject);\nbegin\n  FreeAndNil(FWorkerThread);  // Destroy ends the thread itself\nend;"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
-        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+        { "softwareQuality": "RELIABILITY", "severity": "LOW" }
       ]
     },
     {
@@ -2929,14 +2929,14 @@
       "id": "SCA133",
       "kind": "RaiseOutsideExcept",
       "name": "Bare raise outside an except/on handler",
-      "shortDescription": "`raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation",
-      "fullDescription": "A bare `raise;` re-raises the exception currently being handled. Outside of `except` / `on E: T do` there *is* no current exception, so the RTL receives a NIL exception pointer and an Access Violation is raised inside `System._Raise` - far away from the actual mistake. The detector recursively walks the method AST while tracking an `InHandler` flag. The flag is set when the walker descends into `nkExceptBlock` or `nkOnHandler`. An `nkRaise` node with `Name = 'raise'` (bare form) that is encountered while the flag is False produces a finding. Bare `raise;` inside `finally` blocks that are themselves outside an except handler is correctly flagged. Maps to Sonar-50 rule #15 (`RaiseWithoutClass`).",
+      "shortDescription": "`raise;` without an exception expression is only valid *inside* an except handler (re-raise) - Delphi (E2145) and FPC reject it anywhere else",
+      "fullDescription": "A bare `raise;` re-raises the exception currently being handled, so it is only valid inside `except` / `on E: T do`. Delphi rejects this form everywhere else with compiler error E2145 'Re-raising an exception only allowed in exception handler', FPC with `parser_e_no_reraise_possible` ('Re-raise isn't possible there'). The detector recursively walks the method AST while tracking an `InHandler` flag. The flag is set when the walker descends into `nkExceptBlock` or `nkOnHandler`. An `nkRaise` node with `Name = 'raise'` (bare form) that is encountered while the flag is False produces a finding. Bare `raise;` inside `finally` blocks that are themselves outside an except handler is flagged as well. Maps to Sonar-50 rule #15 (`RaiseWithoutClass`).",
       "defaultSeverity": "Error",
       "type": "Bug",
-      "tags": ["exception-handling", "crash", "sonar50"],
+      "tags": ["exception-handling", "sonar50"],
       "detectorUnit": "uRaiseOutsideExcept.pas",
       "examples": {
-        "bad":  "procedure Foo(x: Integer);\nbegin\n  if x < 0 then\n    raise;             // <- no current exception -> AV inside System._Raise\nend;",
+        "bad":  "procedure Foo(x: Integer);\nbegin\n  if x < 0 then\n    raise;             // <- not inside a handler: compiler error E2145\nend;",
         "good": "procedure Foo(x: Integer);\nbegin\n  if x < 0 then\n    raise EArgumentException.CreateFmt('x = %d (must be >= 0)', [x]);\nend;"
       },
       "cleanCodeAttribute": "LOGICAL",
@@ -3070,15 +3070,15 @@
       "id": "SCA140",
       "kind": "MultipleExit",
       "name": "Method has too many Exit statements",
-      "shortDescription": "A method with more than 3 Exit calls has too many return paths - hard to read, hard to test, easy to miss one",
-      "fullDescription": "Multiple early returns are useful for guard clauses, but past a small number they fragment the control flow so badly that future maintainers miss conditions. The detector counts `nkExit` descendants of each `nkMethod`; threshold is 3. Refactoring options: consolidate guards into a single `if (... or ... or ...) then Exit;`, switch from early returns to a single return variable, or extract the inner logic into a helper. Maps to Sonar-50 rule #34.",
+      "shortDescription": "A method with more than 6 Exit calls has too many return paths - hard to read, hard to test, easy to miss one",
+      "fullDescription": "Multiple early returns are useful for guard clauses, but past a small number they fragment the control flow so badly that future maintainers miss conditions. The detector counts `nkExit` descendants of each `nkMethod` and reports a method with more than 6 of them: 6 Exit statements stay silent, 7 are reported. The threshold is fixed in the detector (`MAX_EXITS`). Exit statements in nested routines and anonymous methods do not count. Refactoring options: consolidate guards into a single `if (... or ... or ...) then Exit;`, switch from early returns to a single return variable, or extract the inner logic into a helper. Maps to Sonar-50 rule #34.",
       "defaultSeverity": "Warning",
       "type": "Code Smell",
       "tags": ["control-flow", "maintainability", "sonar50"],
       "detectorUnit": "uMultipleExit.pas",
       "examples": {
-        "bad":  "function Find(Id: Integer): TUser;\nbegin\n  if Id < 0 then begin Result := nil; Exit; end;\n  if not Db.Connected then begin Result := nil; Exit; end;\n  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;\n  Result := Cache.Get(Id);\n  Exit;                              // 4. Exit\nend;",
-        "good": "function Find(Id: Integer): TUser;\nbegin\n  Result := nil;\n  if (Id < 0) or not Db.Connected then Exit;\n  if Cache.Has(Id) then\n    Result := Cache.Get(Id)\n  else\n    Result := DbLoad(Id);\nend;"
+        "bad":  "function Find(Id: Integer): TUser;\nbegin\n  if Id < 0 then begin Result := nil; Exit; end;\n  if not Db.Connected then begin Result := nil; Exit; end;\n  if Db.IsLocked(Id) then begin Result := nil; Exit; end;\n  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;\n  if Db.IsArchived(Id) then begin Result := nil; Exit; end;\n  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;\n  Result := Cache.Get(Id);\n  Exit;                              // 7th Exit\nend;",
+        "good": "function Find(Id: Integer): TUser;\nbegin\n  Result := nil;\n  if (Id < 0) or not Db.Connected then Exit;\n  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;\n  if Cache.Has(Id) then\n    Result := Cache.Get(Id)\n  else\n    Result := DbLoad(Id);\nend;"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [

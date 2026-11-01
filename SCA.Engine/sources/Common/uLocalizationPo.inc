@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7023 Zeilen, 335802 Bytes
+  // i18n\de.po - 7023 Zeilen, 335855 Bytes
   CPoLines_de: array[0..7022] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -487,8 +487,8 @@ const
     'msgid "TLS verification disabled - MITM-attack surface"',
     'msgstr "TLS-Validierung deaktiviert - MITM-Angriffsflaeche"',
     '',
-    'msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"',
-    'msgstr "TThread zerstoert ohne Terminate+WaitFor - Worker laeuft eventuell noch"',
+    'msgid "TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect"',
+    'msgstr "TThread per FreeAndNil freigegeben - Beendigung pr'#$00FC'fen; ein Hinweis, kein bewiesener Defekt"',
     '',
     'msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"',
     'msgstr "TThread.Resume ist deprecated - stattdessen TThread.Start (seit Delphi 2010)"',
@@ -883,8 +883,8 @@ const
     'msgid "except on E: Exception catches every error - prefer a specific subclass"',
     'msgstr "`except on E: Exception` f'#$00E4'ngt alles - lieber spezifische Subklasse benutzen"',
     '',
-    'msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"',
-    'msgstr "Nacktes `raise;` au'#$00DF'erhalb eines except/on-Handlers wirft NIL - Access Violation"',
+    'msgid "Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form"',
+    'msgstr "Nacktes `raise;` au'#$00DF'erhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"',
     '',
     'msgid "Use After Free"',
     'msgstr "Zugriff nach Free"',
@@ -7312,7 +7312,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7019 Zeilen, 349378 Bytes
+  // i18n\fr.po - 7019 Zeilen, 349426 Bytes
   CPoLines_fr: array[0..7018] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -7791,8 +7791,8 @@ const
     'msgid "TLS verification disabled - MITM-attack surface"',
     'msgstr "V'#$00E9'rification TLS d'#$00E9'sactiv'#$00E9'e - surface d''attaque MITM"',
     '',
-    'msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"',
-    'msgstr "TThread d'#$00E9'truit sans Terminate+WaitFor - le worker tourne peut-'#$00EA'tre encore"',
+    'msgid "TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect"',
+    'msgstr "TThread lib'#$00E9'r'#$00E9' par FreeAndNil - v'#$00E9'rifier l''arr'#$00EA't ; une indication, pas un d'#$00E9'faut prouv'#$00E9'"',
     '',
     'msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"',
     'msgstr "TThread.Resume est deprecated - utiliser TThread.Start (depuis Delphi 2010)"',
@@ -8189,8 +8189,8 @@ const
     'msgid "except on E: Exception catches every error - prefer a specific subclass"',
     'msgstr "`except on E: Exception` intercepte toutes les erreurs - pr'#$00E9'f'#$00E9'rer une sous-classe sp'#$00E9'cifique"',
     '',
-    'msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"',
-    'msgstr "Un `raise;` nu en dehors d''un gestionnaire except/on l'#$00E8've NIL - Access Violation"',
+    'msgid "Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form"',
+    'msgstr "Un `raise;` nu en dehors d''un gestionnaire except/on - Delphi (E2145) et FPC refusent cette forme"',
     '',
     'msgid "Use After Free"',
     'msgstr "Utilisation apr'#$00E8's Free"',

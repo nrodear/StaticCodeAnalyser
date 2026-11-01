@@ -470,8 +470,8 @@ msgstr "Synchronize() im Destruktor - Worker- und UI-Thread blockieren sich gege
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr "TLS-Validierung deaktiviert - MITM-Angriffsflaeche"
 
-msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
-msgstr "TThread zerstoert ohne Terminate+WaitFor - Worker laeuft eventuell noch"
+msgid "TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect"
+msgstr "TThread per FreeAndNil freigegeben - Beendigung prüfen; ein Hinweis, kein bewiesener Defekt"
 
 msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
 msgstr "TThread.Resume ist deprecated - stattdessen TThread.Start (seit Delphi 2010)"
@@ -866,8 +866,8 @@ msgstr "Raise außerhalb except"
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr "`except on E: Exception` fängt alles - lieber spezifische Subklasse benutzen"
 
-msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
-msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers wirft NIL - Access Violation"
+msgid "Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form"
+msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"
 
 msgid "Use After Free"
 msgstr "Zugriff nach Free"

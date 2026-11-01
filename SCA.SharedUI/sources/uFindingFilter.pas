@@ -293,7 +293,7 @@ begin
     fkIfThenShortCircuit         : Result := 'ifthen short circuit math strutils kurzschluss';
     // Sonar-50 Critical (SCA132-137)
     fkExceptionTooGeneral        : Result := 'exception too general base basisklasse fanger handler catch';
-    fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt access violation av';
+    fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt reraise e2145';
     fkUseAfterFree               : Result := 'use after free dangling pointer benutzt nach freigabe';
     fkAbstractNotImpl            : Result := 'abstract not implemented eabstracterror nicht ueberschrieben override';
     fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init';

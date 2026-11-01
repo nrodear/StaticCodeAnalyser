@@ -98,6 +98,8 @@ type
     [Test] procedure FreeAndNilIgnoringExecuteBeforeClassProc_StillReported;
     // Voll-Review 2026-09-12 (Major 47): Zaun fuer die bewusste Grenze
     [Test] procedure BareFreeForm_IsDocumentedBoundary_NoFinding;
+    // Nico-Entscheid 2026-11-01: Pruefhinweis, kein Defektbeweis
+    [Test] procedure ThreadDestroy_DefaultSeverity_IsHint;
   end;
 
 implementation
@@ -1229,6 +1231,16 @@ begin
     TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
     'nackte .Free-Form ist dokumentierte Grenze - kein Fund');
   finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.ThreadDestroy_DefaultSeverity_IsHint;
+// TThread.Destroy beendet den Thread selbst, FreeAndNil allein ist also
+// sicher; die Regel gibt nur einen Hinweis. Dass der Katalog dieselbe
+// Schwere traegt, prueft uTestRuleCatalog fuer alle Kinds.
+begin
+  Assert.AreEqual<TLeakSeverity>(lsHint,
+    KindDefaultSeverity(fkTThreadDestroyWithoutTerminate),
+    'SCA114 ist ein Pruefhinweis, kein Defektbeweis');
 end;
 
 initialization

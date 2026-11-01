@@ -468,10 +468,10 @@ type
     fkThreadResumeDeprecated,    // TThread.Resume ist seit D2010 deprecated.
                                  // Stattdessen TThread.Start nutzen oder
                                  // Create(False).
-    fkTThreadDestroyWithoutTerminate, // FreeAndNil(MyThread) ohne vorheriges
-                                 // Terminate + WaitFor - Worker laeuft
-                                 // weiter waehrend das Objekt zerstoert
-                                 // wird -> AV / Heap-Corruption.
+    fkTThreadDestroyWithoutTerminate, // FreeAndNil(MyThread) ohne nahes
+                                 // Terminate oder WaitFor. Pruefhinweis,
+                                 // kein Defektbeweis: TThread.Destroy
+                                 // beendet den Thread selbst.
     // ---- REST/HTTP-Security (SCA115-116) ----
     fkHttpInsteadOfHttps,        // 'http://'-Stringliteral fuer Remote-URL
                                  // - Plaintext-Connect, MITM-Risiko.
@@ -539,8 +539,9 @@ type
                                  // statt spezifischer Exception-Subklasse.
                                  // Sonar-50 #11.
     fkRaiseOutsideExcept,        // SCA133 - nacktes `raise;` ausserhalb
-                                 // eines except-/on-Handlers loest eine
-                                 // Access Violation aus. Sonar-50 #15.
+                                 // eines except-/on-Handlers; Delphi
+                                 // (E2145) und FPC lehnen die Form ab.
+                                 // Sonar-50 #15.
     fkUseAfterFree,              // SCA134 - Zugriff auf eine Variable nach
                                  // .Free / FreeAndNil ohne Reassignment.
                                  // Sonar-50 #7.
@@ -561,7 +562,7 @@ type
     fkFreeWithoutNil,            // SCA139 - obj.Free ohne anschliessendes
                                  // obj := nil; dangling pointer moeglich.
                                  // Sonar-50 #25.
-    fkMultipleExit,              // SCA140 - Methode mit > 3 Exit-Statements;
+    fkMultipleExit,              // SCA140 - Methode mit > 6 Exit-Statements;
                                  // Pfad-Vielfalt erschwert Verstaendnis.
                                  // Sonar-50 #34.
     fkLargeClass,                // SCA141 - Klassen-Implementation > 500
@@ -986,7 +987,7 @@ const
     (Name: 'ParamByNameInLoop';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkParamByNameInLoop
     (Name: 'FieldByNameInLoop';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFieldByNameInLoop
     (Name: 'ThreadResumeDeprecated';     FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkThreadResumeDeprecated
-    (Name: 'TThreadDestroyWithoutTerminate'; FindingType: ftBug;      DefaultSeverity: lsError),   // fkTThreadDestroyWithoutTerminate
+    (Name: 'TThreadDestroyWithoutTerminate'; FindingType: ftBug;      DefaultSeverity: lsHint),    // fkTThreadDestroyWithoutTerminate
     (Name: 'HttpInsteadOfHttps';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning),// fkHttpInsteadOfHttps
     (Name: 'DisabledTlsVerification';    FindingType: ftVulnerability; DefaultSeverity: lsError),  // fkDisabledTlsVerification
     (Name: 'PublicMemberWithoutDoc';     FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkPublicMemberWithoutDoc
@@ -1486,9 +1487,10 @@ begin
     // SCA114 TThreadDestroyWithoutTerminate: 0 TP / 3 FP. Praemissen-
     // Problem: TThread.Destroy fuehrt Terminate und WaitFor IMPLIZIT
     // aus, ein nacktes FreeAndNil(Thread) ist also fuer sich genommen
-    // kein AV-Pfad - der Detektor weiss das selbst (Kommentar in
-    // uConcurrencyExt zu Gate c), der Meldetext behauptet trotzdem
-    // Heap-Korruption.
+    // kein Defekt. Seit Nico-Entscheid 2026-11-01 steht die Regel auf
+    // Hint, die Evidenz-Politik hat dort nichts mehr zu deckeln.
+    // fcMedium bleibt: die Praemisse traegt kein fcHigh, und die
+    // Regel soll bei MinConfidence=medium sichtbar bleiben.
     fkTThreadDestroyWithoutTerminate: Result := fcMedium;
 
     // SCA027 DfmDuplicateBinding: 0 TP / 2 FP, und beide sind die zwei

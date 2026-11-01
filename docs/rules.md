@@ -117,7 +117,7 @@ All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA111](#sca111) | ParamByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](#sca112) | FieldByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](#sca113) | TThread.Resume is deprecated | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](#sca114) | TThread destroyed without Terminate+WaitFor | **Error** | Bug | `uConcurrencyExt.pas` |
+| [SCA114](#sca114) | TThread freed with FreeAndNil - review shutdown | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](#sca115) | Plaintext HTTP URL | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](#sca116) | TLS verification disabled | **Error** | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](#sca117) | Public member missing doc comment | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |
@@ -2854,28 +2854,70 @@ MyThread.Start;
 
 ---
 ## SCA114
-**TThread destroyed without Terminate+WaitFor**
+**TThread freed with FreeAndNil - review shutdown**
 
-> `FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run
+> `FreeAndNil(MyThread)` with no nearby `Terminate` - a review hint, not a proven defect: `TThread.Destroy` ends the thread itself; check `Execute`, the thread's destructor and `FreeOnTerminate`
 
 | Field | Value |
 |---|---|
-| Severity | **Error** | Type | Bug |
+| Severity | Hint | Type | Bug |
 | Tags | `concurrency`, `lifecycle` |
 | CWE | [CWE-364](https://cwe.mitre.org/data/definitions/364.html) |
 | Detector | `uConcurrencyExt.pas` |
 
-Destroying a TThread instance whose Execute is still running causes the destructor to wait via TThread.Free's implicit WaitFor - but if Execute does not honor the Terminated flag, the destructor blocks forever (UI hang), and during that wait the application can hit AVs as half-destroyed state is observed. The safe pattern is `MyThread.Terminate; MyThread.WaitFor; FreeAndNil(MyThread);` (or use FreeOnTerminate=True and never Free manually). Heuristic: matches FreeAndNil(<id>) without `<id>.Terminate` and `<id>.WaitFor` in the preceding ~10 lines. Suppress with `// noinspection TThreadDestroyWithoutTerminate` for non-thread classes.
+Review hint, not a proven defect. `TThread.Destroy` ends the thread itself: it calls `Terminate`, resumes a suspended thread and waits until `Execute` has returned, so `FreeAndNil(MyThread)` on its own is safe. Check three things at the reported line. Does `Execute` honor `Terminated`? If not, the destructor waits until `Execute` returns by itself. Does a destructor of the thread class free fields that `Execute` uses only after `inherited`? Its body runs before `TThread.Destroy` ends the thread. Is `FreeOnTerminate` set? Such a thread frees itself when `Execute` ends, so it must not be freed from outside as well. An extra `WaitFor` adds nothing: it does not return for a thread created suspended and never started. Heuristic: reports `FreeAndNil(<id>)` when `<id>` has a thread type (the declared or constructed type ends in `Thread` or derives from TThread in the same file; if no type resolves, the identifier contains `thread`) and the preceding ~500 characters (about 10 lines) contain neither `<id>.Terminate` nor `<id>.WaitFor`. No finding after `TerminateThread(<id>`, under a positive `if <id>.Finished` guard, or when an `Execute` of the thread class in the same unit references `Terminated`. The bare `.Free` form is not checked, and the detector only runs on files that mention `TThread`, `.Synchronize`, `.Resume`, `.Queue`, `ParamByName` or `FieldByName`. Suppress with `// noinspection TThreadDestroyWithoutTerminate` for non-thread classes.
 
 ```pascal
 // BAD
-// inside an OnClick:
-FreeAndNil(FWorker);  // FWorker.Execute still running?
+type
+  TWorkerThread = class(TThread)
+  protected
+    procedure Execute; override;
+  end;
+
+var
+  FWorkerThread: TWorkerThread;
+
+procedure TWorkerThread.Execute;
+begin
+  RunLongJob;                 // never looks at Terminated
+end;
+
+procedure TMainForm.BtnStopClick(Sender: TObject);
+begin
+  FreeAndNil(FWorkerThread);  // waits until RunLongJob has returned
+end;
 
 // GOOD
-FWorker.Terminate;
-FWorker.WaitFor;
-FreeAndNil(FWorker);
+type
+  TWorkerThread = class(TThread)
+  private
+    FQueue: TList;
+  protected
+    procedure Execute; override;
+  public
+    destructor Destroy; override;
+  end;
+
+var
+  FWorkerThread: TWorkerThread;
+
+procedure TWorkerThread.Execute;
+begin
+  while not Terminated do
+    DoStep;
+end;
+
+destructor TWorkerThread.Destroy;
+begin
+  inherited;                  // ends the thread first
+  FreeAndNil(FQueue);         // Execute no longer runs
+end;
+
+procedure TMainForm.BtnStopClick(Sender: TObject);
+begin
+  FreeAndNil(FWorkerThread);  // Destroy ends the thread itself
+end;
 ```
 
 ---
@@ -3411,22 +3453,22 @@ end;
 ## SCA133
 **Bare raise outside an except/on handler**
 
-> `raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation
+> `raise;` without an exception expression is only valid *inside* an except handler (re-raise) - Delphi (E2145) and FPC reject it anywhere else
 
 | Field | Value |
 |---|---|
 | Severity | **Error** | Type | Bug |
-| Tags | `exception-handling`, `crash`, `sonar50` |
+| Tags | `exception-handling`, `sonar50` |
 | Detector | `uRaiseOutsideExcept.pas` |
 
-A bare `raise;` re-raises the exception currently being handled. Outside of `except` / `on E: T do` there *is* no current exception, so the RTL receives a NIL exception pointer and an Access Violation is raised inside `System._Raise` - far away from the actual mistake. The detector recursively walks the method AST while tracking an `InHandler` flag. The flag is set when the walker descends into `nkExceptBlock` or `nkOnHandler`. An `nkRaise` node with `Name = 'raise'` (bare form) that is encountered while the flag is False produces a finding. Bare `raise;` inside `finally` blocks that are themselves outside an except handler is correctly flagged. Maps to Sonar-50 rule #15 (`RaiseWithoutClass`).
+A bare `raise;` re-raises the exception currently being handled, so it is only valid inside `except` / `on E: T do`. Delphi rejects this form everywhere else with compiler error E2145 'Re-raising an exception only allowed in exception handler', FPC with `parser_e_no_reraise_possible` ('Re-raise isn't possible there'). The detector recursively walks the method AST while tracking an `InHandler` flag. The flag is set when the walker descends into `nkExceptBlock` or `nkOnHandler`. An `nkRaise` node with `Name = 'raise'` (bare form) that is encountered while the flag is False produces a finding. Bare `raise;` inside `finally` blocks that are themselves outside an except handler is flagged as well. Maps to Sonar-50 rule #15 (`RaiseWithoutClass`).
 
 ```pascal
 // BAD
 procedure Foo(x: Integer);
 begin
   if x < 0 then
-    raise;             // <- no current exception -> AV inside System._Raise
+    raise;             // <- not inside a handler: compiler error E2145
 end;
 
 // GOOD
@@ -3640,7 +3682,7 @@ end;
 ## SCA140
 **Method has too many Exit statements**
 
-> A method with more than 3 Exit calls has too many return paths - hard to read, hard to test, easy to miss one
+> A method with more than 6 Exit calls has too many return paths - hard to read, hard to test, easy to miss one
 
 | Field | Value |
 |---|---|
@@ -3648,7 +3690,7 @@ end;
 | Tags | `control-flow`, `maintainability`, `sonar50` |
 | Detector | `uMultipleExit.pas` |
 
-Multiple early returns are useful for guard clauses, but past a small number they fragment the control flow so badly that future maintainers miss conditions. The detector counts `nkExit` descendants of each `nkMethod`; threshold is 3. Refactoring options: consolidate guards into a single `if (... or ... or ...) then Exit;`, switch from early returns to a single return variable, or extract the inner logic into a helper. Maps to Sonar-50 rule #34.
+Multiple early returns are useful for guard clauses, but past a small number they fragment the control flow so badly that future maintainers miss conditions. The detector counts `nkExit` descendants of each `nkMethod` and reports a method with more than 6 of them: 6 Exit statements stay silent, 7 are reported. The threshold is fixed in the detector (`MAX_EXITS`). Exit statements in nested routines and anonymous methods do not count. Refactoring options: consolidate guards into a single `if (... or ... or ...) then Exit;`, switch from early returns to a single return variable, or extract the inner logic into a helper. Maps to Sonar-50 rule #34.
 
 ```pascal
 // BAD
@@ -3656,9 +3698,12 @@ function Find(Id: Integer): TUser;
 begin
   if Id < 0 then begin Result := nil; Exit; end;
   if not Db.Connected then begin Result := nil; Exit; end;
+  if Db.IsLocked(Id) then begin Result := nil; Exit; end;
+  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;
+  if Db.IsArchived(Id) then begin Result := nil; Exit; end;
   if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;
   Result := Cache.Get(Id);
-  Exit;                              // 4. Exit
+  Exit;                              // 7th Exit
 end;
 
 // GOOD
@@ -3666,6 +3711,7 @@ function Find(Id: Integer): TUser;
 begin
   Result := nil;
   if (Id < 0) or not Db.Connected then Exit;
+  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;
   if Cache.Has(Id) then
     Result := Cache.Get(Id)
   else

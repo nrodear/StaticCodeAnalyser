@@ -3175,21 +3175,32 @@ begin
 
     fkTThreadDestroyWithoutTerminate:
     begin
-      Result.Description := _('TThread destroyed without Terminate+WaitFor - worker may still be running');
+      Result.Description := _('TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect');
       Result.Before :=
         '// inside an OnClick or destructor:'#13#10 +
-        'FreeAndNil(FWorker);';
+        'FreeAndNil(FWorkerThread);        // does Execute honor Terminated?';
       Result.After :=
-        'FWorker.Terminate;'#13#10 +
-        'FWorker.WaitFor;'#13#10 +
-        'FreeAndNil(FWorker);'#13#10 +
+        '// TThread.Destroy ends the thread itself, FreeAndNil alone is fine.'#13#10 +
+        '// Review these three points:'#13#10 +
         ''#13#10 +
-        '// Worker selbst muss Terminated regelmaessig pruefen:'#13#10 +
-        '//   while not Terminated do DoStep;'#13#10 +
+        '// 1. Execute honors Terminated, otherwise Destroy waits until it'#13#10 +
+        '//    returns by itself:'#13#10 +
+        'procedure TWorkerThread.Execute;'#13#10 +
+        'begin'#13#10 +
+        '  while not Terminated do'#13#10 +
+        '    DoStep;'#13#10 +
+        'end;'#13#10 +
         ''#13#10 +
-        '// Alternative: FreeOnTerminate := True;'#13#10 +
-        '//   - dann NIEMALS manuell Free aufrufen'#13#10 +
-        '//   - der Thread ist nach Execute selber weg.';
+        '// 2. The thread destructor frees what Execute uses only after'#13#10 +
+        '//    the thread has ended:'#13#10 +
+        'destructor TWorkerThread.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;                      // ends the thread first'#13#10 +
+        '  FreeAndNil(FQueue);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// 3. With FreeOnTerminate := True the thread frees itself:'#13#10 +
+        '//    do not call Free or FreeAndNil on it as well.';
     end;
 
     // -------- REST/HTTP-Security (SCA115-116) --------
@@ -3580,13 +3591,13 @@ begin
 
     fkRaiseOutsideExcept:
     begin
-      Result.Description := _('Bare raise; outside an except/on handler raises NIL - Access Violation');
+      Result.Description := _('Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form');
       Result.Before :=
         'procedure Foo(x: Integer);'#13#10 +
         'begin'#13#10 +
         '  if x < 0 then'#13#10 +
-        '    raise;                    // <- no current exception ->'#13#10 +
-        'end;                          //    System._Raise gets NIL -> AV';
+        '    raise;                    // <- not inside a handler:'#13#10 +
+        'end;                          //    compiler error E2145';
       Result.After :=
         'procedure Foo(x: Integer);'#13#10 +
         'begin'#13#10 +
@@ -3717,15 +3728,19 @@ begin
         'begin'#13#10 +
         '  if Id < 0 then begin Result := nil; Exit; end;'#13#10 +
         '  if not Db.Connected then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsLocked(Id) then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsArchived(Id) then begin Result := nil; Exit; end;'#13#10 +
         '  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;'#13#10 +
         '  Result := Cache.Get(Id);'#13#10 +
-        '  Exit;                                       // 4. Exit'#13#10 +
+        '  Exit;                                       // 7th Exit'#13#10 +
         'end;';
       Result.After :=
         'function Find(Id: Integer): TUser;'#13#10 +
         'begin'#13#10 +
         '  Result := nil;'#13#10 +
         '  if (Id < 0) or not Db.Connected then Exit;'#13#10 +
+        '  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;'#13#10 +
         '  if Cache.Has(Id) then'#13#10 +
         '    Result := Cache.Get(Id)'#13#10 +
         '  else'#13#10 +
