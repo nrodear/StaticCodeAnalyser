@@ -51,6 +51,10 @@
     "platform": "Win32",
     "projectVersion": "20.1"
   },
+  "reDelphix/tools/probe/RdxActionProbe.dproj": {
+    "platform": "Win64",
+    "projectVersion": "20.1"
+  },
   "reDelphix/tools/probe/RdxCorpusProbe.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"

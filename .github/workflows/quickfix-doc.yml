@@ -9,7 +9,9 @@
 # rules/sca-rules.json, Beschreibung, Sperren und Beispiele aus
 # reDelphix/data/quickfixes-doc.json. Wer eine Hilfe ergaenzt und die Doku
 # vergisst, oder einen Menuetext bzw. eine Uebersetzung aendert und die
-# Datei nicht neu erzeugt, faellt hier auf.
+# Datei nicht neu erzeugt, faellt hier auf. Ebenso, wenn das Katalogfeld
+# "editorHelps" (Quelle von SARIF properties.editorHelp) nicht mehr zu den
+# Zeilen, zweiten Eintraegen, Kennzeichnungen und Rezepten passt.
 #
 # Der Selbsttest laeuft zuerst: er belegt an Mutanten (fehlender Eintrag,
 # neue Zeile in FIX_ROWS, neues Rezept, editorHelp ohne Hilfe, Drift ...),

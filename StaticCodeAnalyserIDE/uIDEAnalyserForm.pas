@@ -28,7 +28,6 @@ uses
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
   uIDESCAOptions,                          // Tools > Options > SCA Page
-  uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter,
   uUiElementRegistry,                      // TUiElementRegistry - AddUiElements-Signatur
   uFindingFileIndex,                       // TFindingFileIndex - Dock-Funde je Datei (FFileIndex)
@@ -630,8 +629,8 @@ type
 var
   GDockableForm: TAnalyserDockableForm;
 
-// Traegt die UI-Elemente DIESER Unit in das Verzeichnis ein - zehn Stueck,
-// von den SharedUI-Hooks bis zur Sonar-Options-Seite, mit SortKeys in der
+// Traegt die UI-Elemente DIESER Unit in das Verzeichnis ein - elf Stueck,
+// von den SharedUI-Hooks bis zur SCA-Options-Seite, mit SortKeys in der
 // am 2026-08-10 GEMESSENEN Anmeldereihenfolge (Messung 0.5). Angemeldet
 // wird dadurch noch nichts; das macht RegisterAll beim Aufrufer
 // (uIDEExpert.Register), der auch die uebrigen vier Elemente beitraegt.
@@ -791,13 +790,14 @@ const
   BTN_W_MED_SHORT    = 64;     // "Settings..."
   BTN_W_MED          = 68;     // "Cancel", "Export"
   BTN_W_MED_LONG     = 48;     // "📄 File"
-  BTN_W_LONG         = 64;     // "▶ Analyse"
+  BTN_W_LONG         = 71;     // "▶ Analyse" (de "▶ Analysieren" braucht +7)
 
   // ---- Label-Widths -----------------------------------------------------
   LBL_W_PATH         = 78;     // "Path:" (AutoSize, Wert nur als Fallback)
-  LBL_W_FILTER       = 76;     // "Severity:"
+  LBL_W_FILTER       = 87;     // "Severity:" (de "Schweregrad:" braucht +11)
   LBL_W_TYPE         = 36;     // "Type:"
   LBL_W_PROFILE      = 48;     // "Profile:"
+  LBL_PAD_LEFT       = 2;      // Abstand "Profile:"/"Severity:" zum Control davor (Margins.Left)
 
   // ---- Combo-Widths (innerhalb der Sub-Panel-Container) -----------------
   // Severity-Combo: 200 px statt 160, damit die laengsten deutschen Labels
@@ -1153,6 +1153,10 @@ begin
   FFilterCombo.DropDownCount := 16;
   FFilterCombo.OnChange := FilterChange;
   FPanelSev := FFilterCombo.Parent as TPanel;
+  // Linker Rand wie beim Profil-Label; der Sub-Container waechst mit.
+  FLblFilter.AlignWithMargins := True;
+  FLblFilter.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER);
   PopulateFilterCombo;
 
   // Type-Filter (Sonar-Kategorie).
@@ -1206,6 +1210,11 @@ begin
                               'Takes effect at the next analysis run.');
   FProfileCombo.ShowHint := True;
   FPanelProfile := FProfileCombo.Parent as TPanel;
+  // Das Label klebte am ⊘-Knopf: linker Rand ueber Margins, der Sub-
+  // Container waechst um denselben Betrag (Combo bleibt gleich breit).
+  FLblProfile.AlignWithMargins := True;
+  FLblProfile.Margins.SetBounds(ScaleW(LBL_PAD_LEFT), 0, 0, 0);
+  FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE);
   PopulateProfileCombo;
 
   // FBtnAnalyseChanged + FBtnCancel + FBtnExport sind aus der Toolbar raus -
@@ -1974,6 +1983,7 @@ var
   TotalMatched   : Integer;
   BaselineActive : Boolean;
   BaselineHidden : Integer;
+  Covered        : TArray<Boolean>;
 begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
@@ -1999,13 +2009,20 @@ begin
   try
     FDisplayedFindings.Clear;
 
+    // Baseline-Abgleich EINMAL fuer die ganze Liste, nicht Contains je
+    // Fund: seit 2026-10-30 deckt jeder Baseline-Eintrag hoechstens EINEN
+    // Fund (TBaselineMatcher), und zaehlen kann nur, wer alle Funde
+    // zugleich sieht. Leer, solange der Filter aus ist.
+    if BaselineActive then
+      Covered := FBaselineSet.CoveredFlags(FAllFindings);
+
     // ---- Filter (Logik in uFindingFilter.TFindingFilter.Matches) ----
     for i := 0 to FAllFindings.Count - 1 do
     begin
       // Baseline-Filter zuerst: bereits akzeptierte Funde ausblenden.
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
-      if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      if (i < Length(Covered)) and Covered[i] then
       begin
         Inc(BaselineHidden);
         Continue;
@@ -2275,7 +2292,8 @@ procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
 // Scans zu verlieren. Findings.OwnsObjects := False damit die TLeakFinding-
 // Instanzen an FAllFindings (hat eigene Ownership=True) wandern.
 var
-  i: Integer;
+  i        : Integer;
+  UnitBase : string;
 begin
   if GLiveAnalyserFrame <> Pointer(Self) then
   begin
@@ -2294,9 +2312,22 @@ begin
     // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
     FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
-    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen.
+    // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
+    // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
+    // .pas liefert die DFM-Funde mit dem Pfad der Formdatei neu mit
+    // (TDfmAnalysisRunner); geloescht wurde bis 2026-10-30 nur nach der
+    // .pas, jeder Watch-Lauf haengte also eine weitere Kopie der DFM-Funde
+    // an. Unter dem zaehlenden Baseline-Abgleich (uBaseline.
+    // TBaselineMatcher) deckt ein Eintrag nur EINE Kopie - die zweite
+    // erschien als neu (Review d/MethodAttr). Die Generation oben reicht
+    // auch fuer die Formdatei: der Index-Stempel ist das Maximum aller
+    // Generationen (FindingsStampOf), FFileIndex baut also neu.
+    UnitBase := ChangeFileExt(FileName, '');
     for i := FAllFindings.Count - 1 downto 0 do
-      if SameText(FAllFindings[i].FileName, FileName) then
+      if SameText(FAllFindings[i].FileName, FileName)
+         or (TStaticFiles.IsFormFileNameAnyDialect(FAllFindings[i].FileName)
+             and SameText(ChangeFileExt(FAllFindings[i].FileName, ''),
+                          UnitBase)) then
         FAllFindings.Delete(i);
 
     // 2) Neue Findings einhaengen (Ownership-Transfer).
@@ -3643,7 +3674,7 @@ begin
   if Assigned(FPanelSev) and Assigned(FLblFilter) then
   begin
     if FLblFilter.Visible then
-      FPanelSev.Width := ScaleW(LBL_W_FILTER + CMB_W_FILTER)
+      FPanelSev.Width := ScaleW(LBL_PAD_LEFT + LBL_W_FILTER + CMB_W_FILTER)
     else
       FPanelSev.Width := ScaleW(CMB_W_FILTER);
   end;
@@ -3657,7 +3688,7 @@ begin
   if Assigned(FPanelProfile) and Assigned(FLblProfile) then
   begin
     if FLblProfile.Visible then
-      FPanelProfile.Width := ScaleW(LBL_W_PROFILE + CMB_W_PROFILE)
+      FPanelProfile.Width := ScaleW(LBL_PAD_LEFT + LBL_W_PROFILE + CMB_W_PROFILE)
     else
       FPanelProfile.Width := ScaleW(CMB_W_PROFILE);
   end;
@@ -6159,7 +6190,6 @@ const
   SK_CTX_MENU       = 80;
   SK_CTX_ACTIONS    = 85;
   SK_OPTIONS_SCA    = 90;
-  SK_OPTIONS_SONAR  = 100;
   procedure AddEl(const AName: string; ASortKey: Integer;
     const AReg, AUnreg: TUiElementProc);
   // Buendelt Element und Not-Aus (A.5): der Name faellt nur EINMAL, und
@@ -6212,10 +6242,6 @@ begin
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
   AddEl('OptionsPageSCA', SK_OPTIONS_SCA,
     RegisterSCAAddInOptions, UnregisterSCAAddInOptions);
-  // Tools > Options > Third Party > Sonar Integration
-  // (separate Page - Host/Token/ProjectKey + Test-Connection).
-  AddEl('OptionsPageSonar', SK_OPTIONS_SONAR,
-    RegisterSonarAddInOptions, UnregisterSonarAddInOptions);
 end;
 
 procedure ShowAnalyserDockableForm;

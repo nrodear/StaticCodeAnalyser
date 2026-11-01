@@ -24,7 +24,8 @@ const
         'finally' + #13#10 + '  list.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA001:changes:free-in-try-finally-block'
     ),
     // SCA002
     (
@@ -35,7 +36,8 @@ const
       GoodEx   : 'try DoStuff except on E: Exception do LogError(E.Message); end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA002:changes:add-raise-to-empty-except-block'
     ),
     // SCA003
     (
@@ -47,7 +49,8 @@ const
         'Query.ParamByName(''n'').AsString := UserName;';
       Anchor   : 'assign-or-call';
       FixMode  : 'assisted';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA003:template:copy-parameterized-template-to-clipboard'
     ),
     // SCA004
     (
@@ -58,7 +61,8 @@ const
       GoodEx   : 'Password := GetEnvironmentVariable(''DB_PASSWORD'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA005
     (
@@ -69,7 +73,8 @@ const
       GoodEx   : 'Format(''%s is %d'', [Name, Age]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA006
     (
@@ -80,7 +85,8 @@ const
       GoodEx   : '(check encoding, fix syntax)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA007
     (
@@ -94,7 +100,8 @@ const
         '  MyUnusedHelper;   // registers its classes in its initialization section';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA007:changes:remove-unit-from-uses'
     ),
     // SCA008
     (
@@ -105,7 +112,8 @@ const
       GoodEx   : 'obj := FindObject(id);' + #13#10 + 'if Assigned(obj) then obj.DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA009
     (
@@ -116,7 +124,8 @@ const
       GoodEx   : 'obj := TFoo.Create;' + #13#10 + 'try obj.DoStuff finally obj.Free end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA009:changes:free-in-try-finally-block'
     ),
     // SCA010
     (
@@ -127,7 +136,8 @@ const
       GoodEx   : 'if count <> 0 then result := total / count;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA011
     (
@@ -139,7 +149,8 @@ const
         #13#10 + 'end;' + #13#10 + 'WriteLn(''reached'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA011:same:delete-unreachable-code-line'
     ),
     // SCA012
     (
@@ -150,7 +161,8 @@ const
       GoodEx   : '(extract into ParseInput, Validate, Persist helper methods)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA013
     (
@@ -161,7 +173,8 @@ const
       GoodEx   : 'procedure SaveOrder(const Order: TOrder);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA014
     (
@@ -172,7 +185,8 @@ const
       GoodEx   : 'const MAX_RETRIES = 3;' + #13#10 + 'if RetryCount > MAX_RETRIES then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA014:same:introduce-local-constant-for'
     ),
     // SCA015
     (
@@ -185,7 +199,8 @@ const
         'ShowMessage(MSG_FILE_NOT_FOUND);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA016
     (
@@ -196,7 +211,8 @@ const
       GoodEx   : 'LogFile := TPath.Combine(GetEnvironmentVariable(''LOGDIR''), ''app.log'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA017
     (
@@ -207,7 +223,8 @@ const
       GoodEx   : 'Logger.Debug(''reached step 3'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA017:changes:put-debug-output-in-ifdef-debug,SCA017.2:changes:delete-debug-output'
     ),
     // SCA018
     (
@@ -220,7 +237,8 @@ const
         #13#10 + 'if d then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA018:same:turn-last-if-into-guard-clause-with-exit'
     ),
     // SCA019
     (
@@ -234,7 +252,8 @@ const
         #13#10 + '// TODO(#4711): handle empty input - see issue 4711';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA020
     (
@@ -246,7 +265,8 @@ const
         '  raise ENotImplemented.Create(''...'');' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA020:same:mark-empty-body-as-intentional,SCA020.2:changes:raise-enotimplemented-in-empty-body'
     ),
     // SCA021
     (
@@ -257,7 +277,8 @@ const
       GoodEx   : '(extract into a single ValidateXxx procedure)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA022
     (
@@ -268,7 +289,8 @@ const
       GoodEx   : '(extract decision groups into named helper methods)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA023
     (
@@ -279,7 +301,8 @@ const
       GoodEx   : '(fix per the custom rule''s message)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA024
     (
@@ -290,7 +313,8 @@ const
       GoodEx   : 'object btnSave: TButton' + #13#10 + '  Caption = ''Save''' + #13#10 + 'end';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA025
     (
@@ -301,7 +325,8 @@ const
       GoodEx   : 'btnSave.Caption := _(''btn.save'');  // i18n at runtime';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA026
     (
@@ -313,7 +338,8 @@ const
       GoodEx   : 'FDConnection1.Params.Values[''Password''] := GetEnvironmentVariable(''DB_PWD'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA027
     (
@@ -325,7 +351,8 @@ const
       GoodEx   : 'DBEdit1.DataField = ''NAME''' + #13#10 + 'DBEdit2.DataField = ''FIRSTNAME''';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA028
     (
@@ -339,7 +366,8 @@ const
         'procedure btnSaveClick(Sender: TObject);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA029
     (
@@ -352,7 +380,8 @@ const
         #13#10 + '// or delete the method - an unbound handler is never called';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA030
     (
@@ -365,7 +394,8 @@ const
         '// or clear OnClick in the designer and delete the method';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA031
     (
@@ -377,7 +407,8 @@ const
         '  btnSave: TButton;   // the .dfm creates it - the field must exist' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA032
     (
@@ -389,7 +420,8 @@ const
         '// QA has no MasterSource';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA033
     (
@@ -401,7 +433,8 @@ const
         'FDQuery1.ParamByName(''n'').AsString := EdName.Text;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA034
     (
@@ -413,7 +446,8 @@ const
         '  DataField = ''Email''' + #13#10 + 'end';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA035
     (
@@ -426,7 +460,8 @@ const
         '// or drop Required = True if the field really is optional';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA036
     (
@@ -437,7 +472,8 @@ const
       GoodEx   : 'DBCheckBox1.DataField = ''IsActive''';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA037
     (
@@ -448,7 +484,8 @@ const
       GoodEx   : 'EdA.TabOrder = 0' + #13#10 + 'EdB.TabOrder = 1';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA038
     (
@@ -459,7 +496,8 @@ const
       GoodEx   : 'object FDQuery1: TFDQuery';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA039
     (
@@ -470,7 +508,8 @@ const
       GoodEx   : 'object dmInvoice: TDataModule' + #13#10 + '  object FDQuery1: TFDQuery ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA040
     (
@@ -481,7 +520,8 @@ const
       GoodEx   : 'Form2.UserName := ''x'';   // property on Form2';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA041
     (
@@ -493,7 +533,8 @@ const
         '    object EdName: TEdit';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA042
     (
@@ -508,7 +549,8 @@ const
         'btnClose.OnClick  = btnCloseClick';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA043
     (
@@ -522,7 +564,8 @@ const
         '// or drop Action and keep OnClick - but not both';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA044
     (
@@ -533,7 +576,8 @@ const
       GoodEx   : 'Msg := Format(''User %s has %d open tickets'', [Name, N]);';
       Anchor   : 'assign';
       FixMode  : 'auto';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA044:same:build-format-from-concatenation'
     ),
     // SCA045
     (
@@ -545,7 +589,8 @@ const
       GoodEx   : 'C := Customer;' + #13#10 + 'C.Name := SomeName;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA046
     (
@@ -556,7 +601,8 @@ const
       GoodEx   : 'for i := 10 downto 1 do DoStuff(i);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA046:changes:replace-to-with-downto,SCA046.2:changes:swap-loop-bounds'
     ),
     // SCA047
     (
@@ -567,7 +613,8 @@ const
       GoodEx   : 'FCount := ACount;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA047:same:remove-self-assignment-of'
     ),
     // SCA048
     (
@@ -581,7 +628,8 @@ const
         '  Configure;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA049
     (
@@ -592,7 +640,8 @@ const
       GoodEx   : 'if Length(s) >= 2 then Last := s[Length(s) - 1];';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA050
     (
@@ -607,7 +656,8 @@ const
         '// Same-unit access stays legal under Delphi-classic `private`.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA051
     (
@@ -618,7 +668,8 @@ const
       GoodEx   : 'protected' + #13#10 + '  procedure HookForSubclasses; virtual;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA052
     (
@@ -632,7 +683,8 @@ const
         '//   procedure NeverCalled;   // part of the published plugin API';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA053
     (
@@ -644,7 +696,8 @@ const
       GoodEx   : 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA053:same:remove-unused-variable'
     ),
     // SCA054
     (
@@ -655,7 +708,8 @@ const
       GoodEx   : 'procedure Process(const Data: TData);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA054:same:prefix-parameter-with-intentionally-unused'
     ),
     // SCA055
     (
@@ -666,7 +720,8 @@ const
       GoodEx   : 'if (a = b) then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA056
     (
@@ -677,7 +732,8 @@ const
       GoodEx   : 'QDetail.MasterSource = dsMaster   QDetail.MasterFields = ''OrderID''';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA057
     (
@@ -688,7 +744,8 @@ const
       GoodEx   : '(move all DB components to a TDataModule)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA058
     (
@@ -699,7 +756,8 @@ const
       GoodEx   : 'Q.SQL.Text := ''UPDATE Users SET Active=0 WHERE Id=:id'';';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA059
     (
@@ -710,7 +768,8 @@ const
       GoodEx   : 'S := Format(''%.2f'', [Price], TFormatSettings.Invariant);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA059:same:pass-formatsettings-explicitly,SCA059.2:changes:pass-tformatsettings-invariant'
     ),
     // SCA060
     (
@@ -722,7 +781,8 @@ const
       GoodEx   : 'if Failed then Exit;' + #13#10 + '...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA060:same:replace-goto-with-exit'
     ),
     // SCA061
     (
@@ -733,7 +793,8 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA061:same:replace-tabs-in-this-line-with-spaces'
     ),
     // SCA062
     (
@@ -745,7 +806,8 @@ const
         '  ArgumentThree, ArgumentFour, ArgumentFive);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA063
     (
@@ -756,7 +818,8 @@ const
       GoodEx   : '  DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA063:same:remove-trailing-whitespace'
     ),
     // SCA064
     (
@@ -767,7 +830,8 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  if X then DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA064:same:write-in-lowercase'
     ),
     // SCA065
     (
@@ -778,7 +842,8 @@ const
       GoodEx   : '// noinspection - covered by integration test' + #13#10 + 'Dispose(P);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA065:changes:replace-nosonar-with-noinspection-all-marker'
     ),
     // SCA066
     (
@@ -789,7 +854,8 @@ const
       GoodEx   : 'MyProc;' + #13#10 + 'Result := MyFunc;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA066:same:remove-empty-parentheses'
     ),
     // SCA067
     (
@@ -802,7 +868,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA068
     (
@@ -815,7 +882,8 @@ const
         'Excel.ActiveWorkbook.SaveAs(NewName);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA068:same:remove-trailing-comma'
     ),
     // SCA069
     (
@@ -826,7 +894,8 @@ const
       GoodEx   : 'const TIMEOUT_MS = 1_800_000;' + #13#10 + 'const MAX_BYTES = 10_485_760;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA069:same:group-digits-with'
     ),
     // SCA070
     (
@@ -837,7 +906,8 @@ const
       GoodEx   : '// TODO: re-enable once issue #123 is fixed - see history';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA070:same:delete-commented-out-code'
     ),
     // SCA071
     (
@@ -848,7 +918,8 @@ const
       GoodEx   : 'implementation' + #13#10 + #13#10 + 'procedure Foo; ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA071:same:move-keyword-to-column-1'
     ),
     // SCA072
     (
@@ -859,7 +930,8 @@ const
       GoodEx   : 'if Active then ...' + #13#10 + 'if Disabled then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA072:same:remove-redundant-comparison-with-true-false'
     ),
     // SCA073
     (
@@ -870,7 +942,8 @@ const
       GoodEx   : 'type ServiceMarkerAttribute = class(TCustomAttribute) end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA074
     (
@@ -881,7 +954,8 @@ const
       GoodEx   : 'Assert(Items.Count > 0, ''caller must ensure non-empty Items'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA074:same:use-condition-as-assert-message'
     ),
     // SCA075
     (
@@ -892,7 +966,8 @@ const
       GoodEx   : 'type TFoo = class ... end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA075:same:remove-tobject-from-class-declaration'
     ),
     // SCA076
     (
@@ -903,7 +978,8 @@ const
       GoodEx   : 'var A: Integer;' + #13#10 + '    B: Integer;' + #13#10 + '    C: Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA076:same:split-grouped-declaration'
     ),
     // SCA077
     (
@@ -914,7 +990,8 @@ const
       GoodEx   : 'if Active then Activate;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA077:same:replace-empty-with-do-begin-end-by-call'
     ),
     // SCA078
     (
@@ -925,7 +1002,8 @@ const
       GoodEx   : 'try Foo; except on E: EDatabaseError do Log(E.Message); end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA079
     (
@@ -936,7 +1014,8 @@ const
       GoodEx   : 'const' + #13#10 + '  A = 1;' + #13#10 + '  B = 2;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA079:same:merge-with-previous-section'
     ),
     // SCA080
     (
@@ -948,7 +1027,8 @@ const
       GoodEx   : 'procedure Foo;' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA080:same:remove-redundant'
     ),
     // SCA081
     (
@@ -960,7 +1040,8 @@ const
         'type TBar = class ... end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA082
     (
@@ -971,7 +1052,8 @@ const
       GoodEx   : 'DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA082:same:remove-extra-semicolon'
     ),
     // SCA083
     (
@@ -984,7 +1066,8 @@ const
         #13#10 + '  Stream.Free;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA083:same:remove-empty-try-finally'
     ),
     // SCA084
     (
@@ -995,7 +1078,8 @@ const
       GoodEx   : 'if Assigned(Obj) then ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA084:same:remove-redundant-comparison-with-nil'
     ),
     // SCA085
     (
@@ -1006,7 +1090,8 @@ const
       GoodEx   : 'FreeAndNil(Obj);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA085:same:use-freeandnil'
     ),
     // SCA086
     (
@@ -1017,7 +1102,8 @@ const
       GoodEx   : 'procedure Foo(var S: string);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA086:depends:replace-out-with-var-for'
     ),
     // SCA087
     (
@@ -1029,7 +1115,8 @@ const
       GoodEx   : 'type TFoo = class' + #13#10 + '  private' + #13#10 + '    FX: Integer;' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA087:same:remove-empty-visibility-section'
     ),
     // SCA088
     (
@@ -1041,7 +1128,8 @@ const
       GoodEx   : 'initialization' + #13#10 + '  RegisterClass(TFoo);' + #13#10 + 'end.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA088:same:replace-begin-with-initialization'
     ),
     // SCA089
     (
@@ -1055,7 +1143,8 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA090
     (
@@ -1067,7 +1156,8 @@ const
       GoodEx   : 'ProtectedDoStuff;  // helper wraps the inner try';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA091
     (
@@ -1079,7 +1169,8 @@ const
       GoodEx   : 'FOperations[Op].Execute;  // dispatch table';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA092
     (
@@ -1090,7 +1181,8 @@ const
       GoodEx   : '// delete the file';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA093
     (
@@ -1103,7 +1195,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA093:changes:remove-second-duplicate-inherited-call,SCA093.2:changes:remove-first-duplicate-inherited-call'
     ),
     // SCA094
     (
@@ -1114,7 +1207,8 @@ const
       GoodEx   : 'if Active then ...' + #13#10 + 'Result := 42;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA094:same:remove-redundant-inner-parentheses'
     ),
     // SCA095
     (
@@ -1127,7 +1221,8 @@ const
         '  public procedure A;' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA096
     (
@@ -1139,7 +1234,8 @@ const
         '  FX := 0;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA096:depends:call-first-in-constructor'
     ),
     // SCA097
     (
@@ -1152,7 +1248,8 @@ const
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA097:depends:call-inherited-last-in-destructor'
     ),
     // SCA098
     (
@@ -1163,7 +1260,8 @@ const
       GoodEx   : 'Result := Active;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA098:same:assign-condition-to-directly'
     ),
     // SCA099
     (
@@ -1176,7 +1274,8 @@ const
         #13#10 + 'else' + #13#10 + 'begin' + #13#10 + '  DoC;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA099:same:put-branch-in-begin-end'
     ),
     // SCA100
     (
@@ -1187,7 +1286,8 @@ const
       GoodEx   : 'type PInteger = ^Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA101
     (
@@ -1198,7 +1298,8 @@ const
       GoodEx   : 'if Active then' + #13#10 + 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA101:same:put-branch-in-begin-end'
     ),
     // SCA102
     (
@@ -1211,7 +1312,8 @@ const
         '  Inner;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA103
     (
@@ -1224,7 +1326,8 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA104
     (
@@ -1235,7 +1338,8 @@ const
       GoodEx   : 'type TCounter = class' + #13#10 + '  ...' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA105
     (
@@ -1246,7 +1350,8 @@ const
       GoodEx   : 'type IService = interface [''{...}''] end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA106
     (
@@ -1257,7 +1362,8 @@ const
       GoodEx   : 'procedure DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA106:same:write-method-name-as'
     ),
     // SCA107
     (
@@ -1272,7 +1378,8 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA108
     (
@@ -1288,7 +1395,8 @@ const
         #13#10 + '// destructor stays Synchronize-free.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA109
     (
@@ -1301,7 +1409,8 @@ const
         '  FLock.Leave;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA109:changes:release-lock-in-try-finally-block'
     ),
     // SCA110
     (
@@ -1314,7 +1423,8 @@ const
         #13#10 + '  s := SB.ToString;' + #13#10 + 'finally SB.Free; end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA111
     (
@@ -1327,7 +1437,8 @@ const
         '  P.AsInteger := Ids[i];' + #13#10 + '  Q.ExecSQL;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA111:changes:move-before-loop'
     ),
     // SCA112
     (
@@ -1341,7 +1452,8 @@ const
         '  Total := Total + Amt.AsCurrency;' + #13#10 + '  Q.Next;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA112:changes:move-before-loop'
     ),
     // SCA113
     (
@@ -1352,7 +1464,8 @@ const
       GoodEx   : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Start;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA113:same:use-start-instead-of-resume'
     ),
     // SCA114
     (
@@ -1363,7 +1476,8 @@ const
       GoodEx   : 'FWorker.Terminate;' + #13#10 + 'FWorker.WaitFor;' + #13#10 + 'FreeAndNil(FWorker);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA115
     (
@@ -1374,7 +1488,8 @@ const
       GoodEx   : 'Url := ''https://api.contoso-shop.de/v1/users'';';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA115:changes:use-https-instead-of-http'
     ),
     // SCA116
     (
@@ -1386,7 +1501,8 @@ const
         'Client.OnVerifyPeer := VerifyPinnedFingerprint;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA117
     (
@@ -1400,7 +1516,8 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA117:same:insert-documentation-skeleton'
     ),
     // SCA118
     (
@@ -1411,7 +1528,8 @@ const
       GoodEx   : 'type' + #13#10 + '  EMyError = class(Exception);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA118:same:rename-exception-class-to'
     ),
     // SCA119
     (
@@ -1424,7 +1542,8 @@ const
         'begin ... end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA119:same:rename-constant-to'
     ),
     // SCA120
     (
@@ -1438,7 +1557,8 @@ const
         '    raise EArgumentOutOfRangeException.Create(''x negative'');' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA120:changes:raise-exception'
     ),
     // SCA121
     (
@@ -1452,7 +1572,8 @@ const
         #13#10 + '  if L <> nil then' + #13#10 + '    Result := L.Count;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA121:changes:initialize-result-with'
     ),
     // SCA122
     (
@@ -1467,7 +1588,8 @@ const
         '    raise;            // preserves trace' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA122:same:use-raise-to-keep-original-stack-trace'
     ),
     // SCA123
     (
@@ -1480,7 +1602,8 @@ const
         '  L.Free;                  // virtual Destroy resolves at runtime' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA123:same:remove-cast-to-before-free'
     ),
     // SCA124
     (
@@ -1496,7 +1619,8 @@ const
         '  list.Clear;             // or FreeAndNil + new TStringList.Create' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA125
     (
@@ -1511,7 +1635,8 @@ const
         '// parent''s Paint is reached by normal virtual dispatch.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA125:same:remove-empty-override'
     ),
     // SCA126
     (
@@ -1524,7 +1649,8 @@ const
         '  Obj.DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA126:same:use-assigned-instead-of-comparing-with-nil'
     ),
     // SCA127
     (
@@ -1536,7 +1662,8 @@ const
         '  raise EArgumentOutOfRangeException.CreateFmt(''x = %d'', [x]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA127:changes:raise-eargumentexception-instead-wrong-argument,SCA127.2:changes:raise-einvalidopexception-instead-invalid-state'
     ),
     // SCA128
     (
@@ -1549,7 +1676,8 @@ const
         #13#10 + 'WriteLn(DateToStr(Now, FS));';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA128:same:pass-formatsettings-explicitly,SCA128.2:changes:pass-tformatsettings-invariant'
     ),
     // SCA129
     (
@@ -1562,7 +1690,8 @@ const
         'logStream.WriteString(UTF8Encode(u));   // explicit, full Unicode';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA130
     (
@@ -1575,7 +1704,8 @@ const
         'ShowMessage(p);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA131
     (
@@ -1588,7 +1718,8 @@ const
         '  x := FetchFromDb;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA131:changes:replace-ifthen-with-if-then-else'
     ),
     // SCA132
     (
@@ -1603,7 +1734,8 @@ const
         '  on E: EFileNotFoundException do' + #13#10 + '    Log(E.Message);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA133
     (
@@ -1617,7 +1749,8 @@ const
         '    raise EArgumentException.CreateFmt(''x = %d (must be >= 0)'', [x]);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA134
     (
@@ -1631,7 +1764,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA135
     (
@@ -1645,7 +1779,8 @@ const
         #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA136
     (
@@ -1662,7 +1797,8 @@ const
         '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA137
     (
@@ -1676,7 +1812,8 @@ const
         '// Cast one operand; the other is auto-promoted; multiplication is 64-bit.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA137:changes:cast-to-int64-before-multiplying'
     ),
     // SCA138
     (
@@ -1694,7 +1831,8 @@ const
         '  FGrid:    TGridRenderer;' + #13#10 + '  procedure Setup;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA139
     (
@@ -1709,7 +1847,8 @@ const
         'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA139:same:use-freeandnil'
     ),
     // SCA140
     (
@@ -1728,7 +1867,8 @@ const
         '    Result := DbLoad(Id);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA141
     (
@@ -1744,7 +1884,8 @@ const
         '  FData:   TDataController;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA142
     (
@@ -1757,7 +1898,8 @@ const
         '  System.JSON,' + #13#10 + '  System.SysUtils;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA143
     (
@@ -1771,7 +1913,8 @@ const
         'interface' + #13#10 + #13#10 + 'uses ...;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA144
     (
@@ -1784,7 +1927,8 @@ const
         'if SameValue(Ratio, 0.5, 1e-9) then DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA144:changes:use-instead-of-exact-comparison'
     ),
     // SCA145
     (
@@ -1800,7 +1944,8 @@ const
         '  inherited;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA146
     (
@@ -1816,7 +1961,8 @@ const
         'begin Notify(Msg, clBlack); end;' + #13#10 + '// Caller: SendErrorNotification(s);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA147
     (
@@ -1830,7 +1976,8 @@ const
         #13#10 + '// or call HelperA from DoStuff to make the dependency explicit';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA147:same:delete-unused-private-method'
     ),
     // SCA148
     (
@@ -1844,7 +1991,8 @@ const
         '// Caller: TMath.Add(1, 2)   // no instance needed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA148:same:make-static-class-method'
     ),
     // SCA149
     (
@@ -1857,7 +2005,8 @@ const
       GoodEx   : 'TDerived = class(TBase)' + #13#10 + '  procedure DoWork; override;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA149:depends:add-to-declaration'
     ),
     // SCA150
     (
@@ -1870,7 +2019,8 @@ const
         'if Length(s) = 0 then DoOther;    // empty check';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA150:same:remove-always-true-condition'
     ),
     // SCA151
     (
@@ -1884,7 +2034,8 @@ const
         'begin' + #13#10 + '  Result := DEFAULT_TIMEOUT;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA152
     (
@@ -1899,7 +2050,8 @@ const
         #13#10 + 'ShowMessage(SSavedMsg);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA153
     (
@@ -1911,7 +2063,8 @@ const
         '  FLocker.UnLock;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA153:changes:release-lock-in-try-finally-block'
     ),
     // SCA154
     (
@@ -1925,7 +2078,8 @@ const
         'FillChar(V, SizeOf(V), 0);             // matches the variable''s size';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA154:changes:use-sizeof-instead-of-pointer-size'
     ),
     // SCA155
     (
@@ -1936,7 +2090,8 @@ const
       GoodEx   : 'Form1.DoStuff;' + #13#10 + 'List1.Sort;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA156
     (
@@ -1948,7 +2103,8 @@ const
         '  FreeMem(P);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA156:changes:free-buffer-in-try-finally-block'
     ),
     // SCA157
     (
@@ -1962,7 +2118,8 @@ const
         '  Dest[i] := Source[i];';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA158
     (
@@ -1973,7 +2130,8 @@ const
       GoodEx   : 'if s <> '''' then' + #13#10 + '  p := PChar(s) + 5;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA159
     (
@@ -1985,7 +2143,8 @@ const
         '    Logger.Error(E.Message);' + #13#10 + '    raise;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA159:changes:add-raise-to-empty-exception-handler'
     ),
     // SCA160
     (
@@ -1996,7 +2155,8 @@ const
       GoodEx   : 'SetString(s, PChar(Buf), Len);   // explicit length';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA161
     (
@@ -2007,7 +2167,8 @@ const
       GoodEx   : 'Diff := NativeUInt(P1) - NativeUInt(P2);   // pointer-wide cast';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA161:changes:replace-32-bit-casts-with-nativeint-nativeuint'
     ),
     // SCA162
     (
@@ -2018,7 +2179,8 @@ const
       GoodEx   : 'algo := ''SHA256'';' + #13#10 + 'Hash := THashSHA2.GetHashString(Input);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA163
     (
@@ -2030,7 +2192,8 @@ const
         'ShellExecute(0, ''open'', ''cmd.exe'', PChar(''/c safe_command''), nil, SW_SHOW);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA164
     (
@@ -2043,7 +2206,8 @@ const
         '// or move it to interface if it should be exported';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA164:same:delete-unused-routine'
     ),
     // SCA165
     (
@@ -2056,7 +2220,8 @@ const
         'WriteLn(''hello'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA165:same:remove-ineffective-suppression-marker'
     ),
     // SCA166
     (
@@ -2071,7 +2236,8 @@ const
         '  finally' + #13#10 + '    L.Free;' + #13#10 + '  end;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA167
     (
@@ -2085,7 +2251,8 @@ const
         '    Players[i].Card := Random(52);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA167:changes:call-randomize-in-initialization-section'
     ),
     // SCA168
     (
@@ -2099,7 +2266,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA168:same:add-empty-else-branch,SCA168.2:changes:add-else-branch-that-raises-exception'
     ),
     // SCA169
     (
@@ -2110,7 +2278,8 @@ const
       GoodEx   : 'var Ok := InitializeSubsystem;' + #13#10 + 'Assert(Ok, ''subsystem init failed'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA169:changes:evaluate-condition-outside-assert'
     ),
     // SCA170
     (
@@ -2121,7 +2290,8 @@ const
       GoodEx   : 'function Hash(const s: string): Integer;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA170:same:declare-parameter-as-const'
     ),
     // SCA171
     (
@@ -2133,7 +2303,8 @@ const
         '{$WARNINGS ON}';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA172
     (
@@ -2144,7 +2315,8 @@ const
       GoodEx   : 'property IsReady: Boolean;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA173
     (
@@ -2157,7 +2329,8 @@ const
         '  s := 0;' + #13#10 + '  for i := 0 to N do s := s + Rows[i];' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA174
     (
@@ -2170,7 +2343,8 @@ const
         'L.Add(TFoo.Create);' + #13#10 + 'L.Free; // item freed';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA174:changes:use-tobjectlist-so-list-frees-its-items'
     ),
     // SCA175
     (
@@ -2184,7 +2358,8 @@ const
         '  begin WriteLn(Captured); end).Start;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA176
     (
@@ -2218,7 +2393,8 @@ const
         '// ShipItem = 4, ProcessOrder = 5 - beide klar unter 15';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA177
     (
@@ -2231,7 +2407,8 @@ const
         #13#10 + 'T := nil;   // drop reference';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA178
     (
@@ -2243,7 +2420,8 @@ const
         'Stream := TFileStream.Create(SafePath, fmOpenRead);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA179
     (
@@ -2254,7 +2432,8 @@ const
       GoodEx   : '[Ignore(''TBD ticket #1234 - flaky on CI'')]' + #13#10 + 'procedure SomeTest;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA179:same:add-reason-to-ignore'
     ),
     // SCA180
     (
@@ -2265,7 +2444,8 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA180:same:remove-duplicate-attribute'
     ),
     // SCA181
     (
@@ -2276,7 +2456,8 @@ const
       GoodEx   : '[Category(''Slow'')]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA181:same:add-category-name-to-attribute'
     ),
     // SCA182
     (
@@ -2289,7 +2470,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA183
     (
@@ -2300,7 +2482,8 @@ const
       GoodEx   : '[Test]' + #13#10 + 'procedure Foo;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA183:same:remove-blank-line-after-attribute'
     ),
     // SCA184
     (
@@ -2313,7 +2496,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA185
     (
@@ -2326,7 +2510,8 @@ const
         'ShowMessage(''...non-ASCII...'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA186
     (
@@ -2337,7 +2522,8 @@ const
       GoodEx   : '(re-encode the file as valid UTF-8)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA187
     (
@@ -2348,7 +2534,8 @@ const
       GoodEx   : '(save the file as UTF-8 with BOM)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA188
     (
@@ -2359,7 +2546,8 @@ const
       GoodEx   : '// no bidirectional control characters anywhere in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA188:same:remove-bidi-control-characters-as-code-in-strings'
     ),
     // SCA189
     (
@@ -2370,7 +2558,8 @@ const
       GoodEx   : '// save the file as UTF-8 with BOM (EF BB BF)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA190
     (
@@ -2381,7 +2570,8 @@ const
       GoodEx   : '(save the file as UTF-8 with BOM)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA191
     (
@@ -2392,7 +2582,8 @@ const
       GoodEx   : '(convert to UTF-8 with BOM)';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA192
     (
@@ -2403,7 +2594,8 @@ const
       GoodEx   : '// no zero-width / invisible characters in source';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA192:same:remove-invisible-characters-as-code-in-strings'
     ),
     // SCA193
     (
@@ -2414,7 +2606,8 @@ const
       GoodEx   : 'var Login: string;  // all-ASCII identifier';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA193:same:write-name-in-ascii-letters'
     ),
     // SCA194
     (
@@ -2425,7 +2618,8 @@ const
       GoodEx   : 'Remove uOldHelper.pas or move it out of the project folder - since the SCA194/SCA195 split this finding means the file is not referenced by any uses; a unit that IS used but unlisted is reported as SCA195 (add it to the project) instead';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA195
     (
@@ -2436,7 +2630,8 @@ const
       GoodEx   : 'Every unit reachable via uses from project units is listed as a DCCReference in the .dproj';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA196
     (
@@ -2453,7 +2648,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA196:changes:initialize-result-first'
     ),
     // SCA197
     (
@@ -2468,7 +2664,8 @@ const
         '    procedure Write(const AText: string);' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA197:same:insert-new-guid'
     ),
     // SCA198
     (
@@ -2489,7 +2686,8 @@ const
         '    procedure Write(const S: string);' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA199
     (
@@ -2505,7 +2703,8 @@ const
         'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA199:changes:use-parameter-name-from-sql'
     ),
     // SCA200
     (
@@ -2516,7 +2715,8 @@ const
       GoodEx   : 'Client.Host := Settings.ReadString(''Server'', ''Host'', ''localhost'');';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA201
     (
@@ -2527,7 +2727,8 @@ const
       GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA202
     (
@@ -2542,7 +2743,8 @@ const
         #13#10 + '  Start;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     ),
     // SCA203
     (
@@ -2554,7 +2756,8 @@ const
       GoodEx   : 'for i := 0 to Names.Count - 1 do' + #13#10 + '  WriteLn(Names[i]);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA203:changes:let-loop-run'
     ),
     // SCA204
     (
@@ -2567,7 +2770,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: True
+      EditorHelp: True;
+      EditorHelps: 'SCA204:same:write-result-instead-of'
     ),
     // SCA205
     (
@@ -2582,7 +2786,8 @@ const
         '    Result := Result + I;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: False;
+      EditorHelps: ''
     )
   );
 

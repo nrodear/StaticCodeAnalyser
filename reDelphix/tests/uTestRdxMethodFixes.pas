@@ -45,6 +45,7 @@ type
     [Test] procedure Sca147_Dispatch_NoHelp;
     [Test] procedure Sca147_Used_NoHelp;
     [Test] procedure Sca147_Rtti_NoHelp;
+    [Test] procedure Sca147_JppPrototype_NoHelp;
     [Test] procedure Sca147_NoImpl_NoHelp;
     [Test] procedure Sca147_ForeignInterface_NoHelp;
     [Test] procedure Sca147_Moved_NoHelp;
@@ -289,6 +290,16 @@ begin
     'TFoo', 'Dead', 'Accessor');
   AssertRefused(Foo('', #13#10'    MethodAddress(''Dead'');'), 7, 'TFoo',
     'Dead', 'String-Literal');
+end;
+
+// rwE29 (SCA164 in JCL source\prototypes): dieselbe Sperre fuer SCA147 -
+// in einem jpp-Prototyp erzeugen Makros Code, der die Methode rufen kann.
+// Gegenprobe: ohne die Sperre bot der Planer die Loeschung an (Foo ist
+// sonst ein gruener Fall, s. Sca147_DeclAndImpl).
+procedure TTestRdxMethodFixes.Sca147_JppPrototype_NoHelp;
+begin
+  AssertRefused(Join(['{$JPPDEFINE GENERIC}', Foo('', '')]), 8, 'TFoo',
+    'Dead', 'jpp-Direktive in Zeile 1');
 end;
 
 procedure TTestRdxMethodFixes.Sca147_Rtti_NoHelp;

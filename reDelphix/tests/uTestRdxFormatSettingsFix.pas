@@ -8,8 +8,8 @@ unit uTestRdxFormatSettingsFix;
 // der Tabelle (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter
 // PlanDateFormatSettings/PlanDateFormatSettingsAlt) und stehen in einer
 // eigenen Fixture hinter {$IFNDEF FPC} - die Text-Fixture bleibt
-// FPC-tauglich. Im FPC-Pruefstand steht die Unit nicht
-// (uRdxFormatSettingsFix fehlt in der Unit-Liste von build.sh).
+// FPC-tauglich und laeuft seit HilfeFix K (rwE31 Stufe 3) im FPC-
+// Pruefstand (uRdxFormatSettingsFix steht in der Unit-Liste von build.sh).
 // Prueft: Hilfe fuer ein und zwei Argumente, Schreibweise und Leerraum,
 // alle Aufrufe der Zeile in einer Ersetzung, verschachtelt, RTL-qualifiziert,
 // der Bereich, der Alt-Weg; die Sperren - verschoben, Folgezeile, Anweisung
@@ -37,16 +37,56 @@ type
     [Test] procedure Sca128_MessageName_Read;
     // ---- keine Hilfe ----
     [Test] procedure Sca128_Moved_NoHelp;
-    [Test] procedure Sca128_CallOnFollowingLine_NoHelp;
-    [Test] procedure Sca128_StatementContinues_NoHelp;
+    [Test] procedure Sca128_CallOnFollowingLine_Helps;
+    [Test] procedure Sca128_StatementContinues_EditsAll;
     [Test] procedure Sca128_QualifiedOrNoCall_NoHelp;
     [Test] procedure Sca128_OtherArity_NoHelp;
     [Test] procedure Sca128_Directive_NoHelp;
     [Test] procedure Sca128_NoSysUtilsOrOwnRoutine_NoHelp;
-    [Test] procedure Sca128_FormatSettingsDeclared_OnlyAlt;
-    [Test] procedure Sca128_With_NoHelp;
+    [Test] procedure Sca128_FormatSettingsDeclared_Qualified;
+    [Test] procedure Sca128_With_MainQualified_AltNoHelp;
     [Test] procedure Sca128_OldCompiler_Blocks;
     [Test] procedure Sca128_Alt_FpcOrOwnType_NoHelp;
+    // ---- Realworld-Test rwE29: Literal gegen Invariant ----
+    [Test] procedure Sca128_Alt_LiteralNotInvariant_NoHelp;
+    [Test] procedure Sca128_Alt_LiteralInvariant_Helps;
+    // ---- Realworld-Test rwE29: Paar-Bruch ----
+    [Test] procedure Sca128_Alt_PairInFile_HintNamesLine;
+    [Test] procedure Sca128_Alt_NoPairInFile_PlainHint;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure Sca128_MultiLineCall_ClosesLower;
+    [Test] procedure Sca128_MultiLineCall_Break_NoHelp;
+    [Test] procedure Sca128_FollowLines_AllCalls;
+    [Test] procedure Sca128_FollowLines_Directive_NoHelp;
+    [Test] procedure Sca128_WithEnded_Helps;
+    [Test] procedure Sca128_WithEncloses_NoHelp;
+    [Test] procedure Sca128_OldMormotSymbols_Block;
+    [Test] procedure Sca128_ModernProof_RefutesTraces;
+    [Test] procedure Sca128_Alt_InlineVarRefutesFpc;
+    [Test] procedure Sca128_Alt_InvariantInFileRefutesTrace;
+    [Test] procedure Sca128_Alt_FpcExcludedBranch_Helps;
+    [Test] procedure Sca128_Alt_GlobalSettingsSet_NoHelp;
+    [Test] procedure Sca128_Alt_CompareLiteral_NoHelp;
+    [Test] procedure Sca128_Alt_PairInSameRoutineFirst;
+    // ---- Realworld-Test rwE31 Stufe 3: gekoppelte Auswertung ----
+    [Test] procedure Sca128_Alt_CoupledCompare_NoHelp;
+    [Test] procedure Sca128_Alt_CoupledSettings_NoHelp;
+    [Test] procedure Sca128_Alt_NotCoupled_Helps;
+    [Test] procedure Sca128_Alt_PairHint_NearestWithoutOwnSettings;
+    [Test] procedure Sca128_FollowLines_AnonymousMethod;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Sca128_Alt_Display_NoHelp;
+    [Test] procedure Sca128_Alt_NotDisplay_Helps;
+    [Test] procedure Sca128_Alt_PairHint_OnlySameRoutine;
+    [Test] procedure Sca128_Alt_PairHint_LiteralReader_None;
+    [Test] procedure Sca128_Alt_With_CarryingReasonFirst;
+    [Test] procedure Sca128_Alt_KitInclude_DiskCheckOrWith;
+    [Test] procedure Sca128_Alt_ClassSettingsField_NoHelp;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+    [Test] procedure Sca128_Alt_ClassSettingsOtherFamily_Helps;
+    [Test] procedure Sca128_Alt_CoupledViaList_NoHelp;
+    [Test] procedure Sca128_Alt_ConcatOnly_NotCoupled;
   end;
 
 {$IFNDEF FPC}
@@ -57,7 +97,12 @@ type
     [Test] procedure Sca128_Detector_CatalogExample;
     [Test] procedure Sca128_Detector_RoundTrip;
     [Test] procedure Sca128_Detector_RoundTripAlt;
-    [Test] procedure Sca128_Detector_ContinuedStatement_NoHelp;
+    [Test] procedure Sca128_Detector_ContinuedStatement_EditsAll;
+    // ---- Realworld-Test rwE29: was nur die Platte weiss ----
+    [Test] procedure Sca128_Detector_OldDelphiProject_NoHelp;
+    [Test] procedure Sca128_Detector_LazarusProject_OnlyMainWay;
+    [Test] procedure Sca128_Detector_OldTraceInInclude_M1b;
+    [Test] procedure Sca128_Detector_PairInFile_HintNamesLine;
   end;
 {$ENDIF}
 
@@ -69,6 +114,7 @@ uses
   System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uDateFormatSettings,
   uRdxRecipeRunner,      // TRdxFixOutcome
+  uRdxMagicFixes,        // FileReason, lfFormatSettingsVar/lfFormatInvariant
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // PlanAltFixIn, FixAllWith
   {$ENDIF}
@@ -297,17 +343,23 @@ begin
     Moved('datetostr'));
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_CallOnFollowingLine_NoHelp;
+procedure TTestRdxFormatSettingsFix.Sca128_CallOnFollowingLine_Helps;
 begin
-  AssertRefused(InUnit(['  r :=', '    DateToStr(d);']), BODY_LINE,
-    Msg('datetostr'), _(R_FS_NEXT_LINE, [BODY_LINE + 1]));
+  // rwE30 Stufe 2: der Planer kennt die Aufrufzeile - bis dahin sperrte er
+  // mit 'der Aufruf steht in Zeile 11, einer Folgezeile der Anweisung'.
+  AssertFixed(InUnit(['  r :=', '    DateToStr(d, FormatSettings);']),
+    InUnit(['  r :=', '    DateToStr(d);']), BODY_LINE, Msg('datetostr'));
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_StatementContinues_NoHelp;
+procedure TTestRdxFormatSettingsFix.Sca128_StatementContinues_EditsAll;
 begin
-  // Der zweite Aufruf bliebe ungeaendert, und der Detektor schwiege.
-  AssertRefused(InUnit(['  r := DateToStr(d) + '' '' +', '    TimeToStr(d);']),
-    BODY_LINE, Msg('datetostr'), _(R_FS_CONTINUES, [BODY_LINE + 1]));
+  // Der Detektor schweigt nach dem ersten Settings-Argument der Anweisung -
+  // seit rwE30 Stufe 2 bekommt der Aufruf der Folgezeile es mit (bis dahin
+  // R_FS_CONTINUES).
+  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings) + '' '' +',
+    '    TimeToStr(d, FormatSettings);']),
+    InUnit(['  r := DateToStr(d) + '' '' +', '    TimeToStr(d);']), BODY_LINE,
+    Msg('datetostr'));
   // Endet die Anweisung auf der Zeile, stoert die naechste nicht.
   AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings);',
     '  r := TimeToStr(d);']),
@@ -339,9 +391,9 @@ begin
   // Ein weiterer Aufruf der Zeile mit fremder Form sperrt die ganze Zeile.
   AssertRefused(InUnit(['  r := DateToStr(d) + StrToDate(s, ''/'');']),
     BODY_LINE, Msg('strtodate'), _(R_FS_ARITY, ['StrToDate', 2, 1]));
-  // Die Klammer schliesst erst auf der Folgezeile.
-  AssertRefused(InUnit(['  r := DateToStr(', '    d);']), BODY_LINE,
-    Msg('datetostr'), _(R_FS_OPEN, ['DateToStr']));
+  // Auch ueber Zeilen (rwE30 Stufe 2: die Klammer darf tiefer schliessen).
+  AssertRefused(InUnit(['  r := DateToStr(d,', '    True);']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_ARITY, ['DateToStr', 2, 1]));
 end;
 
 procedure TTestRdxFormatSettingsFix.Sca128_Directive_NoHelp;
@@ -372,29 +424,44 @@ begin
     _(R_FS_OWN_ROUTINE, ['FloatToStr']), True);
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_FormatSettingsDeclared_OnlyAlt;
+procedure TTestRdxFormatSettingsFix.Sca128_FormatSettingsDeclared_Qualified;
 var
   Src : string;
 begin
   // Ein Parameter FormatSettings irgendwo in der Datei: der blosse Name
-  // bande dort - der Hauptweg sperrt, der Alt-Weg nennt den Namen nicht.
+  // bande dort. Bis rwE30 Stufe 2 sperrte der Hauptweg (TemplatePro.pas:
+  // 3170, R_FS_SHADOW); jetzt nennt er die globale Variable qualifiziert -
+  // in der Schreibweise der uses-Klausel. Der Alt-Weg nennt den Namen nicht.
   Src := UnitText(RTL_USES,
     ['procedure Q(const FormatSettings: TFormatSettings); begin end;'],
     ['  r := DateToStr(d);']);
-  AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_SHADOW, [6]));
+  AssertFixed(UnitText(RTL_USES,
+    ['procedure Q(const FormatSettings: TFormatSettings); begin end;'],
+    ['  r := DateToStr(d, System.SysUtils.FormatSettings);']), Src,
+    BODY_LINE + 1, Msg('datetostr'));
   AssertFixed(UnitText(RTL_USES,
     ['procedure Q(const FormatSettings: TFormatSettings); begin end;'],
     ['  r := DateToStr(d, TFormatSettings.Invariant);']), Src, BODY_LINE + 1,
     Msg('datetostr'), True);
-  // In einer Liste und als Feld.
-  AssertRefused(UnitText(RTL_USES,
+  // In einer Liste und als Feld bzw. Property einer Klasse - 'SysUtils' wie
+  // geschrieben.
+  AssertFixed(UnitText('Classes, SysUtils',
     ['type TFoo = class A, FormatSettings: TFormatSettings; end;'],
-    ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'),
-    _(R_FS_SHADOW, [6]));
+    ['  r := DateToStr(d, SysUtils.FormatSettings);']),
+    UnitText('Classes, SysUtils',
+    ['type TFoo = class A, FormatSettings: TFormatSettings; end;'],
+    ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
+  AssertFixed(UnitText(RTL_USES,
+    ['type TFoo = class property FormatSettings: TFormatSettings read F; end;'],
+    ['  r := FormatFloat(''0.00'', x, System.SysUtils.FormatSettings);']),
+    UnitText(RTL_USES,
+    ['type TFoo = class property FormatSettings: TFormatSettings read F; end;'],
+    ['  r := FormatFloat(''0.00'', x);']), BODY_LINE + 1, Msg('formatfloat'));
   // Als Member (eines fremden Typs).
-  AssertRefused(InUnit(['  Writer.FormatSettings.DecimalSeparator := ''.'';',
-    '  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'),
-    _(R_FS_MEMBER, [BODY_LINE]));
+  AssertFixed(InUnit(['  Writer.FormatSettings.DecimalSeparator := ''.'';',
+    '  r := DateToStr(d, System.SysUtils.FormatSettings);']),
+    InUnit(['  Writer.FormatSettings.DecimalSeparator := ''.'';',
+    '  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
   // SysUtils.FormatSettings ist die RTL - kein Member.
   AssertFixed(InUnit(['  SysUtils.FormatSettings.DecimalSeparator := ''.'';',
     '  r := DateToStr(d, FormatSettings);']),
@@ -402,14 +469,40 @@ begin
     '  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
 end;
 
-procedure TTestRdxFormatSettingsFix.Sca128_With_NoHelp;
+procedure TTestRdxFormatSettingsFix.Sca128_With_MainQualified_AltNoHelp;
 var
   Src : string;
 begin
+  // Seit rwE31 Stufe 3 sperrt ein with nur den Alt-Weg; der Hauptweg nimmt
+  // die globale Variable qualifiziert (bis dahin R_FS_WITH auch hier).
   Src := InUnit(['  with Obj do', '    r := DateToStr(d);']);
-  AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_WITH, [BODY_LINE]));
+  AssertFixed(InUnit(['  with Obj do',
+    '    r := DateToStr(d, System.SysUtils.FormatSettings);']), Src,
+    BODY_LINE + 1, Msg('datetostr'));
   AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_WITH, [BODY_LINE]),
     True);
+  // HeidiSQL SynEditPrintMarginsDialog.pas:174 (ebenso pyscripter
+  // dlgSynPageSetup.pas:458): 'with SynEditMargins do begin' um die
+  // FloatToStr, uses mit 'SysUtils' - die Schreibweise der uses-Klausel.
+  Src := UnitText('SysUtils', [], ['  with SynEditMargins do begin',
+    '    CBUnits.ItemIndex := Ord(UnitSystem);',
+    '    EditLeft.Text := FloatToStr(Left);', '  end;']);
+  AssertFixed(UnitText('SysUtils', [], ['  with SynEditMargins do begin',
+    '    CBUnits.ItemIndex := Ord(UnitSystem);',
+    '    EditLeft.Text := FloatToStr(Left, SysUtils.FormatSettings);',
+    '  end;']), Src, BODY_LINE + 2, Msg('floattostr'));
+  // issrc ISPP.Funcs.pas:1599: with auf eine Interface-Typumwandlung, die
+  // Aufrufe im try des with-Blocks.
+  Src := InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    try', '      MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age));',
+    '    finally', '      Foo;', '    end;', '  end;']);
+  AssertFixed(InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    try', '      MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age, '
+    + 'System.SysUtils.FormatSettings));',
+    '    finally', '      Foo;', '    end;', '  end;']), Src, BODY_LINE + 3,
+    Msg('formatdatetime'));
+  AssertRefused(Src, BODY_LINE + 3, Msg('formatdatetime'),
+    _(R_FS_WITH, [BODY_LINE]), True);
   // Ein with in einer ANDEREN Routine davor stoert nicht.
   AssertFixed(UnitText(RTL_USES,
     ['procedure Q; begin with Obj do Foo; end;'],
@@ -418,19 +511,26 @@ begin
     ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
 end;
 
+// Eine Unit wie InUnit mit 'SysUtils' im uses - ohne den Namensraum, der
+// seit rwE30 Stufe 2 Delphi XE2 beweist (ModernProof).
+function InOldUnit(const ABody: array of string): string;
+begin
+  Result := UnitText('SysUtils', [], ABody);
+end;
+
 procedure TTestRdxFormatSettingsFix.Sca128_OldCompiler_Blocks;
 var
   Src : string;
 begin
   // Delphi 2010 kennt die globale FormatSettings nicht: beide Wege sperren.
-  Src := InUnit(['  r := DateToStr(d);', '  {$IFDEF VER210} Foo; {$ENDIF}']);
+  Src := InOldUnit(['  r := DateToStr(d);', '  {$IFDEF VER210} Foo; {$ENDIF}']);
   AssertRefused(Src, BODY_LINE, Msg('datetostr'),
     _(R_FS_OLD_VAR, ['VER210', BODY_LINE + 1]));
   AssertRefused(Src, BODY_LINE, Msg('datetostr'),
     _(R_FS_OLD_INVARIANT, ['VER210', BODY_LINE + 1]), True);
   // Delphi XE: der Hauptweg geht, Invariant erst ab 10.3 geprueft.
-  Src := InUnit(['  r := DateToStr(d);', '  {$IFDEF VER220} Foo; {$ENDIF}']);
-  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings);',
+  Src := InOldUnit(['  r := DateToStr(d);', '  {$IFDEF VER220} Foo; {$ENDIF}']);
+  AssertFixed(InOldUnit(['  r := DateToStr(d, FormatSettings);',
     '  {$IFDEF VER220} Foo; {$ENDIF}']), Src, BODY_LINE, Msg('datetostr'));
   AssertRefused(Src, BODY_LINE, Msg('datetostr'),
     _(R_FS_OLD_INVARIANT, ['VER220', BODY_LINE + 1]), True);
@@ -454,6 +554,1120 @@ begin
     ['  r := DateToStr(d);']);
   AssertRefused(Src, BODY_LINE + 1, Msg('datetostr'), _(R_FS_OWN_TYPE, [6]),
     True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralNotInvariant_NoHelp;
+var
+  Src : string;
+begin
+  // rwE29, delphimvcframework ...\Serializers.JsonDataObjectsTestU.pas:1221:
+  // StrToDateTime('17/02/2017 16:37:50') mit TFormatSettings.Invariant
+  // (MM/dd/yyyy) wirft sicher EConvertError (Monat 17). Ohne die Sperre
+  // boete der Alt-Weg es an (nichts sonst in der Datei sperrt) - der
+  // Hauptweg bleibt (gleiche Bedeutung).
+  Src := InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'');']);
+  AssertRefused(Src, BODY_LINE, Msg('strtodatetime'),
+    _(R_FS_LIT_DATE, ['''17/02/2017 16:37:50''', 'StrToDateTime']), True);
+  AssertFixed(InUnit(['  d := StrToDateTime(''17/02/2017 16:37:50'', '
+    + 'FormatSettings);']), Src, BODY_LINE, Msg('strtodatetime'));
+  // Dieselbe Datei, Zeile davor: StrToDate('15/10/1987').
+  AssertRefused(InUnit(['  d := StrToDate(''15/10/1987'');']), BODY_LINE,
+    Msg('strtodate'), _(R_FS_LIT_DATE, ['''15/10/1987''', 'StrToDate']),
+    True);
+  // Zahl mit Komma bzw. Tausendertrenner.
+  AssertRefused(InUnit(['  x := StrToFloat(''1,5'');']), BODY_LINE,
+    Msg('strtofloat'), _(R_FS_LIT_NUMBER, ['''1,5''', 'StrToFloat']), True);
+  AssertRefused(InUnit(['  x := StrToCurr(''1.234,50'');']), BODY_LINE,
+    Msg('strtocurr'), _(R_FS_LIT_NUMBER, ['''1.234,50''', 'StrToCurr']),
+    True);
+  // Review e/HilfeFixG: das Literal auf der Folgezeile (die Klammer darf
+  // seit rwE30 Stufe 2 tiefer schliessen) - bis dahin las die Probe nur die
+  // Zeile des Namens und bot Invariant an (sicherer EConvertError).
+  Src := InUnit(['  d := StrToDateTime(', '    ''17/02/2017 16:37:50'');']);
+  AssertRefused(Src, BODY_LINE, Msg('strtodatetime'),
+    _(R_FS_LIT_DATE, ['''17/02/2017 16:37:50''', 'StrToDateTime']), True);
+  AssertFixed(InUnit(['  d := StrToDateTime(',
+    '    ''17/02/2017 16:37:50'', FormatSettings);']), Src, BODY_LINE,
+    Msg('strtodatetime'));
+  // Gegenprobe: ein passendes Literal auf der Folgezeile bekommt Invariant.
+  AssertFixed(InUnit(['  d := StrToDateTime(',
+    '    ''02/17/2017 16:37:50'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDateTime(', '    ''02/17/2017 16:37:50'');']),
+    BODY_LINE, Msg('strtodatetime'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_LiteralInvariant_Helps;
+begin
+  // Gegenprobe: Literale im Invariant-Format (und Aufrufe ohne Literal)
+  // bekommen den Alt-Weg.
+  AssertFixed(InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'', '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDateTime(''02/17/2017 16:37:50'');']), BODY_LINE,
+    Msg('strtodatetime'), True);
+  AssertFixed(InUnit(['  d := StrToTime(''16:40:50'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16:40:50'');']), BODY_LINE, Msg('strtotime'),
+    True);
+  // Ein reines Zeit-Literal sperrt nie (Review e/HilfeFixC): dass es mit
+  // Invariant sicher scheitert, liesse sich nicht behaupten.
+  AssertFixed(InUnit(['  d := StrToTime(''16 Uhr'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToTime(''16 Uhr'');']), BODY_LINE, Msg('strtotime'),
+    True);
+  AssertFixed(InUnit(['  d := StrToDate(''12/31/1999'', TFormatSettings.Invariant);']),
+    InUnit(['  d := StrToDate(''12/31/1999'');']), BODY_LINE, Msg('strtodate'),
+    True);
+  AssertFixed(InUnit(['  x := StrToFloat(''-1.5e3'', TFormatSettings.Invariant);']),
+    InUnit(['  x := StrToFloat(''-1.5e3'');']), BODY_LINE, Msg('strtofloat'),
+    True);
+  // Ein Literal in einem Schreib-Aufruf liest niemand (Formatmuster).
+  AssertFixed(InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d, '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  r := FormatDateTime(''dd/mm/yyyy'', d);']), BODY_LINE,
+    Msg('formatdatetime'), True);
+end;
+
+// Der Hinweis zum Alt-Weg auf ALine mit dem Grundhinweis 'B' (PairHint).
+function PairHintOf(const ASource: string; ALine: Integer): string;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    Result := TRdxFormatSettingsFix.PairHint(Map, ALine, 'B');
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairInFile_HintNamesLine;
+var
+  Src : string;
+begin
+  // rwE29, HeidiSQL main.pas:14718: 'QueryDay := DateToStr(..)' wird mit
+  // Eintraegen verglichen, die eine andere Zeile mit DateToStr (Locale)
+  // schreibt - nur diese Seite auf Invariant, und der Vergleich ist ausser
+  // in en-US immer ungleich. Entscheid M2 (Review e/HilfeFixC): der
+  // Alt-Weg bleibt angeboten (aendert Verhalten, nie per Taste), der
+  // Hinweis nennt das Gegenstueck. Ohne PairHint bliebe er 'B'.
+  // Seit rwE31 Stufe 3 (Nico-Ergaenzung zu M2) sperrt der DIREKTE
+  // Vergleich in derselben Routine ('if r <> DateToStr(..)', CoupledReason,
+  // Sca128_Alt_CoupledCompare_NoHelp); das Gegenstueck ohne Kopplung bleibt
+  // ein Hinweisfall.
+  Src := InUnit(['  r := DateToStr(d);', '  Log(DateToStr(Date));']);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  Log(DateToStr(Date));']), Src, BODY_LINE, Msg('datetostr'), True);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE));
+  Src := InUnit(['  r := DateToStr(d);', '  if r <> DateToStr(Date) then',
+    '    r := '''';']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE));
+  // rwE29, rgInvoiceItemEdit.pas:217: CurrToStr ins Eingabefeld, zurueck
+  // mit TryStrToCurr (ohne eigenen Fund) - dieselbe Zahlen-Familie.
+  Src := InUnit(['  r := CurrToStr(x);', '  if TryStrToCurr(s, x) then',
+    '    r := '''';']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'TryStrToCurr']),
+    PairHintOf(Src, BODY_LINE));
+  // rwE29, wbDefinitionsCommon.pas:996/997: zwei StrToFloat, verglichen;
+  // auch ein Aufruf mit der globalen FormatSettings ist kein Invariant.
+  Src := InUnit(['  x := StrToFloat(s);',
+    '  if x = StrToFloat(r, FormatSettings) then', '    r := '''';']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'StrToFloat']),
+    PairHintOf(Src, BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NoPairInFile_PlainHint;
+var
+  Src : string;
+begin
+  // Gegenprobe: eine andere Familie, ein Aufruf derselben Familie, der
+  // schon Invariant uebergibt (auch ueber zwei Zeilen), ein Member gleichen
+  // Namens (eine andere Routine) und ein Kommentar nennt der Hinweis nicht.
+  Src := InUnit(['  r := DateToStr(d);', '  x := StrToFloat(s);',
+    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  x := StrToFloat(s);',
+    '  d := StrToDate(r,', '    TFormatSettings.Invariant);',
+    '  r := Fmt.DateToStr(d);', '  // DateToStr(d)']), Src, BODY_LINE,
+    Msg('datetostr'), True);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE));
+  // Ohne Aufruf auf der Zeile bleibt der Grundhinweis.
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE - 1));
+end;
+
+// ---- Realworld-Test rwE30 Stufe 2 ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_MultiLineCall_ClosesLower;
+var
+  E : TRdxEdit;
+  R : string;
+begin
+  // Die Klammer schliesst eine Zeile tiefer (bis dahin R_FS_OPEN 'schliesst
+  // nicht auf der gemeldeten Zeile'): eingefuegt hinter dem letzten Argument
+  // auf der Zeile der Klammer.
+  AssertFixed(InUnit(['  r := FormatDateTime(''yyyy-mm-dd'',',
+    '    d, FormatSettings);']),
+    InUnit(['  r := FormatDateTime(''yyyy-mm-dd'',', '    d);']), BODY_LINE,
+    Msg('formatdatetime'));
+  // Die Klammer allein auf der naechsten Zeile: hinter das Zeilenende des
+  // letzten Arguments; der Bereich beginnt auf seinem letzten Zeichen.
+  Assert.IsTrue(PlanOn(InUnit(['  r := DateToStr(d', '    );']), BODY_LINE,
+    Msg('datetostr'), False, E, R), R);
+  Assert.AreEqual<Integer>(BODY_LINE, E.Span.StartLine);
+  Assert.AreEqual<Integer>(18, E.Span.StartCol);
+  Assert.AreEqual<Integer>(BODY_LINE + 1, E.Span.EndLine);
+  Assert.AreEqual('d'#10'    )', E.Expected);
+  Assert.AreEqual('d, FormatSettings'#10'    )', E.NewText);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant', '    );']),
+    InUnit(['  r := DateToStr(d', '    );']), BODY_LINE, Msg('datetostr'),
+    True);
+  // Ein Zeilenkommentar zwischen Argument und Klammer bleibt dahinter.
+  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings // Datum', '    );']),
+    InUnit(['  r := DateToStr(d // Datum', '    );']), BODY_LINE,
+    Msg('datetostr'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_MultiLineCall_Break_NoHelp;
+var
+  Src : string;
+begin
+  // Gegenproben: eine Direktive bzw. ein Kommentar ueber Zeilen zwischen
+  // den Klammern, eine Klammer mehr als MAX_CALL_LINES (10) tiefer.
+  AssertRefused(InUnit(['  r := DateToStr(', '    {$IFDEF X} d {$ELSE} e {$ENDIF});']),
+    BODY_LINE, Msg('datetostr'), _(R_FS_CALL_BREAK, ['DateToStr', BODY_LINE,
+    BODY_LINE + 1]));
+  AssertRefused(InUnit(['  r := DateToStr(d { Datum', '    }', '    );']),
+    BODY_LINE, Msg('datetostr'), _(R_FS_CALL_BREAK, ['DateToStr', BODY_LINE,
+    BODY_LINE + 2]));
+  Src := InUnit(['  r := DateToStr(', '', '', '', '', '', '', '', '', '', '',
+    '    d);']);
+  AssertRefused(Src, BODY_LINE, Msg('datetostr'),
+    _(R_FS_OPEN, ['DateToStr', 10]));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_FollowLines_AllCalls;
+var
+  Src : string;
+begin
+  // delphimvcframework ...\MainControllerU.pas:47: die Anweisung beginnt mit
+  // 'Render(StrDict()', der einzige Aufruf steht zwei Zeilen tiefer.
+  Src := InUnit(['  Render(StrDict()', '    .Add(''message'', ''Hello'')',
+    '    .Add(''timestamp'', FormatDateTime(''yyyy-mm-dd hh:nn:ss'', d))',
+    '    .Add(''storage'', ''Redis''));']);
+  AssertFixed(InUnit(['  Render(StrDict()', '    .Add(''message'', ''Hello'')',
+    '    .Add(''timestamp'', FormatDateTime(''yyyy-mm-dd hh:nn:ss'', d, '
+    + 'TFormatSettings.Invariant))',
+    '    .Add(''storage'', ''Redis''));']), Src, BODY_LINE,
+    Msg('formatdatetime'), True);
+  // TES5Edit wbLOD.pas:3082: 'sl.Add(' und vier FloatToStr auf den
+  // Folgezeilen - alle in einer Ersetzung.
+  Src := InUnit(['  Add(', '    FloatToStr(x) + #9 +', '    FloatToStr(x) + #9 +',
+    '    ''1'');']);
+  AssertFixed(InUnit(['  Add(', '    FloatToStr(x, FormatSettings) + #9 +',
+    '    FloatToStr(x, FormatSettings) + #9 +', '    ''1'');']), Src,
+    BODY_LINE, Msg('floattostr'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_FollowLines_Directive_NoHelp;
+begin
+  // Gegenprobe: eine Direktive zwischen Fundzeile und Aufruf - Code unter
+  // Bedingung.
+  AssertRefused(InUnit(['  Add(', '    {$IFDEF X} ''x'' + {$ENDIF}',
+    '    FloatToStr(x));']), BODY_LINE, Msg('floattostr'), _(R_FS_DIRECTIVE));
+  // Ein Aufruf hinter dem Ende der Anweisung zaehlt nicht mit.
+  AssertRefused(InUnit(['  Add(''x'');', '  r := FloatToStr(x);']), BODY_LINE,
+    Msg('floattostr'), Moved('floattostr'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_WithEnded_Helps;
+begin
+  // Dev-Cpp Project.pas:1501: das with endet mit seinem try..finally..end
+  // lange vor dem Aufruf (bis dahin R_FS_WITH).
+  AssertFixed(InUnit(['  with TObject.Create do try', '    Foo;',
+    '  finally', '    Free;', '  end;', '  r := FloatToStr(x, FormatSettings);']),
+    InUnit(['  with TObject.Create do try', '    Foo;', '  finally',
+    '    Free;', '  end;', '  r := FloatToStr(x);']), BODY_LINE + 5,
+    Msg('floattostr'));
+  // with mit begin..end und mit einer Anweisung bis ';'.
+  AssertFixed(InUnit(['  with Obj do begin Foo; end;', '  with Obj do Bar(1);',
+    '  r := FloatToStr(x, FormatSettings);']),
+    InUnit(['  with Obj do begin Foo; end;', '  with Obj do Bar(1);',
+    '  r := FloatToStr(x);']), BODY_LINE + 2, Msg('floattostr'));
+  // TES5Edit ProcAnalyzeMesh.pas:213: das with steht in einer lokalen
+  // Prozedur vor dem Rumpf.
+  AssertFixed(UnitText(RTL_USES, [],
+    ['  r := FloatToStr(x, FormatSettings);']),
+    UnitText(RTL_USES, [], ['  r := FloatToStr(x);']), BODY_LINE,
+    Msg('floattostr'));
+  AssertFixed(StringReplace(UnitText(RTL_USES, [],
+    ['  r := FloatToStr(x, FormatSettings);']), 'var' + CRLF + '  r: string;',
+    'var' + CRLF + '  r: string;' + CRLF + '  procedure Q;' + CRLF
+    + '  begin with Obj do begin Foo; end; end;', []),
+    StringReplace(UnitText(RTL_USES, [], ['  r := FloatToStr(x);']),
+    'var' + CRLF + '  r: string;', 'var' + CRLF + '  r: string;' + CRLF
+    + '  procedure Q;' + CRLF + '  begin with Obj do begin Foo; end; end;', []),
+    BODY_LINE + 2, Msg('floattostr'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_WithEncloses_NoHelp;
+begin
+  // Gegenproben: der Aufruf im Block bzw. in der Anweisung des with - der
+  // Alt-Weg sperrt, der Hauptweg qualifiziert (seit rwE31 Stufe 3).
+  AssertRefused(InUnit(['  with Obj do begin', '    r := FloatToStr(x);',
+    '  end;']), BODY_LINE + 1, Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]),
+    True);
+  AssertRefused(InUnit(['  with Obj do', '    if x > 0 then', '      Foo',
+    '    else', '      r := FloatToStr(x);']), BODY_LINE + 4,
+    Msg('floattostr'), _(R_FS_WITH, [BODY_LINE]), True);
+  AssertRefused(InUnit(['  with Obj do try', '    r := FloatToStr(x);',
+    '  finally', '    Free;', '  end;']), BODY_LINE + 1, Msg('floattostr'),
+    _(R_FS_WITH, [BODY_LINE]), True);
+  AssertFixed(InUnit(['  with Obj do try',
+    '    r := FloatToStr(x, System.SysUtils.FormatSettings);',
+    '  finally', '    Free;', '  end;']),
+    InUnit(['  with Obj do try', '    r := FloatToStr(x);',
+    '  finally', '    Free;', '  end;']), BODY_LINE + 1, Msg('floattostr'));
+  // Ein with in der anonymen Methode der Anweisung um einen spaeteren
+  // Aufruf (seit rwE31 Stufe 3 jeder Aufruf geprueft).
+  AssertRefused(InUnit(['  r := FloatToStr(x) + Run(procedure begin',
+    '    with Obj do s := FloatToStr(y); end);']), BODY_LINE,
+    Msg('floattostr'), _(R_FS_WITH, [BODY_LINE + 1]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_OldMormotSymbols_Block;
+begin
+  // mORMot2 mormot.core.i18n.pas:1289 - '{$ifdef ISDELPHIXE} .. {$else}
+  // // old Delphi 7-2010': die globale FormatSettings gibt es erst ab XE.
+  AssertRefused(InOldUnit(['  r := DateTimeToStr(d);',
+    '  {$ifdef ISDELPHIXE} Foo; {$else} Bar; {$endif}']), BODY_LINE,
+    Msg('datetimetostr'), _(R_FS_OLD_VAR, ['ISDELPHIXE', BODY_LINE + 1]));
+  // mormot.core.log.pas:8204 - ISDELPHI2005ANDUP.
+  AssertRefused(InOldUnit(['  r := DateToStr(d);',
+    '  {$ifdef ISDELPHI2005ANDUP} Foo; {$endif}']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_OLD_VAR, ['ISDELPHI2005ANDUP', BODY_LINE + 1]));
+  // Das Kit-Include allein sperrt seit rwE31 Stufe 3 nicht mehr im Planer,
+  // sondern im Plattenblick - dort widerlegt es ein Projekt der Unit ab XE
+  // (uRdxMagicFixes.ProjectReason, uTestRdxMagicGuards.
+  // Disk_KitIncludeModernProject_Refutes; mORMot2 dmvc-ai api.impl.pas:50).
+  AssertFixed(UnitText('SysUtils', ['{$I ..\mormot.defines.inc}'],
+    ['  r := DateToStr(d, FormatSettings);']),
+    UnitText('SysUtils', ['{$I ..\mormot.defines.inc}'],
+    ['  r := DateToStr(d);']), BODY_LINE + 1, Msg('datetostr'));
+  // Gegenprobe: ISDELPHIXE2 (CompilerVersion 23) ist nach XE.
+  AssertFixed(InOldUnit(['  r := DateToStr(d, FormatSettings);',
+    '  {$ifdef ISDELPHIXE2} Foo; {$endif}']),
+    InOldUnit(['  r := DateToStr(d);', '  {$ifdef ISDELPHIXE2} Foo; {$endif}']),
+    BODY_LINE, Msg('datetostr'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_ModernProof_RefutesTraces;
+begin
+  // Ein RTL-Namensraum im uses beweist Delphi XE2: die Weiche fuer Delphi
+  // 2010 ist dort toter Code (rwE30 Stufe 2, ModernProof).
+  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings);',
+    '  {$IFDEF VER210} Foo; {$ENDIF}']),
+    InUnit(['  r := DateToStr(d);', '  {$IFDEF VER210} Foo; {$ENDIF}']),
+    BODY_LINE, Msg('datetostr'));
+  // Gegenprobe: unter einer Bedingung beweist er nichts.
+  AssertRefused(UnitText('{$IFDEF X} System.Classes, {$ENDIF} SysUtils',
+    [], ['  r := DateToStr(d);', '  {$IFDEF VER210} Foo; {$ENDIF}']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_OLD_VAR, ['VER210', BODY_LINE + 1]));
+  // Fuer Invariant (10.3) reicht XE2 nicht.
+  AssertRefused(InUnit(['  r := DateToStr(d);', '  {$IFDEF VER320} Foo; {$ENDIF}']),
+    BODY_LINE, Msg('datetostr'), _(R_FS_OLD_INVARIANT, ['VER320',
+    BODY_LINE + 1]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_InlineVarRefutesFpc;
+var
+  Src : string;
+begin
+  // Alcinoe dwsJSON.pas:2612: die FPC-Weiche in Zeile 71 betrifft nur
+  // Deklarationen, die Unit nutzt unbedingt Inline-Variablen - FPC 3.2
+  // uebersetzt sie nicht, Delphi 10.3+ ist belegt.
+  Src := InUnit(['  r := FloatToStr(x);', '  {$IFDEF FPC} Foo; {$ENDIF}',
+    '  for var i := 1 to 3 do Bar;']);
+  AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
+    '  {$IFDEF FPC} Foo; {$ENDIF}', '  for var i := 1 to 3 do Bar;']), Src,
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
+    '  {$IFDEF VER320} Foo; {$ENDIF}', '  var n: Extended := x;']),
+    InUnit(['  r := FloatToStr(x);', '  {$IFDEF VER320} Foo; {$ENDIF}',
+    '  var n: Extended := x;']), BODY_LINE, Msg('floattostr'), True);
+  // Gegenprobe: die Inline-Variable unter einer Bedingung beweist nichts;
+  // ein lokaler var-Abschnitt ist keine.
+  AssertRefused(InUnit(['  r := FloatToStr(x);', '  {$IFDEF FPC} Foo; {$ELSE}',
+    '  for var i := 1 to 3 do Bar;', '  {$ENDIF}']), BODY_LINE,
+    Msg('floattostr'), _(R_FS_FPC, [BODY_LINE + 1]), True);
+  AssertRefused(InUnit(['  r := FloatToStr(x);', '  {$IFDEF FPC} Foo; {$ENDIF}']),
+    BODY_LINE, Msg('floattostr'), _(R_FS_FPC, [BODY_LINE + 1]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_InvariantInFileRefutesTrace;
+begin
+  // TemplatePro.pas: die Datei setzt selbst 'fLocaleFormatSettings :=
+  // TFormatSettings.Invariant' ohne Weiche - wer sie baut, kennt Invariant.
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  {$IFDEF VER320} Foo; {$ENDIF}', '  F := TFormatSettings.Invariant;']),
+    InUnit(['  r := DateToStr(d);', '  {$IFDEF VER320} Foo; {$ENDIF}',
+    '  F := TFormatSettings.Invariant;']), BODY_LINE, Msg('datetostr'), True);
+  // Gegenprobe: unter der Weiche beweist es nichts.
+  AssertRefused(InUnit(['  r := DateToStr(d);',
+    '  {$IFDEF VER320} F := TFormatSettings.Invariant; {$ENDIF}']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_OLD_INVARIANT, ['VER320', BODY_LINE + 1]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_FpcExcludedBranch_Helps;
+const
+  HEAD: array[0..2] of string = ('{$IF DEFINED(FPC)}', '  {$MODE DELPHI}{$H+}',
+    '{$ENDIF}');
+begin
+  // horse Horse.Core.Param.Field.pas:245: die FPC-Weiche (Zeile 3) gilt
+  // nicht im Zweig '{$IF NOT DEFINED(FPC)}' - FPC uebersetzt ihn nie.
+  AssertFixed(UnitText(RTL_USES, HEAD, ['  {$IF NOT DEFINED(FPC)}',
+    '  x := StrToFloat(s, TFormatSettings.Invariant);', '  {$ENDIF}']),
+    UnitText(RTL_USES, HEAD, ['  {$IF NOT DEFINED(FPC)}',
+    '  x := StrToFloat(s);', '  {$ENDIF}']), BODY_LINE + 4, Msg('strtofloat'),
+    True);
+  AssertFixed(UnitText(RTL_USES, HEAD, ['  {$IFDEF FPC} Foo; {$ELSE}',
+    '  x := StrToFloat(s, TFormatSettings.Invariant);', '  {$ENDIF}']),
+    UnitText(RTL_USES, HEAD, ['  {$IFDEF FPC} Foo; {$ELSE}',
+    '  x := StrToFloat(s);', '  {$ENDIF}']), BODY_LINE + 4, Msg('strtofloat'),
+    True);
+  // Gegenproben: ausserhalb des Zweigs, im FPC-Zweig selbst.
+  AssertRefused(UnitText(RTL_USES, HEAD, ['  x := StrToFloat(s);']),
+    BODY_LINE + 3, Msg('strtofloat'), _(R_FS_FPC, [6]), True);
+  AssertRefused(UnitText(RTL_USES, HEAD, ['  {$IFDEF FPC}',
+    '  x := StrToFloat(s);', '  {$ENDIF}']), BODY_LINE + 4, Msg('strtofloat'),
+    _(R_FS_FPC, [6]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_GlobalSettingsSet_NoHelp;
+var
+  Src : string;
+begin
+  // HeidiSQL: das Programm stellt die globale FormatSettings selbst ein
+  // (ShortDateFormat 'yyyy/mm/dd') - Invariant schriebe MM/dd/yyyy
+  // (main.pas:11246, EditMask 0000-00-00). Hier in der Unit selbst; das
+  // Programm prueft der Plattenblick.
+  Src := InUnit(['  r := DateToStr(d);',
+    '  FormatSettings.ShortDateFormat := ''yyyy/mm/dd'';']);
+  AssertRefused(Src, BODY_LINE, Msg('datetostr'),
+    _(R_FS_SETTINGS_SET, ['ShortDateFormat', BODY_LINE + 1]), True);
+  AssertFixed(InUnit(['  r := DateToStr(d, FormatSettings);',
+    '  FormatSettings.ShortDateFormat := ''yyyy/mm/dd'';']), Src, BODY_LINE,
+    Msg('datetostr'));
+  AssertRefused(InUnit(['  r := DateToStr(d);',
+    '  SysUtils.FormatSettings.LongMonthNames[1] := ''Jan'';']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_SETTINGS_SET, ['LongMonthNames', BODY_LINE + 1]),
+    True);
+  // Gegenproben: ein Zahlenfeld (xEdit.dpr setzt DecimalSeparator '.' -
+  // das schreibt Invariant ohnehin), gelesen, als Member eines anderen
+  // Objekts.
+  AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
+    '  FormatSettings.DecimalSeparator := ''.'';']),
+    InUnit(['  r := FloatToStr(x);', '  FormatSettings.DecimalSeparator := ''.'';']),
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  c := FormatSettings.DateSeparator;']),
+    InUnit(['  r := DateToStr(d);', '  c := FormatSettings.DateSeparator;']),
+    BODY_LINE, Msg('datetostr'), True);
+  AssertFixed(InUnit(['  r := DateToStr(d, TFormatSettings.Invariant);',
+    '  W.FormatSettings.ShortDateFormat := ''yyyy'';']),
+    InUnit(['  r := DateToStr(d);', '  W.FormatSettings.ShortDateFormat := ''yyyy'';']),
+    BODY_LINE, Msg('datetostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CompareLiteral_NoHelp;
+begin
+  // horse Tests.Horse.Core.Param.pas:292: mit Invariant schriebe CurrToStr
+  // '5.5', der Vergleich mit '5,5' scheiterte auf jedem System.
+  AssertRefused(InUnit(['  Assert.AreEqual(''5,5'', CurrToStr(x));']),
+    BODY_LINE, Msg('currtostr'), _(R_FS_LIT_COMPARE, ['''5,5''', 'CurrToStr']),
+    True);
+  AssertRefused(InUnit(['  if DateToStr(d) = ''29.10.2026'' then Foo;']),
+    BODY_LINE, Msg('datetostr'), _(R_FS_LIT_COMPARE, ['''29.10.2026''',
+    'DateToStr']), True);
+  // Der Hauptweg bleibt (gleiche Bedeutung).
+  AssertFixed(InUnit(['  Assert.AreEqual(''5,5'', CurrToStr(x, FormatSettings));']),
+    InUnit(['  Assert.AreEqual(''5,5'', CurrToStr(x));']), BODY_LINE,
+    Msg('currtostr'));
+  // Gegenproben: Literal im Invariant-Format, Formatmuster in der Klammer,
+  // ein Text ohne Zahl.
+  AssertFixed(InUnit(['  Assert.AreEqual(''5.5'', CurrToStr(x, '
+    + 'TFormatSettings.Invariant));']),
+    InUnit(['  Assert.AreEqual(''5.5'', CurrToStr(x));']), BODY_LINE,
+    Msg('currtostr'), True);
+  AssertFixed(InUnit(['  r := FormatFloat(''0,00'', x, TFormatSettings.Invariant);']),
+    InUnit(['  r := FormatFloat(''0,00'', x);']), BODY_LINE, Msg('formatfloat'),
+    True);
+  AssertFixed(InUnit(['  r := ''Wert: 1,5 '' + FloatToStr(x, '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  r := ''Wert: 1,5 '' + FloatToStr(x);']), BODY_LINE,
+    Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairInSameRoutineFirst;
+var
+  Src : string;
+begin
+  // HeidiSQL main.pas:14718: das Gegenstueck in derselben Routine (Zeile
+  // 14698) zuerst - bis dahin nannte der Hinweis den ersten Aufruf der
+  // Datei (Zeile 1782, eine andere Routine).
+  Src := UnitText(RTL_USES,
+    ['procedure Q;', 'begin', '  r := DateTimeToStr(Now);', 'end;'],
+    ['  s := DateToStr(d);', '  if s <> DateToStr(Date) then', '    Foo;']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 5, 'DateToStr']),
+    PairHintOf(Src, BODY_LINE + 4));
+  // Ohne Gegenstueck in der Routine: seit rwE32 Stufe 4 kein Hinweis (bis
+  // dahin nannte er Zeile 8 der Routine Q - ohne Datenfluss dorthin).
+  Src := UnitText(RTL_USES,
+    ['procedure Q;', 'begin', '  r := DateTimeToStr(Now);', 'end;'],
+    ['  s := DateToStr(d);']);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE + 4));
+end;
+
+// ---- Realworld-Test rwE31 Stufe 3: gekoppelte Auswertung ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledCompare_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework FrameworkTestsU.pas:1986: nur s2 auf Invariant, s1
+  // bleibt lokal - 'Assert.areEqual(s1,s2)' scheitert danach ausser in
+  // en-US. Bis rwE31 Stufe 3 angeboten (nur Hinweis auf Zeile 1985).
+  Src := InUnit([
+    '  lDate := ISOTimeStampToDateTime(''2020-08-15T12:12:12Z'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''UTC with no time zone (in DST period)'');']);
+  AssertRefused(Src, BODY_LINE + 2, Msg('datetimetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 3, 's2', 's1', BODY_LINE + 1,
+    'DateTimeToStr']), True);
+  // Der Hauptweg aendert nichts am Verhalten und bleibt.
+  AssertFixed(InUnit([
+    '  lDate := ISOTimeStampToDateTime(''2020-08-15T12:12:12Z'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare, FormatSettings);',
+    '  Assert.areEqual(s1,s2, ''UTC with no time zone (in DST period)'');']),
+    Src, BODY_LINE + 2, Msg('datetimetostr'));
+  // FrameworkTestsU.pas:1964: zwei Bloecke in der Routine - gemeldet wird
+  // der Partner des eigenen Blocks (Zeile 1965) und sein Vergleich (1966),
+  // nicht der vorige Block (bis dahin nannte der Hinweis Zeile 1956).
+  Src := InUnit(['  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''DST'');',
+    '  s1 := DateTimeToStr(lDate);',
+    '  s2 := DateTimeToStr(lDateToCompare);',
+    '  Assert.areEqual(s1,s2, ''no DST'');']);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetimetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 5, 's1', 's2', BODY_LINE + 4,
+    'DateTimeToStr']), True);
+  // Das Gegenstueck selbst vergleicht mit dem Ergebnis.
+  AssertRefused(InUnit(['  r := DateToStr(d);',
+    '  if r <> DateToStr(Date) then', '    r := '''';']), BODY_LINE,
+    Msg('datetostr'), _(R_FS_COUPLED_CALL, [BODY_LINE + 1, 'r', 'DateToStr']),
+    True);
+  // Schreiben und Lesen: CurrToStr ins Feld, TryStrToCurr liest es zurueck.
+  AssertRefused(InUnit(['  r := CurrToStr(x);', '  if TryStrToCurr(r, x) then',
+    '    Foo;']), BODY_LINE, Msg('currtostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE + 1, 'r', 'TryStrToCurr']), True);
+  // Der umgestellte Aufruf nennt das Ziel des Gegenstuecks.
+  AssertRefused(InUnit(['  r := DateToStr(Date);',
+    '  Result := DateToStr(d) = r;']), BODY_LINE + 1, Msg('datetostr'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 1, 'DateToStr', 'r', BODY_LINE,
+    'DateToStr']), True);
+  // Review e/HilfeFixK: das Gegenstueck in DERSELBEN Anweisung - ein Aufruf
+  // der Familie, den die Hilfe nicht mit umstellt (TryStrToFloat,
+  // FloatToStrF stehen nicht in LOCALE_FUNCS): Rundlauf bzw. direkter
+  // Vergleich. Bis dahin angeboten (das umgestellte Stueck wurde nach
+  // Gegenstuecken nicht durchsucht).
+  AssertRefused(InUnit(['  if TryStrToFloat(FloatToStr(x), y) then',
+    '    Foo;']), BODY_LINE, Msg('floattostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE, 'FloatToStr', 'TryStrToFloat']), True);
+  AssertRefused(InUnit(['  if FloatToStrF(a, ffFixed, 15, 2) = FloatToStr(b) then',
+    '    Foo;']), BODY_LINE, Msg('floattostr'),
+    _(R_FS_COUPLED_CALL, [BODY_LINE, 'FloatToStr', 'FloatToStrF']), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledSettings_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework MVCFramework.Validators.pas:1647: mit Invariant faende
+  // 'Pos(FormatSettings.DecimalSeparator, LStrValue)' in Komma-Locales
+  // keinen Trenner mehr - die Scale-Pruefung entfiele. Bis rwE31 Stufe 3
+  // angeboten.
+  Src := InUnit(['  LValue := AValue.AsExtended;',
+    '  LStrValue := FloatToStr(Abs(LValue));', '',
+    '  LDecimalPos := Pos(FormatSettings.DecimalSeparator, LStrValue);',
+    '  if LDecimalPos > 0 then', '    Foo;']);
+  AssertRefused(Src, BODY_LINE + 1, Msg('floattostr'),
+    _(R_FS_COUPLED_SETTINGS, [BODY_LINE + 3, 'LStrValue',
+    'FormatSettings.DecimalSeparator']), True);
+  // Der Hauptweg bleibt (dieselbe globale FormatSettings auf beiden Seiten).
+  AssertFixed(InUnit(['  LValue := AValue.AsExtended;',
+    '  LStrValue := FloatToStr(Abs(LValue), FormatSettings);', '',
+    '  LDecimalPos := Pos(FormatSettings.DecimalSeparator, LStrValue);',
+    '  if LDecimalPos > 0 then', '    Foo;']), Src, BODY_LINE + 1,
+    Msg('floattostr'));
+  // Ein Leser, dessen Argument FormatSettings liest: der normalisierte
+  // Text passt nicht mehr zu Invariant.
+  AssertRefused(InUnit(['  x := StrToFloat(StringReplace(s, ''.'', '
+    + 'FormatSettings.DecimalSeparator, []));']), BODY_LINE,
+    Msg('strtofloat'), _(R_FS_COUPLED_SETTINGS, [BODY_LINE, 'StrToFloat',
+    'FormatSettings.DecimalSeparator']), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NotCoupled_Helps;
+begin
+  // Gegenproben: zwei Werte derselben Familie, getrennt ausgegeben; ein
+  // Leser, dessen Zahl formatiert wird (keine Text-Kopplung, Rundlauf des
+  // Detektors 'x := StrToCurr(s); r := FormatCurr(.., x)'); FormatSettings
+  // in einer anderen Routine; ein Member mit aehnlichem Namen.
+  AssertFixed(InUnit(['  s1 := DateTimeToStr(d);', '  Log(s1);',
+    '  s2 := DateTimeToStr(Now, TFormatSettings.Invariant);', '  Log(s2);']),
+    InUnit(['  s1 := DateTimeToStr(d);', '  Log(s1);',
+    '  s2 := DateTimeToStr(Now);', '  Log(s2);']), BODY_LINE + 2,
+    Msg('datetimetostr'), True);
+  AssertFixed(InUnit(['  x := StrToCurr(s, TFormatSettings.Invariant);',
+    '  r := FormatCurr(''0.00'', x);']),
+    InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']),
+    BODY_LINE, Msg('strtocurr'), True);
+  AssertFixed(InUnit(['  x := StrToCurr(s);',
+    '  r := FormatCurr(''0.00'', x, TFormatSettings.Invariant);']),
+    InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']),
+    BODY_LINE + 1, Msg('formatcurr'), True);
+  AssertFixed(UnitText(RTL_USES, ['procedure Q;', 'begin',
+    '  r := Pos(FormatSettings.DecimalSeparator, r);', 'end;'],
+    ['  r := FloatToStr(x, TFormatSettings.Invariant);']),
+    UnitText(RTL_USES, ['procedure Q;', 'begin',
+    '  r := Pos(FormatSettings.DecimalSeparator, r);', 'end;'],
+    ['  r := FloatToStr(x);']), BODY_LINE + 4, Msg('floattostr'), True);
+  // HeidiSQL main.pas:11246: die Zweige einer case-Anweisung schreiben
+  // dieselbe Variable - Alternativen, keine Kopplung.
+  AssertFixed(InUnit(['  case k of',
+    '    1: NowText := DateToStr(Now, TFormatSettings.Invariant);',
+    '    2: NowText := TimeToStr(Now);', '    else NowText := DateTimeToStr(Now);',
+    '  end;']),
+    InUnit(['  case k of', '    1: NowText := DateToStr(Now);',
+    '    2: NowText := TimeToStr(Now);', '    else NowText := DateTimeToStr(Now);',
+    '  end;']), BODY_LINE + 1, Msg('datetostr'), True);
+  AssertFixed(InUnit(['  r := FloatToStr(x, TFormatSettings.Invariant);',
+    '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']),
+    InUnit(['  r := FloatToStr(x);',
+    '  Obj.r := Pos(''.'', Obj.FormatSettingsText);']), BODY_LINE,
+    Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_FollowLines_AnonymousMethod;
+const
+  HEAD: array[0..5] of string = ('  TTask.Create (procedure ()', '    begin',
+    '      sleep(250);', '      TThread.Synchronize(nil,', '        procedure',
+    '        begin');
+  TAIL: array[0..1] of string = ('        end);', '    end).Start;');
+var
+  Src : string;
+begin
+  // Alcinoe Demos\ALFmxControls\_Source\Main.pas:1444: der Detektor meldet
+  // die Zeile von 'TTask.Create (', die beiden FormatFloat stehen in der
+  // anonymen Methode in 1450/1451 - ';' und begin/end dort beenden die
+  // Anweisung nicht (offene Klammer). Bis rwE31 Stufe 3 'kein Aufruf von
+  // formatfloat ... - Zeile verschoben?'.
+  Src := InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b) + '' ms'';',
+    TAIL[0], TAIL[1]]);
+  AssertFixed(InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a, '
+    + 'FormatSettings) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b, '
+    + 'FormatSettings) + '' ms'';',
+    TAIL[0], TAIL[1]]), Src, BODY_LINE, Msg('formatfloat'));
+  // Gegenprobe: schliesst die Klammer der anonymen Methode mit ';', gehoert
+  // der Aufruf der naechsten Anweisung nicht dazu.
+  AssertRefused(InUnit(['  Run(procedure begin Foo; end);',
+    '  r := FormatFloat(''0.0'', x);']), BODY_LINE, Msg('formatfloat'),
+    Moved('formatfloat'));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_NearestWithoutOwnSettings;
+begin
+  // FrameworkTestsU.pas:1964 / wbLOD.pas:3543: der Hinweis nennt das
+  // NAECHSTE Gegenstueck (bis rwE31 Stufe 3 das erste der Routine bzw.
+  // Datei).
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 4, 'DateToStr']),
+    PairHintOf(InUnit(['  r := DateToStr(Date);', '  Foo;', '  Foo;',
+    '  s := DateToStr(d);', '  Bar(DateToStr(e));']), BODY_LINE + 3));
+  // TemplatePro.pas:3365: ein Aufruf mit eigenen Einstellungen
+  // (fLocaleFormatSettings) ist kein Gegenstueck - der Hinweis riet, ihn
+  // auf Invariant umzustellen.
+  Assert.AreEqual('B', PairHintOf(InUnit(['  r := FormatFloat(''0.00'', x);',
+    '  s := FormatFloat(''0'', x, fLocaleFormatSettings);']), BODY_LINE));
+  // Gegenprobe: die globale FormatSettings ausdruecklich bleibt eines.
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatFloat']),
+    PairHintOf(InUnit(['  r := FormatFloat(''0.00'', x);',
+    '  s := FormatFloat(''0'', x, FormatSettings);']), BODY_LINE));
+end;
+
+// ---- Realworld-Test rwE32 Stufe 4 ----
+
+// Der Alt-Weg sperrt mit R_FS_DISPLAY (Zeile ATargetLine, Ziel AWhat); der
+// Hauptweg bleibt angeboten.
+procedure AssertDisplay(const ASource: string; ALine: Integer;
+  const AMessage: string; ATargetLine: Integer; const AWhat: string);
+var
+  Reason : string;
+begin
+  AssertRefused(ASource, ALine, AMessage, _(R_FS_DISPLAY, [ATargetLine,
+    AWhat]), True);
+  Assert.IsTrue(Fix(ASource, ALine, AMessage, False, Reason) <> '',
+    'Hauptweg: ' + Reason);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_Display_NoHelp;
+const
+  HEAD: array[0..5] of string = ('  TTask.Create (procedure ()', '    begin',
+    '      sleep(250);', '      TThread.Synchronize(nil,', '        procedure',
+    '        begin');
+  TAIL: array[0..1] of string = ('        end);', '    end).Start;');
+begin
+  // Nico-Entscheid E6 (rwE32 Stufe 4): geht das Ergebnis in eine Anzeige,
+  // ist dort die Locale des Benutzers richtig - bis dahin bot der Alt-Weg
+  // Invariant an (Punkt, MM/dd/yyyy auf dem Bildschirm), der Hinweis nannte
+  // dazu Anzeigen anderer Routinen als Gegenstueck.
+  // Alcinoe Demos\ALCipher\_Source\Unit1.pas:831 - zwei Aufrufe, verkettet.
+  AssertDisplay(InUnit(['  StatusBar1.Panels[1].Text := FormatFloat(''#,.'', '
+    + '(LCounter)) + '' keys - '' + FormatFloat(''#,.'', (LCounter / (LStopWatch.'
+    + 'Elapsed.TotalMilliseconds / 1000))) + '' keys/s'';']), BODY_LINE,
+    Msg('formatfloat'), BODY_LINE, 'StatusBar1.Panels[1].Text');
+  // ALFmxControls Main.pas:1436 (ebenso 1491) und RSS-1723 Unit1.pas:54.
+  AssertDisplay(InUnit(['  Text10.Text := ''Paint: '' + FormatFloat(''0.#####'','
+    + 'fline.PaintMs) + '' ms'';']), BODY_LINE, Msg('formatfloat'), BODY_LINE,
+    'Text10.Text');
+  AssertDisplay(InUnit(['  Label8.Text := ''Rectangle height = '' + '
+    + 'FloatToStr(rectangle1.Height);']), BODY_LINE, Msg('floattostr'),
+    BODY_LINE, 'Label8.Text');
+  // ALFmxControls Main.pas:1444: gemeldet die Zeile von TTask.Create, die
+  // Zuweisung steht in der anonymen Methode.
+  AssertDisplay(InUnit([HEAD[0], HEAD[1], HEAD[2], HEAD[3], HEAD[4], HEAD[5],
+    '          Text4.Text := ''buffer: '' + FormatFloat(''0.#####'',a) + '' - '' +',
+    '                        ''Paint: '' + FormatFloat(''0.#####'',b) + '' ms'';',
+    TAIL[0], TAIL[1]]), BODY_LINE, Msg('formatfloat'), BODY_LINE + 6,
+    'Text4.Text');
+  // ALStringBenchmark Unit1.pas:501 (ebenso 980, 1293, 1342, 1426).
+  AssertDisplay(InUnit(['  Showmessage(''40,000 ALPosA in: '' + '
+    + 'FormatDateTime(''nn:ss.zzz'',now-StartDate));']), BODY_LINE,
+    Msg('formatdatetime'), BODY_LINE, 'Showmessage');
+  // ALXmlDoc unit1.pas:307 - Lines.Add (die Namensteile 'Xml'/'Node' zaehlen
+  // nur bei '.Text').
+  AssertDisplay(InUnit(['  MemoGenerate100000NodeWithXmlDocument.Lines.Add('
+    + '''Memory used: '' + FormatFloat(''0,'',(a - b)) + '' bytes'');']),
+    BODY_LINE, Msg('formatfloat'), BODY_LINE,
+    'MemoGenerate100000NodeWithXmlDocument.Lines.Add');
+  // delphimvcframework async_client MainClientFormU.pas:329 - vor dem Aufruf
+  // steht selbst ein Aufruf (PadRight).
+  AssertDisplay(InUnit(['  lbPerson.Items.Add(''DOB:''.PadRight(15) + '
+    + 'DateToStr(lPerson.DOB));']), BODY_LINE, Msg('datetostr'), BODY_LINE,
+    'lbPerson.Items.Add');
+  // Weitere Formen: Insert mit Index, Dialoge, Caption/Hint, Klammer und
+  // Typumwandlung, RTL-qualifiziert.
+  AssertDisplay(InUnit(['  ListBox1.Items.Insert(0, FloatToStr(x));']),
+    BODY_LINE, Msg('floattostr'), BODY_LINE, 'ListBox1.Items.Insert');
+  AssertDisplay(InUnit(['  MessageDlg(''Summe: '' + CurrToStr(x), mtInformation, '
+    + '[mbOK], 0);']), BODY_LINE, Msg('currtostr'), BODY_LINE, 'MessageDlg');
+  AssertDisplay(InUnit(['  Application.MessageBox(PChar(''Datum: '' + '
+    + 'DateToStr(d)), ''Info'', MB_OK);']), BODY_LINE, Msg('datetostr'),
+    BODY_LINE, 'Application.MessageBox');
+  AssertDisplay(InUnit(['  Form1.Caption := (''Zeit '' + TimeToStr(d));']),
+    BODY_LINE, Msg('timetostr'), BODY_LINE, 'Form1.Caption');
+  AssertDisplay(InUnit(['  btnGo.Hint := SysUtils.DateTimeToStr(d);']),
+    BODY_LINE, Msg('datetimetostr'), BODY_LINE, 'btnGo.Hint');
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_NotDisplay_Helps;
+const
+  INV = ', TFormatSettings.Invariant)';
+begin
+  // Gegenproben zu E6: Ziel ist SQL, ein XML-Knoten, eine Stringliste, eine
+  // Routine (Protokoll, Datei), ein Ausdruck ueber eine andere Routine
+  // ('Trim(', 'Format(.., [..])'), eine Variable, ein Vergleich, eine
+  // Methode gleichen Namens - der Alt-Weg bleibt angeboten.
+  AssertFixed(InUnit(['  Query.SQL.Text := ''select '' + FloatToStr(x' + INV
+    + ';']), InUnit(['  Query.SQL.Text := ''select '' + FloatToStr(x);']),
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Node.Text := DateToStr(d' + INV + ';']),
+    InUnit(['  Node.Text := DateToStr(d);']), BODY_LINE, Msg('datetostr'),
+    True);
+  AssertFixed(InUnit(['  SL.Text := DateToStr(d' + INV + ';']),
+    InUnit(['  SL.Text := DateToStr(d);']), BODY_LINE, Msg('datetostr'), True);
+  AssertFixed(InUnit(['  Log.Add(''x='' + FloatToStr(x' + INV + ');']),
+    InUnit(['  Log.Add(''x='' + FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Writeln(F, FloatToStr(x' + INV + ');']),
+    InUnit(['  Writeln(F, FloatToStr(x));']), BODY_LINE, Msg('floattostr'),
+    True);
+  AssertFixed(InUnit(['  Edit1.Text := Trim(FloatToStr(x' + INV + ');']),
+    InUnit(['  Edit1.Text := Trim(FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  ShowMessage(Format(''%s'', [FloatToStr(x' + INV
+    + ']));']), InUnit(['  ShowMessage(Format(''%s'', [FloatToStr(x)]));']),
+    BODY_LINE, Msg('floattostr'), True);
+  AssertFixed(InUnit(['  r := FloatToStr(x' + INV + ';', '  Label1.Caption := r;']),
+    InUnit(['  r := FloatToStr(x);', '  Label1.Caption := r;']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  if Edit1.Text = FloatToStr(x' + INV + ' then', '    Foo;']),
+    InUnit(['  if Edit1.Text = FloatToStr(x) then', '    Foo;']), BODY_LINE,
+    Msg('floattostr'), True);
+  AssertFixed(InUnit(['  Self.ShowMessage(FloatToStr(x' + INV + ');']),
+    InUnit(['  Self.ShowMessage(FloatToStr(x));']), BODY_LINE,
+    Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_OnlySameRoutine;
+var
+  Src : string;
+begin
+  // TES5Edit Core\wbInterface.pas:17009: 'lOrgValueStr := FloatToStr(
+  // lOrgValue)' fuer einen Meldungstext; der Hinweis nannte Zeile 17104
+  // ('FloatToStrF(lAbs, ..)' in TwbFloatDef.ToSortKey) - eine andere Routine
+  // ohne Datenfluss (M2: Kopplung nur in derselben Anweisung bzw. Routine).
+  Src := UnitText(RTL_USES, [], ['  try',
+    '    lOrgValueStr := FloatToStr(lOrgValue);', '  except',
+    '    on E: Exception do', '      lOrgValueStr := E.ClassName;', '  end;',
+    'end;', '', 'function ToSortKey(lAbs: Extended): string;', 'begin',
+    '  Result := FloatToStrF(lAbs, ffFixed, 40, 2);']);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE + 1));
+  // Gegenprobe: dasselbe Gegenstueck in derselben Routine bleibt genannt.
+  Src := InUnit(['  lOrgValueStr := FloatToStr(lOrgValue);',
+    '  Key := FloatToStrF(lAbs, ffFixed, 40, 2);']);
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FloatToStrF']),
+    PairHintOf(Src, BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_PairHint_LiteralReader_None;
+var
+  Src : string;
+begin
+  // minesweeper-main uGameScore.pas:144: StrToTime liest ein Literal - es
+  // gibt keinen Datenfluss zu 'ShowTime(FormatDateTime(..))' der Folgezeile,
+  // der Hinweis nannte sie trotzdem als Gegenstueck.
+  Src := InUnit(['  FTime := FTime + StrToTime(''00:00:01'');',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']);
+  Assert.AreEqual('B', PairHintOf(Src, BODY_LINE));
+  // Der Alt-Weg selbst bleibt angeboten (die Umstellung ist die Behebung).
+  AssertFixed(InUnit(['  FTime := FTime + StrToTime(''00:00:01'', '
+    + 'TFormatSettings.Invariant);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), Src, BODY_LINE,
+    Msg('strtotime'), True);
+  // Gegenproben: ein Leser mit Variable bzw. mit verkettetem Text nennt das
+  // Gegenstueck weiter.
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatDateTime']),
+    PairHintOf(InUnit(['  FTime := FTime + StrToTime(s);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), BODY_LINE));
+  Assert.AreEqual(_(R_FS_PAIR_HINT, ['B', BODY_LINE + 1, 'FormatDateTime']),
+    PairHintOf(InUnit(['  FTime := FTime + StrToTime(''00:00:'' + s);',
+    '  ShowTime(FormatDateTime(''hh:nn:ss'', FTime));']), BODY_LINE));
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_With_CarryingReasonFirst;
+const
+  WITH_BODY: array[0..1] of string = ('  with Obj do',
+    '    r := DateToStr(d);');
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4: der Hauptweg loest ein with per Qualifizierung auf; die
+  // Sperre des Alt-Wegs nannte trotzdem das with, obwohl FPC, ein alter
+  // Compiler bzw. die selbst eingestellte FormatSettings sie tragen - seit
+  // dem Fix kommt das with als letzter Grund.
+  // doublecmd SynUniDesigner.pas:2978: '{$IFNDEF FPC}' in der Datei.
+  Src := UnitText(RTL_USES, ['{$IFNDEF FPC}', '{$ENDIF}'], WITH_BODY);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetostr'), _(R_FS_FPC, [6]), True);
+  // jcl peviewer PeDump.pas:674: COMPILER5_UP (Delphi 5).
+  Src := UnitText('SysUtils', ['{$IFDEF COMPILER5_UP}', '{$ENDIF}'], WITH_BODY);
+  AssertRefused(Src, BODY_LINE + 3, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['COMPILER5_UP', 6]), True);
+  // issrc ISPP.Funcs.pas:1599: die Routine stellt DateSeparator selbst ein.
+  Src := InUnit(['  with IInternalFuncParams(Params) do', '  begin',
+    '    FormatSettings.DateSeparator := ''-'';',
+    '    MakeStr(ResPtr^, FormatDateTime(Get(1).AsStr, Age));', '  end;']);
+  AssertRefused(Src, BODY_LINE + 3, Msg('formatdatetime'),
+    _(R_FS_SETTINGS_SET, ['DateSeparator', BODY_LINE + 2]), True);
+  // Ohne weiteren Grund bleibt das with der Grund.
+  AssertRefused(InUnit(WITH_BODY), BODY_LINE + 1, Msg('datetostr'),
+    _(R_FS_WITH, [BODY_LINE]), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_KitInclude_DiskCheckOrWith;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4, mORMot2 dmvc-ai 01-basicdemo_server\src\api.impl.pas:50
+  // (sperre_unnoetig): '{$I mormot.defines.inc}' sperrte den Alt-Weg im
+  // Planer, Eintrag 1 galt per .dproj 20.3 (Delphi 12). Jetzt prueft das
+  // Kit-Include wie beim Hauptweg der Plattenblick (ein Projekt der Unit ab
+  // 10.3 widerlegt es - uTestRdxMagicGuards.Disk_KitIncludeModernProject_
+  // RefutesInvariant); der Planer allein bietet an.
+  Src := UnitText('SysUtils', ['{$I mormot.defines.inc}'],
+    ['  r := TimeToStr(Time);']);
+  AssertFixed(UnitText('SysUtils', ['{$I mormot.defines.inc}'],
+    ['  r := TimeToStr(Time, TFormatSettings.Invariant);']), Src,
+    BODY_LINE + 1, Msg('timetostr'), True);
+  // Mit with sperrt der Planer ohnehin; dann nennt er den Altcompiler des
+  // Kit-Includes wie Eintrag 1 (jcl FileViewer.pas:601 'jcl.inc, Zeile 28'
+  // statt des with).
+  Src := UnitText('SysUtils', ['{$I jcl.inc}'], ['  with Obj do',
+    '    r := DateToStr(d);']);
+  AssertRefused(Src, BODY_LINE + 2, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['jcl.inc', 6]), True);
+  // Eine Versionsfrage in der Datei sperrt im Planer weiter (vor dem
+  // Kit-Include).
+  AssertRefused(UnitText('SysUtils', ['{$I jcl.inc}', '{$IFDEF COMPILER5_UP}',
+    '{$ENDIF}'], ['  r := DateToStr(d);']), BODY_LINE + 3, Msg('datetostr'),
+    _(R_FS_OLD_INVARIANT, ['COMPILER5_UP', 7]), True);
+end;
+
+// Eine Unit mit Klasse TTpl (Felder AFields im Rumpf) und der Methode
+// TTpl.Fmt, deren Rumpfzeile 'Result := FormatDateTime(S, Now);' in Zeile
+// 12 + Length(AFields) steht; mit AUse dahinter die Methode
+// <AOwner>.Other(d: TDateTime) mit dem Rumpf AUse.
+function ClassUnit(const AFields: array of string; const AUse: string = '';
+  const AOwner: string = 'TTpl'): string;
+var
+  S : string;
+begin
+  Result := 'unit t;' + CRLF + 'interface' + CRLF + 'uses' + CRLF
+    + '  System.SysUtils;' + CRLF + 'type' + CRLF + '  TTpl = class' + CRLF
+    + '  private' + CRLF;
+  for S in AFields do
+    Result := Result + S + CRLF;
+  Result := Result
+    + '    function Fmt(const S: string; const AFS: TFormatSettings): string;'
+    + CRLF + '    property FS: TFormatSettings read FFS;' + CRLF + '  end;'
+    + CRLF + 'implementation' + CRLF
+    + 'function TTpl.Fmt(const S: string; const AFS: TFormatSettings): string;'
+    + CRLF + 'begin' + CRLF + '  Result := FormatDateTime(S, Now);' + CRLF
+    + 'end;' + CRLF;
+  if AUse <> '' then
+    Result := Result + 'function ' + AOwner + '.Other(d: TDateTime): string;'
+      + CRLF + 'begin' + CRLF + AUse + CRLF + 'end;' + CRLF;
+  Result := Result + 'end.';
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsField_NoHelp;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4, delphimvcframework sources\TemplatePro.pas:3163 (und
+  // ...-master :3365, besserer-fix): TTProCompiledTemplate traegt
+  // 'fLocaleFormatSettings: TFormatSettings' (per SetFormatSettings
+  // einstellbar); Invariant verwuerfe die eingestellte Template-Locale. Der
+  // Alt-Weg sperrt mit Hinweis auf das Feld - Parameter, Rueckgabetyp und
+  // Property zaehlen nicht als Feld. Seit rwE33 Stufe 5 nur, wenn eine
+  // Methode der Klasse das Feld fuer dieselbe Familie uebergibt (TemplatePro
+  // .pas:889 'DateToStr(.., fLocaleFormatSettings)').
+  Src := ClassUnit(['    fLocaleFormatSettings: TFormatSettings;'],
+    '  Result := DateToStr(d, fLocaleFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'fLocaleFormatSettings', 8]), True);
+  // Der Hauptweg bleibt (gleiche Bedeutung).
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, FormatSettings)', []), Src, 15,
+    Msg('formatdatetime'));
+  // Gegenproben: das Muster als Literal (TemplatePro.pas:3170, ISO-Vorgabe -
+  // Stufe 4: ok), kein Feld (nur Parameter/Property), zwei Felder
+  // (welches?) - Invariant bleibt angeboten.
+  Src := StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(''yyyy-mm-dd hh:nn:ss'', Now)', []);
+  AssertFixed(StringReplace(Src, ', Now)', ', Now, TFormatSettings.Invariant)',
+    []), Src, 15, Msg('formatdatetime'), True);
+  Src := ClassUnit(['    FFS: Integer;']);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 15,
+    Msg('formatdatetime'), True);
+  Src := ClassUnit(['    FA, FB: TFormatSettings;', '    FC: TFormatSettings;']);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)',
+    'FormatDateTime(S, Now, TFormatSettings.Invariant)', []), Src, 16,
+    Msg('formatdatetime'), True);
+end;
+
+// ---- Realworld-Test rwE33 Stufe 5 ----
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_DisplayGridAndTextParam_NoHelp;
+const
+  INV = ', TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6, Luecken der Stufe 5. mORMot2 dmvc-ai
+  // 56-articles_crud_vcl_client MainFormU.pas:206: die Zelle eines
+  // TStringGrid zeigt den Preis an.
+  AssertDisplay(InUnit(['  gridArticles.Cells[3, i + 1] := '
+    + 'CurrToStr(fArticles[i].Price);']), BODY_LINE, Msg('currtostr'),
+    BODY_LINE, 'gridArticles.Cells[3, i + 1]');
+  // Der Hint-Text des OnGetHint-Ereignisses (out-Parameter, zwei Namen in
+  // der Gruppe) - SCA059 mit CellText: uTestRdxFormatLocaleFix.
+  Src := UnitText(RTL_USES, ['procedure TF.vstGetHint(Sender: TObject;',
+    '  out LineBreakStyle, HintText: string);', 'begin',
+    '  HintText := ''Stand: '' + DateToStr(d);', 'end;'], []);
+  AssertDisplay(Src, 9, Msg('datetostr'), 9, 'HintText');
+  // Gegenproben: ein anderes indiziertes Ziel, Cells ohne Objekt davor,
+  // eine lokale Variable CellText, ein Wert-Parameter HintText -
+  // Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Data[3] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Data[3] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'), True);
+  AssertFixed(InUnit(['  Cells[3, 1] := CurrToStr(x' + INV + ';']),
+    InUnit(['  Cells[3, 1] := CurrToStr(x);']), BODY_LINE, Msg('currtostr'),
+    True);
+  Src := UnitText(RTL_USES, ['procedure Q;', 'var', '  CellText: string;',
+    'begin', '  CellText := FloatToStr(x);', '  Log(CellText);', 'end;'], []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 10, Msg('floattostr'), True);
+  Src := UnitText(RTL_USES, ['function Q(HintText: string): string;',
+    'begin', '  HintText := FloatToStr(x);', '  Result := HintText;', 'end;'],
+    []);
+  AssertFixed(StringReplace(Src, 'FloatToStr(x)', 'FloatToStr(x' + INV, []),
+    Src, 8, Msg('floattostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ClassSettingsOtherFamily_Helps;
+const
+  FIELD = '    FFormatSettings: TFormatSettings;';
+  INV = 'FormatDateTime(S, Now, TFormatSettings.Invariant)';
+var
+  Src : string;
+begin
+  // HeidiSQL main.pas:4415 (ebenso 5674, 11246, 11252, 14718): TMainForm
+  // traegt FFormatSettings = TFormatSettings.Create('en-US') und uebergibt es
+  // nur an StrToFloat (Zeile 10680) - der Grund riet, das Feld an
+  // DateTimeToStr zu geben; das braeche das Datum wie Invariant. Kein Grund
+  // der Klasse mehr (der Planer allein bietet an; in HeidiSQL sperrt danach
+  // der Plattenblick: heidisql.dpr stellt die globale FormatSettings ein).
+  Src := ClassUnit([FIELD],
+    '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Nur als Member gelesen bzw. gar nicht uebergeben.
+  Src := ClassUnit([FIELD], '  Result := StringReplace(S, '
+    + 'FFormatSettings.DecimalSeparator, ''.'', []);');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  Src := ClassUnit([FIELD]);
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Dieselbe Familie in einer Methode einer anderen Klasse.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, FFormatSettings);',
+    'TOther');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 15,
+    Msg('formatdatetime'), True);
+  // Gegenproben: dieselbe Familie in der Klasse (auch 'Self.' und ueber
+  // mehrere Argumente) - der Grund bleibt.
+  Src := ClassUnit([FIELD], '  Result := DateToStr(d, Self.FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := FormatDateTime(''hh:nn'', d,'
+    + ' FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  // Review e/HilfeFixV: der Grund faellt nur mit Beweis weg - eine Kopie
+  // des Feldes, eine eigene Routine, ein with oder ein Member fuer
+  // Datum/Uhrzeit koennen dem Datum dienen; der Grund bleibt (bis dahin
+  // bot der Alt-Weg hier Invariant an).
+  Src := ClassUnit([FIELD], '  L := FFormatSettings;' + CRLF
+    + '  Result := DateToStr(d, L);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  Result := MyDateText(d, FFormatSettings);');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  with FFormatSettings do' + CRLF
+    + '    Result := ShortDateFormat;');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  Src := ClassUnit([FIELD], '  FFormatSettings.ShortDateFormat := '
+    + '''yyyy-mm-dd'';');
+  AssertRefused(Src, 15, Msg('formatdatetime'), _(R_FS_CLASS_SETTINGS,
+    ['TTpl', 'FFormatSettings', 8]), True);
+  // HeidiSQL main.pas:1420: die Property gibt das Feld nach aussen, die
+  // Datei selbst liest damit nur Zahlen - kein Grund der Klasse.
+  Src := ClassUnit([FIELD, '    property FormatSettings: TFormatSettings '
+    + 'read FFormatSettings;'], '  FFormatSettings := '
+    + 'TFormatSettings.Create(''en-US'');' + CRLF
+    + '  Result := FloatToStr(StrToFloat(S, FFormatSettings));');
+  AssertFixed(StringReplace(Src, 'FormatDateTime(S, Now)', INV, []), Src, 16,
+    Msg('formatdatetime'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_CoupledViaList_NoHelp;
+const
+  FILL: array[0..4] of string = ('  for Item in History do begin',
+    '    QueryDay := DateToStr(Item.Time);',
+    '    if Tab.HistoryDays.IndexOf(QueryDay) = -1 then',
+    '      Tab.HistoryDays.Add(QueryDay);', '  end;');
+  LOOP = '  for i := History.Count - 1 downto 0 do begin';
+  READ = '    QueryDay := DateToStr(History[i].Time);';
+var
+  Src, Reason : string;
+begin
+  // HeidiSQL main.pas:14718: Zeile 14698 legt 'DateToStr(Item.Time)' ueber
+  // QueryDay in Tab.HistoryDays, Zeile 14719 vergleicht das umgestellte
+  // QueryDay damit - nur diese Seite auf Invariant, und kein Tag passt mehr
+  // (alle Eintraege geloescht). Bis dahin nannte der Grund das Klassenfeld
+  // FFormatSettings bzw. den Plattenblick (V und W heissen gleich).
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Tab.HistoryDays[Node.Index] then',
+    '      History.Delete(i);', '  end;']);
+  AssertRefused(Src, BODY_LINE + 6, Msg('datetostr'), _(R_FS_COUPLED_PAIR,
+    [BODY_LINE + 7, 'QueryDay', 'Tab.HistoryDays', BODY_LINE + 1,
+    'DateToStr']), True);
+  // Der Hauptweg bleibt.
+  Assert.IsTrue(Fix(Src, BODY_LINE + 6, Msg('datetostr'), False, Reason) <> '',
+    'Hauptweg: ' + Reason);
+  // Gegenproben: QueryDay geht nur ins Protokoll bzw. wird mit einer
+  // anderen Liste verglichen - Invariant bleibt angeboten.
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    Log(QueryDay);', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+  Src := InUnit([FILL[0], FILL[1], FILL[2], FILL[3], FILL[4], LOOP, READ,
+    '    if QueryDay <> Other.HistoryDays[0] then', '      Foo;', '  end;']);
+  AssertFixed(StringReplace(Src, 'DateToStr(History[i].Time)',
+    'DateToStr(History[i].Time, TFormatSettings.Invariant)', []), Src,
+    BODY_LINE + 6, Msg('datetostr'), True);
+end;
+
+procedure TTestRdxFormatSettingsFix.Sca128_Alt_ConcatOnly_NotCoupled;
+const
+  ISO = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d);';
+  ISO_INV = '  r := FormatDateTime(''yyyy-mm-dd"T"hh:nn:ss'', d, '
+    + 'TFormatSettings.Invariant);';
+  ZONE = '  s := FormatDateTime(''hh:nn'', x);';
+  TAIL: array[0..3] of string = ('  if x > 0 then', '    r := r + ''+'' + s',
+    '  else', '    r := r + ''Z'';');
+begin
+  // jcl JclDebugSerialization.pas:242: 'Result := Result + ''+'' + S' setzt
+  // zwei je fuer sich formatierte Teile zusammen - die Umstellung von Zeile
+  // 242 bricht nichts an Zeile 244. Bis dahin nannte der Grund Zeile 244
+  // als gekoppeltes Gegenstueck (dort sperrt der Altcompiler ohnehin).
+  AssertFixed(InUnit([ISO_INV, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]),
+    InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3]]), BODY_LINE,
+    Msg('formatdatetime'), True);
+  // Gegenproben: das Ganze wird gelesen bzw. verglichen - die Verkettung
+  // koppelt weiter.
+  AssertRefused(InUnit([ISO, ZONE, TAIL[0], TAIL[1], TAIL[2], TAIL[3],
+    '  d := StrToDateTime(r);']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 3, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  AssertRefused(InUnit([ISO, ZONE, '  r := r + s;', '  if r = Expected then',
+    '    Foo;']), BODY_LINE, Msg('formatdatetime'),
+    _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's', BODY_LINE + 1,
+    'FormatDateTime']), True);
+  // Ein Vergleich in der Zuweisung selbst ist keine Verkettung.
+  AssertRefused(InUnit([ISO, ZONE, '  b := r + s = Expected;']), BODY_LINE,
+    Msg('formatdatetime'), _(R_FS_COUPLED_PAIR, [BODY_LINE + 2, 'r', 's',
+    BODY_LINE + 1, 'FormatDateTime']), True);
 end;
 
 {$IFNDEF FPC}
@@ -566,19 +1780,176 @@ begin
     '  r := FormatCurr(''0.00'', x);']), True));
 end;
 
-procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_ContinuedStatement_NoHelp;
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_PairInFile_HintNamesLine;
+var
+  Src, Base : string;
+  Seen      : TArray<TSeen>;
+  O         : TRdxFixOutcome;
+begin
+  // Entscheid M2 (Review e/HilfeFixC): der echte Detektor meldet beide
+  // Zeilen; der Alt-Weg bleibt angeboten, sein Hinweis nennt die andere
+  // Zeile (Paar-Bruch); bis dahin sperrte er. Den Grundhinweis des
+  // Adapters liefert eine Quelle ohne Gegenstueck.
+  Src := InUnit(['  r := DateTimeToStr(d);']);
+  O := TablePlan(Src, Detect(Src)[0], True);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Base := O.Hint;
+  Src := InUnit(['  x := StrToCurr(s);', '  r := FormatCurr(''0.00'', x);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(2, Length(Seen), 'zwei Funde');
+  if Seen[0].Line <> BODY_LINE then
+    Seen[0] := Seen[1];
+  Assert.AreEqual<Integer>(BODY_LINE, Seen[0].Line, 'Fund der StrToCurr-Zeile');
+  O := TablePlan(Src, Seen[0], True);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'aendert Verhalten');
+  Assert.AreEqual(_(R_FS_PAIR_HINT, [Base, BODY_LINE + 1, 'FormatCurr']),
+    O.Hint);
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_ContinuedStatement_EditsAll;
 var
   Src  : string;
   Seen : TArray<TSeen>;
   O    : TRdxFixOutcome;
 begin
+  // rwE30 Stufe 2: beide Aufrufe der Anweisung bekommen das Argument (bis
+  // dahin R_FS_CONTINUES), danach schweigt der Detektor.
   Src := InUnit(['  r := DateToStr(d) + '' '' +', '    TimeToStr(d);']);
   Seen := Detect(Src);
   Assert.IsTrue(Length(Seen) >= 1, 'der Detektor meldet die Anweisung');
   Assert.AreEqual<Integer>(BODY_LINE, Seen[0].Line, 'Zeile der Anweisung');
   O := TablePlan(Src, Seen[0], False);
-  Assert.IsFalse(O.Enabled);
-  Assert.AreEqual(_(R_FS_CONTINUES, [BODY_LINE + 1]), O.Reason);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual(InUnit(['  r := DateToStr(d, FormatSettings) + '' '' +',
+    '    TimeToStr(d, FormatSettings);']), Apply(Src, O.Edits));
+  Assert.AreEqual<Integer>(0, Length(Detect(Apply(Src, O.Edits))),
+    'der Detektor schweigt');
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldDelphiProject_NoHelp;
+var
+  Root, Dir, U, Dof, Src : string;
+  Seen                   : TArray<TSeen>;
+  O                      : TRdxFixOutcome;
+begin
+  // rwE29, gexperts\Src\GX_DbugIntf.pas:149: GExperts baut mit Delphi 1-6
+  // (GExpert4.dof eine Ebene ueber Src, keine .dproj); die Unit selbst
+  // fragt nach keinem Compiler. Dort gibt es weder die globale
+  // FormatSettings noch TFormatSettings.Invariant (E2003). Der Adapter
+  // fragt jetzt den Plattenblick (FormatSettingsDiskCheck) - ohne ihn
+  // boeten beide Eintraege an (Gegenprobe unten: ohne .dof). 'SysUtils'
+  // ohne Namensraum: System.SysUtils bewiese Delphi XE2 (ModernProof,
+  // rwE30 Stufe 2), und der Hauptweg fragte die Platte nicht.
+  Src := InOldUnit(['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    Dir := Root + 'gx' + PathDelim + 'Src' + PathDelim;
+    ForceDirectories(Dir);
+    U := Dir + 'GX_DbugIntf.pas';
+    Dof := Root + 'gx' + PathDelim + 'GExpert4.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('FormatSettings', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('TFormatSettings.Invariant', O.Reason) > 0, O.Reason);
+    // Gegenprobe: ohne die alte Projektdatei bieten beide an.
+    DeleteFile(Dof);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_LazarusProject_OnlyMainWay;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // rwE29, martin-doyle\10-InvoiceExample\src\rgReportPayments.pas:210 (und
+  // rgInvoiceItemEdit.pas:217): die Unit steht in Rechnung.lpi im selben
+  // Verzeichnis und baut mit FPC 3.2 - dort gibt es kein
+  // TFormatSettings.Invariant. Der Alt-Weg sperrt (ohne den Plattenblick
+  // boete er an: die Unit traegt keine FPC-Weiche); der Hauptweg bleibt -
+  // FPC kennt die globale FormatSettings (FpcKnows).
+  Src := InUnit(['  r := FloatToStr(x);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'rgReportPayments.pas';
+    WriteText(Root + 'Rechnung.lpi', '<CONFIG/>');
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatInvariant),
+      O.Reason);
+    Assert.IsTrue(Pos('Rechnung.lpi', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.AreEqual(InUnit(['  r := FloatToStr(x, FormatSettings);']),
+      Apply(Src, O.Edits));
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
+procedure TTestRdxFormatSettingsFixDetector.Sca128_Detector_OldTraceInInclude_M1b;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // Nico-Entscheid M1b (2026-10-30, ersetzt M1 fuer diesen Fall): eine
+  // Delphi-Weiche bis XE in einem Include ('{$IFDEF VER150}') sperrt auch
+  // den Hauptweg, wenn kein Projekt der Unit ab XE im Fenster liegt; ein
+  // nicht gefundenes Include sperrt ihn nicht (bis dahin: Hauptweg
+  // angeboten, M1). Gegenproben: ohne die Weiche nur das fehlende Include -
+  // angeboten; eine alte Projektdatei (Delphi 7, .dof) sperrt mit ihrem
+  // eigenen Grund.
+  Src := UnitText('SysUtils', ['{$I defs.inc}', '{$I fehlt.inc}'],
+    ['  r := DateTimeToStr(d);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'u.pas';
+    WriteText(Root + 'defs.inc', '{$IFDEF VER150}' + CRLF + '  {$DEFINE D7}'
+      + CRLF + '{$ENDIF}');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (Weiche im Include)');
+    Assert.IsTrue((Pos('defs.inc', O.Reason) > 0)
+      and (Pos('VER150', O.Reason) > 0), O.Reason);
+    O := PlanAltFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Invariant-Weg gesperrt (Include)');
+    Assert.IsTrue(O.Reason <> '', 'mit Grund');
+    WriteText(Root + 'defs.inc', '{$DEFINE NIX}');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.IsTrue(Pos('DateTimeToStr(d, FormatSettings)', Apply(Src, O.Edits))
+      > 0, 'Hauptweg angewendet');
+    WriteText(Root + 'Prj.dof', '[Compiler]');
+    O := PlanFixIn(Src, U, fkDateFormatSettings, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Hauptweg gesperrt (.dof)');
+    Assert.AreEqual(TRdxMagicFixes.FileReason(U, lfFormatSettingsVar),
+      O.Reason);
+    Assert.IsTrue(Pos('Prj.dof', O.Reason) > 0, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}

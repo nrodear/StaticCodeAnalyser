@@ -1,8 +1,8 @@
 #!/usr/bin/env pwsh
 # PR-Comment-Bot fuer Static Code Analysis Tool for Delphi
 #
-# Liest einen SARIF-Report (von analyser.d12.exe --report-sarif erzeugt)
-# und postet einen Kommentar an den aktuellen Pull-Request, der die
+# Liest einen SARIF-Report (von StaticCodeAnalyser.d12.exe --report-sarif
+# erzeugt) und postet einen Kommentar an den aktuellen Pull-Request, der die
 # in DIESEM PR NEU hinzugekommenen Findings auflistet.
 #
 # Backends:
@@ -13,9 +13,9 @@
 #   * gh CLI installiert und authentifiziert (gh auth login)
 #     - Oder GITHUB_TOKEN als Env-Var
 #   * Pre-existierende Baseline (sca.baseline.json) auf dem Target-Branch:
-#     - analyser.d12.exe verglich vorher gegen die Baseline, SARIF enthaelt
-#       nur NEUE Findings
-#   * SARIF v2.1.0 (analyser.d12.exe Standard-Format)
+#     - StaticCodeAnalyser.d12.exe verglich vorher gegen die Baseline,
+#       SARIF enthaelt nur NEUE Findings
+#   * SARIF v2.1.0 (StaticCodeAnalyser.d12.exe Standard-Format)
 #
 # Aufruf:
 #   .\pr-comment-bot.ps1 -SarifPath sca.sarif `

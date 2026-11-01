@@ -224,6 +224,7 @@ All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | CWE | [CWE-401](https://cwe.mitre.org/data/definitions/401.html) |
 | Config | `[Detectors] LeakyClasses` |
 | Detector | `uLeakDetector2.pas` |
+| Editor help | `SCA001:changes:free-in-try-finally-block` |
 
 Reports four variants. (1) never-freed: the object is never freed at all - warning. (2) freed-outside-finally: a `Free` exists but sits outside the protecting `try/finally`, so any exception inside the block leaks - warning. (3) return-value-not-freed: a function returns a freshly created object and the caller never frees it - note. (4) proven-leak: never freed AND the variable provably never escapes the method (no call argument, no assignment target, no owner-suspect constructor argument, no interface type) - the only variant reported as an error. Which variant a finding belongs to is reported in `properties.variant` in the SARIF output and in the fix hint the UI shows; the message text itself carries only the variable name.
 
@@ -254,6 +255,7 @@ end;
 | Tags | `error-handling` |
 | CWE | [CWE-390](https://cwe.mitre.org/data/definitions/390.html) |
 | Detector | `uCodeSmells2.pas` |
+| Editor help | `SCA002:changes:add-raise-to-empty-except-block` |
 
 An except-block with no statements catches every exception including unexpected ones (`EAccessViolation`, `EOutOfMemory`). Bugs become invisible. At minimum log the exception or re-raise.
 
@@ -279,6 +281,7 @@ try DoStuff except on E: Exception do LogError(E.Message); end;
 | CWE | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) |
 | OWASP | A03:2021-Injection |
 | Detector | `uSQLInjection.pas` |
+| Editor help | `SCA003:template:copy-parameterized-template-to-clipboard` |
 
 Building SQL via `'WHERE x='` + operand enables SQL injection when that operand is untrusted. The detector reports the CONCATENATION - it does not track where the operand comes from, so a finding is a review pointer, not proof of a vulnerability. Literal-only concatenations, integer-format masks and known sanitizers are already excluded. Use parameterized queries (`Params.ParamByName(...).Value := ...`) instead.
 
@@ -368,6 +371,7 @@ Special-case finding (no code defect): the file could not be loaded or the lexer
 | Tags | `dead-code`, `uses-cleanup` |
 | Config | `[Detectors] UsesCheck` |
 | Detector | `uUnusedUses.pas` |
+| Editor help | `SCA007:changes:remove-unit-from-uses` |
 
 Heuristic: scans for any identifier from the used unit. False positives possible for units that only register classes / initialize global state via initialization sections.
 
@@ -409,6 +413,7 @@ if Assigned(obj) then obj.DoStuff;
 | Severity | Warning | Type | Code Smell |
 | Tags | `memory`, `exception-safety` |
 | Detector | `uMissingFinally.pas` |
+| Editor help | `SCA009:changes:free-in-try-finally-block` |
 
 Similar to MemoryLeak (SCA001) but checked structurally: any `.Create` followed by code without an enclosing `try/finally` is flagged regardless of whether `Free` is called eventually.
 
@@ -460,6 +465,7 @@ if count <> 0 then result := total / count;
 | Tags | `dead-code` |
 | CWE | [CWE-561](https://cwe.mitre.org/data/definitions/561.html) |
 | Detector | `uDeadCode.pas` |
+| Editor help | `SCA011:same:delete-unreachable-code-line` |
 
 Anything after an unconditional terminator (`Exit`, `raise`, `Halt`, `Continue`, `Break`) in the same block is never executed. Usually leftover code from refactoring. Not reported when the terminator itself sits inside a conditional-compilation range and the following statement does not (`{$IFDEF DEBUG} raise ...; {$ENDIF}` followed by `Exit;`): without the define the terminator does not exist and the next statement is the live path. This guard is DEFINE-DEPENDENT - for a build that always sets the define, the suppressed finding would be factually correct. The analyser cannot decide it without the project defines, and decides in favour of 'reachable'.
 
@@ -530,6 +536,7 @@ procedure SaveOrder(const Order: TOrder);
 | Tags | `maintainability` |
 | Config | `[Detectors] MagicNumberTrivials` |
 | Detector | `uMagicNumbers.pas` |
+| Editor help | `SCA014:same:introduce-local-constant-for` |
 
 Numeric literals embedded directly in business logic carry no meaning: `if RetryCount > 3` forces every reader to guess what 3 represents and forces every maintenance change to find every occurrence by hand. Extract a named constant so the value has a documented purpose and exactly one source of truth. The detector skips trivials (0, 1, 2, -1, common power-of-2 sizes, indexing into known-tiny collections) - see [Detectors] MagicNumberTrivials for the active list. Loop bounds against `Length(arr)` and array index 0 are also ignored. Use the global config to add project-specific trivials (e.g. a fixed PageSize).
 
@@ -592,6 +599,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 | Severity | Warning | Type | Code Smell |
 | Tags | `debug-code` |
 | Detector | `uDebugOutput.pas` |
+| Editor help | `SCA017:changes:put-debug-output-in-ifdef-debug`, `SCA017.2:changes:delete-debug-output` |
 
 `WriteLn` / `ShowMessage` / `OutputDebugString` / OutputDebugStringA in non-test code is almost always leftover debugging: ShowMessage in particular blocks the UI thread and is unfit for any production code path. Replace with a structured logger (TLogger, mORMot TSynLog, log4d) so the call site captures severity, category, and source location, and ops can dial verbosity at runtime. The detector skips units in test/sample/demo directory segments (the project-wide fixture-path definition: `test`, `tests`, `unittest`, `unittests`, `samples`, `demos`, anchored below the scan root) and console/test-runner units (`*Console*`, `*TestProject*` in the unit file name) - output there is intentional, not leftover debugging. Implemented 2026-09-05, after the 2026-09-04 audit found the originally promised skip had never been built. A `// noinspection DebugOutput` marker suppresses individual lines (e.g. interactive CLI banners).
 
@@ -608,6 +616,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 | Tags | `complexity` |
 | Config | `[Detectors] DeepNestingMaxDepth` |
 | Detector | `uDeepNesting.pas` |
+| Editor help | `SCA018:same:turn-last-if-into-guard-clause-with-exit` |
 
 Deep nesting hurts readability and indicates the method is doing too much. Use guard clauses (early `Exit`) or extract inner blocks into helper methods.
 
@@ -652,6 +661,7 @@ Open work markers (TODO, FIXME, HACK, XXX, BUG, NOTE) live as a parallel work tr
 | Severity | Hint | Type | Code Smell |
 | Tags | `maintainability` |
 | Detector | `uEmptyMethod.pas` |
+| Editor help | `SCA020:same:mark-empty-body-as-intentional`, `SCA020.2:changes:raise-enotimplemented-in-empty-body` |
 
 Empty method may indicate a forgotten implementation, a TODO that was never followed up, or an interface stub. Make intent explicit (assert, exception, or comment).
 
@@ -1074,6 +1084,7 @@ When both are set, the EXPLICIT OnClick handler wins at runtime: TControl.Click 
 | Severity | Warning | Type | Code Smell |
 | Tags | `maintainability`, `string-formatting` |
 | Detector | `uConcatToFormat.pas` |
+| Editor help | `SCA044:same:build-format-from-concatenation` |
 
 Chains of `'a' + Var + 'b' + IntToStr(N)` (three or more concatenations involving non-literal segments) are harder to scan and harder to translate than `Format('a%sb%d', [Var, N])`: every IntToStr / FloatToStr / FormatDateTime in the middle of a string is one more place where a `resourcestring` cannot capture the message template. The detector triggers from 3 segments / 2 non-literal pieces upward, ignores trivial cases (`'<' + Name + '>'`) and skips lines under an active `// noinspection ConcatToFormat`. The flagged form may be intentional in performance-critical inner loops where Format's varargs box; the suppression marker is for that case.
 
@@ -1124,6 +1135,7 @@ C.Name := SomeName;
 | Severity | **Error** | Type | Bug |
 | Tags | `loop`, `typo` |
 | Detector | `uReversedForRange.pas` |
+| Editor help | `SCA046:changes:replace-to-with-downto`, `SCA046.2:changes:swap-loop-bounds` |
 
 `for i := 10 `to` 1 do` is a `downto`-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector compares integer literals on both sides, an optional leading minus included (`for i := 5 to -1` is flagged); expressions and constants such as `Length(L)-1` or `High(A)` are not evaluated. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.
 
@@ -1147,6 +1159,7 @@ for i := 10 downto 1 do DoStuff(i);
 | Severity | Warning | Type | Bug |
 | Tags | `typo`, `no-op` |
 | Detector | `uSelfAssignment.pas` |
+| Editor help | `SCA047:same:remove-self-assignment-of` |
 
 Reported only when the target is provably a storage slot: a local variable, a parameter, `Result`, an assignment to the function name, a field declared in the same unit - or a member path (`Pt.Y`, `R^.iType`) whose root is such a slot and whose every segment is a plain record field, resolved through the unit's own record declarations plus a curated RTL list (`TPoint`, `TRect` fields, ...). Property targets stay silent in every position - writing to a property runs its setter, which may clamp, re-apply or reformat the value (`TopLine := TopLine` clamps against the resized window; `TRectF.Height := TRectF.Height` writes `Bottom`). Indexed paths (`a[i]`) and names that cannot be resolved stay silent too. The trade-off is deliberate: unknown forms become false negatives, never false positives. `Result := Result;` to silence a compiler hint is still reported and can be suppressed with a `// noinspection` comment directly above the line.
 
@@ -1252,6 +1265,7 @@ No internal use AND no external use found - dead API surface. Either remove or d
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `locals` |
 | Detector | `uUnusedLocal.pas` |
+| Editor help | `SCA053:same:remove-unused-variable` |
 
 A `var X: T;` in a method body is declared but never read or written in the same body. Mirrors Delphi compiler hint `H2164` but emitted as an SCA finding so it can be filtered, suppressed, prioritized and tracked uniformly with the other rules - useful when H2164 is muted project-wide. The body scan recognises `with`-rebound identifiers and ignores variables whose names match an existing field/property (the `with` would rebind them implicitly). Inline-vars introduced by `var X: T := ...` are treated identically. Suppress with `// noinspection UnusedLocalVar` when the variable is intentionally kept (declarative documentation, or required-by-API record initialization).
 
@@ -1267,6 +1281,7 @@ A `var X: T;` in a method body is declared but never read or written in the same
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `api-design` |
 | Detector | `uUnusedParameter.pas` |
+| Editor help | `SCA054:same:prefix-parameter-with-intentionally-unused` |
 
 A formal parameter is declared but never read in the method body. The parameter clutters the call site (every caller passes a value that has no effect) and obscures the method's true dependencies. Refactor: drop the parameter, or move the call site to a different overload that doesn't take it. The detector intentionally skips externally constrained signatures: `override` (parent signature is fixed), `; virtual; abstract` placeholder bodies, interface implementations (signature dictated by interface), event handlers (`Sender: TObject` and the rest of the event tuple), and methods registered as DFM event handlers. Suppress per-method with `// noinspection UnusedParameter` for stable-shape callbacks (RTTI/streaming).
 
@@ -1359,6 +1374,7 @@ Q.SQL.Text := 'UPDATE Users SET Active=0 WHERE Id=:id';
 | Severity | Hint | Type | Bug |
 | Tags | `string-formatting`, `i18n`, `locale` |
 | Detector | `uFormatMismatch.pas` |
+| Editor help | `SCA059:same:pass-formatsettings-explicitly`, `SCA059.2:changes:pass-tformatsettings-invariant` |
 
 On a DE Windows `Format('%.2f', [3.14])` yields `'3,14'`; on EN-US it yields `'3.14'`. For machine-readable output (SQL, JSON, CSV) always pass `TFormatSettings.Invariant`.
 
@@ -1382,6 +1398,7 @@ S := Format('%.2f', [Price], TFormatSettings.Invariant);
 | Severity | Warning | Type | Code Smell |
 | Tags | `control-flow`, `delphi-classic` |
 | Detector | `uGotoStatement.pas` |
+| Editor help | `SCA060:same:replace-goto-with-exit` |
 
 `goto` and labels make the control flow non-structural: loops, nesting and try/finally become hard to follow. SonarDelphi tracks the same as communitydelphi:GotoStatement. Modern Delphi code rarely justifies goto - even multi-level break is cleaner as an extracted procedure with Exit.
 
@@ -1410,6 +1427,7 @@ if Failed then Exit;
 | Severity | Hint | Type | Code Smell |
 | Tags | `formatting`, `style` |
 | Detector | `uTabulationCharacter.pas` |
+| Editor help | `SCA061:same:replace-tabs-in-this-line-with-spaces` |
 
 Pascal coding convention has been space-indentation since the 80s. Tabs render at 2/4/8 columns depending on the editor, break code-review side-by-side diffs and confuse alignment. SonarDelphi tracks the same as communitydelphi:TabulationCharacter.
 
@@ -1463,6 +1481,7 @@ result := SomeReallyLongFunction(
 | Severity | Hint | Type | Code Smell |
 | Tags | `formatting`, `style` |
 | Detector | `uTrailingWhitespace.pas` |
+| Editor help | `SCA063:same:remove-trailing-whitespace` |
 
 Trailing space/tab at end of line creates phantom diff lines whenever an editor with 'trim trailing whitespace on save' touches the file. SonarDelphi tracks the same as communitydelphi:TrailingWhitespace.
 
@@ -1485,6 +1504,7 @@ Trailing space/tab at end of line creates phantom diff lines whenever an editor 
 | Severity | Hint | Type | Code Smell |
 | Tags | `formatting`, `style`, `convention` |
 | Detector | `uLowercaseKeyword.pas` |
+| Editor help | `SCA064:same:write-in-lowercase` |
 
 Object-Pascal style guide (Embarcadero DocWiki, Marco Cantu, SonarDelphi) is unambiguous: keywords are lowercase. Mixed-case variants like `Begin`/`End`/`Procedure` are leftovers from Turbo-Pascal/Delphi-1 era and create inconsistency in modern codebases. SonarDelphi tracks the same as communitydelphi:LowercaseKeyword.
 
@@ -1513,6 +1533,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `suppression`, `audit` |
 | Detector | `uNoSonarMarker.pas` |
+| Editor help | `SCA065:changes:replace-nosonar-with-noinspection-all-marker` |
 
 NOSONAR markers are technical debt: each one silences a finding without fixing the underlying issue. SCA reports every NOSONAR so reviewers can audit suppressions during code review. SCA uses its own `// noinspection` marker for native suppression - NOSONAR-decorated code coming from SonarDelphi should be migrated. Matches SonarDelphi communitydelphi:NoSonar.
 
@@ -1536,6 +1557,7 @@ Dispose(P);
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `convention` |
 | Detector | `uEmptyArgumentList.pas` |
+| Editor help | `SCA066:same:remove-empty-parentheses` |
 
 Delphi convention is to write parameterless calls without `()`. The C-style `Foo()` form adds noise without communicating anything and is inconsistent with the rest of the language (procedures, properties, function refs all omit parens when no args). Matches SonarDelphi communitydelphi:EmptyArgumentList.
 
@@ -1589,6 +1611,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `bug-risk` |
 | Detector | `uTrailingCommaArgList.pas` |
+| Editor help | `SCA068:same:remove-trailing-comma` |
 
 Trailing comma before `)` in an argument list. In a normal call Delphi rejects it: the comma adds an empty argument (E2034 too many actual parameters). Only a late-bound call on a Variant or dispinterface (OLE automation) compiles it, where the empty argument is an omitted optional parameter. There it has no semantic benefit (unlike Python/JS where it stabilizes the diff) and suggests a forgotten argument. Matches SonarDelphi communitydelphi:TrailingCommaArgumentList.
 
@@ -1613,6 +1636,7 @@ Excel.ActiveWorkbook.SaveAs(NewName);
 | Severity | Hint | Type | Code Smell |
 | Tags | `readability`, `modern-delphi` |
 | Detector | `uDigitGrouping.pas` |
+| Editor help | `SCA069:same:group-digits-with` |
 
 Delphi 10.4+ supports `_` as a digit separator in numeric literals. Constants like timeouts (1_800_000 ms = 30 min), file sizes (1_048_576 = 1 MiB), money cents and the like are dramatically more readable with explicit grouping. Threshold is 5 digits (hardcoded; `[Detectors] DigitGroupingThreshold` is planned). Hex and float literals are exempted (different convention). Matches SonarDelphi communitydelphi:DigitGrouping.
 
@@ -1637,6 +1661,7 @@ const MAX_BYTES = 10_485_760;
 | Severity | Hint | Type | Code Smell |
 | Tags | `maintenance`, `dead-code` |
 | Detector | `uCommentedOutCode.pas` |
+| Editor help | `SCA070:same:delete-commented-out-code` |
 
 Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywords `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) is almost certainly commented-out code. Such code rots silently: nobody dares delete it, nobody updates it. Either remove it, or replace with a TODO that explains the intent. Adjacent flagged lines are reported as ONE finding spanning the block (endLine marks the span; granularity decision 2026-09-05); a single flagged line keeps the per-line message. Matches SonarDelphi communitydelphi:CommentedOutCode.
 
@@ -1660,6 +1685,7 @@ Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywo
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `structure` |
 | Detector | `uUnitLevelKeywordIndent.pas` |
+| Editor help | `SCA071:same:move-keyword-to-column-1` |
 
 Object Pascal convention is that the structural section keywords of a unit are flush-left at column 1. Indented section keywords obscure the unit's structure when scanning and may hint at miscounted begin/end nesting. Matches SonarDelphi communitydelphi:UnitLevelKeywordIndentation.
 
@@ -1686,6 +1712,7 @@ procedure Foo; ...
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `bug-risk` |
 | Detector | `uRedundantBoolean.pas` |
+| Editor help | `SCA072:same:remove-redundant-comparison-with-true-false` |
 
 Comparing a Boolean to True/False is verbose and creates subtle bugs (WinAPI BOOL where Truthy != 1 evaluates `X = True` to false). The expression itself already is the condition. Matches SonarDelphi communitydelphi:RedundantBoolean. Note: `const X = True;` declarations are excluded (legitimate assignment, not comparison).
 
@@ -1739,6 +1766,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `debuggability`, `errors` |
 | Detector | `uAssertMessage.pas` |
+| Editor help | `SCA074:same:use-condition-as-assert-message` |
 
 `Assert(cond)` alone fails with the generic 'Assertion failed at $address' - no clue what was actually expected. `Assert(cond, 'why')` saves debugging hours. Matches SonarDelphi communitydelphi:AssertMessage.
 
@@ -1761,6 +1789,7 @@ Assert(Items.Count > 0, 'caller must ensure non-empty Items');
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `redundancy` |
 | Detector | `uExplicitTObjectInheritance.pas` |
+| Editor help | `SCA075:same:remove-tobject-from-class-declaration` |
 
 Every class implicitly inherits from TObject; `TFoo = class(TObject)` is identical to `TFoo = class`. Removing the explicit base highlights real inheritance changes in diffs. Matches SonarDelphi communitydelphi:ExplicitTObjectInheritance.
 
@@ -1783,6 +1812,7 @@ type TFoo = class ... end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `diff-hygiene` |
 | Detector | `uGroupedDeclaration.pas` |
+| Editor help | `SCA076:same:split-grouped-declaration` |
 
 Grouped declarations (`A, B, C: Integer;` for vars, fields or parameters) confuse diffs (a new variable changes an existing line), prevent per-variable comments, and complicate type-change refactors. Each declaration on its own line is cleaner. Unifies SonarDelphi communitydelphi:GroupedFieldDeclaration / :GroupedVariableDeclaration / :GroupedParameterDeclaration into one rule (SCA may split later).
 
@@ -1808,6 +1838,7 @@ var A: Integer;
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `refactor` |
 | Detector | `uEmptyBlock.pas` |
+| Editor help | `SCA077:same:replace-empty-with-do-begin-end-by-call` |
 
 An empty `begin..end` is almost always a refactor leftover or never-filled-in placeholder. Either delete it or implement the missing logic. Top-level unit `begin end.` initialization sections are exempted (that is the empty init form, not a refactor rest). Matches SonarDelphi communitydelphi:EmptyBlock.
 
@@ -1852,6 +1883,7 @@ try Foo; except on E: EDatabaseError do Log(E.Message); end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `structure` |
 | Detector | `uConsecutiveSection.pas` |
+| Editor help | `SCA079:same:merge-with-previous-section` |
 
 `const A = 1; const B = 2;` should be `const A = 1; B = 2;` - one section keyword can declare all of them. Same for `type` and `var`. Unifies SonarDelphi communitydelphi:ConsecutiveConstSection / :ConsecutiveTypeSection / :ConsecutiveVarSection into one rule. The section type is in the message.
 
@@ -1877,6 +1909,7 @@ const
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `control-flow` |
 | Detector | `uRedundantJump.pas` |
+| Editor help | `SCA080:same:remove-redundant` |
 
 If `Exit` is the last statement of a routine, or `Continue` the last statement of a loop body, control flow already leaves the block - the jump statement is dead. Delete it to clarify intent. Matches SonarDelphi communitydelphi:RedundantJump.
 
@@ -1944,6 +1977,7 @@ type TBar = class ... end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `typo`, `style` |
 | Detector | `uSuperfluousSemicolon.pas` |
+| Editor help | `SCA082:same:remove-extra-semicolon` |
 
 A double semicolon (`;;`) usually means a forgotten typo or a stray paste leftover. Compilers treat the second `;` as an empty statement, so it doesn't break, but it adds noise. Matches SonarDelphi communitydelphi:SuperfluousSemicolon.
 
@@ -1966,6 +2000,7 @@ DoStuff;
 | Severity | Warning | Type | Bug |
 | Tags | `resource-leak`, `refactor` |
 | Detector | `uEmptyFinallyBlock.pas` |
+| Editor help | `SCA083:same:remove-empty-try-finally` |
 
 An empty `finally` block is almost always a forgotten cleanup. If there really is nothing to clean up, drop the `try..finally` wrapper. Matches SonarDelphi communitydelphi:EmptyFinallyBlock.
 
@@ -1997,6 +2032,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `redundancy`, `style` |
 | Detector | `uAssignedAndAssignedNil.pas` |
+| Editor help | `SCA084:same:remove-redundant-comparison-with-nil` |
 
 `Assigned(X)` for pointers and class instances is semantically identical to `X <> nil`. Combining both is redundant - the second check can never give a different result. Matches SonarDelphi communitydelphi:AssignedAndAssignedNil.
 
@@ -2019,6 +2055,7 @@ if Assigned(Obj) then ...
 | Severity | Hint | Type | Code Smell |
 | Tags | `idiom`, `safety` |
 | Detector | `uFreeAndNilHint.pas` |
+| Editor help | `SCA085:same:use-freeandnil` |
 
 `FreeAndNil(X)` is the canonical Delphi idiom: it does both atomically and avoids a dangling pointer if `X.Free` raises (e.g. destructor failure). Manual two-line form is also more diff-noisy and easier to break apart during later refactors. Matches SonarDelphi communitydelphi:FreeAndNil.
 
@@ -2042,6 +2079,7 @@ FreeAndNil(Obj);
 | Severity | Hint | Type | Code Smell |
 | Tags | `api-design`, `bug-risk` |
 | Detector | `uAvoidOut.pas` |
+| Editor help | `SCA086:depends:replace-out-with-var-for` |
 
 `out` parameters clear managed types (string/Interface/dynamic arrays) on method entry - the caller's value is discarded before the method runs. Record/simple types stay uninitialized, so reading the incoming value is UB. Both are rarely what was intended. `var` is the safer default unless you need the COM-interop semantics. Matches SonarDelphi communitydelphi:AvoidOut.
 
@@ -2064,6 +2102,7 @@ procedure Foo(var S: string);
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `refactor` |
 | Detector | `uEmptyVisibilitySection.pas` |
+| Editor help | `SCA087:same:remove-empty-visibility-section` |
 
 A class with a visibility keyword followed immediately by another visibility keyword (or `end`) is usually a refactor leftover - all members of that section moved elsewhere. Delete the empty header. Matches SonarDelphi communitydelphi:EmptyVisibilitySection.
 
@@ -2093,6 +2132,7 @@ type TFoo = class
 | Severity | Hint | Type | Code Smell |
 | Tags | `legacy`, `modernization` |
 | Detector | `uLegacyInitializationSection.pas` |
+| Editor help | `SCA088:same:replace-begin-with-initialization` |
 
 Pre-Delphi-2 units marked their init block with `begin..end.`. Since Delphi 2 the idiomatic form is `initialization..end.` which can be paired with an optional `finalization` block for symmetric cleanup. Matches SonarDelphi communitydelphi:LegacyInitializationSection.
 
@@ -2231,6 +2271,7 @@ end.
 | Severity | Warning | Type | Bug |
 | Tags | `inheritance`, `bug-risk` |
 | Detector | `uTwiceInheritedCalls.pas` |
+| Editor help | `SCA093:changes:remove-second-duplicate-inherited-call`, `SCA093.2:changes:remove-first-duplicate-inherited-call` |
 
 Each `inherited` invocation runs the parent implementation. Two calls fire side-effects (event notifications, refcount updates, log lines) twice. Almost always a copy-paste bug. Matches SonarDelphi communitydelphi:TwiceInheritedCalls.
 
@@ -2262,6 +2303,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `redundancy` |
 | Detector | `uRedundantParentheses.pas` |
+| Editor help | `SCA094:same:remove-redundant-inner-parentheses` |
 
 Double parentheses around a single identifier, literal or simple expression add nothing - a single pair is sufficient (often none). Matches SonarDelphi communitydelphi:RedundantParentheses. Only the simple-expression case is flagged; complex `((A + B))` may still benefit from inner parens for precedence and is not reported.
 
@@ -2316,6 +2358,7 @@ type TFoo = class
 | Severity | Warning | Type | Bug |
 | Tags | `inheritance`, `initialization` |
 | Detector | `uConstructorWithoutInherited.pas` |
+| Editor help | `SCA096:depends:call-first-in-constructor` |
 
 A constructor that does not call `inherited Create(...)` (or `inherited;`) skips parent-class initialization. Parent fields and registrations end up at default/nil state, which leads to follow-up crashes when methods expect the parent to be ready. Matches SonarDelphi communitydelphi:ConstructorWithoutInherited.
 
@@ -2345,6 +2388,7 @@ end;
 | Severity | **Error** | Type | Bug |
 | Tags | `inheritance`, `memory-leak` |
 | Detector | `uDestructorWithoutInherited.pas` |
+| Editor help | `SCA097:depends:call-inherited-last-in-destructor` |
 
 A destructor without `inherited Destroy` (or `inherited;`) prevents the parent class from releasing its own fields, unregistering handlers, and updating reference counts. Almost always a leak. Matches SonarDelphi communitydelphi:DestructorWithoutInherited.
 
@@ -2374,6 +2418,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `simplification`, `style` |
 | Detector | `uRedundantConditional.pas` |
+| Editor help | `SCA098:same:assign-condition-to-directly` |
 
 Two branches assigning True/False to the same variable can be reduced to a single direct assignment (or `not Cond` if the polarity is reversed). Shorter, faster, and matches the boolean expression more directly. Matches SonarDelphi communitydelphi:RedundantConditional.
 
@@ -2396,6 +2441,7 @@ Result := Active;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `consistency` |
 | Detector | `uIfElseBegin.pas` |
+| Editor help | `SCA099:same:put-branch-in-begin-end` |
 
 When the then-branch uses `begin..end`, the else-branch should too (or both should drop it). The mixed form (`end else DoStuff;`) makes a future reader unsure whether more statements belong in the else-branch but were forgotten. `else if` (else-if chain) and `else begin` are explicitly allowed. Matches SonarDelphi communitydelphi:IfElseBegin.
 
@@ -2454,6 +2500,7 @@ type PInteger = ^Integer;
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `bug-risk` |
 | Detector | `uBeginEndRequired.pas` |
+| Editor help | `SCA101:same:put-branch-in-begin-end` |
 
 A single-statement branch without `begin..end` is easy to misread; adding a second statement later without re-blocking is a classic source of indentation-vs-semantics bugs. Style-debated rule (many Delphi codebases use the compact form deliberately) - lsHint, easy to disable in profiles. `else if` chain, `raise`/`exit`/`break`/`continue` and other block-opening statements are explicitly allowed. Matches SonarDelphi communitydelphi:BeginEndRequired.
 
@@ -2585,6 +2632,7 @@ type IService = interface ['{...}'] end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `naming`, `convention` |
 | Detector | `uMethodName.pas` |
+| Editor help | `SCA106:same:write-method-name-as` |
 
 Delphi convention is PascalCase (UpperCamel) for routines and methods: `DoSomething`, not `doSomething` or `do_something`. Operator overloads and identifiers starting with `_` are exempted. Matches SonarDelphi communitydelphi:MethodName. AST-based: checks `nkMethod.Name` (qualified `TFoo.bar` splits on the dot). File-wide exemptions: generated type-library imports (*_TLB.pas) and units declaring FPC foreign-language classes (objcclass/objccategory/cppclass) - their method names ARE the selectors/symbols of the foreign API; `external` routines, `cdecl` type methods and FFI binding types (JNI/ObjC import anchors) are exempted per method.
 
@@ -2672,6 +2720,7 @@ OnTerminate := FOnDone;
 | Tags | `concurrency`, `lock`, `exception-safety` |
 | CWE | [CWE-667](https://cwe.mitre.org/data/definitions/667.html) |
 | Detector | `uLockWithoutTryFinally.pas` |
+| Editor help | `SCA109:changes:release-lock-in-try-finally-block` |
 
 Acquiring a lock (TCriticalSection.Enter / .Acquire, TMonitor.Enter, TMultiReadExclusiveWriteSynchronizer.BeginWrite, WinAPI EnterCriticalSection) without immediately following with try..finally containing the matching Leave / Release / EndWrite is one of the most common Delphi threading bugs: any exception between the acquire and the release leaves the lock permanently held, deadlocking every subsequent caller. Lexical detection: matches the acquire patterns and checks whether the next statement after the `;` is `try`. Suppress with `// noinspection LockWithoutTryFinally` for intentionally-unprotected sequences (rare; usually means the next call is itself never going to throw).
 
@@ -2729,6 +2778,7 @@ finally SB.Free; end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `database` |
 | Detector | `uPerfHotspots.pas` |
+| Editor help | `SCA111:changes:move-before-loop` |
 
 ParamByName walks the TParam collection by string-compare on each call (linear in number of params). Inside a Hot-Path / loop this turns one ParamByName per Query.Execute into N per Execute. Cache the TParam reference once outside the loop or use the integer-indexed Params[i] property if the parameter position is known.
 
@@ -2758,6 +2808,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `database` |
 | Detector | `uPerfHotspots.pas` |
+| Editor help | `SCA112:changes:move-before-loop` |
 
 FieldByName walks the TFields collection by string-compare for every call. In a DataSet-iteration loop that turns one lookup per Field into N lookups per .Next, sometimes per-row times N-fields = O(N*M). Cache the TField reference once before the loop and read/write it directly. Same fix-path as SCA111 (ParamByName) - just a different collection.
 
@@ -2787,6 +2838,7 @@ end;
 | Severity | Warning | Type | Code Smell |
 | Tags | `concurrency`, `deprecated` |
 | Detector | `uConcurrencyExt.pas` |
+| Editor help | `SCA113:same:use-start-instead-of-resume` |
 
 TThread.Resume has been deprecated since Delphi 2010 in favor of TThread.Start (suspends-on-create + resume-on-start became one explicit Start call). The compiler emits a deprecation warning, but it is easily missed in larger code-bases. Two fixes: (a) call .Start instead of .Resume, (b) construct with CreateSuspended := False and skip the Resume/Start step entirely. Detector matches any `<ident>.Resume` - if the identifier is NOT a TThread descendant (e.g. a TForm), suppress per line with `// noinspection ThreadResumeDeprecated`.
 
@@ -2839,6 +2891,7 @@ FreeAndNil(FWorker);
 | CWE | [CWE-319](https://cwe.mitre.org/data/definitions/319.html) |
 | OWASP | A02:2021-Cryptographic Failures |
 | Detector | `uRestHttpSecurity.pas` |
+| Editor help | `SCA115:changes:use-https-instead-of-http` |
 
 A string literal starting with `http://` for any non-localhost endpoint transmits its payload unencrypted. Credentials, session tokens, and PII travel in plaintext and can be sniffed or modified by any active network actor. The fix is virtually free: change the scheme to `https://` (almost every modern service supports both). The detector parses the host out of the literal (userinfo, port and IPv6 brackets removed) and stays silent when that host cannot be a reachable endpoint: loopback and local IPC (`localhost`, `127.x.x.x`, `[::1]`, `0.0.0.0`, `host.docker.internal`, mORMot's `http://unix:` socket layout) plus the ranges reserved for documentation and tests (RFC 2606 `example.com/.net/.org`, `.example`, `.test`, `.invalid`; RFC 5737 `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`; RFC 3849 `2001:db8::/32`; and the link-local ranges `169.254.0.0/16` and `fe80::/10`, which are not documentation ranges but only ever appear as parser fixtures or diagnostic examples in source literals - a real deployment against `fe80::` needs a zone index, and `169.254.x` only appears when DHCP failed). Private LAN ranges (RFC 1918) are deliberately NOT skipped - a `http://192.168.x.y` REST call is a real plaintext endpoint. XML-namespace URIs (`xmlns=`, `schemas`, `w3.org`, ...) are identities, not network targets, and are skipped as well.
 
@@ -2887,6 +2940,7 @@ Client.OnVerifyPeer := VerifyPinnedFingerprint;
 | Severity | Hint | Type | Code Smell |
 | Tags | `documentation`, `api-design` |
 | Detector | `uPublicMemberWithoutDoc.pas` |
+| Editor help | `SCA117:same:insert-documentation-skeleton` |
 
 A public member in a unit's `interface` section is part of the documented API surface that other units consume. Missing doc-comments make the unit harder to use without reading the implementation. The detector accepts any of: `///` XMLDoc, a `{ ... }` block, a `(* ... *)` block, or one-or-more `//` single-line comments directly above the declaration. Skips: constructors `Create` / destructors `Destroy` (self-explanatory by convention), members starting with `_` (private-marker in public sections), `published` members (DFM/RTTI-driven, doc would be noise). Suppression: `// noinspection PublicMemberWithoutDoc` per declaration.
 
@@ -2918,6 +2972,7 @@ type
 | Severity | Hint | Type | Code Smell |
 | Tags | `naming`, `convention` |
 | Detector | `uNamingExt.pas` |
+| Editor help | `SCA118:same:rename-exception-class-to` |
 
 Delphi-RTL convention is unambiguous: exception classes start with `E` (EAbort, EConvertError, EAccessViolation). User-defined exception classes that omit the prefix break the convention and obscure the class kind at the call site (`raise MyError.Create(...)` vs `raise EMyError.Create(...)`). Detector matches any class whose TypeRef inherits from a known Exception class (Exception, EAbort, EAccessViolation, EExternal) and whose name does not start with `E<UpperCase>`.
 
@@ -2942,6 +2997,7 @@ type
 | Severity | Hint | Type | Code Smell |
 | Tags | `naming`, `convention` |
 | Detector | `uNamingExt.pas` |
+| Editor help | `SCA119:same:rename-constant-to` |
 
 Local numeric/integer constants inside a method body benefit from UPPER_SNAKE_CASE (`MAX_RETRIES`, `BUFFER_SIZE`, `DEFAULT_TIMEOUT`) - the reader sees instantly that the identifier is a constant, not a variable, and the convention matches the C / Java / Python convention so cross-language readers do not stumble. Detector skips: very-short names (<=2 chars, typically loop counters or temporaries), string/char-typed constants (often UI labels where PascalCase is fine). Suppress with `// noinspection LocalConstantName` for legitimate PascalCase locals.
 
@@ -2970,6 +3026,7 @@ begin ... end;
 | Severity | **Error** | Type | Bug |
 | Tags | `exception`, `error-handling`, `sonardelphi` |
 | Detector | `uMissingRaise.pas` |
+| Editor help | `SCA120:changes:raise-exception` |
 
 Pattern `EConvertError.Create('bad input');` without a preceding `raise` constructs an exception instance, fails to throw it, and the calling code continues as if nothing happened. The allocated object leaks (classic TObject) or gets immediately collected (ARC), and the intended error branch is gone. Almost always a copy-paste regression from `raise EConvertError.Create(...)` where the `raise` keyword was deleted. Detector heuristic: any `nkCall` named `<Ident>.Create(...)` where `<Ident>` is `Exception` or matches the Delphi `E`-prefix convention (`E` + uppercase letter, e.g. `EConvertError`, `EMyDomainError`). `raise X.Create(...)` is consumed as a string by the raise-statement parser and never produces a `nkCall`, so genuinely raised exceptions are not false-positives. Maps to Sonar-Delphi `MissingRaiseCheck`.
 
@@ -3000,6 +3057,7 @@ end;
 | Severity | **Error** | Type | Bug |
 | Tags | `function`, `uninitialized`, `sonardelphi` |
 | Detector | `uRoutineResultAssigned.pas` |
+| Editor help | `SCA121:changes:initialize-result-with` |
 
 A function that reaches its `end;` without any `Result := ...` or Pascal-style `<FunctionName> := ...` returns whatever register/stack garbage happens to occupy the result slot. In Release builds the caller therefore receives the value of the last same-sized call - a classic Heisenbug that flips with optimisation level. Detector is intentionally conservative: it skips functions that contain any `Exit` (could be `Exit(value)`) or `raise` (function may always throw). Note: the parser does record the `Exit(value)` argument, so this skip is coarser than strictly necessary - narrowing it would add findings and is therefore pending a measured corpus run. Procedures, abstract/forward/external declarations, and DispatchID-only declarations are also skipped. Partial coverage (Result set in one branch only) is currently a false-negative pending CFG analysis. Maps to Sonar-Delphi `RoutineResultAssignedCheck`.
 
@@ -3032,6 +3090,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `exception`, `error-handling`, `stack-trace`, `sonardelphi` |
 | Detector | `uReRaiseException.pas` |
+| Editor help | `SCA122:same:use-raise-to-keep-original-stack-trace` |
 
 `raise E` inside an `on E: SomeException do ...` handler starts a fresh exception propagation rooted at the re-raise site. The original stack trace - the path from where the exception was first raised down through every called routine until it reached this `except` block - is gone. Crash reports and debugger views then point at the handler, not at the actual fault location, which makes triage dramatically harder. The intent of the developer was almost certainly `raise;` (no argument), which continues propagating the *current* exception object with its existing trace intact. Detector walks each `nkOnHandler` with a non-empty bound variable name and flags every `nkRaise` inside that subtree whose argument is exactly that variable (case-insensitive). `raise;` (no argument) is correct and not flagged; `raise EWrapper.Create(...)` is also accepted (deliberate wrap). Maps to Sonar-Delphi `ReRaiseExceptionCheck`.
 
@@ -3070,6 +3129,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `memory`, `destructor`, `cast`, `sonardelphi` |
 | Detector | `uCastAndFree.pas` |
+| Editor help | `SCA123:same:remove-cast-to-before-free` |
 
 Writing `TStringList(L).Free` or `TObject(L).Destroy` is a confusion smell. `TObject.Free` is a non-virtual wrapper around the *virtual* `Destroy`, so virtual dispatch happens through the runtime type of `L`, not through the static cast type. Whether you write `L.Free` or `T(L).Free`, the same destructor chain runs. The cast therefore either is redundant (cast to the variable's own type) or is misleading (cast to an unrelated class that suggests Destroy will pick a different override - it will not). If the cast target is wrong, the rest of the surrounding code may rely on that wrong assumption and break under refactoring. Detector pattern-matches `nkCall.Name` against `<Ident>(<expr>).Free[()][;]` and `<Ident>(<expr>).Destroy[()][;]` where `<Ident>` follows the Delphi class/interface naming convention (`T` or `I` plus uppercase letter). Plain `L.Free` and qualified `Owner.Bar(x).Free` (likely a function-result Free) are not flagged. Maps to Sonar-Delphi `CastAndFreeCheck`.
 
@@ -3132,6 +3192,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `inheritance`, `dead-code`, `sonardelphi` |
 | Detector | `uInheritedMethodEmpty.pas` |
+| Editor help | `SCA125:same:remove-empty-override` |
 
 A method declared with `override` whose implementation only calls the ancestor with the same arguments adds nothing on top of the parent class's behaviour: virtual dispatch already reaches the ancestor when the subclass does not override. The empty override is noise that slows down code reviews and has to be revisited whenever the ancestor's signature changes. Detector walks every method implementation `TClass.Name` whose body is exactly one statement - `inherited;` (procedures, constructors, destructors), `inherited Name;` (no parameters), `inherited Name(p1, .., pn)` with the parameters passed through unchanged and in order, or `Result := inherited [Name(..)]` in functions - and reads the DECLARATION in the class of the same unit (implementation headers never repeat `override`). The declaration must be unique (no overloads, no {$IFDEF} twins) and carry `override` and no other directive (message, final, reintroduce, deprecated, calling convention, ...), no attribute and no default parameter; no compiler directive may sit between implementation header and `end`. Class methods are skipped. Visibility: when the ancestor's method is declared in the same unit and is less visible, the override widens its visibility and is not reported. When the ancestor lies outside the unit, private/protected overrides and public overrides of well-known public root methods (Destroy, Create, AfterConstruction, BeforeDestruction, Assign, ToString, Equals, GetHashCode) are reported with high confidence, other public/published overrides with low confidence (hidden by default). The source file must be readable. Maps to Sonar-Delphi `InheritedMethodWithNoCodeCheck`.
 
@@ -3164,6 +3225,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `convention`, `nil`, `sonardelphi` |
 | Detector | `uNilComparison.pas` |
+| Editor help | `SCA126:same:use-assigned-instead-of-comparing-with-nil` |
 
 Direct comparison against `nil` works for object references but breaks down for method-pointer types and Variants, where the standard library prefers `Assigned`. Sticking to a single form across the code base avoids edge-case bugs and improves readability - the reader does not need to verify which form the variable's type supports. Detector scans every AST node's `Name` and `TypeRef` (the latter holds the textual form of `if`/`while`/`until` conditions and assignment right-hand sides) for the pattern `<op> nil` where `<op>` is `=` or `<>`. String literals (`'nil'`) are stripped before the match, and `:= nil` (assignment), `<= nil` / `>= nil` (rare nonsensical compares) are explicitly excluded. Maps to Sonar-Delphi `NilComparisonCheck`.
 
@@ -3192,6 +3254,7 @@ if Assigned(Obj) then
 | Severity | Warning | Type | Code Smell |
 | Tags | `exception`, `error-handling`, `sonardelphi` |
 | Detector | `uRaisingRawException.pas` |
+| Editor help | `SCA127:changes:raise-eargumentexception-instead-wrong-argument`, `SCA127.2:changes:raise-einvalidopexception-instead-invalid-state` |
 
 Raising the RTL base class `Exception` is the equivalent of throwing `new Error('something')` in JavaScript: it tells the caller *that* something went wrong, but not *what*. Calling code is then forced to catch the broadest possible class (`on E: Exception do ...`), which also catches every unrelated runtime error and tends to swallow bugs. Prefer a specific subclass (e.g. `EArgumentOutOfRangeException`, `EFileNotFoundException`, a domain-specific `EMyDomainError`). Detector walks every `nkRaise` node and flags it when the raised expression starts with `Exception.Create` (case-insensitive) or is exactly `Exception` (no Create call). Bare `raise;` (re-raise) and `raise E;` (variable) are not flagged. Maps to Sonar-Delphi `RaisingRawExceptionCheck`.
 
@@ -3216,6 +3279,7 @@ if x < 0 then
 | Severity | Warning | Type | Bug |
 | Tags | `locale`, `i18n`, `sonardelphi` |
 | Detector | `uDateFormatSettings.pas` |
+| Editor help | `SCA128:same:pass-formatsettings-explicitly`, `SCA128.2:changes:pass-tformatsettings-invariant` |
 
 Pascal's locale-aware conversion functions (`StrToDate`, `StrToTime`, `StrToDateTime`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `StrToFloat`, `StrToCurr`, `FloatToStr`, `CurrToStr`, `FormatDateTime`, `FormatFloat`, `FormatCurr`) default to the global `SysUtils.FormatSettings` record, which is initialised from the operating-system regional settings. The same code therefore behaves differently on a developer's DE-locale machine (`DateSeparator` = '.', `DecimalSeparator` = ',') than on a production server with EN-locale ('/' and '.'). Data exchanged via files, APIs, databases or CSV must always go through an explicit `TFormatSettings` (typically `FormatSettings := TFormatSettings.Invariant` for machine-readable output, or a user-locale snapshot for UI). Detector walks every `nkCall` whose function name matches a known locale-dependent RTL routine and flags the call when its name does not mention `FormatSettings` (case-insensitive substring). `StrToInt` / `IntToStr` and the boolean variants are explicitly **not** locale-dependent and not flagged. Maps to Sonar-Delphi `DateFormatSettingsCheck`.
 
@@ -3293,6 +3357,7 @@ ShowMessage(p);
 | Severity | Warning | Type | Bug |
 | Tags | `control-flow`, `side-effects`, `performance`, `sonardelphi` |
 | Detector | `uIfThenShortCircuit.pas` |
+| Editor help | `SCA131:changes:replace-ifthen-with-if-then-else` |
 
 Both `Math.IfThen` (Integer/Double overload) and `StrUtils.IfThen` (string overload) are regular functions, not language constructs. Pascal evaluates every argument *before* the call, so the function only sees the final result values - it cannot 'skip' the not-selected branch. Whenever the arms contain function or method calls with side effects (DB read, file IO, state mutation) or with non-trivial performance cost, both run unconditionally. The whole point of writing `IfThen(cond, A, B)` instead of `if cond then x := A else x := B` was usually the assumption of short-circuit semantics - which doesn't exist here. Detector walks `nkCall` nodes whose name matches `IfThen(`, `Math.IfThen(`, or `StrUtils.IfThen(` (case-insensitive). After extracting the outer argument list, it strips string literals (so `'a(b)'` doesn't trip the heuristic) and looks for nested `(` - any nested call is a strong signal of a side-effecting branch. Calls with only literals or simple variables as arms are not flagged. Maps to Sonar-Delphi `IfThenShortCircuitCheck`.
 
@@ -3483,6 +3548,7 @@ end;
 | Severity | **Error** | Type | Bug |
 | Tags | `arithmetic`, `integer-overflow`, `sonar50` |
 | Detector | `uIntegerOverflow.pas` |
+| Editor help | `SCA137:changes:cast-to-int64-before-multiplying` |
 
 Delphi evaluates a binary expression in the type of its operands, not the type of the assignment target. When two `Integer` (32-bit) operands are multiplied and the result is assigned to an `Int64`, the multiplication runs in 32-bit; if the true product exceeds `MaxInt`, the value is silently truncated before being widened. The fix is to cast at least one operand to `Int64`. The detector strips strings + comments, scans the cleaned text for `<ident>: Int64|UInt64|QWord` declarations to build a set of 64-bit variables, then scans for assignments `<lhs> := <a> * <b>;` where the LHS is a 64-bit variable but both RHS operands are simple identifiers (no cast, no parenthesised expression) that are not themselves 64-bit. Numeric literals on either side suppress the finding (the compiler can often constant-fold safely). Limitations: no type inference for non-local operands (parameters, fields); only `*` is checked, not `+`/`-`; complex expressions like `(a + b) * c` are not matched. Maps to Sonar-50 rule #14.
 
@@ -3547,6 +3613,7 @@ end;
 | Severity | Warning | Type | Code Smell |
 | Tags | `memory`, `lifecycle`, `sonar50` |
 | Detector | `uFreeWithoutNil.pas` |
+| Editor help | `SCA139:same:use-freeandnil` |
 
 After `obj.Free`, the variable still points at the freed memory. Any further dereference is Use-After-Free, an Access Violation at best, silent corruption at worst. The detector walks `nkCall` nodes whose name matches `<ident>.Free` or `<ident>.Destroy`, then forward-scans the same method for a subsequent `<ident> := nil` or `FreeAndNil(<ident>)`. If neither exists, the call is reported - in a method also when it is the last call: a field outlives the method, and a later `Assigned` check or the destructor touches freed memory (in a constructor Delphi runs the destructor on every exception). A standalone routine that frees a global as its last call (cleanup at program or script end) is not reported unless a `raise` follows. Local variables, inline constants and `const` parameters are skipped (they go out of scope), destructors, `BeforeDestruction`, `DoFree`, `FinalizeClass`, OnDestroy handlers and standalone `Finalize*` routines too (the instance, the class or the program ends with them). `Self`/`Result`/`inherited` as receivers are excluded since they follow different lifecycle patterns. Maps to Sonar-50 rule #25.
 
@@ -3710,6 +3777,7 @@ uses ...;
 | Severity | Warning | Type | Bug |
 | Tags | `floating-point`, `precision`, `sonar50` |
 | Detector | `uFloatEquality.pas` |
+| Editor help | `SCA144:changes:use-instead-of-exact-comparison` |
 
 IEEE-754 floating-point arithmetic does not guarantee exact equality even for results that look identical to the developer (`0.1 + 0.2 = 0.3` is False). Equality checks against floats are a classic silent-bug source - they look fine in tests but occasionally fire wrong. The detector strips strings and comments, then in two phases: (1) collects local variable declarations whose type is `Single`, `Double`, `Extended`, `Real`, or `Currency`; (2) scans for `<ident> = <expr>` or `<ident> <> <expr>` where at least one side references a known float variable. `:=` assignments are excluded via lookbehind. Limitations: no type-inference for function returns or non-local parameters; complex expressions like `a + b = c + d` only fire when at least one operand is a known float variable. Maps to Sonar-50 rule #19. Fix: use `System.Math.SameValue(a, b, Eps)` or `IsZero(a - b)`.
 
@@ -3803,6 +3871,7 @@ begin Notify(Msg, clBlack); end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `maintainability`, `sonar50` |
 | Detector | `uUnusedPrivateMethod.pas` |
+| Editor help | `SCA147:same:delete-unused-private-method` |
 
 Private methods can only be called from inside the same unit (Delphi-classic) or class (strict private). If no other method references them, they cannot be called at all - they are dead code, often the residue of an incomplete refactoring. The detector walks `nkClass` nodes, finds `nkVisibilitySection` children with name `private` or `strict private`, collects their `nkMethod` names, and then text-scans the (string-and-comment-stripped) file body for word-boundary matches. Two matches per method are tolerated (declaration line + implementation header); more indicate at least one call. Since that scan only ever sees calls *by name*, every dispatch mechanism that reaches a method without naming it is gated out before reporting (see below). DFM event handlers are resolved through the paired `.dfm`. Remaining blind spot: invocation purely through RTTI (`TypeInfo`, attribute-driven registries) — use `// noinspection UnusedPrivateMethod` there. Maps to Sonar-50 rule #37.
 
@@ -3846,6 +3915,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `oop`, `refactoring`, `sonar50` |
 | Detector | `uCanBeClassMethod.pas` |
+| Editor help | `SCA148:same:make-static-class-method` |
 
 When an instance method never touches `Self`, an instance field, or `inherited`, the implicit `Self` parameter is wasted - the method is effectively stateless. Declaring it `class function ... static` saves a pointer-pass, makes the stateless intent explicit, and allows callers to invoke it without an instance (`TMath.Add(1, 2)` instead of `MyMath.Add(1, 2)`). The detector walks `nkMethod` nodes that belong to a class (qualified name like `TFoo.Bar`), skips already-class methods (`;class` in TypeRef), polymorphic ones (`;virtual`/`;override`/`;dynamic`/`;abstract`), constructors and destructors, then recursively checks for any identifier named `self`, any `inherited`, or any `F<UppercaseLetter>` field reference. None of those -> finding. Limitations: implicit property access without `Self.` prefix is not detected as instance access, so calls like `Bar := ...` for a property could FP. Maps to Sonar-50 rule #50.
 
@@ -3875,6 +3945,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `polymorphism`, `oop`, `compiler-warning`, `sonar50` |
 | Detector | `uMissingOverride.pas` |
+| Editor help | `SCA149:depends:add-to-declaration` |
 
 Without `override`, the subclass method is treated as a new method by the compiler. Polymorphic dispatch via the parent's vtable still calls the parent's implementation - `Base := Derived; Base.DoWork` runs `TBase.DoWork`, not `TDerived.DoWork`. The compiler warns (W1010), but many codebases suppress that hint. The detector walks `nkClass` nodes, identifies their direct parent in the same unit, collects parent methods with `;virtual` or `;dynamic` in `TypeRef`, and then checks each subclass method whose unqualified name matches a polymorphic parent name: missing `;override` AND missing `;reintroduce` -> finding. Limitations: within-unit only (cross-unit parents like `TForm`/`TStrings` not seen); only direct parent (multi-level chains check just one step). Maps to Sonar-50 rule #21.
 
@@ -3905,6 +3976,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `control-flow`, `dead-code`, `sonar50` |
 | Detector | `uBoolAlwaysTrue.pas` |
+| Editor help | `SCA150:same:remove-always-true-condition` |
 
 Tautological boolean comparisons usually indicate a typo (`< 0` instead of `= 0`, `>= 1` instead of `> 0`) or copy-paste residue from a prior version of the code. The compiler does not warn because the operand type allows the value range syntactically. This narrow detector strips strings + comments, then matches two patterns lexically: `Length(...) >= 0` / `Length(...) < 0` and the mirrored `0 <= Length(...)` / `0 > Length(...)`. Limitations: Cardinal/UInt variables (`<UInt> >= 0` is also always-true) cannot be detected without type inference; complex expressions like `Length(s) - 1 < 0` are not matched. Maps to Sonar-50 rule #18 (narrow form).
 
@@ -3993,6 +4065,7 @@ ShowMessage(SSavedMsg);
 | Severity | Warning | Type | Bug |
 | Tags | `concurrency`, `mormot`, `exception-safety`, `sonar50` |
 | Detector | `uUnpairedLock.pas` |
+| Editor help | `SCA153:changes:release-lock-in-try-finally-block` |
 
 Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A lookahead window of at most 200 characters - truncated at the start of the next routine - then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`); a release that belongs to a neighbouring method (Lock/UnLock facade, Begin/End pair, constructor/destructor scope guard) no longer counts. When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).
 
@@ -4022,6 +4095,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `memory`, `pointer`, `mormot`, `sonar50` |
 | Detector | `uMoveSizeOfPointer.pas` |
+| Editor help | `SCA154:changes:use-sizeof-instead-of-pointer-size` |
 
 Lexical scan for `Move|FillChar|CopyMemory|ZeroMemory(...SizeOf(<Name>)...)` where <Name> begins with `P` followed by an uppercase letter (Delphi P-prefix convention for pointer types: PByte, PInteger, PCardinal, PChar, PSomeRecord, ...). On 64-bit, SizeOf(PXxx) returns 8 regardless of the pointed-to type; on 32-bit it returns 4. The author almost always meant SizeOf(Xxx) or Length(Buf) - the truncated copy silently leaves the rest of the buffer untouched (FillChar) or only partially copies the source (Move). Common mORMot pitfall: SizeOf(PByte) instead of explicit byte count when copying into a fixed array. Whitelist excludes SizeOf(TXxx) / SizeOf(Integer) / SizeOf(Variable) - only P-prefix-and-uppercase triggers.
 
@@ -4077,6 +4151,7 @@ with CL.AddInterface(CL.FindInterface('IFoo'), IBar, 'IBar') do
 | Severity | Warning | Type | Bug |
 | Tags | `memory-leak`, `exception-safety`, `mormot`, `sonar50` |
 | Detector | `uGetMemWithoutFreeMem.pas` |
+| Editor help | `SCA156:changes:free-buffer-in-try-finally-block` |
 
 Lexical scan (comments + strings stripped) for `GetMem(...)`, `AllocMem(...)`, or `ReallocMem(...)`. A 400-character lookahead window searches for the matching `FreeMem`. When both are present in the window but no `try` keyword precedes the FreeMem, the pair is reported - any exception between allocation and release leaks the raw heap buffer. mORMot-tuned: matches the ~20 GetMem occurrences in mORMot core/ that implement high-performance buffer manipulation, where every missing try/finally is a production leak. Patterns where FreeMem is missing entirely are skipped (likely ownership-transfer to caller, or custom allocator).
 
@@ -4157,6 +4232,7 @@ if s <> '' then
 | Severity | Warning | Type | Bug |
 | Tags | `exception-handling`, `silent-failure`, `mormot`, `sonar50` |
 | Detector | `uEmptyOnHandler.pas` |
+| Editor help | `SCA159:changes:add-raise-to-empty-exception-handler` |
 
 Lexical scan for `on [E:] <ExceptionType> do (;|begin end)`. The typed `on E:` form gives the impression of considered handling - a reader assumes the developer thought about this specific exception. An empty body means the failure is invisible in production: no log, no UI feedback, no telemetry. Common mORMot review finding in cleanup code where 'this can be ignored' is not documented. The bare `except end` form is already caught by SCA-001 (EmptyExcept); this rule covers the typed-handler variant.
 
@@ -4209,6 +4285,7 @@ SetString(s, PChar(Buf), Len);   // explicit length
 | Severity | Warning | Type | Bug |
 | Tags | `pointer`, `win64`, `truncation`, `mormot`, `sonar50` |
 | Detector | `uPointerSubtraction.pas` |
+| Editor help | `SCA161:changes:replace-32-bit-casts-with-nativeint-nativeuint` |
 
 Lexical scan for `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - two 32-bit casts joined by minus. On Win64 a Pointer is 64-bit while Cardinal/Integer/LongWord/LongInt are 32-bit, so the cast drops the upper four bytes of the address. The resulting difference is wrong whenever the allocator hands out high addresses - the code works on Win32 and breaks intermittently on Win64. Common porting bug from Delphi-7 / Delphi-2007 examples that pre-date Win64. Fix: use `NativeUInt(P1) - NativeUInt(P2)` or `NativeInt(P1) - NativeInt(P2)` - pointer-width integer types that match the platform pointer size (`PtrUInt`/`PtrInt` are the FPC and mORMot names; the Delphi RTL does not declare them).
 
@@ -4282,6 +4359,7 @@ ShellExecute(0, 'open', 'cmd.exe', PChar('/c safe_command'), nil, SW_SHOW);
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `maintainability`, `sonardelphi` |
 | Detector | `uUnusedRoutine.pas` |
+| Editor help | `SCA164:same:delete-unused-routine` |
 
 Fills the gap between SCA147 (UnusedPrivateMethod - only class private methods) and the visibility-check family SCA148+ (only class public members). Detects top-level (non-class) routines whose name does not appear as a caller anywhere in the same unit, excluding self-references (a recursive routine that only calls itself is still flagged - mirrors SonarDelphi UnusedRoutineCheck behaviour). False-positive guards: constructors and destructors (not directly callable as a procedure), the `override`/`virtual; abstract`/`message`/`dynamic` directives (cross-class or system dispatch), the IDE-bootstrap `Register` procedure, the enumerator trio (`MoveNext`/`GetEnumerator`/`Current` - invoked implicitly by `for-in`), and any routine forward-declared in the unit's interface section (potential cross-unit consumer). Scope is single-file - cross-unit callers of interface-section routines are not tracked in this MVP, so those are intentionally skipped. Suppress with `// noinspection UnusedRoutine` when the routine is intentionally kept (RTTI-driven invocation, attribute-consumed, plugin-loaded). Maps to SonarDelphi UnusedRoutineCheck.
 
@@ -4311,6 +4389,7 @@ implementation
 | Severity | Hint | Type | Code Smell |
 | Tags | `suppression`, `maintainability`, `hygiene` |
 | Detector | `uSuppression.pas` |
+| Editor help | `SCA165:same:remove-ineffective-suppression-marker` |
 
 The suppression filter (uSuppression) records every `// noinspection KindName` comment and the next code line it targets. After all detectors finish, the filter checks which markers actually suppressed a finding. Markers that never fired are reported as fkUnusedSuppression at the marker line - the user should remove the marker (detector evolution made it obsolete) or check whether the target kind name was wrong. False-negative-resistant: only markers with a clear non-comment target line are considered (markers at EOF or in pure doc-comment blocks are ignored). Profile-aware: in the default profile this hint shows up; users who want suppression-hygiene reports without detector noise can run with --profile selftest-quiet.
 
@@ -4371,6 +4450,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `reliability`, `randomness`, `seed` |
 | Detector | `uInsecureRandom.pas` |
+| Editor help | `SCA167:changes:call-randomize-in-initialization-section` |
 
 Delphi's Random function uses an internal seed that defaults to 0 at program start. Until Randomize is called once (typically at the start of program execution), Random returns the same sequence of values every time the program is launched. The detector walks the AST for all calls and skips the entire unit if any Randomize invocation is present anywhere. Otherwise every Random / RandomRange / RandomFrom call is flagged. Note: Randomize calls in other units (e.g. in a use'd unit's initialization block) are not detected; suppress with `// noinspection InsecureRandom` if applicable. For cryptographic use cases (token generation, salts, password reset codes) Random is unsuitable regardless of Randomize - use TBytes from a CSPRNG (e.g. CryptGenRandom on Windows, /dev/urandom on POSIX).
 
@@ -4404,6 +4484,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `control-flow`, `default-case` |
 | Detector | `uDefaultCaseInCaseStatement.pas` |
+| Editor help | `SCA168:same:add-empty-else-branch`, `SCA168.2:changes:add-else-branch-that-raises-exception` |
 
 A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts. Note when comparing against an older version: until 2026-08 the parser attached an else that followed an if in the last arm (`3: if C then Foo; else Bar;`) to that if rather than to the case, so the rule reported a missing else branch on case statements that plainly had one. Those false positives are gone - 148 of them on the reference corpus - and nothing changed about what the rule counts as a violation.
 
@@ -4434,6 +4515,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `reliability`, `assert`, `side-effect` |
 | Detector | `uAssertWithSideEffect.pas` |
+| Editor help | `SCA169:changes:evaluate-condition-outside-assert` |
 
 The Delphi compiler removes Assert calls entirely from Release builds (unless DCC_Assertions is on). If the asserted expression contains a function call with side effects (allocation, state mutation, I/O, counter increment), the side effect disappears too - the Release-only behavior diverges from Debug. The detector flags Assert calls whose argument contains a function-call pattern, after excluding a whitelist of known-pure RTL helpers (Length, Assigned, SizeOf, IntToStr, ...). Move the call out of the Assert and assert on the result instead.
 
@@ -4457,6 +4539,7 @@ Assert(Ok, 'subsystem init failed');
 | Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `string`, `refcount` |
 | Detector | `uConstStringParameter.pas` |
+| Editor help | `SCA170:same:declare-parameter-as-const` |
 
 Delphi increments the string's reference count on every call when the parameter is declared without `const`. With `const`, the compiler passes a pure reference and skips the refcount roundtrip. The compiler also forbids assignment to a `const` parameter, which makes the no-mutation contract explicit. For non-mutating string parameters (the overwhelming majority), prefer `const`. The detector flags parameters whose type is `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` without `const`/`var`/`out`.
 
@@ -4561,6 +4644,7 @@ end;
 | Severity | Warning | Type | Bug |
 | Tags | `memory-safety`, `leak`, `container` |
 | Detector | `uTObjectListWithoutOwnership.pas` |
+| Editor help | `SCA174:changes:use-tobjectlist-so-list-frees-its-items` |
 
 TList<T> is a typed container that does NOT own its items - freeing the list does not free the items it holds. When the items are class instances allocated with .Create, they leak on every list-free unless the caller manually iterates and frees each one. The correct container is TObjectList<T> from Generics.Collections, which has OwnsObjects=True by default and frees its items on destruction. The detector walks each method, collects all `TList<T>.Create` assignments (where T is a class-looking identifier), then looks for `<varname>.Add(<T>.Create)` patterns in the same method. Cross-method ownership (Add in a different method than Create) is not tracked.
 
@@ -4702,6 +4786,7 @@ Stream := TFileStream.Create(SafePath, fmOpenRead);
 | Severity | Hint | Type | Code Smell |
 | Tags | `test`, `dunitx`, `documentation` |
 | Detector | `uAttributeIgnoreWithoutReason.pas` |
+| Editor help | `SCA179:same:add-reason-to-ignore` |
 
 DUnitX accepts [Ignore] both as a marker attribute and as [Ignore('reason')]. The marker form skips the test without surfacing WHY it was disabled - the test then drifts unmaintained, often forgotten. Always add a reason string referencing a ticket / external dependency / known limitation so the disable can be triaged.
 
@@ -4726,6 +4811,7 @@ procedure SomeTest;
 | Severity | Warning | Type | Code Smell |
 | Tags | `attribute`, `duplication` |
 | Detector | `uAttributeDuplicate.pas` |
+| Editor help | `SCA180:same:remove-duplicate-attribute` |
 
 Delphi's attribute model accepts repeated attributes (some, like [TestCase], are intentionally multi-applied with different args). Duplicates with IDENTICAL args are not — they are usually copy-paste leftovers from refactoring. The detector compares (attribute-name, argument-text) pairs and flags identical occurrences in the same attribute group (lines max. 2 apart). Multi-applied attributes with different args (different [TestCase('A','1')] / [TestCase('B','2')]) are correctly NOT flagged.
 
@@ -4751,6 +4837,7 @@ procedure Foo;
 | Severity | **Error** | Type | Bug |
 | Tags | `test`, `dunitx`, `compile-error` |
 | Detector | `uAttributeCategoryWithoutString.pas` |
+| Editor help | `SCA181:same:add-category-name-to-attribute` |
 
 DUnitX's [Category] attribute requires a string argument that is used to group tests for selective execution. Without the argument, the compiler raises a missing-parameter error. Always pass an explicit category name (e.g. 'Slow', 'CI-only', 'Integration').
 
@@ -4803,6 +4890,7 @@ end;
 | Severity | Hint | Type | Code Smell |
 | Tags | `attribute`, `readability` |
 | Detector | `uAttributeMisalignment.pas` |
+| Editor help | `SCA183:same:remove-blank-line-after-attribute` |
 
 The Delphi compiler attaches an attribute to the syntactically next member regardless of intervening blank lines. Visually however, an attribute separated from its member by a blank line is easy to overlook - the reader may not realize the attribute applies to the member below. This is also a frequent symptom of refactoring where a member was moved/deleted but the attribute was left behind. The detector flags attribute lines whose next non-blank line is more than one line away.
 
@@ -4924,6 +5012,7 @@ The source file contains a NUL byte or a disallowed control character (below U+0
 | Tags | `security`, `unicode`, `trojan-source` |
 | CWE | [CWE-1007](https://cwe.mitre.org/data/definitions/1007.html) |
 | Detector | `uSourceEncoding.pas` |
+| Editor help | `SCA188:same:remove-bidi-control-characters-as-code-in-strings` |
 
 The file contains a Unicode bidirectional override or isolate control character (U+202A-202E, U+2066-2069, U+061C). These can make source code display differently to a human reviewer than it is compiled - the Trojan Source attack (CVE-2021-42574, CWE-1007). There is no legitimate use in Delphi source; remove the control character.
 
@@ -5013,6 +5102,7 @@ The source file is UTF-32 / UCS-4 (detected via its byte-order mark). The Delphi
 | Tags | `security`, `unicode`, `trojan-source` |
 | CWE | [CWE-1007](https://cwe.mitre.org/data/definitions/1007.html) |
 | Detector | `uSourceEncoding.pas` |
+| Editor help | `SCA192:same:remove-invisible-characters-as-code-in-strings` |
 
 The file contains an invisible or zero-width Unicode character (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 word-joiner, or a mid-file U+FEFF ZWNBSP). Such characters are almost never legitimate in source and can hide or alter identifiers and text - part of the Trojan Source / invisible-character family (CWE-1007). Note: U+200D can appear legitimately inside emoji string literals.
 
@@ -5037,6 +5127,7 @@ The file contains an invisible or zero-width Unicode character (U+200B ZWSP, U+2
 | Tags | `security`, `unicode`, `trojan-source` |
 | CWE | [CWE-1007](https://cwe.mitre.org/data/definitions/1007.html) |
 | Detector | `uSourceEncoding.pas` |
+| Editor help | `SCA193:same:write-name-in-ascii-letters` |
 
 An identifier (variable, type, routine, ...) contains a non-ASCII character. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): a letter such as Cyrillic U+043E looks like Latin 'o' but is a different identifier, so two identifiers can look identical yet bind differently. A legitimate Unicode identifier is also possible, so review before changing; prefer ASCII identifiers for portability and to avoid confusion.
 
@@ -5104,6 +5195,7 @@ Every unit reachable via uses from project units is listed as a DCCReference in 
 | Severity | Warning | Type | Bug |
 | Tags | `function`, `uninitialized`, `memory` |
 | Detector | `uManagedResultUninit.pas` |
+| Editor help | `SCA196:changes:initialize-result-first` |
 | Scope | functions returning string family, dynamic arrays (`TArray<>`, `TBytes`, `*DynArray`), `Variant`/`OleVariant`, interfaces; records and classes stay out |
 
 For managed return types the compiler passes Result as a hidden var parameter that aliases the caller's target variable INCLUDING its previous content (`System.Rtti` `UseResultPointer`; the RTL itself guards against this, e.g. TStringBuilder.ToString starts with Result := `''` 'to prevent copying of existing data'). Result is therefore NOT initialized to ''/`nil`/empty on entry. Reading it before the first assignment - `Result := Result + [x]`, `Result[i] := ...` without a prior `SetLength`, `Result.Add(...)`, `Exit(Result + ...)` - processes stale caller data: the classic symptom is a collector function whose second call appends to the results of the first. The compiler hint W1035 (return value undefined) stays SILENT for exactly these types, so nothing else warns here. Detection is purely source-order (variant 2, no path analysis): the first Result access in the body decides; anything that writes or may write Result (direct assignment, `Exit(value)`, Result or @Result passed as a call argument such as `SetLength(Result, n)` or TryGetValue(key, Result)) counts as an assignment and ends the scan. Functions with an '`absolute Result`' alias, assembler routines and bodyless declarations are skipped; string literals containing the word 'result' never count. Path-blind by design: a write in one branch followed by a read after the branch is NOT flagged (false negative, not false positive) - path-sensitive analysis is a planned follow-up. The function-name result alias counts ONLY as an assignment target: in expression context a bare function name is always a (recursive/parameterless) CALL - 'Result := Put;' invokes the parameterless overload and never reads Result; '`Obj.Result`' is a foreign field. IFDEF-twin assignments, embedded anonymous methods (whose Result belongs to the anonymous function) and 'Result[0] := Char(Api(@Result[1], N))' buffer-fill idioms are treated as writes, not reads. For `ShortString` results, '`Result[0] := #len`' is the length-byte initialization idiom and counts as the first write. Where this rule fires, SCA121 stays silent for the same function.
@@ -5139,6 +5231,7 @@ end;
 | Severity | Warning | Type | Code Smell |
 | Tags | `interface`, `guid`, `rtti` |
 | Detector | `uInterfaceGuid.pas` |
+| Editor help | `SCA197:same:insert-new-guid` |
 | Scope | `IFoo = interface` declarations; forward declarations and `dispinterface` stay out |
 
 An interface without a GUID exists only at compile time. Both Supports(Obj, IFoo, X) and Obj.QueryInterface(IFoo, X) resolve the interface through its GUID, so neither compiles against a GUID-less interface - and the error surfaces at the call site, often in a different unit and long after the interface was written. Delphi generates a fresh GUID with Ctrl+Shift+G while the cursor sits inside the interface declaration. Detection is lexical: the declaration `IFoo = interface` (optionally with an ancestor list) is followed by the optional GUID in square brackets. Forward declarations (`IFoo = interface;`) are skipped because they may not carry a GUID at all, and dispinterface types are outside this rule.
@@ -5220,6 +5313,7 @@ Supports() returns whichever was registered first.
 | Severity | Warning | Type | Bug |
 | Tags | `sql`, `database`, `parameters`, `runtime-error` |
 | Detector | `uParamNameMismatch.pas` |
+| Editor help | `SCA199:changes:use-parameter-name-from-sql` |
 | Scope | one routine at a time (from its first `begin`), per query variable |
 
 The compiler cannot see the link between Query.SQL and Query.ParamByName - both are strings. A renamed placeholder, a typo or a copied block leaves a ParamByName whose name is not in the SQL, and the mistake surfaces only when the statement runs: FireDAC, BDE, dbExpress, UniDAC, Zeos and ADO (Parameters.ParamByName) all raise 'parameter not found'. The opposite direction is reported for queries the routine creates itself: the SQL has :y, the routine binds other parameters of that query but never y - execution then fails with an unbound parameter (FireDAC: unknown data type, Oracle: ORA-01008) or silently binds NULL. The check works per routine and per query variable, reading from the routine's first 'begin', and only when it knows the query's SQL completely from literals in that routine: the query is created there (Q := TXxx.Create) or its SQL is cleared or assigned before the first Add, and every contribution is a string literal (sLineBreak and #13#10 included). Placeholders are :name outside SQL strings and comments - also :@name (ADO, SQL Server), names with $ or # (Oracle) and :"quoted names" - and a name counts as present if it matches either the identifier reading or the reading of Data.DB/ADODB ParseSQL, which runs to the next space, comma, semicolon or closing parenthesis; for the unknown-name direction a placeholder inside an SQL comment counts as present too, because Data.DB, ADO and IBX create it anyway. '::' casts, ':=' (PL/SQL), positional ':1', ':new.'/':old.' in trigger bodies and '?' parameters are not names. Names compare case-insensitively, as all the libraries do. Accesses that count as binding: ParamByName, Params.ParamByName, Parameters.ParamByName, FindParam, ParamValues['a;b'], and for Direct Oracle Access SetVariable, DeclareVariable, SetComplexVariable, SetLongVariable.
@@ -5362,6 +5456,7 @@ Operator precedence: 'not List.Count > ...' is evaluated as '(not List.Count) > 
 | Tags | `loop`, `off-by-one`, `range-check`, `runtime-error` |
 | CWE | [CWE-193](https://cwe.mitre.org/data/definitions/193.html), [CWE-125](https://cwe.mitre.org/data/definitions/125.html) |
 | Detector | `uLoopPastHighBound.pas` |
+| Editor help | `SCA203:changes:let-loop-run` |
 
 A classic off-by-one: 'for i := 0 to List.Count do' with List[i] in the body reads List[List.Count], one item past the end. The compiler accepts it; at run time it raises ERangeError with {$R+}, EArgumentOutOfRangeException or EStringListError for TList and TStrings, and otherwise silently reads or writes the memory behind the last element. Reported are loop heads whose upper bound is one index too far - 'X.Count' (from 0, or from 1 when X is a proven list), 'Length(A)' from 0, 'Low(A) to Length(A)' for a dynamic array, 'High(A) + 1' - when the body reads or writes the same collection (same name or chain) with the unshifted loop variable: X[i], X[i, j], and for .Count also X.Items[i], X.Strings[i] and X.Objects[i]. Strings are 1-based and have their own forms: '0 to Length(S)' with S[i] is wrong at both ends (S[0] before the first character), '1 to Length(S) + 1' past the last; '1 to Length(S)' is correct. The finding is an error only when the type is proven: the collection is a name declared in the unit (parameter, local or inline variable, Result, field of the method's own class or its ancestors in the unit, unit variable) whose type is a known list (TList, TObjectList, TStrings, TStringList, TCollection, TMenuItem, FPC TFPList/TFPGList ...), an array or a string, and the body neither leaves the pass before the access (break, exit, continue, raise, goto) nor grows the collection nor contains an anonymous method. Otherwise it is a warning. Fix: Count - 1, High(A) (or Length(A) - 1), and for strings 1 to Length(S).
 
@@ -5395,6 +5490,7 @@ Loop past the last index: i := 0 to Names.Count with Names[i] - the last pass is
 | Severity | Hint | Type | Code Smell |
 | Tags | `style`, `convention`, `delphi-classic` |
 | Detector | `uFunctionNameResult.pas` |
+| Editor help | `SCA204:same:write-result-instead-of` |
 
 Inside a function, 'GetCount := FItems.Count;' sets the result - the form Pascal had before Result existed. It works, but the same name means two different things in one body: on the left of ':=' it is the result variable, anywhere else it is a recursive call of the function (see SCA205). 'Result :=' says what is meant and cannot be mistaken for a call. Reported is an assignment to the bare function name at the start of a statement (also behind a case label) in the function's own body. Only where Result exists: in Delphi (not under {$X-}), and in Free Pascal in the modes delphi, delphiunicode and objfpc or with {$modeswitch result}; a file without {$mode} counts as Delphi in a Delphi scan and as unknown under --dialect=fpc. Style rule (hint): profiles strict and style, not default. reDelphix offers the replacement 'Result :='.
 

@@ -23,6 +23,7 @@ Aufruf:
 import io
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -109,6 +110,12 @@ def wrap(parts: list, indent: str) -> str:
     return ('\n' + indent).join(out)
 
 
+def helps_text(rule) -> str:
+    """"editorHelps" einer Regel als 'id:effect:slug,...' ('' ohne)."""
+    return ','.join('%s:%s:%s' % (h['id'], h['effect'], h['slug'])
+                    for h in rule.get('editorHelps') or [])
+
+
 def build() -> str:
     with io.open(SRC, encoding='utf-8-sig') as f:
         rules = json.load(f)['rules']
@@ -146,6 +153,13 @@ def build() -> str:
             # Beschluss 2026-10-10: Editorhilfe im IDE-Modul (HTML-QF-Badge).
             # Nur ein JSON-Boolean true zaehlt - wie im Lader.
             ('EditorHelp', r.get('editorHelp') is True),
+            # Die Eintraege dahinter (SARIF properties.editorHelp, Nico
+            # 2026-10-28) als EIN String 'id:effect:slug,id:effect:slug' -
+            # ein String-Feld wie alle anderen, kein Array-Literal in der
+            # Record-Konstante. Der Lader zerlegt ihn
+            # (EditorHelpsAusText); validate_enums stellt sicher, dass kein
+            # Feld ':' oder ',' traegt.
+            ('EditorHelps', helps_text(r)),
         ]
         L.append('    // %s' % r.get('id', '?'))
         L.append('    (')
@@ -237,6 +251,49 @@ def schema_enum(name: str):
     return None
 
 
+HELP_ID_RE = re.compile(r'SCA\d{3}(\.[2-9])?')
+HELP_SLUG_RE = re.compile(r'[a-z0-9]+(-[a-z0-9]+)*')
+
+
+def validate_helps(rules) -> list:
+    """"editorHelps" jeder Regel: Form wie im Schema (id/slug-Muster,
+    effect aus dem enum), die id gehoert zur Regel. Der Generator schreibt
+    die Eintraege als 'id:effect:slug,...' in den Fallback - die Muster
+    halten ':' und ',' aus den Feldern heraus. Ob die Liste zur Tabelle
+    von reDelphix passt, prueft tools/gen-quickfix-doc.py --check."""
+    effects = schema_enum('effect')
+    errs = []
+    if effects is None:
+        return ['Schema ohne enum fuer effect (editorHelps)']
+    for r in rules:
+        rid = r.get('id', '?')
+        if 'editorHelps' not in r:
+            continue
+        helps = r['editorHelps']
+        if not isinstance(helps, list) or not helps:
+            errs.append('%s: editorHelps=%r ist keine nicht-leere Liste'
+                        % (rid, helps))
+            continue
+        for h in helps:
+            if (not isinstance(h, dict) or sorted(h) != ['effect', 'id', 'slug']
+                    or not all(isinstance(v, str) for v in h.values())):
+                errs.append('%s: editorHelps-Eintrag %r ist kein '
+                            '{"id", "effect", "slug"}' % (rid, h))
+                continue
+            if (not HELP_ID_RE.fullmatch(h['id'])
+                    or h['id'].split('.')[0] != rid):
+                errs.append('%s: editorHelps id %r passt nicht zur Regel'
+                            % (rid, h['id']))
+            if h['effect'] not in effects:
+                errs.append('%s: editorHelps effect %r ist nicht im '
+                            'Schema-enum %s' % (rid, h['effect'],
+                                                sorted(effects)))
+            if not HELP_SLUG_RE.fullmatch(h['slug']):
+                errs.append('%s: editorHelps slug %r ist kein kebab-case'
+                            % (rid, h['slug']))
+    return errs
+
+
 def validate_enums() -> list:
     """anchor/fixMode jeder Regel gegen das Schema-enum (Review reDelphiX
     nach Bereichen 2026-10-10, Nit 12): der Generator kopiert die Werte in
@@ -249,6 +306,7 @@ def validate_enums() -> list:
         if 'editorHelp' in r and not isinstance(r['editorHelp'], bool):
             errs.append('%s: editorHelp=%r ist kein Boolean'
                         % (r.get('id', '?'), r['editorHelp']))
+    errs.extend(validate_helps(rules))
     for field in ('anchor', 'fixMode'):
         allowed = schema_enum(field)
         if allowed is None:

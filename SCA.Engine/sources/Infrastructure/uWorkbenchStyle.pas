@@ -54,6 +54,17 @@ type
     // Der Aufrufer haengt das Ergebnis in seinen eigenen
     // <script>-Block, nach dem <header class="kopf">.
     class function KopfVerhaltenJs: string; static;
+
+    // Die Liste der Editorhilfen einer Regel (ul.eh-list aus
+    // TExporterHtml.EditorHelpListHtml), OHNE <style>-Klammer - nach
+    // BasisCss einzubinden. OPT-IN wie KopfAngepinntCss: nur die
+    // Fundberichte MIT Editorhilfen binden es ein (CLI-Bericht und
+    // Workbench-Seite, je bei ihrer Option EditorHelp); der
+    // Detektor-Katalog und ein Bericht mit Option aus nicht - deren
+    // Stylesheet bleibt dadurch byte-gleich (Nico 2026-10-29).
+    // .eh-zeile setzt die Liste in EINE Zeile ('Editorhilfen: A . B',
+    // Trenner ist ein Mittelpunkt U+00B7). Nur Token-Farben: Themes brauchen keine eigenen Regeln.
+    class function EditorHilfenCss: string; static;
   end;
 
 implementation
@@ -183,6 +194,25 @@ begin
     SB.AppendLine('button.copy{border:1px solid var(--rand);'
       + 'background:var(--karte);border-radius:5px;cursor:pointer;'
       + 'font-size:0.8em;padding:1px 8px;}');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TWorkbenchStyle.EditorHilfenCss: string;
+// Vertrag an der Deklaration.
+var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('.eh-list{margin:0;padding:0;list-style:none;}');
+    SB.AppendLine('.eh-id{font-family:Consolas,monospace;}');
+    SB.AppendLine('.eh-eff{color:var(--dezent);}');
+    SB.AppendLine('.eh-lbl{font-weight:600;}');
+    SB.AppendLine('.eh-zeile .eh-list,.eh-zeile .eh-list li{display:inline;}');
+    SB.AppendLine('.eh-zeile .eh-list li+li::before{content:" \00B7  ";}');
     Result := SB.ToString;
   finally
     SB.Free;

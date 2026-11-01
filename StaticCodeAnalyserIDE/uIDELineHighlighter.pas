@@ -231,6 +231,12 @@ type
     // sonst sammeln sich Rechtecke ausgescrollter Zeilen an und ein Klick
     // an der alten Bildschirmposition traefe einen Geist.
     FRenderedHintRects : TDictionary<Integer, TRect>;
+    // Erster Klick auf einen Nur-Text-Hint (Ankerzeile, Zeit, Position):
+    // verworfen wird erst beim Doppelklick (Nico 2026-10-29). Der eigene
+    // Abgleich deckt den Fall ab, dass der Editor kein ssDouble liefert.
+    FHintClickLine : Integer;
+    FHintClickMs   : UInt64;
+    FHintClickPt   : TPoint;
     // Zeilen, deren Text sich seit dem ersten Anblick geaendert hat -
     // eingesammelt in PaintLine, abgeraeumt in EndPaint (Konzept
     // 2026-08-09, Ziel 2). Die Trennung ist Pflicht und kein Stil:
@@ -337,9 +343,10 @@ type
     procedure PaintAnchorBadge(
       const Context: INTACodeEditorPaintContext; const AMark: TFindingMark;
       AStripeCol: TColor; const ACodeRect: TRect; ALine, ATextEndX: Integer);
-    // Klick-Treffer gegen die gezeichneten Text-Hints: Treffer verwirft
-    // den Fund (RemoveMark loest Bereiche auf und invalidiert selbst).
-    procedure DismissTextHintAt(X, Y: Integer);
+    // Klick-Treffer gegen die gezeichneten Text-Hints: ein DOPPELKLICK auf
+    // denselben Hint verwirft den Fund (RemoveMark loest Bereiche auf und
+    // invalidiert selbst); ein Einfachklick merkt sich nur den Treffer.
+    procedure DismissTextHintAt(X, Y: Integer; Shift: TShiftState);
     // Raeumt die in PaintLine eingesammelten bearbeiteten Fundzeilen ab.
     // Aus EndPaint gezogen - der eigene Detektor meldete die Routine
     // sonst als zu komplex (zerlegt statt unterdrueckt, wie schon bei
@@ -2618,6 +2625,7 @@ begin
   FRenderedRects     := TDictionary<Integer, TRect>.Create;
   FRenderedTextEnds  := TDictionary<Integer, Integer>.Create;
   FRenderedHintRects := TDictionary<Integer, TRect>.Create;
+  FHintClickLine     := -1;
   FStaleLines        := TList<Integer>.Create;
   FHoverWatch := TTimer.Create(nil);
   FHoverWatch.Interval := 200;
@@ -2999,15 +3007,16 @@ begin
   if Button <> mbLeft then Exit;
   if Editor <> FSavedEditor then Exit;
 
-  // Nur-Text-Modus: Klick auf den gezeichneten Text-Hint VERWIRFT den
-  // Fund (Konzept 2026-08-09, Entscheidung 3 - Ersatz des Close-Glyphs).
-  // RemoveMark loest Mehrzeilen-Bereiche ueber SpanFirst/SpanLast komplett
-  // auf und invalidiert selbst; der naechste Zeichendurchgang malt ohne
-  // Markierung auch keinen Text mehr - es gibt nichts zu "verstecken".
-  // Kein Fenster-Pfad in diesem Modus.
+  // Nur-Text-Modus: DOPPELKLICK auf den gezeichneten Text-Hint VERWIRFT den
+  // Fund (Konzept 2026-08-09, Entscheidung 3 - Ersatz des Close-Glyphs;
+  // seit 2026-10-29 Doppel- statt Einfachklick, Nico: ein Einfachklick soll
+  // nichts tun). RemoveMark loest Mehrzeilen-Bereiche ueber SpanFirst/
+  // SpanLast komplett auf und invalidiert selbst; der naechste
+  // Zeichendurchgang malt ohne Markierung auch keinen Text mehr - es gibt
+  // nichts zu "verstecken". Kein Fenster-Pfad in diesem Modus.
   if GTextOnlyHint then
   begin
-    DismissTextHintAt(X, Y);
+    DismissTextHintAt(X, Y, Shift);
     Exit;
   end;
 
@@ -3528,9 +3537,16 @@ begin
   end;
 end;
 
-procedure TFindingEditorEvents.DismissTextHintAt(X, Y: Integer);
+procedure TFindingEditorEvents.DismissTextHintAt(X, Y: Integer;
+  Shift: TShiftState);
 // Vertrag an der Deklaration. Klick NEBEN alle Texte: bewusst kein
-// Verhalten - der Klick setzt nur die Schreibmarke.
+// Verhalten - der Klick setzt nur die Schreibmarke (und vergisst einen
+// gemerkten ersten Klick).
+//
+// Doppelklick = ssDouble vom Editor ODER zweiter Klick auf DENSELBEN Hint
+// innerhalb der System-Doppelklickzeit und -flaeche. Der eigene Abgleich
+// ist der Normalweg, falls das Editorfenster ohne CS_DBLCLKS laeuft und
+// nie ssDouble meldet; liefert es ssDouble, endet der Weg gleich.
 //
 // ZWEIPHASIG (Review 2026-08-13): erst den Treffer suchen, DANN
 // RemoveMark - nie waehrend einer aktiven Dictionary-Enumeration
@@ -3540,9 +3556,11 @@ procedure TFindingEditorEvents.DismissTextHintAt(X, Y: Integer);
 // iteriert undefiniert weiter - im Krisenpfad dieses Plugins kein
 // Zustand, auf den man baut).
 var
-  HintHit : TPair<Integer, TRect>;
-  HitKey  : Integer;
-  Found   : Boolean;
+  HintHit  : TPair<Integer, TRect>;
+  HitKey   : Integer;
+  Found    : Boolean;
+  NowMs    : UInt64;
+  IsDouble : Boolean;
 begin
   if not Assigned(GHighlighter) then Exit;
   Found  := False;
@@ -3554,8 +3572,28 @@ begin
       Found  := True;
       Break;
     end;
-  if Found then
+  if not Found then
+  begin
+    FHintClickLine := -1;
+    Exit;
+  end;
+  NowMs := GetTickCount64;
+  IsDouble := (ssDouble in Shift) or
+    ((FHintClickLine = HitKey) and
+     (NowMs - FHintClickMs <= UInt64(GetDoubleClickTime)) and
+     (Abs(X - FHintClickPt.X) <= GetSystemMetrics(SM_CXDOUBLECLK)) and
+     (Abs(Y - FHintClickPt.Y) <= GetSystemMetrics(SM_CYDOUBLECLK)));
+  if IsDouble then
+  begin
+    FHintClickLine := -1;
     GHighlighter.RemoveMark(FLastPaintedFile, HitKey);
+  end
+  else
+  begin
+    FHintClickLine := HitKey;
+    FHintClickMs   := NowMs;
+    FHintClickPt   := Point(X, Y);
+  end;
 end;
 
 procedure TFindingEditorEvents.PaintLine(const Rect: TRect;

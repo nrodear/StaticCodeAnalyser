@@ -12,8 +12,9 @@
 // Bekannter Schoenheitsfehler: der cmd-Prompt kommt sofort zurueck bevor
 // die letzte Output-Zeile sichtbar ist (Windows-Quirk fuer GUI-Subsystem-
 // Programme die nachtraeglich AttachConsole rufen). Wer es absolut blockend
-// braucht, ruft 'start /wait analyser.exe ...' oder pipt nach 'more'.
-// CI-Runner (PowerShell, GH Actions) sehen das nicht - die loggen synchron.
+// braucht, ruft 'start /wait StaticCodeAnalyser.d12.exe ...' oder pipt nach
+// 'more'. CI-Runner (PowerShell, GH Actions) sehen das nicht - die
+// loggen synchron.
 
 // Build-Hygiene (2026-07-04): die Scan-Fixtures (MeineUnit, uCustomerForm,
 // uOrderForm, ConcatToFormatSample, WithStatementSample) sind NICHT mehr

@@ -46,13 +46,22 @@ type
     // ALang ('de'/'en'/'fr', sonst en): Sprache der GANZEN Seite -
     // Oberflaechentexte aus TWorkbenchI18n, Regeltexte aus
     // GetRule(K, ALang). Default 'de' haelt Bestandsaufrufer stabil.
+    // AEditorHelp (Nico 2026-10-29, Voreinstellung AN - das Exportmenue
+    // von GUI und IDE nimmt sie): die Editorhilfen der Regel stehen als
+    // Zeile 'Editorhilfen: ...' oben im Regel-Template - EINMAL je
+    // Regel, je Fund kein zusaetzliches Byte (der Verweis ist das
+    // data-rid der Fundzeile, ueber das oeffneDrawer das Template holt).
+    // False: die Seite ist byte-gleich zu der vor dem Parameter. Ein
+    // Boolean statt eines Optionsrecords: die Seite hat keinen, und
+    // fuer einen Schalter waere ein Record mehr Umbau als Nutzen.
     class function BuildHtml(AFindings: TObjectList<TLeakFinding>;
       const ABaseDir: string; AMaxRows: Integer = -1;
-      const ALang: string = 'de'): string; static;
+      const ALang: string = 'de'; AEditorHelp: Boolean = True): string;
+      static;
     // Schreibt BuildHtml als UTF-8 mit BOM (Konvention aller Exporte).
     class procedure Run(AFindings: TObjectList<TLeakFinding>;
       const ABaseDir, AFileName: string; AMaxRows: Integer = -1;
-      const ALang: string = 'de'); static;
+      const ALang: string = 'de'; AEditorHelp: Boolean = True); static;
     // Vorschlag fuer den Save-Dialog.
     class function DefaultFileName: string; static;
 
@@ -64,7 +73,7 @@ type
     class procedure BauePage(ASB: TStringBuilder;
       AFindings: TObjectList<TLeakFinding>;
       const ABaseDir: string; AMaxRows: Integer;
-      const ALang: string); static;
+      const ALang: string; AEditorHelp: Boolean); static;
   end;
 
 implementation
@@ -432,7 +441,7 @@ begin
   end;
 end;
 
-function SeiteStyle: string;
+function SeiteStyle(AEditorHelp: Boolean): string;
 // Workbench-Kern + Seitenspezifisches. Tabelle, Chips, Kacheln und
 // Codekarten sind bewusst deckungsgleich mit der Katalogseite
 // ("gleich anfuehlen"); der DRAWER weicht seit dem IDE-Focus-
@@ -905,6 +914,10 @@ begin
     SB.AppendLine('@media (max-width:900px){');
     SB.AppendLine('#drawer{width:100%;min-width:0;max-width:none;}');
     SB.AppendLine('}');
+    // Editorhilfen (Nico 2026-10-29): geteilte Listen-Optik, opt-in -
+    // ohne AEditorHelp bleibt das Stylesheet byte-gleich.
+    if AEditorHelp then
+      SB.Append(TWorkbenchStyle.EditorHilfenCss);
     SB.AppendLine('</style>');
     Result := SB.ToString;
   finally
@@ -1898,7 +1911,7 @@ begin
 end;
 
 function TemplateFuerRegel(K: TFindingKind; const AMeta: TRuleMeta;
-  const ALang: string): string;
+  const ALang, AHilfeListe: string): string;
 // Regel-Doku als geteiltes Template - EINMAL je vorkommender Regel
 // (der Deduplikations-Kern der V2, s. Unit-Kopf). Seit dem
 // IDE-Focus-Redesign (08.09.) OHNE Titel und Status-Badges: die
@@ -1911,6 +1924,14 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine(Format('<template id="tpl-%s">', [H(AMeta.ID)]));
+    // Editorhilfen (Nico 2026-10-29): ganz oben, direkt unter dem
+    // Fundkopf - sie sind die Handlung zum Fund. AHilfeListe ist die
+    // geteilte Liste aus TExporterHtml.EditorHelpHtmlJeArt (schon
+    // escapet, in ALang); leer ohne Option oder ohne Hilfe der Regel.
+    if AHilfeListe <> '' then
+      SB.AppendLine('<div class="insp-block eh-zeile"><span class="eh-lbl">'
+        + TWorkbenchI18n.T(wtEditorhilfen, ALang) + '</span>: '
+        + AHilfeListe + '</div>');
     // KEIN Titel und KEINE Status-Badges mehr: die stehen seit dem
     // IDE-Focus-Redesign (08.09.) im HERO des Inspectors und zeigen
     // dort die Werte DIESES FUNDES statt der Regel-Defaults. Das
@@ -2022,13 +2043,13 @@ end;
 class procedure TFindingsWorkbenchExport.Run(
   AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AFileName: string; AMaxRows: Integer;
-  const ALang: string);
+  const ALang: string; AEditorHelp: Boolean);
 var
   SB : TStringBuilder;
 begin
   SB := TStringBuilder.Create;
   try
-    BauePage(SB, AFindings, ABaseDir, AMaxRows, ALang);
+    BauePage(SB, AFindings, ABaseDir, AMaxRows, ALang, AEditorHelp);
     // Direkt aus dem Builder schreiben (BOM-Politik + Stueckgrenze im
     // Helfer): kein ToString, keine TStringList - beides waeren
     // Vollkopien des Berichts, und SL.Text normalisierte obendrein
@@ -2151,13 +2172,13 @@ end;
 class function TFindingsWorkbenchExport.BuildHtml(
   AFindings: TObjectList<TLeakFinding>;
   const ABaseDir: string; AMaxRows: Integer;
-  const ALang: string): string;
+  const ALang: string; AEditorHelp: Boolean): string;
 var
   SB : TStringBuilder;
 begin
   SB := TStringBuilder.Create;
   try
-    BauePage(SB, AFindings, ABaseDir, AMaxRows, ALang);
+    BauePage(SB, AFindings, ABaseDir, AMaxRows, ALang, AEditorHelp);
     Result := SB.ToString;
   finally
     SB.Free;
@@ -2166,7 +2187,8 @@ end;
 
 class procedure TFindingsWorkbenchExport.BauePage(ASB: TStringBuilder;
   AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string; AMaxRows: Integer; const ALang: string);
+  const ABaseDir: string; AMaxRows: Integer; const ALang: string;
+  AEditorHelp: Boolean);
 var
   SB          : TStringBuilder;
   F           : TLeakFinding;
@@ -2181,7 +2203,11 @@ var
   Zeile       : TFundZeile;
   Zusatz      : TStringBuilder;
   Erste       : Boolean;
+  // Editorhilfen je Art, EINMAL gebaut (geteilt mit dem CLI-Bericht);
+  // alles leer ohne AEditorHelp.
+  Hilfen      : THelpHtmlJeArt;
 begin
+  Hilfen := TExporterHtml.EditorHelpHtmlJeArt(AEditorHelp, ALang);
   if AMaxRows < 0 then
     MaxRows := V2_MAX_ROWS_DEFAULT
   else
@@ -2206,7 +2232,7 @@ begin
       + 'initial-scale=1">');
     SB.AppendLine('<title>' + TWorkbenchI18n.T(wtTitelFunde, ALang)
       + '</title>');
-    SB.Append(SeiteStyle);
+    SB.Append(SeiteStyle(AEditorHelp));
     // Anti-Blitz: die gespeicherte Theme-Wahl muss VOR dem ersten Paint
     // am <html>-Element stehen. Das grosse Skript am Body-Ende reicht
     // NICHT - bis dahin hat der @media-Block laengst nach der
@@ -2338,7 +2364,7 @@ begin
         if K in Regeln then
         begin
           Meta := TRuleCatalog.GetRule(K, ALang);
-          SB.Append(TemplateFuerRegel(K, Meta, ALang));
+          SB.Append(TemplateFuerRegel(K, Meta, ALang, Hilfen[K].Liste));
           if not Erste then Zusatz.Append(',');
           Erste := False;
           // Die Anfuehrungszeichen kommen HIER dazu: JsonForScript

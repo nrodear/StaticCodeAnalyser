@@ -93,6 +93,17 @@ type
     // ---- I2 (2026-09-20): Literaltext ist kein Nachweis ----
     [Test] procedure Uses_IdentNurImStringLiteral_ReportsWarning;
     [Test] procedure Uses_IdentImCode_BleibtNachweis;
+    // ---- D007 (2026-10-29): sichtbare Exporte in KnownIdents ----
+    [Test] procedure Datei_D007_Controls_CursorKonstante_NoFinding;
+    [Test] procedure Datei_D007_Graphics_FontStyleElement_NoFinding;
+    [Test] procedure Datei_D007_Classes_TShortCut_NoFinding;
+    [Test] procedure Datei_D007_ShlObj_CsidlKonstante_NoFinding;
+    [Test] procedure Datei_D007_Controls_NurKommentarStringNahtreffer_ReportsWarning;
+    [Test] procedure Datei_D007_FmxControls_EnumElementText_ReportsWarning;
+    [Test] procedure Datei_D007_Classes_NurTypesBezeichner_ReportsWarning;
+    // ---- D007b (2026-10-30): TCloseAction-Werte in der Forms-Liste ----
+    [Test] procedure Datei_D007b_Forms_NurCaFree_NoFinding;
+    [Test] procedure Datei_D007b_Forms_CaFreeNurKommentarString_ReportsWarning;
   end;
 
 implementation
@@ -1345,6 +1356,229 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
     'der Variant-Typ im CODE beweist die Unit weiterhin');
+  finally F.Free; end;
+end;
+
+{ ---- D007 (2026-10-29): sichtbare Exporte in KnownIdents ---- }
+// KI-Realworld-Test: 47 von 200 SCA007-Funden waren FP, weil die
+// Listen sichtbare Bezeichner der Unit nicht kannten (Vertrag d007).
+// Ueber die Tempdatei (FindingsAusDatei), weil die Belege - wie in
+// den Realfaellen - in Rumpf-Statements stehen. VORHER an der
+// BESTEHENDEN Exe gemessen (--file, Profil strict, je Fixture eine
+// Datei mit genau diesem Text): alle sieben Fixturen 1 SCA007-Fund.
+// Die vier NoFinding-Tests waren damit rot; die drei ReportsWarning-
+// Tests sind die Klammer (Nachbildung vorher und nachher je 1).
+
+procedure TTestUnusedUses.Datei_D007_Controls_CursorKonstante_NoFinding;
+// jcl MemoryDump.pas / JvCtrlUtils.pas: 'Screen.Cursor := crHourGlass'
+// - crHourGlass ist fuer den Compiler ein Controls-Bezeichner (Vcl.
+// Controls fuehrt ihn als Alias von System.UITypes neu).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Controls;'#13#10+
+    'implementation'#13#10+
+    'procedure Warte;'#13#10+
+    'var C: Integer;'#13#10+
+    'begin'#13#10+
+    '  C := crHourGlass;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'crHourGlass beweist Controls - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_Graphics_FontStyleElement_NoFinding;
+// SynHighlighterCache.pas:54 - 'fCommentAttri.Style := [fsItalic]'.
+// Die alte Liste kannte 'tfontstyle', nicht das Element.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Graphics;'#13#10+
+    'implementation'#13#10+
+    'procedure Init;'#13#10+
+    'begin'#13#10+
+    '  fCommentAttri.Style := [fsItalic];'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'fsItalic beweist Graphics - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_Classes_TShortCut_NoFinding;
+// CnTestNtaCurrLineWizard.pas:42 - TShortCut ist in Classes deklariert.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Classes;'#13#10+
+    'type'#13#10+
+    '  TWiz = class'#13#10+
+    '    function GetDefShortCut: TShortCut;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'function TWiz.GetDefShortCut: TShortCut;'#13#10+
+    'begin'#13#10+
+    '  Result := 0;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'TShortCut beweist Classes - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_ShlObj_CsidlKonstante_NoFinding;
+// xeInit.pas:68 - SHGetSpecialFolderPath + CSIDL_PERSONAL aus ShlObj.
+// Die alte ShlObj-Liste fuehrte keinen der beiden.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses ShlObj;'#13#10+
+    'implementation'#13#10+
+    'procedure Pfad(P: PChar);'#13#10+
+    'begin'#13#10+
+    '  SHGetSpecialFolderPath(0, P, CSIDL_PERSONAL, True);'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'CSIDL_PERSONAL beweist ShlObj - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_Controls_NurKommentarStringNahtreffer_ReportsWarning;
+// KLAMMER: crHourGlass nur im Kommentar, mrOk nur im Literal, dazu
+// zwei Nahtreffer (crHourGlass2, MycrHourGlass) - nichts davon ist ein
+// ganzes Code-Wort aus der Liste. Muss weiter melden.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Controls;'#13#10+
+    'implementation'#13#10+
+    'procedure Warte;'#13#10+
+    'var crHourGlass2, MycrHourGlass: Integer;'#13#10+
+    'begin'#13#10+
+    '  // Screen.Cursor := crHourGlass;'#13#10+
+    '  crHourGlass2 := MycrHourGlass;'#13#10+
+    '  Log(''mrOk'');'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'Kommentar, Literal und Nahtreffer sind kein Nachweis');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_FmxControls_EnumElementText_ReportsWarning;
+// KLAMMER zur Auswahlregel: FMX-Enums sind scoped - ihre Elemente
+// (Text, Left, Platform) wurden bewusst NICHT aufgenommen, sie sind
+// allgemeine Woerter (Text: 3.771 Dateien ohne FMX.Controls).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses FMX.Controls;'#13#10+
+    'implementation'#13#10+
+    'procedure Zeige(var S: string);'#13#10+
+    'begin'#13#10+
+    '  S := Text;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'ein Enum-Elementname ist kein Nachweis fuer FMX.Controls');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007_Classes_NurTypesBezeichner_ReportsWarning;
+// KLAMMER zur Auswahlregel: TRect/TPoint/Point exportiert Classes zwar
+// mit, aber auch System.Types/Windows (IsAlwaysNeeded) - sie beweisen
+// nichts fuer Classes und stehen nicht in der Liste.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Classes;'#13#10+
+    'implementation'#13#10+
+    'procedure Mitte(var R: TRect; var P: TPoint);'#13#10+
+    'begin'#13#10+
+    '  P := Point(R.Left, R.Top);'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'TRect/TPoint beweisen Classes nicht');
+  finally F.Free; end;
+end;
+
+{ ---- D007b (2026-10-30): TCloseAction-Werte in der Forms-Liste ---- }
+// KI-Pruefung rwE31 Stufe 3 (jvcl JvInterpreterMDI childwin.pas:31,
+// Dev-Cpp NewVarFrm.pas:25): die Forms-Liste kannte 'canone', nicht
+// caFree/caHide/caMinimize. Vcl.Forms deklariert alle vier im interface
+// als Konstanten (caFree = System.UITypes.TCloseAction.caFree), LCL
+// forms.pp ebenso. Im Korpus faellt dadurch kein Fund weg (Vertrag
+// d007b: jede Datei mit caFree nennt auch TForm/TCloseAction) - der
+// Test haelt den Fall ohne diese Begleiter fest.
+
+procedure TTestUnusedUses.Datei_D007b_Forms_NurCaFree_NoFinding;
+// Vorher (Nachbildung mit der alten Liste) 1 Fund: kein Bezeichner der
+// Liste im Text, caFree fehlte.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Forms;'#13#10+
+    'implementation'#13#10+
+    'procedure Zu(var A: Integer);'#13#10+
+    'begin'#13#10+
+    '  A := Ord(caFree);'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'caFree beweist Forms - vorher 1 Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_D007b_Forms_CaFreeNurKommentarString_ReportsWarning;
+// GEGENPROBE (vorher und nachher 1 Fund): caFree nur im Kommentar,
+// caHide nur im Literal, dazu der Nahtreffer caFreeX - kein ganzes
+// Code-Wort aus der Liste.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Forms;'#13#10+
+    'implementation'#13#10+
+    'procedure Zu(var A: Integer);'#13#10+
+    'var caFreeX: Integer;'#13#10+
+    'begin'#13#10+
+    '  // A := Ord(caFree);'#13#10+
+    '  A := caFreeX;'#13#10+
+    '  Log(''caHide'');'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'Kommentar, Literal und Nahtreffer sind kein Nachweis fuer Forms');
   finally F.Free; end;
 end;
 

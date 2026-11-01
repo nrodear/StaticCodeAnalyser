@@ -94,6 +94,16 @@ type
     [Test] procedure Severity_MinHint_KeepsEverything;
     // MethodName-Nachtrag fuer line-basierte Befunde (Grid-Anzeige)
     [Test] procedure MethodName_FilledForLineBasedFinding;
+    // ... aber nur INNERHALB einer Routine (Spanne Kopf..Rumpf-Ende);
+    // Fixture: SCA188 (U+202E, per Code erzeugt) an wechselnden Stellen
+    [Test] procedure MethodName_EmptyBetweenDeclarationAndFirstRoutine;
+    [Test] procedure MethodName_EmptyBetweenTwoRoutines;
+    [Test] procedure MethodName_EmptyInInitialization;
+    [Test] procedure MethodName_SetInRoutineBody;
+    [Test] procedure MethodName_SetInRoutineVarSection;
+    [Test] procedure MethodName_SetInNestedRoutineAsOuter;
+    // Funde FREMDER Dateien (DFM-Durchlauf) bekommen keinen .pas-Namen
+    [Test] procedure MethodName_EmptyForFindingInFormFile;
   end;
 
 implementation
@@ -1450,6 +1460,206 @@ begin
     finally F.Free; end;
   finally
     if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+{ ---- MethodName-Nachtrag: nur innerhalb einer Routine ---- }
+// Nico-Beobachtung 2026-10-30: SCA188 in examples\ShowcaseDemo\
+// uLegacyImport.pas:40 (Kommentar zwischen const-Block und dem ersten
+// Konstruktor) zeigte 'Methode: ImportFile'. FillMissingMethodNames nahm
+// den letzten nkMethod-Kopf vor der Zeile - dort die INTERFACE-Deklaration
+// von ImportFile -, ohne zu pruefen, ob die Zeile ueberhaupt in einem
+// Rumpf liegt. Fixture-Traeger ist SCA188 (line-basiert, MethodName='',
+// ein Fund je Datei auf der ersten Bidi-Zeile); das U+202E entsteht per
+// Code (#$202E), WriteTempPas schreibt UTF-8 mit BOM.
+
+const
+  RLO = #$202E;
+
+function BidiFindingMethod(const Src: string; ExpLine: Integer): string;
+var
+  FName : string;
+  F     : TObjectList<TLeakFinding>;
+  Fnd, Hit : TLeakFinding;
+begin
+  WriteTempPas(Src, FName);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Hit := nil;
+      for Fnd in F do
+        if Fnd.Kind = fkSourceBidiOverride then begin Hit := Fnd; Break; end;
+      Assert.IsNotNull(Hit, 'fkSourceBidiOverride-Befund erwartet');
+      Assert.AreEqual(IntToStr(ExpLine), Hit.LineNumber,
+        'Fixture: Fundzeile des Bidi-Zeichens');
+      Result := Hit.MethodName;
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+  end;
+end;
+
+procedure TTestNewChecks.MethodName_EmptyBetweenDeclarationAndFirstRoutine;
+// Der Showcase-Fall: vor der ersten Implementierung steht als letzter
+// Kopf nur die Interface-Deklaration 'Bar' (Zeile 5). Vor dem Fix: 'Bar'.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'type'#13#10 +                          // 3
+  '  TFoo = class'#13#10 +                // 4
+  '    procedure Bar;'#13#10 +            // 5
+  '  end;'#13#10 +                        // 6
+  'implementation'#13#10 +                // 7
+  'const'#13#10 +                         // 8
+  '  C = 1;'#13#10 +                      // 9
+  '// credit notes, the admin' + RLO + ' team checks them'#13#10 + // 10
+  'procedure TFoo.Bar;'#13#10 +           // 11
+  'begin'#13#10 +                         // 12
+  'end;'#13#10 +                          // 13
+  'end.';                                 // 14
+begin
+  Assert.AreEqual('', BidiFindingMethod(SRC, 10),
+    'Zeile ausserhalb jeder Routine traegt keine Methode');
+end;
+
+procedure TTestNewChecks.MethodName_EmptyBetweenTwoRoutines;
+// Kommentar NACH dem Rumpf von A, VOR dem Kopf von B. Vor dem Fix: 'A'.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'implementation'#13#10 +                // 3
+  'procedure A;'#13#10 +                  // 4
+  'begin'#13#10 +                         // 5
+  'end;'#13#10 +                          // 6
+  '// between' + RLO + ' routines'#13#10 + // 7
+  'procedure B;'#13#10 +                  // 8
+  'begin'#13#10 +                         // 9
+  'end;'#13#10 +                          // 10
+  'end.';                                 // 11
+begin
+  Assert.AreEqual('', BidiFindingMethod(SRC, 7),
+    'Kommentar zwischen zwei Routinen gehoert zu keiner');
+end;
+
+procedure TTestNewChecks.MethodName_EmptyInInitialization;
+// initialization-Abschnitt hinter der letzten Routine. Vor dem Fix: 'A'.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'implementation'#13#10 +                // 3
+  'procedure A;'#13#10 +                  // 4
+  'begin'#13#10 +                         // 5
+  'end;'#13#10 +                          // 6
+  'initialization'#13#10 +                // 7
+  '  // init' + RLO + #13#10 +            // 8
+  'end.';                                 // 9
+begin
+  Assert.AreEqual('', BidiFindingMethod(SRC, 8),
+    'initialization gehoert zu keiner Routine');
+end;
+
+procedure TTestNewChecks.MethodName_SetInRoutineBody;
+// GEGENPROBE: Zeile im Rumpf (auch ein Rumpf nur aus Kommentar) -
+// Methode wie bisher gesetzt, vor wie nach dem Fix.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'type'#13#10 +                          // 3
+  '  TFoo = class'#13#10 +                // 4
+  '    procedure Bar;'#13#10 +            // 5
+  '  end;'#13#10 +                        // 6
+  'implementation'#13#10 +                // 7
+  'procedure TFoo.Bar;'#13#10 +           // 8
+  'begin'#13#10 +                         // 9
+  '  // body' + RLO + #13#10 +            // 10
+  'end;'#13#10 +                          // 11
+  'end.';                                 // 12
+begin
+  Assert.AreEqual('TFoo.Bar', BidiFindingMethod(SRC, 10),
+    'Zeile im Rumpf traegt die Routine');
+end;
+
+procedure TTestNewChecks.MethodName_SetInRoutineVarSection;
+// GEGENPROBE: der Deklarationsteil (var) gehoert zur Routine.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'implementation'#13#10 +                // 3
+  'procedure A;'#13#10 +                  // 4
+  'var'#13#10 +                           // 5
+  '  X: Integer; // local' + RLO + #13#10 + // 6
+  'begin'#13#10 +                         // 7
+  '  X := 0;'#13#10 +                     // 8
+  'end;'#13#10 +                          // 9
+  'end.';                                 // 10
+begin
+  Assert.AreEqual('A', BidiFindingMethod(SRC, 6),
+    'var-Abschnitt der Routine traegt die Routine');
+end;
+
+procedure TTestNewChecks.MethodName_SetInNestedRoutineAsOuter;
+// GEGENPROBE: geschachtelte Routinen stehen nicht im AST; ihre Zeilen
+// liegen in der Spanne der aeusseren und tragen deren Namen - wie bisher.
+const SRC =
+  'unit t;'#13#10 +                       // 1
+  'interface'#13#10 +                     // 2
+  'implementation'#13#10 +                // 3
+  'procedure Outer;'#13#10 +              // 4
+  '  procedure Inner;'#13#10 +            // 5
+  '  begin'#13#10 +                       // 6
+  '    // nested' + RLO + #13#10 +        // 7
+  '  end;'#13#10 +                        // 8
+  'begin'#13#10 +                         // 9
+  '  Inner;'#13#10 +                      // 10
+  'end;'#13#10 +                          // 11
+  'end.';                                 // 12
+begin
+  Assert.AreEqual('Outer', BidiFindingMethod(SRC, 7),
+    'Zeile einer geschachtelten Routine traegt die aeussere');
+end;
+
+procedure TTestNewChecks.MethodName_EmptyForFindingInFormFile;
+// Der DFM-Durchlauf laeuft als Detektor der .pas und meldet auf der .dfm.
+// Vor dem Fix ordnete der Nachtrag die .dfm-Zeile 3 (Button1) der .pas-
+// Routine A zu (Kopf in .pas-Zeile 3, Rumpf-Ende ebenfalls 3 - die
+// Spannen-Pruefung allein haelt das NICHT auf, erst der Dateiwaechter).
+const
+  PAS =
+    'unit t; interface'#13#10 +            // 1
+    'implementation'#13#10 +               // 2
+    'procedure A; begin end;'#13#10 +      // 3
+    'end.';                                // 4
+  DFM =
+    'object Form1: TForm1'#13#10 +         // 1
+    '  Left = 0'#13#10 +                   // 2
+    '  object Button1: TButton'#13#10 +    // 3
+    '    Left = 8'#13#10 +                 // 4
+    '  end'#13#10 +                        // 5
+    'end'#13#10;                           // 6
+var
+  FName, DName : string;
+  F     : TObjectList<TLeakFinding>;
+  Fnd, Hit : TLeakFinding;
+begin
+  WriteTempPas(PAS, FName);
+  DName := ChangeFileExt(FName, '.dfm');
+  TFile.WriteAllText(DName, DFM, TEncoding.ASCII);
+  try
+    F := TStaticAnalyzer2.AnalyzeLeaks(FName);
+    try
+      Hit := nil;
+      for Fnd in F do
+        if Fnd.Kind = fkDfmDefaultName then begin Hit := Fnd; Break; end;
+      Assert.IsNotNull(Hit, 'fkDfmDefaultName-Befund (Button1) erwartet');
+      Assert.IsTrue(SameText(DName, Hit.FileName),
+        'Fixture: Fund liegt auf der .dfm, war: ' + Hit.FileName);
+      Assert.AreEqual('3', Hit.LineNumber, 'Fixture: Zeile von Button1');
+      Assert.AreEqual('', Hit.MethodName,
+        '.dfm-Fund darf keinen Routinennamen aus der .pas tragen');
+    finally F.Free; end;
+  finally
+    if FileExists(FName) then DeleteFile(FName);
+    if FileExists(DName) then DeleteFile(DName);
   end;
 end;
 

@@ -18,8 +18,10 @@ de commande. Là où les trois diffèrent délibérément, le nom de la clé le 
 (`IdeProfile`, `IdeMinSeverity`). Les options de la ligne de commande
 l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
-> Les réglages SonarQube ne sont **pas** dans ce fichier — voir
-> [sonar-config.md](sonar-config.md).
+> SCA ne garde aucun réglage SonarQube : serveur, jeton et clé de projet
+> relèvent de `sonar-scanner`, voir [sonarHowto_fr.md](../sonarHowto_fr.md).
+> Les sections `[Sonar]` et `[SonarTokens]` des anciennes versions sont
+> ignorées et peuvent être supprimées.
 
 > reDelphix, les actions de code du plugin IDE, garde ses propres réglages
 > dans `redelphix.ini`, à côté de ce fichier, et le crée avec un modèle
@@ -81,9 +83,24 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `File` | String | _(vide)_ | JSON de référence. Les chemins relatifs se résolvent par rapport à la racine de l'analyse ; vide = emplacement standard `.sca`. |
+| `File` | String | _(vide)_ | JSON de référence. Un chemin relatif se résout par rapport au répertoire du projet ou du groupe, sinon par rapport à la racine de l'analyse ; la CLI se rabat sur le répertoire de travail si le fichier n'existe que là, et le signale. Vide = emplacement standard `.sca`. |
 | `OnlyNew` | Bool | `False` | N'afficher que les résultats absents de la base de référence. |
 | `PathInFingerprint` | Bool | `False` | Inclure le chemin relatif dans l'empreinte — distingue des fichiers homonymes dans des dossiers différents. |
+
+**Une base de référence compte.** Le fichier contient une entrée par
+résultat, et chaque entrée couvre au plus un résultat : deux entrées de
+même empreinte couvrent deux résultats, un troisième est nouveau. Les
+entrées s'appliquent en trois passes, chacune n'étant utilisée qu'une
+fois : empreinte et hachage de contexte, puis le hachage de contexte seul,
+puis l'empreinte seule. Là où un fichier a plus de résultats d'un type que
+la base n'a d'entrées, les résultats en plus sont donc signalés comme
+nouveaux.
+
+**Les résultats hors d'une routine** ont une méthode vide, et la méthode
+fait partie de l'empreinte. Une base écrite avant la v0.9.19 les reconnaît
+encore par son hachage de contexte tant que les lignes autour sont
+inchangées ; une base sans hachages de contexte les montre une fois comme
+nouveaux.
 
 ### Quels seuils se réajustent sans invalider une base de référence
 
@@ -135,8 +152,9 @@ l'empreinte. Changer `CyclomaticMax` change quels résultats sont
 Le seul cas que les cinq clés exemptées ne savent pas distinguer : pour
 SCA012, SCA018, SCA022 et SCA176, deux méthodes homonymes d'un même
 fichier — surcharges, ou le même nom dans deux classes d'une unité —
-partagent une seule entrée de référence. Sur le corpus de référence de
-783 105 résultats cela concerne **183 à 185 résultats sur 37 990
+partagent une même empreinte. Chacune garde sa propre entrée de référence,
+le compte reste donc juste ; seulement, les entrées ne disent pas quelle
+méthode est laquelle. Sur le corpus de référence de 783 105 résultats cela concerne **183 à 185 résultats sur 37 990
 (0,49 %) avec `PathInFingerprint=1`**, et **environ 1 450 (3,8 %) dans le
 mode par défaut**, où le jeton de fichier est le nom de fichier nu et où
 des fichiers homonymes dans des dossiers différents le partagent (le
@@ -170,7 +188,7 @@ l'argument repose sur la raison structurelle plutôt que sur le taux.
 |---|---|---|---|
 | `Language` | String | `en` | Langue de l'interface : `de`, `en`, `fr`. Vide ou inconnue = anglais. reDelphix suit cette clé tant que son propre `redelphix.ini` n'en décide pas autrement (voir plus haut). |
 | `Theme` | String | `system` | Thème de l'exécutable autonome : `system` (suivre Windows), `light`, `dark`. |
-| `Element.<Nom>` | Bool | `True` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (ampoule avec les actions du résultat sur la ligne du curseur ; elle reçoit ses événements d'éditeur de `LineHighlighter`, donc `LineHighlighter=0` la désactive aussi), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (actions de code sans résultat dans le menu contextuel de l'éditeur, section plate sous les actions du résultat avec l'en-tête désactivé « Actions de code » ; les actions du résultat restent ; sans `EditorContextMenu`, sans effet), `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
+| `Element.<Nom>` | Bool | `True` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (ampoule avec les actions du résultat sur la ligne du curseur ; elle reçoit ses événements d'éditeur de `LineHighlighter`, donc `LineHighlighter=0` la désactive aussi), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (actions de code sans résultat dans le menu contextuel de l'éditeur, section plate sous les actions du résultat avec l'en-tête désactivé « Actions de code » ; les actions du résultat restent ; sans `EditorContextMenu`, sans effet), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
 | `ClipboardOnClick` | Integer | `1` | Ce qu'un clic sur une ligne copie : `1` rien, `2` mini-ticket Jira, `3` invite Markdown. |
 | `EditorColorScheme` | String | `default` | Palette de la bande de marqueurs de l'éditeur et de la barre de titre de la surimpression. |
 | `OverlayPosition` | String | `below` | Ancrage de la surimpression au survol par rapport à la ligne du résultat. `below` (par défaut) commence une ligne en dessous, en début de ligne ; `sameline` recouvre la ligne du résultat. |
@@ -208,34 +226,6 @@ cette section.
 | `ExternalEditor` | String | _(vide)_ | Chemin complet vers un éditeur. S'il est défini, il ouvre **tous** les types de fichiers — y compris `.dfm` — et l'IDE Delphi n'est plus sollicité. |
 | `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Marqueurs : `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. La valeur par défaut correspond à Visual Studio Code. L'EDI Lazarus n'accepte qu'un nom de fichier - utiliser `%file%` ; il ne peut pas sauter à la ligne. |
 | `DfmTarget` | String | `ide` | Ce qu'ouvre un résultat `.dfm` lorsqu'aucun éditeur externe n'est défini : `ide` ou `viewer` (visionneuse de texte intégrée, qui atteint la ligne de façon fiable). |
-
-## `[Sonar]`
-
-Paramètres de connexion pour le test (`--sonar-test`, « Test Connection »
-dans l'EDI) et pour `--sonar-init`. **Aucune de ces clés n'influence
-l'analyse ni un détecteur.** Détail complet dans [sonar-config.md](sonar-config.md).
-
-**Cette section a la priorité la plus basse des quatre sources.** Une
-option de ligne de commande, une variable d'environnement (`SONAR_HOST_URL`,
-`SONAR_TOKEN`, `SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`, `SONAR_BRANCH`) et
-- pour la clé de projet, l'organisation et la branche - un
-`sonar-project.properties` dans le dépôt ANALYSÉ l'emportent sur elle.
-`--sonar-test` indique quelle source a fourni chaque valeur.
-
-**Le jeton n'est pas ici.** Il réside chiffré dans `[SonarTokens]`, écrit
-par la page d'options ou par `--sonar-token`. Sous Windows il est lié à
-l'utilisateur et à la machine : un `analyser.ini` copié est inutilisable
-ailleurs, et un jeton saisi à la main ne se déchiffre pas. Utilisez
-`SONAR_TOKEN` s'il ne doit pas toucher le disque.
-
-| Clé | Type | Défaut | Signification |
-| --- | --- | --- | --- |
-| `HostUrl` | String | _(vide)_ | URL de base du serveur. Le test y envoie le jeton en en-tête bearer : un hôte erroné reçoit donc le secret. C'est pourquoi un `sonar.host.url` trouvé dans le dépôt analysé est délibérément ignoré. |
-| `ProjectKey` | String | _(vide)_ | Le projet que le test interroge. |
-| `Organization` | String | _(vide)_ | Clé de locataire SonarCloud. Sans elle SonarCloud répond 400 et le test signale « projet introuvable » alors que le projet existe. |
-| `Branch` | String | _(vide)_ | Nom de branche pour la recherche et pour `--sonar-init`. |
-| `Insecure` | Bool | `0` | `1` ignore la vérification du certificat TLS du test. Cela affaiblit précisément le transport qui porte le jeton. |
-| `TokenRef` | String | _(vide)_ | Nom de l'entrée dans `[SonarTokens]` qui contient le jeton chiffré - un même INI peut ainsi en porter plusieurs. |
 
 ## Écrit automatiquement — ne pas modifier
 

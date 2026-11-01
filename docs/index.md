@@ -41,9 +41,7 @@ version carries the `_de` suffix, the French version the `_fr` suffix
 
 | Document | What it answers |
 |---|---|
-| [sonar-setup.md](sonar-setup.md) | Full setup: server, token, project properties, export, scanner run, troubleshooting. |
-| [sonar-config.md](sonar-config.md) | Reference for the four configuration sources and which command actually reads them. |
-| [../sonarHowto.md](../sonarHowto.md) | Step-by-step walk-through for the standalone EXE, including an all-in-one PowerShell script. |
+| [../sonarHowto.md](../sonarHowto.md) | Short guide: write the report, configure and run the scanner, and the mistakes worth avoiding. |
 | [sonar-coverage.md](sonar-coverage.md) | How SCA rules map onto Sonar's own rule set — where the two overlap and where SCA adds something. |
 
 ## IDE plugin
@@ -58,6 +56,8 @@ from the release assets.
 | [../BRANCH_CHANGES.md](../BRANCH_CHANGES.md) | The Branch-Changes feature: Git/SVN detection, Tortoise compatibility, configuration, troubleshooting. |
 | [../installer/README_Installer.md](../installer/README_Installer.md) | Building and running the plugin installer. |
 | [../getit/README_GetIt.md](../getit/README_GetIt.md) | GetIt local package - manifest contracts and lessons. |
+| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the optional package with the code actions: prerequisites, building, behaviour. Not part of the setup or GetIt; the [README](../README.md#code-actions-redelphix-optional-ide-package) has the short version. In German. |
+| [../reDelphix/QUICKFIXES.md](../reDelphix/QUICKFIXES.md) | Every code action with its menu texts (en/de/fr), effect, locks and an example. In German. |
 
 ## Embedding the engine
 

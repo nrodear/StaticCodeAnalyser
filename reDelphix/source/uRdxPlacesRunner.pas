@@ -44,6 +44,22 @@ uses
   uRdxRecipes,     // TRdxParts
   uRdxBufferMath;  // TRdxEdit
 
+const
+  // PlanUses (Realworld-Test rwE29): die Unit steht im Text der uses-
+  // Klauseln nur unter {$IF..}/{$IFDEF..} - ob im gebauten Zweig, bleibt
+  // offen. Der Satz folgt hinter '%s is missing in uses: ' (AppendUses in
+  // uRdxFixRunner, FormatUsesReason in uRdxRecipeRunner); %d die Zeile, %s
+  // MsgByHand.
+  R_USES_CONDITIONAL = 'it stands there only under a compiler condition '
+    + '(line %d); %s';
+  // Der ganze Satz dazu (TRdxPlacesRunner.UsesReason, Fix-Runde 4 nach
+  // rwE32: Dev-Cpp ClassBrowser.pas:507 - "System.SysUtils fehlt in uses"
+  // stimmte nicht, die Unit steht in '{$IFDEF WIN32}' UND '{$IFDEF LINUX}',
+  // nur gilt keiner der beiden sicher). %s die Unit, %d die Zeile des
+  // ersten Eintrags, %s MsgByHand.
+  R_USES_ONLY_CONDITIONAL = '%s stands in uses only under a compiler '
+    + 'condition (line %d), not in every branch around this place; %s';
+
 type
   // Was fuer eine fehlende Unit in der uses-Klausel zu tun ist (AH19).
   TRdxUsesPlan = record
@@ -51,6 +67,10 @@ type
     Name   : string;      // der einzufuegende Name ('System.SysUtils' / 'SysUtils')
     Edit   : TRdxEdit;    // die Ersetzung, wenn Needed und Reason = ''
     Reason : string;      // wenn Needed, aber keine Stelle bestimmbar
+    // > 0: die Unit steht nur unter bedingter Uebersetzung in uses (die
+    // Zeile des ersten Eintrags), Reason ist R_USES_CONDITIONAL - den
+    // ganzen Satz fuer den Benutzer baut UsesReason.
+    CondLine : Integer;
   end;
 
   // Die Anfrage an Describe: Zeile und Anker der Regel ('assign', 'call',
@@ -174,12 +194,69 @@ type
     // (ein '//'-Kommentar, das ';' erst nach weiterem Text), wird VOR dem
     // letzten eingefuegt - immer gueltig, die Sortierung kann dann
     // brechen. Eine Compiler-Direktive in der Klausel oder eine Klausel in
-    // einem $IFDEF-Zweig sperrt (DirectiveLineIn). Ohne jede uses-Klausel
-    // wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
+    // einem $IFDEF-Zweig sperrt (DirectiveLineIn) - seit rwE31 nicht mehr,
+    // wenn das Schluesselwort 'uses' und ein Eintrag, vor bzw. hinter dem
+    // eingefuegt wird, ausserhalb jedes bedingten Zweigs stehen und die
+    // Klausel kein {$I} traegt (UnconditionalPlace; JvCalc.pas:487 'uses
+    // {$IFNDEF WIN32} JvStr16, {$ENDIF} JvVCLUtils, .. JvToolEdit;' - der
+    // neue Name gilt dann in jedem Zweig - als Kurzname, die Zweige
+    // koennen Compiler ohne Unit-Scopes bedienen; qualifiziert, wenn die
+    // Datei ausserhalb jedes Zweigs Delphi ab XE2 beweist, rwE32
+    // UnitScopesProven - uRdxCompilerTraces.ModernProof). Ohne jede
+    // uses-Klausel wird hinter 'implementation' (sonst 'interface') eine neue angelegt;
     // ein Programm oder eine Library ohne uses-Klausel bekommt keine -
-    // Reason 'keine uses-Klausel und kein interface/implementation'.
+    // Reason 'keine uses-Klausel und kein interface/implementation'; steht
+    // das Schluesselwort selbst in einem bedingten Zweig, sperrt PlanUses
+    // (die neue Klausel galte nur dort - ConditionLineOf, rwE29), ebenso,
+    // wenn der Text eine uses-Klausel traegt, die der Baum nicht sah (in
+    // einem bedingten Zweig - die neue Klausel kaeme davor, zwei
+    // Klauseln hintereinander, rwE31 CnAICoderConfig.pas:649).
+    // Ob die Unit schon da ist, fragt PlanUses den Baum UND den Text der
+    // uses-Klauseln (TextUsesLine, Realworld-Test rwE29): steht sie nur
+    // im Text, ist sie da; steht sie dort nur unter einer bedingten
+    // Uebersetzung, sperrt PlanUses (Needed mit Reason) - ausser AAtLine
+    // (die Zeile der Stelle, die die Unit braucht; 0 = unbekannt) liegt in
+    // JEDEM bedingten Zweig, in dem der Eintrag steht (rwE31: gexperts
+    // '{$IFDEF GX_EII}' um die ganze Unit, GX_Toolbar.pas:167): wo die
+    // Stelle uebersetzt wird, ist die Unit eingebunden. Geht der Code, der
+    // die Unit braucht, ueber mehrere Zeilen, ist AAtEndLine die letzte
+    // (0 = wie AAtLine): JEDE Zeile von AAtLine bis AAtEndLine muss in den
+    // Zweigen liegen, dazu das Ende von AAtEndLine hinter ihren
+    // Direktiven (TextCovers; Fix-Runde 4: die Ersetzungen von SCA168.2
+    // stehen auf der Zeile des letzten Arms und des 'end'). Steht die Unit
+    // in jedem Zweig von '{$IFDEF X} .. {$ELSE} .. {$ENDIF}' (CEF4Delphi:
+    // '{$IFDEF DELPHI16_UP} System.SysUtils, .. {$ELSE} SysUtils, ..
+    // {$ENDIF}'), sieht sie schon der Baum - er parst genau einen der
+    // Zweige (Ein-Zweig-Sicht), die Unit ist da (geprueft Fix-Runde 4 nach
+    // rwE32, PlanUses_EntryInEachElseBranch_Present). Zwei getrennte
+    // Bloecke ohne {$ELSE} ('{$IFDEF WIN32} .. SysUtils .. {$ENDIF}
+    // {$IFDEF LINUX} .. SysUtils .. {$ENDIF}', Dev-Cpp ClassBrowser.pas)
+    // beweisen nichts - es kann keiner gelten: gesperrt. Gesperrt wegen
+    // eines nur bedingten Eintrags traegt der Plan CondLine (UsesReason).
     class function PlanUses(APlaces: TSourcePlaces;
-      const AShortName, AQualifiedName: string): TRdxUsesPlan; static;
+      const AShortName, AQualifiedName: string;
+      AAtLine: Integer = 0; AAtEndLine: Integer = 0): TRdxUsesPlan; static;
+
+    // Der Grund fuer den Benutzer zu einem gesperrten Plan (Needed, Reason
+    // gesetzt) der Unit AQualifiedName: mit CondLine R_USES_ONLY_CONDITIONAL
+    // ("steht nur unter bedingter Uebersetzung"), sonst '%s is missing in
+    // uses: <Reason>' - fuer AppendUses (uRdxFixRunner) und
+    // FormatUsesReason.
+    class function UsesReason(const APlan: TRdxUsesPlan;
+      const AQualifiedName: string): string; static;
+
+    // Die erste der Stellen (ALines[i], ACols[i]), die ueberall uebersetzt
+    // wird, wo die Zeilen AAtLine bis AAtEndLine uebersetzt werden: jeder
+    // bedingte Zweig um sie umfasst auch diese Zeilen - dieselbe Probe wie
+    // fuer einen uses-Eintrag in PlanUses (TextCovers: Anfang von AAtLine,
+    // Ende von AAtEndLine hinter ihren Direktiven). Ihr Index, -1 ohne
+    // (auch ohne Stelle oder ohne gueltige Zeilen). Fuer SCA085/SCA139
+    // (uRdxFixRunner, rwE33 Stufe 5): ein FreeAndNil-Aufruf, der dort
+    // uebersetzt wird, wo die Ersetzung landet, beweist den Namen an der
+    // Stelle.
+    class function CoveringPlace(APlaces: TSourcePlaces;
+      const ALines, ACols: TArray<Integer>;
+      AAtLine, AAtEndLine: Integer): Integer; static;
 
     // Erste Zeile mit einer Compiler-Direktive ('{$' oder '(*$') in der
     // Klausel von AEntries - von der Zeile des Schluesselworts 'uses' bis
@@ -225,7 +302,10 @@ implementation
 
 uses
   System.SysUtils,
-  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix (E29)
+  System.Classes,    // TStringList (PlacesLines)
+  uRdxCodeMap,       // TRdxCodeMap, Token, Direktiven (PlanUses)
+  uRdxCompilerTraces, // ModernProof (UnitScopesProven, rwE32)
+  uRdxText;          // _, MsgNoFileOpen, MsgMovedSuffix, MsgByHand (E29)
 
 // Gegen Version 1 des Quellstellen-Vertrags geschrieben (uSourcePlaces,
 // Abschnitt VERTRAGSVERSION) - wie uRdxRecipeRunner und uRdxFixRunner:
@@ -609,7 +689,11 @@ end;
 
 // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit - nicht
 // ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06). ''
-// oder der Grund, wenn die Einfuegung nicht planbar ist.
+// oder der Grund, wenn die Einfuegung nicht planbar ist. Die Stelle, die
+// SysUtils braucht, ist der ersetzte Bereich AOutcome.Span (der Format-
+// Aufruf ersetzt ihn): steht SysUtils nur bedingt in uses, genuegt es,
+// wenn jeder Zweig um den Eintrag seine Zeilen umfasst (PlanUses, Fix-
+// Runde 4 - bis dahin ohne Zeile, gesperrt).
 function FormatUsesReason(APlaces: TSourcePlaces;
   const AUsesNames: TArray<string>; var AOutcome: TRdxFormatOutcome): string;
 var
@@ -617,13 +701,17 @@ var
 begin
   Result := '';
   if TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then Exit;
-  Plan := TRdxPlacesRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+  Plan := TRdxPlacesRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils',
+    AOutcome.Span.StartLine, AOutcome.Span.EndLine);
   if not Plan.Needed then Exit;
   if Plan.Reason <> '' then
   begin
-    // Gilt jeder Kette der Datei (C16: kein Eintrag am Caret).
+    // Gilt jeder Kette der Datei (C16: kein Eintrag am Caret) - auch
+    // R_USES_CONDITIONAL, das seit Fix-Runde 4 von der Stelle abhaengt:
+    // eine Kette in einem anderen Zweig gibt den Eintrag dann frei, ein
+    // gesperrter Eintrag auf jeder Kette ausserhalb waere Rauschen.
     AOutcome.FileWide := True;
-    Exit(_('%s is missing in uses: %s', ['System.SysUtils', Plan.Reason]));
+    Exit(TRdxPlacesRunner.UsesReason(Plan, 'System.SysUtils'));
   end;
   AOutcome.NeedsUses := True;
   AOutcome.UsesName  := Plan.Name;
@@ -893,29 +981,38 @@ begin
     ASpan.EndCol := ALast.EndCol + Tail;
 end;
 
+function UnconditionalPlace(APlaces: TSourcePlaces;
+  const AEntries: TArray<TRefactorSpan>; var AAnchor: TRefactorSpan;
+  var AAppend: Boolean): Boolean; forward;
+function UnitScopesProven(APlaces: TSourcePlaces): Boolean; forward;
+
 // Die Einfuegung in eine bestehende Klausel (PlanUses). APlan.Name steht.
 procedure PlanIntoClause(APlaces: TSourcePlaces;
   const AEntries: TArray<TRefactorSpan>; var APlan: TRdxUsesPlan);
 var
   Names  : TArray<string>;
   i, Idx : Integer;
+  Dir    : Integer;
   E      : TRefactorSpan;
   Append : Boolean;
   Old    : string;
 begin
-  // Compiler-Direktiven in der Klausel ('uses A {$IFDEF X}, B{$ENDIF};')
-  // oder eine Klausel in einem bedingten Zweig: jede Einfuegestelle kann
-  // in einem Zweig liegen, der fuer ein anderes Ziel nicht uebersetzt
-  // wird - dann von Hand.
-  i := TRdxPlacesRunner.DirectiveLineIn(APlaces, AEntries);
-  if i > 0 then
-  begin
-    // Dieselbe msgid wie der Sperrgrund 'uses qualifizieren' des Anbieters
-    // (uRdxProvider) - derselbe Satz, schon in de.po/fr.po.
-    APlan.Reason := _('uses clause contains compiler directives (line %d)',
-      [i]);
-    Exit;
-  end;
+  Dir := TRdxPlacesRunner.DirectiveLineIn(APlaces, AEntries);
+  // Eine Klausel mit Direktiven kann Compiler-Zweige tragen ('{$IF
+  // CompilerVersion >= 23} System.SysUtils, {$ELSE} SysUtils, {$IFEND}',
+  // '{$IFDEF D16} Vcl.Forms, {$ELSE} Forms, {$ENDIF}' - uChildForm.pas):
+  // der Name kommt unbedingt hinein (UnconditionalPlace) und gilt in
+  // jedem Zweig, einen Unit-Scope-Namen kennen Compiler vor XE2 nicht.
+  // Darum der Kurzname wie in einer Datei mit FPC-Weiche - Delphi loest
+  // ihn ueber die Vorgabe-Scopes ebenso auf (Review e/HilfeFixL). Nicht,
+  // wenn die Datei ausserhalb jedes Zweigs Delphi ab XE2 beweist
+  // (UnitScopesProven, rwE32 Kastri DW.Camera.pas:533: unbedingt
+  // 'FMX.Platform', danach Zweige fuer ANDROID und IOS): dann kennt jeder
+  // Compiler, der die Datei uebersetzt, Unit-Scopes - der Name bleibt im
+  // Stil der Datei.
+  if (Dir > 0) and TRdxRecipes.IsRtlScopedName(APlan.Name)
+     and not UnitScopesProven(APlaces) then
+    APlan.Name := Copy(APlan.Name, Pos('.', APlan.Name) + 1, MaxInt);
   SetLength(Names, Length(AEntries));
   for i := 0 to High(AEntries) do
     Names[i] := AEntries[i].Resolved;
@@ -929,6 +1026,22 @@ begin
   begin
     if Idx > High(AEntries) then Idx := High(AEntries);
     E := AEntries[Idx];
+  end;
+  // Compiler-Direktiven in der Klausel ('uses A {$IFDEF X}, B{$ENDIF};')
+  // oder eine Klausel in einem bedingten Zweig: eine Einfuegestelle kann
+  // in einem Zweig liegen, der fuer ein anderes Ziel nicht uebersetzt
+  // wird - dann von Hand. Seit rwE31 nicht, wenn 'uses' und ein Eintrag,
+  // vor bzw. hinter den der Name kommt, ausserhalb jedes Zweigs stehen
+  // (UnconditionalPlace; E und Append koennen dafuer wechseln): der Name
+  // steht dann in jedem Zweig.
+  if (Dir > 0) and not UnconditionalPlace(APlaces, AEntries, E, Append) then
+  begin
+    // Dieselbe msgid wie der Sperrgrund 'uses qualifizieren' des Anbieters
+    // (uRdxActionCore, bis E3 uRdxProvider) - derselbe Satz, schon in
+    // de.po/fr.po.
+    APlan.Reason := _('uses clause contains compiler directives (line %d)',
+      [Dir]);
+    Exit;
   end;
   // Ersetzt wird der Eintrag so, wie er im Puffer steht (TextOf), nicht
   // der aufgeloeste Name - der Editor vergleicht Zeichen fuer Zeichen.
@@ -946,13 +1059,446 @@ begin
     APlan.Edit.NewText := APlan.Name + ', ' + Old;
 end;
 
+// ---- Die uses-Klauseln im Text (PlanUses, Realworld-Test rwE29) ----
+// WARUM: der Baum kann einen Eintrag verlieren. uParser2.ParseUses bricht
+// eine Klausel an einem Namensglied ab, das ein Schluesselwort ist
+// ('MVCFramework.Serializer.Abstract,' - der Knoten heisst dann
+// 'MVCFramework.Serializer', alle Eintraege dahinter fehlen; Korpus:
+// MVCFramework.Serializer.JsonDataObjects.pas mit 'System.SysUtils;' als
+// letztem Eintrag des interface-uses). PlanUses fuegte die Unit dann ein
+// zweites Mal ein (E2004 - SCA127 und SCA168.2). Der Text der Klauseln
+// (Code-Sicht: Kommentare und Strings zaehlen nicht) entscheidet mit.
+
+// Offene bedingte Bloecke ({$IF}, {$IFDEF}, {$IFNDEF}, {$IFOPT} ohne ihr
+// {$ENDIF}/{$IFEND}) vor (ALine, ACol); AOuterLine ist die Zeile des
+// aeussersten davon (0 = keiner) - fuer den Grund in PlanNewClause.
+function ConditionDepthAt(AMap: TRdxCodeMap; ALine, ACol: Integer;
+  out AOuterLine: Integer): Integer; overload;
+var
+  Li, Co : Integer;
+  W      : string;
+  Arg    : Boolean;
+begin
+  Result := 0;
+  AOuterLine := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
+  begin
+    if (Li > ALine) or ((Li = ALine) and (Co >= ACol)) then
+      Exit;
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, COND_OPENERS) then
+    begin
+      if Result = 0 then
+        AOuterLine := Li;
+      Inc(Result);
+    end
+    else if InList(W, COND_CLOSERS) and (Result > 0) then
+    begin
+      Dec(Result);
+      if Result = 0 then
+        AOuterLine := 0;
+    end;
+    Inc(Co);
+  end;
+end;
+
+function ConditionDepthAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Integer;
+  overload;
+var
+  Outer : Integer;
+begin
+  Result := ConditionDepthAt(AMap, ALine, ACol, Outer);
+end;
+
+// Die Eintraege AShortName (letztes Glied, Gross/klein egal - wie
+// TRdxRecipes.HasUnit) in den uses-Klauseln des Codes, je ihr erstes
+// Token, in der Reihenfolge der Datei. Eine Klausel endet am ';'; ein
+// 'in'-Pfad ist ein String, kein Code-Token. Bis rwE31 der Lauf von
+// UsesLineInMap selbst (TextCovers fragt jeden Treffer).
+function UsesHitsInMap(AMap: TRdxCodeMap;
+  const AShortName: string): TArray<TRdxToken>;
+var
+  T, N, First : TRdxToken;
+  Name        : string;
+begin
+  Result := nil;
+  T := NextTokenOnLineWith(AMap, Default(TRdxToken), 'uses');
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+    begin
+      Name := '';
+      First := Default(TRdxToken);
+      N := After(AMap, T);
+      while N.Low <> '' do
+      begin
+        if (N.Low = ',') or (N.Low = ';') or (N.Low = 'in') then
+        begin
+          if (Name <> '') and SameText(LastPart(Name), AShortName) then
+            AddToken(Result, First);
+          Name := '';
+          if N.Low = ';' then
+            Break;
+        end
+        else
+        begin
+          if Name = '' then
+            First := N;
+          Name := Name + N.Low;
+        end;
+        N := After(AMap, N);
+      end;
+    end;
+    T := NextTokenOnLineWith(AMap, T, 'uses');
+  end;
+end;
+
+// Die Zeile des ersten Eintrags AShortName (UsesHitsInMap) ausserhalb
+// jedes bedingten Zweigs; ACond: es gibt nur Eintraege unter bedingter
+// Uebersetzung (ConditionDepthAt > 0 - jeder Treffer), dann die Zeile des
+// ersten. 0 ohne Treffer.
+function UsesLineInMap(AMap: TRdxCodeMap; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  Hits : TArray<TRdxToken>;
+  i    : Integer;
+begin
+  Result := 0;
+  ACond := False;
+  Hits := UsesHitsInMap(AMap, AShortName);
+  for i := 0 to High(Hits) do
+    if ConditionDepthAt(AMap, Hits[i].Line, Hits[i].Col) = 0 then
+      Exit(Hits[i].Line);
+  if Length(Hits) > 0 then
+  begin
+    ACond := True;
+    Result := Hits[0].Line;
+  end;
+end;
+
+// Die bedingten Zweige, in denen (ALine, ACol) steht, von aussen nach
+// innen: je Zweig die Stelle der Direktive, die ihn beginnt ({$IF..}/
+// {$IFDEF..}, im Else-Teil das {$ELSE}/{$ELSEIF}), als Zahl (Zeile oben,
+// Spalte unten). Zwei Stellen liegen im selben Zweig, wenn die Listen
+// gleich anfangen (CoversBranches).
+function BranchKeysAt(AMap: TRdxCodeMap; ALine, ACol: Integer): TArray<Int64>;
+var
+  Li, Co, n : Integer;
+  W         : string;
+  Arg       : Boolean;
+begin
+  Result := nil;
+  n := 0;
+  Li := 1;
+  Co := 1;
+  while NextDirective(AMap, Li, Co) do
+  begin
+    if (Li > ALine) or ((Li = ALine) and (Co >= ACol)) then
+      Break;
+    W := DirectiveWord(AMap, Li, Co, Arg);
+    if InList(W, COND_OPENERS) then
+    begin
+      Inc(n);
+      SetLength(Result, n);
+      Result[n - 1] := (Int64(Li) shl 32) or Co;
+    end
+    else if ((W = 'else') or (W = 'elseif')) and (n > 0) then
+      Result[n - 1] := (Int64(Li) shl 32) or Co
+    else if InList(W, COND_CLOSERS) and (n > 0) then
+    begin
+      Dec(n);
+      SetLength(Result, n);
+    end;
+    Inc(Co);
+  end;
+end;
+
+// Liegt die Stelle mit den Zweigen AAt in JEDEM Zweig von AEntry (die
+// Liste von AEntry ist der Anfang der von AAt)? Dann wird sie nur
+// uebersetzt, wo auch der Eintrag uebersetzt wird.
+function CoversBranches(const AEntry, AAt: TArray<Int64>): Boolean;
+var
+  i : Integer;
+begin
+  Result := Length(AEntry) <= Length(AAt);
+  if Result then
+    for i := 0 to High(AEntry) do
+      if AEntry[i] <> AAt[i] then
+        Exit(False);
+end;
+
+// Die Zeilen von APlaces als neue Liste - fuer eine eigene Code-Sicht (der
+// Dienst reicht seine Zeilen nur einzeln heraus). Der Aufrufer gibt sie
+// frei.
+function PlacesLines(APlaces: TSourcePlaces): TStringList;
+var
+  Li : Integer;
+begin
+  Result := TStringList.Create;
+  for Li := 1 to APlaces.LineCount do
+    Result.Add(APlaces.LineText(Li));
+end;
+
+// UsesLineInMap auf den Zeilen von APlaces.
+function TextUsesLine(APlaces: TSourcePlaces; const AShortName: string;
+  out ACond: Boolean): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+begin
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      Result := UsesLineInMap(Map, AShortName, ACond);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Die Stelle, an der der Code der Zeile ALine beginnt (das erste Token;
+// ohne Code auf der Zeile Spalte 1) - fuer BranchKeysAt.
+function LineStartKeys(AMap: TRdxCodeMap; ALine: Integer): TArray<Int64>;
+var
+  T : TRdxToken;
+begin
+  T := NextToken(AMap, ALine, 1);
+  if (T.Low <> '') and (T.Line = ALine) then
+    Result := BranchKeysAt(AMap, ALine, T.Col)
+  else
+    Result := BranchKeysAt(AMap, ALine, 1);
+end;
+
+// Steht ein Eintrag AShortName der uses-Klauseln im Text so, dass jeder
+// bedingte Zweig um ihn auch die Zeilen AAtLine bis AAtEndLine umfasst
+// (CoversBranches)? Dann ist die Unit dort eingebunden, wo diese Zeilen
+// uebersetzt werden (rwE31: gexperts GX_Toolbar.pas - '{$IFDEF GX_EII}'
+// ab Zeile 5 um die ganze Unit, SysUtils in Zeile 14, die Stelle in Zeile
+// 167). Geprueft werden die beiden Enden: der Code am Anfang von AAtLine
+// (LineStartKeys) und das Ende von AAtEndLine HINTER jeder Direktive der
+// Zeile ('X.Free; {$ENDIF}' liegt dort schon ausserhalb - eine Einfuegung
+// hinter dem Zeilenende auch). Liegen beide Enden in denselben Zweigen
+// des Eintrags, dann auch alles dazwischen: ein Zweig, der dazwischen
+// endet ({$ENDIF}) oder wechselt ({$ELSE}), traegt danach eine andere
+// Direktive als Schluessel (BranchKeysAt). Die Startzeile allein genuegte
+// nicht: Direktiven duerfen mitten in einer Anweisung stehen, die
+// Ersetzungen einer Hilfe koennen ueber mehrere Zeilen gehen
+// (uRdxFixRunner.EditLines).
+function TextCovers(APlaces: TSourcePlaces; const AShortName: string;
+  AAtLine, AAtEndLine: Integer): Boolean;
+var
+  Lines   : TStringList;
+  Map     : TRdxCodeMap;
+  Hits    : TArray<TRdxToken>;
+  At, Fin : TArray<Int64>;
+  Entry   : TArray<Int64>;
+  i       : Integer;
+begin
+  Result := False;
+  if (AAtLine < 1) or (AAtEndLine < AAtLine)
+     or (AAtEndLine > APlaces.LineCount) then
+    Exit;
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      Hits := UsesHitsInMap(Map, AShortName);
+      At := LineStartKeys(Map, AAtLine);
+      Fin := BranchKeysAt(Map, AAtEndLine, MaxInt);
+      for i := 0 to High(Hits) do
+      begin
+        Entry := BranchKeysAt(Map, Hits[i].Line, Hits[i].Col);
+        if CoversBranches(Entry, At) and CoversBranches(Entry, Fin) then
+          Exit(True);
+      end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Das Schluesselwort 'uses' auf ALine (Code); Low = '' ohne.
+function UsesKeywordOn(AMap: TRdxCodeMap; ALine: Integer): TRdxToken;
+var
+  T : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  T := NextToken(AMap, ALine, 1);
+  while (T.Low <> '') and (T.Line = ALine) do
+  begin
+    if (T.Low = 'uses') and IsKeywordAfter(T, Before(AMap, T)) then
+      Exit(T);
+    T := After(AMap, T);
+  end;
+end;
+
+// Steht AAnchor (Anfang und Ende, ohne Direktive darin) als Code
+// ausserhalb jedes bedingten Zweigs (UnconditionalPlace)? Code: nicht in
+// einem Kommentar oder einer Direktive - der Stub-Parser des FPC-
+// Pruefstands liefert Direktivenwoerter als Eintraege.
+function AnchorUnconditional(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  const AAnchor: TRefactorSpan): Boolean;
+begin
+  Result := AMap.IsCode(AAnchor.StartLine, AAnchor.StartCol)
+    and not HasDirectiveText(APlaces.TextOf(AAnchor))
+    and (ConditionDepthAt(AMap, AAnchor.StartLine, AAnchor.StartCol) = 0)
+    and (ConditionDepthAt(AMap, AAnchor.EndLine, AAnchor.EndCol) = 0);
+end;
+
+// Wohin in eine Klausel mit Direktiven (DirectiveLineIn) eingefuegt werden
+// darf (rwE31, JvCalc.pas:487 'uses {$IFNDEF WIN32} JvStr16, {$ENDIF}
+// JvVCLUtils, .. JvToolEdit;', DW.Camera.pas:533 mit '{$IF
+// Defined(ANDROID)}'-Bloecken mitten in der Klausel): das Schluesselwort
+// 'uses' steht ausserhalb jedes bedingten Zweigs, die Klausel traegt kein
+// {$I} (ein Include koennte die Unit schon bringen), und der Eintrag, vor
+// bzw. hinter den der Name kommt, steht ausserhalb jedes Zweigs
+// (AnchorUnconditional) - 'Name, A' bzw. 'A, Name' gilt dann in jedem
+// Zweig. Erst die geplante Stelle (AAnchor, AAppend), dann hinter dem
+// letzten Eintrag (AppendSpanOf), dann vor dem ersten unbedingten - die
+// Sortierung kann dabei brechen. True mit der Stelle in AAnchor/AAppend,
+// False ohne.
+function UnconditionalPlace(APlaces: TSourcePlaces;
+  const AEntries: TArray<TRefactorSpan>; var AAnchor: TRefactorSpan;
+  var AAppend: Boolean): Boolean;
+var
+  Lines  : TStringList;
+  Map    : TRdxCodeMap;
+  Lo, Hi : Integer;
+  i      : Integer;
+  U      : TRdxToken;
+  S      : TRefactorSpan;
+begin
+  Result := False;
+  if Length(AEntries) = 0 then
+    Exit;
+  Lo := UsesKeywordLine(APlaces, AEntries[0]);
+  Hi := ClauseLastLine(AEntries);
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      U := UsesKeywordOn(Map, Lo);
+      if (U.Low = '') or (IncludeInLines(Map, Lo, Hi) > 0)
+         or (ConditionDepthAt(Map, U.Line, U.Col) > 0) then
+        Exit;
+      if AnchorUnconditional(APlaces, Map, AAnchor) then
+        Exit(True);
+      if AppendSpanOf(APlaces, AEntries[High(AEntries)], S)
+         and AnchorUnconditional(APlaces, Map, S) then
+      begin
+        AAnchor := S;
+        AAppend := True;
+        Exit(True);
+      end;
+      for i := 0 to High(AEntries) do
+        if AnchorUnconditional(APlaces, Map, AEntries[i]) then
+        begin
+          AAnchor := AEntries[i];
+          AAppend := False;
+          Exit(True);
+        end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Beweist die Datei ausserhalb jedes Bedingungsblocks Delphi ab XE2 - ein
+// RTL-Unit-Name im uses ('System.Classes', 'FMX.Platform') oder eine
+// Inline-Variable (uRdxCompilerTraces.ModernProof, derselbe Gegenbeweis
+// wie bei SCA128/SCA059 und SCA120)? Dann uebersetzt die Datei nur ein
+// Compiler mit Unit-Scopes - auch in einer Klausel mit Direktiven passt
+// der qualifizierte Name (rwE32, PlanIntoClause). Bis zum Review e/
+// HilfeFixQ eine eigene Probe ueber die Eintraege der Klausel mit der
+// weiteren Praefix-Liste von IsRtlScopedName ('Data.', 'Xml.', 'Web.' ...
+// - ein eigener Unit-Name eines Delphi 2007 galte dort als Beweis).
+function UnitScopesProven(APlaces: TSourcePlaces): Boolean;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+begin
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      Result := ModernProof(Map).Version >= PROOF_RTL_SCOPE;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Die Zeile des ersten Schluesselworts 'uses' im Code; 0 ohne. PlanNewClause:
+// sah der Baum keine Klausel, steht sie dann in einem Zweig, den er nicht
+// las.
+function TextUsesKeywordLine(APlaces: TSourcePlaces): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+  T     : TRdxToken;
+begin
+  Result := 0;
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      T := NextTokenOnLineWith(Map, Default(TRdxToken), 'uses');
+      while T.Low <> '' do
+      begin
+        if (T.Low = 'uses') and IsKeywordAfter(T, Before(Map, T)) then
+          Exit(T.Line);
+        T := NextTokenOnLineWith(Map, T, 'uses');
+      end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+// Die Zeile des aeussersten bedingten Blocks, in dem der Code der Zeile
+// ALine von APlaces steht (ConditionDepthAt vor ihrem ersten Zeichen);
+// 0 = in keinem.
+function ConditionLineOf(APlaces: TSourcePlaces; ALine: Integer): Integer;
+var
+  Lines : TStringList;
+  Map   : TRdxCodeMap;
+  Text  : string;
+begin
+  Text := APlaces.LineText(ALine);
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      ConditionDepthAt(Map, ALine, Length(Text) - Length(TrimLeft(Text)) + 1,
+        Result);
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 // Keine uses-Klausel (PlanUses): eine neue hinter 'implementation', sonst
 // hinter 'interface' anlegen - als Ersetzung der Schluesselwort-Zeile. Ein
 // Programm oder eine Library hat keinen der beiden Abschnitte: Reason.
 procedure PlanNewClause(APlaces: TSourcePlaces; var APlan: TRdxUsesPlan);
 var
-  Line : Integer;
-  Text : string;
+  Line, CondLine : Integer;
+  Text           : string;
 begin
   Line := APlaces.SectionLine(TUsesSection.usImplementation);
   if Line = 0 then
@@ -960,6 +1506,30 @@ begin
   if Line = 0 then
   begin
     APlan.Reason := _('no uses clause and no interface/implementation');
+    Exit;
+  end;
+  // Der Baum sah keine Klausel, der Text traegt eine: sie steht in einem
+  // Zweig, den der Baum nicht las (rwE31, cnwizards CnAICoderConfig.pas:
+  // 'implementation' / '{$IFDEF CNWIZARDS_CNAICODERWIZARD}' / 'uses
+  // CnSM4, ..' - die neue Klausel kam zwischen 'implementation' und den
+  // Zweig, zwei Klauseln hintereinander, E2029).
+  CondLine := TextUsesKeywordLine(APlaces);
+  if CondLine > 0 then
+  begin
+    APlan.Reason := _('the uses clause in line %d is not read here (it lies '
+      + 'in a conditional branch) - add the unit by hand', [CondLine]);
+    Exit;
+  end;
+  // Ein Abschnitts-Schluesselwort in einem bedingten Zweig: die neue
+  // Klausel galte nur dort (rwE29, mORMot2 mormot.crypt.openssl.pas: das
+  // zweite 'implementation' im {$else}-Zweig des leeren Moduls bekam die
+  // Klausel, der Code der Fundstelle steht im {$ifdef}-Zweig).
+  CondLine := ConditionLineOf(APlaces, Line);
+  if CondLine > 0 then
+  begin
+    APlan.Reason := _('the section keyword in line %d is inside a '
+      + 'conditional branch (line %d) - add the uses clause by hand',
+      [Line, CondLine]);
     Exit;
   end;
   Text := APlaces.LineText(Line);
@@ -976,10 +1546,13 @@ begin
 end;
 
 class function TRdxPlacesRunner.PlanUses(APlaces: TSourcePlaces;
-  const AShortName, AQualifiedName: string): TRdxUsesPlan;
+  const AShortName, AQualifiedName: string;
+  AAtLine, AAtEndLine: Integer): TRdxUsesPlan;
 var
   AllNames : TArray<string>;
   Entries  : TArray<TRefactorSpan>;
+  Li, Last : Integer;
+  Cond     : Boolean;
 begin
   Result := Default(TRdxUsesPlan);
   if not Assigned(APlaces) or not APlaces.IsOpen then
@@ -990,7 +1563,25 @@ begin
   end;
   AllNames := UsesNamesOf(APlaces);
   if TRdxRecipes.HasUnit(AllNames, AShortName) then Exit;   // schon da
+  // Im Text da, der Baum sah sie nicht (s. TextUsesLine): nicht noetig;
+  // nur unter einer Bedingung: offen - gesperrt.
+  Li := TextUsesLine(APlaces, AShortName, Cond);
+  if (Li > 0) and not Cond then Exit;
+  // Nur bedingt eingebunden, aber in jedem Zweig, der die Stelle AAtLine
+  // (bis AAtEndLine) umfasst (rwE31): dort ist sie da.
+  Last := AAtEndLine;
+  if Last < AAtLine then
+    Last := AAtLine;
+  if (Li > 0) and (AAtLine > 0)
+     and TextCovers(APlaces, AShortName, AAtLine, Last) then
+    Exit;
   Result.Needed := True;
+  if Li > 0 then
+  begin
+    Result.Reason := _(R_USES_CONDITIONAL, [Li, MsgByHand]);
+    Result.CondLine := Li;
+    Exit;
+  end;
   // FPC 3.2 kennt keine Unit-Scopes: eine Datei mit FPC-Weiche bekommt
   // den Kurznamen, Delphi loest ihn ueber die Vorgabe-Scopes ebenso auf.
   if SourceLooksFpcAware(APlaces) then
@@ -1008,6 +1599,55 @@ begin
     PlanIntoClause(APlaces, Entries, Result)
   else
     PlanNewClause(APlaces, Result);
+end;
+
+class function TRdxPlacesRunner.UsesReason(const APlan: TRdxUsesPlan;
+  const AQualifiedName: string): string;
+begin
+  if APlan.CondLine > 0 then
+    Result := _(R_USES_ONLY_CONDITIONAL, [AQualifiedName, APlan.CondLine,
+      MsgByHand])
+  else
+    Result := _('%s is missing in uses: %s', [AQualifiedName, APlan.Reason]);
+end;
+
+// Wie TextCovers, die Stellen statt der uses-Eintraege - EINE Code-Sicht
+// fuer alle Stellen (je Stelle eine neue kostete auf einer grossen Datei
+// mit vielen Aufrufen spuerbar Zeit im IDE-Hauptthread).
+class function TRdxPlacesRunner.CoveringPlace(APlaces: TSourcePlaces;
+  const ALines, ACols: TArray<Integer>;
+  AAtLine, AAtEndLine: Integer): Integer;
+var
+  Lines   : TStringList;
+  Map     : TRdxCodeMap;
+  At, Fin : TArray<Int64>;
+  Place   : TArray<Int64>;
+  i       : Integer;
+begin
+  Result := -1;
+  if not Assigned(APlaces) or not APlaces.IsOpen
+     or (Length(ALines) = 0) or (Length(ACols) <> Length(ALines))
+     or (AAtLine < 1) or (AAtEndLine < AAtLine)
+     or (AAtEndLine > APlaces.LineCount) then
+    Exit;
+  Lines := PlacesLines(APlaces);
+  try
+    Map := TRdxCodeMap.Create(Lines);
+    try
+      At := LineStartKeys(Map, AAtLine);
+      Fin := BranchKeysAt(Map, AAtEndLine, MaxInt);
+      for i := 0 to High(ALines) do
+      begin
+        Place := BranchKeysAt(Map, ALines[i], ACols[i]);
+        if CoversBranches(Place, At) and CoversBranches(Place, Fin) then
+          Exit(i);
+      end;
+    finally
+      Map.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
 end;
 
 end.

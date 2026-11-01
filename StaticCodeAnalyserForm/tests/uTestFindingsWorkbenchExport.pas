@@ -71,6 +71,11 @@ type
     // IDE-Focus-Redesign 08.09. (Variante A des UI-TODO): Selection
     // mit Severity-Rail, Inspector mit Hero und gestaffelten Ebenen.
     [Test] procedure IdeInspector_HeroHierarchyAndSelectionStates;
+    // Editorhilfen (Nico 2026-10-29): Zeile oben im Regel-Template,
+    // einmal je Regel; Sprache der Seite; Option aus = Seite wie vorher.
+    [Test] procedure EditorHelp_Voreinstellung_ZeileImTemplateEinmalJeRegel;
+    [Test] procedure EditorHelp_SpracheFolgtDerSeite;
+    [Test] procedure EditorHelp_Aus_SeiteByteGleich;
   end;
 
 implementation
@@ -90,6 +95,7 @@ implementation
 
 uses
   System.IOUtils,
+  System.RegularExpressions,   // EditorHelp_Aus_...: Hilfe-Teile herausnehmen
   uFindingsWorkbenchExport, uRuleCatalog,
   uExportHtml; // HtmlEscape - Erwartungsbau des data-copy-Vertrags
 
@@ -1656,6 +1662,137 @@ begin
     'noinspection-Karte verloren');
   Assert.IsTrue(Pos('class="metarow"', Html) > 0,
     'Metadaten-Zeile verloren');
+end;
+
+{ --- Editorhilfen (Nico 2026-10-29) ----------------------------- }
+//
+// Fixture wie in uTestExportHtml: zwei Funde von SCA017 (DebugOutput,
+// zwei Hilfen SCA017/SCA017.2 im Katalog) und einer von SCA019
+// (TodoComment, keine Hilfe). Die Liste ist dieselbe wie im
+// CLI-Bericht (geteilt: TExporterHtml.EditorHelpHtmlJeArt).
+
+const
+  WB_EH_LISTE_017_DE =
+    '<ul class="eh-list" data-eh="SCA017">' +
+    '<li><span class="eh-id">SCA017</span> Put debug output in ifdef debug ' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">&auml;ndert Verhalten</span>)</li>' +
+    '<li><span class="eh-id">SCA017.2</span> Delete debug output ' +
+    '(<span class="eh-eff" data-i18n="eh-eff-changes">&auml;ndert Verhalten</span>)</li>' +
+    '</ul>';
+
+function WbEditorHelpFunde: TObjectList<TLeakFinding>;
+// Die Liste gehoert dem Aufrufer.
+var
+  Fnd : TLeakFinding;
+  i   : Integer;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  for i := 1 to 2 do
+  begin
+    Fnd := TLeakFinding.Create;
+    Fnd.SetKind(fkDebugOutput);
+    Fnd.FileName   := 'src\A.pas';
+    Fnd.LineNumber := IntToStr(i);
+    Fnd.MissingVar := 'WriteLn' + IntToStr(i);
+    Fnd.MethodName := 'TestMethod';
+    Result.Add(Fnd);
+  end;
+  Fnd := TLeakFinding.Create;
+  Fnd.SetKind(fkTodoComment);
+  Fnd.FileName   := 'src\A.pas';
+  Fnd.LineNumber := '10';
+  Fnd.MissingVar := 'TODO: x';
+  Fnd.MethodName := 'TestMethod';
+  Result.Add(Fnd);
+end;
+
+function WbEditorHelpHtml(const ALang: string; AAn: Boolean): string;
+var
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Findings := WbEditorHelpFunde;
+  try
+    Result := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, ALang,
+      AAn);
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestFindingsWorkbenchExport.EditorHelp_Voreinstellung_ZeileImTemplateEinmalJeRegel;
+// Ohne die Aenderung ROT. Render = Voreinstellungen (wie das
+// Exportmenue von GUI und IDE): die Zeile steht oben im Template der
+// Regel, EINMAL, obwohl zwei Funde daran haengen - je Fund kommt
+// nichts dazu (der Verweis ist das vorhandene data-rid).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := WbEditorHelpFunde;
+  try
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.Contains('<template id="tpl-SCA017">' + sLineBreak
+    + '<div class="insp-block eh-zeile"><span class="eh-lbl">Editorhilfen'
+    + '</span>: ' + WB_EH_LISTE_017_DE + '</div>' + sLineBreak),
+    'Editorhilfen-Zeile fehlt oben im Template von SCA017');
+  Assert.AreEqual<Integer>(1, VorkommenIn(Html, '<ul class="eh-list"'),
+    'die Liste steht je Regel EINMAL, nicht je Fund');
+  Assert.AreEqual<Integer>(2, VorkommenIn(Html, '<tbody data-rid="SCA017"'),
+    'Vorbedingung: zwei Funde an SCA017 (ihr Verweis ist data-rid)');
+  Assert.IsFalse(Html.Contains('eh-ref'),
+    'die Workbench-Seite braucht keinen eigenen Verweis je Fund');
+  // Regel ohne Hilfe: ihr Template beginnt wie bisher mit der Erklaerung.
+  Assert.IsTrue(Html.Contains('<template id="tpl-SCA019">' + sLineBreak
+    + '<div class="insp-block">' + sLineBreak),
+    'eine Regel ohne Hilfe bekommt keine Editorhilfen-Zeile');
+  // Geteilte Optik aus uWorkbenchStyle, nur mit Option.
+  Assert.IsTrue(Html.Contains(
+    '.eh-zeile .eh-list,.eh-zeile .eh-list li{display:inline;}'),
+    'Listen-CSS (TWorkbenchStyle.EditorHilfenCss) fehlt');
+end;
+
+procedure TTestFindingsWorkbenchExport.EditorHelp_SpracheFolgtDerSeite;
+// Die Seite backt ihre Sprache: Zeilenkopf und Wirkung kommen aus
+// TWorkbenchI18n in ALang (dieselbe Quelle wie im CLI-Bericht).
+var
+  En, Fr : string;
+begin
+  En := WbEditorHelpHtml('en', True);
+  Assert.IsTrue(En.Contains('<span class="eh-lbl">Editor helps</span>: '),
+    'en: Zeilenkopf');
+  Assert.IsTrue(En.Contains('data-i18n="eh-eff-changes">changes behaviour</span>'),
+    'en: Wirkung');
+  Fr := WbEditorHelpHtml('fr', True);
+  Assert.IsTrue(Fr.Contains('<span class="eh-lbl">Aides d''&eacute;dition</span>: '),
+    'fr: Zeilenkopf');
+  Assert.IsTrue(Fr.Contains('data-i18n="eh-eff-changes">modifie le comportement</span>'),
+    'fr: Wirkung');
+end;
+
+procedure TTestFindingsWorkbenchExport.EditorHelp_Aus_SeiteByteGleich;
+// Option aus: die Seite ist GENAU die mit Option an, wenn man dort die
+// Editorhilfen-Zeilen (Template) und das Listen-CSS herausnimmt - und
+// damit die Seite von vor dem Parameter (beide Teile sind die einzigen
+// Stellen, die AEditorHelp liest). Die Seite traegt keinen Zeitstempel,
+// zwei Laeufe sind ohne Pinning byte-gleich.
+var
+  An, Aus, Rest : string;
+begin
+  An  := WbEditorHelpHtml('de', True);
+  Aus := WbEditorHelpHtml('de', False);
+  Assert.IsFalse(Aus.Contains('Editorhilfen'), 'aus: kein Zeilenkopf');
+  Assert.IsFalse(Aus.Contains('eh-list'), 'aus: keine Liste');
+  Assert.IsFalse(Aus.Contains('eh-zeile'), 'aus: keine Zeile');
+  Assert.IsFalse(Aus.Contains('eh-eff'), 'aus: keine Wirkung');
+  Assert.AreNotEqual(Aus, An, 'an und aus muessen sich unterscheiden');
+  Rest := TRegEx.Replace(An,
+    '(?m)^<div class="insp-block eh-zeile">[^\r\n]*\r?\n', '');
+  Rest := TRegEx.Replace(Rest, '(?m)^\.eh-[^\r\n]*\r?\n', '');
+  Assert.AreEqual(Aus, Rest,
+    'ohne die Hilfe-Teile muss die Seite mit Option an die mit Option aus sein');
 end;
 
 initialization

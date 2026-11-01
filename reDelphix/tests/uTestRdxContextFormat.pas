@@ -17,7 +17,8 @@ unit uTestRdxContextFormat;
 // die Fund-Hilfe SCA044 nennt dort weiter den Grund -, ohne Dienst kein
 // Eintrag, die Vorprobe WantsPlaces; jede Ersetzung beginnt auf einem
 // Zeichen (nie auf einer leeren Zeile); der Menuetext ist die msgid des
-// SCA044-Rezepts (Quelltext von uRdxProvider und uRdxFixTable gelesen).
+// SCA044-Rezepts (Quelltext von uRdxActionCore und uRdxFixTable gelesen;
+// bis E3, 2026-10-28, stand das Rezept in uRdxProvider).
 // Zweite Fixture (nur Delphi, echter Parser und Typen): ContextCaption,
 // Variant-Lokale, mehrzeilige Kette am Caret der Fortsetzungszeile, und die
 // Ersetzung gleich der des Fund-Wegs (TRdxRecipeRunner.Describe +
@@ -47,6 +48,8 @@ type
     [Test] procedure CaretOutsideChain_NoEntry;
     [Test] procedure MultiArgCall_NoEntry;
     [Test] procedure FileWide_NoEntry_Sca044KeepsReason;
+    // Fix-Runde 4: SysUtils nur bedingt, die Kette im selben Zweig.
+    [Test] procedure SysUtilsInChainBranch_Offered;
     [Test] procedure NoPlaces_NoEntry;
     [Test] procedure WantsPlaces_PlusNearCaret;
     [Test] procedure Caption_IsSca044RecipeCaption;
@@ -398,29 +401,24 @@ begin
     ['  Log(''a'' + IntToStr({^}N) + ''b'', 3);']), 'zwei Argumente');
 end;
 
-procedure TTestRdxContextFormat.FileWide_NoEntry_Sca044KeepsReason;
+// Die Fund-Hilfe (SCA044) fuer die Kette der Zeile mit '  S := ' in
+// AMarked (die Caret-Marke faellt weg): DescribeAnchor + FormatRewrite.
+function FindingFormat(const AMarked: string): TRdxFormatOutcome;
 var
-  Src     : string;
-  Places  : TSourcePlaces;
-  Info    : TRefactorInfo;
-  IsCall  : Boolean;
-  Why     : string;
-  Outcome : TRdxFormatOutcome;
+  Src    : string;
+  Places : TSourcePlaces;
+  Info   : TRefactorInfo;
+  IsCall : Boolean;
+  Why    : string;
 begin
-  // SysUtils fehlt, und die Klausel traegt eine Direktive: die Einfuegung
-  // ist nirgends planbar - das gilt jeder Kette der Datei, kein Eintrag.
-  Src := UnitWith('Classes {$IFDEF X}, Foo{$ENDIF};',
-    ['  S := ''a'' + Name + ''{^}b'';']);
-  AssertNoFormat(Src, 'uses mit Direktive');
-  // Die Fund-Hilfe (dieselbe Kette) nennt den Grund weiter.
   Places := TSourcePlaces.Create;
   try
-    Src := StringReplace(Src, CARET_MARK, '', []);
+    Src := StringReplace(AMarked, CARET_MARK, '', []);
     Assert.IsTrue(Places.OpenSource('u.pas', Src), 'OpenSource');
     Info := TRdxPlacesRunner.DescribeAnchor(Places,
       LineOf(Src, '  S := '), 'assign', IsCall, Why);
     try
-      Outcome := TRdxPlacesRunner.FormatRewrite(Places, Info, Why,
+      Result := TRdxPlacesRunner.FormatRewrite(Places, Info, Why,
         TRdxPlacesRunner.UsesNamesOf(Places));
     finally
       Info.Free;
@@ -428,9 +426,68 @@ begin
   finally
     Places.Free;
   end;
+end;
+
+procedure TTestRdxContextFormat.FileWide_NoEntry_Sca044KeepsReason;
+var
+  Src     : string;
+  Outcome : TRdxFormatOutcome;
+begin
+  // SysUtils fehlt, und jeder Eintrag der Klausel steht in einem
+  // bedingten Zweig: die Einfuegung ist nirgends planbar - das gilt jeder
+  // Kette der Datei, kein Eintrag. Bis rwE31 'Classes {$IFDEF X},
+  // Foo{$ENDIF};' - seitdem geht 'SysUtils, Classes' (Classes steht
+  // ausserhalb jedes Zweigs, PlanIntoClause/UnconditionalPlace).
+  Src := UnitWith('{$IFDEF X}Foo{$ELSE}Classes{$ENDIF};',
+    ['  S := ''a'' + Name + ''{^}b'';']);
+  AssertNoFormat(Src, 'uses mit Direktive');
+  // Die Fund-Hilfe (dieselbe Kette) nennt den Grund weiter.
+  Outcome := FindingFormat(Src);
   Assert.IsFalse(Outcome.Enabled, 'gesperrt');
   Assert.IsTrue(Outcome.FileWide, 'ganze Datei');
   Assert.IsTrue(Pos('System.SysUtils', Outcome.Reason) > 0, Outcome.Reason);
+end;
+
+// Fix-Runde 4 (Folge rwE31): SysUtils steht nur unter '{$IFDEF RDX_X}' in
+// uses, und derselbe Zweig umschliesst die Kette - dort ist es
+// eingebunden: Eintrag frei, nur die Kette, keine uses-Ersetzung. Bis
+// dahin fragte FormatUsesReason PlanUses ohne Zeile: R_USES_CONDITIONAL,
+// FileWide, kein Eintrag (rot ohne Fix). Den Eintrag verlieren beide
+// Baeume: der Delphi-Parser bricht die Klausel am Glied 'Foo.Abstract' ab
+// (rwE29), der Stub des FPC-Pruefstands sieht eine Klausel nur, wenn die
+// Zeile mit 'uses' beginnt. Gegenprobe: der Zweig endet hinter der
+// Klausel - kein Eintrag, die Fund-Hilfe nennt R_USES_ONLY_CONDITIONAL mit
+// der Zeile des Eintrags (5; bis Fix-Runde 4 nach rwE32 '%s is missing in
+// uses: ' mit R_USES_CONDITIONAL).
+procedure TTestRdxContextFormat.SysUtilsInChainBranch_Offered;
+const
+  BODY = 'procedure P(const Name: string);'#13#10'var'#13#10'  S: string;'
+    + #13#10'begin'#13#10'  S := ''a'' + Name + ''{^}b'';'#13#10'end;';
+var
+  Src, Marked : string;
+  O           : TRdxContextOutcome;
+  Outcome     : TRdxFormatOutcome;
+begin
+  Marked := Join(['unit u;', '{$IFDEF RDX_X}', 'interface uses',
+    '  Foo.Abstract,', '  SysUtils;', 'implementation', BODY,
+    '{$ENDIF RDX_X}', 'end.']);
+  O := FormatAt(Marked, Src);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur die Kette');
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  Outcome := FindingFormat(Marked);
+  Assert.IsTrue(Outcome.Enabled, Outcome.Reason);
+  Assert.IsFalse(Outcome.NeedsUses, 'SysUtils ist im Zweig da');
+  // Gegenprobe: die Kette ausserhalb des Zweigs.
+  Marked := Join(['unit u;', 'interface', '{$IFDEF RDX_X} uses',
+    '  Foo.Abstract,', '  SysUtils;', '{$ENDIF RDX_X}', 'implementation',
+    BODY, 'end.']);
+  AssertNoFormat(Marked, 'Kette ausserhalb des Zweigs');
+  Outcome := FindingFormat(Marked);
+  Assert.IsFalse(Outcome.Enabled, 'gesperrt');
+  Assert.IsTrue(Outcome.FileWide, 'ganze Datei');
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), Outcome.Reason);
 end;
 
 procedure TTestRdxContextFormat.NoPlaces_NoEntry;
@@ -528,12 +585,13 @@ end;
 procedure TTestRdxContextFormat.Caption_IsSca044RecipeCaption;
 begin
   // Dedup per Caption (F2): der Menuetext der Kontextaktion ist die msgid
-  // des SCA044-Rezepts (CAP_FORMAT im Anbieter) - und die Konstante, die
-  // uRdxFixTable.ContextCaption uebersetzt. Gelesen wird der Quelltext,
-  // beide Units uebersetzt der FPC-Pruefstand nicht.
+  // des SCA044-Rezepts (CAP_FORMAT im Kern des Anbieters) - und die
+  // Konstante, die uRdxFixTable.ContextCaption uebersetzt. Gelesen wird der
+  // Quelltext, beide Units uebersetzt der FPC-Pruefstand nicht.
   Assert.AreEqual('Build Format() from concatenation', CONTEXT_FORMAT_CAPTION);
   Assert.AreEqual(CONTEXT_FORMAT_CAPTION,
-    SourceConst('uRdxProvider.pas', 'CAP_FORMAT '), 'uRdxProvider.CAP_FORMAT');
+    SourceConst('uRdxActionCore.pas', 'CAP_FORMAT '),
+    'uRdxActionCore.CAP_FORMAT');
   Assert.AreEqual(CONTEXT_FORMAT_CAPTION,
     SourceConst('uRdxFixTable.pas', 'CAP_CONTEXT_FORMAT '),
     'uRdxFixTable.CAP_CONTEXT_FORMAT');

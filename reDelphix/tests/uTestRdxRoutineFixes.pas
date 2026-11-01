@@ -68,6 +68,17 @@ type
     [Test] procedure Sca164_UmlautCall_NoHelp;
     [Test] procedure Sca164_MarkerAround_NoHelp;
     [Test] procedure Sca164_IncludeOnNetworkPath_NoDiskAccess;
+    [Test] procedure Sca164_JppPrototype_NoHelp;
+    // rwE30 Stufe 2: Includes des implementation-Teils werden gelesen statt
+    // gesperrt (uPSRuntime.pas:1229, IdGlobal.pas:7141), ab
+    // MAX_READ_INCLUDES verschiedenen gesperrt.
+    [Test] procedure Sca164_ImplInclude_Read;
+    // rwE30 Stufe 2 (FrameworkTestsU.pas:372): ein Literal in anderer
+    // Schreibweise ('md5' neben 'MD5') ist kein Aufruf per Name.
+    [Test] procedure Sca164_LiteralOtherCase_Helps;
+    // rwE30 Stufe 2 (Fehler, jvcl 'sample - form.pas':13): Unit-Name passt
+    // nicht zur Datei - ein Skript.
+    [Test] procedure Sca164_UnitNameNotFileName_Refused;
   end;
 
 implementation
@@ -484,7 +495,39 @@ begin
     'Dead', 'zweite Routine');
 end;
 
+// rwE29, JCL source\prototypes\JclAlgorithms.pas:539 (minimiert): ein
+// Prototyp des JEDI-Praeprozessors jpp - die interface-Deklaration der
+// Routine entsteht erst aus dem Makro, ein Aufrufer (JclAbstractContainers)
+// steht in einer anderen Unit. Gegenprobe: ohne die jpp-Sperre fand der
+// Planer den Namen nirgends sonst und loeschte die Routine (nach dem
+// Generieren E2065).
+procedure TTestRdxRoutineFixes.Sca164_JppPrototype_NoHelp;
+begin
+  AssertRefused(Join(['unit u;', 'interface',
+    '(*$JPPLOOP ALLTYPEINDEX ALLTYPECOUNT',
+    '{$JPPEXPANDMACRO SIMPLEEQUALITYCOMPAREINT(,,)}',
+    '*)',
+    'implementation',
+    'function CardinalSimpleEqualityCompare(Obj1, Obj2: Cardinal): Boolean;',
+    'begin',
+    '  Result := Obj1 = Obj2;',
+    'end;',
+    'end.']), 7, 'CardinalSimpleEqualityCompare', 'jpp-Direktive in Zeile 3');
+  // Dieselbe Sperre fuer ein einzeiliges Makro im interface-Teil.
+  AssertRefused(Join(['unit u;', 'interface',
+    '{$JPPEXPANDMACRO SIMPLECOMPAREINT(IntegerCompare,,TObject)}',
+    'implementation',
+    'function IntegerCompare(Obj1, Obj2: TObject): Integer;',
+    'begin',
+    '  Result := 0;',
+    'end;',
+    'end.']), 5, 'IntegerCompare', 'jpp-Direktive in Zeile 3');
+end;
+
 procedure TTestRdxRoutineFixes.Sca164_ByName_NoHelp;
+var
+  P : TRdxRoutinePlan;
+  R : string;
 begin
   AssertRefused(InImpl(['procedure Dead;', 'begin', 'end;', 'procedure Keep;',
     'begin', '  GetProcAddress(0, ''Dead'');', 'end;']), 4, 'Dead',
@@ -493,8 +536,14 @@ begin
     'end;']), 5, 'Dead', 'Direktive nennt');
   AssertRefused(InImpl(['{$L dead.obj}', 'procedure Dead; cdecl;', 'begin',
     'end;']), 5, 'Dead', 'Objektdatei');
-  AssertRefused(InImpl(['{$I callers.inc}', 'procedure Dead;', 'begin',
-    'end;']), 5, 'Dead', 'Include');
+  // Ein Include im implementation-Teil sperrt seit rwE30 Stufe 2 nicht mehr
+  // im Planer: er nennt es, der Check der Tabelle liest es (IncludeReason,
+  // Sca164_ImplInclude_Read).
+  P := PlanOf(InImpl(['{$I callers.inc}', 'procedure Dead;', 'begin',
+    'end;']), 5, Msg('Dead'), R);
+  Assert.AreEqual('', R, 'Planer');
+  Assert.AreEqual<Integer>(1, Integer(Length(P.Includes)), 'Includes');
+  Assert.AreEqual('callers.inc', P.Includes[0]);
 end;
 
 procedure TTestRdxRoutineFixes.Sca164_Directives_NoHelp;
@@ -798,6 +847,123 @@ begin
   Assert.AreEqual(Dir + 'x.inc', IncludeSearchPath(Dir, 'x.inc'), 'relativ');
   Assert.AreEqual(Dir + 'y.inc', IncludeSearchPath(Unc, Dir + 'y.inc'),
     'absolut');
+end;
+
+// ---- rwE30 Stufe 2 ----
+
+procedure TTestRdxRoutineFixes.Sca164_ImplInclude_Read;
+var
+  P         : TRdxRoutinePlan;
+  R, Dir, U : string;
+  Src       : string;
+  Lines     : TArray<string>;
+  i         : Integer;
+begin
+  // PascalScript uPSRuntime.pas (minimiert): die leere Prozedur P_CM_A und
+  // weit dahinter die Assembler-Includes im implementation-Teil - bis dahin
+  // sperrte das {$include} (R_IMPL_INCLUDE).
+  Src := InImpl(['procedure P_CM_A; begin end;', '', 'procedure Keep;',
+    'begin', 'end;', '', '{$IFDEF CPU86}', '  {$include x86.inc}',
+    '{$ELSE}', '  {$include x86.inc}', '  {$include arm.inc}', '{$ENDIF}']);
+  P := PlanOf(Src, 4, Msg('P_CM_A'), R);
+  Assert.AreEqual('', R, 'Planer');
+  Assert.AreEqual<Integer>(2, Integer(Length(P.Includes)),
+    'jedes Include einmal');
+  Assert.AreEqual('x86.inc', P.Includes[0]);
+  Assert.AreEqual('arm.inc', P.Includes[1]);
+  Dir := TempDir;
+  U := Dir + 'u.pas';
+  try
+    // Nur Assembler und Direktiven: die Hilfe gilt.
+    WriteText(Dir + 'x86.inc', Join(['{$IFDEF FPC}{$ASMMODE INTEL}{$ENDIF}',
+      'procedure RealFloatCall; assembler;', 'asm', '  MOV EAX, 1', 'end;']));
+    WriteText(Dir + 'arm.inc', '{ arm calling convention }');
+    Assert.AreEqual('', TRdxRoutineFixes.IncludeReason(U, P.Includes,
+      'P_CM_A'));
+    // Gegenprobe: ein Include ruft P_CM_A - keine Hilfe.
+    WriteText(Dir + 'arm.inc', Join(['procedure Init;', 'begin',
+      '  P_CM_A;', 'end;']));
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'P_CM_A');
+    Assert.IsTrue(Pos('nennt P_CM_A', R) > 0, R);
+    // Gegenprobe: nicht neben der Unit.
+    DeleteFile(Dir + 'arm.inc');
+    R := TRdxRoutineFixes.IncludeReason(U, P.Includes, 'P_CM_A');
+    Assert.IsTrue(Pos('nicht neben der Unit', R) > 0, R);
+  finally
+    DeleteFile(Dir + 'x86.inc');
+    DeleteFile(Dir + 'arm.inc');
+    RemoveDir(Dir);
+  end;
+  // Gegenprobe: mehr als MAX_READ_INCLUDES (16) verschiedene - gesperrt wie
+  // bisher.
+  SetLength(Lines, 21);
+  Lines[0] := 'procedure Dead;';
+  Lines[1] := 'begin';
+  Lines[2] := 'end;';
+  Lines[3] := '';
+  for i := 4 to 20 do
+    Lines[i] := Format('{$I sw%d.inc}', [i]);
+  Src := InImpl(Lines);
+  R := '';
+  PlanOf(Src, 4, Msg('Dead'), R);
+  Assert.IsTrue(Pos('implementation-Teil', R) > 0, '17 Includes: ' + R);
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_LiteralOtherCase_Helps;
+begin
+  // FrameworkTestsU.pas (minimiert): 'md5' ist ein Algorithmusname, die
+  // Routine heisst MD5 - GetProcAddress vergliche mit Gross/klein, und die
+  // Routine ist kein Export.
+  Assert.AreEqual(Join(['unit u;', 'interface', 'implementation', 'const',
+    '  ALG: array[0..0] of string = (''md5'');', 'end.']),
+    FixOk(InImpl(['const', '  ALG: array[0..0] of string = (''md5'');',
+    '', 'function MD5(const S: string): string;', 'begin', '  Result := S;',
+    'end;']), 7, 'MD5'));
+  // Gegenprobe: dieselbe Schreibweise sperrt (Sca164_ByName_NoHelp).
+  AssertRefused(InImpl(['const', '  ALG: array[0..0] of string = (''MD5'');',
+    '', 'function MD5(const S: string): string;', 'begin', '  Result := S;',
+    'end;']), 7, 'MD5', 'String-Literal');
+end;
+
+// UnitFileReason fuer den Text ASource und die Datei AFile.
+function UnitFile(const ASource, AFile: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    Result := TRdxRoutineFixes.UnitFileReason(AFile, Map);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxRoutineFixes.Sca164_UnitNameNotFileName_Refused;
+var
+  R : string;
+begin
+  // jvcl JvInterpreterTest\samples\'sample - form.pas': ein Skript fuer den
+  // JvInterpreter, 'function main' ruft der Interpreter per Name.
+  R := UnitFile(Join(['unit SampleForm;', 'interface', 'implementation',
+    'function main: string;', 'begin', 'end;', 'end.']),
+    'C:\jvcl\samples\sample - form.pas');
+  Assert.IsTrue(Pos('SampleForm', R) > 0, R);
+  Assert.IsTrue(Pos('sample - form.pas', R) > 0, R);
+  // Gegenproben: passender Name (auch mit Punkten, Gross/klein egal), kein
+  // Dateiname, ein Programm.
+  Assert.AreEqual('', UnitFile(Join(['unit SampleForm;', 'interface',
+    'implementation', 'end.']), 'C:\x\sampleform.pas'));
+  Assert.AreEqual('', UnitFile(Join(['unit Vcl.Styles.NC;', 'interface',
+    'implementation', 'end.']), 'C:\x\Vcl.Styles.NC.pas'));
+  Assert.AreEqual('', UnitFile(Join(['unit SampleForm;', 'interface',
+    'implementation', 'end.']), ''));
+  Assert.AreEqual('', UnitFile(Join(['program Main;', 'begin', 'end.']),
+    'C:\x\p.dpr'));
 end;
 
 initialization

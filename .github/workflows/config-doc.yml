@@ -4,11 +4,9 @@
 # Die Konfiguration hat drei unabhaengig gepflegte Beschreibungen desselben
 # Gegenstands - den Code (Ini.ReadXxx / QuickReadXxx), die Vorlage
 # DEFAULT_INI_CONTENT und docs/configuration.md. Beim ersten Nachmessen
-# (2026-08-19) klafften 22 Luecken: die komplette [Sonar]-Sektion fehlte in
-# Vorlage UND Doku, obwohl uSonarConfig die INI ausdruecklich als vierte
-# Konfigurationsquelle fuehrt, und zehn gelesene Schluessel standen zwar in
-# der Doku, aber nicht in der Datei, die der Nutzer beim ersten Start
-# bekommt.
+# (2026-08-19) klafften 22 Luecken: eine komplette Sektion fehlte in Vorlage
+# UND Doku, und zehn gelesene Schluessel standen zwar in der Doku, aber
+# nicht in der Datei, die der Nutzer beim ersten Start bekommt.
 #
 # Der Code ist die Wahrheit: was er nicht liest, gehoert weder in die
 # Vorlage noch in die Doku; was er liest, gehoert in beide.

@@ -146,6 +146,25 @@ type
     class function IncludeReason(const AUnitFile: string;
       const AIncludes: TArray<string>; const AName: string): string; static;
 
+    // SCA164 (rwE30 Stufe 2, jvcl JvInterpreterTest\samples\'sample -
+    // form.pas':13): heisst die Unit (Kopf 'unit X;' in AMap) anders als
+    // ihre Datei AUnitFile, uebersetzt der Compiler die Datei nicht als
+    // diese Unit (E1038) - ein Skript oder eine Vorlage, deren Routinen ein
+    // Interpreter per Name ruft ('function main' des JvInterpreter). '' oder
+    // der Grund; '' auch ohne Dateinamen und ohne Kopf 'unit' (Programm,
+    // Include-Datei).
+    class function UnitFileReason(const AUnitFile: string;
+      AMap: TRdxCodeMap): string; static;
+
+    // SCA147, seit rwE30 Stufe 2 auch SCA086 (uRdxAvoidOutFix): implementiert
+    // die Klasse ab AClass (das Token 'class') ein Interface aus einer
+    // anderen Unit - direkt oder als Vorfahr eines Interfaces dieser Datei -
+    // bzw. eine Wurzel (IInterface/IUnknown/IDispatch), zu deren Membern
+    // ALowMethod gehoert? Dann kann die Methode ein Interface-Member sein.
+    // '' oder der Grund (Gate E des Detektors nachgebildet, s. Rumpf).
+    class function InterfaceMemberReason(AMap: TRdxCodeMap;
+      const AClass: TRdxToken; const ALowMethod: string): string; static;
+
     // SCA125 (uRdxInheritedEmptyFix, Charge A4): Deklaration D und
     // Implementierung R einer Methode loeschen wie bei SCA147 - Bereiche
     // samt '///'-Doku und Attributen ueber der Deklaration bzw. den
@@ -223,15 +242,35 @@ const
   R_IMPL_INCLUDE = '{$I} include in the implementation section (line %d) - a '
     + 'caller that the quick fix does not see may be there';
   R_LAST_LINE = 'the routine ends on the last line of the file';
+  // SCA164/SCA147 (rwE29, JCL source\prototypes\JclAlgorithms.pas: fuenf
+  // Loeschungen, nach dem Generieren E2065 bzw. fehlende Routinen fuer
+  // JclAbstractContainers): eine Direktive des JEDI-Praeprozessors jpp
+  // ({$JPPEXPANDMACRO ..}, (*$JPPLOOP ..*)) heisst, die Datei ist ein
+  // Prototyp - aus ihr entsteht die eigentliche Unit, und deren interface-
+  // Teil und Rumpf erzeugen die Makros; wer die Routine dort deklariert
+  // oder ruft, steht nicht im Puffer.
+  JPP_PREFIX = 'jpp';
+  R_JPP_PROTOTYPE = 'jpp directive in line %d - the file is a JEDI '
+    + 'preprocessor prototype; the unit generated from it declares and calls '
+    + 'routines through macros that the quick fix does not see';
   // SCA164/SCA147: Include-Dateien vor implementation (IncludeReason) - fuer
   // beide Regeln: die Routine deklarieren oder rufen (SCA164) bzw. die
   // Methode als Property-Accessor einer Nachfahrenklasse nennen (SCA147;
   // bis zur Nachpruefung der Charge B1-FD sprach der Text nur von SCA164).
   // Ein MUSTER fuer TRdxIncludeCheck.MissingFmt (%s die Datei, %s die
   // Ursache aus uRdxBlocks): uebersetzt, aber unformatiert uebergeben.
-  R_INC_MISSING = 'include %s before implementation %s - it can declare the '
-    + 'name, call it or name it as a property accessor, and the quick fix '
-    + 'does not see it';
+  // Seit rwE30 Stufe 2 liest SCA164 auch die Includes des implementation-
+  // Teils (PlanRoutine) - der Text nennt die Stelle nicht mehr ('include %s
+  // before implementation %s' bis dahin).
+  R_INC_MISSING = 'include %s %s - it can declare the name, call it or name '
+    + 'it as a property accessor, and the quick fix does not see it';
+  // SCA164: so viele verschiedene Include-Dateien liest die Hilfe hoechstens
+  // (Leseaufwand im Menueaufbau, Hauptthread); mehr sperren wie bisher
+  // (R_IMPL_INCLUDE). Korpus rwE30: uPSRuntime 3, IdGlobal 13 (je ein
+  // Schalter-Paar ...Off.inc/...On.inc, wenige Zeilen).
+  MAX_READ_INCLUDES = 16;
+  R_UNIT_FILE = 'the unit is named %s, its file %s - the compiler does not '
+    + 'take the file as this unit (script or template?)';
   // SCA164/SCA147: Marker im geloeschten Bereich, die ausserhalb wirken
   // (MarkerLinesReason, Gegen-Review R4-04). Das letzte %s ist das Satzende
   // MsgDeleteByHand (de wie bisher '; von Hand loeschen').
@@ -267,12 +306,16 @@ type
     Rtti          : Integer;   // {$RTTI ...}
     NameLiteral   : Integer;   // String-Literal mit dem Namen als Wort
     NameDirective : Integer;   // Direktive mit dem Namen als Wort
+    Jpp           : Integer;   // {$JPP..} / (*$JPP..*): JPP-Prototyp (rwE29)
   end;
 
   // Zustand der Zeilen-Durchsicht. Own: die geloeschten Bereiche - ein
   // Literal oder eine Direktive dort zaehlt nicht.
   TRdxFactScan = record
     LowName  : string;
+    // Nicht leer: ein Literal sperrt nur mit genau dieser Schreibweise
+    // (SCA164, s. PlanRoutine); leer: ohne Gross/klein (LowName).
+    CaseName : string;
     ImplLine : Integer;
     Own      : array[0..1] of TRdxLines;
     Facts    : TRdxFileFacts;
@@ -701,6 +744,8 @@ begin
     Facts.ImplInclude := ALine;
   if (W = 'rtti') and (Facts.Rtti = 0) then
     Facts.Rtti := ALine;
+  if (Facts.Jpp = 0) and (Copy(W, 1, Length(JPP_PREFIX)) = JPP_PREFIX) then
+    Facts.Jpp := ALine;
   Text := LowerCase(Copy(AMap.Raw(ALine), ACol,
     RunEnd(AMap, ALine, ACol) - ACol + 1));
   if (Facts.NameDirective = 0) and not InOwn(ALine)
@@ -709,23 +754,33 @@ begin
 end;
 
 procedure TRdxFactScan.Literal(AMap: TRdxCodeMap; ALine, ACol, AEnd: Integer);
+var
+  Text : string;
 begin
-  if (Facts.NameLiteral = 0) and not InOwn(ALine)
-     and HasIdentWord(LowerCase(Copy(AMap.Raw(ALine), ACol, AEnd - ACol + 1)),
-       LowName) then
+  if (Facts.NameLiteral > 0) or InOwn(ALine) then Exit;
+  Text := Copy(AMap.Raw(ALine), ACol, AEnd - ACol + 1);
+  if CaseName <> '' then
+  begin
+    if HasExactWord(Text, CaseName) then
+      Facts.NameLiteral := ALine;
+  end
+  else if HasIdentWord(LowerCase(Text), LowName) then
     Facts.NameLiteral := ALine;
 end;
 
 // Eine Durchsicht aller Zeilen: String-Literale und Direktiven (s.
-// TRdxFileFacts). AOwn und AOther: die geloeschten Bereiche.
+// TRdxFileFacts). AOwn und AOther: die geloeschten Bereiche. ACaseName:
+// s. TRdxFactScan.CaseName.
 function FileFacts(AMap: TRdxCodeMap; const ALowName: string;
-  AImplLine: Integer; const AOwn, AOther: TRdxLines): TRdxFileFacts;
+  AImplLine: Integer; const AOwn, AOther: TRdxLines;
+  const ACaseName: string = ''): TRdxFileFacts;
 var
   Scan       : TRdxFactScan;
   Li, Co, E  : Integer;
 begin
   Scan := Default(TRdxFactScan);
   Scan.LowName := ALowName;
+  Scan.CaseName := ACaseName;
   Scan.ImplLine := AImplLine;
   Scan.Own[0] := AOwn;
   Scan.Own[1] := AOther;
@@ -927,16 +982,37 @@ begin
       + 'no body', [W]);
 end;
 
-// SCA164: {$L}, {$I} im implementation-Teil, Name in Literal/Direktive.
+// SCA164: JPP-Prototyp, {$L}, Name in Literal/Direktive. Ein {$I} im
+// implementation-Teil sperrt seit rwE30 Stufe 2 nicht mehr selbst - die
+// Hilfe liest das Include (PlanRoutine, IncludeReason).
 function RoutineFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
-  if F.LinksObject > 0 then
+  if F.Jpp > 0 then
+    Result := _(R_JPP_PROTOTYPE, [F.Jpp])
+  else if F.LinksObject > 0 then
     Result := _('the unit links an object file ({$L} in line %d) - the C '
       + 'code calls routines by name', [F.LinksObject])
-  else if F.ImplInclude > 0 then
-    Result := _(R_IMPL_INCLUDE, [F.ImplInclude])
   else
     Result := NameFactsReason(F, AName);
+end;
+
+// Die Dateien der Includes ausser denen im Kopf der Unit (IncludesUpTo bis
+// zur letzten Zeile), jede einmal (ohne Gross/klein).
+function DistinctIncludes(AMap: TRdxCodeMap): TArray<string>;
+var
+  F, G : string;
+  Seen : Boolean;
+begin
+  Result := nil;
+  for F in IncludesUpTo(AMap, AMap.LineCount) do
+  begin
+    Seen := False;
+    for G in Result do
+      if SameText(F, G) then
+        Seen := True;
+    if not Seen then
+      AddText(Result, F);
+  end;
 end;
 
 // Die Zeilen der forward-Deklaration AFwd (ohne: ALines bleibt 0..0). ''
@@ -961,6 +1037,8 @@ var
   Scan       : TRdxNameScan;
   Fwd        : TRdxRoutine;
   Main, FwdL : TRdxLines;
+  Facts      : TRdxFileFacts;
+  Incs       : TArray<string>;
 begin
   FwdL := Default(TRdxLines);
   Scan := ScanName(AMap, LowerCase(R.Name));
@@ -974,8 +1052,25 @@ begin
     Result := HeadLines(AMap, R, abComments, Main);
   if Result <> '' then Exit;
   TakeBlankLine(AMap, Main, FwdL.Bottom);
-  Result := RoutineFactsReason(FileFacts(AMap, LowerCase(R.Name),
-    Scan.Impl.Line, Main, FwdL), R.Name);
+  // Ein String-Literal sperrt nur mit genau der Schreibweise des Namens
+  // (rwE30 Stufe 2, delphimvcframework FrameworkTestsU.pas:372: 'md5' als
+  // Algorithmusname neben 'function MD5'): die Routine steht nur im
+  // implementation-Teil und in keiner exports-Klausel (beides sperrt
+  // schon), erreichbar ist sie per Name nur ueber GetProcAddress auf einen
+  // Export - und der vergleicht mit Gross/klein; RTTI kennt keine freien
+  // Routinen.
+  Facts := FileFacts(AMap, LowerCase(R.Name), Scan.Impl.Line, Main, FwdL,
+    R.Name);
+  Result := RoutineFactsReason(Facts, R.Name);
+  // Includes: auch die des implementation-Teils liest der Check der Tabelle
+  // (IncludeReason - nennt eines den Namen oder fehlt es, keine Hilfe; rwE30
+  // Stufe 2, PascalScript uPSRuntime.pas:1229 x86.inc ..., Indy
+  // IdGlobal.pas:7141 IdObjectChecksOff.inc). Bis dahin sperrte jedes {$I}
+  // dort (R_IMPL_INCLUDE); das bleibt nur, wenn es zu viele sind.
+  Incs := DistinctIncludes(AMap);
+  if (Result = '') and (Facts.ImplInclude > 0)
+     and (Length(Incs) > MAX_READ_INCLUDES) then
+    Result := _(R_IMPL_INCLUDE, [Facts.ImplInclude]);
   if Result = '' then
     Result := DirectiveBalance(AMap, Main);
   if Result = '' then
@@ -986,9 +1081,9 @@ begin
   if FwdL.Top > 0 then
     AddEdit(APlan.Edits, LinesEdit(AMap, FwdL, SPAN_164));
   AddEdit(APlan.Edits, LinesEdit(AMap, Main, SPAN_164));
-  // Die Zeile von 'implementation' zaehlt mit: dort vor oder hinter dem
-  // Wort sieht FileFacts (ImplInclude ab der Zeile danach) es nicht.
-  APlan.Includes := IncludesUpTo(AMap, Scan.Impl.Line);
+  // Alle Includes ausser denen im Kopf, jedes einmal (bis rwE30 Stufe 2 nur
+  // die bis zur Zeile von 'implementation').
+  APlan.Includes := Incs;
 end;
 
 { ---- SCA147 ---- }
@@ -1210,10 +1305,13 @@ begin
       Exit(HitReason(AMap, H, D.Name, 0));
 end;
 
-// SCA147: {$RTTI}, {$I} im implementation-Teil, Name in Literal/Direktive.
+// SCA147: JPP-Prototyp, {$RTTI}, {$I} im implementation-Teil, Name in
+// Literal/Direktive.
 function MethodFactsReason(const F: TRdxFileFacts; const AName: string): string;
 begin
-  if F.Rtti > 0 then
+  if F.Jpp > 0 then
+    Result := _(R_JPP_PROTOTYPE, [F.Jpp])
+  else if F.Rtti > 0 then
     Result := _('{$RTTI} in line %d - extended RTTI can call private methods '
       + 'by name', [F.Rtti])
   else if F.ImplInclude > 0 then
@@ -1299,6 +1397,37 @@ begin
   Check.Arg := AName;
   Check.MissingFmt := _(R_INC_MISSING);
   Result := IncludeChainReason(AUnitFile, AIncludes, Check);
+end;
+
+class function TRdxRoutineFixes.InterfaceMemberReason(AMap: TRdxCodeMap;
+  const AClass: TRdxToken; const ALowMethod: string): string;
+begin
+  Result := ForeignInterfaceReason(AMap, AClass, ALowMethod);
+end;
+
+class function TRdxRoutineFixes.UnitFileReason(const AUnitFile: string;
+  AMap: TRdxCodeMap): string;
+var
+  T    : TRdxToken;
+  Name : string;
+begin
+  Result := '';
+  if AUnitFile = '' then Exit;
+  T := NextToken(AMap, 1, 1);
+  if T.Low <> 'unit' then Exit;
+  Name := '';
+  T := After(AMap, T);
+  while T.IsWord do
+  begin
+    Name := Name + TokText(AMap, T);
+    T := After(AMap, T);
+    if T.Low <> '.' then Break;
+    Name := Name + '.';
+    T := After(AMap, T);
+  end;
+  if (Name <> '')
+     and not SameText(Name, ChangeFileExt(ExtractFileName(AUnitFile), '')) then
+    Result := _(R_UNIT_FILE, [Name, ExtractFileName(AUnitFile)]);
 end;
 
 class function TRdxRoutineFixes.UnusedRoutine(AMap: TRdxCodeMap;

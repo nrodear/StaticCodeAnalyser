@@ -243,9 +243,24 @@ function TypeHasBody(AMap: TRdxCodeMap; const AKind: TRdxToken): Boolean;
 // (SCA147: steht die Methode unter private?).
 function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
   const ALowName: string; out AClass: TRdxClassHead): Boolean;
+// Dasselbe fuer einen record- oder object-Typ ('Name = [packed] record'
+// bzw. 'object'; AClass.ClassTok ist das Token der Art, Vis '' ohne
+// Abschnitt). Seit rwE31 Stufe 3 (SCA086: Kastri DW.Exif.Win.pas:102
+// 'TGdip = record' mit class-Methoden, mORMot-Typen mit dem Kopf
+// '{$ifdef USERECORDWITHMETHODS} record {$else} object {$endif}').
+function EnclosingRecord(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
 // Das end des Klassenrumpfs ab AClass (dem Token 'class'); Low = ''
 // ohne. Seit Charge B2S-b oeffentlich (SCA147: Include im Klassenrumpf).
 function ClassEnd(AMap: TRdxCodeMap; const AClass: TRdxToken): TRdxToken;
+// Steht der Kopf ab AHead im Rumpf eines Typs (class, record, object,
+// interface ...)? Rueckwaerts bis zum Abschnitt interface bzw.
+// implementation der Unit; ohne ihn: ja (unsicher). Bis rwE30 Stufe 2 als
+// InsideType nur in uRdxAvoidOutFix (SCA086); seitdem fragt es auch SCA106
+// (freie Routinen, uRdxMethodNameFix). Ein Typkopf doppelt in zwei Zweigen
+// ('{$ifdef X} TFoo = record {$else} TFoo = object {$endif}') zaehlt
+// einmal (TwinTypeHead, Fix-Runde 4 nach rwE32).
+function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
 
 type
   // Ergebnis von BeginBodyAround: gefunden, ein Kopf mit unsicheren
@@ -379,6 +394,10 @@ const
   // die ein Klassenrumpf schachtelt.
   CLASS_LIKE: array[0..3] of string = (KW_CLASS, 'object', 'interface',
     'dispinterface');
+  // ... wenn davor '=' bzw. 'packed' steht (InsideTypeBody).
+  TYPE_HEAD_PREV: array[0..1] of string = ('=', 'packed');
+  // Die Arten, die EnclosingRecord sucht.
+  RECORD_KINDS: array[0..1] of string = ('record', 'object');
   // Damit beginnt der Rumpf einer Routine.
   BODY_WORDS: array[0..1] of string = ('begin', 'asm');
   // Was hinter einer Routine folgen darf - sonst sind ihre Grenzen falsch
@@ -980,10 +999,12 @@ begin
   Result := not InList(N.Low, [KW_SEMI, 'of', '']);
 end;
 
-// 'AName [<..>] = [packed] class' mit Rumpf an T; AClass ist das Token
-// 'class'.
-function ClassHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
-  const ALowName: string; out AClass: TRdxToken): Boolean;
+// 'AName [<..>] = [packed] <Art>' mit Rumpf an T, die Art eines der Woerter
+// AKinds ('class'; 'record'/'object' fuer EnclosingRecord); AClass ist das
+// Token der Art.
+function TypeHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ALowName: string; const AKinds: array of string;
+  out AClass: TRdxToken): Boolean;
 var
   N : TRdxToken;
 begin
@@ -998,7 +1019,15 @@ begin
   AClass := After(AMap, N);
   if AClass.Low = 'packed' then
     AClass := After(AMap, AClass);
-  Result := (AClass.Low = KW_CLASS) and TypeHasBody(AMap, AClass);
+  Result := InList(AClass.Low, AKinds) and TypeHasBody(AMap, AClass);
+end;
+
+// 'AName [<..>] = [packed] class' mit Rumpf an T; AClass ist das Token
+// 'class'.
+function ClassHeadAt(AMap: TRdxCodeMap; const T: TRdxToken;
+  const ALowName: string; out AClass: TRdxToken): Boolean;
+begin
+  Result := TypeHeadAt(AMap, T, ALowName, [KW_CLASS], AClass);
 end;
 
 { TRdxClassScan }
@@ -1063,6 +1092,79 @@ begin
     Result := P;
 end;
 
+// Der Name vor der Art AKind eines Typkopfs ('TX = [packed] record');
+// Low = '' ohne.
+function TypeHeadNameOf(AMap: TRdxCodeMap; const AKind: TRdxToken): TRdxToken;
+var
+  E : TRdxToken;
+begin
+  Result := Default(TRdxToken);
+  E := Before(AMap, AKind);
+  if E.Low = 'packed' then
+    E := Before(AMap, E);
+  if E.Low <> '=' then
+    Exit;
+  Result := Before(AMap, E);
+  if not Result.IsWord then
+    Result := Default(TRdxToken);
+end;
+
+// Ist AKind die Art des ERSTEN von zwei Koepfen desselben Typs in zwei
+// Zweigen, deren zweiter die Art ANext traegt ('{$ifdef X} TFoo = record
+// {$else} TFoo = object {$endif}', mORMot USERECORDWITHMETHODS)? Direkt
+// hinter AKind beginnt der zweite Kopf mit demselben Namen, dazwischen
+// steht eine Direktive. Beide Arten teilen EIN end (InsideTypeBody).
+function TwinTypeHead(AMap: TRdxCodeMap;
+  const AKind, ANext: TRdxToken): Boolean;
+var
+  N, M : TRdxToken;
+begin
+  N := TypeHeadNameOf(AMap, ANext);
+  M := TypeHeadNameOf(AMap, AKind);
+  Result := (N.Low <> '') and (M.Low = N.Low)
+    and SameTok(After(AMap, AKind), N)
+    and DirectiveBetween(AMap, AKind, N.Line, N.Col);
+end;
+
+function InsideTypeBody(AMap: TRdxCodeMap; const AHead: TRdxToken): Boolean;
+var
+  T, P, Closed : TRdxToken;
+  Depth        : Integer;
+begin
+  Depth := 0;
+  Closed := Default(TRdxToken);
+  T := Before(AMap, AHead);
+  while T.Low <> '' do
+  begin
+    P := Before(AMap, T);
+    if IsKeywordAfter(T, P) then
+    begin
+      if T.Low = KW_END then
+        Inc(Depth)
+      else if ((T.Low = 'record')
+         or (InList(T.Low, CLASS_LIKE) and InList(P.Low, TYPE_HEAD_PREV)
+             and TypeHasBody(AMap, T)))
+         // Der erste Kopf eines Zwillings: sein end hat der zweite schon
+         // gezaehlt (rwE32 Stufe 4, SCA086: mORMot
+         // mormot.core.os.security.pas:1425, mormot.net.sock.pas:4744 -
+         // freie Funktionen hinter 'TAceBinaryTree = record {$else}
+         // TAceBinaryTree = object' galten als "in einem Typ").
+         and not ((Closed.Low <> '') and TwinTypeHead(AMap, T, Closed)) then
+      begin
+        if Depth = 0 then
+          Exit(True);
+        Dec(Depth);
+        Closed := T;
+      end
+      else if ((T.Low = 'interface') or (T.Low = 'implementation'))
+         and not InList(P.Low, TYPE_HEAD_PREV) then
+        Exit(False);
+    end;
+    T := P;
+  end;
+  Result := True;
+end;
+
 // Die Sichtbarkeit, unter der AHead im Rumpf ab AClass auf Tiefe 1 steht;
 // False, wenn AHead nicht dort steht.
 function VisibilityAt(AMap: TRdxCodeMap; const AClass, AHead: TRdxToken;
@@ -1103,10 +1205,11 @@ begin
   end;
 end;
 
-// Der naechste Kopf der Klasse ALowName ueber AHead (zeilenweise
-// rueckwaerts), dessen Rumpf AHead auf Tiefe 1 traegt.
-function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
-  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+// Der naechste Kopf des Typs ALowName einer der Arten AKinds ueber AHead
+// (zeilenweise rueckwaerts), dessen Rumpf AHead auf Tiefe 1 traegt.
+function EnclosingTypeOf(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; const AKinds: array of string;
+  out AClass: TRdxClassHead): Boolean;
 var
   Li : Integer;
   T  : TRdxToken;
@@ -1117,7 +1220,7 @@ begin
     T := NextToken(AMap, Li, 1);
     while (T.Low <> '') and (T.Line = Li) and TokBefore(T, AHead) do
     begin
-      if ClassHeadAt(AMap, T, ALowName, AClass.ClassTok) then
+      if TypeHeadAt(AMap, T, ALowName, AKinds, AClass.ClassTok) then
       begin
         AClass.NameTok := T;
         Exit(VisibilityAt(AMap, AClass.ClassTok, AHead, AClass.Vis));
@@ -1126,6 +1229,18 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function EnclosingClass(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+begin
+  Result := EnclosingTypeOf(AMap, AHead, ALowName, [KW_CLASS], AClass);
+end;
+
+function EnclosingRecord(AMap: TRdxCodeMap; const AHead: TRdxToken;
+  const ALowName: string; out AClass: TRdxClassHead): Boolean;
+begin
+  Result := EnclosingTypeOf(AMap, AHead, ALowName, RECORD_KINDS, AClass);
 end;
 
 // Die Namen der Vorfahrenliste 'class(TBase, IFoo, Unit.IBar)' (wie im

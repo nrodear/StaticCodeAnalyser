@@ -4,7 +4,8 @@ unit uRdxRecipeRunner;
 // den Quellstellen-Dienst des SCA-Cores (TSourcePlaces) aus. Ohne
 // ToolsAPI, ohne Clipboard, ohne Menue - damit ist dieser Weg vom Fund
 // bis zum fertigen Ersatztext in reDelphix.Test ohne IDE pruefbar. Der
-// Anbieter (uRdxProvider) baut daraus nur noch Menuepunkte.
+// Kern des Anbieters (uRdxActionCore, seit E3) baut daraus die Eintraege,
+// uRdxProvider nur noch die Menuepunkte.
 //
 // ABLAUF FUER SCA044 (Rezept 5.1)
 //
@@ -128,6 +129,14 @@ type
     // von SCA168 und SCA020 mit raise). Massgeblich ist FIX_ROWS - diese
     // Aufzaehlung ist nur die Uebersicht (Stand Charge FB).
     ChangesBehavior : Boolean;
+    // Die Hilfe steht nur im Menue, nicht in der Gluehbirne (Nico
+    // 2026-10-29, Realworld-Test rwE30 Stufe 2): ihr Beweis ist nicht
+    // vollstaendig - SCA007, wenn die Datei Bezeichner nutzt, die der Planer
+    // keiner anderen Unit zuordnen kann (TRdxStructFixes.ForeignIdent). Der
+    // Anbieter gibt dem Eintrag dafuer die Art fakRefactor
+    // (uRdxActionCore.AddSimpleFix): Kontextmenue und Dock-Grid zeigen ihn,
+    // die Gluehbirne und Ctrl+Alt+F nicht.
+    MenuOnly : Boolean;
   end;
 
   // uses-Eintraege qualifizieren ('uses: X -> Scope.X', QualifyUses):
@@ -194,7 +203,8 @@ type
       const AWhy: string;
       const AUsesNames: TArray<string>): TRdxFormatOutcome; static;
     class function PlanUses(APlaces: TSourcePlaces;
-      const AShortName, AQualifiedName: string): TRdxUsesPlan; static;
+      const AShortName, AQualifiedName: string;
+      AAtLine: Integer = 0; AAtEndLine: Integer = 0): TRdxUsesPlan; static;
     class function DirectiveLineIn(APlaces: TSourcePlaces;
       const AEntries: TArray<TRefactorSpan>): Integer; static;
     class function UsesDirectiveLine(APlaces: TSourcePlaces): Integer; static;
@@ -433,9 +443,11 @@ begin
 end;
 
 class function TRdxRecipeRunner.PlanUses(APlaces: TSourcePlaces;
-  const AShortName, AQualifiedName: string): TRdxUsesPlan;
+  const AShortName, AQualifiedName: string;
+  AAtLine, AAtEndLine: Integer): TRdxUsesPlan;
 begin
-  Result := TRdxPlacesRunner.PlanUses(APlaces, AShortName, AQualifiedName);
+  Result := TRdxPlacesRunner.PlanUses(APlaces, AShortName, AQualifiedName,
+    AAtLine, AAtEndLine);
 end;
 
 // Die Anfrage an BuildSqlTemplate: Ziel, Teile mit ihren Zeilen, with-

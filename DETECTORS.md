@@ -7,15 +7,15 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary (2026-08-07):** All **205 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **162 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 44 / 50 Sonar-rule slots complete; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary:** All **205 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **162 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 45 / 50 Sonar-rule slots complete, #16 partial; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
-The 21 Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
+The Pascal-AST detectors below follow the Sonar 50-rule taxonomy.
 The **23 DFM detectors** in the dedicated section are form-file
 specific and do not appear in the Sonar catalogue — they operate on
 the DFM lexer + parser + component graph (and FormBinder for
-Pascal-AST coupling) introduced with v0.10.0. The **SonarDelphi-
+Pascal-AST coupling). The **SonarDelphi-
 migration cluster (SCA120-131)** below covers Delphi-specific
 correctness checks that SonarDelphi ships and we ported. The SCA060-119 naming / formatting / structural checks are enumerated
 in their own section below (added 2026-07-19); [`rules/sca-rules.json`](rules/sca-rules.json)
@@ -58,7 +58,7 @@ remains the canonical machine-readable roster.
 
 | # | SCA | Rule | Description | Status | Unit |
 |---|-----|------|-------------|--------|------|
-| 16 | SCA166 | **UninitVar — uninitialised variable** | Local variable read before being assigned on every code path | 🟡 | MVP shipped as `SCA166` (`uUninitVar.pas`) — conservative single-method scope without full path-sensitivity. Slot #16 stays `🟡 partial` until Phase 3 (CFG + symbol table). See `Konzept_SCA166_UninitVar.md`. |
+| 16 | SCA166 | **UninitVar — uninitialised variable** | Local variable read before being assigned on every code path | 🟡 | MVP shipped as `SCA166` (`uUninitVar.pas`) — conservative single-method scope without full path-sensitivity. Slot #16 stays `🟡 partial` until Phase 3 (CFG + symbol table). |
 | 17 | SCA011 | **DeadCode — unreachable code** | Statements after `Exit`, `Break`, `Continue` or `raise` at the same nesting level | ✅ | `uDeadCode` |
 | 18 | SCA150 | **BoolAlwaysTrue — boolean always true/false** | Comparison such as `x >= 0` for `Cardinal` or `Length(s) >= 0` — always evaluates to True | ✅ | `uBoolAlwaysTrue` (Length-pattern only) |
 | 19 | SCA144 | **FloatEquality — floating-point comparison with =** | `if a = b` where `a` or `b` is `Single`/`Double`/`Extended` | ✅ | `uFloatEquality` |
@@ -131,19 +131,19 @@ remains the canonical machine-readable roster.
 
 ```
 Sonar-50 catalogue
-  ✅ Complete:  44  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
+  ✅ Complete:  45  (#1, #2, #3, #4, #5, #6, #7, #8, #9, #10,
                     #11, #12, #13, #14, #15, #17, #18, #19, #21,
-                    #23, #24, #25, #26, #27, #29, #31, #32, #33,
-                    #34, #35, #36, #37, #38, #39, #40, #41, #43,
-                    #44, #45, #46, #47, #48, #50)
+                    #23, #24, #25, #26, #27, #28, #29, #30, #31,
+                    #32, #33, #34, #35, #36, #37, #38, #39, #40,
+                    #41, #43, #44, #45, #46, #47, #48, #50)
                   Critical (#6-#15) all done. #7/#10/#12/#14/#18/
                   #21/#43/#46 use heuristic AST/lexical patterns
                   with documented limitations (narrow-by-design).
-  🟡 Partial:    1  (#30 — strings only, not arbitrary blocks)
+  🟡 Partial:    1  (#16 — conservative single-method scope)
   🎁 Bonus:      3  (HardcodedPath, DebugOutput, DuplicateString)
-  🔲 Open:       5
+  🔲 Open:       4  (#20, #22, #42, #49)
 
-  → 48 of 50 Sonar rules backed by Pascal-AST detector code,
+  → 46 of 50 Sonar rules backed by Pascal-AST detector code,
     45 of those fully complete.
 
 📐 DFM detectors:                  23 (all complete)
@@ -448,7 +448,7 @@ Not an AST/per-file detector: runs only for `.dproj`/`.groupproj` scans (CLI `--
 | SCA194 | **NotIncludedInProject** | .pas/.dfm in the project folder but not referenced by the project (.dproj/.groupproj) - orphaned / dead source | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas referenced via uses by project units (compiles through the search path) but missing from the .dproj - add it to the project | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
-## 🧪 Result initialization (SCA196) — 1 rule
+## 🧪 Result initialization and later additions (SCA196–SCA205) — 10 rules
 
 Managed return types (string family, dynamic arrays, `Variant`, interfaces) return through a hidden **var** parameter aliasing the caller's target variable including its OLD content — Result is NOT `''`/`nil` on entry, and the compiler hint W1035 stays silent for exactly these types. Where SCA196 fires, SCA121 stays silent for the same function.
 

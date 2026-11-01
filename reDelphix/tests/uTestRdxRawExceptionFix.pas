@@ -42,6 +42,15 @@ type
     [Test] procedure OwnException_NoHelp;
     [Test] procedure OwnTargetClass_NoHelp;
     [Test] procedure OwnTargetVariable_NoHelp;
+    // ---- Realworld-Test rwE29 ----
+    [Test] procedure OldCompilerSwitch_NoHelp;
+    [Test] procedure NewCompilerSwitch_Helps;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure OwnException_OtherRoutine_Helps;
+    [Test] procedure OwnException_SameRoutine_NoHelp;
+    [Test] procedure MormotSymbols_NoHelp;
+    [Test] procedure ModernProof_RefutesTrace;
+    [Test] procedure FpcVersionSwitch_Helps;
   end;
 
 {$IFNDEF FPC}
@@ -61,6 +70,14 @@ type
     // ---- Tabellenzeile ----
     [Test] procedure Table_BothEntriesMarked;
     [Test] procedure Table_MissingSysUtils_AddsUses;
+    // ---- Realworld-Test rwE29 (uses im Text, PlanUses) ----
+    [Test] procedure Table_SysUtilsBehindKeywordSegment_NoSecondUses;
+    [Test] procedure Table_SysUtilsOnlyUnderCondition_NoHelp;
+    [Test] procedure Table_SysUtilsOnlyInComment_AddsUses;
+    // Fix-Runde 4: SysUtils nur bedingt, die Stelle im selben Zweig.
+    [Test] procedure Table_SysUtilsInSiteBranch_NoUses;
+    // ---- Realworld-Test rwE30 Stufe 2 (Plattenblick, Sperre bei Beleg) ----
+    [Test] procedure Table_OldProjectNearby_NoHelp;
   end;
 {$ENDIF}
 
@@ -73,6 +90,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uRaisingRawException,
   uRdxRecipeRunner,      // TRdxFixOutcome
   uRdxFixTable,          // TRdxFixTable.CaptionFor
+  uRdxPlacesRunner,      // R_USES_ONLY_CONDITIONAL (PlanUses)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRawExceptionFix,
@@ -355,6 +373,138 @@ begin
     True);
 end;
 
+// Eine Unit mit zwei Methoden: Other (AOther: Kopf-Rest und Rumpf) und
+// Check (raise in Zeile LineOf 'raise ').
+function TwoRoutines(const AIface: string; const AOther: array of string;
+  const ACheckHead: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'uses SysUtils;', AIface,
+    'implementation']) + #13#10 + Join(AOther) + #13#10
+    + Join([ACheckHead, 'begin', '  if X < 0 then',
+    '    raise Exception.Create(''bad index'');', 'end;', 'end.']);
+end;
+
+procedure TTestRdxRawExceptionFix.OwnException_OtherRoutine_Helps;
+var
+  Src : string;
+begin
+  // Alcinoe Archive\Source\Alcinoe.FBX.Lib.pas:3040 - 'Exception:
+  // EALFBXError' ist eine lokale Variable der verschachtelten Prozedur
+  // RaiseException einer ANDEREN Methode; bis dahin sperrte die Datei
+  // ('die Datei deklariert ein eigenes "Exception"').
+  Src := TwoRoutines('', ['procedure Other(const S: Integer);',
+    '  procedure RaiseException(const Excep: TClass);', '  var',
+    '    Exception: TObject;', '  begin', '    Exception := nil;', '  end;',
+    'begin', '  RaiseException(nil);', 'end;'],
+    'procedure CheckRange(X: Integer);');
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // issrc Setup.MainFunc.pas:523 - Parameter 'const Exception: AnsiString'
+  // einer anderen Routine, im interface deklariert und implementiert.
+  Src := TwoRoutines('procedure OnException(const Exception: AnsiString; '
+    + 'const Position: Cardinal);',
+    ['procedure OnException(const Exception: AnsiString; '
+    + 'const Position: Cardinal);', 'begin', '  Log(String(Exception));',
+    'end;'], 'procedure CheckRange(X: Integer);');
+  Assert.AreEqual(Retyped(Src, RAWEXC_INVALID_OP), Fixed(Src,
+    LineOf(Src, 'raise '), True));
+end;
+
+procedure TTestRdxRawExceptionFix.OwnException_SameRoutine_NoHelp;
+var
+  Src : string;
+begin
+  // Gegenproben: dieselbe Routine (Parameter bzw. lokale Variable), eine
+  // lokale Prozedur, deren Variable das raise sieht, eine globale Variable
+  // und ein Feld - dort gilt der Name am raise.
+  Src := TwoRoutines('', [], 'procedure CheckRange(X: Integer; Exception: '
+    + 'TObject);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('', [], 'procedure CheckRange(X: Integer);' + #13#10
+    + 'var' + #13#10 + '  Exception: TObject;');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := Join(['unit t;', 'interface', 'implementation', 'uses SysUtils;',
+    'procedure Outer(X: Integer);', 'var', '  Exception: TObject;',
+    '  procedure Inner;', '  begin',
+    '    raise Exception.Create(''x'');', '  end;', 'begin', 'end;',
+    'end.']);
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('var' + #13#10 + '  Exception: TObject;', [],
+    'procedure CheckRange(X: Integer);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+  Src := TwoRoutines('type' + #13#10 + '  TFoo = class' + #13#10
+    + '    procedure Bar;' + #13#10 + '    Exception: TObject;' + #13#10
+    + '  end;', [], 'procedure TFoo.CheckRange(X: Integer);');
+  AssertRefused(Src, LineOf(Src, 'raise '), _(R_RAWEXC_OWN, ['Exception']));
+end;
+
+procedure TTestRdxRawExceptionFix.MormotSymbols_NoHelp;
+var
+  Src : string;
+begin
+  // delphimvcframework lib\dmustache\mormot.core.base.pas:7259 - mORMot 2
+  // baut ab Delphi 7: '{$ifndef ISDELPHI2007ANDUP}' (Z. 361), dazu
+  // '{$I mormot.defines.inc}'; mORMot2 mormot.core.base.pas:8475 -
+  // '{$ifndef FPC_OR_UNICODE}' (Delphi vor 2009).
+  Src := WrapWith(['{$ifndef ISDELPHI2007ANDUP}', 'type PtrInt = Integer;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['ISDELPHI2007ANDUP', 3, RAWEXC_ARGUMENT]));
+  Src := WrapWith(['{$ifndef FPC_OR_UNICODE}', 'type RawUtf8 = AnsiString;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['FPC_OR_UNICODE', 3, RAWEXC_INVALID_OP]), True);
+  // Das Kit-Include fragt seit rwE32 Stufe 4 der Plattenblick (ProjectReason,
+  // uTestRdxMagicGuards.Disk_ExceptionClasses_KitIncludeModernProject) - ein
+  // Projekt der Unit ab 2009 widerlegt es; der Planer allein hilft.
+  Src := WrapWith(['{$I mormot.defines.inc}'], ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // Gegenprobe: ISDELPHIXE2 ist nach Delphi 2009.
+  Src := WrapWith(['{$ifdef ISDELPHIXE2}', 'type PtrInt = NativeInt;',
+    '{$endif}'], ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+end;
+
+procedure TTestRdxRawExceptionFix.ModernProof_RefutesTrace;
+var
+  Src : string;
+begin
+  // Eine Inline-Variable ausserhalb jeder Weiche beweist Delphi 10.3: die
+  // Weiche fuer Delphi 7 ist dort toter Code.
+  Src := WrapWith(['{$IFDEF VER150}', 'type PtrInt = Integer;', '{$ENDIF}'],
+    ['  for var i := 1 to X do', '    raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // Gegenprobe: unter einer Weiche beweist sie nichts.
+  Src := WrapWith(['{$IFDEF VER150}', 'type PtrInt = Integer;', '{$ENDIF}'],
+    ['  {$IFNDEF VER150} for var i := 1 to X do Foo; {$ENDIF}',
+    '  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['VER150', 3, RAWEXC_ARGUMENT]));
+end;
+
+procedure TTestRdxRawExceptionFix.FpcVersionSwitch_Helps;
+var
+  Src : string;
+begin
+  // rwE32 Stufe 4 (doublecmd src\umaincommands.pas:4399, dort SCA168.2 -
+  // dieselbe Schwelle FLOOR_EXCEPTION_CLASSES): '{$IF FPC_FULLVERSION >=
+  // 020501}' fragt nur nach FPC, das die Klassen kennt - kein Beleg fuer
+  // ein altes Delphi. Bis dahin 'die Datei fragt nach alten Compilern
+  // (FPC_FULLVERSION >= 020501 ..)'.
+  Src := WrapWith(['{$IF FPC_FULLVERSION >= 020501}', 'type PtrInt = Integer;',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, RAWEXC_ARGUMENT), Fixed(Src,
+    LineOf(Src, 'raise ')));
+  // Gegenprobe: eine Delphi-Weiche vor 2009 sperrt weiter.
+  Src := WrapWith(['{$IF CompilerVersion < 20}', 'type PtrInt = Integer;',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILERVERSION < 20', 3, RAWEXC_ARGUMENT]));
+end;
+
 procedure TTestRdxRawExceptionFix.OwnTargetClass_NoHelp;
 var
   Src : string;
@@ -386,6 +536,56 @@ begin
     ['  raise Exception.Create(''x'');']);
   AssertRefused(Src, LineOf(Src, 'raise '),
     _(R_RAWEXC_OWN, [RAWEXC_ARGUMENT]));
+end;
+
+procedure TTestRdxRawExceptionFix.OldCompilerSwitch_NoHelp;
+var
+  Src : string;
+begin
+  // rwE29, cnwizards ThirdParty\PascalScript\uPSRuntime.pas:5927 (gebaut
+  // nur mit Delphi 5-2007): die Unit fragt '{$IFDEF DELPHI3UP }' - dort
+  // gibt es EArgumentException und EInvalidOpException nicht (erst ab
+  // Delphi 2009), die Hilfe brach den Bau (E2003). Ohne die Sperre bekaeme
+  // diese Quelle beide Eintraege (die Datei deklariert nichts, SysUtils
+  // steht in uses).
+  Src := WrapWith(['{$IFDEF DELPHI3UP }', 'uses ActiveX;', '{$ENDIF}'],
+    ['  if X < 0 then raise Exception.Create(''bad index'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['DELPHI3UP', 3, RAWEXC_ARGUMENT]));
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['DELPHI3UP', 3, RAWEXC_INVALID_OP]), True);
+  // Die Schwelle selbst zaehlt mit: wer nach Delphi 2009 fragt, baut auch
+  // davor.
+  Src := WrapWith(['{$IF CompilerVersion >= 20}', '{$DEFINE NEWRTL}',
+    '{$IFEND}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILERVERSION >= 20', 3, RAWEXC_ARGUMENT]));
+  // rwE33 Stufe 5 (jvcl install\JVCLInstall\Compile.pas:512): steht danach
+  // eine Weiche, die den alten Zweig selbst nennt ('{$IFNDEF
+  // COMPILER12_UP}'), nennt der Grund sie - bis dahin 'COMPILERVERSION >=
+  // 20.0, Zeile 3'.
+  Src := WrapWith(['{$IF CompilerVersion >= 20.0}', '{$DEFINE NEWRTL}',
+    '{$IFEND}', '{$IFNDEF COMPILER12_UP}', 'type PtrInt = Integer;',
+    '{$ENDIF}'], ['  raise Exception.Create(''x'');']);
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILER12_UP', 6, RAWEXC_ARGUMENT]));
+  AssertRefused(Src, LineOf(Src, 'raise '),
+    _(R_RAWEXC_OLD, ['COMPILER12_UP', 6, RAWEXC_INVALID_OP]), True);
+end;
+
+procedure TTestRdxRawExceptionFix.NewCompilerSwitch_Helps;
+var
+  Src : string;
+begin
+  // Gegenprobe: eine Weiche, die nur neuere Compiler nennt (VER330 = 10.3,
+  // FPC-Weiche - FPC 3.2.2 kennt beide Klassen), sperrt nicht.
+  Src := WrapWith(['{$IFDEF VER330}', '{$DEFINE RIO}', '{$ENDIF}',
+    '{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}'],
+    ['  raise Exception.Create(''x'');']);
+  Assert.AreEqual(Retyped(Src, 'EArgumentException'),
+    Fixed(Src, LineOf(Src, 'raise ')));
+  Assert.AreEqual(Retyped(Src, 'EInvalidOpException'),
+    Fixed(Src, LineOf(Src, 'raise '), True));
 end;
 
 {$IFNDEF FPC}
@@ -582,6 +782,48 @@ begin
   Assert.AreEqual(Retyped(Src, 'EInvalidOpException'), Apply(Src, O.Edits));
 end;
 
+procedure TTestRdxRawExceptionDetector.Table_OldProjectNearby_NoHelp;
+var
+  Root, U, Dof, Src : string;
+  S                 : TSeen;
+  Seen              : TArray<TSeen>;
+  O                 : TRdxFixOutcome;
+begin
+  // gexperts Extras\NewEditor\GX_eAlign.pas:302: GExperts baut mit Delphi
+  // 3-6 (GExpert4.dof zwei Ebenen hoeher, keine .dproj) - dort gibt es
+  // weder EArgumentException noch EInvalidOpException. Die Unit selbst
+  // fragt nach keinem Compiler; ohne den Plattenblick des Adapters
+  // (TRdxMagicFixes.ProjectReason, lfExceptionClasses) boeten beide
+  // Eintraege an. Gegenprobe: ohne die .dof.
+  Src := Wrap(['  raise Exception.Create(''No Editor Interface'');']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  S := Seen[0];
+  Root := NewTempDir('rdx_s127_');
+  try
+    U := Root + 'gx' + PathDelim + 'Extras' + PathDelim + 'NewEditor'
+      + PathDelim;
+    ForceDirectories(U);
+    U := U + 'GX_eAlign.pas';
+    Dof := Root + 'gx' + PathDelim + 'GExpert4.dof';
+    WriteText(Dof, '[Compiler]');
+    O := PlanFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsFalse(O.Enabled, 'erster Eintrag gesperrt');
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+    O := PlanAltFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsFalse(O.Enabled, 'zweiter Eintrag gesperrt');
+    Assert.IsTrue(Pos('GExpert4.dof', O.Reason) > 0, O.Reason);
+    DeleteFile(Dof);
+    O := PlanFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    O := PlanAltFixIn(Src, U, fkRaisingRawException, S);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
+end;
+
 procedure TTestRdxRawExceptionDetector.Table_MissingSysUtils_AddsUses;
 var
   Src, Done : string;
@@ -602,6 +844,87 @@ begin
   Assert.IsTrue(Pos('raise EArgumentException.Create(''x'');', Done) > 0, Done);
   Assert.IsTrue(Pos('SysUtils', Done) > 0, Done);
   Assert.AreEqual<Integer>(0, Length(Detect(Done)), 'der Detektor schweigt');
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsBehindKeywordSegment_NoSecondUses;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // rwE29, MVCFramework.Serializer.JsonDataObjects.pas:2161: der Parser
+  // bricht das interface-uses am Glied 'Abstract' (ein Schluesselwort) ab,
+  // 'System.SysUtils' dahinter fehlt im Baum - die Hilfe fuegte es ein
+  // zweites Mal ins implementation-uses ein (E2004). Ohne den Blick auf den
+  // Text (PlanUses) kaemen zwei Ersetzungen und ' + uses System.SysUtils'.
+  Src := Join(['unit t;', 'interface', 'uses', '  System.Classes,',
+    '  MVCFramework.Serializer.Abstract,', '  System.SysUtils;',
+    'implementation', 'uses', '  System.SysConst;',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur der Klassenname');
+  Assert.AreEqual<Integer>(0, Pos(' + uses', O.Hint), O.Hint);
+  O := PlanFirst(Src, True, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(1, Length(O.Edits), 'nur der Klassenname (Alt)');
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsOnlyUnderCondition_NoHelp;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Der Baum sieht SysUtils nicht (Klausel am 'Abstract' abgebrochen), im
+  // Text steht es nur unter '{$IFDEF FPC}' (Zeile 5) - ob im gebauten
+  // Zweig, ist offen: gesperrt (rwE29, mormot.crypt.openssl.pas: sysutils
+  // nur im {$ifdef USE_OPENSSL}-Zweig, die Hilfe fuegte es in den anderen
+  // ein). Ohne den Fix fuegte PlanUses System.SysUtils ein.
+  Src := Join(['unit t;', 'interface', 'uses', '  Foo.Abstract,',
+    '  {$IFDEF FPC} SysUtils, {$ENDIF}', '  Classes;', 'implementation',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsFalse(O.Enabled, 'gesperrt');
+  Assert.AreEqual(_(R_USES_ONLY_CONDITIONAL, ['System.SysUtils', 5,
+    MsgByHand]), O.Reason);
+  Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+// Fix-Runde 4 (Folge rwE31): beide Eintraege gaben PlanUses keine Zeile
+// (AppendUses ohne AAtLine) - ein nur bedingt eingebundenes SysUtils
+// sperrte auch dann, wenn derselbe Zweig die ganze Unit samt raise
+// umschliesst (rot ohne Fix: R_USES_CONDITIONAL). Gegenprobe je Eintrag:
+// der Zweig endet hinter der Klausel - gesperrt.
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsInSiteBranch_NoUses;
+const
+  IMPL = 'procedure Foo(X: Integer);'#13#10'begin'#13#10
+    + '  raise Exception.Create(''x'');'#13#10'end;';
+begin
+  AssertBranchUses('SysUtils', 'System.SysUtils', IMPL,
+    fkRaisingRawException, False, 1, DetectKind);
+  AssertBranchUses('SysUtils', 'System.SysUtils', IMPL,
+    fkRaisingRawException, True, 1, DetectKind);
+end;
+
+procedure TTestRdxRawExceptionDetector.Table_SysUtilsOnlyInComment_AddsUses;
+var
+  Src : string;
+  S   : TSeen;
+  O   : TRdxFixOutcome;
+begin
+  // Gegenprobe zum Blick auf den Text: 'uses SysUtils' nur in einem
+  // Block-Kommentar und hinter '//' zaehlt nicht - die Einfuegung bleibt.
+  Src := Join(['unit t;', 'interface', 'implementation',
+    '{ uses SysUtils; }', 'uses System.Classes; // uses SysUtils;',
+    'procedure Foo(X: Integer);', 'begin',
+    '  raise Exception.Create(''x'');', 'end;', 'end.']);
+  O := PlanFirst(Src, False, S);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(2, Length(O.Edits), 'Klassenname und uses');
+  Assert.IsTrue(Pos(' + uses ', O.Hint) > 0, O.Hint);
 end;
 
 {$ENDIF}

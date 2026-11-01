@@ -47,7 +47,8 @@ Projekt-Code versioniert — Drift-Risiko.
 ### Variante C — CLI
 
 ```powershell
-analyser.d12.exe --path . --full --custom-rules profile-strict.yml --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --full --custom-rules profile-strict.yml `
+  --report-sarif sca.sarif
 ```
 
 Vorteil: pro CI-Pipeline ein anderes Profil möglich (z.B. `strict`

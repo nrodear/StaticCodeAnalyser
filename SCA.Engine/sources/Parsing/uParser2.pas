@@ -113,6 +113,10 @@ type
     // nichts; SkipTo/SkipToSemicolon/SkipBalanced/GuardAdvance laufen ueber
     // Next und sind damit abgedeckt.
     FLastConsumed: TTokenKind;
+    // Zeile des zuletzt konsumierten Tokens - dieselben zwei Konsumpunkte,
+    // dieselbe Invariante wie FLastConsumed. Einziger Leser:
+    // ParseMethodImpl, das daraus TAstNode.EndLine der Routine setzt.
+    FLastConsumedLine: Integer;
 
     // Kann ein UMGEBENDER Rahmen ein liegengelassenes 'else' ueberhaupt
     // AUFNEHMEN? Nur dann darf ParseIfStmt ein else ablehnen (Begruendung
@@ -377,6 +381,7 @@ constructor TParser2.Create;
 begin
   inherited;
   FLastConsumed  := tkUnknown; // ParseSource setzt pro Datei nach
+  FLastConsumedLine := 0;      // dito
   FElseTakerOpen := False;     // dito
 end;
 
@@ -522,6 +527,7 @@ begin
     // Gurt fuer den Fall, dass jemand spaeter einen Rahmen ohne finally
     // ergaenzt - die Datei-Grenze bleibt dann trotzdem sauber.
     FLastConsumed  := tkUnknown;
+    FLastConsumedLine := 0;
     FElseTakerOpen := False;
     // Recovery-Zustand pro Datei zuruecksetzen (2026-07-04): ein Parser-
     // Objekt kann mehrere Dateien nacheinander parsen; Reste einer
@@ -585,6 +591,7 @@ begin
       'pathologisch, Analyse abgebrochen.', [MAX_NEXT_CALLS]);
   Result := FLex.Next;
   FLastConsumed := Result.Kind; // Konsumpunkt 1 von 2 (siehe Feld-Kommentar)
+  FLastConsumedLine := Result.Line;
 end;
 
 procedure TParser2.GuardAdvance(StartCount: Integer);
@@ -817,6 +824,7 @@ begin
   begin
     Inc(FConsumeCount);  // Fortschritt - GuardAdvance MUSS ihn sehen
     FLastConsumed := K;
+    FLastConsumedLine := Dummy.Line;
   end;
 end;
 
@@ -2321,14 +2329,26 @@ begin
     ParseLocalVarSection(MNode);
   end;
 
+  // Rumpf-Ende festhalten (TAstNode.EndLine): die Zeile des letzten
+  // konsumierten Tokens nach dem Rumpf, also des schliessenden 'end' bzw.
+  // des ';' dahinter. FillMissingMethodNames ordnet eine Fundzeile nur
+  // dann dieser Routine zu, wenn sie in [Line, EndLine] liegt - ohne das
+  // Ende landete ein Kommentar ZWISCHEN zwei Routinen bei der vorigen
+  // und eine Zeile vor der ersten Implementierung bei der letzten
+  // Interface-Deklaration. Ohne begin/asm (kopflose Routine) bleibt
+  // EndLine 0: keine Spanne, keine Zuordnung.
   if Tok.Kind = tkKwBegin then
-    ParseBlock(MNode)
+  begin
+    ParseBlock(MNode);
+    MNode.EndLine := FLastConsumedLine;
+  end
   else if Tok.Kind = tkKwAsm then
   begin
     Next;
     SkipTo([tkKwEnd, tkEof]);
     Eat(tkKwEnd);
     Eat(tkSemicolon);
+    MNode.EndLine := FLastConsumedLine;
   end;
 end;
 

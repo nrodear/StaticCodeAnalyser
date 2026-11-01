@@ -2,16 +2,14 @@
 
 // Gemeinsame Basis fuer Tools>Options-Pages des Plugins.
 //
-// Beide Options-Pages (uIDESCAOptions.TSCAAddInOptions /
-// uIDESonarOptions.TSonarAddInOptions) hatten den identischen Cycle:
+// Eine Options-Page (uIDESCAOptions.TSCAAddInOptions) braucht diesen Cycle:
 //   * FFrame + FThemeSub als Felder
 //   * OnThemeChanged ruft TIDETheme.Apply(FFrame)
 //   * FrameCreated:  Cast + DoLoadFrame + TIDETheme.Apply + Subscribe
 //   * DialogClosed:  try DoSaveFrame finally Theme-Cleanup
 //   * ValidateContents := True / GetHelpContext := 0 / GetArea := ''
-// Das war ~80 Lines, dupliziert. Diese Base-Klasse zieht das auf ein
-// Spot zusammen; Konkrete Pages ueberschreiben nur LoadFrame, SaveFrame,
-// GetCaption, GetFrameClass.
+// Diese Base-Klasse zieht das an eine Stelle zusammen; konkrete Pages
+// ueberschreiben nur LoadFrame, SaveFrame, GetCaption, GetFrameClass.
 //
 // LIFECYCLE
 //   IDE ruft FrameCreated wenn der User die Page oeffnet, DialogClosed

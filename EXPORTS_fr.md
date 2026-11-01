@@ -9,15 +9,15 @@ le produire, et les six workflows que les équipes pratiquent réellement.
 
 Les flux de travail ont été vérifiés contre des binaires compilés
 (v0.9.14 et suivants) ; les sections sur le rapport d'atelier décrivent
-l'état 0.9.18. Là où un chemin est aujourd'hui cassé, c'est indiqué —
+l'état 0.9.19. Là où un chemin est aujourd'hui cassé, c'est indiqué —
 contournement compris.
 
 ---
 
 ## La première chose à savoir
 
-`analyser.exe` est **un seul binaire à deux modes**. Lancé sans
-arguments, il démarre l'interface graphique ; dès que le premier
+`StaticCodeAnalyser.d12.exe` est **un seul binaire à deux modes**. Lancé
+sans arguments, il démarre l'interface graphique ; dès que le premier
 argument commence par `-`, il bascule en CLI sans interface. « GUI
 uniquement » ne signifie donc jamais « programme différent », mais
 *inaccessible depuis un script*.
@@ -74,6 +74,32 @@ lignes affichées.
 signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
 et n'équivaut pas au profil curé `default`.
 
+**Aides d'édition dans les deux rapports HTML.** Pour une règle dotée d'une
+**aide d'édition** (une action de code du module IDE reDelphix :
+ampoule, Ctrl+Alt+F), la page de `--report-html` nomme les aides —
+activé par défaut ; `--html-no-editor-help` les omet, et la page est
+alors exactement celle sans elles. Le rapport par règle reçoit une
+colonne *Aides d'édition* avec la liste de chaque règle, une entrée par
+entrée de menu : l'id (`SCA017`, `SCA017.2` pour une deuxième entrée),
+le texte de menu lu depuis son slug (`put-debug-output-in-ifdef-debug`
+devient « Put debug output in ifdef debug » : les tirets deviennent
+des espaces, la première lettre une majuscule — la CLI ne lie pas
+reDelphix et ne connaît pas le texte de menu lui-même) et l'effet,
+traduit par le sélecteur de langue de la page (comportement inchangé /
+modifie le comportement / selon l'occurrence / modèle, n'écrit rien).
+Le détail d'un résultat montre la même liste sur une ligne, « Aides
+d'édition : … ». La liste figure **une fois par règle** ; un résultat
+ne porte qu'une référence d'environ 40 octets, le rapport ne grossit
+donc pas de la liste avec le nombre de résultats. La liste vient du
+catalogue de règles (`editorHelps`), comme le champ SARIF plus bas. La
+**page d'atelier** de l'interface et de l'IDE montre la même liste,
+dans la langue de la page, comme première ligne de la documentation de
+règle dans le panneau — une fois par règle, sans un octet de plus par
+résultat (le menu d'export l'inclut toujours ; dans le code
+`AEditorHelp` de `TFindingsWorkbenchExport.BuildHtml`/`Run`, activé
+par défaut). Les autres exports (CSV, JSON, Sonar) ne portent aucune
+aide d'édition ; SARIF ne les nomme qu'avec `--sarif-editor-help`.
+
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de
 recherche par résultat — c'est pourquoi elle reste environ deux fois
@@ -117,6 +143,13 @@ que SARIF et l'export Sonar — et `ruleID` est le nom antérieur à
 0.9.19, conservé pour ne pas casser les lecteurs existants. Même
 valeur dans les deux ; préférer `ruleId`, `ruleID` est déprécié.
 
+**Méthode vide.** La méthode d'un résultat (CSV, JSON, HTML, atelier,
+référence) n'est renseignée que si la ligne se trouve dans une routine.
+Un résultat sur un commentaire, une déclaration de classe ou dans un
+fichier de fiche a une méthode vide. C'est nouveau en 0.9.19 et change
+l'empreinte de ces résultats ; une référence avec `contextHash` les
+reconnaît tant que les lignes autour restent inchangées.
+
 ---
 
 ## Workflow 1 — Gate CI : faire échouer le build sur les nouveaux résultats
@@ -127,11 +160,17 @@ d'aujourd'hui pour que le build de demain ne se plaigne que de ce qui a
 
 ```bash
 # une seule fois, pour consigner l'état actuel
-analyser.exe --path . --write-baseline .sca/sca.baseline.json
+StaticCodeAnalyser.d12.exe --path . --write-baseline .sca/sca.baseline.json
 
 # à chaque build
-analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+StaticCodeAnalyser.d12.exe --path . --baseline .sca/sca.baseline.json \
+  --report-sarif build/sca.sarif
 ```
+
+**Une entrée de référence couvre un résultat.** Depuis 0.9.19, la référence
+compte : deux entrées de même empreinte couvrent deux résultats, un
+troisième est nouveau. Avant, une entrée masquait tous les résultats de
+cette empreinte ; ces résultats apparaissent donc comme nouveaux.
 
 Les codes de sortie sont gradués : `0` propre, non nul quand des
 résultats subsistent après le filtre de référence.
@@ -161,8 +200,8 @@ chose. `--write-baseline auto` écrit au même emplacement `.sca`, la
 paire se passe donc de chemins codés en dur :
 
 ```bash
-analyser.exe --path . --write-baseline auto        # une seule fois
-analyser.exe --path . --baseline-scan y            # à chaque build
+StaticCodeAnalyser.d12.exe --path . --write-baseline auto    # une seule fois
+StaticCodeAnalyser.d12.exe --path . --baseline-scan y        # à chaque build
 ```
 
 `--baseline-scan n` est le contraire explicite : tourner sans référence
@@ -197,7 +236,8 @@ nouveau tout l'arriéré. Pour rafraîchir, écrivez une référence fraîche
 ## Workflow 2 — Revue de pull request : seulement ce qui a changé
 
 ```bash
-analyser.exe --path . --diff main...HEAD --report-html build/review.html
+StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
+  --report-html build/review.html
 ```
 
 `--branch` utilise l'ensemble des fichiers modifiés selon le
@@ -222,24 +262,17 @@ pas d'API publique d'ingestion pour les issues externes. SCA écrit le
 fichier, et `sonar-scanner` l'achemine.
 
 ```bash
-analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+StaticCodeAnalyser.d12.exe --path . --base-dir . \
+  --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
-> **⚠️ Cassé dans le ZIP livré — à lire avant d'essayer.** L'archive de
-> release ne contient que l'EXE. Sans `rules/sca-rules.json` à côté, le
-> catalogue de règles retombe sur un substitut intégré qui émet `type`
-> au lieu de `cleanCodeAttribute` + `impacts`, et **SonarQube rejette
-> le rapport entier** (vérifié contre les vrais validateurs du
-> scanner-engine : 10.7 signale *missing mandatory field
-> 'cleanCodeAttribute'*, 2025.x *missing mandatory field 'severity'*).
-> L'exécution a l'air réussie et le fichier est écrit — seul le tableau
-> de bord reste vide.
->
-> **Contournement :** copier le dossier `rules/` du dépôt à côté de
-> l'EXE. Avec le catalogue présent, l'export est validé sur toutes les
-> générations de moteur testées. Un `rules/sca-rules.json` corrompu
-> dégrade de la même manière, tout aussi silencieusement.
+Guide rapide avec les erreurs à éviter : [sonarHowto_fr.md](sonarHowto_fr.md).
+
+> **Gardez `rules/sca-rules.json` à côté de l'EXE.** Le ZIP de release le
+> contient. Sans lui, le catalogue de règles retombe sur un substitut
+> intégré : le rapport reste valide, mais ses règles portent des attributs
+> et des impacts grossiers au lieu des valeurs du catalogue.
 
 Les chemins du rapport sont relatifs à `--base-dir` (défaut :
 `--path`) ; lancez donc l'export avec la même racine que celle
@@ -259,10 +292,61 @@ exécution qui n'a produit *que* des erreurs de lecture exporte donc
 ligne console, pas le tableau de bord, pour savoir si un scan était
 complet.
 
+### Ce qui change pour les utilisateurs existants (correctif d'export, octobre 2026)
+
+Si vous importez déjà les constats SCA dans SonarQube, la première analyse
+après la mise à jour déplace des issues — une seule fois. Sonar associe
+les issues par règle, fichier et ligne ; chaque changement ci-dessous
+apparaît donc dans la période de nouveau code comme *fermé* plus *nouveau*.
+
+- **De nouvelles issues apparaissent.**
+  - Les fichiers de fiche dont l'extension s'écrit autrement sur le
+    disque (`ABOUT.DFM` au lieu de `ABOUT.dfm`) étaient écartés
+    silencieusement par Sonar comme fichiers inconnus. L'export reprend
+    désormais l'orthographe du disque (corpus de référence : 960 issues).
+  - Les règles personnalisées avec `severity: hint` manquaient
+    entièrement ; elles sont désormais exportées.
+  - Les constats plafonnés par la politique de preuve (confiance *medium*
+    → au plus Warning) ne comptent plus comme rétrogradés. SCA001, SCA003,
+    SCA004 et d'autres arrivent maintenant dans Sonar (corpus de
+    référence : +726 issues). Seule une rétrogradation que vous avez
+    configurée vous-même (`[PathOverrides]`) reste dehors ;
+    `--sonar-keep-downgraded` la ramène toujours.
+- **Les règles plafonnées portent la sévérité plafonnée.** L'impact suit
+  les constats de l'analyse : si même le constat le plus fort d'une règle
+  est plafonné, la règle reçoit cette sévérité comme impact — SCA004 sans
+  constat prouvé arrive en SECURITY/MEDIUM au lieu de BLOCKER, SCA202 en
+  RELIABILITY/MEDIUM. Un seul constat de pleine sévérité garde les impacts
+  du catalogue pour toute la règle, car Sonar ne connaît la sévérité que
+  par règle ; l'impact peut donc changer d'une analyse à l'autre, les
+  issues restent. Avec `[Rules] EvidenceTiering=0`, les impacts du
+  catalogue restent.
+- **Fiches binaires au niveau fichier.** Les issues dans des fichiers
+  `.dfm` binaires, et celles sur une ligne au-delà de la fin du fichier,
+  n'ont plus de ligne. Auparavant, une telle ligne pouvait faire échouer
+  le scanner (*« N is not a valid line for pointer »*). Sonar ferme les
+  anciennes issues liées à une ligne et en ouvre au niveau fichier.
+- **Nom et impact des règles personnalisées.** Chaque règle personnalisée
+  a désormais son propre nom (`User-defined custom rule PROJ001`) et un
+  impact qui suit sa sévérité YAML (error → HIGH, warning → MEDIUM,
+  hint → LOW) au lieu de l'espace réservé commun MAINTAINABILITY/MEDIUM.
+- **`engineId` uniquement sur la règle.** L'`engineId` au niveau de
+  l'issue — un champ de l'ancien format — disparaît. Les scripts qui lisent
+  le JSON directement prennent le moteur dans `rules[].engineId`.
+- **Version minimale du serveur.** Les sévérités d'impact BLOCKER et INFO
+  exigent SonarQube 10.8 ou plus récent (Server 2025.x, Community Build).
+  Sur 10.3–10.7, un rapport qui les contient est invalide. SCA026 porte
+  toujours BLOCKER, SCA004 dès qu'une analyse a un résultat prouvé (un
+  motif de jeton connu).
+
+Sonar résout `filePath` par rapport à `sonar.projectBaseDir` (le dossier
+du `sonar-project.properties`), et non par rapport à `sonar.sources` —
+donnez ce dossier à `--base-dir`.
+
 ## Workflow 4 — Code scanning GitHub / Azure
 
 ```bash
-analyser.exe --path . --base-dir . --report-sarif sca.sarif
+StaticCodeAnalyser.d12.exe --path . --base-dir . --report-sarif sca.sarif
 ```
 
 Le SARIF porte des `partialFingerprints` (hachage de ligne +
@@ -279,6 +363,29 @@ de résultats : basculer l'ini entre le scan et l'export ne peut pas
 mélanger niveaux et confiances de deux mondes différents. Avec
 `EvidenceTiering=0`, le SARIF est identique octet pour octet à la
 sortie d'avant 0.9.18.
+
+Avec **`--sarif-editor-help`** (désactivé par défaut ; sans lui le
+SARIF reste inchangé), un résultat d'une règle dotée d'une **aide
+d'édition** (une action de code du module IDE reDelphix : ampoule,
+Ctrl+Alt+F) porte `properties.editorHelp`, une entrée `id:effect:slug`
+par entrée de menu, sur une seule ligne :
+
+```json
+"editorHelp": ["SCA017:changes:put-debug-output-in-ifdef-debug","SCA017.2:changes:delete-debug-output"]
+```
+
+`id` est l'ID de la règle, `<ID de règle>.2` pour une deuxième entrée ;
+`effect` vaut `same` (comportement inchangé), `changes` (change le
+comportement — jamais via Ctrl+Alt+F), `depends` (selon le résultat)
+ou `template` (n'écrit rien dans le source : SCA003 copie un modèle SQL
+paramétré dans le presse-papiers) ; `slug` nomme le texte du menu. La
+liste vient du catalogue de règles (`editorHelps` dans
+`rules/sca-rules.json` ; la CLI ne lie pas reDelphix) : elle dit ce que
+la règle propose — si l'aide s'applique à ce résultat précis, c'est
+l'IDE qui en décide. Les résultats des règles sans aide ne portent pas
+ce champ ; `tool.driver.rules[]` porte la même liste dans les
+`properties` de chaque règle. Le menu d'export de l'interface et l'IDE
+n'écrivent jamais ce champ.
 
 Deux points à surveiller : un SARIF écrit par la **v0.9.14 ou une version
 antérieure** porte un BOM UTF-8 qui fait trébucher les uploaders basés sur
@@ -324,7 +431,6 @@ Liste honnête, état v0.9.14 — tout a été reproduit :
 
 | Domaine | Comportement |
 |---|---|
-| Export Sonar depuis le ZIP de release | rejeté par SonarQube ; livrer `rules/` à côté de l'EXE |
 | Rafraîchir la référence avec les deux options | tronque la référence aux seuls nouveaux résultats |
 | `--write-baseline` avec un simple nom de fichier | n'écrit pas |
 | Exports JSON | UTF-8 **avec** BOM — corrigé après v0.9.14, désormais sans BOM |
@@ -332,8 +438,6 @@ Liste honnête, état v0.9.14 — tout a été reproduit :
 | Empreintes de référence | les unités homonymes de dossiers différents partagent par défaut un même espace de noms — désactivable avec `--baseline-path-fingerprint y` (voir ci-dessous) |
 | Fichiers source illisibles | comptés différemment dans la console, SARIF/Sonar/HTML et la référence |
 | `--parallel` | déterministe depuis le 2026-08-20 (identique octet pour octet aux exécutions sérielles), mais sans gain de vitesse - la phase préalable sérielle domine |
-| `--sonar-insecure` | n'accepte pas les certificats auto-signés (il n'active que TLS 1.1) |
-| `--sonar-test` dans un dépôt étranger | un `sonar-project.properties` dans le dépôt scanné remplace votre hôte — votre jeton part là-bas |
 
 ---
 

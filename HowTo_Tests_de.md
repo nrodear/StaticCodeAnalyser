@@ -21,15 +21,15 @@ kann das TestProject im IDE-Build aushaengen (s. Workarounds unten).
 ### DUnitX (Pflicht — beide Plattformen)
 
 ```bash
-cd D:\git-demos\delphi
+cd D:\projects
 git clone https://github.com/VSoftTechnologies/DUnitX.git dunitx
 ```
 
-Im `TestProject.dproj` ist der Pfad `..\..\..\dunitx\Source` bereits in
-`DCC_UnitSearchPath` eingetragen (Commit `3f1cab0`). Andere Parent-
-Directory? Pfad in der dproj entsprechend anpassen oder via Tools ->
-Options -> Language -> Delphi -> Library global setzen (fuer **Win32
-und Win64** je separat).
+Neben das Repository klonen: im `TestProject.dproj` ist der Pfad
+`..\..\..\dunitx\Source` bereits in `DCC_UnitSearchPath` eingetragen.
+Andere Parent-Directory? Pfad in der dproj entsprechend anpassen oder via
+Tools -> Options -> Language -> Delphi -> Library global setzen (für
+**Win32 und Win64** je separat).
 
 ### TestInsight (optional — Win32 IDE-Integration)
 
@@ -54,12 +54,12 @@ Win32-Library-Path adden.
 |---|---|---|
 | SCA.Engine290.bpl | Win32 + Win64 | rtl, nichts extern |
 | SCA.SharedUI290.bpl | **nur Win32** | rtl, vcl, designide (IDE-only) |
-| StaticCodeAnalyser.exe (Standalone) | Win32 + Win64 | nichts extern |
-| StaticCodeAnalyser.IDE.bpl | **nur Win32** | rtl, vcl, designide |
-| **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32: TestInsight) |
+| StaticCodeAnalyser.d12.exe (Standalone) | Win32 + Win64 | nichts extern |
+| StaticCodeAnalyser.IDE.d12.bpl | **nur Win32** | rtl, vcl, designide |
+| **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (siehe unten) |
 
-Die Group baut mit "Alle Projekte erzeugen" alle 5 Targets auf der
-aktuell gewaehlten Plattform.
+Die Group baut mit "Alle Projekte erzeugen" jedes Projekt der Gruppe auf
+der aktuell gewählten Plattform.
 
 ---
 
@@ -121,19 +121,20 @@ das Projekt dann.
 
 Aequivalent direkt im `.groupproj`: Eintrag fuer TestProject auskommentieren.
 
-### TESTINSIGHT-Define plattform-gated
+### Der TESTINSIGHT-Define
 
-Im `TestProject.dproj` ist der Define nur fuer Win32 aktiv (Z133):
+Im `TestProject.dproj` steht der Define in der Base-Gruppe, gilt also für
+jede Plattform und Konfiguration:
 
 ```xml
-<PropertyGroup Condition="'$(Base_Win32)'!=''">
+<PropertyGroup Condition="'$(Base)'!=''">
   <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
 </PropertyGroup>
 ```
 
-Win64-Build ueberspringt damit automatisch die TestInsight-Imports und
-braucht das Plugin nicht. Wer TestInsight gar nicht haben will, kann
-den Eintrag ersatzlos loeschen.
+Auch der Win64-Build braucht damit die TestInsight-Units. Wer TestInsight
+gar nicht haben will, löscht den Eintrag ersatzlos; dann übernimmt der
+Console-Logger.
 
 ### EFOpenError-Dialog beim Test-Run
 
@@ -153,7 +154,7 @@ faengt sie ab und zeigt einen Dialog. Workaround:
 Generic-Inference scheitert unter Win64 wenn untyped Int-Literal +
 Integer kombiniert werden. Fix: expliziter Typ-Parameter
 `Assert.AreEqual<Integer>(N, X.Count)`. Bereits in 1209 Stellen der
-Suite gepatcht (Commit `5f1661c`). Bei neuen Tests beachten.
+Suite gepatcht. Bei neuen Tests beachten.
 
 ---
 
@@ -162,5 +163,5 @@ Suite gepatcht (Commit `5f1661c`). Bei neuen Tests beachten.
 - `StaticCodeAnalyserForm\tests\TestProject.dproj` — Test-Projekt-Config
 - `StaticCodeAnalyserForm\tests\TestProject.dpr` — Test-Runner-Code
 - `StaticCodeAnalyserForm\tests\uTest*.pas` — die einzelnen Test-Units
-- `HowTo_AddDetector.md` — wenn ein neuer Detektor + Tests anzulegen sind
-- `HowTo_DetectorSelftest.md` — Dogfooding-Workflow fuer das SCA-EXE
+- `reDelphix\tests\reDelphix.Test.dproj` — Tests der reDelphix-Code-Aktionen;
+  die Konfiguration `CI` ist ein Konsolen-Runner mit echtem Exit-Code

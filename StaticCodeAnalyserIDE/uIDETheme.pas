@@ -83,7 +83,7 @@ type
     // Cache wird beim Theme-Wechsel automatisch invalidiert.
     class function FrameBg: TColor; static;
 
-    // Hintergrund fuer die Tools>Options-Pages (SCA/Sonar): im DARK-Theme der
+    // Hintergrund fuer die Tools>Options-Page des SCA: im DARK-Theme der
     // kuratierte Ton IDE_BG_OPTIONS_FRAME (User-Wahl 2026-06-19), im LIGHT-Theme
     // die theme-korrekte System-Window-Farbe (FrameBg). Bugfix 2026-07-15:
     // vorher wurde die Dunkelfarbe bedingungslos gesetzt -> die Options-Page war

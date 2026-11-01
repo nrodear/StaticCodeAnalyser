@@ -7,9 +7,9 @@ unit uTestRdxFormatLocaleFix;
 // Detektor (TFormatMismatchDetector) laufen ueber den Einstieg der Tabelle
 // (TRdxFixTable.FixFor bzw. AlternativeFixFor, Adapter PlanFormatLocale/
 // PlanFormatLocaleAlt) und stehen in einer eigenen Fixture hinter
-// {$IFNDEF FPC} - die Text-Fixture bleibt FPC-tauglich. Im FPC-Pruefstand
-// steht die Unit nicht (uRdxFormatSettingsFix fehlt in der Unit-Liste von
-// build.sh).
+// {$IFNDEF FPC} - die Text-Fixture bleibt FPC-tauglich und laeuft seit
+// HilfeFix K (rwE31 Stufe 3) im FPC-Pruefstand (uRdxFormatSettingsFix steht
+// in der Unit-Liste von build.sh).
 // Prueft: Hilfe mit Literal, Konstante, Verkettung, verdoppeltem Quote,
 // RTL-Qualifizierung, der Bereich, der Alt-Weg samt Waehrungs-Spec; die
 // Sperren - anderer Formatstring, verschoben, zwei Format, qualifiziert,
@@ -39,10 +39,21 @@ type
     [Test] procedure Sca059_Moved_NoHelp;
     [Test] procedure Sca059_TwoFormats_NoHelp;
     [Test] procedure Sca059_QualifiedOrArity_NoHelp;
-    [Test] procedure Sca059_OpenOrFollowingLine_NoHelp;
+    [Test] procedure Sca059_OpenOrFollowingLine_Helps;
     [Test] procedure Sca059_Directive_NoHelp;
     [Test] procedure Sca059_FileChecks_NoHelp;
     [Test] procedure Sca059_Alt_FpcOrOldCompiler_NoHelp;
+    // ---- Realworld-Test rwE30 Stufe 2 ----
+    [Test] procedure Sca059_MultiLine_RealworldShapes;
+    [Test] procedure Sca059_FollowLine_OneFormat;
+    [Test] procedure Sca059_ShadowedSettings_Qualified;
+    [Test] procedure Sca059_Alt_InlineVarRefutesInclude;
+    // ---- Realworld-Test rwE31 Stufe 3 ----
+    [Test] procedure Sca059_Alt_ArgsReadFormatSettings_NoHelp;
+    // ---- Realworld-Test rwE32 Stufe 4 ----
+    [Test] procedure Sca059_Alt_Display_NoHelp;
+    // ---- Realworld-Test rwE33 Stufe 5 ----
+    [Test] procedure Sca059_Alt_CellTextParam_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -53,6 +64,8 @@ type
     [Test] procedure Sca059_Detector_CatalogExample;
     [Test] procedure Sca059_Detector_RoundTrip;
     [Test] procedure Sca059_Detector_TwoFormatsOnLine_NoHelp;
+    // ---- Realworld-Test rwE29: FPC-Weiche im Include ----
+    [Test] procedure Sca059_Detector_IncludeWithFpcSwitch_OnlyMainWay;
   end;
 {$ENDIF}
 
@@ -327,15 +340,22 @@ begin
     _(R_FS_NOT_CALL, ['Format']));
 end;
 
-procedure TTestRdxFormatLocaleFix.Sca059_OpenOrFollowingLine_NoHelp;
+procedure TTestRdxFormatLocaleFix.Sca059_OpenOrFollowingLine_Helps;
 begin
-  AssertRefused(InUnit(['  r := Format(''%.2f'',', '    [x]);']), BODY_LINE,
-    Msg('%.2f'), _(R_FS_OPEN, ['Format']));
-  AssertRefused(InUnit(['  r :=', '    Format(''%.2f'', [x]);']), BODY_LINE,
-    Msg('%.2f'), _(R_FS_NEXT_LINE, [BODY_LINE + 1]));
+  // rwE30 Stufe 2: die Klammer darf tiefer schliessen, das eine Format darf
+  // auf einer Folgezeile stehen (bis dahin R_FS_OPEN bzw. R_FS_NEXT_LINE).
+  AssertFixed(InUnit(['  r := Format(''%.2f'',', '    [x], FormatSettings);']),
+    InUnit(['  r := Format(''%.2f'',', '    [x]);']), BODY_LINE, Msg('%.2f'));
+  AssertFixed(InUnit(['  r :=', '    Format(''%.2f'', [x], FormatSettings);']),
+    InUnit(['  r :=', '    Format(''%.2f'', [x]);']), BODY_LINE, Msg('%.2f'));
+  // Zwei Format in der Anweisung bleiben gesperrt: der Detektor meldet
+  // eines, das andere bliebe ungeaendert.
   AssertRefused(InUnit(['  r := Format(''%.2f'', [x]) +',
     '    Format(''%.3f'', [x]);']), BODY_LINE, Msg('%.2f'),
     _(R_FS_CONTINUES, [BODY_LINE + 1]));
+  AssertRefused(InUnit(['  r :=', '    Format(''%.2f'', [x]) +',
+    '    Format(''%.3f'', [x]);']), BODY_LINE, Msg('%.2f'),
+    _(R_FS_CONTINUES, [BODY_LINE + 2]));
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Directive_NoHelp;
@@ -352,12 +372,14 @@ begin
     ['function Format(const F: string; const A: array of const): string; forward;'],
     ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'),
     _(R_FS_OWN_ROUTINE, ['Format']), True);
-  AssertRefused(UnitText(RTL_USES,
-    ['var', '  FormatSettings: TFormatSettings;'],
-    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 2, Msg('%.2f'),
-    _(R_FS_SHADOW, [7]));
+  // with: seit rwE31 Stufe 3 sperrt es nur den Alt-Weg, der Hauptweg nimmt
+  // die globale Variable qualifiziert.
   AssertRefused(InUnit(['  with Obj do r := Format(''%.2f'', [x]);']),
-    BODY_LINE, Msg('%.2f'), _(R_FS_WITH, [BODY_LINE]));
+    BODY_LINE, Msg('%.2f'), _(R_FS_WITH, [BODY_LINE]), True);
+  AssertFixed(InUnit(['  with Obj do r := Format(''%.2f'', [x], '
+    + 'System.SysUtils.FormatSettings);']),
+    InUnit(['  with Obj do r := Format(''%.2f'', [x]);']), BODY_LINE,
+    Msg('%.2f'));
 end;
 
 procedure TTestRdxFormatLocaleFix.Sca059_Alt_FpcOrOldCompiler_NoHelp;
@@ -376,10 +398,173 @@ begin
     Msg('%.2f'));
   AssertRefused(Src, BODY_LINE, Msg('%.2f'),
     _(R_FS_OLD_INVARIANT, ['COMPILERVERSION >= 32', BODY_LINE + 1]), True);
-  // Delphi 2009 kennt die globale FormatSettings nicht.
-  AssertRefused(InUnit(['  r := Format(''%.2f'', [x]);',
+  // Delphi 2009 kennt die globale FormatSettings nicht ('SysUtils' ohne
+  // Namensraum - System.SysUtils bewiese XE2, rwE30 Stufe 2).
+  AssertRefused(UnitText('SysUtils', [], ['  r := Format(''%.2f'', [x]);',
     '  {$IFDEF DELPHI2009_UP} Foo; {$ENDIF}']), BODY_LINE, Msg('%.2f'),
     _(R_FS_OLD_VAR, ['DELPHI2009_UP', BODY_LINE + 1]));
+end;
+
+// ---- Realworld-Test rwE30 Stufe 2 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_MultiLine_RealworldShapes;
+begin
+  // delphimvcframework activerecord_showcase\MainFormU.pas:1471 (ohne %m):
+  // die Klammer schliesst eine Zeile tiefer mit 'lOrder.Total]));'.
+  AssertFixed(InUnit(['  Log(Format(''%-20s - %4d - %.2f'', [Desc, Qty,',
+    '    Total], FormatSettings));']),
+    InUnit(['  Log(Format(''%-20s - %4d - %.2f'', [Desc, Qty,',
+    '    Total]));']), BODY_LINE, Msg('%-20s - %4d - %.2f'));
+  // python4delphi WrapFmxTypes.pas:391 - Invariant fuer repr.
+  AssertFixed(InUnit(['  r := Str(Format(''<PointF (%f, %f)>'',',
+    '    [Value.X, Value.Y], TFormatSettings.Invariant));']),
+    InUnit(['  r := Str(Format(''<PointF (%f, %f)>'',',
+    '    [Value.X, Value.Y]));']), BODY_LINE, Msg('<PointF (%f, %f)>'), True);
+  // issrc IDE.MainForm.pas:6170: 'Format(' am Zeilenende, der Formatstring
+  // auf der naechsten Zeile wird gegen die Meldung geprueft.
+  AssertFixed(InUnit(['  r := Format(', '    ''%.0n KB'',',
+    '    [x / 1024], FormatSettings);']),
+    InUnit(['  r := Format(', '    ''%.0n KB'',', '    [x / 1024]);']),
+    BODY_LINE, Msg('%.0n KB'));
+  AssertRefused(InUnit(['  r := Format(', '    ''%.0n KB'',', '    [x / 1024]);']),
+    BODY_LINE, Msg('%.1n KB'), MsgMovedSuffix(_(R_FL_OTHER_FMT)));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_FollowLine_OneFormat;
+begin
+  // TES5Edit BSArch\frmMain.pas:1519: 'DialogMessage(' - das Format steht
+  // in Zeile 1520 (bis dahin 'der Aufruf steht in Zeile 1520 ...').
+  AssertFixed(InUnit(['  DialogMessage(',
+    '    Format(''Size %.2n MB'', [x / 1024], FormatSettings) +',
+    '    ''more'');']),
+    InUnit(['  DialogMessage(', '    Format(''Size %.2n MB'', [x / 1024]) +',
+    '    ''more'');']), BODY_LINE, Msg('Size %.2n MB'));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_ShadowedSettings_Qualified;
+begin
+  // Eine Variable FormatSettings der Datei: bis rwE30 Stufe 2 R_FS_SHADOW,
+  // jetzt die globale Variable qualifiziert (gleiche Bedeutung).
+  AssertFixed(UnitText(RTL_USES,
+    ['var', '  FormatSettings: TFormatSettings;'],
+    ['  r := Format(''%.2f'', [x], System.SysUtils.FormatSettings);']),
+    UnitText(RTL_USES, ['var', '  FormatSettings: TFormatSettings;'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 2, Msg('%.2f'));
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_InlineVarRefutesInclude;
+begin
+  // mORMot2 ...\dmvc-ai\50-utilities_batch\src\demos.pas:243: die Datei
+  // bindet mormot.defines.inc ein, nutzt aber 'for var' - Delphi 10.3+.
+  AssertFixed(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x], TFormatSettings.Invariant);',
+    '  for var i := 1 to 3 do Foo;']),
+    UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);', '  for var i := 1 to 3 do Foo;']),
+    BODY_LINE + 1, Msg('%.2f'), True);
+  // Ohne Inline-Variable prueft das Kit-Include seit rwE32 Stufe 4 der
+  // Plattenblick (dort widerlegt es ein Projekt der Unit ab 10.3 - mORMot2
+  // dmvc-ai 19-basicdemo_vclclient MainFormU.pas:165; uTestRdxMagicGuards.
+  // Disk_KitIncludeModernProject_RefutesInvariant), nicht mehr der Planer.
+  AssertFixed(UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x], TFormatSettings.Invariant);']),
+    UnitText(RTL_USES, ['{$I mormot.defines.inc}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 1, Msg('%.2f'), True);
+  // Gegenprobe: eine Versionsfrage IN der Datei sperrt im Planer weiter.
+  AssertRefused(UnitText(RTL_USES, ['{$I mormot.defines.inc}',
+    '{$ifdef ISDELPHI2007ANDUP}', '{$endif}'],
+    ['  r := Format(''%.2f'', [x]);']), BODY_LINE + 3, Msg('%.2f'),
+    _(R_FS_OLD_INVARIANT, ['ISDELPHI2007ANDUP', 7]), True);
+end;
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_ArgsReadFormatSettings_NoHelp;
+var
+  Src : string;
+begin
+  // issrc IDE.MainForm.pas:6170: die Argumente lesen selbst
+  // FormatSettings.TimeSeparator - mit Invariant mischte die Statusleiste
+  // lokalen Zeittrenner und invarianten Tausendertrenner (rwE31 Stufe 3,
+  // gekoppelte Auswertung). Bis dahin angeboten.
+  Src := InUnit(['  StatusBar.Panels[1].Text := Format(',
+    '    '' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'',',
+    '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024]);']);
+  AssertRefused(Src, BODY_LINE,
+    Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'),
+    _(R_FS_COUPLED_SETTINGS, [BODY_LINE + 2, 'Format',
+    'FormatSettings.TimeSeparator']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(InUnit(['  StatusBar.Panels[1].Text := Format(',
+    '    '' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'',',
+    '    [m div 60, FormatSettings.TimeSeparator, m mod 60, x / 1024], '
+    + 'FormatSettings);']), Src, BODY_LINE,
+    Msg(' Remaining: %.2d%s%.2d     Average KB/sec: %.0n'));
+end;
+
+// ---- Realworld-Test rwE32 Stufe 4 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_Display_NoHelp;
+const
+  FMT = '%6s: %-34s %5.2f';
+var
+  Src : string;
+begin
+  // Nico-Entscheid E6: delphimvcframework samples\jsonrpc\async_client\
+  // MainClientFormU.pas:484 - die Preisliste geht in eine ListBox; dort ist
+  // die Locale des Benutzers richtig. Bis dahin bot der Alt-Weg Invariant
+  // an (sein eigener Hinweis sagt 'nicht fuer die Anzeige').
+  Src := InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c]));']);
+  AssertRefused(Src, BODY_LINE, Msg(FMT), _(R_FS_DISPLAY, [BODY_LINE,
+    'ListBox1.Items.Add']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(InUnit(['  ListBox1.Items.Add(Format(''' + FMT + ''', [a, b,',
+    '    c], FormatSettings));']), Src, BODY_LINE, Msg(FMT));
+  AssertRefused(InUnit(['  lblSum.Caption := ''Summe: '' + Format(''%.2f'', '
+    + '[x]);']), BODY_LINE, Msg('%.2f'), _(R_FS_DISPLAY, [BODY_LINE,
+    'lblSum.Caption']), True);
+  // Gegenprobe: Ziel ist eine Datei bzw. SQL - Invariant bleibt angeboten.
+  AssertFixed(InUnit(['  Writeln(F, Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant));']),
+    InUnit(['  Writeln(F, Format(''%.2f'', [x]));']), BODY_LINE, Msg('%.2f'),
+    True);
+  AssertFixed(InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x], '
+    + 'TFormatSettings.Invariant);']),
+    InUnit(['  Qry.SQL.Text := Format(''%.2f'', [x]);']), BODY_LINE,
+    Msg('%.2f'), True);
+end;
+
+// ---- Realworld-Test rwE33 Stufe 5 ----
+
+procedure TTestRdxFormatLocaleFix.Sca059_Alt_CellTextParam_NoHelp;
+const
+  FMT = '%.0n';
+  HEAD: array[0..1] of string = (
+    'procedure TfrmLogAnalyzer.vstFormsGetText(Sender: TBaseVirtualTree;',
+    '  Node: PVirtualNode; Column: TColumnIndex; var CellText: string);');
+  LINE = 'Format(''%.0n'', [Round(Data.PEntry.Value1) + 0.0]';
+var
+  Src : string;
+begin
+  // TES5Edit xEdit\xeLogAnalyzerForm.pas:326/:329: CellText ist der
+  // var-Parameter des OnGetText-Ereignisses - die Zelle zeigt den Text an.
+  // Bis dahin bot der Alt-Weg Invariant an (in der Birne).
+  Src := UnitText(RTL_USES, [HEAD[0], HEAD[1], 'begin', '  case Column of',
+    '    2: CellText := ' + LINE + ');', '  end;', 'end;'], []);
+  AssertRefused(Src, 10, Msg(FMT), _(R_FS_DISPLAY, [10, 'CellText']), True);
+  // Der Hauptweg bleibt.
+  AssertFixed(UnitText(RTL_USES, [HEAD[0], HEAD[1], 'begin', '  case Column of',
+    '    2: CellText := ' + LINE + ', FormatSettings);', '  end;', 'end;'], []),
+    Src, 10, Msg(FMT));
+  // Gegenproben: ein Wert-Parameter bzw. eine lokale Variable dieses Namens,
+  // ein Member - Invariant bleibt angeboten.
+  Src := UnitText(RTL_USES, ['function Cell(CellText: string): string;',
+    'begin', '  CellText := ' + LINE + ');', '  Result := CellText;', 'end;'],
+    []);
+  AssertFixed(StringReplace(Src, '0.0]);', '0.0], TFormatSettings.Invariant);',
+    []), Src, 8, Msg(FMT), True);
+  AssertFixed(InUnit(['  Item.CellText := ' + LINE
+    + ', TFormatSettings.Invariant);']), InUnit(['  Item.CellText := ' + LINE
+    + ');']), BODY_LINE, Msg(FMT), True);
 end;
 
 {$IFNDEF FPC}
@@ -476,6 +661,42 @@ begin
   O := TablePlan(Src, Seen[0], False);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(_(R_FL_MANY, [BODY_LINE, 2]), O.Reason);
+end;
+
+procedure TTestRdxFormatLocaleFixDetector.Sca059_Detector_IncludeWithFpcSwitch_OnlyMainWay;
+var
+  Root, U, Src : string;
+  Seen         : TArray<TSeen>;
+  O            : TRdxFixOutcome;
+begin
+  // rwE29, doublecmd components\Image32\source\Img32.SVG.Path.pas:320: die
+  // Unit bindet '{$I Img32.inc}' ein, das '{$IFDEF FPC} {$MODE DELPHI}'
+  // setzt (Double Commander baut mit FPC 3.2 - kein
+  // TFormatSettings.Invariant). Die Unit selbst traegt keine FPC-Weiche:
+  // ohne den Plattenblick des Adapters boete der Alt-Weg an. Der Hauptweg
+  // bleibt (FPC kennt FormatSettings); Gegenprobe: ein Include ohne
+  // FPC-Weiche sperrt den Alt-Weg nicht.
+  Src := UnitText(RTL_USES, ['{$I Img32.inc}'],
+    ['  r := Format(''%.2f'', [x]);']);
+  Seen := Detect(Src);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
+  Root := NewTempDir(FILE_PREFIX);
+  try
+    U := Root + 'Img32.SVG.Path.pas';
+    WriteText(Root + 'Img32.inc', '{$IFDEF FPC}' + CRLF + '  {$MODE DELPHI}'
+      + CRLF + '{$ENDIF}');
+    O := PlanAltFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsFalse(O.Enabled, 'Alt-Weg gesperrt');
+    Assert.IsTrue(Pos('Img32.inc', O.Reason) > 0, O.Reason);
+    Assert.IsTrue(Pos('TFormatSettings.Invariant', O.Reason) > 0, O.Reason);
+    O := PlanFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    WriteText(Root + 'Img32.inc', '{$DEFINE IMG32}');
+    O := PlanAltFixIn(Src, U, fkFormatLocaleHint, Seen[0]);
+    Assert.IsTrue(O.Enabled, O.Reason);
+  finally
+    RemoveTree(Root);
+  end;
 end;
 
 {$ENDIF}

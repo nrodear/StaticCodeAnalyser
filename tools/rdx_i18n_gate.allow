@@ -24,6 +24,5 @@
 
 uRdxLog.pas | unit | Protokoll (reDelphix.log, OutputDebugString): Zeilen fuer die Fehlersuche, keine Oberflaeche - bleibt deutsch (Plan E29)
 * | call RdxLog | Protokoll: der Text eines RdxLog-Aufrufs geht nur nach reDelphix.log, nie in ein Menue oder eine Meldung
-uRdxProvider.pas | const OPEN_NAMES | Protokoll: Woerter der Provide-Zeile im reDelphix.log (Argument von RdxLog, nie in der Oberflaeche)
-uRdxProvider.pas | const SOURCE_NAMES | Protokoll: Quelle des Texts in der Provide-Zeile im reDelphix.log ('quelle=Editor-Puffer', Argument von RdxLog, nie in der Oberflaeche) - seit FIX-C1 sieht die Heuristik einzelne Woerter
-uRdxProvider.pas | name S_TOO_LONG | die msgid steht in uRdxEditor (dort _(S_TOO_LONG), derselbe Text) - der Extraktor findet sie dort
+uRdxActionCore.pas | const OPEN_NAMES | Protokoll: Woerter der Provide-Zeile im reDelphix.log (Argument von RdxLog, nie in der Oberflaeche) - bis E3 (2026-10-28) in uRdxProvider.pas
+uRdxActionCore.pas | const SOURCE_NAMES | Protokoll: Quelle des Texts in der Provide-Zeile im reDelphix.log ('quelle=Editor-Puffer', Argument von RdxLog, nie in der Oberflaeche) - seit FIX-C1 sieht die Heuristik einzelne Woerter; bis E3 (2026-10-28) in uRdxProvider.pas

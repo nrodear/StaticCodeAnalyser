@@ -116,6 +116,7 @@
         <DCCReference Include="uTestBaselineSetContextHash.pas"/>
         <DCCReference Include="uTestBaselineMetricFingerprint.pas"/>
         <DCCReference Include="uTestBaselineJson.pas"/>
+        <DCCReference Include="uTestBaselineCounting.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
         <DCCReference Include="uTestFileTextCache.pas"/>
         <DCCReference Include="uTestRegExCache.pas"/>
@@ -195,14 +196,13 @@
         <DCCReference Include="uTestExportSonarGeneric.pas"/>
         <DCCReference Include="uTestExportHtml.pas"/>
         <DCCReference Include="uTestExportHtmlRowAttrs.pas"/>
-        <DCCReference Include="uTestSonarConfig.pas"/>
-        <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestConsoleParseArgs.pas"/>
         <DCCReference Include="uTestDetectorTimings.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
+        <DCCReference Include="uTestExportSonarRoundtrip.pas"/>
         <DCCReference Include="uTestContrastColor.pas"/>
         <DCCReference Include="uTestUiElementRegistry.pas"/>
         <DCCReference Include="uTestSonarPush.pas"/>

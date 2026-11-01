@@ -313,6 +313,9 @@ const
   // 'Strg+Umschalt+E').
   R_MAGIC_HINT = 'same meaning - the constant %s holds the literal; rename '
     + 'it by hand or with Refactor > Rename (Ctrl+Shift+E)';
+  // SCA061: die Hinweise (Tabweite und woher sie kommt) stehen seit rwE30 in
+  // uRdxTabsFix (TRdxTabsFix.Hint; bis dahin R_TABS_DERIVED_HINT und
+  // R_TABS_DEFAULT_HINT hier).
 
   // ---- Gruende, Dateiarten und Menuetext-Bausteine (keine Hinweise) ----
   // SCA147: Formdateien, die eine Methode per Name an ein Ereignis binden.
@@ -343,7 +346,7 @@ const
   CAP_CHANGES  = '(changes behavior)';
   NAME_UNKNOWN = 'X';
   // C16 (Charge N): der Menuetext von ckConcatToFormat - die msgid von
-  // CAP_FORMAT des SCA044-Rezepts (uRdxProvider) und
+  // CAP_FORMAT des SCA044-Rezepts (uRdxActionCore, bis E3 uRdxProvider) und
   // uRdxContextRunner.CONTEXT_FORMAT_CAPTION; hier noch einmal, weil der
   // Extraktor eine msgid-Konstante nur in der Unit ihres _() aufloest.
   // Gleichheit: uTestRdxContextFormat.Caption_IsSca044RecipeCaption.
@@ -503,6 +506,64 @@ begin
   if Place = '' then
     Place := ExtractFileDir(Path);
   Result := _(R_REMOTE_READS[AWhat], [Place, MsgByHand]);
+end;
+
+// SCA128/SCA059 (Realworld-Test rwE29): was nur Dateiname und Platte
+// wissen - der Plattenblick von SCA014 (TRdxMagicFixes, wie
+// PlanDigitGrouping): Netzpfad, Lazarus-Dateiart bzw. -Projekt neben der
+// Unit, alte Delphi-Projektdatei bzw. .dproj vor der Schwelle, Weichen in
+// den Includes. AFeature: lfFormatSettingsVar fuer den Hauptweg (die
+// globale Variable ab Delphi XE; FPC kennt sie - Lazarus sperrt nicht),
+// lfFormatInvariant fuer den Alt-Weg (ab 10.3 geprueft, FPC 3.2 kennt
+// TFormatSettings.Invariant nicht). Die FPC-Weiche und alte Spuren IN der
+// Datei prueft schon der Planer. Fundstellen: GExperts GX_DbugIntf.pas
+// (Delphi 1-6, GExpert4.dof), Rechnung.lpi (rgReportPayments.pas,
+// rgInvoiceItemEdit.pas), Img32.inc mit '{$IFDEF FPC}' (Img32.SVG.Path.pas).
+// Die Includes fragte bis rwE31 Stufe 3 NUR der Alt-Weg (Entscheid Nico
+// nach dem Review e/HilfeFixC, M1): fuer den Hauptweg beweist eine
+// Versionsweiche in jedi.inc & Co. nichts (die Kits bauen mit vielen
+// Versionen, auch ab XE), und ein nicht gefundenes Include sperrt ihn
+// nicht - sonst fielen rund 40 % (SCA128) bzw. 50 % (SCA059) der
+// Hauptweg-Angebote weg. Seit rwE31 Stufe 3 sperrt den Hauptweg ein
+// Kit-Include der Unit und (Nico-Entscheid M1b, 2026-10-30) eine
+// Delphi-Weiche bis XE in einem gelesenen Include - beides nur, wenn kein
+// Programm mit .dproj ab XE im Fenster die Unit enthaelt
+// (TRdxMagicFixes.ProjectReason, ModernProjectProof; Clipper.inc in
+// doublecmd Image32). FPC-Weichen und nicht gefundene Includes sperren ihn
+// weiter nicht. Dazu die Spuren in der Unit (Planer) und alte
+// Projektdateien (FileReason). Die Netzpfad-Sperre bleibt fuer beide Wege:
+// sie ist die Politik des Plattenblicks von SCA014 (auf einem Netzpfad
+// liest die Hilfe im Hauptthread keine Projektdatei - ohne den Blick ist
+// die Projekt-Sperre nicht pruefbar).
+// Seit rwE30 Stufe 2 ueber TRdxMagicFixes.ProjectReason: beweist die
+// Datei selbst einen neueren Compiler (Inline-Variable, RTL-Namensraum)
+// bzw. nutzt sie Invariant ohne Weiche, fragt er die Platte nicht. Auch
+// fuer SCA127 (lfExceptionClasses, mit Includes; dort sperrt der Netzpfad
+// nicht - kein Beleg) und seit dem Nachzug zu e/HilfeFixJ fuer die
+// raise-Varianten von SCA020 und SCA168 (ENotImplemented,
+// EInvalidOpException - dieselbe Schwelle Delphi 2009).
+procedure FormatSettingsDiskCheck(ALines: TStrings; AFinding: TLeakFinding;
+  AFeature: TRdxLateFeature; var AOutcome: TRdxFixOutcome);
+var
+  Map : TRdxCodeMap;
+begin
+  if not AOutcome.Enabled then Exit;
+  AOutcome.Reason := '';
+  if TRdxMagicFixes.MissingBlocks(AFeature) then
+    AOutcome.Reason := NetworkPathReason(AFinding.FileName, rrProjectFiles);
+  if AOutcome.Reason = '' then
+  begin
+    Map := TRdxCodeMap.Acquire(ALines);
+    try
+      AOutcome.Reason := TRdxMagicFixes.ProjectReason(AFinding.FileName, Map,
+        AFeature, AFeature in [lfFormatInvariant, lfExceptionClasses]);
+    finally
+      TRdxCodeMap.Release(Map);
+    end;
+  end;
+  if AOutcome.Reason = '' then Exit;
+  AOutcome.Enabled := False;
+  AOutcome.Edits := nil;
 end;
 
 // SCA164: die Include-Dateien vor implementation liest die Hilfe von der
@@ -918,11 +979,16 @@ begin
   Result := TRdxFixRunner.CaseElseFix(APlaces, ALines, AFinding.LineInt);
 end;
 
+// SCA168, zweiter Eintrag: EInvalidOpException gibt es erst ab Delphi 2009 -
+// neben den Spuren in der Datei (Planer, OldExceptionClassReason) wie SCA127
+// der Plattenblick (Nico-Entscheid "Altcompiler: Sperre nur bei Beleg",
+// Nachzug Review e/HilfeFixJ).
 function PlanCaseRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.CaseRaiseFix(APlaces, ALines, AFinding.LineInt,
     AUsesNames);
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
 end;
 
 // SCA101 und SCA099 - BlockFix unterscheidet die Art selbst.
@@ -979,10 +1045,13 @@ begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message, EmptyIntentOnMap);
 end;
 
+// SCA020, zweiter Eintrag: ENotImplemented gibt es erst ab Delphi 2009 - der
+// Plattenblick wie bei SCA168.2 (PlanCaseRaise).
 function PlanEmptyRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := EmptyRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
 end;
 
 function PlanMissingRaise(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1062,14 +1131,27 @@ begin
     APlaces, ALines, AFinding, P);
 end;
 
+// SCA164: zuerst der Name der Unit gegen ihre Datei (rwE30 Stufe 2, jvcl
+// 'sample - form.pas': ein Interpreter-Skript, TRdxRoutineFixes.
+// UnitFileReason), dann die Includes wie bei SCA147 (IncludeCheck).
+function UnusedRoutineCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  AFinding: TLeakFinding; const APlan: TRdxRoutinePlan): string;
+begin
+  Result := TRdxRoutineFixes.UnitFileReason(AFinding.FileName, AMap);
+  if Result = '' then
+    Result := IncludeCheck(APlaces, AMap, AFinding, APlan);
+end;
+
 function PlanUnusedRoutine(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  P : TRdxRoutinePlan;
+  P    : TRdxRoutinePlan;
+  Form : TRdxPlanForm<TRdxRoutinePlan>;
 begin
-  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
-    RoutineForm(TRdxRoutineFixes.UnusedRoutine),
-    APlaces, ALines, AFinding, P);
+  Form := RoutineForm(TRdxRoutineFixes.UnusedRoutine);
+  Form.Check := UnusedRoutineCheck;
+  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(Form, APlaces, ALines,
+    AFinding, P);
 end;
 
 // SCA147: bindet die Formdatei neben der Unit (.dfm/.fmx/.lfm) die Methode
@@ -1306,9 +1388,25 @@ end;
 
 function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Why : string;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxHttpsFix.Https);
+  // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich;
+  // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
+  // Frage liest die Platte, also nur fuer eine angebotene Hilfe.
+  if not Result.Enabled then Exit;
+  // rwE31: mit Zeile und Meldung - ein Projekt nur mit 'test' im Namen
+  // sperrt ein Argument einer Aufruf-Anweisung nicht.
+  Why := TRdxHttpsFix.TestPathReason(AFinding.FileName, ALines,
+    AFinding.LineInt, AFinding.Message);
+  if Why <> '' then
+  begin
+    Result.Enabled := False;
+    Result.Reason := Why;
+    Result.Edits := nil;
+  end;
 end;
 
 function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1375,11 +1473,23 @@ begin
     Result.Hint := _(R_FORRANGE_SWAP_HINT);
 end;
 
+// SCA061: der Hinweis nennt die Tabweite des Plans und woher sie kommt
+// (TRdxTabsFix.Hint rechnet sie fuer dieselbe Zeile noch einmal - die
+// Belege der Datei aus dem Cache; HintByPlanner).
 function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxTabsFix.Tabs);
+  if not Result.Enabled then Exit;
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Hint := TRdxTabsFix.Hint(Map, AFinding.LineInt);
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
 end;
 
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1484,18 +1594,30 @@ function PlanDateFormatSettings(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.DateFormatSettings);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
 
 // SCA128, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
 function PlanDateFormatSettingsAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.DateFormatInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
-  if Result.Enabled then
-    Result.Hint := _(R_FMTSET_INV_HINT);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatInvariant, Result);
+  if not Result.Enabled then Exit;
+  // Ein Gegenstueck derselben Familie ohne Invariant sperrt nicht, der
+  // Hinweis nennt es (Entscheid M2, Review e/HilfeFixC).
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Hint := TRdxFormatSettingsFix.PairHint(Map, AFinding.LineInt,
+      _(R_FMTSET_INV_HINT));
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
 end;
 
 // SCA059 (Charge QF1): drittes Argument ', FormatSettings' an das eine
@@ -1505,6 +1627,7 @@ function PlanFormatLocale(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxFormatSettingsFix.FormatLocale);
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
 
 // SCA059, zweiter Eintrag: ', TFormatSettings.Invariant' (aendert Verhalten).
@@ -1515,6 +1638,7 @@ begin
     TRdxFormatSettingsFix.FormatLocaleInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
+  FormatSettingsDiskCheck(ALines, AFinding, lfFormatInvariant, Result);
   if Result.Enabled then
     Result.Hint := _(R_FMTLOC_INV_HINT);
 end;
@@ -1583,13 +1707,26 @@ begin
 end;
 
 // SCA144 (Charge QF5): der deklarierte Typ eines Operanden; '' fuer eine
-// Zahl (sie braucht keinen Beweis).
-function FloatOperandType(APlaces: TSourcePlaces; ALine: Integer;
-  const AOperand: string): string;
+// Zahl (sie braucht keinen Beweis). Seit rwE30 zuerst der Feldtyp, wenn
+// der Operand ein Feld eines with-Records ist (AWithType,
+// WithMemberTypes), und - wenn DeclaredTypeOf schweigt - der Typ aus den
+// Routinen um die Zeile (LocalType: Parameter einer verschachtelten
+// Routine).
+function FloatOperandType(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AOperand, AWithType: string): string;
 begin
   Result := '';
-  if not TRdxFloatEqualityFix.IsLiteral(AOperand) then
-    Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if TRdxFloatEqualityFix.IsLiteral(AOperand) then
+    Exit;
+  if AWithType <> '' then
+    Exit(AWithType);
+  Result := APlaces.DeclaredTypeOf(ALine, AOperand);
+  if Result = '' then
+    Result := TRdxFloatEqualityFix.LocalType(AMap, ALine, AOperand);
+  // Ein Alias bis zum Gleitkommatyp ('TFloat = single', auch aus einer
+  // Unit neben der Datei - rwE31).
+  Result := TRdxFloatEqualityFix.BaseFloatType(AMap, APlaces.FileName,
+    Result);
 end;
 
 // SCA144: 'A = B' -> 'SameValue(A, B)', eine Null-Seite -> 'IsZero(A)', bei
@@ -1605,8 +1742,10 @@ end;
 function PlanFloatEquality(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map      : TRdxCodeMap;
-  L, Op, R : string;
+  Map          : TRdxCodeMap;
+  L, Op, R     : string;
+  InWith       : Boolean;
+  WithL, WithR : string;
 begin
   Result := Default(TRdxFixOutcome);
   Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
@@ -1620,18 +1759,30 @@ begin
   try
     Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
       AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
+    // Ein with, dessen Ziele Records dieser Unit nur mit Feldern sind,
+    // bindet nur deren Felder (rwE30) - dann zaehlt der Blockbereich des
+    // Quellstellen-Dienstes nicht, und ein Operand, der ein Feld ist, hat
+    // dessen Typ.
+    InWith := False;
+    WithL := '';
+    WithR := '';
+    if Result.Enabled then
+    begin
+      TRdxFloatEqualityFix.WithMemberTypes(Map, AFinding.LineInt,
+        AFinding.Message, InWith, WithL, WithR);
+      Result.Reason := TRdxFloatEqualityFix.ContextReason(
+        AFinding.Confidence = fcLow,
+        APlaces.InWithBlock(AFinding.LineInt) and not InWith,
+        AFinding.Message);
+    end;
+    if Result.Enabled and (Result.Reason = '')
+       and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
+      Result.Reason := TRdxFloatEqualityFix.TypeReason(
+        L, FloatOperandType(APlaces, Map, AFinding.LineInt, L, WithL),
+        R, FloatOperandType(APlaces, Map, AFinding.LineInt, R, WithR));
   finally
     TRdxCodeMap.Release(Map);
   end;
-  if Result.Enabled then
-    Result.Reason := TRdxFloatEqualityFix.ContextReason(
-      AFinding.Confidence = fcLow, APlaces.InWithBlock(AFinding.LineInt),
-      AFinding.Message);
-  if Result.Enabled and (Result.Reason = '')
-     and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
-    Result.Reason := TRdxFloatEqualityFix.TypeReason(
-      L, FloatOperandType(APlaces, AFinding.LineInt, L),
-      R, FloatOperandType(APlaces, AFinding.LineInt, R));
   Result.Enabled := Result.Enabled and (Result.Reason = '');
   if not Result.Enabled then
   begin
@@ -1870,13 +2021,32 @@ end;
 function PlanAvoidOut(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  P : TRdxOutPlan;
+  P   : TRdxOutPlan;
+  Map : TRdxCodeMap;
 begin
   Result := TRdxFixFrame.Run<TRdxOutPlan>(OutForm(TRdxAvoidOutFix.OutToVar),
     APlaces, ALines, AFinding, P);
+  // Ein Typ aus einer Unit neben der Datei kann einfach sein (rwE32 Stufe
+  // 4: jcl JclStringConversions.pas:407 'UCS4 = Cardinal' in JclBase.pas) -
+  // den Dateinamen kennt nur der Adapter (NeighbourPlain).
+  if Result.Enabled and (P.ForeignType <> '') and Assigned(APlaces)
+     and APlaces.IsOpen then
+  begin
+    Map := TRdxCodeMap.Acquire(ALines);
+    try
+      TRdxAvoidOutFix.NeighbourPlain(Map, APlaces.FileName, P);
+    finally
+      TRdxCodeMap.Release(Map);
+    end;
+  end;
   Result.ChangesBehavior := P.Changes;
   if not Result.Enabled then Exit;
-  if P.Changes then
+  // Verwaltet und nicht zuerst gesetzt (rwE30 Stufe 2): nur im Menue, der
+  // Hinweis nennt die Stelle (TRdxOutPlan.Caution, schon uebersetzt).
+  Result.MenuOnly := P.MenuOnly;
+  if P.MenuOnly then
+    Result.Hint := P.Caution
+  else if P.Changes then
     Result.Hint := _(R_OUT_MANAGED_HINT)
   else
     Result.Hint := _(R_OUT_PLAIN_HINT);
@@ -1891,6 +2061,8 @@ function PlanRaisingRawException(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxRawExceptionFix.ToArgumentException);
+  // Alte Compiler in der Nachbarschaft (rwE30 Stufe 2, Sperre bei Beleg).
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
   if not Result.Enabled then Exit;
   Result.Hint := _(R_RAWEXC_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
@@ -1906,6 +2078,7 @@ begin
     TRdxRawExceptionFix.ToInvalidOpException);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
+  FormatSettingsDiskCheck(ALines, AFinding, lfExceptionClasses, Result);
   if not Result.Enabled then Exit;
   Result.Hint := _(R_RAWEXC_ALT_HINT);
   Result.Enabled := AppendUses(APlaces, AUsesNames, 'SysUtils',
@@ -2194,7 +2367,7 @@ const
      HintByPlanner: False; Changes: True;
      Alt: PlanReversedForRangeAlt),
     (Kind: fkTabulationCharacter; Plan: PlanTabs;
-     HintByPlanner: False; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: nil),
     (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
      HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
@@ -2482,12 +2655,12 @@ const
     // ReversedForRange
     'the loop never ran so far and then counts down; if it was switched off '
       + 'on purpose, this is an intervention',
-    // SCA061: die Tabweite ist eine feste Annahme (uRdxTabsFix.TAB_WIDTH),
-    // nicht die Einstellung der IDE - der Hinweis sagt es (Wochen-Review
-    // 2026-10-21, P17: bis dahin klang sie wie ein Standard).
+    // SCA061: den Hinweis setzt PlanTabs - er nennt die Tabweite, die
+    // uRdxTabsFix.TabWidth aus den Nachbarzeilen ableitet, bzw. die Annahme 2
+    // (rwE29; bis dahin hier fest 'tab width 2 (assumption)', Wochen-Review
+    // 2026-10-21, P17).
     // TabulationCharacter
-    'tabs in code become spaces - tab width 2 (assumption); tabs in strings '
-      + 'and comments stay',
+    '',
     // TrailingWhitespace
     'whitespace at the end of the line only',
     // LowercaseKeyword

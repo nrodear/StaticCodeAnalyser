@@ -33,6 +33,7 @@ uses
   uTestBaselineSetContextHash in 'uTestBaselineSetContextHash.pas',
   uTestBaselineMetricFingerprint in 'uTestBaselineMetricFingerprint.pas',
   uTestBaselineJson in 'uTestBaselineJson.pas',
+  uTestBaselineCounting in 'uTestBaselineCounting.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestFileTextCache in 'uTestFileTextCache.pas',
   uTestRegExCache in 'uTestRegExCache.pas',
@@ -112,8 +113,6 @@ uses
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
   uTestExportHtml in 'uTestExportHtml.pas',
   uTestExportHtmlRowAttrs in 'uTestExportHtmlRowAttrs.pas',
-  uTestSonarConfig in 'uTestSonarConfig.pas',
-  uTestSonarTokenStorage in 'uTestSonarTokenStorage.pas',
   // Die CLI-Unit liegt ausserhalb des Test-Suchpfads (..\sources\Console
   // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
@@ -122,6 +121,7 @@ uses
   uTestDetectorTimings in 'uTestDetectorTimings.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
+  uTestExportSonarRoundtrip in 'uTestExportSonarRoundtrip.pas',
   uTestContrastColor in 'uTestContrastColor.pas',
   uTestUiElementRegistry in 'uTestUiElementRegistry.pas',
   uTestSonarPush in 'uTestSonarPush.pas',
