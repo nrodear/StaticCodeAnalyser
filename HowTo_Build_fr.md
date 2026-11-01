@@ -383,7 +383,7 @@ quoi ressemble la correction.
   `%APPDATA%\StaticCodeAnalyser\`. Vous pouvez régler `Profile=`
   (quelles règles s'exécutent), `MinSeverity=`, `MinConfidence=`, etc.
   Le fichier est commenté.
-- **Se connecter à SonarQube :** voir [sonarHowto_fr.md](sonarHowto_fr.md).
+- **Envoyer les résultats vers SonarQube :** voir [sonarHowto_fr.md](sonarHowto_fr.md).
 - **Lancer depuis la ligne de commande / la CI :** voir la sortie
   `--help` de l'EXE autonome. Options utiles : `--profile`,
   `--report-sarif`, `--quiet`, `--time-detectors`.

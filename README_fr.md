@@ -301,24 +301,17 @@ des contrôles étrangers à Sonar comme `TautologicalBoolExpr`,
 > avec SonarQube Server qu'avec SonarCloud.
 
 ```powershell
-# Configurer une fois (IDE: Tools > Options > Sonar Integration, ou CLI):
-analyser.exe --sonar-test `
-  --sonar-host http://localhost:9000 `
-  --sonar-token squ_xxxxx `
-  --sonar-project my-delphi-project
-
 # Lancer l'analyse et produire le Generic Issue Format pour sonar-scanner
-analyser.exe --path . --full --sonar-export sca-findings.json
+analyser.exe --path . --sonar-export sca.json --profile default
 sonar-scanner   # le lit via sonar.externalIssuesReportPaths
 ```
 
 Chaque règle porte les champs MQR de SonarQube (`cleanCodeAttribute` +
 `impacts`), de sorte que les résultats apparaissent correctement dans le
-tableau de bord MQR. Le stockage du jeton dans l'IDE utilise Windows DPAPI
-(portée utilisateur courant) — aucun secret en clair dans `analyser.ini`.
+tableau de bord MQR.
 
-Installation complète : [docs/sonar-setup.md](docs/sonar-setup.md).
-Référence du résolveur de configuration : [docs/sonar-config.md](docs/sonar-config.md).
+SCA écrit seulement le fichier. Guide rapide : [sonarHowto_fr.md](sonarHowto_fr.md) ;
+le serveur, le scanner et les jetons relèvent de la documentation officielle de Sonar.
 
 ---
 

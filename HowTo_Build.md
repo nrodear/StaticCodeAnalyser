@@ -353,7 +353,7 @@ code example: how the problem looks, and how the fix looks.
 - **Configure the analyzer:** open `analyser.ini` in
   `%APPDATA%\StaticCodeAnalyser\`. You can set `Profile=` (which rules
   run), `MinSeverity=`, `MinConfidence=`, etc. The file has comments.
-- **Connect to SonarQube:** see [sonarHowto.md](sonarHowto.md).
+- **Get findings into SonarQube:** see [sonarHowto.md](sonarHowto.md).
 - **Run from the command line / CI:** see the `--help` output of the
   standalone EXE. Useful flags: `--profile`, `--report-sarif`,
   `--quiet`, `--time-detectors`.

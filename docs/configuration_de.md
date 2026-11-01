@@ -18,8 +18,10 @@ sich die drei bewusst unterscheiden, sagt es der Schluesselname
 (`IdeProfile`, `IdeMinSeverity`). CLI-Schalter schlagen die Datei fuer den
 Lauf, in dem sie angegeben werden.
 
-> SonarQube-Einstellungen stehen **nicht** in dieser Datei - siehe
-> [sonar-config.md](sonar-config.md).
+> SCA fuehrt keine SonarQube-Einstellungen: Server, Token und Projektschluessel
+> gehoeren zu `sonar-scanner`, siehe [sonarHowto_de.md](../sonarHowto_de.md).
+> Abschnitte `[Sonar]` und `[SonarTokens]` aus aelteren Versionen werden
+> ignoriert und koennen geloescht werden.
 
 > reDelphix, die Code-Aktionen des IDE-Plugins, hat eigene Einstellungen in
 > `redelphix.ini` neben dieser Datei und legt sie beim ersten Gebrauch mit
@@ -184,7 +186,7 @@ dort traegt der strukturelle Grund, nicht die Rate.
 |---|---|---|---|
 | `Language` | String | `en` | Oberflaechensprache: `de`, `en`, `fr`. Leer oder unbekannt = Englisch. reDelphix folgt dem Schluessel, solange seine eigene `redelphix.ini` nichts anderes sagt (siehe oben). |
 | `Theme` | String | `system` | Design der EXE: `system` (Windows folgen), `light`, `dark`. |
-| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (Code-Aktionen ohne Fund im Editor-Kontextmenue, flacher Abschnitt unter den Fund-Aktionen mit der deaktivierten Kopfzeile "Code-Aktionen"; die Fund-Aktionen bleiben; ohne `EditorContextMenu` wirkungslos), `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
+| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (Code-Aktionen ohne Fund im Editor-Kontextmenue, flacher Abschnitt unter den Fund-Aktionen mit der deaktivierten Kopfzeile "Code-Aktionen"; die Fund-Aktionen bleiben; ohne `EditorContextMenu` wirkungslos), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
 | `ClipboardOnClick` | Integer | `1` | Was ein Zeilenklick kopiert: `1` nichts, `2` Jira-Mini-Ticket, `3` Markdown-Prompt. |
 | `EditorColorScheme` | String | `default` | Farbschema von Editor-Markerstreifen und Overlay-Titelleiste. |
 | `OverlayPosition` | String | `below` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. `below` (Standard) beginnt eine Zeile darunter am Zeilenanfang; `sameline` legt sich ueber die Fundzeile. |
@@ -222,35 +224,6 @@ diesen Abschnitt nicht.
 | `ExternalEditor` | String | _(leer)_ | Voller Pfad zu einem Editor. Ist er gesetzt, uebernimmt er **alle** Dateiarten - auch `.dfm` - und die Delphi-IDE wird nicht mehr angesprochen. |
 | `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Argumente. Platzhalter: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. Der Standard passt zu Visual Studio Code. Die Lazarus-IDE nimmt nur einen Dateinamen - dort `%file%` verwenden; einen Zeilensprung kann sie nicht. |
 | `DfmTarget` | String | `ide` | Was ein `.dfm`-Befund oeffnet, wenn kein externer Editor gesetzt ist: `ide` oder `viewer` (eingebauter Textbetrachter, der zuverlaessig zur Zeile springt). |
-
-## `[Sonar]`
-
-Verbindungsdaten fuer den Test (`--sonar-test`, "Test Connection" in der
-IDE) und fuer `--sonar-init`. **Keiner dieser Schluessel beeinflusst die
-Analyse oder irgendeinen Detektor.** Ausfuehrlich in [sonar-config.md](sonar-config.md).
-
-**Dieser Abschnitt hat die niedrigste Prioritaet der vier Quellen.** Ein
-CLI-Schalter, eine Umgebungsvariable (`SONAR_HOST_URL`, `SONAR_TOKEN`,
-`SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`, `SONAR_BRANCH`) und - fuer
-Projektschluessel, Organisation und Branch - eine `sonar-project.properties`
-im GESCANNTEN Repository stechen ihn aus. `--sonar-test` zeigt an, welche
-Quelle den Wert geliefert hat.
-
-**Der Token steht nicht hier.** Er liegt verschluesselt in `[SonarTokens]`,
-geschrieben von der Options-Seite oder `--sonar-token`. Unter Windows ist
-er an Benutzer und Rechner gebunden - eine kopierte `analyser.ini` ist
-anderswo wertlos, und ein von Hand eingetragener Token laesst sich nicht
-entschluesseln. Wer ihn gar nicht auf der Platte haben will, nimmt
-`SONAR_TOKEN`.
-
-| Schluessel | Typ | Default | Bedeutung |
-| --- | --- | --- | --- |
-| `HostUrl` | String | _(leer)_ | Basis-URL des Servers. Der Test schickt den Token als Bearer-Header genau dorthin - ein falscher Host bekommt das Geheimnis. Deshalb wird eine `sonar.host.url` aus dem gescannten Repository bewusst ignoriert. |
-| `ProjectKey` | String | _(leer)_ | Das Projekt, das der Test nachschlaegt. |
-| `Organization` | String | _(leer)_ | SonarCloud-Mandantenschluessel. Ohne ihn antwortet SonarCloud mit 400 und der Test meldet "Projekt nicht gefunden", obwohl es das Projekt gibt. |
-| `Branch` | String | _(leer)_ | Branch-Name fuer den Lookup und fuer `--sonar-init`. |
-| `Insecure` | Bool | `0` | `1` ueberspringt die TLS-Zertifikatspruefung des Tests. Das schwaecht genau den Transportweg, der den Token traegt. |
-| `TokenRef` | String | _(leer)_ | Name des Eintrags in `[SonarTokens]`, der den verschluesselten Token haelt - so kann eine INI mehrere fuehren. |
 
 ## Automatisch geschrieben - nicht von Hand aendern
 

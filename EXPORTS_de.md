@@ -9,7 +9,7 @@ Workflows, die Teams tatsächlich fahren.
 
 Die Workflows hier wurden gegen gebaute Binaries geprüft (v0.9.14 und
 später); die Abschnitte zum Workbench-Bericht beschreiben den Stand
-0.9.18. Wo ein Weg heute kaputt ist, steht es dabei — samt Umgehung.
+0.9.19. Wo ein Weg heute kaputt ist, steht es dabei — samt Umgehung.
 
 ---
 
@@ -138,6 +138,13 @@ und der Sonar-Export verwenden — und `ruleID` ist der Name vor 0.9.19,
 der erhalten bleibt, damit bestehende Leser nicht brechen. Gleicher
 Wert in beiden; `ruleId` bevorzugen, `ruleID` gilt als veraltet.
 
+**Leere Methode.** Die Methode eines Funds (CSV, JSON, HTML, Workbench,
+Baseline) steht nur dort, wo die Zeile in einer Routine liegt. Ein Fund
+auf einem Kommentar, einer Klassendeklaration oder in einer Formulardatei
+hat eine leere Methode. Das ist neu in 0.9.19 und ändert den Fingerprint
+solcher Funde; eine Baseline mit `contextHash` passt weiter, solange die
+Zeilen um den Fund unverändert sind.
+
 ---
 
 ## Workflow 1 — CI-Gate: Build scheitert bei neuen Funden
@@ -152,6 +159,11 @@ analyser.exe --path . --write-baseline .sca/sca.baseline.json
 # in jedem Build
 analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
 ```
+
+**Ein Baseline-Eintrag deckt einen Fund.** Seit 0.9.19 zählt die Baseline:
+Zwei Einträge mit demselben Fingerprint decken zwei Funde, ein dritter ist
+neu. Vorher versteckte ein Eintrag jeden Fund mit diesem Fingerprint,
+solche Funde erscheinen deshalb als neu.
 
 Die Exit-Codes sind gestuft: `0` sauber, ungleich null, wenn nach dem
 Baseline-Filter Funde bleiben. `--fail-on error|warning|hint|none`
@@ -241,20 +253,13 @@ analyser.exe --path . --base-dir . --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
-> **⚠️ Im ausgelieferten ZIP kaputt — bitte vorher lesen.** Das
-> Release-Archiv enthält nur die EXE. Ohne `rules/sca-rules.json`
-> daneben fällt der Regelkatalog auf einen eingebauten Notbehelf zurück,
-> der `type` statt `cleanCodeAttribute` + `impacts` schreibt — und
-> **SonarQube verwirft daraufhin den gesamten Report** (gegen die echten
-> Scanner-Engine-Validatoren geprüft: 10.7 meldet *missing mandatory
-> field 'cleanCodeAttribute'*, 2025.x *missing mandatory field
-> 'severity'*). Der Lauf sieht erfolgreich aus, die Datei ist da — nur
-> das Dashboard bleibt leer.
->
-> **Umgehung:** den `rules/`-Ordner aus dem Repository neben die EXE
-> legen. Mit vorhandenem Katalog validiert der Export auf allen
-> getesteten Engine-Generationen. Eine kaputte `rules/sca-rules.json`
-> führt in denselben Zustand, ebenfalls lautlos.
+Kurzanleitung mit den Fehlern, die sich vermeiden lassen:
+[sonarHowto_de.md](sonarHowto_de.md).
+
+> **`rules/sca-rules.json` gehört neben die EXE.** Das Release-ZIP enthält
+> sie. Ohne sie fällt der Regelkatalog auf einen eingebauten Notbehelf
+> zurück: Der Report bleibt gültig, seine Regeln tragen aber grobe
+> Attribute und Impacts statt der Katalogwerte.
 
 Die Pfade im Report sind relativ zu `--base-dir` (Vorgabe: `--path`) —
 den Export also mit derselben Wurzel fahren, die auch der Scanner
@@ -313,8 +318,9 @@ New-Code-Periode als *geschlossen* plus *neu*.
   die Engine aus `rules[].engineId`.
 - **Mindestversion des Servers.** Die Impact-Schweren BLOCKER und INFO
   brauchen SonarQube 10.8 oder neuer (Server 2025.x, Community Build). Auf
-  10.3–10.7 ist ein Report damit ungültig; SCA026 trägt weiterhin
-  BLOCKER.
+  10.3–10.7 ist ein Report damit ungültig. SCA026 trägt immer BLOCKER,
+  SCA004, sobald ein Lauf einen belegten Fund hat (ein bekanntes
+  Token-Muster).
 
 `filePath` löst Sonar relativ zu `sonar.projectBaseDir` auf (dem Ordner
 der `sonar-project.properties`), nicht relativ zu `sonar.sources` —
@@ -405,7 +411,6 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 
 | Bereich | Verhalten |
 |---|---|
-| Sonar-Export aus dem Release-ZIP | wird von SonarQube verworfen; `rules/` neben die EXE legen |
 | Baseline-Auffrischen mit beiden Schaltern | kürzt die Baseline auf die neuen Funde |
 | `--write-baseline` mit bloßem Dateinamen | schreibt nicht |
 | JSON-Exporte | UTF-8 **mit** BOM — nach v0.9.14 behoben, jetzt BOM-frei |
@@ -413,8 +418,6 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 | Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |
 | unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
 | `--parallel` | seit 2026-08-20 deterministisch (byte-identisch zum seriellen Lauf), aber ohne Tempogewinn - die serielle Vorphase dominiert |
-| `--sonar-insecure` | akzeptiert keine selbstsignierten Zertifikate (schaltet nur TLS 1.1 frei) |
-| `--sonar-test` in einem fremden Repo | eine `sonar-project.properties` im gescannten Repo überschreibt den eigenen Host — der Token geht dorthin |
 
 ---
 

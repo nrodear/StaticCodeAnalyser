@@ -2793,7 +2793,7 @@ Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
 - **Project-template** — `--sonar-init` writes a `sonar-project.properties`
   template into the project root (or `.sample` if one exists).
 - **IDE plugin Tools > Options > "Sonar Integration"** page
-  ([uIDESonarOptions](StaticCodeAnalyserIDE/uIDESonarOptions.pas)) —
+  (`uIDESonarOptions`) —
   Host / Project / Token / Branch / Insecure-TLS toggle, "Test
   Connection" button runs the same multi-stage check as the CLI,
   "Detect from project" reads `sonar-project.properties` of the active
@@ -2806,7 +2806,7 @@ Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
   LRU cache, dedup-matcher for SCA-kind ↔ Sonar-rule name overlap.
   (UI binding into the findings grid deferred to a later release.)
 - **PowerShell push helpers** under
-  [StaticCodeAnalyserForm/scripts/](StaticCodeAnalyserForm/scripts/):
+  `StaticCodeAnalyserForm/scripts/`:
   `sonar-scan.ps1` (analysis + JSON), `sonar-upload.ps1` (DPAPI-decrypt
   + scanner) with `-DryRun` and `-DisableDelphi` switches for the
   SonarDelphi/communitydelphi sensor-crash case.
@@ -2889,9 +2889,9 @@ Full release notes: [docs/releases/v0.9.1.md](docs/releases/v0.9.1.md)
 ### Docs
 
 - New: [sonarHowto.md](sonarHowto.md) + [sonarHowto_de.md](sonarHowto_de.md)
-  (standalone-only walkthrough), [docs/sonar-setup.md](docs/sonar-setup.md)
-  (full guide), [docs/sonar-config.md](docs/sonar-config.md) (resolver
-  reference), [StaticCodeAnalyserForm/scripts/README.md](StaticCodeAnalyserForm/scripts/README.md)
+  (standalone-only walkthrough), `docs/sonar-setup.md`
+  (full guide), `docs/sonar-config.md` (resolver
+  reference), `StaticCodeAnalyserForm/scripts/README.md`
   + `README_de.md` (scripts reference with troubleshooting table).
 - All Sonar-relevant READMEs gained a "Tested with: SonarQube Community
   Build 26.5+, sits alongside Sonar Way" compatibility block.

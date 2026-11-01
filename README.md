@@ -287,23 +287,16 @@ checks like `TautologicalBoolExpr`, `ConcatToFormat`, `WithStatement`).
 > no override. Works with both SonarQube Server and SonarCloud.
 
 ```powershell
-# Configure once (IDE: Tools > Options > Sonar Integration, or CLI):
-analyser.exe --sonar-test `
-  --sonar-host http://localhost:9000 `
-  --sonar-token squ_xxxxx `
-  --sonar-project my-delphi-project
-
 # Run analysis and emit Generic Issue Format for sonar-scanner
-analyser.exe --path . --full --sonar-export sca-findings.json
+analyser.exe --path . --sonar-export sca.json --profile default
 sonar-scanner   # picks up via sonar.externalIssuesReportPaths
 ```
 
 Each rule carries SonarQube MQR fields (`cleanCodeAttribute` + `impacts`) so
-findings show up correctly in the MQR dashboard. Token-storage in the IDE
-uses Windows DPAPI (Current-User-Scope) — no plaintext secrets in `analyser.ini`.
+findings show up correctly in the MQR dashboard.
 
-Full setup: [docs/sonar-setup.md](docs/sonar-setup.md). Config-resolver
-reference: [docs/sonar-config.md](docs/sonar-config.md).
+SCA only writes the file. Short guide: [sonarHowto.md](sonarHowto.md);
+server, scanner and tokens are covered by the official Sonar documentation.
 
 ---
 

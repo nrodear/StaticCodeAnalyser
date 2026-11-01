@@ -364,7 +364,7 @@ der Fix aussieht.
   `%APPDATA%\StaticCodeAnalyser\`. Du kannst `Profile=` (welche Regeln
   laufen), `MinSeverity=`, `MinConfidence=` etc. setzen. Das File ist
   kommentiert.
-- **Mit SonarQube verbinden:** siehe [sonarHowto_de.md](sonarHowto_de.md).
+- **Funde nach SonarQube bringen:** siehe [sonarHowto_de.md](sonarHowto_de.md).
 - **Aus Command-Line / CI:** schau in die `--help`-Ausgabe der
   Standalone. Nuetzliche Flags: `--profile`, `--report-sarif`,
   `--quiet`, `--time-detectors`.

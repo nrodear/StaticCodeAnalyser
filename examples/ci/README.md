@@ -230,5 +230,5 @@ Code-Scanning by adding both export flags in the same run:
 SARIF goes to GitHub via the upload-sarif action; the Sonar JSON gets
 picked up by `sonar-scanner` via
 `sonar.externalIssuesReportPaths=sca.sonar.json` in your
-`sonar-project.properties`. See [docs/sonar-setup.md](../../docs/sonar-setup.md)
-for the full Sonar story.
+`sonar-project.properties`. See the short guide in
+[sonarHowto.md](../../sonarHowto.md).

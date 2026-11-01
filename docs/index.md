@@ -41,9 +41,7 @@ version carries the `_de` suffix, the French version the `_fr` suffix
 
 | Document | What it answers |
 |---|---|
-| [sonar-setup.md](sonar-setup.md) | Full setup: server, token, project properties, export, scanner run, troubleshooting. |
-| [sonar-config.md](sonar-config.md) | Reference for the four configuration sources and which command actually reads them. |
-| [../sonarHowto.md](../sonarHowto.md) | Step-by-step walk-through for the standalone EXE, including an all-in-one PowerShell script. |
+| [../sonarHowto.md](../sonarHowto.md) | Short guide: write the report, configure and run the scanner, and the mistakes worth avoiding. |
 | [sonar-coverage.md](sonar-coverage.md) | How SCA rules map onto Sonar's own rule set — where the two overlap and where SCA adds something. |
 
 ## IDE plugin

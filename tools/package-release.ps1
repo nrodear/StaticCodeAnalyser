@@ -194,7 +194,7 @@ $docItems = @(
   'RELEASE_NOTES.md', 'RELEASE_NOTES_de.md', 'RELEASE_NOTES_fr.md',
   'HowTo_Build.md', 'HowTo_Build_de.md', 'HowTo_Build_fr.md',
   'CHANGELOG.md',
-  'docs/sonar-setup.md', 'docs/sonar-config.md', 'docs/sonar-coverage.md',
+  'docs/sonar-coverage.md',
   'docs/rules.md', 'docs/rules/index.md', 'docs/index.md',
   'docs/configuration.md', 'docs/configuration_de.md', 'docs/configuration_fr.md',
   'docs/profiles.md', 'docs/profiles_de.md', 'docs/profiles_fr.md',
@@ -247,7 +247,7 @@ try {
 $za = [System.IO.Compression.ZipFile]::OpenRead($docZip)
 try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
 finally { $za.Dispose() }
-foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
+foreach ($sentinel in @('EXPORTS.md', 'sonarHowto.md',
                         'examples/ci/github-actions-sca.yml')) {
   if ($names -notcontains $sentinel) {
     throw "docs-scripts: $sentinel fehlt im Archiv. Abbruch."

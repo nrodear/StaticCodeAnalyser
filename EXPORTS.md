@@ -8,7 +8,7 @@ produce, which of the three front-ends can produce it, and the six
 workflows teams actually run.
 
 The workflows here were verified against built binaries (v0.9.14 and
-later); the sections on the workbench report describe the 0.9.18 state.
+later); the sections on the workbench report describe the 0.9.19 state.
 Where a path is known to be broken today, it says so, with the
 workaround.
 
@@ -134,6 +134,13 @@ export use — and `ruleID` is the pre-0.9.19 name, kept so existing
 readers do not break. Same value in both; prefer `ruleId`, treat
 `ruleID` as deprecated.
 
+**Empty method.** The method of a finding (CSV, JSON, HTML, workbench,
+baseline) is only filled in when the line lies inside a routine. A
+finding on a comment, a class declaration or a form file has an empty
+method. Since this is new in 0.9.19, such a finding changes its
+fingerprint; a baseline with a `contextHash` still matches it while the
+lines around it are unchanged.
+
 ---
 
 ## Workflow 1 — CI gate: fail the build on new findings
@@ -148,6 +155,11 @@ analyser.exe --path . --write-baseline .sca/sca.baseline.json
 # in every build
 analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
 ```
+
+**A baseline entry covers one finding.** Since 0.9.19 the baseline counts:
+two entries with the same fingerprint cover two findings, a third one is
+new. Before, one entry hid every finding with that fingerprint, so
+findings it used to hide show up as new.
 
 Exit codes are graded: `0` clean, non-zero when findings remain after
 the baseline filter. `--fail-on error|warning|hint|none` narrows what
@@ -231,20 +243,12 @@ analyser.exe --path . --base-dir . --sonar-export sca-findings.json
 sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
 ```
 
-> **⚠️ Broken in the released ZIP — read this before you try.** The
-> release archive contains only the EXE. Without `rules/sca-rules.json`
-> beside it the rule catalog falls back to a built-in stub that emits
-> `type` instead of `cleanCodeAttribute` + `impacts`, and **SonarQube
-> rejects the entire report** (verified against the real scanner-engine
-> validators: 10.7 reports *missing mandatory field
-> 'cleanCodeAttribute'*, 2025.x *missing mandatory field 'severity'*).
-> The run looks successful and the file is written — only the dashboard
-> stays empty.
->
-> **Workaround:** copy the repository's `rules/` folder next to the EXE.
-> With the catalog present the export validates on every tested engine
-> generation. A corrupt `rules/sca-rules.json` degrades the same way,
-> also silently.
+Short guide with the mistakes worth avoiding: [sonarHowto.md](sonarHowto.md).
+
+> **Keep `rules/sca-rules.json` beside the EXE.** The release ZIP ships
+> it. Without it the rule catalog falls back to a built-in stub: the
+> report stays valid, but its rules carry coarse attributes and impacts
+> instead of the catalog values.
 
 Paths in the report are relative to `--base-dir` (default: `--path`), so
 run the export with the same root the scanner uses. Files outside that
@@ -302,7 +306,8 @@ new-code period.
   the engine from `rules[].engineId`.
 - **Minimum server version.** The impact severities BLOCKER and INFO need
   SonarQube 10.8 or later (Server 2025.x, Community Build). On 10.3–10.7 a
-  report containing them is invalid; SCA026 still carries BLOCKER.
+  report containing them is invalid. SCA026 always carries BLOCKER, SCA004
+  as soon as a run has a proven finding (a known token pattern).
 
 `filePath` is resolved by Sonar relative to `sonar.projectBaseDir` (the
 folder of `sonar-project.properties`), not relative to `sonar.sources` —
@@ -394,7 +399,6 @@ Honest list, as of v0.9.14 — all reproduced:
 
 | Area | Behaviour |
 |---|---|
-| Sonar export from the release ZIP | Rejected by SonarQube; ship `rules/` alongside the EXE |
 | Baseline refresh with both switches | Truncates the baseline to the new findings |
 | `--write-baseline` with a bare file name | Fails to write |
 | JSON exports | UTF-8 **with** BOM — fixed after v0.9.14, they are BOM-free now |
@@ -402,8 +406,6 @@ Honest list, as of v0.9.14 — all reproduced:
 | Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |
 | Unreadable source files | Counted differently in console, SARIF/Sonar/HTML and baseline |
 | `--parallel` | Deterministic since 2026-08-20 (byte-identical to serial runs), but no speedup yet - the serial pre-phase dominates |
-| `--sonar-insecure` | Does not accept self-signed certificates (it only enables TLS 1.1) |
-| `--sonar-test` inside a foreign repo | A `sonar-project.properties` in the scanned repo overrides your host — your token is sent there |
 
 ---
 
