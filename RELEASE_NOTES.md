@@ -5,8 +5,8 @@
 Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
 ([deutsch](docs/releases/v0.9.19_de.md)).
 
-- **reDelphix: repair a finding where you read it.** A new IDE package
-  offers quick-fixes for 96 rules in the light bulb and the finding's
+- **reDelphix: repair a finding where you read it.** This new feature
+  of SCA offers quick-fixes for 96 rules in the light bulb and the finding's
   context menu, plus nine code actions at the caret, in English, German
   and French. Every action re-checks the editor buffer first and writes
   one undo step, never into a file. It needs Delphi 12 (Win32), a build
@@ -15,6 +15,14 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   loses the four quick-fixes of v0.9.18 (SCA066, SCA072, SCA084,
   SCA085): `Ctrl+Alt+F` now reports "Quick-Fix: the reDelphix package is
   not loaded".
+- **Sonar settings and the connection check are gone. SCA writes the
+  file, `sonar-scanner` sends it. The switches `--sonar-test`,
+  `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,
+  `--sonar-branch`, `--sonar-insecure` and `--sonar-config` are removed,
+  so a pipeline call with one of them fails. `sonar-scan.ps1` and
+  `sonar-upload.ps1` are gone too: call `sonar-scanner` yourself, see
+  [sonarHowto.md](sonarHowto.md). `[Sonar]` and `[SonarTokens]` in
+  `analyser.ini` are ignored and can be deleted.**
 - **Lazarus and Free Pascal are a real scan target.** `--dialect=fpc` or
   `auto`, `.pp`/`.lpr` units, `.lfm` forms, `.lpi`/`.lpk`/`.lpg` as
   project scope, `[Scan] Dialect` in `analyser.ini`.
@@ -33,11 +41,9 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   safe against formula injection, report files are written atomically,
   and `--diff`/`--branch` always write the requested report.
 - **Sonar export that fits the server.** Every issue matches a file and
-  a line SonarQube knows, capped findings are exported, and
-  `sonar-scan.ps1` uses the rule set of the IDE (from the template
-  `ide-fast`, 21 rules: see the migration notes). The impact of a rule
-  follows the findings of the run. Existing projects see issues appear
-  and move.
+  a line SonarQube knows, and capped findings are exported. The impact
+  of a rule follows the findings of the run. Existing projects see
+  issues appear and move.
 - **In the IDE:** new installations open the overlay below the finding
   line (an existing `analyser.ini` from the template still says
   `OverlayPosition=sameline`; change it to `below`), and the action menu

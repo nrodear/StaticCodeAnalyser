@@ -5,8 +5,8 @@
 Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
 ([deutsch](docs/releases/v0.9.19_de.md)).
 
-- **reDelphix : corriger un résultat là où on le lit.** Un nouveau
-  paquet IDE propose des quick-fixes pour 96 règles, dans l'ampoule et
+- **reDelphix : corriger un résultat là où on le lit.** Cette nouvelle
+  fonction de SCA propose des quick-fixes pour 96 règles, dans l'ampoule et
   dans le menu contextuel du résultat, ainsi que neuf actions de code au
   curseur, en anglais, en allemand et en français. Chaque action
   revérifie d'abord le tampon de l'éditeur et écrit en une seule étape
@@ -17,6 +17,15 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   installent perd les quatre quick-fixes de la v0.9.18 (SCA066, SCA072,
   SCA084, SCA085) : `Ctrl+Alt+F` affiche désormais « Quick-Fix : le
   package reDelphix n'est pas chargé ».
+- **Les réglages Sonar et le test de connexion disparaissent. SCA écrit
+  le fichier, `sonar-scanner` l'envoie. Les options `--sonar-test`,
+  `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,
+  `--sonar-branch`, `--sonar-insecure` et `--sonar-config` sont retirées :
+  un appel de pipeline qui les utilise échoue. `sonar-scan.ps1` et
+  `sonar-upload.ps1` disparaissent aussi : appelez `sonar-scanner`
+  vous-même, voir [sonarHowto_fr.md](sonarHowto_fr.md). `[Sonar]` et
+  `[SonarTokens]` dans `analyser.ini` sont ignorés et peuvent être
+  supprimés.**
 - **Lazarus et Free Pascal sont une vraie cible d'analyse.**
   `--dialect=fpc` ou `auto`, unités `.pp`/`.lpr`, formulaires `.lfm`,
   `.lpi`/`.lpk`/`.lpg` comme périmètre de projet, `[Scan] Dialect` dans
@@ -39,11 +48,9 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   rapport sont écrits de façon atomique, et `--diff`/`--branch` écrivent
   toujours le rapport demandé.
 - **Un export Sonar conforme au serveur.** Chaque issue correspond à un
-  fichier et à une ligne que SonarQube connaît, les résultats plafonnés
-  sont exportés, et `sonar-scan.ps1` utilise le jeu de règles de l'IDE
-  (d'après le modèle `ide-fast`, 21 règles : voir la migration). L'impact
-  d'une règle suit les résultats de l'analyse. Les projets existants
-  verront des issues apparaître et se déplacer.
+  fichier et à une ligne que SonarQube connaît, et les résultats plafonnés
+  sont exportés. L'impact d'une règle suit les résultats de l'analyse.
+  Les projets existants verront des issues apparaître et se déplacer.
 - **Dans l'IDE :** les nouvelles installations ouvrent l'overlay sous la
   ligne du résultat (un `analyser.ini` existant issu du modèle indique
   encore `OverlayPosition=sameline` ; remplacez-le par `below`), et le menu

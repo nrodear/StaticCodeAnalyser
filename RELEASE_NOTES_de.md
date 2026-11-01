@@ -5,8 +5,8 @@
 Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19_de.md)
 ([english](docs/releases/v0.9.19.md)).
 
-- **reDelphix: den Fund dort reparieren, wo man ihn liest.** Ein neues
-  IDE-Paket bietet Quick-Fixes für 96 Regeln in der Glühbirne und im
+- **reDelphix: den Fund dort reparieren, wo man ihn liest.** Dieses neue
+  Feature des SCA bietet Quick-Fixes für 96 Regeln in der Glühbirne und im
   Kontextmenü des Funds, dazu neun Code-Aktionen am Caret, auf Deutsch,
   Englisch und Französisch. Jede Aktion prüft zuerst den Editor-Puffer
   und schreibt einen Undo-Schritt, nie in eine Datei. Es braucht
@@ -16,6 +16,14 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   Plugin verliert die vier Quick-Fixes aus v0.9.18 (SCA066, SCA072,
   SCA084, SCA085): `Strg+Alt+F` meldet jetzt „Quick-Fix: das Package
   reDelphix ist nicht geladen".
+- **Sonar-Einstellungen und Verbindungstest entfallen. SCA schreibt die
+  Datei, `sonar-scanner` sendet sie. Die Schalter `--sonar-test`,
+  `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,
+  `--sonar-branch`, `--sonar-insecure` und `--sonar-config` sind entfernt,
+  ein Pipeline-Aufruf damit schlägt also fehl. Auch `sonar-scan.ps1` und
+  `sonar-upload.ps1` sind weg: `sonar-scanner` selbst aufrufen, siehe
+  [sonarHowto_de.md](sonarHowto_de.md). `[Sonar]` und `[SonarTokens]` in
+  der `analyser.ini` werden ignoriert und können gelöscht werden.**
 - **Lazarus und Free Pascal sind ein echtes Scan-Ziel.** `--dialect=fpc`
   oder `auto`, `.pp`/`.lpr`-Units, `.lfm`-Formulare, `.lpi`/`.lpk`/`.lpg`
   als Projekt-Umfang, `[Scan] Dialect` in der `analyser.ini`.
@@ -36,11 +44,9 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   werden atomar geschrieben, und `--diff`/`--branch` schreiben den
   angeforderten Bericht immer.
 - **Ein Sonar-Export, der zum Server passt.** Jedes Issue passt zu einer
-  Datei und einer Zeile, die SonarQube kennt, gedeckelte Funde werden
-  exportiert, und `sonar-scan.ps1` nutzt den Regelsatz der IDE (aus der
-  Vorlage `ide-fast`, 21 Regeln: siehe Migration). Der Impact einer Regel
-  folgt den Funden des Laufs. Bestehende Projekte sehen Issues auftauchen
-  und wandern.
+  Datei und einer Zeile, die SonarQube kennt, und gedeckelte Funde werden
+  exportiert. Der Impact einer Regel folgt den Funden des Laufs.
+  Bestehende Projekte sehen Issues auftauchen und wandern.
 - **In der IDE:** Neue Installationen öffnen das Overlay unter der
   Fundzeile (eine bestehende `analyser.ini` aus der Vorlage sagt weiter
   `OverlayPosition=sameline`; dort auf `below` ändern), und das Aktionsmenü
