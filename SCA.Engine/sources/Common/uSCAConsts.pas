@@ -861,7 +861,6 @@ const
   // (FileVersion / ProductVersion = SCA_VERSION_FULL).
   SCA_VERSION      = '0.9.19';
   SCA_VERSION_FULL = '0.9.19.0';
-  SCA_RELEASE_DATE = 'TBD';
 
   // Reihenfolge MUSS exakt mit TFindingKind uebereinstimmen.
   // Beim Hinzufuegen eines neuen TFindingKind: hier nachpflegen, dann
