@@ -6,7 +6,8 @@
 #   1. Copy this file to .git\hooks\pre-commit  (no extension!)
 #   2. On Windows: ensure pwsh.exe is in PATH (PowerShell 7+) - or
 #      adapt the shebang to powershell.exe (5.1).
-#   3. Make sure analyser.d12.exe is reachable - adjust $SCA_EXE below.
+#   3. Make sure StaticCodeAnalyser.d12.exe is reachable - adjust $SCA_EXE
+#      below.
 #
 # Usage:
 #   git commit       (hook runs automatically)
@@ -17,12 +18,12 @@
 #   non-0 -> commit aborted (analyser reported findings)
 
 $ErrorActionPreference = 'Stop'
-$SCA_EXE   = Join-Path $PSScriptRoot '..\..\tools\sca\analyser.d12.exe'
+$SCA_EXE   = Join-Path $PSScriptRoot '..\..\tools\sca\StaticCodeAnalyser.d12.exe'
 $BASELINE  = Join-Path $PSScriptRoot '..\..\sca.baseline.json'
 $REPO_ROOT = (git rev-parse --show-toplevel).Trim()
 
 if (-not (Test-Path $SCA_EXE)) {
-    Write-Host "[sca-hook] analyser.d12.exe not found at $SCA_EXE - skipping."
+    Write-Host "[sca-hook] StaticCodeAnalyser.d12.exe not found at $SCA_EXE - skipping."
     exit 0
 }
 
