@@ -17,8 +17,10 @@ Where the three deliberately differ, the key name says so (`IdeProfile`,
 `IdeMinSeverity`). CLI switches win over the file for the run they are
 given in.
 
-> SonarQube settings are **not** in this file - see
-> [sonar-config.md](sonar-config.md).
+> SCA keeps no SonarQube settings: server, token and project key belong to
+> `sonar-scanner`, see [sonarHowto.md](../sonarHowto.md). `[Sonar]` and
+> `[SonarTokens]` sections from older versions are ignored and can be
+> deleted.
 
 > reDelphix, the code actions of the IDE plugin, keeps its own settings in
 > `redelphix.ini` next to this file and creates it with a commented
@@ -79,9 +81,22 @@ given in.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `File` | String | _(empty)_ | Baseline JSON. Relative paths resolve against the scan root; empty = `.sca` default location. |
+| `File` | String | _(empty)_ | Baseline JSON. A relative path resolves against the directory of the project or group, otherwise against the scan root; the CLI falls back to the working directory if the file exists only there, and says so. Empty = `.sca` default location. |
 | `OnlyNew` | Bool | `False` | Show only findings that are not in the baseline. |
 | `PathInFingerprint` | Bool | `False` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
+
+**A baseline counts.** The file holds one entry per finding, and each
+entry covers at most one finding: two entries with the same fingerprint
+cover two findings, a third one is new. Entries match in three passes,
+each entry used once: fingerprint and context hash, then the context hash
+alone, then the fingerprint alone. So where a file has more findings of
+one kind than the baseline has entries, the extra ones are reported as
+new.
+
+**Findings outside a routine** have an empty method, and the method is
+part of the fingerprint. A baseline written before v0.9.19 still matches
+them through its context hash as long as the lines around them are
+unchanged; a baseline without context hashes shows them once as new.
 
 ### Which thresholds you can re-tune without invalidating a baseline
 
@@ -129,8 +144,9 @@ which of them your baseline already *accepts*.
 
 The one case the exempt five cannot tell apart: for SCA012, SCA018,
 SCA022 and SCA176, two same-named methods in one file - overloads, or the
-same name in two classes of one unit - share a single baseline entry. On
-the 783,105-finding reference corpus that affects **183 to 185 of 37,990
+same name in two classes of one unit - share one fingerprint. Each keeps
+its own baseline entry, so the count stays right; the entries just cannot
+say which method is which. On the 783,105-finding reference corpus that affects **183 to 185 of 37,990
 findings (0.49 %) with `PathInFingerprint=1`**, and **about 1,450 (3.8 %)
 in the default mode**, where the file token is the bare file name and
 same-named files in different folders share it (the corpus has four
@@ -163,7 +179,7 @@ rate.
 |---|---|---|---|
 | `Language` | String | `en` | UI language: `de`, `en`, `fr`. Empty or unknown = English. reDelphix follows this key unless its own `redelphix.ini` says otherwise (see above). |
 | `Theme` | String | `system` | Standalone theme: `system` (follow Windows), `light`, `dark`. |
-| `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (light bulb with the finding actions at the caret line; it receives its editor events from `LineHighlighter`, so `LineHighlighter=0` silences it too), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (code actions without a finding in the editor context menu, flat section below the finding actions with the disabled header "Code actions"; finding actions stay; without `EditorContextMenu` it has no effect), `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
+| `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (light bulb with the finding actions at the caret line; it receives its editor events from `LineHighlighter`, so `LineHighlighter=0` silences it too), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (code actions without a finding in the editor context menu, flat section below the finding actions with the disabled header "Code actions"; finding actions stay; without `EditorContextMenu` it has no effect), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
 | `ClipboardOnClick` | Integer | `1` | What a row click copies: `1` nothing, `2` Jira mini issue, `3` Markdown prompt. |
 | `EditorColorScheme` | String | `default` | Colour scheme of the editor marker stripe and overlay title bar. |
 | `OverlayPosition` | String | `below` | Where the hover overlay anchors relative to the finding line. `below` (default) starts one line below it, at the start of the line; `sameline` overlays the finding line itself. |
@@ -201,34 +217,6 @@ section.
 | `ExternalEditor` | String | _(empty)_ | Full path to an editor. If set, it opens **every** file type - including `.dfm` - and the Delphi IDE is no longer used. |
 | `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Placeholders: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. The default matches Visual Studio Code. The Lazarus IDE accepts a file name only - use `%file%` there; it cannot jump to the line. |
 | `DfmTarget` | String | `ide` | What a `.dfm` finding opens when no external editor is set: `ide` or `viewer` (built-in text viewer, which can jump to the line). |
-
-## `[Sonar]`
-
-Connection settings for the check (`--sonar-test`, "Test Connection" in the
-IDE) and for `--sonar-init`. **None of these influence the analysis or any
-detector.** Full walkthrough in [sonar-config.md](sonar-config.md).
-
-**This section has the lowest priority of the four sources.** A CLI flag, an
-environment variable (`SONAR_HOST_URL`, `SONAR_TOKEN`, `SONAR_PROJECT_KEY`,
-`SONAR_ORGANIZATION`, `SONAR_BRANCH`) and - for the project key,
-organisation and branch - a `sonar-project.properties` in the scanned
-repository all win over it. `--sonar-test` prints which source supplied
-each value.
-
-**The token is not here.** It sits encrypted in `[SonarTokens]`, written by
-the options page or `--sonar-token`. On Windows it is protected per user and
-machine, so a copied `analyser.ini` is useless elsewhere - and a
-hand-written token will not decrypt. Use `SONAR_TOKEN` when it should not
-touch the disk at all.
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `HostUrl` | String | _(empty)_ | Base URL of the server. The check sends the token here as a bearer header, so a wrong host receives the secret - which is why a `sonar.host.url` found in the scanned repository is deliberately ignored. |
-| `ProjectKey` | String | _(empty)_ | The project the check looks up. |
-| `Organization` | String | _(empty)_ | SonarCloud tenant key. Without it SonarCloud answers 400 and the check reports "project not found" although the project exists. |
-| `Branch` | String | _(empty)_ | Branch name for the lookup and for `--sonar-init`. |
-| `Insecure` | Bool | `0` | `1` skips TLS certificate validation for the check. It weakens exactly the transport that carries the token. |
-| `TokenRef` | String | _(empty)_ | Name of the entry in `[SonarTokens]` holding the encrypted token - lets one INI carry several. |
 
 ## Written automatically - do not edit
 

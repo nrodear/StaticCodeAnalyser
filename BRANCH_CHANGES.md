@@ -5,12 +5,13 @@ memory leaks, code smells, security gaps and maintainability issues.
 
 🇬🇧 English page · 🇩🇪 [Deutsche Version](BRANCH_CHANGES_de.md) · 🇫🇷 [Version française](BRANCH_CHANGES_fr.md)
 
-The repository ships two components:
+The repository ships three components:
 
 | Component | Purpose | Path |
 |-----------|---------|------|
 | **Standalone EXE** | Stand-alone tool for scanning directories on disk | `StaticCodeAnalyserForm/` |
 | **IDE plugin** | Dockable tool window inside the Delphi IDE | `StaticCodeAnalyserIDE/` |
+| **reDelphix** | Optional IDE package with code actions, built from source | `reDelphix/` |
 
 ---
 
@@ -20,10 +21,10 @@ The repository ships two components:
 - **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality as a letter grade **A–E** (raw score + breakdown in the tooltip)
 - **Severity filter** + **type filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help panel on the right** with paired "before/after" code examples per finding
-- **Claude AI prompt generator** — clicking a row copies a ready-made Markdown block to the clipboard
+- **Claude AI prompt generator** — **Copy AI prompt** in the context menu puts a ready-made Markdown block on the clipboard
 - **VCS branch mode** — analyses only the files changed in the branch (see below)
-- **Suppression** through `// SCA: ignore` comments
-- **Export** as CSV / JSON / Jira / HTML
+- **Suppression** through `// noinspection` comments
+- **Export** as SARIF / Sonar / CSV / JSON / Jira / HTML
 - **Theme aware** — follows the active Delphi IDE theme (Light / Dark / Mountain Mist / Carbon)
 - **Recent paths** persisted across sessions
 - **Ignore list** at `%APPDATA%\StaticCodeAnalyser\ignore.txt`
@@ -32,9 +33,9 @@ The repository ships two components:
 
 ## Components in detail
 
-### 1. Standalone EXE — `analyser.d12.dpr`
+### 1. Standalone EXE — `StaticCodeAnalyser.d12.dpr`
 
-A self-contained program built from `analyser.d12.dproj`. It offers:
+A self-contained program built from `StaticCodeAnalyser.d12.dproj`. It offers:
 
 - Recursive folder scan
 - Single-file analysis
@@ -44,14 +45,13 @@ A self-contained program built from `analyser.d12.dproj`. It offers:
 Build:
 
 ```
-Open analyser.d12.dproj in Delphi 12  →  Project  →  Build
+Open StaticCodeAnalyser.d12.dproj in Delphi  →  Project  →  Build
 ```
 
 ### 2. IDE plugin — `StaticCodeAnalyser.IDE.d12.dpk`
 
 Designtime package providing the dockable tool window. Launched via
-**Tools / Static Code Analysis Tool for Delphi** or **View / Static Code
-Analysis Tool for Delphi**.
+**Tools / Static Code Analysis** or **View / Static Code Analysis**.
 
 Functions on top of the standalone:
 
@@ -77,7 +77,7 @@ Open StaticCodeAnalyser.IDE.d12.dproj  →  Project  →  Install
 The full list with status (✅ implemented · 🟡 partial · 🔲 open) lives
 in [`DETECTORS.md`](DETECTORS.md).
 
-Current state (v0.9.16): **198 rules (175 Pascal + 23 DFM)** — Sonar catalogue + SonarDelphi-migration (SCA120-152) + DFM detectors + naming/formatting checks (SCA060-119) + bonus.
+Current state: **205 rules (181 Pascal + 23 DFM + 1 INI)** — Sonar catalogue + SonarDelphi-migration (SCA120-152) + DFM detectors + naming/formatting checks (SCA060-119) + bonus.
 
 Highlights by severity:
 
@@ -229,8 +229,12 @@ SvnExe=
 Suppress findings on a single line:
 
 ```pascal
-x := 1 / y;  // SCA: ignore (DivByZero — y is validated upstream)
+// noinspection DivByZero
+x := 1 / y;
 ```
+
+The marker covers the next line; the [README](README.md#suppression) has
+the other forms.
 
 Skip whole files via `%APPDATA%\StaticCodeAnalyser\ignore.txt` — one
 file (or path glob) per line.
@@ -252,8 +256,9 @@ Your repository has no default branch under the usual names. Set
 
 ### Findings you expected aren't there
 
-- **File extension**: only `.pas` files are analysed. `.dpr` / `.dpk`
-  are not yet covered (extension is straightforward).
+- **File extension**: only `.pas` files are analysed (with the fpc
+  dialect also `.pp` and `.lpr`). `.dpr` / `.dpk` are not yet covered
+  (extension is straightforward).
 - **Submodules**: `git status` does not capture submodule-internal
   changes — scan the submodule folder separately.
 - **Test filter**: tests are excluded by default. Set
@@ -280,12 +285,12 @@ sequences.
 
 | Target | Step |
 |--------|------|
-| Standalone EXE | Open `analyser.d12.dproj` → Project → Build |
+| Standalone EXE | Open `StaticCodeAnalyser.d12.dproj` → Project → Build |
 | IDE plugin (recommended) | Run the release setup `StaticCodeAnalyserSetup-<Version>.exe`, or load the GetIt local package (`StaticCodeAnalyser-v<V>-getit-manifest.zip`) |
 | IDE plugin (from source) | Open `StaticCodeAnalyser.IDE.d12.dproj` → Project → Install |
 
-Platform: **Win32** — the plugin runs in the 32-bit IDE of Delphi
-12.0–12.3 (the 64-bit IDE of 12.3 is not yet supported).
+Platform: the plugin runs in the 32-bit IDE of Delphi 12.0–12.3 and in
+both IDEs of Delphi 13, 32- and 64-bit.
 
 ---
 
@@ -293,12 +298,13 @@ Platform: **Win32** — the plugin runs in the 32-bit IDE of Delphi
 
 ```
 StaticCodeAnalyser/
-├── StaticCodeAnalyserForm/         # Standalone EXE + detector code
-│   ├── sources/                    # Detectors, parser, theme helpers
+├── StaticCodeAnalyserForm/         # Standalone EXE
+│   ├── sources/                    # Forms and console runner
 │   ├── resources/                  # Pascal test files used by detector tests
 │   ├── tests/                      # Unit tests
-│   └── analyser.d12.dproj          # Standalone project
+│   └── StaticCodeAnalyser.d12.dproj # Standalone project
 ├── SCA.Engine/
+│   ├── sources/                    # Detectors, parser, exports
 │   └── SCA.Engine.dpk              # Engine package (dev set)
 ├── SCA.SharedUI/
 │   └── SCA.SharedUI.dpk            # Shared-UI package (dev set)
@@ -307,6 +313,7 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + dockable form wrapper
 │   ├── StaticCodeAnalyser.IDE.d12.dpk       # Designtime package (dev set)
 │   └── StaticCodeAnalyser.Plugin.d12.dpk    # Release monolith package
+├── reDelphix/                      # Optional IDE package with code actions
 ├── docs/                           # Mockups, sketches, screenshots
 └── DETECTORS.md                    # Full detector catalogue with status
 ```

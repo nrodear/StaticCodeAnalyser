@@ -196,8 +196,6 @@
         <DCCReference Include="uTestExportSonarGeneric.pas"/>
         <DCCReference Include="uTestExportHtml.pas"/>
         <DCCReference Include="uTestExportHtmlRowAttrs.pas"/>
-        <DCCReference Include="uTestSonarConfig.pas"/>
-        <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestConsoleParseArgs.pas"/>

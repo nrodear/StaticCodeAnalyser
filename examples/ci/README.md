@@ -10,6 +10,10 @@ pipelines. Pick the one that matches your stack — they're independent.
 | `pr-comment-bot.ps1`     | Posts a Markdown comment on the PR with only NEW findings |
 | `msbuild-sca-target.xml` | MSBuild target snippet to embed SCA as pre-build step into a `.dproj` |
 
+The examples expect the EXE as `tools\sca\analyser.d12.exe`. The release
+ZIPs contain it as `StaticCodeAnalyser.d12.exe`: rename it, or adjust the
+path.
+
 ---
 
 ## Common flags
@@ -19,7 +23,7 @@ All of these examples build on the new CLI flags. Cheat-sheet:
 | Flag | Purpose |
 |---|---|
 | `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. A run that hit read errors never drops below exit 4 — only `--fail-on=none` returns 0 there. |
-| `--baseline <file>` | Drop findings whose fingerprint matches a known entry in `<file>`. Only NEW findings count. |
+| `--baseline <file>` | Drop findings covered by an entry in `<file>`, each entry covering at most one finding. Only NEW findings count. |
 | `--write-baseline <file>` | Write the current findings as the new baseline. Run on `main` after the team accepts the current state. |
 
 Fingerprint = `SHA256(filename | kindname | methodname | detail)`. Stable
@@ -226,5 +230,5 @@ Code-Scanning by adding both export flags in the same run:
 SARIF goes to GitHub via the upload-sarif action; the Sonar JSON gets
 picked up by `sonar-scanner` via
 `sonar.externalIssuesReportPaths=sca.sonar.json` in your
-`sonar-project.properties`. See [docs/sonar-setup.md](../../docs/sonar-setup.md)
-for the full Sonar story.
+`sonar-project.properties`. See the short guide in
+[sonarHowto.md](../../sonarHowto.md).

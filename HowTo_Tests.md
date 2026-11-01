@@ -22,14 +22,14 @@ TestProject from the IDE build (see workarounds below).
 ### DUnitX (required — both platforms)
 
 ```bash
-cd D:\git-demos\delphi
+cd D:\projects
 git clone https://github.com/VSoftTechnologies/DUnitX.git dunitx
 ```
 
-In `TestProject.dproj` the path `..\..\..\dunitx\Source` is already in
-`DCC_UnitSearchPath` (commit `3f1cab0`). Different parent directory? Adjust the
-path in the dproj or set it globally via Tools → Options → Language → Delphi →
-Library (separately for **Win32 and Win64**).
+Clone it next to the repository: in `TestProject.dproj` the path
+`..\..\..\dunitx\Source` is already in `DCC_UnitSearchPath`. Different parent
+directory? Adjust the path in the dproj or set it globally via Tools → Options →
+Language → Delphi → Library (separately for **Win32 and Win64**).
 
 ### TestInsight (optional — Win32 IDE integration)
 
@@ -53,11 +53,12 @@ If the GetIt entry is missing: search GitHub/Bitbucket for
 |---|---|---|
 | SCA.Engine290.bpl | Win32 + Win64 | rtl, nothing external |
 | SCA.SharedUI290.bpl | **Win32 only** | rtl, vcl, designide (IDE-only) |
-| StaticCodeAnalyser.exe (standalone) | Win32 + Win64 | nothing external |
-| StaticCodeAnalyser.IDE.bpl | **Win32 only** | rtl, vcl, designide |
-| **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32: TestInsight) |
+| StaticCodeAnalyser.d12.exe (standalone) | Win32 + Win64 | nothing external |
+| StaticCodeAnalyser.IDE.d12.bpl | **Win32 only** | rtl, vcl, designide |
+| **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (see below) |
 
-"Build all projects" builds all 5 targets on the currently selected platform.
+"Build all projects" builds every project of the group on the currently selected
+platform.
 
 ---
 
@@ -70,32 +71,32 @@ to the assertion.
 
 ### IDE without TestInsight (Win32 or Win64)
 
-> **ACHTUNG — so gebaut, wie das Repo heute steht, geht das NICHT, und
-> der Konsolenlauf sieht trotzdem nach Erfolg aus.**
-> `TestProject.dproj` setzt `TESTINSIGHT` als `DCC_Define` in der
-> **Base**-PropertyGroup, also fuer JEDE Konfiguration und Plattform.
-> Damit greift im `.dpr` das `{$IFNDEF TESTINSIGHT}` nicht, die EXE
-> bekommt das **GUI**-Subsystem statt Console, und sie laeuft ueber
-> `TestInsight.DUnitX` statt ueber den Console-Logger. Ohne
-> TestInsight-Server in der IDE beendet sie sofort per `Halt(0)`:
-> **kein stdout, keine NUnit-XML, Exitcode 0.**
+> **WARNING — built as the repository stands today, this does NOT work,
+> and the console run still looks like a success.**
+> `TestProject.dproj` sets `TESTINSIGHT` as a `DCC_Define` in the **Base**
+> property group, so for EVERY configuration and platform. The
+> `{$IFNDEF TESTINSIGHT}` in the `.dpr` therefore does not apply: the EXE
+> gets the **GUI** subsystem instead of Console and runs through
+> `TestInsight.DUnitX` instead of the console logger. Without a TestInsight
+> server in the IDE it ends at once with `Halt(0)`: **no stdout, no NUnit
+> XML, exit code 0.**
 >
-> Gemessen am 2026-09-20 an beiden frisch gebauten EXEn (Win32 und
-> Win64): PE-Subsystem 2 = GUI, 0 Zeilen Ausgabe, Exit 0.
+> Measured on 2026-09-20 on both freshly built EXEs (Win32 and Win64):
+> PE subsystem 2 = GUI, 0 lines of output, exit 0.
 >
-> **Exitcode 0 ist hier also KEIN Testbeweis** - er ist von "alles
-> gruen" nicht zu unterscheiden. Ergebnisse gibt es nur im
-> TestInsight-Panel der IDE. Wer den Konsolenlauf wirklich will, muss
-> `TESTINSIGHT` vorher aus der Base-Gruppe der `.dproj` nehmen.
+> **So exit code 0 is NOT proof of a test run here** — it cannot be told
+> apart from "all green". Results exist only in the TestInsight panel of
+> the IDE. If you really want the console run, take `TESTINSIGHT` out of
+> the Base group of the `.dproj` first.
 
-Der urspruengliche Weg (nur gueltig OHNE das Define):
+The original way (valid only WITHOUT the define):
 
 ```powershell
 ".\Output\Tests\Win64 Release\TestProject.exe"
 ```
 
-Dann gilt: Exit code 0 = all green, Failures als stdout + NUnit XML neben
-der EXE (via `DUnitX.Loggers.Xml.NUnit`).
+Then: exit code 0 = all green, failures on stdout + NUnit XML next to the
+EXE (via `DUnitX.Loggers.Xml.NUnit`).
 
 ### Running a subset
 
@@ -118,18 +119,19 @@ IDE → right-click the project group → **Build order** → uncheck
 
 Equivalently, comment out the TestProject entry directly in the `.groupproj`.
 
-### Platform-gated TESTINSIGHT define
+### The TESTINSIGHT define
 
-In `TestProject.dproj` the define is active only for Win32 (line 133):
+In `TestProject.dproj` the define sits in the Base group, so it applies to every
+platform and configuration:
 
 ```xml
-<PropertyGroup Condition="'$(Base_Win32)'!=''">
+<PropertyGroup Condition="'$(Base)'!=''">
   <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
 </PropertyGroup>
 ```
 
-The Win64 build therefore skips the TestInsight imports automatically and does
-not need the plugin. If you do not want TestInsight at all, delete the entry.
+The Win64 build therefore needs the TestInsight units as well. If you do not want
+TestInsight at all, delete the entry; the console logger then takes over.
 
 ### EFOpenError dialog during the test run
 
@@ -147,8 +149,7 @@ Workaround:
 
 Generic inference fails under Win64 when an untyped int literal + Integer are
 combined. Fix: explicit type parameter `Assert.AreEqual<Integer>(N, X.Count)`.
-Already patched in 1209 places of the suite (commit `5f1661c`). Mind this for new
-tests.
+Already patched in 1209 places of the suite. Mind this for new tests.
 
 ---
 
@@ -157,5 +158,5 @@ tests.
 - `StaticCodeAnalyserForm\tests\TestProject.dproj` — test project config
 - `StaticCodeAnalyserForm\tests\TestProject.dpr` — test runner code
 - `StaticCodeAnalyserForm\tests\uTest*.pas` — the individual test units
-- `HowTo_AddDetector.md` — when a new detector + tests are to be created
-- `HowTo_DetectorSelftest.md` — dogfooding workflow for the SCA EXE
+- `reDelphix\tests\reDelphix.Test.dproj` — tests of the reDelphix code actions; its
+  `CI` configuration is a console runner with a real exit code

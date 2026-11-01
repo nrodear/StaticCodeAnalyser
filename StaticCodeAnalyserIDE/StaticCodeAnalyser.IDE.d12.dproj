@@ -132,10 +132,6 @@
             <Form>SCAOptionsFrame</Form>
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
-        <DCCReference Include="uIDESonarOptions.pas">
-            <Form>SonarOptionsFrame</Form>
-            <DesignClass>TFrame</DesignClass>
-        </DCCReference>
         <DCCReference Include="uIDEAnalyseRunner.pas"/>
         <RcCompile Include="..\branding\sca_branding.rc"/>
         <BuildConfiguration Include="Base">

@@ -119,7 +119,7 @@ type
     // Standalone-Modus: AlwaysVisible=True (kein Auto-Hide).
     FHintPanel : TFindingHintPanel;
     // Geteilter Export-Menu-Helper (HTML / JSON / CSV / Jira / Clipboard
-    // / Sonar-Generic / Sonar-Push). Identisch zum IDE-Plugin.
+    // / Sonar-Generic / Sonar-Einzeldateien). Identisch zum IDE-Plugin.
     FExportMenu : TFindingExportMenu;
     FBtnExport  : TButton;
     // Progress-Feedback waehrend Analyse (analog zum IDE-Plugin).
@@ -617,7 +617,7 @@ begin
   Self.OnResize := FormResizeHandler;
 
   // ---- Export-Button + geteiltes Popup-Menu (HTML / JSON / CSV / Jira /
-  //      Clipboard / Sonar-Generic / Sonar-Push). Selbe Implementierung
+  //      Clipboard / Sonar-Generic / Sonar-Einzeldateien). Selbe Implementierung
   //      wie im IDE-Plugin via uExportMenu.TFindingExportMenu.
   FBtnExport := TButton.Create(Self);
   FBtnExport.Parent  := PanelActions; // gleiche Toolbar wie Analyse-Buttons

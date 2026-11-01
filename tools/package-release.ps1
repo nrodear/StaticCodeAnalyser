@@ -119,11 +119,10 @@ foreach ($p in $platforms) {
   }
 
   # 4. Der Regelkatalog MUSS mit ins Archiv. Ohne rules\sca-rules.json
-  #    neben der EXE faellt TRuleCatalog auf den einkompilierten Notbehelf
-  #    zurueck - und der Sonar-Export wird dann von SonarQube komplett
-  #    verworfen (2026-08-08 am v0.9.14-ZIP nachgewiesen: Lauf gruen,
-  #    Datei geschrieben, Dashboard leer). Der Katalog speist ausserdem
-  #    tool.driver.version im SARIF und die FixHints.
+  #    neben der EXE faellt TRuleCatalog auf den einkompilierten Stand
+  #    zurueck: der Sonar-Export bleibt gueltig, traegt aber grobe
+  #    Attribute und Impacts statt der Katalogwerte. Der Katalog speist
+  #    ausserdem tool.driver.version im SARIF und die FixHints.
   $rules = Join-Path $repo 'rules\sca-rules.json'
   if (-not (Test-Path $rules)) { throw "Regelkatalog fehlt: $rules" }
 
@@ -180,6 +179,11 @@ foreach ($p in $platforms) {
 # das Doku-Archiv lieferte bisher aber nur de/en aus. Dazu HowTo_Build -
 # wer die Packages selbst bauen will, braucht genau diese Anleitung, und
 # das Setup verweist im Wizard darauf.
+# Die Notes laufen mit -Version mit: fest eingetragen lag bis v0.9.18 noch
+# v0.9.17 im Archiv. Dazu alles, worauf README und RELEASE_NOTES im Archiv
+# verweisen, soweit es einzelne Doku-Dateien sind. Nicht dabei: der Ordner
+# i18n und die Quelle uSCAConsts.pas (kein Doku-Inhalt) sowie die Seiten je
+# Regel hinter docs/rules/index.md.
 $docItems = @(
   'README.md', 'README_de.md', 'README_fr.md',
   'EXPORTS.md', 'EXPORTS_de.md', 'EXPORTS_fr.md',
@@ -189,9 +193,24 @@ $docItems = @(
   'RELEASE_NOTES.md', 'RELEASE_NOTES_de.md', 'RELEASE_NOTES_fr.md',
   'HowTo_Build.md', 'HowTo_Build_de.md', 'HowTo_Build_fr.md',
   'CHANGELOG.md',
-  'docs/sonar-setup.md', 'docs/sonar-config.md', 'docs/sonar-coverage.md',
-  'docs/rules.md',
-  'docs/releases/v0.9.17.md', 'docs/releases/v0.9.17_de.md'
+  'docs/sonar-coverage.md',
+  'docs/rules.md', 'docs/rules/index.md', 'docs/index.md',
+  'docs/configuration.md', 'docs/configuration_de.md', 'docs/configuration_fr.md',
+  'docs/profiles.md', 'docs/profiles_de.md', 'docs/profiles_fr.md',
+  'docs/OptionsSca.gif', 'docs/PlugInDockedSca.gif', 'docs/PlugInSca.gif',
+  'docs/sca-demo.gif',
+  'LICENSE',
+  'reDelphix/QUICKFIXES.md', 'reDelphix/README.md',
+  "docs/releases/v$Version.md", "docs/releases/v${Version}_de.md",
+  'docs/releases/v0.9.18.md', 'docs/releases/v0.9.18_de.md',
+  'docs/releases/v0.9.17.md', 'docs/releases/v0.9.17_de.md',
+  'docs/releases/v0.9.16.md', 'docs/releases/v0.9.16_de.md',
+  'docs/releases/v0.9.14.md', 'docs/releases/v0.9.14_de.md',
+  'docs/releases/v0.9.13.md', 'docs/releases/v0.9.13_de.md',
+  'docs/releases/v0.9.12.md', 'docs/releases/v0.9.12_de.md',
+  'docs/releases/v0.9.11.md', 'docs/releases/v0.9.11_de.md',
+  'docs/releases/v0.9.10.md', 'docs/releases/v0.9.10_de.md',
+  'docs/releases/v0.9.9.md', 'docs/releases/v0.9.9_de.md'
 )
 foreach ($d in $docItems) {
   if (-not (Test-Path (Join-Path $repo $d))) { throw "Doku fehlt: $d" }
@@ -227,7 +246,7 @@ try {
 $za = [System.IO.Compression.ZipFile]::OpenRead($docZip)
 try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
 finally { $za.Dispose() }
-foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
+foreach ($sentinel in @('EXPORTS.md', 'sonarHowto.md',
                         'examples/ci/github-actions-sca.yml')) {
   if ($names -notcontains $sentinel) {
     throw "docs-scripts: $sentinel fehlt im Archiv. Abbruch."

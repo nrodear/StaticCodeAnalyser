@@ -1385,17 +1385,11 @@ msgstr "Silent-Modus"
 msgid "Sonar export failed: "
 msgstr "Sonar-Export fehlgeschlagen: "
 
-msgid "Sonar push failed: "
-msgstr "Sonar-Push fehlgeschlagen: "
+msgid "Sonar export needs a project directory (run analysis first)."
+msgstr "Sonar-Export braucht ein Projektverzeichnis (zuerst analysieren)."
 
-msgid "Sonar push needs a project directory (run analysis first)."
-msgstr "Sonar-Push braucht ein Projektverzeichnis (zuerst analysieren)."
-
-msgid "Sonar push: select at least one finding first."
-msgstr "Sonar-Push: zuerst mindestens einen Befund auswaehlen."
-
-msgid "Sonar push: wrote %d issue file(s) to .sonar\\external\\"
-msgstr "Sonar-Push: %d Issue-Datei(en) nach .sonar\\external\\ geschrieben"
+msgid "Sonar export: select at least one finding first."
+msgstr "Sonar-Export: zuerst mindestens einen Befund auswaehlen."
 
 msgid "Sonar report saved: %s"
 msgstr "Sonar-Report gespeichert: %s"
@@ -1403,14 +1397,14 @@ msgstr "Sonar-Report gespeichert: %s"
 msgid "Sonar report saved: %s (%d findings)"
 msgstr "Sonar-Report gespeichert: %s (%d Befunde)"
 
-msgid "Sonar: send selected as external issue"
-msgstr "Sonar: Auswahl als External Issue senden"
-
 msgid "Sonar: write Generic Issue report (all findings)..."
 msgstr "Sonar: Generic-Issue-Report schreiben (alle Befunde)..."
 
 msgid "Sonar: write Generic Issue report..."
 msgstr "Sonar: Generic-Issue-Report schreiben..."
+
+msgid "Sonar: write selected as external issue"
+msgstr "Sonar: Auswahl als External Issue schreiben"
 
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr "Static Code Analyser: diese Datei analysieren, kein Dock-Fenster wird geöffnet"
@@ -1618,9 +1612,6 @@ msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Filterlisten, Hilfe-Pa
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
 # auf Englisch zurueck. ---
 
-msgid "Accept self-signed TLS certificates"
-msgstr "Selbstsignierte TLS-Zertifikate akzeptieren"
-
 msgid "Actions menu: Cancel, Export, Settings, Ignore"
 msgstr "Aktionsmenü: Abbrechen, Export, Einstellungen, Ignorieren"
 
@@ -1645,9 +1636,6 @@ msgstr "Projekt analysieren"
 msgid "Annotation overlay position:"
 msgstr "Position der Anmerkung:"
 
-msgid "Authentication"
-msgstr "Authentifizierung"
-
 msgid "Baseline (show only new findings)"
 msgstr "Baseline (nur neue Befunde anzeigen)"
 
@@ -1660,17 +1648,8 @@ msgstr "Baseline-Datei:"
 msgid "Baseline written: %s (%d findings)"
 msgstr "Baseline geschrieben: %s (%d Befunde)"
 
-msgid "Bearer Token:"
-msgstr "Bearer-Token:"
-
-msgid "Branch:"
-msgstr "Branch:"
-
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr "Alle Editor-Markierungen in allen Dateien löschen (Tabellen bleiben)"
-
-msgid "Connectivity"
-msgstr "Verbindung"
 
 msgid "Could not write baseline: %s"
 msgstr "Baseline konnte nicht geschrieben werden: %s"
@@ -1678,26 +1657,14 @@ msgstr "Baseline konnte nicht geschrieben werden: %s"
 msgid "Default (bright colors)"
 msgstr "Standard (kräftige Farben)"
 
-msgid "Detect"
-msgstr "Ermitteln"
-
 msgid "Display"
 msgstr "Anzeige"
 
 msgid "Editor marker color scheme:"
 msgstr "Farbschema der Editor-Markierungen:"
 
-msgid "File does not exist yet: "
-msgstr "Datei existiert noch nicht: "
-
 msgid "Gray (neutral)"
 msgstr "Grau (neutral)"
-
-msgid "Hide"
-msgstr "Ausblenden"
-
-msgid "Host URL:"
-msgstr "Host-URL:"
 
 msgid "Ignore list opened: %s"
 msgstr "Ignorierliste geöffnet: %s"
@@ -1705,41 +1672,20 @@ msgstr "Ignorierliste geöffnet: %s"
 msgid "No findings to write. Run an analysis first."
 msgstr "Keine Befunde zum Schreiben. Bitte zuerst eine Analyse ausführen."
 
-msgid "No sonar-project.properties found in "
-msgstr "Keine sonar-project.properties gefunden in "
-
 msgid "One line below (default)"
 msgstr "Eine Zeile darunter (Standard)"
-
-msgid "Open analyser.ini"
-msgstr "analyser.ini öffnen"
 
 msgid "Plugin Open Error"
 msgstr "Fehler beim Öffnen im Plugin"
 
-msgid "Project Key:"
-msgstr "Projektschlüssel:"
-
 msgid "Reset all findings (clear panels + markers)"
 msgstr "Alle Befunde zurücksetzen (Panels und Markierungen leeren)"
-
-msgid "Running health-check (this may take up to ~15s)..."
-msgstr "Systemprüfung läuft (kann bis zu ~15 s dauern)..."
 
 msgid "Same line at end"
 msgstr "Gleiche Zeile am Ende"
 
-msgid "Save once to create it."
-msgstr "Einmal speichern, um sie anzulegen."
-
 msgid "Select baseline file"
 msgstr "Baseline-Datei auswählen"
-
-msgid "Server"
-msgstr "Server"
-
-msgid "Show"
-msgstr "Anzeigen"
 
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr "Anmerkung beim Überfahren anzeigen (sonst markierte Zeile anklicken)"
@@ -1750,14 +1696,8 @@ msgstr "Nur Befunde anzeigen, die seit der Baseline neu sind (Altbestand ausblen
 msgid "Subtle (muted colors)"
 msgstr "Dezent (gedämpfte Farben)"
 
-msgid "Test Connection"
-msgstr "Verbindung testen"
-
 msgid "Write baseline from current scan..."
 msgstr "Baseline aus aktuellem Scan schreiben..."
-
-msgid "sonar.projectKey not found in "
-msgstr "sonar.projectKey nicht gefunden in "
 
 # --- 2026-08-05: in template.pot vorhanden, hier bisher nicht ---
 msgid "%s (%d findings)"
@@ -1825,9 +1765,6 @@ msgstr "Statische Code-Analyse - Datei"
 
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr "Unterdrückungs-Marker hat keinen zugehörigen Fund - vermutlich nach einer Korrektur übrig geblieben"
-
-msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."
-msgstr "DPAPI-verschlüsselt in analyser.ini [SonarTokens] - an dieses Windows-Konto gebunden, eine kopierte Datei ist anderswo wertlos."
 
 msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
 msgstr "AUS (Standard): die Einblendung erscheint nur beim Klick auf eine markierte Zeile - ungestörtes Lesen. EIN: die Einblendung folgt der Maus und erscheint, sobald eine markierte Zeile überfahren wird."
@@ -1997,9 +1934,6 @@ msgstr "In der Delphi-IDE geoeffnet: %s"
 msgid "Opened: %s  Line: %d"
 msgstr "Geöffnet: %s  Zeile: %d"
 
-msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
-msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut speichern, dann wird es für Ihr Konto DPAPI-verschlüsselt."
-
 # Neue msgids 2026-08-12: Baseline-Statuszeile, Quick-Fix-Header,
 # Jira-Mini-Issue ([UI] ClipboardOnClick), Grid-Platzhalter.
 
@@ -2070,8 +2004,8 @@ msgstr "DFM-Viewer"
 msgid "More than %d files found - scan cancelled."
 msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
 
-msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
-msgstr "Sonar-Push: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Pushes wurden entfernt."
+msgid "Sonar export: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier exports were removed."
+msgstr "Sonar-Export: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Exporte wurden entfernt."
 
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unverändert."

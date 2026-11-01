@@ -6,6 +6,10 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
 (getitnow.embarcadero.com/submit). Format: "GetIt Local Files"
 (vereinfachtes Server-Format; DocWiki "Local GetIt Packages").
 
+Das Paket enthaelt nur den Monolithen `StaticCodeAnalyser.Plugin.d12.bpl`,
+reDelphix ist nicht dabei (es braucht den Dev-Satz, siehe `HowTo_Build.md`,
+Abschnitt 5.3).
+
 ## Feld-Vertraege
 
 **HARTE Format-Fallen des Local-Parsers** (GetItMapper, Exception-Analyse

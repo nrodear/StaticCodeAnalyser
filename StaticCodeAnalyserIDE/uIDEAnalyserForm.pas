@@ -28,7 +28,6 @@ uses
   uIDELifecycle, uIDEAnalyseRunner,
   uIDEAnnotationOverlay,
   uIDESCAOptions,                          // Tools > Options > SCA Page
-  uIDESonarOptions,                        // Tools > Options > Sonar Integration
   uFindingGridRenderer, uFindingFilter,
   uUiElementRegistry,                      // TUiElementRegistry - AddUiElements-Signatur
   uFindingFileIndex,                       // TFindingFileIndex - Dock-Funde je Datei (FFileIndex)
@@ -630,8 +629,8 @@ type
 var
   GDockableForm: TAnalyserDockableForm;
 
-// Traegt die UI-Elemente DIESER Unit in das Verzeichnis ein - zehn Stueck,
-// von den SharedUI-Hooks bis zur Sonar-Options-Seite, mit SortKeys in der
+// Traegt die UI-Elemente DIESER Unit in das Verzeichnis ein - elf Stueck,
+// von den SharedUI-Hooks bis zur SCA-Options-Seite, mit SortKeys in der
 // am 2026-08-10 GEMESSENEN Anmeldereihenfolge (Messung 0.5). Angemeldet
 // wird dadurch noch nichts; das macht RegisterAll beim Aufrufer
 // (uIDEExpert.Register), der auch die uebrigen vier Elemente beitraegt.
@@ -6191,7 +6190,6 @@ const
   SK_CTX_MENU       = 80;
   SK_CTX_ACTIONS    = 85;
   SK_OPTIONS_SCA    = 90;
-  SK_OPTIONS_SONAR  = 100;
   procedure AddEl(const AName: string; ASortKey: Integer;
     const AReg, AUnreg: TUiElementProc);
   // Buendelt Element und Not-Aus (A.5): der Name faellt nur EINMAL, und
@@ -6244,10 +6242,6 @@ begin
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
   AddEl('OptionsPageSCA', SK_OPTIONS_SCA,
     RegisterSCAAddInOptions, UnregisterSCAAddInOptions);
-  // Tools > Options > Third Party > Sonar Integration
-  // (separate Page - Host/Token/ProjectKey + Test-Connection).
-  AddEl('OptionsPageSonar', SK_OPTIONS_SONAR,
-    RegisterSonarAddInOptions, UnregisterSonarAddInOptions);
 end;
 
 procedure ShowAnalyserDockableForm;

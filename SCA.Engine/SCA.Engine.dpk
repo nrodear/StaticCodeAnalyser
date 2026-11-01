@@ -327,7 +327,6 @@ contains
   uPathOverrides in 'sources\Infrastructure\uPathOverrides.pas',
   uProjectFiles in 'sources\Infrastructure\uProjectFiles.pas',
   uRepoSettings in 'sources\Infrastructure\uRepoSettings.pas',
-  uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',
   uSourcePlaces in 'sources\Infrastructure\uSourcePlaces.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
   uStaticFiles in 'sources\Infrastructure\uStaticFiles.pas',

@@ -1,6 +1,6 @@
 unit uSonarPush;
 
-// Helper fuer den "Send to Sonar"-Workflow aus dem IDE-Plugin und der UI.
+// Helper fuer die Sonar-Eintraege im Export-Menue von IDE-Plugin und UI.
 //
 // Es gibt zwei Modi:
 //   1. Bulk-Export: die uebergebene Findings-Liste als EINE
@@ -9,7 +9,7 @@ unit uSonarPush;
 //      Analyse-Output VOR Grid- und Baseline-Filter - dasselbe was
 //      --sonar-export im CLI macht. (Bis 03616dd war es die gefilterte
 //      Sicht; dieser Kommentar hinkte seither hinterher.)
-//   2. Per-Issue-Push: ausgewaehlte Findings einzeln in
+//   2. Einzeldateien: ausgewaehlte Findings einzeln in
 //      <project>\.sonar\external\<hash>.json schreiben. Sonar-Scanner
 //      sammelt alle .json-Files im Pfad automatisch ueber
 //      sonar.externalIssuesReportPaths=.sonar/external/.

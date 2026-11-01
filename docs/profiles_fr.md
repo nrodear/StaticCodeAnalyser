@@ -140,6 +140,11 @@ Les profils repris arrivent dans votre propre `profiles.json`. Ils se
 comportent ensuite comme ceux que vous avez créés vous-même - y compris
 avec `--profile <nom>` en ligne de commande.
 
+Le dépôt fournit un tel fichier : `reDelphix/data/profile-code-aktionen.json`
+contient le profil `code-aktionen`, les règles dotées d'une action de code
+du paquet optionnel reDelphix plus `FileReadError`. Il ne fait pas partie
+des profils intégrés et doit être importé.
+
 ## Trouver une règle dans la liste
 
 Les deux listes de la fenêtre des profils - les règles du profil et la

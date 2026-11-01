@@ -126,7 +126,7 @@ d'include activés, `dlDelphi`, en série), puis surcharger de façon ciblée.
 | `IncludeDefines` | `Boolean` | Lire les fichiers `{$I}` pour l'effet de leurs `{$DEFINE}`. `Init` pose `True` ; `False` = aveugle aux includes (CLI `--no-include-defines`). Vue d'analyse comme `IfdefDefines`. |
 | `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) ou `dlFpc` (`uSCAConsts`) : `dlFpc` collecte en plus les `*.pp` lors du parcours de répertoires et, avec un `IfdefDefines` non vide, ajoute `FPC` et `LCL`. Forcé à `dlFpc` pour les scopes de projet `.lpi`/`.lpk`/`.lpg`. Vue d'analyse comme `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML de règles personnalisées (`''`=aucune). |
-| `BaselinePath` | `string` | Filtrer les résultats contre un JSON de référence (`''`=désactivé). |
+| `BaselinePath` | `string` | Filtrer les résultats contre un JSON de référence (`''`=désactivé). Chaque entrée couvre au plus un résultat. |
 | `WriteBaselinePath` | `string` | Écrire les résultats actuels comme nouvelle référence. |
 | `ApplyRepoIni` | `Boolean` | Charger + appliquer intégralement `analyser.ini` (comme la CLI). |
 | `MinSeverityName` | `string` | Mode INI : surcharge `'error'`/`'warning'`/`'hint'`. |
@@ -221,7 +221,7 @@ Chaque résultat :
 | Membre | Type / retour | Signification |
 |--------|---------------|---------------|
 | `FileName` | `string` | Fichier source. |
-| `MethodName` | `string` | Méthode/routine (si connue). |
+| `MethodName` | `string` | Routine dont les lignes contiennent le résultat ; vide hors d'une routine et pour les résultats d'un fichier de fiche. |
 | `LineNumber` / `LineInt` | `string` / `Integer` | Ligne (champ chaîne + assistant entier). |
 | `EndLine` / `SpanEnd` / `IsMultiLine` / `SpanLineCount` | `Integer` / `Integer` / `Boolean` / `Integer` | Dernière ligne de la plage du résultat. `EndLine = 0` (défaut) = une seule ligne ; lire `SpanEnd` (borné, jamais inférieur à la ligne de début) plutôt que le champ brut. Une plage ne change que la surface marquée, jamais le nombre de résultats. |
 | `MissingVar` / `Message` | `string` | Message de détail (`Message` = alias). |
