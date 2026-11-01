@@ -55,9 +55,10 @@ bibliothèque Win32.
 | Cible de build | Plateforme | Prérequis |
 |---|---|---|
 | SCA.Engine290.bpl | Win32 + Win64 | rtl, rien d'externe |
-| SCA.SharedUI290.bpl | **Win32 uniquement** | rtl, vcl, designide (IDE uniquement) |
+| SCA.SharedUI290.bpl | Win32 + Win64 | rtl, vcl, vclwinx, SCA.Engine |
 | StaticCodeAnalyser.d12.exe (autonome) | Win32 + Win64 | rien d'externe |
-| StaticCodeAnalyser.IDE.d12.bpl | **Win32 uniquement** | rtl, vcl, designide |
+| StaticCodeAnalyser.IDE.d12.bpl | Win32 ; Win64 **sous Delphi 13 uniquement** | rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI |
+| reDelphix.d12.bpl | Win32 ; Win64 **sous Delphi 13 uniquement** | rtl, vcl, designide, SCA.Engine |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (voir plus bas) |
 
 « Build all projects » compile chaque projet du groupe sur la plateforme

@@ -52,9 +52,10 @@ If the GetIt entry is missing: search GitHub/Bitbucket for
 | Build target | Platform | Prerequisite |
 |---|---|---|
 | SCA.Engine290.bpl | Win32 + Win64 | rtl, nothing external |
-| SCA.SharedUI290.bpl | **Win32 only** | rtl, vcl, designide (IDE-only) |
+| SCA.SharedUI290.bpl | Win32 + Win64 | rtl, vcl, vclwinx, SCA.Engine |
 | StaticCodeAnalyser.d12.exe (standalone) | Win32 + Win64 | nothing external |
-| StaticCodeAnalyser.IDE.d12.bpl | **Win32 only** | rtl, vcl, designide |
+| StaticCodeAnalyser.IDE.d12.bpl | Win32; Win64 **under Delphi 13 only** | rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI |
+| reDelphix.d12.bpl | Win32; Win64 **under Delphi 13 only** | rtl, vcl, designide, SCA.Engine |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (see below) |
 
 "Build all projects" builds every project of the group on the currently selected
