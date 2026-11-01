@@ -1411,14 +1411,14 @@ msgstr "Rapport Sonar enregistré : %s"
 msgid "Sonar report saved: %s (%d findings)"
 msgstr "Rapport Sonar enregistré : %s (%d résultats)"
 
-msgid "Sonar: send selected as external issue"
-msgstr "Sonar : envoyer la sélection comme external issue"
-
 msgid "Sonar: write Generic Issue report (all findings)..."
 msgstr "Sonar : écrire un rapport Generic Issue (tous les résultats)..."
 
 msgid "Sonar: write Generic Issue report..."
 msgstr "Sonar : écrire un rapport Generic Issue..."
+
+msgid "Sonar: write selected as external issue"
+msgstr "Sonar : écrire la sélection comme external issue"
 
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr "Static Code Analyser : analyser ce fichier, aucune fenêtre ancrée ne s'ouvre"
@@ -1630,9 +1630,6 @@ msgstr "Langue de l'interface : %s - les libellés restants (tuiles, listes de f
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
 # auf Englisch zurueck. ---
 
-msgid "Accept self-signed TLS certificates"
-msgstr "Accepter les certificats TLS auto-signés"
-
 msgid "Actions menu: Cancel, Export, Settings, Ignore"
 msgstr "Menu Actions : Annuler, Exporter, Paramètres, Ignorer"
 
@@ -1657,9 +1654,6 @@ msgstr "Analyser le projet"
 msgid "Annotation overlay position:"
 msgstr "Position de l’annotation :"
 
-msgid "Authentication"
-msgstr "Authentification"
-
 msgid "Baseline (show only new findings)"
 msgstr "Référence (afficher uniquement les nouveaux résultats)"
 
@@ -1672,17 +1666,8 @@ msgstr "Fichier de référence :"
 msgid "Baseline written: %s (%d findings)"
 msgstr "Référence écrite : %s (%d résultats)"
 
-msgid "Bearer Token:"
-msgstr "Jeton Bearer :"
-
-msgid "Branch:"
-msgstr "Branche :"
-
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr "Effacer tous les marqueurs de l’éditeur dans tous les fichiers (les tableaux restent)"
-
-msgid "Connectivity"
-msgstr "Connectivité"
 
 msgid "Could not write baseline: %s"
 msgstr "Impossible d’écrire la référence : %s"
@@ -1690,26 +1675,14 @@ msgstr "Impossible d’écrire la référence : %s"
 msgid "Default (bright colors)"
 msgstr "Par défaut (couleurs vives)"
 
-msgid "Detect"
-msgstr "Détecter"
-
 msgid "Display"
 msgstr "Affichage"
 
 msgid "Editor marker color scheme:"
 msgstr "Palette des marqueurs de l’éditeur :"
 
-msgid "File does not exist yet: "
-msgstr "Le fichier n’existe pas encore : "
-
 msgid "Gray (neutral)"
 msgstr "Gris (neutre)"
-
-msgid "Hide"
-msgstr "Masquer"
-
-msgid "Host URL:"
-msgstr "URL de l’hôte :"
 
 msgid "Ignore list opened: %s"
 msgstr "Liste d’exclusions ouverte : %s"
@@ -1717,41 +1690,20 @@ msgstr "Liste d’exclusions ouverte : %s"
 msgid "No findings to write. Run an analysis first."
 msgstr "Aucun résultat à écrire. Lancez d’abord une analyse."
 
-msgid "No sonar-project.properties found in "
-msgstr "Aucun fichier sonar-project.properties trouvé dans "
-
 msgid "One line below (default)"
 msgstr "Une ligne en dessous (par défaut)"
-
-msgid "Open analyser.ini"
-msgstr "Ouvrir analyser.ini"
 
 msgid "Plugin Open Error"
 msgstr "Erreur d’ouverture du plugin"
 
-msgid "Project Key:"
-msgstr "Clé du projet :"
-
 msgid "Reset all findings (clear panels + markers)"
 msgstr "Réinitialiser tous les résultats (vider les panneaux et les marqueurs)"
-
-msgid "Running health-check (this may take up to ~15s)..."
-msgstr "Vérification en cours (jusqu’à ~15 s)..."
 
 msgid "Same line at end"
 msgstr "Même ligne, à la fin"
 
-msgid "Save once to create it."
-msgstr "Enregistrez une fois pour le créer."
-
 msgid "Select baseline file"
 msgstr "Sélectionner le fichier de référence"
-
-msgid "Server"
-msgstr "Serveur"
-
-msgid "Show"
-msgstr "Afficher"
 
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr "Afficher l’annotation au survol (sinon, cliquer sur la ligne marquée)"
@@ -1762,14 +1714,8 @@ msgstr "Afficher uniquement les résultats nouveaux depuis la référence (masqu
 msgid "Subtle (muted colors)"
 msgstr "Discret (couleurs atténuées)"
 
-msgid "Test Connection"
-msgstr "Tester la connexion"
-
 msgid "Write baseline from current scan..."
 msgstr "Écrire la référence à partir de l’analyse actuelle..."
-
-msgid "sonar.projectKey not found in "
-msgstr "sonar.projectKey introuvable dans "
 
 # --- 2026-08-05: in template.pot vorhanden, hier bisher nicht ---
 msgid "%s (%d findings)"
@@ -1837,9 +1783,6 @@ msgstr "Analyse statique du code - Fichier"
 
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr "Le marqueur de suppression ne correspond à aucun résultat - probablement obsolète après une correction"
-
-msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."
-msgstr "Chiffré par DPAPI dans analyser.ini [SonarTokens] - lié à ce compte Windows, une copie du fichier est inutilisable ailleurs."
 
 msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
 msgstr "DÉSACTIVÉ (par défaut) : la fenêtre n'apparaît qu'au clic sur une ligne marquée - lecture sans gêne. ACTIVÉ : la fenêtre suit la souris et s'affiche dès le survol d'une ligne marquée."
@@ -2008,9 +1951,6 @@ msgstr "Ouvert dans l'IDE Delphi : %s"
 
 msgid "Opened: %s  Line: %d"
 msgstr "Ouvert : %s  Ligne : %d"
-
-msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
-msgstr "AVERTISSEMENT : ce jeton est stocké EN CLAIR dans analyser.ini. Enregistrez-le à nouveau ici pour le chiffrer par DPAPI pour votre compte."
 
 msgid "%d hidden by baseline"
 msgstr "%d masqués par la base"

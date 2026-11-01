@@ -211,7 +211,7 @@ begin
     Mi.OnClick := DoExportSonarGeneric;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
-    Mi.Caption := _('Sonar: send selected as external issue');
+    Mi.Caption := _('Sonar: write selected as external issue');
     Mi.OnClick := DoExportSonarSingleIssue;
     FPopup.Items.Add(Mi);
 end;
