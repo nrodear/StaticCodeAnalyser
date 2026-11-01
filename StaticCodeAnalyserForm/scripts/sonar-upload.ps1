@@ -14,15 +14,18 @@
 .PARAMETER ProjectPath
   The folder the analysis ran on: the paths in the report are relative to
   it. The script aborts if no report path exists below it and warns if only
-  some do. It also warns, per reason, about report files that match the
-  exclusions, sit in an embedded git repo (own .git, no gitlink in the parent
-  index) or are gitignored in their repo; none of these stops the upload, and
-  the git part is skipped with a note if git or a repo is missing. Default:
-  the StaticCodeAnalyser repo root (mirrors sonar-scan.ps1 self-scan default).
+  some do; absolute paths and paths leading out of it count as not found,
+  because Sonar drops them. It also warns, per reason, about report files
+  that match the exclusions, sit in an embedded git repo (own .git, no gitlink
+  in the parent index) or are gitignored in their repo; none of these stops
+  the upload, and the git part is skipped with a note if git or a repo is
+  missing. A report that cannot be read or is over 100 MB skips this whole
+  pre-check with a warning, the upload continues. Default: the
+  StaticCodeAnalyser repo root (mirrors sonar-scan.ps1 self-scan default).
 
 .PARAMETER JsonPath
-  Path to the Sonar Generic Issue Format JSON. Default:
-  <ProjectPath>\sca-findings.json.
+  Path to the Sonar Generic Issue Format JSON, a relative one counts from the
+  current location. Default: <ProjectPath>\sca-findings.json.
 
 .PARAMETER ScannerPath
   Full path to sonar-scanner.bat. Default: 'sonar-scanner' from PATH, then
@@ -70,15 +73,24 @@ $ErrorActionPreference = 'Stop'
 # Nicht im param-Block: dort ist $PSScriptRoot unter Windows PowerShell 5.1
 # mit `powershell -File` leer, und das Skript bricht vor der ersten Zeile ab.
 if (-not $ProjectPath) {
-  $ProjectPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
+  $ProjectPath = Join-Path $PSScriptRoot '..\..'
 }
+if (-not (Test-Path -LiteralPath $ProjectPath -PathType Container)) {
+  throw "ProjectPath not found or not a folder: $ProjectPath"
+}
+# Immer absolut: git und .NET loesen relative Pfade gegen das Prozessverzeichnis
+# auf, PowerShell gegen die aktuelle Location, und die koennen abweichen.
+# 'D:\' behaelt den Backslash, 'D:' waere relativ zum Ordner auf dem Laufwerk.
+$ProjectPath = (Resolve-Path -LiteralPath $ProjectPath).ProviderPath.TrimEnd('\')
+if ($ProjectPath -match '^[A-Za-z]:$') { $ProjectPath += '\' }
 
 if (-not $JsonPath) {
   $JsonPath = Join-Path $ProjectPath 'sca-findings.json'
 }
-if (-not (Test-Path $JsonPath)) {
+if (-not (Test-Path -LiteralPath $JsonPath -PathType Leaf)) {
   throw "Findings JSON not found: $JsonPath -- run sonar-scan.ps1 first."
 }
+$JsonPath = (Resolve-Path -LiteralPath $JsonPath).ProviderPath
 
 # Locate sonar-scanner: PATH first, then the user's known install.
 if (-not $ScannerPath) {
@@ -185,20 +197,21 @@ and SONAR_TOKEN in the environment.
   }
 }
 
+# Rest von $path unterhalb von $root mit /, $null wenn er nicht darunter liegt.
+# Der Vergleich nimmt den Pfadtrenner mit, sonst passte D:\foo auf D:\foobar\x.
+# TrimEnd, weil eine Laufwerkswurzel ihren Backslash schon mitbringt.
+function Get-PathBelowRoot([string]$root, [string]$path) {
+  $prefix = $root.TrimEnd('\') + '\'
+  $full = [IO.Path]::GetFullPath($path)
+  if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+  return $full.Substring($prefix.Length).Replace('\', '/')
+}
+
 # Make JsonPath relative to ProjectPath so sonar-scanner picks it up
 # regardless of absolute drive paths.
-$relJson = ''
-try {
-  $relJson = (Resolve-Path $JsonPath -Relative -RelativeBasePath $ProjectPath).TrimStart('.\').TrimStart('.','/')
-} catch {
-  # PowerShell 5.1 lacks -RelativeBasePath -> fall back to manual prefix-strip
-  $absJson = (Resolve-Path $JsonPath).Path
-  $absProj = (Resolve-Path $ProjectPath).Path
-  if ($absJson.StartsWith($absProj, [StringComparison]::OrdinalIgnoreCase)) {
-    $relJson = $absJson.Substring($absProj.Length).TrimStart('\','/').Replace('\','/')
-  } else {
-    $relJson = $absJson  # absolut, sonar-scanner kommt damit klar
-  }
+$relJson = Get-PathBelowRoot $ProjectPath $JsonPath
+if (-not $relJson) {
+  $relJson = $JsonPath  # absolut, sonar-scanner kommt damit klar
 }
 
 # Die EINE Liste, die der Scanner bekommt: die Vorpruefung unten liest dieselbe.
@@ -300,22 +313,73 @@ function Invoke-Git([string]$gitExe, [string]$workDir, [string]$gitArgs, [byte[]
 # Sonar verwirft Findings zu Dateien, die es unter dem Scan-Ordner nicht
 # findet, und der Scanner meldet trotzdem Erfolg. Ein falscher ProjectPath
 # ergab so ein leeres Projekt mit "Upload complete" - also vorher pruefen.
-$report = Get-Content -LiteralPath $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
-$reportFiles = @($report.issues | ForEach-Object { $_.primaryLocation.filePath } | Sort-Object -Unique)
+# Laesst sich der Report nicht lesen, entfaellt die Vorpruefung, der Upload
+# laeuft weiter (siehe unten). Der throw bei 0 gefundenen Dateien steht bewusst
+# ausserhalb des try. Die Grenze schuetzt den Speicher: 41 MB Report brauchen
+# unter Windows PowerShell 5.1 rund 1,2 GB RAM.
+$maxReportBytes = 100MB
+$reportFiles = @()
+$findingsPerFile = @{}
+try {
+  $reportBytes = [IO.FileInfo]::new($JsonPath).Length
+  if ($reportBytes -gt $maxReportBytes) {
+    Write-Warning "Report is $([int]($reportBytes / 1MB)) MB, over the limit of $([int]($maxReportBytes / 1MB)) MB for the pre-check. Pre-check skipped, the upload continues."
+  } else {
+    $report = Get-Content -LiteralPath $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($null -eq $report) { throw 'the file is empty' }
+    $uniqueFiles =New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($issue in $report.issues) {
+      $filePath = [string]$issue.primaryLocation.filePath
+      if ($filePath) {
+        [void]$uniqueFiles.Add($filePath)
+        $findingsPerFile[$filePath] += 1
+      }
+    }
+    $reportFiles = @($uniqueFiles | Sort-Object)
+  }
+} catch {
+  Write-Warning "Report could not be read. Pre-check skipped, the upload continues: $($_.Exception.Message)"
+}
 if ($reportFiles.Count -gt 0) {
-  $missingFiles = @($reportFiles | Where-Object {
-    -not (Test-Path -LiteralPath ([IO.Path]::Combine($ProjectPath, $_)) -PathType Leaf)
-  })
-  $foundCount = $reportFiles.Count - $missingFiles.Count
+  # Gefunden heisst: relativ, wirklich unter ProjectPath und die Datei existiert.
+  # Absolute Pfade verwirft Sonar auch, wenn die Datei unter ProjectPath liegt.
+  # Der Schluessel ist der Pfad aus dem Report, der Wert sein normalisierter Rest.
+  $foundFiles   = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([StringComparer]::OrdinalIgnoreCase)
+  $missingFiles = New-Object System.Collections.Generic.List[string]
+  $outsideFiles = New-Object System.Collections.Generic.List[string]
+  foreach ($file in $reportFiles) {
+    try {
+      $full = [IO.Path]::Combine($ProjectPath, $file)
+      $rel  = if ([IO.Path]::IsPathRooted($file)) { $null } else { Get-PathBelowRoot $ProjectPath $full }
+      if (-not $rel) {
+        $outsideFiles.Add($file)
+      } elseif (Test-Path -LiteralPath $full -PathType Leaf) {
+        $foundFiles[$file] = $rel
+      } else {
+        $missingFiles.Add($file)
+      }
+    } catch {
+      # Zeichen, die .NET Framework im Pfad ablehnt: so eine Datei gibt es nicht.
+      $missingFiles.Add($file)
+    }
+  }
+  $foundCount = $foundFiles.Count
   Write-Host "Report:   $($reportFiles.Count) files, $foundCount found under ProjectPath" -ForegroundColor DarkGray
   if ($foundCount -eq 0) {
+    $outsideNote = if ($outsideFiles.Count -gt 0) {
+      "`n  Unusable:    $($outsideFiles.Count) of them are absolute or lead out of ProjectPath, Sonar drops those paths."
+    } else { '' }
     throw @"
 None of the $($reportFiles.Count) files in the report exist under ProjectPath.
   ProjectPath: $ProjectPath
-  Example:     $($reportFiles[0])
+  Example:     $($reportFiles[0])$outsideNote
 ProjectPath must be the folder the analysis ran on: the paths in the report
 are relative to it. Sonar would import 0 issues.
 "@
+  }
+  if ($outsideFiles.Count -gt 0) {
+    $examples = ($outsideFiles | Select-Object -First 3) -join ', '
+    Write-Warning "$($outsideFiles.Count) of $($reportFiles.Count) report files have an absolute path or lead out of ProjectPath, Sonar drops their findings even if the file exists. Examples: $examples"
   }
   if ($missingFiles.Count -gt 0) {
     $examples = ($missingFiles | Select-Object -First 3) -join ', '
@@ -326,12 +390,6 @@ are relative to it. Sonar would import 0 issues.
   # die sonar.exclusions treffen oder die Git vor ihm verbirgt, und nennt davon
   # nur fuenf Beispiele. Jede Datei zaehlt genau einmal, in der Reihenfolge des
   # Scanners: erst die Muster, dann SCM.
-  $missingSet = New-Object 'System.Collections.Generic.HashSet[string]' (
-    [string[]]$missingFiles, [StringComparer]::OrdinalIgnoreCase)
-  $findingsPerFile = @{}
-  foreach ($issue in $report.issues) {
-    $findingsPerFile[$issue.primaryLocation.filePath] += 1
-  }
   function Measure-Findings([string[]]$files) {
     $sum = 0
     foreach ($f in $files) { $sum += $findingsPerFile[$f] }
@@ -347,10 +405,10 @@ are relative to it. Sonar would import 0 issues.
   $exclusionRegexes = @($effectiveExclusions -split ',' | Where-Object { $_.Trim() } |
     ForEach-Object { ConvertTo-SonarPathRegex $_ })
   foreach ($file in $reportFiles) {
-    if ($missingSet.Contains($file)) { continue }
+    if (-not $foundFiles.ContainsKey($file)) { continue }
     $hit = $false
     foreach ($rx in $exclusionRegexes) {
-      if ($rx.IsMatch($file.Replace('\', '/'))) { $hit = $true; break }
+      if ($rx.IsMatch($foundFiles[$file])) { $hit = $true; break }
     }
     if ($hit) { $excludedFiles.Add($file) } else { $scmFiles.Add($file) }
   }
@@ -421,7 +479,7 @@ are relative to it. Sonar would import 0 issues.
 
       $filesOfRepo = @{}
       foreach ($file in $scmFiles) {
-        $norm = $file.Replace('\', '/')
+        $norm = $foundFiles[$file]
         $slash = $norm.LastIndexOf('/')
         $repo = if ($slash -gt 0) { Get-OwningRepo $norm.Substring(0, $slash) } else { '' }
         if (Test-RepoVisible $repo) {

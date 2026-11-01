@@ -143,11 +143,14 @@ ihrer YAML-Severity (error → HIGH, warning → MEDIUM, hint → LOW).
 Funde mit Konfidenz *medium* auf Warning (*low* auf Hint). Das zählt nicht
 als Herabstufung — solche Funde gehen in den Report. Bis Oktober 2026 galten
 sie als herabgestuft und fehlten: im Realwelt-Korpus 726 Funde, u. a. fast
-alle von SCA001, SCA003 und SCA004. Eine Regel, deren Funde die Politik
-schon mit der Standard-Konfidenz des Kinds deckelt, trägt in Sonar die
-gedeckelte Schwere als Impact (Warning → höchstens MEDIUM): SCA004 kommt als
-SECURITY/MEDIUM statt BLOCKER an. Mit `[Rules] EvidenceTiering=0` bleiben die
-Katalog-Impacts.
+alle von SCA001, SCA003 und SCA004. Der Impact einer Regel folgt den Funden
+des Laufs: Ist selbst ihr stärkster Fund gedeckelt, trägt sie in Sonar die
+gedeckelte Schwere (Warning → höchstens MEDIUM). SCA004 ohne belegten Fund
+kommt als SECURITY/MEDIUM statt BLOCKER an, SCA202 als RELIABILITY/MEDIUM.
+Ein Fund mit voller Schwere hält die ganze Regel auf den Katalog-Impacts,
+denn Sonar kennt die Schwere nur je Regel; der Impact kann also von Lauf zu
+Lauf wechseln, die Issues bleiben. Mit `[Rules] EvidenceTiering=0` bleiben
+die Katalog-Impacts.
 
 Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
 einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
@@ -289,7 +292,11 @@ SonarDelphi.
    `analyser.ini`) und behält Test-Fixtures im Report, damit dieselben Findings
    entstehen wie in der IDE. `-RuleProfile` und `-HideTestFixtures` weichen davon
    ab. Einen unbekannten Profilnamen lehnt das Skript ab, die EXE selbst würde
-   damit ohne Fehler andere Regeln anwenden.
+   damit ohne Fehler alle Regeln anwenden. Geprüft wird gegen `profiles.json` und
+   den einen Katalog, den die EXE lädt: die erste `rules\sca-rules.json` ab dem
+   EXE-Ordner bis zu acht Ebenen aufwärts, erst danach die Kopie unter
+   `%APPDATA%\StaticCodeAnalyser\rules\`. Bei einer EXE im Repo zählt die Kopie
+   also nicht.
 
    **Warum nicht aus dem Export-Menü:** GUI und CLI schreiben bei gleichen
    Findings unterschiedliche Regel-Metadaten (Beschreibung,

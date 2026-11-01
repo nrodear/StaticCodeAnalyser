@@ -324,9 +324,20 @@ function ReadSonarFileView(const AFileName: string): TSonarFileView;
 // (Dateiebene) - welche Zeile Sonar dort sieht, haengt an
 // sonar.sourceEncoding.
 //
-// Eine Datei, die nicht zu lesen ist (fehlt, gesperrt), liefert
+// Eine Datei, die nicht zu lesen ist (fehlt, gesperrt, Lesefehler), liefert
 // Readable = False - dann aendert der Export nichts am Fund. Das ist auch
 // der Fall aller Unit-Tests mit erfundenen Pfaden.
+//
+// LESEFEHLER (Review 2026-10-31): FS.Read meldet sie nicht. FileRead liefert
+// -1, THandleStream.Read macht daraus 0 (System.Classes, Delphi 37) - fuer
+// den Aufrufer sieht ein Fehler aus wie das Dateiende. Eine Pruefung auf
+// N < 0 waere deshalb toter Code, ein Abbruch bei N = 0 wuerde die leere
+// Datei treffen. Verlaesslich ist nur der Vergleich mit der Dateigroesse:
+// wurde weniger gelesen, als die Datei hat, ist die Zeilenzahl zu klein,
+// und jeder Fund dahinter landete auf Dateiebene. Der Vergleich deckt auch
+// den ersten Read, den Read in der Schleife und den Abbruch bei N <
+// BUF_SIZE ab; 'Total' und 'Size' laufen auf Int64, die Datei kann groesser
+// sein als ein Integer.
 const
   // Gerade: eine 16-Bit-Einheit steht nie ueber einer Puffergrenze.
   BUF_SIZE = 65536;
@@ -338,6 +349,8 @@ var
   Lines  : Integer;
   Binary : Boolean;
   Prev   : Word;
+  Size   : Int64;     // Dateigroesse beim Oeffnen
+  Total  : Int64;     // davon wirklich gelesen
 
   procedure Count(U: Word);
   begin
@@ -364,6 +377,8 @@ begin
     Lines  := 1;
     Binary := False;
     Prev   := 0;
+    Size   := FS.Size;
+    Total  := 0;
     N := FS.Read(Buf[0], BUF_SIZE);
     Wide := 0;
     if (N >= 2) and (Buf[0] = $FF) and (Buf[1] = $FE) then
@@ -376,6 +391,7 @@ begin
       I := 2;   // BOM ueberspringen
     while N > 0 do
     begin
+      Inc(Total, N);
       if Wide = 0 then
       begin
         while I < N do
@@ -399,6 +415,9 @@ begin
       N := FS.Read(Buf[0], BUF_SIZE);
       I := 0;
     end;
+    // Lesefehler: wie die gesperrte Datei oben. Result ist noch der
+    // Default, der Fund geht unveraendert mit (s. Funktionskopf).
+    if Total < Size then Exit;
     Result.Lines    := Lines;
     Result.Binary   := Binary;
     Result.Readable := True;
@@ -655,6 +674,19 @@ begin
     Result := Weaker(Result, TEvidenceTiering.MaxSeverityFor(F.Confidence));
 end;
 
+function RuleSeverityOf(const F: TLeakFinding): TLeakSeverity;
+// Was dieser Fund zur Schwere seiner REGEL beitraegt: PolicySeverity, und
+// eine Nutzer-HOCHstufung zaehlt mit. poaSeverityError hat das letzte Wort
+// gegen die Evidenz-Politik (s. Kopf von uEvidenceTiering); ein so
+// hochgestufter Fund ist im Lauf wirklich ein Error, seine Regel darf ihn
+// in Sonar nicht auf MEDIUM druecken. Eine HERABstufung zaehlt dagegen nicht:
+// mit --sonar-keep-downgraded bleibt die Regel, wie sie ohne den Pfad waere.
+begin
+  Result := PolicySeverity(F);
+  if F.SeverityWasOverridden and (Ord(F.Severity) < Ord(Result)) then
+    Result := F.Severity;
+end;
+
 function IsDowngraded(const F: TLeakFinding): Boolean;
 // True, wenn ein NUTZER die Severity dieses Fundes abgeschwaecht hat - per
 // Pfad-Ueberschreibung ("generierter Code zaehlt nur als Hinweis",
@@ -667,7 +699,7 @@ function IsDowngraded(const F: TLeakFinding): Boolean;
 // Funde galten damit fast ALLE als herabgestuft und fehlten in Sonar: JVCL
 // SCA001 51 von 53, SCA003 10 von 10, Realwelt-Korpus 726 Funde
 // (Sonar-Roundtrip-Pruefung). Gedeckelte Funde gehen jetzt mit; ihre Regel
-// traegt die gedeckelte Schwere als Impact (KindCappedMeta), damit Sonar
+// traegt die gedeckelte Schwere als Impact (RunCappedMeta), damit Sonar
 // sie nicht in voller Katalog-Schwere zeigt.
 //
 // Ebenso keine Herabstufung ist eine Schwere, die der DETEKTOR selbst
@@ -719,36 +751,51 @@ begin
       Result[I].Severity := ACap;
 end;
 
-function KindCappedMeta(const M: TRuleMeta; K: TFindingKind): TRuleMeta;
-// Regel-Metadaten mit der GEDECKELTEN Kind-Schwere.
+function RunCappedMeta(const M: TRuleMeta;
+  AStrongest: TLeakSeverity): TRuleMeta;
+// Regel-Metadaten, gedeckelt auf das, was der LAUF fuer diese Regel hergibt.
+// AStrongest ist die staerkste Schwere ihrer Funde in diesem Export
+// (RuleSeverityOf, gesammelt in EmitRules).
 //
-// Deckelt die Evidenz-Politik das Kind schon mit seiner Standard-Konfidenz
-// (KindDefaultConfidence; SCA001, SCA003, SCA004 u. a. = medium -> Warning),
-// steht praktisch jeder Fund der Regel gedeckelt im Lauf. Sonar kennt die
-// Schwere nur je Regel; mit den Katalog-Impacts erschiene SCA004 dort als
-// SECURITY/BLOCKER, obwohl der Lauf ihn als Warning fuehrt. Deshalb werden
-// die Impacts auf die gedeckelte Schwere begrenzt (Warning -> hoechstens
-// MEDIUM) und DefaultSeverity mitgezogen (sie speist den Fallback-Impact in
-// BuildRuleObject). Ohne Deckel - Politik aus oder Kind fcHigh - bleibt der
-// Katalog unveraendert.
+// Sonar kennt die Schwere nur je Regel. Mit den Katalog-Impacts erschiene
+// SCA004 dort als SECURITY/BLOCKER, obwohl der Lauf seine Funde als Warning
+// fuehrt. Liegt AStrongest unter der Katalog-Schwere, werden die Impacts
+// deshalb darauf begrenzt (Warning -> hoechstens MEDIUM, Hint -> hoechstens
+// LOW) und DefaultSeverity mitgezogen (sie speist den Fallback-Impact in
+// BuildRuleObject). Ohne Deckel - Politik aus, oder mindestens ein Fund mit
+// voller Schwere - bleibt der Katalog unveraendert. Angehoben wird nie.
 //
-// Je Regel, nicht je Fund: ein einzelner fcHigh-Fund einer medium-Regel
-// (SCA001 proven-leak) aendert die Regel nicht - mehr als eine Schwere je
-// Regel gibt das Format nicht her.
+// Je Lauf, nicht je Kind (Review 2026-10-31): bis dahin entschied die
+// Standard-Konfidenz des Kinds (KindDefaultConfidence). Regeln mit Default
+// fcHigh, deren Detektor unbewiesene Funde selbst absenkt (SCA202, SCA203,
+// SCA205: Warning/fcMedium ohne Beleg; SCA097, SCA166: fcMedium), trugen
+// dann die vollen Impacts, auch wenn der Lauf NUR solche Funde hatte.
+// Massstab ist die Schwere, nicht die Konfidenz allein: eine Warning-Regel
+// mit Katalog-HIGH (SCA008, SCA138, SCA162) bleibt unveraendert, die Politik
+// senkt ihre Funde nicht unter die Katalog-Schwere.
+//
+// Je Regel, nicht je Fund: EIN voller Fund traegt die ganze Regel, auch eine
+// medium-Regel (SCA001 proven-leak, SCA109, SCA121, SCA004 mit Beleg, alle
+// fcHigh). Ihre unbewiesenen Funde zeigen dann in Sonar ebenfalls die volle
+// Schwere - mehr als eine Schwere je Regel gibt das Format nicht her, und
+// eigene Regel-IDs je Variante scheiden aus: ein Fund wechselte die Regel,
+// Sonar zaehlte ihn als geschlossen und neu (s. BuildIssueObject). Der Preis:
+// die Schwere der Regel kann zwischen zwei Laeufen wechseln, wenn der letzte
+// volle Fund verschwindet oder der erste dazukommt. Die Issue-Historie
+// bleibt, die Regel-ID ist dieselbe.
 var
   Capped : TLeakSeverity;
 begin
   Result := M;
   if not uSCAConsts.LastScanEvidenceTiering then Exit;
-  Capped := Weaker(M.DefaultSeverity,
-                   TEvidenceTiering.MaxSeverityFor(KindDefaultConfidence(K)));
+  Capped := Weaker(M.DefaultSeverity, AStrongest);
   if Capped = M.DefaultSeverity then Exit;
   Result.DefaultSeverity := Capped;
   Result.Impacts := CapImpacts(M.Impacts, MaxImpactFor(Capped));
 end;
 
 function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
-  const ARuleID: string): TRuleMeta;
+  const ARuleID: string; AStrongest: TLeakSeverity): TRuleMeta;
 // Regel-Metadaten fuer eine Custom-Regel (fkCustomRule, eigene Regel-ID).
 //
 // Der Katalog kennt fuer ALLE Custom-Regeln nur EINEN Platzhalter (SCA023,
@@ -765,8 +812,9 @@ function CustomRuleMeta(const M: TRuleMeta; const F: TLeakFinding;
 // einer Regel die YAML-Severity. F.Severity dagegen kann eine Pfad-
 // Ueberschreibung verschoben haben - stuende der erste Fund in so einer
 // Datei, bekaeme sonst die GANZE Regel deren Schwere (Review 2026-10-29).
-// Gedeckelt wie jede Regel (s. KindCappedMeta); fkCustomRule ist heute
-// fcHigh, der Deckel greift also nicht.
+// Gedeckelt wie jede Regel auf AStrongest (s. RunCappedMeta); Custom-Funde
+// tragen heute fcHigh (KindDefaultConfidence), der Deckel greift also nicht.
+// Eine Pfad-Hochstufung in AStrongest hebt die Regel nicht ueber die YAML.
 var
   Imp : TSonarImpact;
   Sev : TLeakSeverity;
@@ -779,8 +827,7 @@ begin
     Imp.SoftwareQuality := sqMaintainability;
   Sev := F.OriginalSeverity;
   if uSCAConsts.LastScanEvidenceTiering then
-    Sev := Weaker(Sev, TEvidenceTiering.MaxSeverityFor(
-                         KindDefaultConfidence(fkCustomRule)));
+    Sev := Weaker(Sev, AStrongest);
   case Sev of
     lsError   : Imp.Severity := isHigh;
     lsWarning : Imp.Severity := isMedium;
@@ -801,20 +848,31 @@ procedure EmitRules(AStream: TStream;
 // rules[] in der Reihenfolge des ersten Auftretens - genau die Reihenfolge,
 // die der fruehere DOM-Aufbau erzeugte, weil der die Regeln waehrend der
 // Issue-Schleife einsammelte.
+//
+// Zwei Schritte: rules[] steht im Stream VOR issues[], die Schwere einer
+// Regel haengt aber an ALLEN ihren Funden im Lauf (RunCappedMeta). Der erste
+// Schritt laeuft ueber die Funde und merkt sich je Regel den ersten Fund und
+// die staerkste Schwere, der zweite schreibt je Regel ein Objekt. Das bleibt
+// EIN Durchlauf ueber die Funde wie bisher.
 var
-  Seen   : TDictionary<string, Boolean>;
-  F      : TLeakFinding;
-  Meta   : TRuleMeta;
-  RuleID : string;
-  First  : Boolean;
+  Strongest : TDictionary<string, TLeakSeverity>;
+  Firsts    : TList<TLeakFinding>;
+  F         : TLeakFinding;
+  Meta      : TRuleMeta;
+  RuleID    : string;
+  Sev       : TLeakSeverity;
+  Known     : TLeakSeverity;
+  First     : Boolean;
 begin
   // Lokaler nil-Guard, obwohl EmitReport schon einen hat: die Zusage
   // "eine nil-Liste ist ein leerer Report, keine AV" soll hier gelten
   // und nicht an genau einem Aufrufer haengen (Chargen-Review 08.09.).
   if not Assigned(AFindings) then Exit;
-  Seen  := TDictionary<string, Boolean>.Create;
-  First := True;
+  First     := True;
+  Firsts    := nil;
+  Strongest := TDictionary<string, TLeakSeverity>.Create;
   try
+    Firsts := TList<TLeakFinding>.Create;
     for F in AFindings do
     begin
       if F.Kind = fkFileReadError then Continue;
@@ -825,24 +883,38 @@ begin
       // Regel ohne Fund waere ein toter Eintrag im rules-Array.
       if not AKeepDowngraded and IsDowngraded(F) then Continue;
       RuleID := EffectiveRuleID(F, Meta);
-      if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
-      Seen.Add(RuleID, True);
+      if RuleID = '' then Continue;
+      Sev := RuleSeverityOf(F);
+      if not Strongest.TryGetValue(RuleID, Known) then
+      begin
+        Firsts.Add(F);
+        Strongest.Add(RuleID, Sev);
+      end
+      else if Ord(Sev) < Ord(Known) then
+        Strongest[RuleID] := Sev;
+    end;
+    for F in Firsts do
+    begin
+      Meta   := TRuleCatalog.GetRuleCanonical(F.Kind);
+      RuleID := EffectiveRuleID(F, Meta);
       if not First then WStr(AStream, ',');
       First := False;
       // Custom-Regel: Name und Impact aus der YAML-Regel statt aus dem
       // gemeinsamen Katalog-Platzhalter (s. CustomRuleMeta); jede andere
-      // Regel mit der gedeckelten Kind-Schwere (s. KindCappedMeta).
+      // Regel mit der Schwere, die ihre Funde im Lauf tragen
+      // (s. RunCappedMeta).
       if F.Kind = fkCustomRule then
-        Meta := CustomRuleMeta(Meta, F, RuleID)
+        Meta := CustomRuleMeta(Meta, F, RuleID, Strongest[RuleID])
       else
-        Meta := KindCappedMeta(Meta, F.Kind);
+        Meta := RunCappedMeta(Meta, Strongest[RuleID]);
       // Dieselbe ID, die oben schon der Dedup-Schluessel war und die
       // EmitIssues fuer issue.ruleId bekommt - EINE Quelle, sonst
       // koppelt Sonar die beiden Eintraege nicht.
       WObj(AStream, BuildRuleObject(Meta, RuleID));
     end;
   finally
-    Seen.Free;
+    Firsts.Free;
+    Strongest.Free;
   end;
 end;
 

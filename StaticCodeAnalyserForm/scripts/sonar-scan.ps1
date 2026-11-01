@@ -20,8 +20,8 @@
   Rule profile for the report (--profile). Default: [Rules] IdeProfile from
   analyser.ini, so the report has the rule set of the IDE. Without that entry
   the analyser decides ([Rules] Profile, else 'default'). The script aborts on
-  a name it cannot find: the analyser itself would accept it and silently scan
-  with a different rule set.
+  a name that is neither in the catalog the analyser loads nor in profiles.json:
+  the analyser itself would accept it and silently scan with all rules.
 
 .PARAMETER HideTestFixtures
   Leave out findings in test fixtures. Default: they stay in the report, as in
@@ -126,15 +126,53 @@ if (-not $RuleProfile) {
   }
 }
 if ($RuleProfile) {
-  $knownProfiles = @()
-  foreach ($file in @($catRepo, $catUser, (Join-Path $configDir 'profiles.json'))) {
-    if (Test-Path $file) {
-      $json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json
-      if ($json.profiles) { $knownProfiles += $json.profiles.PSObject.Properties.Name }
+  # Nur gegen das pruefen, was die EXE wirklich laedt: ein Profil aus einem
+  # Katalog, den sie nicht liest, ist fuer sie unbekannt, und unbekannt heisst
+  # alle Regeln (TRuleCatalog.GetProfile). Eine Listen-Option hat die EXE nicht.
+  # Geladen wird genau EIN Katalog, der erste Treffer von FindRulesFile
+  # (uRuleCatalog.pas): ab dem Ordner der EXE bis zu 8 Ebenen aufwaerts, zuletzt
+  # %APPDATA%. Aus Output\<Config>\ ist das normalerweise $catRepo, die Kopie
+  # aus dem Block oben liest die EXE dann nicht.
+  $catLoaded = $null
+  $dir = Split-Path $exe
+  for ($i = 0; ($i -le 8) -and $dir -and (-not $catLoaded); $i++) {
+    $cand = Join-Path $dir 'rules\sca-rules.json'
+    if (Test-Path -LiteralPath $cand -PathType Leaf) { $catLoaded = $cand }
+    $dir = Split-Path $dir
+  }
+  if (-not $catLoaded) { $catLoaded = $catUser }
+
+  # 'default' garantiert die EXE auch ohne Eintrag im Katalog (LoadProfiles).
+  $knownProfiles = @('default')
+  try {
+    $json = Get-Content -LiteralPath $catLoaded -Raw -Encoding UTF8 | ConvertFrom-Json
+  } catch {
+    throw "Rule catalog $catLoaded is not readable: $($_.Exception.Message)"
+  }
+  if ($json.profiles) {
+    $knownProfiles += @($json.profiles.PSObject.Properties | Where-Object { $_.Value -is [array] } | ForEach-Object { $_.Name })
+  }
+  $checked = @($catLoaded)
+
+  # Eigene Profile wie ReadProfilesFile: volle Datei oder blosse Abbildung,
+  # nur Listen aus Strings. Eine kaputte Datei kostet auch die EXE nur diese
+  # Profile, also kein Abbruch, solange das Profil aus dem Katalog kommt.
+  $userProfiles = Join-Path $configDir 'profiles.json'
+  if (Test-Path -LiteralPath $userProfiles -PathType Leaf) {
+    try {
+      $json = Get-Content -LiteralPath $userProfiles -Raw -Encoding UTF8 | ConvertFrom-Json
+      $map = if ($json.profiles -is [System.Management.Automation.PSCustomObject]) { $json.profiles } else { $json }
+      $knownProfiles += @($map.PSObject.Properties |
+        Where-Object { ($_.Value -is [array]) -and (@($_.Value | Where-Object { $_ -isnot [string] }).Count -eq 0) } |
+        ForEach-Object { $_.Name.Trim() })
+      $checked += $userProfiles
+    } catch {
+      Write-Warning "Ignoring ${userProfiles}: $($_.Exception.Message) The analyser skips this file too."
     }
   }
+
   if ($knownProfiles -notcontains $RuleProfile) {
-    throw "Rule profile '$RuleProfile' not found. Known: $(($knownProfiles | Sort-Object -Unique) -join ', '). Pass -RuleProfile, or fix [Rules] IdeProfile in analyser.ini."
+    throw "Rule profile '$RuleProfile' not found in the files the analyser loads: $($checked -join ', '). Known there: $(($knownProfiles | Sort-Object -Unique) -join ', '). Pass -RuleProfile, or fix [Rules] IdeProfile in analyser.ini."
   }
 }
 

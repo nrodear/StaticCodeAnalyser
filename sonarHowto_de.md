@@ -79,6 +79,10 @@ Copy-Item "D:\git-demos\delphi\StaticCodeAnalyser\rules\sca-rules.json" `
 Bei Catalog-Updates im Repo: Copy nachziehen. (Siehe
 [docs/sonar-config.md](docs/sonar-config.md) für die volle Lookup-Reihenfolge.)
 
+Die EXE lädt nur einen Katalog: die erste `rules\sca-rules.json` ab ihrem eigenen
+Ordner bis zu acht Ebenen aufwärts, und nur wenn es keine gibt, diese Kopie. Eine
+EXE im Repo ignoriert die Kopie, ein dort ergänztes Profil gilt als unbekannt.
+
 ---
 
 ## 1. Sonar-Konfiguration für die Standalone-EXE
