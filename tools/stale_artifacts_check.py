@@ -14,6 +14,14 @@ die Aufrufstelle, nicht auf das veraltete Artefakt.
 
     python tools/stale_artifacts_check.py
     python tools/stale_artifacts_check.py --clean-commands
+    python tools/stale_artifacts_check.py --release
+
+--release prueft nur, was ausgeliefert wird: die vier Pakete des
+Paketsatzes auf den drei Schienen. Der Monolith wird dafuer nicht mehr
+gebaut, und D12 Win64 ist keine Schiene (keine 64-Bit-IDE); beide stuenden
+sonst fuer immer auf VERALTET und sperrten jedes Release
+(package-release.ps1). Die PATH-Warnungen entfallen dort ebenfalls: sie
+gelten dem Dev-Bau, nicht dem Release.
 
 EXIT  0 alles aktueller als die Quelle | 1 veraltete Artefakte | 2 Fehler
 """
@@ -43,7 +51,13 @@ PACKAGES = (
      'StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk'),
     ('StaticCodeAnalyser.Plugin.d12',
      'StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.dpk'),
+    ('reDelphix.d12',                 'reDelphix/reDelphix.d12.dpk'),
 )
+
+# Nur fuer --release: der Monolith liegt bis zu seiner Entfernung noch im
+# Repo, ausgeliefert wird er nicht mehr.
+NICHT_AUSGELIEFERT = ('StaticCodeAnalyser.Plugin.d12',)
+RELEASE_SCHIENEN = (('D12', 'Win32'), ('D13', 'Win32'), ('D13', 'Win64'))
 
 
 def dproj_of(dpk_rel, gen):
@@ -140,7 +154,7 @@ def pfad_kollision():
 
 
 def bpl_gewinner():
-    """Welche gleichnamige BPL findet der Loader zuerst?
+    r"""Welche gleichnamige BPL findet der Loader zuerst?
 
     Die PATH-Warnung darunter galt bisher nur dem Compiler. Am 2026-08-24
     hat dieselbe Reihenfolge den IDE-LOADER getroffen: das D12-Plugin
@@ -208,9 +222,12 @@ def newest_source(dpk_rel):
 
 
 def main():
+    nur_release = '--release' in sys.argv
     rows, stale, fehlend = [], 0, 0
     for name, dpk in PACKAGES:
         if not os.path.isfile(os.path.join(REPO, dpk)):
+            continue
+        if nur_release and name in NICHT_AUSGELIEFERT:
             continue
         src_ts, src_who = newest_source(dpk)
         for ver, label in STUDIOS:
@@ -218,6 +235,8 @@ def main():
             if not os.path.isdir(root):
                 continue
             for plat in erwartete_plattformen(dpk, label):
+                if nur_release and (label, plat) not in RELEASE_SCHIENEN:
+                    continue
                 sub = '' if plat == 'Win32' else plat
                 dcp = os.path.join(root, 'Dcp', sub, name + '.dcp')
                 if not os.path.isfile(dcp):
@@ -232,7 +251,7 @@ def main():
                 stale += bad
                 rows.append((label, plat, name, art, src_ts, src_who, bad))
 
-    kol = pfad_kollision()
+    kol = {} if nur_release else pfad_kollision()
     if len(kol) > 1:
         print('WARNUNG: Bpl-Ordner BEIDER Generationen stehen im PATH.')
         for label in sorted(kol):
@@ -250,7 +269,7 @@ def main():
         print('     nicht stehen - dann entscheidet allein der PATH.')
         print()
 
-    doppelt = bpl_gewinner()
+    doppelt = {} if nur_release else bpl_gewinner()
     if doppelt:
         print('ROT: %d BPL-Name(n) liegen MEHRFACH im PATH.' % len(doppelt))
         print('Der Loader nimmt den ersten Treffer - die anderen sind tot:')
@@ -322,7 +341,7 @@ def main():
     print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
     print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
     print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
-    print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/Plugin.')
+    print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/reDelphix/Plugin.')
     for label, plat, name, art, src, who, bad in rows:
         if bad:
             print('  %s %s %s: juengste Quelle ist %s (%s)'
