@@ -66,10 +66,10 @@
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
-        <VerInfo_MinorVer>1</VerInfo_MinorVer>
-        <VerInfo_Release>0</VerInfo_Release>
+        <VerInfo_MinorVer>9</VerInfo_MinorVer>
+        <VerInfo_Release>19</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=reDelphix - Source Refactor for the Static Code Analyser (IDE package);FileVersion=0.1.0.0;InternalName=reDelphix;LegalCopyright=;LegalTrademarks=;OriginalFilename=reDelphix.d12.bpl;ProductName=reDelphix;ProductVersion=0.1.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=reDelphix - Source Refactor for the Static Code Analyser (IDE package);FileVersion=0.9.19.0;InternalName=reDelphix;LegalCopyright=;LegalTrademarks=;OriginalFilename=reDelphix.d12.bpl;ProductName=reDelphix;ProductVersion=0.9.19.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>SCA.Engine;vcl;rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
@@ -78,10 +78,10 @@
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
-        <VerInfo_MinorVer>1</VerInfo_MinorVer>
-        <VerInfo_Release>0</VerInfo_Release>
+        <VerInfo_MinorVer>9</VerInfo_MinorVer>
+        <VerInfo_Release>19</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=reDelphix - Source Refactor for the Static Code Analyser (IDE package);FileVersion=0.1.0.0;InternalName=reDelphix;LegalCopyright=;LegalTrademarks=;OriginalFilename=reDelphix.d12.bpl;ProductName=reDelphix;ProductVersion=0.1.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=reDelphix - Source Refactor for the Static Code Analyser (IDE package);FileVersion=0.9.19.0;InternalName=reDelphix;LegalCopyright=;LegalTrademarks=;OriginalFilename=reDelphix.d12.bpl;ProductName=reDelphix;ProductVersion=0.9.19.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>SCA.Engine;vcl;rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
