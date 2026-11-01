@@ -276,7 +276,11 @@ unter `C:\Users\Public\Documents\Embarcadero\Studio\`:
    als seine Quelle.
 2. Je Schiene in dieser Reihenfolge bauen: `SCA.Engine`, `SCA.SharedUI`,
    `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`. Dazu die Standalone-EXE
-   für Win32 und Win64 (Abschnitt 4).
+   für Win32 und Win64 (Abschnitt 4). Ein Package linkt gegen die DCPs
+   seiner Abhängigkeiten: Wer eines neu baut, baut die folgenden mit, auch
+   ohne Quelländerung. Nicht „Alle erzeugen" der Projektgruppe nehmen: Das
+   baut `SCA.Engine` direkt vor `reDelphix.d12` ein zweites Mal, und die
+   Prüfung unten bricht daran ab.
 3. Das Ergebnis prüfen, ohne etwas anzulegen:
 
    ```powershell

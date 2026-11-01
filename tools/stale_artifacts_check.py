@@ -23,6 +23,12 @@ sonst fuer immer auf VERALTET und sperrten jedes Release
 (package-release.ps1). Die PATH-Warnungen entfallen dort ebenfalls: sie
 gelten dem Dev-Bau, nicht dem Release.
 
+Dazu verlangt --release je Schiene die Bau-Reihenfolge: kein DCP darf
+aelter sein als ein DCP, gegen das sein Paket linkt (Engine <= SharedUI
+<= IDE, Engine <= reDelphix). Wer nur die Engine neu baut, sieht sonst
+ueberall "ok" und liefert Pakete aus, die gegen die alte Engine gelinkt
+sind.
+
 EXIT  0 alles aktueller als die Quelle | 1 veraltete Artefakte | 2 Fehler
 """
 import io
@@ -206,6 +212,50 @@ def when(ts):
     return time.strftime('%Y-%m-%d %H:%M', time.localtime(ts))
 
 
+def sekunde(ts):
+    # Die Pakete einer Schiene entstehen innerhalb einer Minute.
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))
+
+
+def ohne_kommentare(text):
+    """Pascal-Text ohne Kommentare, Strings bleiben stehen.
+
+    Die requires-Klausel von SCA.SharedUI traegt einen langen Kommentar
+    mit Semikolons und dem Wort designide.
+    """
+    return re.sub(r"('[^'\n]*')|//[^\n]*|\{.*?\}|\(\*.*?\*\)",
+                  lambda m: m.group(1) or ' ', text, flags=re.S)
+
+
+def eigene_requires(dpk_rel):
+    """Die Pakete aus PACKAGES, die in der requires-Klausel stehen."""
+    t = ohne_kommentare(io.open(os.path.join(REPO, dpk_rel),
+                                encoding='utf-8-sig').read())
+    m = re.search(r'\brequires\b(.*?);', t, re.S | re.I)
+    if not m:
+        return []
+    namen = {n.strip().lower() for n in m.group(1).split(',')}
+    return [name for name, _d in PACKAGES if name.lower() in namen]
+
+
+def bau_reihenfolge(rows):
+    """Pakete, die aelter sind als ein Paket, gegen das sie linken.
+
+    Liefert [(IDE, Plattform, Paket, DCP-Zeit, Abhaengigkeit, deren Zeit)].
+    Gleiche Zeit ist erlaubt: der Bau schreibt mit Sekundengenauigkeit.
+    Ein fehlendes DCP meldet die Tabelle bereits.
+    """
+    zeit = {(r[0], r[1], r[2]): r[3] for r in rows if r[3] is not None}
+    dpk_von = dict(PACKAGES)
+    out = []
+    for (label, plat, name), art in sorted(zeit.items()):
+        for dep in eigene_requires(dpk_von[name]):
+            dep_zeit = zeit.get((label, plat, dep))
+            if dep_zeit is not None and art < dep_zeit:
+                out.append((label, plat, name, art, dep, dep_zeit))
+    return out
+
+
 def newest_source(dpk_rel):
     """Juengste Quelldatei eines Pakets: die .dpk selbst plus alles aus
     ihrer contains-Klausel."""
@@ -285,6 +335,8 @@ def main():
         print('Keine gebauten Paket-Artefakte gefunden - nichts zu pruefen.')
         return 0
 
+    reihenfolge = bau_reihenfolge(rows) if nur_release else []
+
     print('%-4s %-11s %-30s %-16s %-16s' %
           ('IDE', 'Plattform', 'Paket', 'DCP gebaut', 'Quelle zuletzt'))
     for label, plat, name, art, src, who, bad in rows:
@@ -293,7 +345,7 @@ def main():
               % (label, plat, name, '-' if art is None else when(art),
                  when(src), zustand))
 
-    if not stale and not fehlend:
+    if not stale and not fehlend and not reihenfolge:
         print('\nGRUEN: jedes DCP ist juenger als seine Quelle.')
         return 0
 
@@ -336,16 +388,25 @@ def main():
             print('  (nichts gefunden)')
 
     print()
-    print('ROT: %d Artefakt(e) FEHLEN, %d sind aelter als die Quelle.'
-          % (fehlend, stale))
-    print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
-    print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
-    print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
-    print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/reDelphix/Plugin.')
-    for label, plat, name, art, src, who, bad in rows:
-        if bad:
-            print('  %s %s %s: juengste Quelle ist %s (%s)'
-                  % (label, plat, name, who, when(src)))
+    if stale or fehlend:
+        print('ROT: %d Artefakt(e) FEHLEN, %d sind aelter als die Quelle.'
+              % (fehlend, stale))
+        print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
+        print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
+        print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
+        print('Reihenfolge SCA.Engine -> SCA.SharedUI -> IDE/reDelphix/Plugin.')
+        for label, plat, name, art, src, who, bad in rows:
+            if bad:
+                print('  %s %s %s: juengste Quelle ist %s (%s)'
+                      % (label, plat, name, who, when(src)))
+    if reihenfolge:
+        print('ROT: %d Mal ist ein Paket aelter als ein Paket, gegen das es'
+              ' linkt.' % len(reihenfolge))
+        print('Es ist gegen den alten Stand gelinkt: neu bauen, auch ohne'
+              ' Quellaenderung.')
+        for label, plat, name, art, dep, dep_zeit in reihenfolge:
+            print('  %s %s %s (%s) ist aelter als %s (%s)'
+                  % (label, plat, name, sekunde(art), dep, sekunde(dep_zeit)))
     return 1
 
 

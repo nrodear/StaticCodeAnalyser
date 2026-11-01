@@ -286,7 +286,11 @@ sous `C:\Users\Public\Documents\Embarcadero\Studio\` :
    source.
 2. Sur chaque cible, compilez dans cet ordre : `SCA.Engine`,
    `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`. Compilez
-   aussi l'EXE autonome pour Win32 et Win64 (section 4).
+   aussi l'EXE autonome pour Win32 et Win64 (section 4). Un paquet se lie
+   aux DCP de ses dépendances : qui recompile un paquet recompile aussi les
+   suivants, même sans changement de source. N'utilisez pas « Tout
+   construire » du groupe de projets : il recompile `SCA.Engine` une seconde
+   fois juste avant `reDelphix.d12`, et le contrôle ci-dessous s'y arrête.
 3. Vérifiez le résultat sans rien créer :
 
    ```powershell

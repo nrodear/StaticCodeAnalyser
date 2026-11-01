@@ -268,7 +268,11 @@ same project files, in the Release configuration. The BPLs land under
    own checkout and stops if a DCP is older than its source there.
 2. On each target build, in this order: `SCA.Engine`, `SCA.SharedUI`,
    `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`. Build the standalone
-   EXE for Win32 and Win64 as well (section 4).
+   EXE for Win32 and Win64 as well (section 4). A package links against
+   the DCPs it requires, so whoever rebuilds one package also rebuilds
+   those after it, even without a source change. Do not use Build All of
+   the project group for this: it builds `SCA.Engine` a second time right
+   before `reDelphix.d12`, and the check below stops on that.
 3. Check the result without creating anything:
 
    ```powershell
