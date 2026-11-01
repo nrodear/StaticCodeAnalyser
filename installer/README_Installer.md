@@ -76,9 +76,9 @@ bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis, und
 ein `{$RUNONLY}`-Paket darf nicht in die Known Packages. Deshalb stehen nur die
 beiden Design-BPLs dort (voller Pfad), und das Setup legt `{app}\bpl\<schiene>`
 vorn in den IDE-eigenen Override
-`HKCU\Software\Embarcadero\BDS\<bds>\Environment Variables\PATH`. Am 2026-10-28
-gemessen: die IDE uebernimmt ihn vor dem Laden der Known Packages, auch
-`bin64\bds.exe`, und der 64-Bit-Loader ueberspringt gleichnamige 32-Bit-Dateien.
+`HKCU\Software\Embarcadero\BDS\<bds>\Environment Variables\PATH`. Gemessen: die
+IDE uebernimmt ihn vor dem Laden der Known Packages, auch `bin64\bds.exe`, und
+beide Loader ueberspringen gleichnamige BPLs der falschen Bitbreite.
 
 Bis 0.9.18 ging das Setup diesen Weg nicht und lieferte den Monolithen
 `StaticCodeAnalyser.Plugin.d12` (eine BPL mit den Units von Engine, SharedUI und
@@ -174,16 +174,23 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
   Wert. Er ist geteilt (InterBase traegt dort z. B. `...\IDE_spoof;$(PATH)`):
   nur das eigene Segment wird bewegt, alles andere bleibt Zeichen fuer
   Zeichen. Das Segment wird immer entnommen und vorn eingesetzt, eine
-  Doppelinstallation aendert den Wert also nicht. Fehlt der Wert, entsteht
-  er als `<segment>;$(PATH)`. Unter BDS 37.0 teilen sich beide Schienen den
-  Wert, `bpl\d13` steht vor `bpl\d13x64`. Scheitert das Schreiben, meldet das
-  Setup es: ohne den Eintrag laedt das Plugin beim IDE-Start nicht.
+  Doppelinstallation aendert den Wert also nicht. Fehlt der Wert in HKCU, ist
+  die Vorlage der Delphi-Installation der Ausgangswert
+  (`HKLM\SOFTWARE\WOW6432Node\Embarcadero\BDS\<bds>\Environment Variables\PATH`,
+  also die 32-Bit-Sicht); der neue HKCU-Wert uebernimmt ihre Segmente, HKLM
+  selbst bleibt unberuehrt. Fehlt auch sie, entsteht `<segment>;$(PATH)`. Unter
+  BDS 37.0 teilen sich beide Schienen den Wert, `bpl\d13` steht vor
+  `bpl\d13x64`. Der Override wird VOR der Koexistenz-Bereinigung geschrieben.
+  Scheitert das, meldet das Setup es, im Silent-Lauf im Log, und laesst die
+  Dev-Registrierungen dieser Schiene stehen: ohne den Eintrag laedt das Plugin
+  beim IDE-Start nicht.
 - **reDelphix als eigene Komponente** (`redelphix`): vorgewaehlt, abwaehlbar,
   gilt fuer alle gewaehlten Schienen; das IDE-Paket haengt nicht davon ab.
   Die Abwahl entfernt je Schiene die Registrierung (Known + Disabled) und
   `reDelphix.d12.bpl`, Laufzeitpakete und Override bleiben. Kennt die von Inno
   gespeicherte Auswahl reDelphix noch nicht (Upgrade von 0.9.18), waehlt das
-  Setup es vor; eine echte Abwahl aus einem spaeteren Lauf bleibt bestehen.
+  Setup es vor; eine echte Abwahl aus einem spaeteren Lauf bleibt bestehen, und
+  `/COMPONENTS=` auf der Kommandozeile legt die Auswahl selbst fest.
 - **Monolith-Bereinigung beim Upgrade**: Reste von
   `StaticCodeAnalyser.Plugin.d12.bpl` aus einer Installation bis 0.9.18 werden
   entfernt, die Known- und Disabled-Werte aller drei Zweige, auch abgewaehlter,
@@ -200,7 +207,12 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
   in dieser Reihenfolge. Eine Auswahl ohne Delphi-Version blockt
   `NextButtonClick` mit Meldung ab, statt ein Setup ohne Wirkung durchlaufen
   zu lassen.
-- **IDE-Prozess-Check** vor Install und Uninstall (TAppBuilder-Fenster).
+- **IDE-Prozess-Check** (TAppBuilder-Fenster) beim Start von Setup und
+  Uninstall und noch einmal unmittelbar vor dem Schreiben: `PrepareToInstall`
+  stoppt das Setup auf der Vorbereiten-Seite, wenn die IDE erst waehrend des
+  Wizards gestartet wurde. Im Silent-Lauf zeigt Inno diesen Text als Dialog
+  (gemessen), dort endet das Setup deshalb schon beim simulierten Weiter der
+  Ready-Seite, ohne Dialog und mit dem Text im Log.
 - **Koexistenz-Check, je Registry-Zweig einzeln**: eine Registrierung der
   SCA-Familie (`SCA.Engine*` und `SCA.SharedUI*` mit oder ohne Versionssuffix,
   `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`, Monolith) unter anderem Pfad
@@ -214,14 +226,18 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 - **Disabled-Packages-Bereinigung**: ein frueherer "Can't load package →
   Nein"-Eintrag wuerde die frische Installation sonst stumm blockieren. Gilt
   fuer beide Design-BPLs.
-- **Hinweise im Silent-Lauf**: Koexistenz-, Monolith- und Override-Meldungen
-  stehen dort nur im Log, kein Dialog haelt den Lauf an.
+- **Meldungen im Silent-Lauf**: Koexistenz-, Monolith- und Override-Meldungen
+  stehen dort nur im Log, ebenso die Abbrueche von Setup und Uninstall (keine
+  unterstuetzte IDE, IDE laeuft, keine Delphi-Version gewaehlt). Kein Dialog
+  haelt den Lauf an; das Log braucht `/LOG` bzw. `/LOG=<datei>`.
 - **Deinstallation**: Registry-Werte werden VOR den Dateien entfernt
   (`uninsdeletevalue` + expliziter `usUninstall`-Handler), und zwar in
   allen drei Zweigen - unabhaengig davon, was diese Installation gesetzt
   hat. Der Handler nimmt auch die Override-Segmente heraus, und nur diese:
   fremde Segmente bleiben. Bleibt vom Wert nichts oder nur `$(PATH)` uebrig,
-  verschwindet er, der Schluessel mit, wenn er dann leer ist.
+  verschwindet er, der Schluessel mit, wenn er dann leer ist. Bleibt mehr
+  uebrig, etwa die aus HKLM uebernommenen Segmente, bleibt der HKCU-Wert ohne
+  unser Segment stehen: ob er vorher schon da war, ist nicht unterscheidbar.
   `[UninstallDelete]` raeumt danach `bpl\d12`, `bpl\d13`,
   `bpl\d13x64` und den dann leeren `bpl`-Ordner ab.
 - **Privacy-Gate**: keinerlei Netzwerk-Code; Zusicherung steht sichtbar auf
@@ -244,13 +260,15 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 1 | Frische VM, D12 installiert, Non-Admin-Konto | Setup laeuft ohne UAC-Prompt durch; vier BPLs unter `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`; `Known Packages`-Werte nur fuer `StaticCodeAnalyser.IDE.d12.bpl` und `reDelphix.d12.bpl`, Wertdaten nicht leer; `{app}\bpl\d12` vorn im IDE-PATH-Override |
 | 2 | IDE-Start nach Install | Plugin laedt (Splash/About-Branding sichtbar, Tools-Menue-Eintrag da); kein "Can't load package"; Engine und SharedUI laden aus `{app}\bpl\d12` |
 | 3 | Setup starten, waehrend bds.exe laeuft | Setup bricht mit klarer Meldung ab (kein Teil-Install) |
+| 3a | IDE erst starten, wenn der Wizard offen ist, dann Installieren | Setup stoppt auf der Vorbereiten-Seite mit derselben Meldung, nichts geschrieben |
 | 3b | Maschine OHNE unterstuetzte IDE (weder BDS 23.0 noch 37.0, oder RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "Es wurde weder Delphi 12 (BDS 23.0) noch Delphi 13 (BDS 37.0) auf diesem System gefunden" ab; keine Dateien, keine Registry-Werte |
 | 4 | Dev-Maschine mit registriertem Dev-Satz (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existieren nur noch die Install-Pfad-Eintraege; IDE laedt das Plugin genau einmal |
 | 5 | Vorher per "Can't load package → Nein" deaktiviert (Disabled Packages) | Setup raeumt den Disabled-Eintrag; Plugin laedt nach Neustart wieder |
 | 6 | Update ueber Bestand (Paketsatz installiert, auch dasselbe Setup zweimal) | BPLs + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag je Design-BPL; Override-Segment genau einmal |
 | 6b | Upgrade vom 0.9.18-Monolithen, aus Setup und aus GetIt, alle drei Schienen | Hinweis erscheint; Monolith-Werte (Known + Disabled) weg, eigene Monolith-Datei weg; IDE-Start ohne "enthaelt die Unit ..."; reDelphix war vorgewaehlt |
 | 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0; Hinweise nur im Log |
-| 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), Override-Wert im Ausgangszustand mit allen fremden Segmenten, danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
+| 7b | Silent mit offener IDE, Setup und Uninstall | Lauf endet ohne Dialog mit Exit-Code ungleich 0, Grund im `/LOG` |
+| 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), Override ohne unser Segment mit allen fremden Segmenten (aus HKLM entstanden: HKCU-Kopie bleibt), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
 | 10 | reDelphix am Fund | Gluehbirne erscheint, Quick-Fix schreibt, Strg+Z macht ihn rueckgaengig; Aktionen im Kontextmenue des Dock-Grids |
 | 11 | reDelphix abwaehlen (Setup erneut) | `reDelphix.d12.bpl` und seine Registry-Werte weg, Plugin laedt weiter, Override bleibt |
