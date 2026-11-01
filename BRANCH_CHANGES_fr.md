@@ -12,7 +12,7 @@ Le dépôt fournit trois composants :
 |-----------|------|--------|
 | **EXE autonome** | Outil autonome pour analyser des répertoires sur disque | `StaticCodeAnalyserForm/` |
 | **Plugin IDE** | Fenêtre d'outil ancrable dans l'IDE Delphi | `StaticCodeAnalyserIDE/` |
-| **reDelphix** | Paquet IDE optionnel avec des actions de code, compilé depuis les sources | `reDelphix/` |
+| **reDelphix** | Actions de code du plugin IDE, toujours installées avec lui | `reDelphix/` |
 
 ---
 
@@ -318,7 +318,7 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + enveloppe de fiche ancrable
 │   ├── StaticCodeAnalyser.IDE.d12.dpk       # Paquet designtime (jeu dev)
 │   └── StaticCodeAnalyser.Plugin.d12.dpk    # Paquet monolithe de release
-├── reDelphix/                      # Paquet IDE optionnel avec actions de code
+├── reDelphix/                      # Paquet IDE avec les actions de code
 ├── docs/                           # Maquettes, croquis, captures d'écran
 └── DETECTORS_fr.md                 # Catalogue complet des détecteurs avec statut
 ```

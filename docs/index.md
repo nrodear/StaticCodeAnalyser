@@ -56,7 +56,7 @@ GetIt is suspended for 0.9.19.
 | [../BRANCH_CHANGES.md](../BRANCH_CHANGES.md) | The Branch-Changes feature: Git/SVN detection, Tortoise compatibility, configuration, troubleshooting. |
 | [../installer/README_Installer.md](../installer/README_Installer.md) | Building and running the plugin installer. |
 | [../getit/README_GetIt.md](../getit/README_GetIt.md) | GetIt local package, suspended for 0.9.19 - why, plus the manifest contracts and lessons. |
-| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the optional package with the code actions: prerequisites, building, behaviour. Part of the setup; the [README](../README.md#code-actions-redelphix-optional-ide-package) has the short version. In German. |
+| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the SCA feature with the code actions: prerequisites, building, behaviour. Always installed with the plugin; the [README](../README.md#code-actions-redelphix) has the short version. In German. |
 | [../reDelphix/QUICKFIXES.md](../reDelphix/QUICKFIXES.md) | Every code action with its menu texts (en/de/fr), effect, locks and an example. In German. |
 
 ## Embedding the engine

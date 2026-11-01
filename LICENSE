@@ -19,3 +19,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-------------------------------------------------------------------------------
+Third-party material
+
+The following files are not covered by the MIT License above:
+
+  StaticCodeAnalyserForm/styles/SCADark.vsf
+  StaticCodeAnalyserForm/styles/sca_styles.RES
+
+They contain a modified version of the VCL style Windows10Dark.vsf from
+RAD Studio, Copyright (c) Embarcadero Technologies, Inc., redistributed as
+part of this application under the RAD Studio license terms. The same applies
+to the style data embedded in the compiled application. Those terms do not
+allow you to modify this material, to distribute it on its own or to use it
+in your own programs.

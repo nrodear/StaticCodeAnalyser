@@ -2,8 +2,15 @@
 
 `SCADark.vsf` (interner Name `SCA VSDark`) ist ein per Skript
 umgefärbtes `Windows10Dark.vsf` aus `Redist\styles\vcl\` der Delphi-12-
-Installation — der Redist-Ordner ist ausdrücklich zur Weitergabe mit
-eigenen Anwendungen bestimmt.
+Installation.
+
+**Lizenz:** `SCADark.vsf` und `sca_styles.RES` fallen nicht unter die
+MIT-Lizenz des Projekts, siehe [LICENSE](../../LICENSE). Die Änderung und
+Weitergabe deckt Abschnitt 3 von `radstudio_deploy_en.htm` (Delphi 12 und 13):
+„These files may also be modified and freely redistributed as part of your
+larger work under a new name." Deshalb trägt die Datei einen eigenen Namen und
+wird nur als Teil der Anwendung ausgeliefert. Der Embarcadero-Hinweis in der
+Datei bleibt stehen.
 
 **Warum umgefärbt (2026-08-08, User-Auflage):** das Original steht
 wörtlich auf `clBlack` (Window, Panel, Grid, Edit, Menü) und wirkte

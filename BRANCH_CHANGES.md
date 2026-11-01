@@ -11,7 +11,7 @@ The repository ships three components:
 |-----------|---------|------|
 | **Standalone EXE** | Stand-alone tool for scanning directories on disk | `StaticCodeAnalyserForm/` |
 | **IDE plugin** | Dockable tool window inside the Delphi IDE | `StaticCodeAnalyserIDE/` |
-| **reDelphix** | Optional IDE package with code actions, built from source | `reDelphix/` |
+| **reDelphix** | Code actions of the IDE plugin, always installed with it | `reDelphix/` |
 
 ---
 
@@ -313,7 +313,7 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + dockable form wrapper
 │   ├── StaticCodeAnalyser.IDE.d12.dpk       # Designtime package (dev set)
 │   └── StaticCodeAnalyser.Plugin.d12.dpk    # Release monolith package
-├── reDelphix/                      # Optional IDE package with code actions
+├── reDelphix/                      # IDE package with the code actions
 ├── docs/                           # Mockups, sketches, screenshots
 └── DETECTORS.md                    # Full detector catalogue with status
 ```

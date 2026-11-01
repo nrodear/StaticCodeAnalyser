@@ -59,7 +59,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 | 🔇 **Suppression** | `// noinspection MemoryLeak` par ligne, plus `ignore.txt` pour des fichiers entiers |
 | 🌓 **Suivi du thème** | Suit automatiquement le thème actif de l'IDE (Light / Dark / Mountain Mist / Carbon) |
 | 💡 **Aide avant/après** | Chaque détecteur possède une paire d'exemples de code « à ne pas faire / à faire » dans le panneau d'aide |
-| 🔧 **Actions de code** | Paquet optionnel [reDelphix](#actions-de-code--redelphix-paquet-ide-optionnel) : quick-fixes sur les résultats et refactorisations dans l'éditeur, inclus dans le setup |
+| 🔧 **Actions de code** | [reDelphix](#actions-de-code--redelphix), partie intégrante de SCA : quick-fixes sur les résultats et refactorisations dans l'éditeur, toujours installé avec le plugin IDE |
 
 ---
 
@@ -124,7 +124,7 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 | Cas d'usage | Plugin IDE | EXE autonome (GUI) | CLI (même EXE) |
 |---|:---:|:---:|:---:|
 | **Revue en ligne pendant le codage** — voir les marqueurs Bug/Vuln à côté de la ligne que vous venez d'écrire | ✅ grille en direct + bande de 3 px dans l'éditeur + surimpression au survol | — | — |
-| **Quick-Fix de la ligne courante** — appliquer une suggestion de correctif sur place | ✅ `Ctrl+Alt+F` ou ampoule, nécessite [reDelphix](#actions-de-code--redelphix-paquet-ide-optionnel) | — | — |
+| **Quick-Fix de la ligne courante** — appliquer une suggestion de correctif sur place | ✅ `Ctrl+Alt+F` ou ampoule, via [reDelphix](#actions-de-code--redelphix) | — | — |
 | **Naviguer dans les résultats au clavier** | ✅ grille + touches fléchées, l'éditeur suit | grille + touches fléchées | — |
 | **Supprimer un faux positif sur cette ligne** | ✅ `Ctrl+Alt+S` insère `// noinspection RuleName` | manuel | manuel |
 | **Confier un résultat à Claude AI** — prompt Markdown avec contexte de code | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | — |
@@ -197,8 +197,8 @@ supprimé dans l'IDE reste supprimé en CI.
      Seules les cases cochées sont installées, et décocher une version
      déjà installée la supprime — fichiers, enregistrement et entrée PATH.
      Chaque IDE coché reçoit le plugin, ses deux paquets d'exécution et
-     [reDelphix](#actions-de-code--redelphix-paquet-ide-optionnel),
-     présélectionné et décochable. Pour que l'IDE trouve les paquets
+     [reDelphix](#actions-de-code--redelphix), toujours installé avec
+     le plugin. Pour que l'IDE trouve les paquets
      d'exécution, le setup place son dossier en tête du réglage PATH de l'IDE
      (**Tools > Options > IDE > Environment Variables**) ; les entrées
      existantes restent, et la désinstallation ne retire que ce dossier. Le
@@ -248,10 +248,11 @@ catalogue de règles ; seule la façon de les piloter diffère.
 
 ---
 
-## Actions de code : reDelphix (paquet IDE optionnel)
+## Actions de code : reDelphix
 
-**reDelphix** est un paquet de conception optionnel qui ajoute des actions
-de code au plugin IDE. Sur un résultat, il propose des quick-fixes — pour
+**reDelphix** est la fonction de SCA qui ajoute des actions de code au
+plugin IDE, sous forme de paquet de conception distinct.
+Sur un résultat, il propose des quick-fixes — pour
 96 des 205 règles, par exemple `FreeAndNil(X)`, `try/finally` autour d'une
 libération ou `Format()` à la place d'une concaténation — via une ampoule
 sur la ligne du curseur, le menu contextuel du résultat (éditeur et grille
@@ -262,20 +263,19 @@ l'éditeur et n'écrit que dans l'éditeur, en une seule étape d'annulation,
 jamais dans un fichier. Une action qui modifie le comportement le dit dans
 son texte de menu et ne passe jamais par `Ctrl+Alt+F`.
 
-**Le setup l'installe.** reDelphix est un composant du setup pour chaque
-IDE que celui-ci dessert, y compris l'IDE 64 bits de Delphi 13. Il est
-présélectionné ; décochez-le si vous n'en voulez pas. Les ZIP ne le
-contiennent pas.
+**Le setup l'installe.** reDelphix fait partie du plugin IDE : chaque IDE
+que le setup dessert le reçoit, y compris l'IDE 64 bits de Delphi 13, et
+il ne peut pas être décoché. Les ZIP ne le contiennent pas.
 
 On peut aussi le compiler depuis les sources. Il faut pour cela le jeu de
 paquets de développement (`SCA.Engine`, `SCA.SharedUI`,
 `StaticCodeAnalyser.IDE.d12`), car reDelphix est lié à `SCA.Engine`.
 Retirez d'abord une installation par le setup pour cet IDE.
 
-Les étapes figurent dans [HowTo_Build_fr.md](HowTo_Build_fr.md#53-optionnel--installer-redelphix-actions-de-code).
-Sans reDelphix, le plugin fonctionne normalement : `Ctrl+Alt+F` signale
-que le paquet n'est pas chargé, `Ctrl+Alt+S` insère toujours le marqueur
-de suppression.
+Les étapes figurent dans [HowTo_Build_fr.md](HowTo_Build_fr.md#53-installer-redelphix-actions-de-code).
+Une compilation personnelle fonctionne aussi sans ce paquet : `Ctrl+Alt+F`
+signale alors qu'il n'est pas chargé, `Ctrl+Alt+S` insère toujours le
+marqueur de suppression.
 
 Chaque action avec ses textes de menu, son effet, ses blocages et un
 exemple : [reDelphix/QUICKFIXES.md](reDelphix/QUICKFIXES.md). Notes de
@@ -458,7 +458,7 @@ l'infobulle de la tuile.
 | **Clic droit → Copy AI prompt** | Copie le prompt Markdown Claude AI — toujours, quel que soit `ClipboardOnClick`. |
 | **Double-clic / Entrée** | Ouvre le fichier dans l'IDE, saute à la ligne du résultat, peint le marqueur de ligne |
 | **Ctrl+Alt+F** | **Appliquer l'aide d'édition** du résultat — la première aide disponible du package reDelphix, la même que propose l'ampoule (sur place via IOTAEditWriter après vérification du tampon, une seule étape Ctrl+Z). Les aides marquées « (modifie le comportement) » ne s'exécutent que depuis le menu ou l'ampoule. Nécessite reDelphix ; la barre d'état rapporte le résultat ou la raison de l'absence d'aide. |
-| **Ctrl+Alt+S** | **Insérer le marqueur de suppression** au-dessus de la ligne du résultat : `// noinspection <RuleName>` (avec reDelphix, un marqueur existant reçoit la règle en plus). La prochaine analyse filtre le résultat. Ctrl+Z pour revenir en arrière. |
+| **Ctrl+Alt+S** | **Insérer le marqueur de suppression** au-dessus de la ligne du résultat : `// noinspection <RuleName>` (reDelphix ajoute la règle à un marqueur existant). La prochaine analyse filtre le résultat. Ctrl+Z pour revenir en arrière. |
 | **Touches fléchées, Page préc./suiv., Début/Fin** | Se déplacent dans la grille ; dès que la sélection s'arrête, l'éditeur saute au résultat |
 | **Survol (colonne fichier)** | Infobulle avec le chemin complet du fichier (délai de 100 ms) |
 | **Clic sur un en-tête de colonne** | Trie selon cette colonne |
@@ -498,7 +498,7 @@ déroulantes fichier et règle, et les pastilles type / sévérité /
 confiance. Un clic sur un résultat ouvre un **panneau latéral** avec
 l'extrait de code, l'emplacement et la documentation de cette règle
 précise, y compris les actions de code reDelphix de la règle (voir
-[plus haut](#actions-de-code--redelphix-paquet-ide-optionnel)). L'en-tête de page, la barre de filtres et la ligne d'en-têtes
+[plus haut](#actions-de-code--redelphix)). L'en-tête de page, la barre de filtres et la ligne d'en-têtes
 de colonnes s'épinglent l'une sous l'autre pendant le défilement : on
 voit donc toujours selon quoi on filtre et quelle colonne on lit.
 
@@ -1199,8 +1199,8 @@ StaticCodeAnalyserForm/sources/        Interface autonome
   UI/                                  Fiches, dialogue d'options, panneaux
   Console/uConsoleRunner.pas           CLI (--path, --report-*, codes de sortie)
 
-reDelphix/                             Paquet IDE optionnel avec les actions
-                                       de code, voir reDelphix/README.md
+reDelphix/                             Paquet IDE avec les actions de code,
+                                       voir reDelphix/README.md
 ```
 
 ### Flux de données
@@ -1319,7 +1319,7 @@ grand (pertinent uniquement sur les scans de plusieurs Go).
 |-----------|--------|------|
 | **EXE autonome** | `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` | Scan de dossiers/fichiers hors de l'IDE |
 | **Plugin IDE** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (jeu de paquets avec `SCA.Engine.dpk` + `SCA.SharedUI.dpk`, le même en dev et en release) | Fonction principale — fenêtre d'outil ancrable avec l'ensemble des fonctionnalités |
-| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (fait partie du jeu de paquets, décochable dans le setup) | Optionnel — quick-fixes et refactorisations dans l'éditeur |
+| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (fait partie du jeu de paquets, toujours installé avec le plugin) | Quick-fixes et refactorisations dans l'éditeur |
 
 L'EXE autonome et le plugin IDE partagent le moteur d'analyse de `SCA.Engine/sources/`.
 
@@ -1412,6 +1412,9 @@ En bref :
 - ✅ Aucune garantie — le logiciel est fourni « tel quel »
 - ℹ️ La mention de copyright et le texte de la licence doivent être
   conservés dans les copies ou parties substantielles du logiciel
+- ⚠️ Exclu : le style VCL sombre (`SCADark.vsf`, `sca_styles.RES`) est un style
+  Embarcadero modifié et reste soumis aux conditions de licence de RAD Studio,
+  voir [LICENSE](LICENSE)
 
 ---
 

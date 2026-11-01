@@ -76,8 +76,8 @@ Du kannst jeden Pfad nehmen. In dieser Anleitung nehmen wir
 ## 3. Die Projekt-Gruppe in Delphi oeffnen
 
 Das Projekt liefert eine **Project-Group** mit Engine, geteilter UI,
-Standalone und IDE-Plugin, dazu dem optionalen Paket reDelphix, einer
-CLI-Demo, den Testprojekten und zwei Proben. Delphi 13 nutzt dieselben
+Standalone, IDE-Plugin und reDelphix, dazu einer CLI-Demo, den
+Testprojekten und zwei Proben. Delphi 13 nutzt dieselben
 Projektdateien. `StaticCodeAnalyser.d13.64bit.groupproj` fasst sie für
 die 64-bit-IDE zusammen, aber ohne reDelphix.
 
@@ -94,7 +94,7 @@ diese Anleitung zählen diese Sub-Projekte:
 - `SCA.SharedUI` — UI-Komponenten fuer Standalone + Plugin.
 - `StaticCodeAnalyser.d12` — die Standalone-EXE.
 - `StaticCodeAnalyser.IDE.d12` — das IDE-Plugin (ein BPL-Package).
-- `reDelphix.d12` — die optionalen Code-Aktionen (Abschnitt 5.3).
+- `reDelphix.d12` — die Code-Aktionen des Plugins (Abschnitt 5.3).
 
 Delphi zeigt das **aktive** Sub-Projekt in **fetter** grueuner Schrift.
 Wir wechseln das aktive Projekt unten je nach Bedarf.
@@ -211,7 +211,7 @@ Ein Plugin hat die Bitness seiner IDE. Delphi 12 hat nur eine
 > Packages, verweigert Delphi 13 das Plugin mit der Meldung „enthaelt die
 > Unit 'uLocalization', die auch im Package 'SCA.Engine' enthalten ist".
 > Installiert werden nur die beiden Entwurfszeit-Pakete,
-> `StaticCodeAnalyser.IDE.d12` und optional `reDelphix.d12`: aus deinem Bau
+> `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12`: aus deinem Bau
 > oder aus dem Setup, nie beides zugleich.
 
 Du hast jetzt drei `.bpl`-Dateien in
@@ -239,12 +239,12 @@ Falls der Menue-Eintrag fehlt, ist das Plugin nicht geladen. Schau in
 **View → Window List…** oder lies die Splash-Screen-Fehler vorsichtig
 durch.
 
-### 5.3 Optional: reDelphix installieren (Code-Aktionen)
+### 5.3 reDelphix installieren (Code-Aktionen)
 
 reDelphix ergänzt das Plugin um Quick-Fixes und Refactorings (siehe
-[README](README_de.md#code-aktionen-redelphix-optionales-ide-paket)).
-Das Setup liefert es mit, diesen Abschnitt brauchst du also nur für den
-eigenen Bau. Es braucht den Dev-Satz aus 5.1 und 5.2, denn es linkt
+[README](README_de.md#code-aktionen-redelphix)).
+Das Setup installiert es immer mit dem Plugin, diesen Abschnitt brauchst
+du also nur für den eigenen Bau. Es braucht den Dev-Satz aus 5.1 und 5.2, denn es linkt
 gegen `SCA.Engine`.
 
 1. 5.1 und 5.2 abschließen und prüfen, dass `reDelphix.d12` auf derselben
@@ -376,8 +376,8 @@ der Gutter-Spalte.
 
 Einen Befund auswählen und **Strg+Alt+S** drücken. Das Plugin schreibt
 einen `// noinspection`-Kommentar über die Zeile, der genau diese Regel
-an dieser Stelle ausblendet. Beim nächsten Scan ist der Befund weg. Mit
-reDelphix bietet das Kontextmenü des Befunds dasselbe an.
+an dieser Stelle ausblendet. Beim nächsten Scan ist der Befund weg.
+reDelphix bietet dasselbe im Kontextmenü des Befunds an.
 
 ### 7.6 Hover-Hint
 

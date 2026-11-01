@@ -40,8 +40,8 @@ einfügt oder löscht – darum die Grundregel unten.
 ## Szene 0: Vorbereitung (vor der Aufnahme)
 
 1. Delphi 12 Athens (Win32-IDE) oder Delphi 13 Florence.
-2. SCA und reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
-   ausführen, die Komponente reDelphix bleibt angehakt. Aus den Quellen geht
+2. SCA samt reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
+   ausführen, reDelphix kommt mit dem Plugin. Aus den Quellen geht
    es auch: Projektgruppe `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe
    erzeugen, dann `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im
    Projekt-Manager **Installieren** (Details: `reDelphix/README.md`, Abschnitte

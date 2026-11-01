@@ -133,8 +133,8 @@ behave like any profile you made yourself - including `--profile <name>`
 on the command line.
 
 The repository carries one such file: `reDelphix/data/profile-code-aktionen.json`
-holds the profile `code-aktionen`, the rules with a code action of the
-optional reDelphix package plus `FileReadError`. It is not one of the
+holds the profile `code-aktionen`, the rules with a code action of
+reDelphix plus `FileReadError`. It is not one of the
 built-in profiles and has to be imported.
 
 ## Finding a rule in the list

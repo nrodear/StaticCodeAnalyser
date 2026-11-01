@@ -72,8 +72,8 @@ You can pick any path. In this guide we assume `D:\projects\StaticCodeAnalyser`.
 ## 3. Open the project group in Delphi
 
 The project ships as a **project group** with the engine, the shared UI,
-the standalone app and the IDE plugin, plus the optional reDelphix
-package, a CLI demo, the test projects and two probes. Delphi 13 uses
+the standalone app, the IDE plugin and reDelphix, plus a CLI demo, the
+test projects and two probes. Delphi 13 uses
 the same project files. `StaticCodeAnalyser.d13.64bit.groupproj` groups
 them for the 64-bit IDE, but without reDelphix.
 
@@ -90,7 +90,7 @@ sub-projects matter here:
 - `SCA.SharedUI` — UI components used by both standalone and plugin.
 - `StaticCodeAnalyser.d12` — the standalone EXE.
 - `StaticCodeAnalyser.IDE.d12` — the IDE plugin (a BPL package).
-- `reDelphix.d12` — the optional code actions (section 5.3).
+- `reDelphix.d12` — the code actions of the plugin (section 5.3).
 
 Delphi shows a green **bold** font for the **active** sub-project.
 You will switch the active project as needed below.
@@ -204,7 +204,7 @@ is built as Win64.
 > monolith from version 0.9.18 or older is registered on top of that,
 > Delphi 13 refuses the plugin with "contains unit 'uLocalization', which
 > is also contained in package 'SCA.Engine'". Only the two design-time
-> packages get installed, `StaticCodeAnalyser.IDE.d12` and optionally
+> packages get installed, `StaticCodeAnalyser.IDE.d12` and
 > `reDelphix.d12`: from your build or from the setup, never both at once.
 
 You now have three `.bpl` files in
@@ -232,11 +232,11 @@ After restart, the IDE shows a new dockable window:
 If the menu entry is missing, the plugin failed to load. Check
 **View → Window List…** or read the splash-screen errors carefully.
 
-### 5.3 Optional: install reDelphix (code actions)
+### 5.3 Install reDelphix (code actions)
 
 reDelphix adds quick fixes and refactorings to the plugin (see the
-[README](README.md#code-actions-redelphix-optional-ide-package)). The
-setup ships it, so you need this section only for your own build. It
+[README](README.md#code-actions-redelphix)). The setup always installs
+it with the plugin, so you need this section only for your own build. It
 needs the dev set from 5.1 and 5.2, because it links against
 `SCA.Engine`.
 
@@ -366,8 +366,8 @@ highlights the offending code with a colored marker in the gutter.
 
 Select a finding and press **Ctrl+Alt+S**. The plugin writes a
 `// noinspection` comment above the line that hides exactly this rule
-at this place. The finding disappears on the next scan. With reDelphix
-the context menu of the finding offers the same.
+at this place. The finding disappears on the next scan. reDelphix
+offers the same in the context menu of the finding.
 
 ### 7.6 Hover hint
 

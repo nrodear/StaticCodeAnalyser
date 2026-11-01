@@ -184,13 +184,13 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
   Scheitert das, meldet das Setup es, im Silent-Lauf im Log, und laesst die
   Dev-Registrierungen dieser Schiene stehen: ohne den Eintrag laedt das Plugin
   beim IDE-Start nicht.
-- **reDelphix als eigene Komponente** (`redelphix`): vorgewaehlt, abwaehlbar,
-  gilt fuer alle gewaehlten Schienen; das IDE-Paket haengt nicht davon ab.
-  Die Abwahl entfernt je Schiene die Registrierung (Known + Disabled) und
-  `reDelphix.d12.bpl`, Laufzeitpakete und Override bleiben. Kennt die von Inno
-  gespeicherte Auswahl reDelphix noch nicht (Upgrade von 0.9.18), waehlt das
-  Setup es vor; eine echte Abwahl aus einem spaeteren Lauf bleibt bestehen, und
-  `/COMPONENTS=` auf der Kommandozeile legt die Auswahl selbst fest.
+- **reDelphix gehoert fest zu jeder Schiene**: es ist keine eigene Komponente
+  und laesst sich nicht abwaehlen, auch nicht ueber `/COMPONENTS=`. Jede
+  angehakte Schiene bekommt `reDelphix.d12.bpl` samt Registrierung, wer eine
+  Schiene aushakt, wird es mit ihr los. Die von Inno gespeicherte Auswahl
+  eines Upgrades von 0.9.18 nennt nur Schienen und braucht deshalb keine
+  Sonderbehandlung. Technisch haengt das IDE-Paket nicht von reDelphix ab
+  (`requires` nur Engine und SharedUI).
 - **Monolith-Bereinigung beim Upgrade**: Reste von
   `StaticCodeAnalyser.Plugin.d12.bpl` aus einer Installation bis 0.9.18 werden
   entfernt, die Known- und Disabled-Werte aller drei Zweige, auch abgewaehlter,
@@ -265,13 +265,13 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 4 | Dev-Maschine mit registriertem Dev-Satz (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existieren nur noch die Install-Pfad-Eintraege; IDE laedt das Plugin genau einmal |
 | 5 | Vorher per "Can't load package → Nein" deaktiviert (Disabled Packages) | Setup raeumt den Disabled-Eintrag; Plugin laedt nach Neustart wieder |
 | 6 | Update ueber Bestand (Paketsatz installiert, auch dasselbe Setup zweimal) | BPLs + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag je Design-BPL; Override-Segment genau einmal |
-| 6b | Upgrade vom 0.9.18-Monolithen, aus Setup und aus GetIt, alle drei Schienen | Hinweis erscheint; Monolith-Werte (Known + Disabled) weg, eigene Monolith-Datei weg; IDE-Start ohne "enthaelt die Unit ..."; reDelphix war vorgewaehlt |
+| 6b | Upgrade vom 0.9.18-Monolithen, aus Setup und aus GetIt, alle drei Schienen | Hinweis erscheint; Monolith-Werte (Known + Disabled) weg, eigene Monolith-Datei weg; IDE-Start ohne "enthaelt die Unit ..."; reDelphix je Schiene installiert und registriert |
 | 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0; Hinweise nur im Log |
 | 7b | Silent mit offener IDE, Setup und Uninstall | Lauf endet ohne Dialog mit Exit-Code ungleich 0, Grund im `/LOG` |
 | 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), Override ohne unser Segment mit allen fremden Segmenten (aus HKLM entstanden: HKCU-Kopie bleibt), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
 | 10 | reDelphix am Fund | Gluehbirne erscheint, Quick-Fix schreibt, Strg+Z macht ihn rueckgaengig; Aktionen im Kontextmenue des Dock-Grids |
-| 11 | reDelphix abwaehlen (Setup erneut) | `reDelphix.d12.bpl` und seine Registry-Werte weg, Plugin laedt weiter, Override bleibt |
+| 11 | Auswahlseite ansehen, danach Silent mit `/COMPONENTS=d12` | Die Liste nennt nur Delphi-Versionen; die Schiene bekommt alle vier BPLs und beide Known-Packages-Werte |
 | 12 | Eine Schiene abwaehlen (Setup erneut) | Dateien, Known-, Disabled-Werte und Override-Segment dieser Schiene weg |
 | 13 | D12 und D13 gleichzeitig offen | jede IDE laedt ihre 290- bzw. 370-Fassung |
 | 14 | Fremdbau: `SCA.CLI.Demo` samt Engine selbst gebaut, IDE neu starten | Plugin laedt weiter aus `{app}\bpl\<schiene>` |

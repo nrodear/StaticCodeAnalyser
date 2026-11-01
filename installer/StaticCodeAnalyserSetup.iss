@@ -56,7 +56,7 @@
 ;   SCA.Engine<suffix>.bpl          Laufzeitpaket ({$RUNONLY})
 ;   SCA.SharedUI<suffix>.bpl        Laufzeitpaket ({$RUNONLY})
 ;   StaticCodeAnalyser.IDE.d12.bpl  Design-Paket, requires Engine + SharedUI
-;   reDelphix.d12.bpl               Design-Paket, requires Engine; abwaehlbar
+;   reDelphix.d12.bpl               Design-Paket, requires Engine; fest Teil jeder Schiene
 ; Die dproj setzen KEIN DCC_BplOutput -> BPLs landen im Standard-BPL-Ordner
 ; der jeweiligen IDE (Studio\<bds>\Bpl, Win64 in Bpl\Win64). Die Generation
 ; steckt im Ordner, auch "d12" im Namen der Design-Pakete gilt fuer beide.
@@ -236,8 +236,6 @@ de.CompD13=Delphi 13 Florence (32-bit-IDE)
 en.CompD13=Delphi 13 Florence (32-bit IDE)
 de.CompD13X64=Delphi 13 Florence (64-bit-IDE)
 en.CompD13X64=Delphi 13 Florence (64-bit IDE)
-de.CompRedelphix=reDelphix: Quick-Fixes im Editor (fuer alle gewaehlten Delphi-Versionen)
-en.CompRedelphix=reDelphix: quick fixes in the editor (for all selected Delphi versions)
 de.NoComponent=Bitte mindestens eine Delphi-Version auswaehlen - sonst wird kein Plugin installiert.
 en.NoComponent=Please select at least one Delphi version - otherwise no plugin is installed.
 
@@ -274,15 +272,15 @@ Name: "custom"; Description: "{cm:TypeCustom}"; Flags: iscustom
 ; Types: full -> in der Voreinstellung sind alle gefundenen angehakt.
 ; disablenouninstallwarning: Innos Warnung "wird nicht deinstalliert" waere
 ; hier falsch, CurStepChanged entfernt Abgewaehltes restlos.
+; reDelphix ist bewusst KEINE eigene Komponente: es gehoert fest zu jeder Schiene
+; und wird mit ihr installiert und registriert. Technisch haengt das Plugin nicht
+; davon ab (StaticCodeAnalyser.IDE.d12 requires nur Engine und SharedUI).
 Name: "d12";    Description: "{cm:CompD12}";    Types: full custom; \
   Flags: disablenouninstallwarning; Check: IsDelphi12Installed
 Name: "d13";    Description: "{cm:CompD13}";    Types: full custom; \
   Flags: disablenouninstallwarning; Check: IsDelphi13Installed
 Name: "d13x64"; Description: "{cm:CompD13X64}"; Types: full custom; \
   Flags: disablenouninstallwarning; Check: IsDelphi13X64Available
-; Gilt fuer alle gewaehlten Schienen; das Plugin haengt nicht von reDelphix ab.
-Name: "redelphix"; Description: "{cm:CompRedelphix}"; Types: full custom; \
-  Flags: disablenouninstallwarning
 
 [Files]
 ; Vier BPLs je Schiene, Components statt Check: nur schreiben, wenn die
@@ -296,7 +294,7 @@ Source: "{#SCABplSourceDir}\SCA.SharedUI{#SCASuffixD12}.bpl"; DestDir: "{app}\bp
 Source: "{#SCABplSourceDir}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d12"; \
   Flags: ignoreversion; Components: d12
 Source: "{#SCABplSourceDir}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d12"; \
-  Flags: ignoreversion; Components: d12 and redelphix
+  Flags: ignoreversion; Components: d12
 
 ; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
@@ -307,7 +305,7 @@ Source: "{#SCABplSourceDirD13}\SCA.SharedUI{#SCASuffixD13}.bpl"; DestDir: "{app}
 Source: "{#SCABplSourceDirD13}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d13"; \
   Flags: ignoreversion; Components: d13
 Source: "{#SCABplSourceDirD13}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d13"; \
-  Flags: ignoreversion; Components: d13 and redelphix
+  Flags: ignoreversion; Components: d13
 #endif
 #ifdef SCA_D13_X64
 ; Die 64-bit-IDE laedt NIE eine 32-bit-BPL. Eigener Build, eigener Ordner,
@@ -319,7 +317,7 @@ Source: "{#SCABplSourceDirD13X64}\SCA.SharedUI{#SCASuffixD13}.bpl"; DestDir: "{a
 Source: "{#SCABplSourceDirD13X64}\{#SCAIdeBpl}"; DestDir: "{app}\bpl\d13x64"; \
   Flags: ignoreversion; Components: d13x64
 Source: "{#SCABplSourceDirD13X64}\{#SCARdxBpl}"; DestDir: "{app}\bpl\d13x64"; \
-  Flags: ignoreversion; Components: d13x64 and redelphix
+  Flags: ignoreversion; Components: d13x64
 #endif
 
 ; --- Regelkatalog -------------------------------------------------------------
@@ -366,7 +364,7 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCARdxBpl}"; \
   ValueData: "reDelphix - Source Refactor for Static Code Analyser"; \
-  Flags: uninsdeletevalue; Components: d12 and redelphix
+  Flags: uninsdeletevalue; Components: d12
 
 ; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
@@ -377,7 +375,7 @@ Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
   ValueName: "{app}\bpl\d13\{#SCARdxBpl}"; \
   ValueData: "reDelphix - Source Refactor for Static Code Analyser"; \
-  Flags: uninsdeletevalue; Components: d13 and redelphix
+  Flags: uninsdeletevalue; Components: d13
 #endif
 #ifdef SCA_D13_X64
 Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
@@ -387,7 +385,7 @@ Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
   ValueName: "{app}\bpl\d13x64\{#SCARdxBpl}"; \
   ValueData: "reDelphix - Source Refactor for Static Code Analyser (64-bit IDE)"; \
-  Flags: uninsdeletevalue; Components: d13x64 and redelphix
+  Flags: uninsdeletevalue; Components: d13x64
 #endif
 
 [Code]
@@ -407,9 +405,6 @@ const
   KNOWN_PACKAGES_37X64 = 'Software\Embarcadero\BDS\37.0\Known Packages x64';
   DISABLED_PKGS_37X64  = 'Software\Embarcadero\BDS\37.0\Disabled Packages x64';
   ENV_VARS_37          = 'Software\Embarcadero\BDS\37.0\Environment Variables';
-  // Inno legt hier die Auswahl des letzten Laufs ab; GUID = AppId oben.
-  UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\' +
-    '{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}_is1';
   IDE_BPL_NAME      = '{#SCAIdeBpl}';
   RDX_BPL_NAME      = '{#SCARdxBpl}';
   MONOLITH_BPL_NAME = '{#SCAMonolithBpl}';
@@ -835,33 +830,11 @@ begin
     GReadyRich.Visible := False;
 end;
 
-// Upgrade von 0.9.18: die gespeicherte Auswahl kennt reDelphix noch nicht.
-// Inno uebernimmt bei Typ "custom" die alte Liste, die neue Komponente waere
-// dann womoeglich nicht vorgewaehlt. Eine echte Abwahl steht dagegen in der
-// Liste und bleibt unangetastet, /COMPONENTS= legt die Auswahl selbst fest.
-procedure WaehleRedelphixBeimUpgradeVor;
-var
-  Gewaehlt, Abgewaehlt: string;
-begin
-  if Pos('/COMPONENTS=', Uppercase(GetCmdTail)) > 0 then
-    Exit;
-  if not RegQueryStringValue(HKEY_CURRENT_USER, UNINSTALL_KEY,
-       'Inno Setup: Selected Components', Gewaehlt) then
-    Exit;
-  if not RegQueryStringValue(HKEY_CURRENT_USER, UNINSTALL_KEY,
-       'Inno Setup: Deselected Components', Abgewaehlt) then
-    Abgewaehlt := '';
-  if Pos('redelphix', Lowercase(Gewaehlt + ',' + Abgewaehlt)) = 0 then
-    WizardSelectComponents('redelphix');
-end;
-
 procedure InitializeWizard;
 var
   Btn: TNewButton;
   NextLeft: Integer;
 begin
-  WaehleRedelphixBeimUpgradeVor;
-
   // Ready-Memo: Inno-Default ist WordWrap AUS + horizontaler Scrollbalken -
   // die Hinweis-Saetze der Versions-Uebersicht liefen damit aus dem Bild
   // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen
@@ -1028,14 +1001,6 @@ end;
 // Inno zu diesem Zeitpunkt schon geschrieben.
 procedure RichteSchieneEin(const AOrdner, AKnownKey, ADisabledKey, AEnvKey: string);
 begin
-  // Abwahl von reDelphix: die Schiene bleibt, das Segment auch (Engine und
-  // SharedUI brauchen es weiter).
-  if not WizardIsComponentSelected('redelphix') then
-  begin
-    EntferneRegistrierung(BplPfad(AOrdner, RDX_BPL_NAME), AKnownKey, ADisabledKey);
-    EntferneDatei(BplPfad(AOrdner, RDX_BPL_NAME));
-  end;
-
   // Override VOR jeder Bereinigung: ohne ihn laedt der Paketsatz nicht, und
   // eine Dev-Registrierung waere dann der einzige lauffaehige Stand.
   if not SetzeOverrideSegment(AEnvKey, AOrdner) then

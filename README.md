@@ -55,7 +55,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 | 🔇 **Suppression** | `// noinspection MemoryLeak` per line, plus `ignore.txt` for whole files |
 | 🌓 **Theme aware** | Follows the active IDE theme automatically (Light / Dark / Mountain Mist / Carbon) |
 | 💡 **Before/after help** | Every detector has a paired "wrong way / right way" code example in the help panel |
-| 🔧 **Code actions** | Optional package [reDelphix](#code-actions-redelphix-optional-ide-package): quick fixes at findings and refactorings in the editor, part of the setup |
+| 🔧 **Code actions** | [reDelphix](#code-actions-redelphix), part of SCA: quick fixes at findings and refactorings in the editor, always installed with the IDE plugin |
 
 ---
 
@@ -119,7 +119,7 @@ different workflow. Pick by where you sit in the day:
 | Use case | IDE plugin | Standalone EXE (GUI) | CLI (same EXE) |
 |---|:---:|:---:|:---:|
 | **Inline review while coding** — see Bug/Vuln markers next to the line you just wrote | ✅ live grid + 3 px editor stripe + hover-overlay | — | — |
-| **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` or light bulb, needs [reDelphix](#code-actions-redelphix-optional-ide-package) | — | — |
+| **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` or light bulb, via [reDelphix](#code-actions-redelphix) | — | — |
 | **Navigate findings with the keyboard** | ✅ grid + arrow keys, the editor follows | grid + arrow keys | — |
 | **Suppress a false positive on this line** | ✅ `Ctrl+Alt+S` adds `// noinspection RuleName` | manual | manual |
 | **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ context menu → clipboard (or opt-in row-click) | ✅ context menu → clipboard (or opt-in row-click) | — |
@@ -189,8 +189,8 @@ suppressed in the IDE stays suppressed in CI.
      Only the ticked entries are installed, and unticking a previously
      installed one removes it — files, registration and PATH entry. Each
      ticked IDE gets the plugin, its two runtime packages and
-     [reDelphix](#code-actions-redelphix-optional-ide-package), which is
-     preselected and can be unticked. So that the IDE finds the runtime
+     [reDelphix](#code-actions-redelphix), which always comes with the
+     plugin. So that the IDE finds the runtime
      packages, the setup puts its folder at the front of the IDE's PATH
      setting (**Tools > Options > IDE > Environment Variables**); existing
      entries stay, and uninstalling removes only this folder. The setup also
@@ -239,10 +239,11 @@ rule catalogue; they differ only in how you drive them.
 
 ---
 
-## Code actions: reDelphix (optional IDE package)
+## Code actions: reDelphix
 
-**reDelphix** is an optional design-time package that adds code actions
-to the IDE plugin. At a finding it offers quick fixes — for 96 of the 205
+**reDelphix** is the SCA feature that adds code actions to the IDE plugin,
+as a design-time package of its own.
+At a finding it offers quick fixes — for 96 of the 205
 rules, for example `FreeAndNil(X)`, `try/finally` around a release or
 `Format()` instead of a concatenation — through a light bulb at the caret
 line, the context menu of the finding (editor and findings grid) and
@@ -252,18 +253,18 @@ checks the current editor buffer first and writes only into the editor,
 as one undo step, never into a file. An action that changes behaviour
 says so in its menu text and never runs through `Ctrl+Alt+F`.
 
-**The setup installs it.** reDelphix is a component of the setup for every
-IDE the setup serves, including the 64-bit IDE of Delphi 13. It is
-preselected; untick it if you do not want it. The ZIPs do not contain it.
+**The setup installs it.** reDelphix belongs to the IDE plugin: every IDE
+the setup serves gets it, including the 64-bit IDE of Delphi 13, and it
+cannot be unticked. The ZIPs do not contain it.
 
 You can also build it from source. That takes the dev package set
 (`SCA.Engine`, `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`), because
 reDelphix links against `SCA.Engine`. Remove a setup installation for that
 IDE first.
 
-The steps are in [HowTo_Build.md](HowTo_Build.md#53-optional-install-redelphix-code-actions).
-Without reDelphix the plugin works as usual: `Ctrl+Alt+F` reports that
-the package is not loaded, `Ctrl+Alt+S` still inserts the suppression
+The steps are in [HowTo_Build.md](HowTo_Build.md#53-install-redelphix-code-actions).
+An own build also runs without the package: `Ctrl+Alt+F` then reports
+that it is not loaded, `Ctrl+Alt+S` still inserts the suppression
 marker.
 
 Every action with its menu texts, effect, locks and an example:
@@ -439,7 +440,7 @@ the tile's tooltip.
 | **Right-click → Copy AI prompt** | Copies the Claude AI Markdown prompt — always, regardless of `ClipboardOnClick`. |
 | **Double-click / Enter** | Open the file in the IDE, jump to the finding line, paint the line marker |
 | **Ctrl+Alt+F** | **Apply the quick fix** of the finding — the first available code action of the reDelphix package, the same one the light bulb offers (in-place via IOTAEditWriter after checking the buffer, one Ctrl+Z step). Code actions marked "(changes behavior)" run only from the menu or the light bulb. Needs reDelphix; the status bar reports the result or why there is no quick fix. |
-| **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>` (with reDelphix an existing marker gets the rule added). Next analysis run filters the finding. Ctrl+Z to revert. |
+| **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>` (reDelphix adds the rule to an existing marker). Next analysis run filters the finding. Ctrl+Z to revert. |
 | **Arrow keys, Page Up/Down, Home/End** | Move through the grid; once the selection rests, the editor jumps to the finding |
 | **Hover (file column)** | Tooltip with the full file path (100 ms delay) |
 | **Click a column header** | Sort by that column |
@@ -477,7 +478,7 @@ It opens with the health rating, the stat tiles and two top-lists
 dropdowns and the type / severity / confidence chips. A click on a
 finding opens a **side drawer** with the source excerpt, the location
 and the documentation for that rule, including the reDelphix code
-actions the rule has (see [below](#code-actions-redelphix-optional-ide-package)). Page header, filter bar and column
+actions the rule has (see [below](#code-actions-redelphix)). Page header, filter bar and column
 row pin below one another as you scroll, so you always see what you are
 filtering and which column you are reading.
 
@@ -1157,8 +1158,8 @@ StaticCodeAnalyserForm/sources/        Standalone front-end
   UI/                                  Forms, options dialog, panels
   Console/uConsoleRunner.pas           CLI (--path, --report-*, exit codes)
 
-reDelphix/                             Optional IDE package with the code
-                                       actions, see reDelphix/README.md
+reDelphix/                             IDE package with the code actions,
+                                       see reDelphix/README.md
 ```
 
 ### Data flow
@@ -1273,7 +1274,7 @@ larger heap (relevant only on multi-GB scans).
 |-----------|------|---------|
 | **Standalone EXE** | `StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj` | Folder/file scan outside the IDE |
 | **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (package set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`, the same in dev and in a release) | Main feature — dockable tool window with the full feature set |
-| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (part of the package set, can be unticked in the setup) | Optional — quick fixes and refactorings in the editor |
+| **reDelphix** | `reDelphix/reDelphix.d12.dpk` (part of the package set, always installed with the plugin) | Quick fixes and refactorings in the editor |
 
 Standalone EXE and IDE plugin share the analysis engine in `SCA.Engine/sources/`.
 
@@ -1367,6 +1368,9 @@ In short:
 - ✅ No warranty — the software is provided "as is"
 - ℹ️ The copyright notice and the license text must be kept in copies or
   substantial portions of the software
+- ⚠️ Not covered: the dark VCL style (`SCADark.vsf`, `sca_styles.RES`) is a
+  modified Embarcadero style and stays under the RAD Studio license terms,
+  see [LICENSE](LICENSE)
 
 ---
 

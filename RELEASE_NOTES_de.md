@@ -10,16 +10,16 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   Kontextmenü des Funds, dazu neun Code-Aktionen am Caret, auf Deutsch,
   Englisch und Französisch. Jede Aktion prüft zuerst den Editor-Puffer
   und schreibt einen Undo-Schritt, nie in eine Datei. Das Setup
-  installiert es für Delphi 12 und für die 32- und die 64-Bit-IDE von
-  Delphi 13; es ist vorgewählt und lässt sich abwählen.
+  installiert es immer mit dem Plugin, für Delphi 12 und für die 32- und
+  die 64-Bit-IDE von Delphi 13.
 - **GetIt ist für 0.9.19 ausgesetzt: Wer GetIt nutzt, nimmt das Setup.**
   Das Setup installiert jetzt einen Satz aus vier Paketen je IDE statt
   einer BPL, und dieser Satz lässt sich über GetIt nicht installieren. Das
   neue Setup über v0.9.18 ausführen: Es entfernt das alte Plugin, auch
   eine GetIt-Installation, und meldet das. Sein Ordner kommt vorn in die
   PATH-Einstellung der IDE; die Deinstallation entfernt nur diesen
-  Eintrag. Mit reDelphix behält ein installiertes Plugin seine Quick-Fixes
-  und `Strg+Alt+F`.
+  Eintrag. reDelphix kommt mit, ein installiertes Plugin behält also seine
+  Quick-Fixes und `Strg+Alt+F`.
 - **Sonar-Einstellungen und Verbindungstest entfallen. SCA schreibt die
   Datei, `sonar-scanner` sendet sie. Die Schalter `--sonar-test`,
   `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,

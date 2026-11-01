@@ -141,7 +141,7 @@ verhalten sie sich wie selbst angelegte - einschließlich
 
 Das Repository bringt eine solche Datei mit:
 `reDelphix/data/profile-code-aktionen.json` enthält das Profil
-`code-aktionen`, die Regeln mit einer Code-Aktion des optionalen Pakets
+`code-aktionen`, die Regeln mit einer Code-Aktion von
 reDelphix plus `FileReadError`. Es gehört nicht zu den eingebauten
 Profilen und muss importiert werden.
 

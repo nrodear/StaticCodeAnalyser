@@ -78,10 +78,10 @@ tools\probe\sites_sample.py       Stichprobe je Regel aus einem SARIF-Lauf (seed
 
 ## Voraussetzungen in der IDE
 
-* **Im Setup enthalten**: seit 0.9.19 liefert das Setup reDelphix als
-  vorgewaehlte, abwaehlbare Komponente fuer Delphi 12 Win32 sowie Delphi 13
-  Win32 und Win64. Die ZIPs enthalten es nicht, GetIt ist fuer 0.9.19
-  ausgesetzt.
+* **Im Setup enthalten**: reDelphix ist ein Feature des SCA. Seit 0.9.19
+  installiert das Setup es immer mit dem Plugin, fuer Delphi 12 Win32 sowie
+  Delphi 13 Win32 und Win64; abwaehlen laesst es sich nicht. Die ZIPs
+  enthalten es nicht, GetIt ist fuer 0.9.19 ausgesetzt.
 * **Eigener Bau**: `StaticCodeAnalyser.IDE.d12` (requires `SCA.Engine`,
   `SCA.SharedUI`) muss installiert sein. reDelphix linkt gegen
   `SCA.Engine290.bpl` bzw. `SCA.Engine370.bpl`; neben einem Monolithen
@@ -112,9 +112,10 @@ eigenen Bau. Das Package ist Teil von `StaticCodeAnalyser.d12.groupproj`
 und liegt im SCA-Repo unter `reDelphix\`. In der Gruppe steht es nach dem IDE-Plugin;
 danach folgen TestProject, reDelphix.Test, RdxCorpusProbe und
 RdxActionProbe. Es haengt von
-`SCA.Engine` ab (das Package bindet `SCA.Engine.dcp`); die Gruppe traegt
-das als Abhaengigkeit, ein einzelnes "Erzeugen" von `reDelphix_d12` baut
-die Engine also vorher. DCUs landen wie bei den anderen Projekten in
+`SCA.Engine` ab (das Package bindet `SCA.Engine.dcp`). Die Gruppe steht in
+Bau-Reihenfolge und traegt dafuer keine eigene Abhaengigkeit: ein einzelnes
+"Erzeugen" von `reDelphix_d12` baut die Engine nicht mit, sie muss schon
+gebaut sein. DCUs landen wie bei den anderen Projekten in
 `..\Output\reDelphix\`.
 
 1. Die Gruppe bauen (Engine, SharedUI, IDE-Plugin, reDelphix, Tests) und
