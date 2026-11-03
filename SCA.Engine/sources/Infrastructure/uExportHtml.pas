@@ -651,6 +651,25 @@ begin
   end;
 end;
 
+function ReportLangOf(const AAppLang: string): string;
+// Vorgabesprache der Beschriftung im CLI-Report (i18n-Luecken
+// 2026-11-03, C12). Die Regeltexte backt der Report in der Sprache der
+// erzeugenden Anwendung (TRuleCatalog.GetRule(K, CurrentLanguage)); die
+// Labels muessen dieselbe Sprache vorgeben, sonst stehen deutsche Labels
+// ueber englischen Regeltexten - genau das passierte, als der Report die
+// Browsersprache nahm (und jede andere als en/fr auf "de" fiel, auch
+// unter der CLI, die nie eine Sprache setzt und damit englisch backt).
+// Die Browsersprache entfaellt GANZ: auch eine unterstuetzte waere nur
+// dann richtig, wenn sie zufaellig der Erzeugungssprache gleicht - dann
+// liefert diese Regel dasselbe Ergebnis. Eine Sprache ohne I18N-Block
+// (z.B. eine externe es.po) faellt auf "en", wie GetRule und
+// TWorkbenchI18n auch.
+begin
+  Result := NormalizeLangCode(AAppLang);
+  if not TWorkbenchI18n.IstBekannt(Result) then
+    Result := 'en';
+end;
+
 function EditorHelpI18nZeilen(const ALang: string): string;
 // Die sechs Schluessel der Editorhilfen im I18N-Woerterbuch des
 // CLI-Berichts, je eine Zeile mit Komma (es folgen weitere Eintraege).
@@ -975,8 +994,9 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
-    // lang-Attribute wird per JS aus localStorage / navigator.language
-    // auf en/de/fr gesetzt - Default 'de' fuer den Pre-JS-Render.
+    // lang-Attribut setzt applyLanguage per JS (gespeicherte Wahl, sonst
+    // die Erzeugungssprache, s. SCA_LANG unten). 'de' gilt nur fuer den
+    // Pre-JS-Render, weil die DOM-Vorgabetexte deutsch sind.
     SB.AppendLine('<html lang="de">');
     SB.AppendLine('<head>');
     SB.AppendLine('  <meta charset="UTF-8">');
@@ -1620,7 +1640,7 @@ begin
     SB.Append    (IntToStr(Files.Count));
     SB.Append    ('">');
     SB.Append    (IntToStr(nTotal));
-    SB.Append    (' Befunde in ');
+    SB.Append    (' Funde in ');
     SB.Append    (IntToStr(Files.Count));
     SB.Append    (' Dateien</span>');
     if SourceFile <> '' then
@@ -1785,12 +1805,16 @@ begin
     // Aufbau dieser Seite. Volltext wird im I18N-Dict gehalten -
     // data-i18n=audience-hint laesst applyLanguage den kompletten HTML-
     // Block durch T() schreiben.
+    // DOM-Vorgaben dieser Seite: Umlaute als HTML-Entities (die Quelle
+    // bleibt ASCII, im Markup sind Entities gueltig), Wortwahl wie der
+    // de-Block des I18N-Woerterbuchs (Fund, Schweregrad, unpersoenlich -
+    // i18n-Luecken 2026-11-03, C13).
     SB.AppendLine('  <div class="audience-hint" data-i18n="audience-hint">');
-    SB.AppendLine('    <b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> ' +
+    SB.AppendLine('    <b>Optimiert f&uuml;r Tech-Lead / Senior-Dev Review</b> ' +
                   '&middot; Refactoring-Priorisierung. ' +
-                  'Starte oben mit den Top-Detektoren (groesstes Volumen, ' +
-                  '<span class="td-qf">QF</span> = Quick-Fix vorhanden), ' +
-                  'die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).');
+                  'Oben mit den Top-Detektoren beginnen (gr&ouml;&szlig;tes Volumen, ' +
+                  '<span class="td-qf">QF</span> = Quick-Fix vorhanden); ' +
+                  'die Tabelle ist nach Schweregrad sortiert (Fehler &rarr; Hinweis).');
     SB.AppendLine('  </div>');
 
     // Header-Actions: zwei Tech-Lead-Tools direkt unter dem Hint.
@@ -1801,7 +1825,7 @@ begin
     SB.AppendLine('  <div class="header-actions">');
     SB.AppendLine('    <button class="tl-btn" id="btnSprintCopy" ' +
                   'data-i18n="btn-sprint" data-i18n-title="ttl-sprint" ' +
-                  'title="Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage">' +
+                  'title="Sichtbare Top-Funde als Markdown-Liste in die Zwischenablage">' +
                   '&#128203; Sprint-Liste kopieren</button>');
     SB.AppendLine('    <button class="tl-btn" id="btnShareLink" ' +
                   'data-i18n="btn-share" data-i18n-title="ttl-share" ' +
@@ -1862,7 +1886,7 @@ begin
         SB.Append(IntToStr(KindPairs[i].Value));
         SB.Append('</span>');
         if HasQf then
-          SB.Append(' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
+          SB.Append(' <span class="td-qf" title="Quick-Fix verf&uuml;gbar (Gl&uuml;hbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
         SB.AppendLine('</li>');
       end;
       SB.AppendLine('    </ol>');
@@ -1888,7 +1912,7 @@ begin
       SB.Append    (IntToStr(KindPairs.Count));
       SB.Append    (' Regeln, ');
       SB.Append    (IntToStr(nTotal));
-      SB.AppendLine(' Befunde</summary>');
+      SB.AppendLine(' Funde</summary>');
       SB.AppendLine('    <table class="rule-table">');
       SB.AppendLine('      <thead><tr>');
       SB.AppendLine('        <th data-i18n="rr-rule">Regel</th>');
@@ -2017,7 +2041,7 @@ begin
     // Tech-Lead-Workflow: "was kann das Team per Gluehbirne / Ctrl+Alt+F im
     // IDE-Plugin beheben?". Die Regeln liefert das Katalogfeld editorHelp
     // (HelpKinds); konkretes Matching passiert im JS gegen ALL_KINDS[*].qf.
-    SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verfuegbar)</option>');
+    SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verf&uuml;gbar)</option>');
     SB.AppendLine('      <option value="sec">Security (CWE / OWASP)</option>');
     // Profile-Optionen aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
     // Werte: "profile:<Name>", damit der JS-Filter Profile von "all"/"top10"
@@ -2146,7 +2170,7 @@ begin
     SB.Append    (IntToStr(nTotal));
     SB.Append    ('">');
     SB.Append    (IntToStr(nTotal));
-    SB.AppendLine(' Befunde</span>');
+    SB.AppendLine(' Funde</span>');
     SB.AppendLine('    <span class="hint" data-i18n="hint-bar">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
     SB.AppendLine('  </div>');
 
@@ -2158,9 +2182,9 @@ begin
       SB.Append    (IntToStr(RowsDropped));
       SB.Append    ('">');
       SB.Append    (IntToStr(RowsDropped));
-      SB.Append    (' weitere Befunde sind nicht in diesem Bericht. ');
+      SB.Append    (' weitere Funde sind nicht in diesem Report. ');
       SB.Append    ('Filter, Suche und Sortierung arbeiten nur auf den ');
-      SB.Append    ('angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.');
+      SB.Append    ('angezeigten Zeilen; die Zusammenfassung z&auml;hlt alle Funde.');
       SB.AppendLine('</div>');
     end;
 
@@ -2171,7 +2195,7 @@ begin
     // Text-Teil aktualisiert, ohne die <span class="sort-ind"> zu zerstoeren.
     if SourceFile = '' then
       SB.AppendLine('      <th class="sortable" data-col="file"><span data-i18n="th-file">Datei</span><span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Severity</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Schweregrad</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="conf"><span data-i18n="th-conf">Konfidenz</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="type"><span data-i18n="th-type">Typ</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable num" data-col="line"><span data-i18n="th-line">Zeile</span><span class="sort-ind"></span></th>');
@@ -2484,7 +2508,7 @@ begin
             end;
             if Hint.After <> '' then
             begin
-              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (L&ouml;sung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
               SB.Append(#10#10);
               SB.Append('</pre></div>');
@@ -2507,7 +2531,7 @@ begin
             end;
             if Meta.GoodExample <> '' then
             begin
-              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (L&ouml;sung)</h5><pre>');
               SB.Append(HtmlEscape(Meta.GoodExample));
               SB.Append(#10#10);
               SB.Append('</pre></div>');
@@ -2524,8 +2548,9 @@ begin
     // ---- i18n: Sprach-Wahlmoeglichkeit EN / DE / FR -----------------------
     // Strings die im DOM stehen werden via data-i18n-Attribut markiert;
     // dynamische Strings (im JS gebaut) gehen ueber T(key, ...args).
-    // Auswahl wird in localStorage["sca-html-lang"] persistiert. Beim
-    // ersten Laden: navigator.language -> en/de/fr fallback de.
+    // Auswahl wird in localStorage["sca-html-lang"] persistiert. Ohne
+    // gespeicherte Wahl gilt die Erzeugungssprache (SCA_LANG_DEFAULT, s.
+    // ReportLangOf), Ersatz "en".
     SB.AppendLine('    var I18N = {');
     SB.AppendLine('      en: {');
     SB.AppendLine('        "lbl-lang": "Language:",');
@@ -2602,6 +2627,11 @@ begin
     SB.AppendLine('        "hint-before": "Before (Problem)",');
     SB.AppendLine('        "hint-after":  "After (Fix)"');
     SB.AppendLine('      },');
+    // DE-Block (i18n-Luecken 2026-11-03, C13): Umlaute wie im FR-Block als
+    // \uXXXX mit EINEM Backslash (Quelle bleibt ASCII; s. Kommentar am
+    // FR-Block). Wortwahl nach den Hausregeln der de.po: "Fund" (nicht
+    // "Befund"), "Schweregrad" (nicht "Severity"), "Report" (nicht
+    // "Bericht"), unpersoenliche Anrede.
     SB.AppendLine('      de: {');
     SB.AppendLine('        "lbl-lang": "Sprache:",');
     SB.AppendLine('        "lbl-profile": "Profil:",');
@@ -2610,11 +2640,11 @@ begin
     SB.AppendLine('        "ph-search": "Methode, Datei, Detail...",');
     SB.AppendLine('        "opt-all": "Alle",');
     SB.AppendLine('        "opt-all-files": "Alle ({0} Dateien)",');
-    SB.AppendLine('        "row-count": "{0} Befunde",');
-    SB.AppendLine('        "trunc-banner": "{0} weitere Befunde sind nicht in diesem Bericht. Filter, Suche und Sortierung arbeiten nur auf den angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.",');
+    SB.AppendLine('        "row-count": "{0} Funde",');
+    SB.AppendLine('        "trunc-banner": "{0} weitere Funde sind nicht in diesem Report. Filter, Suche und Sortierung arbeiten nur auf den angezeigten Zeilen; die Zusammenfassung z\u00e4hlt alle Funde.",');
     SB.AppendLine('        "hint-bar": "Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts",');
     SB.AppendLine('        "th-file": "Datei",');
-    SB.AppendLine('        "th-sev": "Severity",');
+    SB.AppendLine('        "th-sev": "Schweregrad",');
     SB.AppendLine('        "th-type": "Typ",');
     SB.AppendLine('        "th-line": "Zeile",');
     SB.AppendLine('        "th-method": "Methode",');
@@ -2642,15 +2672,15 @@ begin
     SB.AppendLine('        "health-summary": "{0} Fehler, {1} Warnungen in {2} Dateien; Schwerpunkt <b>{3}</b>",');
     SB.AppendLine('        "hdr-top-files": "Top {0} Risiko-Dateien (von {1})",');
     SB.AppendLine('        "meta-tool": "Tool: {0}",');
-    SB.AppendLine('        "meta-scope": "{0} Befunde in {1} Dateien",');
+    SB.AppendLine('        "meta-scope": "{0} Funde in {1} Dateien",');
     SB.AppendLine('        "btn-sprint": "&#128203; Sprint-Liste kopieren",');
-    SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage",');
+    SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Funde als Markdown-Liste in die Zwischenablage",');
     SB.AppendLine('        "btn-share": "&#128279; Sicht teilen",');
     SB.AppendLine('        "ttl-share": "Aktuelle Filter-Sicht als URL in die Zwischenablage (zum Teilen)",');
     SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
     SB.AppendLine('        "ttl-kbd":   "Tastatur-Shortcuts anzeigen (?)",');
     SB.AppendLine('        "hdr-top-detectors": "Top {0} Detektoren (von {1})",');
-    SB.AppendLine('        "hdr-rule-report": "Regel-Report: {0} Regeln, {1} Befunde",');
+    SB.AppendLine('        "hdr-rule-report": "Regel-Report: {0} Regeln, {1} Funde",');
     SB.AppendLine('        "rr-rule": "Regel",');
     SB.AppendLine('        "rr-detector": "Detektor",');
     SB.AppendLine('        "rr-total": "Summe",');
@@ -2660,18 +2690,18 @@ begin
     if AOptions.EditorHelp then
       SB.Append(EditorHelpI18nZeilen('de'));
     SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
-    SB.AppendLine('        "kbd-help-close": "Schliessen",');
-    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
+    SB.AppendLine('        "kbd-help-close": "Schlie\u00dfen",');
+    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Funde. Top {1} Priorit\u00e4ten:",');
     SB.AppendLine('        "meta-created": "Erstellt: {0}",');
     SB.AppendLine('        "meta-file":    "Datei: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; ' +
-      'Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
+    SB.AppendLine('        "audience-hint": "<b>Optimiert f\u00fcr Tech-Lead / Senior-Dev Review</b> &middot; ' +
+      'Refactoring-Priorisierung. Oben mit den Top-Detektoren beginnen (gr\u00f6\u00dftes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden); die Tabelle ist nach Schweregrad sortiert (Fehler &rarr; Hinweis).",');
     SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
     SB.AppendLine('        "hint-what": "Was wird erkannt?",');
     SB.AppendLine('        "hint-why":  "Warum ist das relevant?",');
     SB.AppendLine('        "hint-this": "Hinweis zu diesem Fund",');
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
-    SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
+    SB.AppendLine('        "hint-after":  "Nachher (L\u00f6sung)"');
     SB.AppendLine('      },');
     // FR-Block: Nicht-ASCII-Zeichen als JS-Unicode-Escapes (\uXXXX), damit die
     // Pascal-Quelle ASCII-rein bleibt. ACHTUNG: Delphi-Strings kennen KEIN
@@ -2753,13 +2783,18 @@ begin
     SB.AppendLine('        "hint-after":  "Apr\u00e8s (solution)"');
     SB.AppendLine('      }');
     SB.AppendLine('    };');
+    // Sprachwahl (C12, s. ReportLangOf): 1. die gespeicherte Wahl des
+    // Lesers - er hat bewusst umgeschaltet und weiss, dass die Regeltexte
+    // gebacken sind; 2. die Erzeugungssprache, in der auch die Regeltexte
+    // stehen; 3. "en". Die Browsersprache zaehlt nicht mehr.
+    // ReportLangOf liefert nur de/en/fr - als JS-Literal unbedenklich.
+    SB.AppendLine('    var SCA_LANG_DEFAULT = "' + ReportLangOf(CurrentLanguage) + '";');
     SB.AppendLine('    var SCA_LANG = (function() {');
     SB.AppendLine('      try {');
     SB.AppendLine('        var s = localStorage.getItem("sca-html-lang");');
     SB.AppendLine('        if (s && I18N[s]) return s;');
     SB.AppendLine('      } catch(e) {}');
-    SB.AppendLine('      var nav = (navigator.language || "de").substring(0,2).toLowerCase();');
-    SB.AppendLine('      return I18N[nav] ? nav : "de";');
+    SB.AppendLine('      return I18N[SCA_LANG_DEFAULT] ? SCA_LANG_DEFAULT : "en";');
     SB.AppendLine('    })();');
     SB.AppendLine('    function T(key) {');
     SB.AppendLine('      var s = (I18N[SCA_LANG] && I18N[SCA_LANG][key]) || (I18N["en"] && I18N["en"][key]) || key;');
@@ -3262,7 +3297,7 @@ begin
     SB.AppendLine('      var html = '''';');
     SB.AppendLine('      topN.forEach(function(k) {');
     SB.AppendLine('        var qfHtml = (k.qf === 1)');
-    SB.AppendLine('          ? '' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>''');
+    SB.AppendLine('          ? '' <span class="td-qf" title="Quick-Fix verf&uuml;gbar (Gl&uuml;hbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>''');
     SB.AppendLine('          : '''';');
     SB.AppendLine('        html += ''<li data-kind="'' + k.n + ''">'' +');
     SB.AppendLine('                ''<span class="td-name">'' + k.n + ''</span> '' +');
@@ -3560,7 +3595,7 @@ begin
     SB.AppendLine('      aggList.sort(function(a, b) { return b.c - a.c; });');
     SB.AppendLine('      var qfAgg = aggList.filter(function(k){ return QF_KINDS[k.n] === 1; });');
     SB.AppendLine('      if (qfAgg.length) {');
-    SB.AppendLine('        md += ''\n### Quick-Wins (Quick-Fix: Gluehbirne / Ctrl+Alt+F im IDE-Plugin)\n\n'';');
+    SB.AppendLine('        md += ''\n### Quick-Wins (Quick-Fix: Gl\u00fchbirne / Ctrl+Alt+F im IDE-Plugin)\n\n'';');
     SB.AppendLine('        qfAgg.slice(0, 10).forEach(function(k) {');
     SB.AppendLine('          md += ''- [ ] '' + k.n + '' ('' + k.c + '' Vorkommen)\n'';');
     SB.AppendLine('        });');
@@ -3728,9 +3763,10 @@ begin
     // Steuerzeichen-Fund ungueltig gemacht hat (uBaseline.TBaseline.Write,
     // seit 2026-08-28 behoben); der stille Zweig bleibt aber fuer jede
     // fremde oder von Hand bearbeitete Datei erreichbar - deshalb sagt er
-    // jetzt Bescheid, statt zu schweigen. Ohne Akzente, damit der
-    // FR-Text keine \u-Sequenz braucht.
-    SB.AppendLine('      var TPLERR = { en: "Baseline: not loaded - invalid JSON", de: "Baseline: nicht geladen - ungueltiges JSON", fr: "Base: non chargee - JSON invalide" };');
+    // jetzt Bescheid, statt zu schweigen. Umlaut und Akzent als \uXXXX
+    // wie in TPL darueber (i18n-Luecken C13; vorher bewusst ohne, was
+    // "ungueltiges"/"chargee" ergab).
+    SB.AppendLine('      var TPLERR = { en: "Baseline: not loaded - invalid JSON", de: "Baseline: nicht geladen - ung\u00fcltiges JSON", fr: "Base: non charg\u00e9e - JSON invalide" };');
     SB.AppendLine('      var bf = document.getElementById("baseFile");');
     SB.AppendLine('      if (bf) bf.addEventListener("change", function(){');
     SB.AppendLine('        var f = bf.files && bf.files[0]; if (!f) return;');
@@ -3782,8 +3818,8 @@ begin
     // jeweils angeklickten Befund-Zeile). Steht bewusst NACH dem
     // Skript - das JS greift deshalb lazy zu (drawerEl) und verdrahtet
     // den Close-Button per Delegation.
-    SB.AppendLine('<aside id="drawer" aria-label="Befund-Details">');
-    SB.AppendLine('  <button id="drawer-schliessen" aria-label="Details schliessen">&times;</button>');
+    SB.AppendLine('<aside id="drawer" aria-label="Fund-Details">');
+    SB.AppendLine('  <button id="drawer-schliessen" aria-label="Details schlie&szlig;en">&times;</button>');
     SB.AppendLine('  <div id="drawer-kopf"></div>');
     SB.AppendLine('  <div id="drawer-inhalt"></div>');
     SB.AppendLine('</aside>');

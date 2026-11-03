@@ -155,7 +155,7 @@ const
     ('%d Security-Funde', '%d security findings',
      '%d r&eacute;sultats de s&eacute;curit&eacute;'),
     ('Vulnerability- und Security-Hotspot-Regeln zusammen.',
-     'Vulnerability and security hotspot rules combined.',
+     'Vulnerability and Security Hotspot rules combined.',
      'R&egrave;gles Vulnerability et Security Hotspot r&eacute;unies.'),
     ('Nur diese zeigen', 'Show only these',
      'N''afficher que ceux-ci'),
@@ -202,7 +202,7 @@ const
     // ---- Drawer -----------------------------------------------------------
     ('Detektor-Details', 'Detector details', 'D&eacute;tails du d&eacute;tecteur'),
     ('Fund-Details', 'Finding details', 'D&eacute;tails du r&eacute;sultat'),
-    ('Details schliessen', 'Close details', 'Fermer les d&eacute;tails'),
+    ('Details schlie&szlig;en', 'Close details', 'Fermer les d&eacute;tails'),
     ('Was wird erkannt?', 'What is detected?',
      'Qu''est-ce qui est d&eacute;tect&eacute; ?'),
     ('Warum ist das relevant?', 'Why does it matter?',
@@ -374,19 +374,21 @@ end;
 class function TWorkbenchI18n.TJs(AText: TWbText;
   const ALang: string): string;
 // Entity -> \uXXXX. Die Liste deckt GENAU die in WB_TEXTE benutzten
-// Entities ab; eine neue Entity in der Tabelle gehoert hier ergaenzt.
+// Entities ab; eine neue Entity in der Tabelle gehoert hier ergaenzt
+// (&szlig; kam 2026-11-03 mit "Details schlie&szlig;en" dazu - vorher
+// stand dort die Umschreibung "schliessen", i18n-Luecken C13).
 // Der Waechtertest I18n_JsTexteOhneEntities haelt das zusammen: er
 // prueft, dass nach der Wandlung KEIN '&...;' mehr uebrig ist.
 // \uXXXX statt der echten Zeichen: die Quelldatei bleibt reines ASCII
 // (Projektstil), und der JS-Parser erzeugt daraus dasselbe Zeichen.
 const
-  ENTITIES : array[0..10] of array[0..1] of string = (
+  ENTITIES : array[0..11] of array[0..1] of string = (
     ('&eacute;', '\u00e9'), ('&egrave;', '\u00e8'),
     ('&agrave;', '\u00e0'), ('&ccedil;', '\u00e7'),
     ('&ocirc;', '\u00f4'),  ('&Agrave;', '\u00c0'),
     ('&uuml;', '\u00fc'),   ('&auml;', '\u00e4'),
     ('&ouml;', '\u00f6'),   ('&middot;', '\u00b7'),
-    ('&quot;', '\"')
+    ('&quot;', '\"'),     ('&szlig;', '\u00df')
   );
 var
   i : Integer;

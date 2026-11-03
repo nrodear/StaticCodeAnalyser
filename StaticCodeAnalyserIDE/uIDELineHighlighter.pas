@@ -1719,12 +1719,16 @@ begin
 end;
 
 function SeverityLabel(S: TFindingSeverity): string;
+// Klammer-Marke der Mehrfach-Zusammenfassung im Hover-Overlay. Die
+// Ueberschrift darueber ('%d findings on this line') war uebersetzt, die
+// Marke nicht (i18n-Luecken C3). ERROR/WARNING/HINT sind dieselben
+// msgids wie in uFindingCopyText; READ ERROR ist neu.
 begin
   case S of
-    fsError     : Result := 'ERROR';
-    fsWarning   : Result := 'WARNING';
-    fsHint      : Result := 'HINT';
-    fsFileError : Result := 'READ ERROR';
+    fsError     : Result := _('ERROR');
+    fsWarning   : Result := _('WARNING');
+    fsHint      : Result := _('HINT');
+    fsFileError : Result := _('READ ERROR');
   else
     Result := '';
   end;
@@ -1854,7 +1858,7 @@ begin
       if Group[j].Title <> '' then
         DescSB.Append(Group[j].Title)
       else
-        DescSB.Append('(unnamed)');
+        DescSB.Append(_('(unnamed)'));
       if Group[j].Severity <> fsUnknown then
       begin
         DescSB.Append('  [');

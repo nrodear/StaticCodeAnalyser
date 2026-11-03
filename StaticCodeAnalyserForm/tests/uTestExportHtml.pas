@@ -90,6 +90,14 @@ type
     // fix-hint einer Custom Rule (2026-11-03): steht als "Hinweis zu
     // diesem Fund" im Report - und escaped, es ist Benutzertext.
     [Test] procedure CustomRuleFixHint_EscapedInHintRow;
+    // i18n-Luecken 2026-11-03, C12: die Labels geben die Sprache vor, in
+    // der auch die Regeltexte gebacken sind (CurrentLanguage) - nicht die
+    // Browsersprache, und als Ersatz "en" statt "de".
+    [Test] procedure ReportLang_VorgabeIstErzeugungssprache;
+    [Test] procedure ReportLang_UnbekannteOderLeereSprache_FaelltAufEn;
+    // C13: der de-Block des I18N-Woerterbuchs folgt den Hausregeln der
+    // de.po (Fund, Schweregrad, echte Umlaute als \uXXXX).
+    [Test] procedure DeI18nBlock_HausregelnUndUmlaute;
   end;
 
 
@@ -106,6 +114,7 @@ uses
   System.IOUtils,
   System.RegularExpressions,   // EditorHelp_Aus_...: Hilfe-Teile herausnehmen
   uRuleCatalog,                // TRuleEditorHelp (EditorHelpListHtml)
+  uLocalization,               // SetLanguage/CurrentLanguage (ReportLang_*)
   Winapi.Windows;
 
 // Der Pfad steht in drei Fixtures - einmal benannt statt dreimal
@@ -937,7 +946,8 @@ begin
   Assert.IsTrue(Html.Contains('id="findingsTable"'),
     'Tabellen-Skelett bleibt');
   Assert.IsTrue(Html.Contains('</tbody>'), 'tbody bleibt (leer)');
-  Assert.IsTrue(Html.Contains('data-count="0">0 Befunde'),
+  // DOM-Vorgabe seit 2026-11-03 "Funde" (Hausregel der de.po, C13).
+  Assert.IsTrue(Html.Contains('data-count="0">0 Funde'),
     'Zeilenzaehler 0');
   Assert.IsTrue(Html.Contains('class="health-panel health-green"'),
     'Health gruen');
@@ -1158,7 +1168,7 @@ var
   Html : string;
 begin
   Html := RenderReport;
-  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Befund-Details">',
+  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Fund-Details">',
     Html) > 0, 'Drawer-Markup fehlt');
   Assert.IsTrue(Pos('id="drawer-schliessen"', Html) > 0,
     'Close-Button fehlt');
@@ -1482,6 +1492,102 @@ begin
     'der fix-hint steht escaped im Report');
   Assert.AreEqual<Integer>(0, Pos(RULE_HINT, Html),
     'der fix-hint steht nirgends roh');
+end;
+
+{ --- Sprachwahl und de-Woerterbuch (i18n-Luecken 2026-11-03) ---------- }
+
+function RenderInSprache(const ALang: string): string;
+// Ein Fund, Bericht unter der Oberflaechensprache ALang - die alte
+// Sprache kommt zurueck, auch wenn Run wirft.
+var
+  AltSpr : string;
+begin
+  AltSpr := CurrentLanguage;
+  try
+    SetLanguage(ALang);
+    Result := RenderMitProfil('');
+  finally
+    SetLanguage(AltSpr);
+  end;
+end;
+
+const
+  LANG_DEFAULT_FMT = 'var SCA_LANG_DEFAULT = "%s";';
+
+procedure TTestExportHtml.ReportLang_VorgabeIstErzeugungssprache;
+// Rot ohne den Fix: der Bericht kannte keine Vorgabe und nahm
+// navigator.language - deutsche Labels ueber englischen Regeltexten.
+var
+  Html : string;
+begin
+  Html := RenderInSprache('fr');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['fr'])),
+    'unter fr muss der Bericht fr als Vorgabe tragen');
+  Assert.AreEqual<Integer>(0, Pos('navigator.language', Html),
+    'die Browsersprache darf die Vorgabe nicht mehr bestimmen');
+
+  Html := RenderInSprache('de');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['de'])),
+    'unter de muss der Bericht de als Vorgabe tragen');
+
+  // Regionale Kuerzel wie in der INI: CurrentLanguage liefert den
+  // Rohwert, die Vorgabe muss trotzdem die Basissprache sein.
+  Html := RenderInSprache('de-DE');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['de'])),
+    'de-DE muss auf de normalisiert werden');
+
+  // Eine gespeicherte Wahl des Lesers geht weiter vor.
+  Assert.IsTrue(Html.Contains('var s = localStorage.getItem("sca-html-lang");'),
+    'die gespeicherte Sprachwahl muss erhalten bleiben');
+end;
+
+procedure TTestExportHtml.ReportLang_UnbekannteOderLeereSprache_FaelltAufEn;
+// Die CLI setzt nie eine Sprache (leer = Englisch, die Regeltexte
+// stehen englisch); eine Sprache ohne I18N-Block (externe es.po) backt
+// ebenfalls englische Regeltexte. Beide Male muss "en" vorgegeben
+// sein - vorher war der Ersatz "de".
+var
+  Html : string;
+begin
+  Html := RenderInSprache('');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['en'])),
+    'ohne Sprache muss en vorgegeben sein');
+  Html := RenderInSprache('es');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['en'])),
+    'eine Sprache ohne I18N-Block muss auf en fallen');
+  Assert.IsTrue(Html.Contains(
+    'return I18N[SCA_LANG_DEFAULT] ? SCA_LANG_DEFAULT : "en";'),
+    'der JS-Ersatz muss en sein, nicht de');
+end;
+
+procedure TTestExportHtml.DeI18nBlock_HausregelnUndUmlaute;
+// Rot ohne den Fix: "Severity", "Befunde", "Loesung", "Schliessen",
+// "Prioritaeten" und das geduzte "Starte oben" standen im de-Block.
+// Geprueft wird NUR der Block zwischen 'de: {' und 'fr: {' - im
+// uebrigen Skript stehen deutsche Kommentare, die "Befund" sagen duerfen.
+const
+  VERBOTEN : array[0..6] of string = ('Befund', 'Severity', 'Loesung',
+    'Schliessen', 'Prioritaeten', 'zaehlt', 'Starte ');
+var
+  Html, Block : string;
+  PDe, PFr, i : Integer;
+begin
+  Html := RenderMitProfil('');
+  PDe := Pos('      de: {', Html);
+  PFr := Pos('      fr: {', Html);
+  Assert.IsTrue((PDe > 0) and (PFr > PDe), 'de-Block nicht gefunden');
+  Block := Copy(Html, PDe, PFr - PDe);
+  for i := Low(VERBOTEN) to High(VERBOTEN) do
+    Assert.AreEqual<Integer>(0, Pos(VERBOTEN[i], Block),
+      QuotedStr(VERBOTEN[i]) + ' steht noch im de-Block');
+  Assert.IsTrue(Block.Contains('"th-sev": "Schweregrad"'),
+    'Spaltenkopf Schweregrad fehlt');
+  Assert.IsTrue(Block.Contains('"row-count": "{0} Funde"'),
+    'Zeilenzaehler sagt nicht "Funde"');
+  // Genau EIN Backslash - wie im FR-Block (Bug Doku_06 #21).
+  Assert.IsTrue(Block.Contains('L\u00f6sung'), 'Umlaut nicht als \uXXXX');
+  Assert.AreEqual<Integer>(0, Pos('\\u00', Block),
+    'doppelter Backslash vor \u - im JS waere das literaler Text');
 end;
 
 initialization

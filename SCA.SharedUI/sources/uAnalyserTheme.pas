@@ -121,16 +121,13 @@ function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
 procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);
 
 type
-  /// <summary>Alles, was je Farbschema variiert: der Token fuer die INI
-  /// und der Text fuer die Anzeige.</summary>
+  /// <summary>Was je Farbschema in die INI geht. Der Anzeigetext steht
+  /// seit 2026-11-03 NICHT mehr hier, sondern in
+  /// EDITOR_COLOR_SCHEME_CAPTION (Begruendung dort).</summary>
   TEditorColorSchemeInfo = record
     /// <summary>INI-Wert. STABIL und niemals uebersetzt - er steht in
     /// Anwender-Dateien und muss ein Update ueberleben.</summary>
     Token   : string;
-    /// <summary>Anzeigetext. Englisch hinterlegt, die Uebersetzung holt
-    /// der Aufrufer mit _() - die msgid bleibt damit dieselbe wie zu der
-    /// Zeit, als der Text noch literal im Options-Dialog stand.</summary>
-    Caption : string;
   end;
 
 const
@@ -145,9 +142,25 @@ const
   //
   // Jetzt loest dasselbe Versaeumnis E2072 aus, und zwar hier.
   EDITOR_COLOR_SCHEME_INFO: array[TEditorColorScheme] of TEditorColorSchemeInfo =
-    ((Token: 'default'; Caption: 'Default (bright colors)'),
-     (Token: 'gray';    Caption: 'Gray (neutral)'),
-     (Token: 'subtle';  Caption: 'Subtle (muted colors)'));
+    ((Token: 'default'),
+     (Token: 'gray'),
+     (Token: 'subtle'));
+
+  // Anzeigetexte, englisch = msgid. Uebersetzt wird NUR ueber
+  // EditorColorSchemeCaption. Bis 2026-11-03 standen sie als Feld Caption
+  // im Record oben, und der Options-Dialog rief
+  // _(EDITOR_COLOR_SCHEME_INFO[..].Caption) - fuer tools/i18n_extract.py
+  // ist das dynamisch (er loest nur unit-lokale String-Konstanten und
+  // String-Arrays auf, keine Record-Felder und nichts ueber Unitgrenzen).
+  // Die drei msgids fehlten deshalb in der template.pot, i18n_audit fuehrte
+  // sie als "tot", und ein msgmerge -U haette ihre Uebersetzungen obsolet
+  // gesetzt - die Combo waere still englisch geworden (i18n-Luecken C10).
+  // Als String-Array MIT dem _()-Aufruf in derselben Unit findet der
+  // Extraktor sie; der Index am Enum haelt E2072 fuer ein viertes Schema.
+  EDITOR_COLOR_SCHEME_CAPTION: array[TEditorColorScheme] of string =
+    ('Default (bright colors)',
+     'Gray (neutral)',
+     'Subtle (muted colors)');
 
   // Display-Reihenfolge fuer ComboBoxen. Index hier == ComboBox.ItemIndex.
   // Die Laenge haengt am Enum, nicht an einer Zahl - ein neues Schema
@@ -165,6 +178,12 @@ const
 // die das Combo-Mapping nicht jedes Mal selbst hinschreiben wollen.
 function SchemeFromComboIndex(AIndex: Integer): TEditorColorScheme;
 function ComboIndexFromScheme(Scheme: TEditorColorScheme): Integer;
+
+/// <summary>Anzeigetext des Farbschemas in der aktiven Oberflaechen-
+/// sprache (_() auf EDITOR_COLOR_SCHEME_CAPTION). Der einzige
+/// Uebersetzungsweg fuer diese Texte - nur so sieht der Extraktor die
+/// msgids.</summary>
+function EditorColorSchemeCaption(Scheme: TEditorColorScheme): string;
 
 var
   // Globaler Cache fuer das Editor-Farbschema. Wird vom IDE-Plugin-Init
@@ -233,7 +252,8 @@ implementation
 
 uses
   Winapi.Windows,
-  uAnalyserPalette;
+  uAnalyserPalette,
+  uLocalization;     // _() - EditorColorSchemeCaption
 
 function ActiveStyleServices: TCustomStyleServices;
 begin
@@ -508,6 +528,13 @@ begin
   for i := Low(EDITOR_COLOR_SCHEME_ORDER) to High(EDITOR_COLOR_SCHEME_ORDER) do
     if EDITOR_COLOR_SCHEME_ORDER[i] = Scheme then Exit(i);
   Result := 0;   // Fallback: erster Eintrag (Default)
+end;
+
+function EditorColorSchemeCaption(Scheme: TEditorColorScheme): string;
+// Das _() MUSS hier stehen, in derselben Unit wie das Array: nur dann
+// meldet tools/i18n_extract.py alle drei Elemente als msgids.
+begin
+  Result := _(EDITOR_COLOR_SCHEME_CAPTION[Scheme]);
 end;
 
 
