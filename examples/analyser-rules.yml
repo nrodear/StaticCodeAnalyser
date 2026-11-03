@@ -50,7 +50,7 @@ rules:
     pattern: "TADOQuery"
     pattern-type: word
     message: "Use TFDQuery from FireDAC instead of TADOQuery"
-    fix-hint: "Ersetze TADOQuery durch TFDQuery + 'FireDAC.Comp.Client' im uses-Block."
+    fix-hint: "Replace TADOQuery with TFDQuery and add 'FireDAC.Comp.Client' to the uses clause."
 
   # Example 2: Catch raw Sleep() calls outside test code.
   - id: PROJ002

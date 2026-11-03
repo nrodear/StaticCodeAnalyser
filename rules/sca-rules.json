@@ -583,7 +583,7 @@
       "detectorUnit": "uCustomRuleDetector.pas",
       "examples": {
         "bad":  "(pattern from analyser-rules.yml matches)",
-        "good": "(fix per the custom rule's message)"
+        "good": "(fix per the custom rule's fix-hint, shown with the finding, or its message)"
       },
       "cleanCodeAttribute": "CONVENTIONAL",
       "impacts": [

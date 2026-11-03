@@ -303,7 +303,7 @@ const
       Name     : 'User-defined custom rule';
       ShortDesc: 'Pattern matched by a rule loaded from analyser-rules.yml';
       BadEx    : '(pattern from analyser-rules.yml matches)';
-      GoodEx   : '(fix per the custom rule''s message)';
+      GoodEx   : '(fix per the custom rule''s fix-hint, shown with the finding, or its message)';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
