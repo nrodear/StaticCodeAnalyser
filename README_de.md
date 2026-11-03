@@ -459,7 +459,8 @@ Tooltip der Kachel.
 - **Severity-/Type-Combo**: filtert das Grid auf eine Kategorie
 - **Profile-Combo**: schaltet das aktive Rule-Set live um. Mitgeliefert:
   `ide-fast` (Plugin-Default — nur Bugs + Vulns), `default` (alles ausser
-  den acht reinen Konventions-Regeln), `strict` (wirklich alles), `style`
+  den acht reinen Konventions-Regeln), `strict` (wirklich alles; SCA007
+  nur mit `[Detectors] UsesCheck=1`, anders als in der CLI), `style`
   (genau diese acht), `security` (Vulns + Hotspots), `bugs-only`,
   `code-quality`, `dfm-only`. Profile leben in
   `rules/sca-rules.json` unter `profiles` und die Combo wird daraus
@@ -822,7 +823,8 @@ asymmetrisches `begin..end` um `if`/`else`, `with`, eine Klasse je Unit,
 Klartext-Beschriftungen im DFM und der Funktionsname statt `Result`. Das
 sind korrekte Funde, aber Konventionen — zusammen waren sie 48 % von
 allem, was ein Neueinsteiger zu sehen bekam. `--profile style` schaltet genau diese ein,
-`--profile strict` schaltet alles ein. `--min-severity hint|warning|error` skippt
+`--profile strict` schaltet alles ein, auch SCA007 (EXE und IDE-Plugin
+lassen SCA007 nur mit `[Detectors] UsesCheck=1` laufen). `--min-severity hint|warning|error` skippt
 Detektoren unterhalb der Schwelle. Beide Flags ueberschreiben `[Rules]`
 in `analyser.ini`.
 

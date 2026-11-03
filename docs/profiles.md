@@ -9,7 +9,7 @@ profile decides what is looked for in the first place.
 
 | Profile | Rules | What it is for |
 |---|---|---|
-| `strict` | 205 | Everything; in the CLI it also switches on SCA007 (unused uses). The completeness promise hangs on this one - rules at confidence low still need `[Rules] MinConfidence=low`, see below. |
+| `strict` | 205 | Everything; in the CLI it also switches on SCA007 (unused uses), in the EXE and the IDE plugin it does not (see below). The completeness promise hangs on this one - rules at confidence low still need `[Rules] MinConfidence=low`, see below. |
 | `default` | 197 | Everything except the eight pure-convention rules of `style`. Those eight account for roughly half of all findings on a large code base - which is why they are not in the default. |
 | `selftest-quiet` | 194 | Everything except eleven rules switched off for the self-scan (among them `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Not a subset of `default`: it keeps five of the `style` rules. Used when this repository scans itself. |
 | `code-quality` | 26 | Maintainability: dead code, long methods, complexity, unused uses (SCA007 only with `[Detectors] UsesCheck=1`). |
@@ -27,6 +27,12 @@ confidence *low* - among them `TooLongLine`, `UnsortedUses`,
 `UseAfterFree` and `AbstractNotImpl` - so they stay silent in every
 profile, `strict` included, until you set `MinConfidence=low`. The list
 is in [DETECTORS.md](../DETECTORS.md).
+
+**`strict` and SCA007.** Only the CLI adds SCA007 (unused uses) to
+`strict`: `--profile strict`, or `[Rules] Profile=strict` in a CLI run,
+runs it without `[Detectors] UsesCheck=1`. The standalone EXE and the
+IDE plugin treat `strict` like any other profile - there SCA007 needs
+`[Detectors] UsesCheck=1` in every profile.
 
 ## Choosing a profile
 

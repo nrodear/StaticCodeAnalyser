@@ -473,7 +473,8 @@ l'infobulle de la tuile.
 - **Liste déroulante de profil** : change le jeu de règles actif à la
   volée. Profils fournis : `ide-fast` (défaut de l'IDE — bugs + vulns
   uniquement), `default` (tout sauf les huit règles de pure convention),
-  `strict` (vraiment tout), `style` (exactement ces huit), `security`
+  `strict` (vraiment tout ; SCA007 seulement avec
+  `[Detectors] UsesCheck=1`, contrairement à la CLI), `style` (exactement ces huit), `security`
   (vulns + hotspots uniquement), `bugs-only`, `code-quality`, `dfm-only`.
   Les profils vivent dans `rules/sca-rules.json` sous `profiles` et la
   liste déroulante s'en nourrit — déposez votre propre profil dans le JSON
@@ -839,7 +840,8 @@ sont des résultats corrects, mais ce
 sont des conventions,
 et ensemble elles représentaient 48 % de tout ce qu'un nouveau venu voyait.
 `--profile style` active exactement celles-ci ; `--profile strict` active
-tout. `--min-severity hint|warning|error` saute les
+tout, SCA007 compris (l'EXE et le plugin IDE ne lancent SCA007 qu'avec
+`[Detectors] UsesCheck=1`). `--min-severity hint|warning|error` saute les
 détecteurs sous le seuil. Les deux options priment sur `[Rules]` dans `analyser.ini`.
 
 **Réglages `analyser.ini` pour Git** :

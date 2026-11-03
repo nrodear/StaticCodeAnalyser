@@ -453,7 +453,8 @@ the tile's tooltip.
 - **Profile dropdown**: switch the active rule-set on the fly. Bundled
   profiles: `ide-fast` (IDE default — bugs + vulns only), `default`
   (everything except the eight pure-convention rules), `strict` (really
-  everything), `style` (exactly those eight), `security` (vulns + hotspots
+  everything; SCA007 only with `[Detectors] UsesCheck=1`, unlike the
+  CLI), `style` (exactly those eight), `security` (vulns + hotspots
   only), `bugs-only`, `code-quality`, `dfm-only`. Profiles
   live in `rules/sca-rules.json` under `profiles` and the dropdown is
   populated from there — drop your own profile in the JSON and it
@@ -805,7 +806,9 @@ eight pure-convention rules** — public-member docs, `Assigned()` vs `<> nil`,
 `if`/`else`, `with`, one-class-per-unit, hardcoded DFM captions and the
 function name instead of `Result`. They are correct findings, but they are conventions,
 and together they were 48 % of everything a newcomer saw. `--profile style`
-turns exactly those on; `--profile strict` turns on everything. `--min-severity hint|warning|error` skips
+turns exactly those on; `--profile strict` turns on everything, SCA007
+included (the EXE and the IDE plugin run SCA007 only with `[Detectors]
+UsesCheck=1`). `--min-severity hint|warning|error` skips
 detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
 
 **`analyser.ini` settings for Git**:
