@@ -51,6 +51,9 @@ type
     [Test] procedure Language_TranslatesChromeButKeepsTokens;
     // Waechter der Sprachtabelle selbst.
     [Test] procedure I18n_JsVarianteOhneEntities_UndFallbackAufEn;
+    // fr-Entscheide 2026-11-03: finding = resultat, Suppress = Masquer
+    // bzw. Suppression, Guillemets statt &quot;, "..." ohne Leerzeichen.
+    [Test] procedure I18n_FrTexteFolgenDenHausregeln;
   end;
 
 implementation
@@ -145,6 +148,33 @@ begin
     'Sprachcode-Pruefung ist case-insensitiv');
   Assert.IsFalse(TWorkbenchI18n.IstBekannt('kl'),
     'unbekannter Code darf nicht als bekannt gelten');
+end;
+
+procedure TTestDetectorInfoExport.I18n_FrTexteFolgenDenHausregeln;
+// Rot ohne den Nachtrag: "occurrence" (5 Texte), "Supprimer une
+// occurrence", &quot;...&quot; im Katalog-Untertitel und "tag ..." im
+// Suchfeld. Pruefung je Text, damit eine neue Zeile mitgeprueft wird.
+const
+  VERBOTEN : array[0..3] of string = ('occurrence', 'Supprim', '&quot;',
+    ' ...');
+var
+  T : TWbText;
+  S : string;
+  i : Integer;
+begin
+  for T := Low(TWbText) to High(TWbText) do
+  begin
+    S := TWorkbenchI18n.T(T, 'fr');
+    for i := Low(VERBOTEN) to High(VERBOTEN) do
+      Assert.AreEqual<Integer>(0, Pos(VERBOTEN[i], S),
+        QuotedStr(VERBOTEN[i]) + ' im fr-Text: ' + S);
+  end;
+  Assert.AreEqual('Masquer un r&eacute;sultat',
+    TWorkbenchI18n.T(wtUnterdruecken, 'fr'),
+    'Suppress als Verb heisst Masquer');
+  Assert.IsTrue(Pos('&laquo; &eacute;lev&eacute;e &raquo;',
+    TWorkbenchI18n.T(wtUntertitelKatalog, 'fr')) > 0,
+    'Prosa-Anfuehrung als Guillemets');
 end;
 
 procedure TTestDetectorInfoExport.EveryRule_AppearsExactlyOnce;

@@ -98,6 +98,11 @@ type
     // C13: der de-Block des I18N-Woerterbuchs folgt den Hausregeln der
     // de.po (Fund, Schweregrad, echte Umlaute als \uXXXX).
     [Test] procedure DeI18nBlock_HausregelnUndUmlaute;
+    // Nachtrag: fr-Block nach den fr-Entscheiden (resultat, severite,
+    // normales Leerzeichen vor : ; ? !), und die bisher nur deutschen
+    // DOM-Texte tragen Schluessel in allen drei Sprachen.
+    [Test] procedure FrI18nBlock_HausregelnUndTypografie;
+    [Test] procedure DomTexte_SchluesselInAllenSprachen;
   end;
 
 
@@ -1168,7 +1173,8 @@ var
   Html : string;
 begin
   Html := RenderReport;
-  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Fund-Details">',
+  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Fund-Details" ' +
+    'data-i18n-aria="aria-drawer">',
     Html) > 0, 'Drawer-Markup fehlt');
   Assert.IsTrue(Pos('id="drawer-schliessen"', Html) > 0,
     'Close-Button fehlt');
@@ -1213,7 +1219,8 @@ begin
     'en-Schluessel hint-what fehlt');
   Assert.IsTrue(Pos('"hint-this": "Note on this finding"', Html) > 0,
     'en-Schluessel hint-this fehlt');
-  Assert.IsTrue(Pos('"hint-this": "Remarque sur cette occurrence"',
+  // fr-Entscheid 2026-11-03: finding = "resultat".
+  Assert.IsTrue(Pos('"hint-this": "Remarque sur ce r\u00e9sultat"',
     Html) > 0, 'fr-Schluessel hint-this fehlt');
 end;
 
@@ -1588,6 +1595,92 @@ begin
   Assert.IsTrue(Block.Contains('L\u00f6sung'), 'Umlaut nicht als \uXXXX');
   Assert.AreEqual<Integer>(0, Pos('\\u00', Block),
     'doppelter Backslash vor \u - im JS waere das literaler Text');
+end;
+
+procedure TTestExportHtml.FrI18nBlock_HausregelnUndTypografie;
+// Rot ohne den Nachtrag: der fr-Block sagte "d\u00e9tections" und
+// "gravit\u00e9", trug \u00a0 vor jedem Doppelpunkt, ein typografisches
+// Apostroph und "occurrence". Geprueft wird der Block zwischen 'fr: {'
+// und dem Ende des Woerterbuchs.
+const
+  VERBOTEN : array[0..5] of string = ('\u00a0', 'd\u00e9tections',
+    'D\u00e9tections', 'gravit\u00e9', '\u2019', 'sur cette occurrence');
+var
+  Html, Block : string;
+  PFr, PEnde, i : Integer;
+begin
+  Html := RenderMitProfil('');
+  PFr := Pos('      fr: {', Html);
+  PEnde := Pos('var SCA_LANG_DEFAULT', Html);
+  Assert.IsTrue((PFr > 0) and (PEnde > PFr), 'fr-Block nicht gefunden');
+  Block := Copy(Html, PFr, PEnde - PFr);
+  for i := Low(VERBOTEN) to High(VERBOTEN) do
+    Assert.AreEqual<Integer>(0, Pos(VERBOTEN[i], Block),
+      QuotedStr(VERBOTEN[i]) + ' steht noch im fr-Block');
+  Assert.IsTrue(Block.Contains('"row-count": "{0} r\u00e9sultats"'),
+    'Zeilenzaehler sagt nicht "r\u00e9sultats"');
+  Assert.IsTrue(Block.Contains(
+    '"chart-sev-title": "R\u00e9partition par s\u00e9v\u00e9rit\u00e9"'),
+    'Donut-Titel sagt nicht "s\u00e9v\u00e9rit\u00e9"');
+  Assert.IsTrue(Block.Contains('"lbl-lang": "Langue :"'),
+    'vor dem Doppelpunkt muss ein normales Leerzeichen stehen');
+end;
+
+procedure TTestExportHtml.DomTexte_SchluesselInAllenSprachen;
+// Rot ohne den Nachtrag: Tooltips von Theme/Baseline, die Quick-Wins-
+// Option, der QF-Tooltip, Quick-Wins-Ueberschrift und "Vorkommen" der
+// Sprint-Liste und die Drawer-aria-labels standen nur deutsch im DOM -
+// ohne Schluessel, also in jeder Sprache deutsch.
+const
+  SCHLUESSEL : array[0..12] of string = ('btn-theme', 'ttl-theme',
+    'aria-theme', 'btn-base-save', 'ttl-base-save', 'btn-base-load',
+    'ttl-base-load', 'opt-qf', 'ttl-qf', 'sprint-qf-hdr', 'sprint-occ',
+    'aria-drawer', 'aria-drawer-close');
+  MARKUP : array[0..10] of string = (
+    'data-i18n="btn-theme" data-i18n-title="ttl-theme" data-i18n-aria="aria-theme"',
+    'data-i18n="btn-base-save" data-i18n-title="ttl-base-save"',
+    'data-i18n-title="ttl-base-load"',
+    '<span data-i18n="btn-base-load">',
+    '<option value="qf" data-i18n="opt-qf">',
+    'data-i18n-aria="aria-drawer"',
+    'data-i18n-aria="aria-drawer-close"',
+    'data-i18n-aria="chart-sev-title"',
+    'T("sprint-qf-hdr")',
+    'T("sprint-occ", k.c)',
+    'data-i18n-title="ttl-qf" title="'' + T("ttl-qf")');
+var
+  Html : string;
+  i, P, N : Integer;
+begin
+  Html := RenderMitProfil('');
+  // Jeder Schluessel genau dreimal: en, de, fr.
+  for i := Low(SCHLUESSEL) to High(SCHLUESSEL) do
+  begin
+    N := 0;
+    P := Pos('"' + SCHLUESSEL[i] + '": "', Html);
+    while P > 0 do
+    begin
+      Inc(N);
+      P := Pos('"' + SCHLUESSEL[i] + '": "', Html, P + 1);
+    end;
+    Assert.AreEqual<Integer>(3, N,
+      'Schluessel ' + SCHLUESSEL[i] + ' nicht in en/de/fr');
+  end;
+  for i := Low(MARKUP) to High(MARKUP) do
+    Assert.IsTrue(Html.Contains(MARKUP[i]),
+      'Markup/Aufruf fehlt: ' + MARKUP[i]);
+  // aria-labels werden umgeschaltet - auch im Drawer, der HINTER dem
+  // Skript steht und beim Laden noch nicht im DOM ist.
+  Assert.IsTrue(Html.Contains('function i18nAria(root)'), 'i18nAria fehlt');
+  Assert.IsTrue(Html.Contains('      i18nAria(document);'),
+    'applyLanguage schaltet die aria-labels nicht um');
+  Assert.IsTrue(Html.Contains('      i18nAria(dw);'),
+    'openDrawer beschriftet den Drawer nicht');
+  // Die alten festen deutschen Texte im Skript sind weg.
+  Assert.AreEqual<Integer>(0, Pos(' Vorkommen)', Html),
+    '"Vorkommen" steht noch fest in der Sprint-Liste');
+  Assert.AreEqual<Integer>(0, Pos('### Quick-Wins (Quick-Fix: Gl', Html),
+    'die Quick-Wins-Ueberschrift steht noch fest im Skript');
 end;
 
 initialization

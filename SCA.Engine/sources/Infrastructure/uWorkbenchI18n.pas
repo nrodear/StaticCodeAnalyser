@@ -112,10 +112,10 @@ const
     // ---- gemeinsame Bedienelemente ----------------------------------
     ('SCA-ID, Regelname, noinspection, CWE, Tag oder Begriff suchen ...',
      'Search rule ID, name, noinspection, CWE, tag or any term ...',
-     'Rechercher ID SCA, nom de r&egrave;gle, noinspection, CWE, tag ...'),
+     'Rechercher ID SCA, nom de r&egrave;gle, noinspection, CWE, tag...'),
     ('Datei, Methode, Regel, SCA-ID, CWE oder Begriff suchen ...',
      'Search file, method, rule, SCA ID, CWE or any term ...',
-     'Rechercher fichier, m&eacute;thode, r&egrave;gle, ID SCA, CWE ...'),
+     'Rechercher fichier, m&eacute;thode, r&egrave;gle, ID SCA, CWE...'),
     ('Durchsuchen', 'Search', 'Rechercher'),
     ('Filter zur&uuml;cksetzen', 'Reset filters',
      'R&eacute;initialiser les filtres'),
@@ -208,7 +208,7 @@ const
     ('Warum ist das relevant?', 'Why does it matter?',
      'Pourquoi est-ce pertinent ?'),
     ('Hinweis zu diesem Fund', 'Note on this finding',
-     'Remarque sur cette occurrence'),
+     'Remarque sur ce r&eacute;sultat'),
     ('Vorher (problematisch)', 'Before (problematic)',
      'Avant (probl&eacute;matique)'),
     ('Nachher (empfohlen)', 'After (recommended)',
@@ -216,12 +216,12 @@ const
     ('Kopieren', 'Copy', 'Copier'),
     ('kopiert', 'copied', 'copi&eacute;'),
     ('Einzelfund unterdr&uuml;cken', 'Suppress a single finding',
-     'Supprimer une occurrence'),
+     'Masquer un r&eacute;sultat'),
     ('Unterdr&uuml;ckt diesen konkreten Fund an der markierten Stelle. '
      + 'Die Regel bleibt projektweit aktiv.',
      'Suppresses this one finding at the marked position. The rule '
      + 'stays active across the project.',
-     'Supprime cette occurrence pr&eacute;cise &agrave; l''endroit '
+     'Masque ce r&eacute;sultat pr&eacute;cis &agrave; l''endroit '
      + 'marqu&eacute;. La r&egrave;gle reste active dans tout le projet.'),
     ('Projektweite Kalibrierung', 'Project-wide calibration',
      'Calibrage &agrave; l''&eacute;chelle du projet'),
@@ -230,7 +230,7 @@ const
      'Calibrates the detector across the project (analyser.ini) - '
      + 'deliberately separate from suppressing a single finding.',
      'Calibre le d&eacute;tecteur dans tout le projet (analyser.ini) - '
-     + 'volontairement distinct de la suppression d''une occurrence.'),
+     + 'volontairement distinct de la suppression d''un r&eacute;sultat isol&eacute;.'),
     ('Keine projektweite Konfiguration - die Regel meldet ohne '
      + 'Schwellwerte.',
      'No project-wide configuration - the rule reports without '
@@ -260,7 +260,7 @@ const
      'Lorsqu''un scan signale une r&egrave;gle SCA, cette page '
      + 'explique ce qu''elle v&eacute;rifie et pourquoi, avec '
      + 'l''exemple avant/apr&egrave;s comme mod&egrave;le de '
-     + 'correction. Le nom noinspection supprime une occurrence de '
+     + 'correction. Le nom noinspection masque un r&eacute;sultat de '
      + 'mani&egrave;re justifi&eacute;e dans le code ; la cl&eacute; '
      + 'de configuration calibre le d&eacute;tecteur pour tout le projet.'),
     ('QA / Test', 'QA / Test', 'QA / Test'),
@@ -311,7 +311,7 @@ const
      + 'contenu (descriptions et exemples de code inclus). La '
      + 's&eacute;v&eacute;rit&eacute; est celle par d&eacute;faut de la '
      + 'r&egrave;gle : dans la politique standard, une erreur exige une '
-     + 'confiance &quot;&eacute;lev&eacute;e&quot;, sinon le rapport '
+     + 'confiance &laquo; &eacute;lev&eacute;e &raquo;, sinon le rapport '
      + 'descend d''un niveau.'),
     ('SCA Funde', 'SCA Findings', 'R&eacute;sultats SCA'),
     ('%s %s &middot; %d Funde &middot; Klick auf einen Fund '
@@ -351,7 +351,7 @@ const
     ('&auml;ndert Verhalten', 'changes behaviour',
      'modifie le comportement'),                                 // wtWirkungChanges
     ('je nach Fund', 'depends on the finding',
-     'selon l''occurrence'),                                     // wtWirkungDepends
+     'selon le r&eacute;sultat'),                                     // wtWirkungDepends
     ('Vorlage, schreibt nichts', 'template, writes nothing',
      'mod&egrave;le, n''&eacute;crit rien')                      // wtWirkungTemplate
   );
@@ -376,19 +376,21 @@ class function TWorkbenchI18n.TJs(AText: TWbText;
 // Entity -> \uXXXX. Die Liste deckt GENAU die in WB_TEXTE benutzten
 // Entities ab; eine neue Entity in der Tabelle gehoert hier ergaenzt
 // (&szlig; kam 2026-11-03 mit "Details schlie&szlig;en" dazu - vorher
-// stand dort die Umschreibung "schliessen", i18n-Luecken C13).
+// stand dort die Umschreibung "schliessen", i18n-Luecken C13; &laquo;/
+// &raquo; fuer die Guillemets der fr-Texte, fr-Entscheid 4).
 // Der Waechtertest I18n_JsTexteOhneEntities haelt das zusammen: er
 // prueft, dass nach der Wandlung KEIN '&...;' mehr uebrig ist.
 // \uXXXX statt der echten Zeichen: die Quelldatei bleibt reines ASCII
 // (Projektstil), und der JS-Parser erzeugt daraus dasselbe Zeichen.
 const
-  ENTITIES : array[0..11] of array[0..1] of string = (
+  ENTITIES : array[0..13] of array[0..1] of string = (
     ('&eacute;', '\u00e9'), ('&egrave;', '\u00e8'),
     ('&agrave;', '\u00e0'), ('&ccedil;', '\u00e7'),
     ('&ocirc;', '\u00f4'),  ('&Agrave;', '\u00c0'),
     ('&uuml;', '\u00fc'),   ('&auml;', '\u00e4'),
     ('&ouml;', '\u00f6'),   ('&middot;', '\u00b7'),
-    ('&quot;', '\"'),     ('&szlig;', '\u00df')
+    ('&quot;', '\"'),     ('&szlig;', '\u00df'),
+    ('&laquo;', '\u00ab'),  ('&raquo;', '\u00bb')
   );
 var
   i : Integer;
