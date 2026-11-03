@@ -654,13 +654,20 @@ begin
   // oder '/'), damit sich fuer sie nichts aendert. --file/--project/
   // --project-group laufen nie durch DetectRepo (--branch und --diff
   // verlangen --path) und bleiben unberuehrt.
-  // "Verwurzelt" = Laufwerk/UNC (ExtractFileDrive) oder fuehrender
-  // Trenner. Bewusst nicht TPath.IsPathRooted: das wirft bei einem
-  // ungueltigen Zeichen im Pfad, und ParseArgs meldet Fehler nur ueber
-  // ParseError - den falschen Pfad meldet weiter die Existenzpruefung in
-  // Run.
-  if (Result.Path <> '') and (ExtractFileDrive(Result.Path) = '') and
-     not CharInSet(Result.Path[1], ['\', '/']) then
+  // "Verwurzelt" = fuehrender Trenner (deckt auch UNC '\\server\share'
+  // ab) oder Laufwerk MIT folgendem Trenner ('C:\', 'C:/'). Nicht
+  // ExtractFileDrive <> '': das liefert auch fuer den laufwerksrelativen
+  // Pfad 'C:sub' 'C:', der Pfad blieb dann relativ zum Arbeitsverzeichnis
+  // von C: und DetectRepo scheiterte wie bei 'src'. 'C:sub' und 'C:'
+  // gehen deshalb durch ExpandFileName (GetFullPathName loest sie gegen
+  // das Arbeitsverzeichnis jenes Laufwerks auf). Bewusst nicht
+  // TPath.IsPathRooted: das wirft bei einem ungueltigen Zeichen im Pfad,
+  // und ParseArgs meldet Fehler nur ueber ParseError - den falschen Pfad
+  // meldet weiter die Existenzpruefung in Run.
+  if (Result.Path <> '') and
+     not CharInSet(Result.Path[1], ['\', '/']) and
+     not ((Length(Result.Path) >= 3) and (Result.Path[2] = ':') and
+          CharInSet(Result.Path[3], ['\', '/'])) then
     Result.Path := ExpandFileName(Result.Path);
 
   // --index-root nur dort, wo ein Listen-Scope existiert (Projekt/Gruppe/

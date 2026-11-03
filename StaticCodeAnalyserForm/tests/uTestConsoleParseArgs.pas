@@ -86,6 +86,9 @@ type
     // Waechter der Zusage "absolute Pfade unveraendert" - gruen mit und
     // ohne Fix, rot erst, wenn jemand hier zu normalisieren beginnt.
     [Test] procedure AbsoluterPfad_BleibtZeichengleich;
+    // Rot ohne Fix: ExtractFileDrive('C:sub') = 'C:', der Pfad galt als
+    // absolut und blieb 'C:sub'.
+    [Test] procedure LaufwerksrelativerPfad_WirdAbsolut;
   end;
 
 implementation
@@ -595,16 +598,50 @@ end;
 procedure TTestConsolePfadAbsolut.AbsoluterPfad_BleibtZeichengleich;
 // Kein ExpandFileName auf absolute Pfade: das wuerde '..' aufloesen und
 // '/' umschreiben, und schon der Text in Meldungen und Berichten saehe
-// anders aus als bisher.
+// anders aus als bisher. Vergleich mit ignoreCase = False: die
+// Ueberladung ohne den Schalter vergleicht in DUnitX ohne Gross-/
+// Kleinschreibung (Assert.fIgnoreCaseDefault = True) und liesse ein
+// 'c:\REPO' als zeichengleich durchgehen.
 var
   A : TCliArgs;
 begin
   A := TConsoleRunner.ParseArgs(['--path', 'C:\repo\..\src']);
-  Assert.AreEqual('C:\repo\..\src', A.Path, 'Laufwerkspfad unveraendert');
+  Assert.AreEqual('C:\repo\..\src', A.Path, False,
+    'Laufwerkspfad unveraendert');
   A := TConsoleRunner.ParseArgs(['--path', '\\server\share\src']);
-  Assert.AreEqual('\\server\share\src', A.Path, 'UNC-Pfad unveraendert');
+  Assert.AreEqual('\\server\share\src', A.Path, False,
+    'UNC-Pfad unveraendert');
   A := TConsoleRunner.ParseArgs(['--path', 'D:/repo/src']);
-  Assert.AreEqual('D:/repo/src', A.Path, 'Schraegstriche unveraendert');
+  Assert.AreEqual('D:/repo/src', A.Path, False,
+    'Schraegstriche unveraendert');
+end;
+
+procedure TTestConsolePfadAbsolut.LaufwerksrelativerPfad_WirdAbsolut;
+// 'X:sub' ist relativ zum Arbeitsverzeichnis von Laufwerk X. Der Test
+// nimmt das Laufwerk des aktuellen Arbeitsverzeichnisses: fuer das
+// aktuelle Laufwerk loest GetFullPathName gegen GetCurrentDir auf, das
+// Ergebnis haengt also nicht von der Prozessumgebung ('=X:'-Variablen
+// anderer Laufwerke) ab. Liegt das Arbeitsverzeichnis auf einer UNC-
+// Freigabe, gibt es keine laufwerksrelative Schreibweise - dann nur der
+// Hinweis per Assert.Pass.
+var
+  A        : TCliArgs;
+  Laufwerk : string;
+begin
+  Laufwerk := ExtractFileDrive(GetCurrentDir);
+  if (Length(Laufwerk) <> 2) or (Laufwerk[2] <> ':') then
+  begin
+    Assert.Pass('Arbeitsverzeichnis ohne Laufwerksbuchstaben: ' +
+      GetCurrentDir);
+    Exit;
+  end;
+  A := TConsoleRunner.ParseArgs(['--path', Laufwerk + 'sub']);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.IsTrue(SameText(
+    IncludeTrailingPathDelimiter(GetCurrentDir) + 'sub',
+    A.Path),
+    '--path ' + Laufwerk + 'sub muss unter dem Arbeitsverzeichnis liegen, '
+    + 'ist: ' + A.Path);
 end;
 
 initialization
