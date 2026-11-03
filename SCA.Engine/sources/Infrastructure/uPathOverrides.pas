@@ -10,8 +10,9 @@ unit uPathOverrides;
 //
 //   [PathOverrides]
 //   ; Glob-Pattern (Forward- oder Backslashes; case-insensitive). Erste
-//   ; Match-Zeile gewinnt. Aktions-Syntax (kommasepariert mehrere
-//   ; Aktionen moeglich):
+//   ; Match-Zeile gewinnt. GENAU EINE Aktion je Zeile (Load nimmt den
+//   ; ganzen Wert als eine Aktion); eine Zeile mit anderer Aktion
+//   ; ueberspringt Load still:
 //   ;
 //   ;   drop:*                 - Alle Findings auf diesem Pfad droppen
 //   ;   drop:KindA,KindB,...   - Nur diese Kinds droppen
@@ -19,11 +20,16 @@ unit uPathOverrides;
 //   ;   severity:warn:Kind     - "
 //   ;   severity:error:Kind    - " (eskaliert nur falls niedriger)
 //   ;
-//   ; Beispiele:
-//   tests\**.pas               = drop:*
+//   ; Beispiele (stehen gleichlautend in der Vorlage, uRepoSettings):
+//   **\tests\**                = drop:*
 //   **\test_*.pas              = drop:MissingFinally,MagicNumber
-//   demos\legacy\**.pas        = drop:LongMethod,DeepNesting,CyclomaticComplexity
-//   src\generated\**.pas       = severity:hint:*
+//   **\demos\legacy\**         = drop:LongMethod,DeepNesting,CyclomaticComplexity
+//   **\src\generated\**        = severity:hint:*
+//
+// Der Glob laeuft gegen F.FileName, und das ist der ABSOLUTE Pfad
+// (C:\repo\tests\uFoo.pas). MatchesMask verankert das Muster am Anfang -
+// ein relatives Muster wie tests\** trifft deshalb nie. Ein Ordner-Muster
+// beginnt mit **\.
 //
 // Apply-Reihenfolge im Analyzer-Pipeline:
 //   1. Detector-Loop emittiert Findings
@@ -34,7 +40,8 @@ unit uPathOverrides;
 //   4. uPathOverrides.ApplyToFindings (diese Unit)
 //
 // Globs werden ueber System.Masks.TMask geprueft. Backslash <-> Slash
-// werden normalisiert; `**` matcht beliebige Unterverzeichnis-Tiefe.
+// werden normalisiert. `**` wird zu `*`, und schon `*` matcht ueber
+// Ordnergrenzen hinweg - beide bedeuten dasselbe.
 
 interface
 
@@ -199,7 +206,8 @@ function MatchesGlob(const Glob, Path: string): Boolean;
 // kennt nur `*` als single-segment-Wildcard. Trick: ersetze `**` durch
 // einen Marker, dann `*` durch was-auch-immer, dann den Marker zurueck.
 // Praktisch matcht der Code:
-//   tests/**.pas  ->  tests/* gefolgt von .pas in beliebiger Tiefe
+//   **/tests/**   ->  */tests/* - jede Datei unter einem Ordner tests,
+//                     gleich wie tief, gemessen am absoluten Pfad
 var
   GlobN, PathN : string;
 begin
