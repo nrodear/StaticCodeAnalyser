@@ -30,6 +30,8 @@
 #                  custom-rule text wherever a finding shows its hint
 #                  (HTML report, plugin help panel and editor hint,
 #                  Jira/clipboard text, Claude prompt). Not translated.
+#                  Kept on one line: a line break (\n in a quoted
+#                  value) becomes a single space.
 #                  SARIF/CSV/JSON carry only message.
 #   file-include - list of glob patterns; rule only fires for matching files
 #   file-exclude - list of glob patterns; rule skips matching files

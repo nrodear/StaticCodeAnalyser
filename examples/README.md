@@ -140,7 +140,10 @@ Glob-Wildcards:
    Rules. Der Text wird nicht übersetzt und nicht als Markup gelesen (im
    HTML escaped). SARIF, CSV, JSON und der Sonar-Export tragen ihn nicht,
    dort steht nur `message` — was die Pipeline sehen soll, gehört deshalb
-   weiter in `message`.
+   weiter in `message`. Der Hinweis bleibt einzeilig: ein Zeilenumbruch
+   (`\n` im Wert in Anführungszeichen) wird zu einem Leerzeichen. Im
+   Claude-Prompt steht er unter der Überschrift „Fix hint“ (deutsch
+   „Fix-Hinweis“), nicht unter „Rule description“.
 
 ## Validierung & Debug
 
