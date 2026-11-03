@@ -69,7 +69,7 @@ règles peuvent aussi abaisser des résultats isolés à *low*.
 
 | # | SCA | Règle | Description | Statut | Unit |
 |---|-----|-------|-------------|--------|------|
-| 16 | SCA166 | **UninitVar — variable non initialisée** | Variable locale lue avant d'être affectée sur chaque chemin de code | 🟡 | MVP livré sous `SCA166` (`uUninitVar.pas`) — portée mono-méthode conservatrice sans sensibilité complète aux chemins. Le slot #16 reste `🟡 partiel` jusqu'à la phase 3 (CFG + table de symboles). |
+| 16 | SCA166 | **UninitVar — variable non initialisée** | Variable locale lue avant sa première affectation dans l'ordre du source, ou jamais affectée | 🟡 | MVP livré sous `SCA166` (`uUninitVar.pas`) — portée mono-méthode conservatrice sans sensibilité complète aux chemins. Le slot #16 reste `🟡 partiel` jusqu'à la phase 3 (CFG + table de symboles). |
 | 17 | SCA011 | **DeadCode — code inatteignable** | Instructions après `Exit`, `Break`, `Continue` ou `raise` au même niveau d'imbrication | ✅ | `uDeadCode` |
 | 18 | SCA150 | **BoolAlwaysTrue — booléen toujours vrai/faux** | Comparaison telle que `x >= 0` pour un `Cardinal` ou `Length(s) >= 0` — vaut toujours True | ✅ | `uBoolAlwaysTrue` (motif Length uniquement) |
 | 19 | SCA144 | **FloatEquality — comparaison de flottants avec =** | `if a = b` où `a` ou `b` est de type `Single`/`Double`/`Extended` | ✅ | `uFloatEquality` |
@@ -280,7 +280,7 @@ avant/après et une fixture de test DUnitX.
 | SCA155 | **WithMultipleTargets** | `with A, B do` (deux receveurs ou plus séparés par des virgules) — résolution de membre ambiguë ; ajouter une méthode à A ou à B change en silence le sens du corps | Hint | Code Smell | `uWithMultipleTargets` |
 | SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` suivi du `FreeMem` correspondant dans la même routine sans `try/finally` englobant — le chemin d'exception laisse fuir le tampon brut du tas | Warning | Bug | `uGetMemWithoutFreeMem` |
 | SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` dans une boucle `for/while/repeat` — coût de réallocation quadratique ; agrandir une fois avant la boucle ou croître par blocs | Warning | Code Smell | `uSetLengthAppendInLoop` |
-| SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- offset` (ou `PAnsiChar` / `PWideChar`) sans vérification préalable que `s` n'est pas vide — `PChar('')` est NIL, l'arithmétique sur nil déclenche une Access Violation | Warning | Bug | `uPointerArithmeticOnString` |
+| SCA158 | **PointerArithmeticOnString** | `PChar(s) + n` (ou `PAnsiChar` / `PWideChar`) sans test préalable de `s` vide — pour une chaîne plus courte que n, le pointeur pointe au-delà du terminateur | Warning | Bug | `uPointerArithmeticOnString` |
 | SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (ou `begin end` vide) — un handler d'exception typé avale en silence une classe d'exception précise ; pire qu'un `except end` nu car l'annotation de type semble intentionnelle | Warning | Bug | `uEmptyOnHandler` |
 | SCA160 | **StringFromPointer** | Le cast `string(P)` / `AnsiString(P)` / `UTF8String(P)` depuis un pointeur préfixé P suppose un terminateur nul — lit au-delà de la fin du tampon si le terminateur manque ; sur-lecture du tas | Warning | Bug | `uStringFromPointer` |
 | SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (ou variantes Integer / LongWord / LongInt) tronque les 32 bits supérieurs d'un pointeur 64 bits sous Win64 ; utiliser `NativeInt` / `NativeUInt` | Warning | Bug | `uPointerSubtraction` |
@@ -308,7 +308,7 @@ Vérifications issues de la construction d'origine, antérieures aux tables de s
 | SCA006 | **FileReadError** | Erreur parseur/E-S - fichier source illisible ou syntaxiquement cassé | Error | File Error | ✅ | `uStaticAnalyzer2` |
 | SCA007 | **UnusedUses** | Entrée uses probablement inutilisée (aucun identificateur n'en est référencé) | Hint | Code Smell | ✅ | `uUnusedUses` |
 | SCA013 | **LongParamList** | La méthode a plus de paramètres que le maximum configuré (5 par défaut) | Hint | Code Smell | ✅ | `uLongParamList` |
-| SCA015 | **DuplicateString** | Le même littéral de chaîne apparaît N fois ou plus - à extraire dans une constante | Hint | Code Duplication | ✅ | `uDuplicateString` |
+| SCA015 | **DuplicateString** | Le même littéral de chaîne apparaît au moins 3 fois dans un fichier - à extraire dans une constante | Hint | Code Duplication | ✅ | `uDuplicateString` |
 | SCA016 | **HardcodedPath** | Chemin C:\ / UNC / Linux codé en dur dans la source | Warning | Security Hotspot | ✅ | `uHardcodedPath` |
 | SCA017 | **DebugOutput** | Instruction de sortie de débogage trouvée dans une unité de production | Warning | Code Smell | ✅ | `uDebugOutput` |
 | SCA023 | **CustomRule** | Motif reconnu par une règle chargée depuis analyser-rules.yml | Warning | Code Smell | ✅ | `uCustomRuleDetector` |
@@ -317,7 +317,7 @@ Vérifications issues de la construction d'origine, antérieures aux tables de s
 | SCA046 | **ReversedForRange** | for i := 10 to 1 do - le corps de la boucle ne s'exécute jamais | Error | Bug | ✅ | `uReversedForRange` |
 | SCA047 | **SelfAssignment** | Auto-affectation - no-op ou faute de copier-coller | Warning | Bug | ✅ | `uSelfAssignment` |
 | SCA048 | **VirtualCallInCtor** | Méthode virtuelle invoquée depuis le constructeur - la redéfinition de la sous-classe voit un Self à moitié initialisé | Error | Bug | ✅ | `uVirtualCallInCtor` |
-| SCA049 | **LengthUnderflow** | Length / .Count avec soustraction - sous-dépassement d'entier natif non signé quand c'est vide | Hint | Bug | ✅ | `uLengthUnderflow` |
+| SCA049 | **LengthUnderflow** | `Length(s) - K` / `.Count - K` avec K >= 2 sans garde - index ou nombre négatif | Hint | Bug | ✅ | `uLengthUnderflow` |
 | SCA050 | **CanBeUnitPrivate** | Membre public référencé uniquement dans l'unité courante - le `private` Delphi classique (portée unité) suffit | Hint | Code Smell | ✅ | `uVisibilityCheck` |
 | SCA051 | **CanBeProtected** | Membre public référencé uniquement depuis des sous-classes, jamais de l'extérieur | Hint | Code Smell | ✅ | `uVisibilityCheck` |
 | SCA052 | **UnusedPublicMember** | Membre public jamais référencé par une sous-classe ni par un chemin inter-unités | Hint | Code Smell | ✅ | `uStaticAnalyzer2` |
@@ -383,7 +383,7 @@ Autrefois référencées uniquement via [`rules/sca-rules.json`](rules/sca-rules
 | SCA105 | **InterfaceName** | Les alias d'interface devraient commencer par `I` (`IFoo = interface`) | Hint | Code Smell | ✅ | `uInterfaceName` |
 | SCA106 | **MethodName** | Les méthodes devraient commencer par une majuscule (PascalCase) | Hint | Code Smell | ✅ | `uMethodName` |
 | SCA107 | **CanBeStrictPrivate** | Membre public référencé UNIQUEMENT par les méthodes de sa classe déclarante - `strict private` atteint l'encapsulation la plus forte | Hint | Code Smell | ✅ | `uVisibilityCheck` |
-| SCA108 | **SynchronizeInDestructor** | Synchronize() appelé depuis le destructeur Destroy - deadlock classique entre thread worker et thread UI | Error | Bug | ✅ | `uSynchronizeInDestructor` |
+| SCA108 | **SynchronizeInDestructor** | Synchronize() appelé depuis le destructeur Destroy - un thread qui se libère lui-même s'y fige si le thread principal n'exécute pas l'appel | Error | Bug | ✅ | `uSynchronizeInDestructor` |
 | SCA109 | **LockWithoutTryFinally** | Verrou TCriticalSection / Monitor / WinAPI pris sans try..finally englobant - une exception laisse le verrou tenu | Error | Bug | ✅ | `uLockWithoutTryFinally` |
 | SCA110 | **StringConcatInLoop** | `s := s + x` dans for/while/repeat - réallocations quadratiques | Warning | Code Smell | ✅ | `uPerfHotspots` |
 | SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` dans une boucle - recherche linéaire à chaque itération | Hint | Code Smell | ✅ | `uPerfHotspots` |

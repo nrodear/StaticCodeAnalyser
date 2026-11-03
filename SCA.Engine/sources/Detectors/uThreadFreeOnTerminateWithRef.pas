@@ -7,9 +7,13 @@ unit uThreadFreeOnTerminateWithRef;
 //   T := TMyThread.Create(True);
 //   T.FreeOnTerminate := True;
 //   T.Start;
-//   T.Resume;          // BUG: T koennte schon freigegeben sein
 //   T.WaitFor;         // BUG: T koennte schon freigegeben sein
 //   if T.Finished ...  // BUG: T koennte schon freigegeben sein
+//
+// NICHT gemeldet: Start, Resume und Execute (Lifecycle-Whitelist in
+// HasDangerousMemberAccess) - auch ein T.Resume nach T.Start bleibt still.
+// Gemeldet wird erst ab dem ersten Start/Resume (ActLine); ohne einen
+// davon in der Methode meldet der Detektor nichts.
 //
 // Korrekt:
 //   T := TMyThread.Create(True);
@@ -106,10 +110,9 @@ end;
 class function TThreadFreeOnTerminateWithRefDetector.HasDangerousMemberAccess(
   const Expr, VarName: string): Boolean;
 // True wenn `<VarName>.<ident>` im Expr vorkommt UND ident NICHT auf
-// der Lifecycle-Whitelist {Start, Execute} steht. Start ist der ERWARTETE
-// Init-Call nach FoT, Execute ist der Inner-Thread-Body. Resume ist
-// deprecated und nach FoT genauso gefaehrlich wie ein generischer
-// Member-Access -> NICHT auf der Whitelist.
+// der Lifecycle-Whitelist {Start, Execute, Resume} steht. Start ist der
+// ERWARTETE Init-Call nach FoT, Execute ist der Inner-Thread-Body, Resume
+// der Start-Call vor XE2 (siehe WHITELIST unten).
 const
   // 'resume' jetzt auf der Whitelist: pre-XE2 ist Resume DER Start-Call,
   // kein gefaehrlicher Post-Mortem-Zugriff (Real-World-FP 2026-06-21).

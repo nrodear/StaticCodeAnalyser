@@ -178,6 +178,11 @@
           "pattern": "^([uU]\\w+\\.pas|\\(\\w+\\))$",
           "description": "Source file implementing the detector (e.g. 'uLeakDetector2.pas') or '(parser)' for non-detector findings."
         },
+        "defaultConfidence": {
+          "type": "string",
+          "enum": ["low", "mixed"],
+          "description": "Only for rules whose findings fall below the standard [Rules] MinConfidence=medium. 'low' = the findings carry low confidence by default (uSCAConsts.KindDefaultConfidence or the detector itself), so they are hidden in a default run; 'mixed' = the kind default is low but the detector raises some findings to medium or high. Absent = medium or high. Shown on the generated rule pages and in docs/rules.md; tools/rules_doc_gate.py checks it against uSCAConsts.KindDefaultConfidence."
+        },
         "examples": {
           "type": "object",
           "required": ["bad", "good"],

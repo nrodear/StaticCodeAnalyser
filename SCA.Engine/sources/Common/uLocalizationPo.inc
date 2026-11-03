@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7023 Zeilen, 335855 Bytes
+  // i18n\de.po - 7023 Zeilen, 335926 Bytes
   CPoLines_de: array[0..7022] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -280,8 +280,8 @@ const
     'msgid "Destructor does not call inherited - resource leak"',
     'msgstr "Destruktor ruft kein inherited - Ressourcen-Leck"',
     '',
-    'msgid "Division by zero: EZeroDivide or EDivByZero possible"',
-    'msgstr "Division durch Null: EZeroDivide oder EDivByZero m'#$00F6'glich"',
+    'msgid "Division by zero: EDivByZero possible"',
+    'msgstr "Division durch Null: EDivByZero m'#$00F6'glich"',
     '',
     'msgid "Double semicolon \";;\" - one is enough"',
     'msgstr "Doppelte Semikolons \";;\" - eines reicht"',
@@ -481,8 +481,8 @@ const
     'msgid "String literal repeated - extract to a constant or resourcestring"',
     'msgstr "Stringliteral mehrfach genutzt - in Konstante / resourcestring auslagern"',
     '',
-    'msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"',
-    'msgstr "Synchronize() im Destruktor - Worker- und UI-Thread blockieren sich gegenseitig"',
+    'msgid "Synchronize() in a destructor - a self-freeing thread can hang waiting for the main thread"',
+    'msgstr "Synchronize() im Destruktor - ein sich selbst freigebender Thread kann beim Warten auf den Hauptthread h'#$00E4'ngen bleiben"',
     '',
     'msgid "TLS verification disabled - MITM-attack surface"',
     'msgstr "TLS-Validierung deaktiviert - MITM-Angriffsflaeche"',
@@ -841,8 +841,8 @@ const
     'msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"',
     'msgstr "SetLength-Wachstum um 1 in einer Schleife - O(n'#$00B2') Realloc; stattdessen einmal vor der Schleife vor-allokieren"',
     '',
-    'msgid "PChar(s) arithmetic without empty-check - PChar('''') is nil, arithmetic triggers AV"',
-    'msgstr "PChar(s)-Arithmetik ohne Empty-Check - PChar('''') ist nil, Arithmetik darauf l'#$00F6'st AV aus"',
+    'msgid "PChar(s) arithmetic without empty-check - on a short string the pointer lands behind the terminator"',
+    'msgstr "PChar(s)-Arithmetik ohne Empty-Check - bei einem kurzen String zeigt der Zeiger hinter den Terminator"',
     '',
     'msgid "Empty typed exception handler"',
     'msgstr "Leerer typisierter Exception-Handler"',
@@ -904,8 +904,8 @@ const
     'msgid "Class inherits an abstract method but does not override it - EAbstractError"',
     'msgstr "Klasse erbt eine abstrakte Methode ohne sie zu '#$00FC'berschreiben - EAbstractError zur Laufzeit"',
     '',
-    'msgid "Constructor allocates fields and raises - partially-initialized fields leak"',
-    'msgstr "Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leaken auf dem Exception-Pfad"',
+    'msgid "Constructor allocates fields and raises - the fields leak unless the destructor frees them"',
+    'msgstr "Konstruktor erzeugt Felder und raised - die Felder leaken, wenn der Destruktor sie nicht freigibt"',
     '',
     'msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"',
     'msgstr "Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation '#$00FC'berl'#$00E4'uft in 32-Bit"',
@@ -7312,7 +7312,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7019 Zeilen, 349426 Bytes
+  // i18n\fr.po - 7019 Zeilen, 349495 Bytes
   CPoLines_fr: array[0..7018] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -7584,8 +7584,8 @@ const
     'msgid "Destructor does not call inherited - resource leak"',
     'msgstr "Le destructeur n''appelle pas inherited - fuite de ressources"',
     '',
-    'msgid "Division by zero: EZeroDivide or EDivByZero possible"',
-    'msgstr "Division par z'#$00E9'ro : EZeroDivide ou EDivByZero possible"',
+    'msgid "Division by zero: EDivByZero possible"',
+    'msgstr "Division par z'#$00E9'ro : EDivByZero possible"',
     '',
     'msgid "Double semicolon \";;\" - one is enough"',
     'msgstr "Point-virgule doubl'#$00E9' \";;\" - un seul suffit"',
@@ -7785,8 +7785,8 @@ const
     'msgid "String literal repeated - extract to a constant or resourcestring"',
     'msgstr "Litt'#$00E9'ral cha'#$00EE'ne r'#$00E9'p'#$00E9't'#$00E9' - l''extraire dans une constante ou une resourcestring"',
     '',
-    'msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"',
-    'msgstr "Synchronize() dans un destructeur - le thread de travail et le thread UI se bloquent mutuellement"',
+    'msgid "Synchronize() in a destructor - a self-freeing thread can hang waiting for the main thread"',
+    'msgstr "Synchronize() dans un destructeur - un thread qui se lib'#$00E8're lui-m'#$00EA'me peut rester bloqu'#$00E9' en attendant le thread principal"',
     '',
     'msgid "TLS verification disabled - MITM-attack surface"',
     'msgstr "V'#$00E9'rification TLS d'#$00E9'sactiv'#$00E9'e - surface d''attaque MITM"',
@@ -8147,8 +8147,8 @@ const
     'msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"',
     'msgstr "SetLength augment'#$00E9' de 1 dans une boucle - r'#$00E9'allocation en O(n^2) ; allouer une seule fois avant la boucle"',
     '',
-    'msgid "PChar(s) arithmetic without empty-check - PChar('''') is nil, arithmetic triggers AV"',
-    'msgstr "Arithm'#$00E9'tique sur PChar(s) sans contr'#$00F4'le de cha'#$00EE'ne vide - PChar('''') vaut nil, l''arithm'#$00E9'tique d'#$00E9'clenche une AV"',
+    'msgid "PChar(s) arithmetic without empty-check - on a short string the pointer lands behind the terminator"',
+    'msgstr "Arithm'#$00E9'tique sur PChar(s) sans contr'#$00F4'le de cha'#$00EE'ne vide - sur une cha'#$00EE'ne courte, le pointeur pointe au-del'#$00E0' du terminateur"',
     '',
     'msgid "Empty typed exception handler"',
     'msgstr "Gestionnaire d''exception typ'#$00E9' vide"',
@@ -8210,8 +8210,8 @@ const
     'msgid "Class inherits an abstract method but does not override it - EAbstractError"',
     'msgstr "La classe h'#$00E9'rite d''une m'#$00E9'thode abstraite sans la red'#$00E9'finir - EAbstractError '#$00E0' l''ex'#$00E9'cution"',
     '',
-    'msgid "Constructor allocates fields and raises - partially-initialized fields leak"',
-    'msgstr "Le constructeur alloue des champs puis l'#$00E8've une exception - les champs partiellement initialis'#$00E9's fuient"',
+    'msgid "Constructor allocates fields and raises - the fields leak unless the destructor frees them"',
+    'msgstr "Le constructeur alloue des champs puis l'#$00E8've une exception - les champs fuient si le destructeur ne les lib'#$00E8're pas"',
     '',
     'msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"',
     'msgstr "Une cible Int64 re'#$00E7'oit le produit de deux Integer - la multiplication d'#$00E9'borde en 32 bits"',

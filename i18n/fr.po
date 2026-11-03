@@ -268,8 +268,8 @@ msgstr "Sortie de débogage laissée dans le code de production"
 msgid "Destructor does not call inherited - resource leak"
 msgstr "Le destructeur n'appelle pas inherited - fuite de ressources"
 
-msgid "Division by zero: EZeroDivide or EDivByZero possible"
-msgstr "Division par zéro : EZeroDivide ou EDivByZero possible"
+msgid "Division by zero: EDivByZero possible"
+msgstr "Division par zéro : EDivByZero possible"
 
 msgid "Double semicolon \";;\" - one is enough"
 msgstr "Point-virgule doublé \";;\" - un seul suffit"
@@ -469,8 +469,8 @@ msgstr "Concaténation de chaînes dans une boucle - réallocations quadratiques
 msgid "String literal repeated - extract to a constant or resourcestring"
 msgstr "Littéral chaîne répété - l'extraire dans une constante ou une resourcestring"
 
-msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
-msgstr "Synchronize() dans un destructeur - le thread de travail et le thread UI se bloquent mutuellement"
+msgid "Synchronize() in a destructor - a self-freeing thread can hang waiting for the main thread"
+msgstr "Synchronize() dans un destructeur - un thread qui se libère lui-même peut rester bloqué en attendant le thread principal"
 
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr "Vérification TLS désactivée - surface d'attaque MITM"
@@ -831,8 +831,8 @@ msgstr "GetMem / AllocMem sans try/finally - une exception laisse fuir le tampon
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr "SetLength augmenté de 1 dans une boucle - réallocation en O(n^2) ; allouer une seule fois avant la boucle"
 
-msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
-msgstr "Arithmétique sur PChar(s) sans contrôle de chaîne vide - PChar('') vaut nil, l'arithmétique déclenche une AV"
+msgid "PChar(s) arithmetic without empty-check - on a short string the pointer lands behind the terminator"
+msgstr "Arithmétique sur PChar(s) sans contrôle de chaîne vide - sur une chaîne courte, le pointeur pointe au-delà du terminateur"
 
 msgid "Empty typed exception handler"
 msgstr "Gestionnaire d'exception typé vide"
@@ -894,8 +894,8 @@ msgstr "Variable utilisée après Free / FreeAndNil - pointeur invalide, AV prob
 msgid "Class inherits an abstract method but does not override it - EAbstractError"
 msgstr "La classe hérite d'une méthode abstraite sans la redéfinir - EAbstractError à l'exécution"
 
-msgid "Constructor allocates fields and raises - partially-initialized fields leak"
-msgstr "Le constructeur alloue des champs puis lève une exception - les champs partiellement initialisés fuient"
+msgid "Constructor allocates fields and raises - the fields leak unless the destructor frees them"
+msgstr "Le constructeur alloue des champs puis lève une exception - les champs fuient si le destructeur ne les libère pas"
 
 msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
 msgstr "Une cible Int64 reçoit le produit de deux Integer - la multiplication déborde en 32 bits"

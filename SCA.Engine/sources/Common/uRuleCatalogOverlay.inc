@@ -71,7 +71,7 @@ const
     (
       RuleID   : 'SCA010';
       Name     : 'M' + #$00F6 + 'gliche Division durch null';
-      ShortDesc: 'Division durch eine Variable oder einen Ausdruck, der null sein kann'
+      ShortDesc: 'Ganzzahl-Division (div / mod) durch eine Variable, die null sein kann'
     ),
     // SCA011
     (
@@ -83,13 +83,14 @@ const
     (
       RuleID   : 'SCA012';
       Name     : 'Methode ' + #$00FC + 'berschreitet die Zeilengrenze';
-      ShortDesc: 'Methode l' + #$00E4 + 'nger als das konfigurierte Maximum (Vorgabe 80 Zeilen)'
+      ShortDesc: 'Methodenrumpf l' + #$00E4 +
+        'nger als das konfigurierte Maximum (Vorgabe: mehr als 50 Zeilen und mehr als 30 Anweisungen)'
     ),
     // SCA013
     (
       RuleID   : 'SCA013';
       Name     : 'Zu viele Parameter';
-      ShortDesc: 'Methode hat mehr Parameter als konfiguriert erlaubt (Vorgabe 7)'
+      ShortDesc: 'Methode hat mehr Parameter als konfiguriert erlaubt (Vorgabe 5)'
     ),
     // SCA014
     (
@@ -101,7 +102,7 @@ const
     (
       RuleID   : 'SCA015';
       Name     : 'String-Literal an mehreren Stellen wiederholt';
-      ShortDesc: 'Dasselbe String-Literal kommt N-mal oder ' + #$00F6 +
+      ShortDesc: 'Dasselbe String-Literal kommt in einer Datei dreimal oder ' + #$00F6 +
         'fter vor - in eine Konstante herausziehen'
     ),
     // SCA016
@@ -311,7 +312,8 @@ const
     (
       RuleID   : 'SCA049';
       Name     : 'Length(s) - N ohne Absicherung';
-      ShortDesc: 'Length oder .Count mit Subtraktion - Unterlauf des vorzeichenlosen Typs, wenn leer'
+      ShortDesc: '`Length(s) - K` bzw. `.Count - K` mit K >= 2 ohne Absicherung - negativer Index oder negative Anzahl, wenn die Eingabe k' +
+        #$00FC + 'rzer als K ist'
     ),
     // SCA050
     (
@@ -675,7 +677,8 @@ const
     (
       RuleID   : 'SCA108';
       Name     : 'TThread.Synchronize aus dem Destruktor';
-      ShortDesc: 'Synchronize() aus dem Destruktor Destroy gerufen - der klassische Deadlock zwischen Worker und UI-Thread'
+      ShortDesc: 'Synchronize() aus dem Destruktor Destroy gerufen - ein sich selbst freigebender Thread blockiert dort, bis der Hauptthread den Aufruf ausf' +
+        #$00FC + 'hrt, und h' + #$00E4 + 'ngt, wenn er es nicht tut'
     ),
     // SCA109
     (
@@ -866,7 +869,7 @@ const
       RuleID   : 'SCA136';
       Name     : 'Konstruktor belegt Felder und l' + #$00F6 + 'st ohne try/except aus';
       ShortDesc: 'Der Konstruktor weist Felder per `<Klasse>.Create` zu und l' + #$00F6 + 'st sp' + #$00E4 +
-        'ter aus - die teilweise belegten Felder lecken auf dem Ausnahmepfad'
+        'ter ohne try/except aus - die Felder lecken, wenn der Destruktor sie nicht freigibt'
     ),
     // SCA137
     (
@@ -1021,7 +1024,8 @@ const
       RuleID   : 'SCA158';
       Name     : 'PChar(s) +/- Offset ohne Leerpr' + #$00FC + 'fung';
       ShortDesc: '`PChar(s) + n` und Verwandte ohne vorherige Leerpr' + #$00FC +
-        'fung auf `s` - PChar('''') wird zu NIL optimiert, die Rechnung darauf ist eine latente Access Violation'
+        'fung auf `s` - bei einem String k' + #$00FC +
+        'rzer als n zeigt der Zeiger hinter den Terminator'
     ),
     // SCA159
     (
@@ -1075,7 +1079,7 @@ const
     (
       RuleID   : 'SCA166';
       Name     : 'Uninitialisierte lokale Variable';
-      ShortDesc: 'Lokale Variable wird gelesen, bevor sie auf jedem Pfad durch die Methode zugewiesen wurde'
+      ShortDesc: 'Lokale Variable wird vor ihrer ersten Zuweisung in Quelltext-Reihenfolge gelesen oder nie zugewiesen'
     ),
     // SCA167
     (
@@ -1406,7 +1410,8 @@ const
     (
       RuleID   : 'SCA010';
       Name     : 'Division par z' + #$00E9 + 'ro possible';
-      ShortDesc: 'Division par une variable ou une expression pouvant valoir z' + #$00E9 + 'ro'
+      ShortDesc: 'Division enti' + #$00E8 + 're (div / mod) par une variable pouvant valoir z' + #$00E9 +
+        'ro'
     ),
     // SCA011
     (
@@ -1418,15 +1423,15 @@ const
     (
       RuleID   : 'SCA012';
       Name     : 'La m' + #$00E9 + 'thode d' + #$00E9 + 'passe le seuil de lignes';
-      ShortDesc: 'M' + #$00E9 + 'thode plus longue que le maximum configur' + #$00E9 + ' (80 lignes par d' +
-        #$00E9 + 'faut)'
+      ShortDesc: 'Corps de m' + #$00E9 + 'thode plus long que le maximum configur' + #$00E9 + ' (par d' +
+        #$00E9 + 'faut : plus de 50 lignes et plus de 30 instructions)'
     ),
     // SCA013
     (
       RuleID   : 'SCA013';
       Name     : 'Trop de param' + #$00E8 + 'tres';
       ShortDesc: 'La m' + #$00E9 + 'thode a plus de param' + #$00E8 + 'tres que le maximum configur' + #$00E9 +
-        ' (7 par d' + #$00E9 + 'faut)'
+        ' (5 par d' + #$00E9 + 'faut)'
     ),
     // SCA014
     (
@@ -1441,7 +1446,7 @@ const
       Name     : 'Litt' + #$00E9 + 'ral cha' + #$00EE + 'ne r' + #$00E9 + 'p' + #$00E9 + 't' + #$00E9 +
         ' a plusieurs endroits';
       ShortDesc: 'Le m' + #$00EA + 'me litt' + #$00E9 + 'ral cha' + #$00EE + 'ne appara' + #$00EE +
-        't N fois ou plus - extraire vers une constante'
+        't au moins 3 fois dans un fichier - extraire vers une constante'
     ),
     // SCA016
     (
@@ -1671,8 +1676,8 @@ const
     (
       RuleID   : 'SCA049';
       Name     : 'Length(s) - N sans garde';
-      ShortDesc: 'Length ou .Count avec soustraction - d' + #$00E9 +
-        'passement par le bas du type non signe quand c''est vide'
+      ShortDesc: '`Length(s) - K` ou `.Count - K` avec K >= 2 sans garde - index ou nombre n' + #$00E9 +
+        'gatif quand l''entr' + #$00E9 + 'e est plus courte que K'
     ),
     // SCA050
     (
@@ -2057,8 +2062,9 @@ const
     (
       RuleID   : 'SCA108';
       Name     : 'TThread.Synchronize depuis le destructeur';
-      ShortDesc: 'Synchronize() appel' + #$00E9 +
-        ' depuis le destructeur Destroy - l''interblocage classique entre le thread de travail et celui de l''interface'
+      ShortDesc: 'Synchronize() appel' + #$00E9 + ' depuis le destructeur Destroy - un thread qui se lib' +
+        #$00E8 + 're lui-m' + #$00EA + 'me y reste bloqu' + #$00E9 + ' jusqu''' + #$00E0 +
+        ' ce que le thread principal ex' + #$00E9 + 'cute l''appel, et se fige s''il ne le fait pas'
     ),
     // SCA109
     (
@@ -2258,7 +2264,7 @@ const
       RuleID   : 'SCA136';
       Name     : 'Constructeur qui alloue des champs et l' + #$00E8 + 've sans try/except';
       ShortDesc: 'Le constructeur affecte des champs par `<Classe>.Create` puis l' + #$00E8 +
-        've - les champs partiellement initialis' + #$00E9 + 's fuient sur le chemin d''exception'
+        've sans try/except - les champs fuient si le destructeur ne les lib' + #$00E8 + 're pas'
     ),
     // SCA137
     (
@@ -2432,9 +2438,8 @@ const
     (
       RuleID   : 'SCA158';
       Name     : 'PChar(s) +/- d' + #$00E9 + 'calage sans test de cha' + #$00EE + 'ne vide';
-      ShortDesc: '`PChar(s) + n` et variantes sans test pr' + #$00E9 +
-        'alable de `s` vide - PChar('''') est optimis' + #$00E9 + ' en NIL, l''arithm' + #$00E9 +
-        'tique dessus est une violation d''acc' + #$00E8 + 's latente'
+      ShortDesc: '`PChar(s) + n` et variantes sans test pr' + #$00E9 + 'alable de `s` vide - pour une cha' +
+        #$00EE + 'ne plus courte que n, le pointeur pointe au-del' + #$00E0 + ' du terminateur'
     ),
     // SCA159
     (
@@ -2494,8 +2499,8 @@ const
     (
       RuleID   : 'SCA166';
       Name     : 'Variable locale non initialis' + #$00E9 + 'e';
-      ShortDesc: 'Variable locale lue avant d''avoir ' + #$00E9 + 't' + #$00E9 + ' affect' + #$00E9 +
-        'e sur tous les chemins traversant la m' + #$00E9 + 'thode'
+      ShortDesc: 'Variable locale lue avant sa premi' + #$00E8 +
+        're affectation dans l''ordre du source, ou jamais affect' + #$00E9 + 'e'
     ),
     // SCA167
     (

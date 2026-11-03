@@ -211,10 +211,10 @@ var
   O      : TRdxFixOutcome;
   Source : string;
 begin
-  // 'good' steht einzeilig da ('try obj.DoStuff finally obj.Free end;') -
-  // die Hilfe setzt try/finally/end in eigene Zeilen. TFoo kennt der
-  // Detektor nicht als freizugebende Klasse; geplant wird deshalb aus einem
-  // Fund, wie der Detektor ihn schriebe (Zeile des Create, Name).
+  // 'good' steht einzeilig da ('try LoadNames(obj) finally obj.Free end;') -
+  // die Hilfe setzt try/finally/end in eigene Zeilen. InRoutine deklariert
+  // obj nicht, ohne Typ meldet der Detektor nichts; geplant wird deshalb
+  // aus einem Fund, wie der Detektor ihn schriebe (Zeile des Create, Name).
   Meta := TRuleCatalog.GetRuleCanonical(fkMissingFinally);
   Assert.IsTrue(Pos('obj.Free', Meta.GoodExample) > 0, Meta.GoodExample);
   Source := InRoutine(CatalogText(Meta.BadExample));
@@ -223,8 +223,8 @@ begin
   Seen.Msg := 'obj';
   O := PlanFixIn(Source, 't.pas', fkMissingFinally, Seen);
   Assert.IsTrue(O.Enabled, O.Reason);
-  Assert.AreEqual(InRoutine(Join(['obj := TFoo.Create;', 'try',
-    '  obj.DoStuff;', 'finally', '  obj.Free;', 'end;'])),
+  Assert.AreEqual(InRoutine(Join(['obj := TStringList.Create;', 'try',
+    '  LoadNames(obj);', 'finally', '  obj.Free;', 'end;'])),
     Apply(Source, O.Edits));
 end;
 

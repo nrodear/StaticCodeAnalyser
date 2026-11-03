@@ -41,7 +41,7 @@
     },
     "SCA010": {
       "name": "Division par zéro possible",
-      "shortDescription": "Division par une variable ou une expression pouvant valoir zéro"
+      "shortDescription": "Division entière (div / mod) par une variable pouvant valoir zéro"
     },
     "SCA011": {
       "name": "Le code après Exit/Raise est inatteignable",
@@ -49,11 +49,11 @@
     },
     "SCA012": {
       "name": "La méthode dépasse le seuil de lignes",
-      "shortDescription": "Méthode plus longue que le maximum configuré (80 lignes par défaut)"
+      "shortDescription": "Corps de méthode plus long que le maximum configuré (par défaut : plus de 50 lignes et plus de 30 instructions)"
     },
     "SCA013": {
       "name": "Trop de paramètres",
-      "shortDescription": "La méthode a plus de paramètres que le maximum configuré (7 par défaut)"
+      "shortDescription": "La méthode a plus de paramètres que le maximum configuré (5 par défaut)"
     },
     "SCA014": {
       "name": "Littéral numérique sans constante nommée",
@@ -61,7 +61,7 @@
     },
     "SCA015": {
       "name": "Littéral chaîne répété a plusieurs endroits",
-      "shortDescription": "Le même littéral chaîne apparaît N fois ou plus - extraire vers une constante"
+      "shortDescription": "Le même littéral chaîne apparaît au moins 3 fois dans un fichier - extraire vers une constante"
     },
     "SCA016": {
       "name": "Chemin de fichier en littéral chaîne",
@@ -197,7 +197,7 @@
     },
     "SCA049": {
       "name": "Length(s) - N sans garde",
-      "shortDescription": "Length ou .Count avec soustraction - dépassement par le bas du type non signe quand c'est vide"
+      "shortDescription": "`Length(s) - K` ou `.Count - K` avec K >= 2 sans garde - index ou nombre négatif quand l'entrée est plus courte que K"
     },
     "SCA050": {
       "name": "Le membre public pourrait être privé a l'unit",
@@ -433,7 +433,7 @@
     },
     "SCA108": {
       "name": "TThread.Synchronize depuis le destructeur",
-      "shortDescription": "Synchronize() appelé depuis le destructeur Destroy - l'interblocage classique entre le thread de travail et celui de l'interface"
+      "shortDescription": "Synchronize() appelé depuis le destructeur Destroy - un thread qui se libère lui-même y reste bloqué jusqu'à ce que le thread principal exécute l'appel, et se fige s'il ne le fait pas"
     },
     "SCA109": {
       "name": "Verrou pris sans libération par try/finally",
@@ -545,7 +545,7 @@
     },
     "SCA136": {
       "name": "Constructeur qui alloue des champs et lève sans try/except",
-      "shortDescription": "Le constructeur affecte des champs par `<Classe>.Create` puis lève - les champs partiellement initialisés fuient sur le chemin d'exception"
+      "shortDescription": "Le constructeur affecte des champs par `<Classe>.Create` puis lève sans try/except - les champs fuient si le destructeur ne les libère pas"
     },
     "SCA137": {
       "name": "Cible Int64 recevant le produit de deux opérandes 32 bits",
@@ -633,7 +633,7 @@
     },
     "SCA158": {
       "name": "PChar(s) +/- décalage sans test de chaîne vide",
-      "shortDescription": "`PChar(s) + n` et variantes sans test préalable de `s` vide - PChar('') est optimisé en NIL, l'arithmétique dessus est une violation d'accès latente"
+      "shortDescription": "`PChar(s) + n` et variantes sans test préalable de `s` vide - pour une chaîne plus courte que n, le pointeur pointe au-delà du terminateur"
     },
     "SCA159": {
       "name": "Gestionnaire d'exception typée au corps vide",
@@ -665,7 +665,7 @@
     },
     "SCA166": {
       "name": "Variable locale non initialisée",
-      "shortDescription": "Variable locale lue avant d'avoir été affectée sur tous les chemins traversant la méthode"
+      "shortDescription": "Variable locale lue avant sa première affectation dans l'ordre du source, ou jamais affectée"
     },
     "SCA167": {
       "name": "Appel a Random sans Randomize préalable",

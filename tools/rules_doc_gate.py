@@ -221,6 +221,18 @@ def pruefe(rules, md, voll):
         elif soll and ist != soll:
             melde(rid, 'Editor help', ist, soll)
 
+        # Konfidenz (2026-11-03): optional wie Config. Ohne die Zeile sagte
+        # die Seite "BAD", und im Standardlauf (MinConfidence=medium) kam
+        # bei 21 Regeln trotzdem nichts - Doku-Review 2026-11-01.
+        ist = feld(body, 'Confidence')
+        soll = r.get('defaultConfidence')
+        if soll and ist is None:
+            melde(rid, 'Confidence fehlt in der Doku', '-', soll)
+        elif not soll and ist is not None:
+            melde(rid, 'Confidence steht nur in der Doku', ist, '-')
+        elif soll and not ist.startswith(BT + soll + BT):
+            melde(rid, 'Confidence', ist, soll)
+
         # --- Prosa ----------------------------------------------------------
         mn = re.search(r'^\*\*(.+?)\*\*$', body, re.M)
         if not mn:
@@ -241,7 +253,97 @@ def pruefe(rules, md, voll):
         elif kern(vt) != kern(r['fullDescription']):
             melde(rid, 'Volltext', kern(vt), kern(r['fullDescription']))
 
+        # --- Beispiele ------------------------------------------------------
+        # Der erste Codeblock ('// BAD ... // GOOD ...') muss die Beispiele
+        # des Katalogs tragen. Bis 2026-11-03 prueft das Gate nur Prosa - so
+        # blieb auf der helpUri-Zielseite das alte SCA115-Beispiel stehen,
+        # das die Regel selbst ueberspringt, obwohl der Katalog es laengst
+        # korrigiert hatte. Ein Abschnitt OHNE Codeblock bleibt erlaubt,
+        # ebenso ein angehaengter '// NOT REPORTED'-Teil und ein Zusatz am
+        # GOOD-Etikett ('// GOOD (.pas at runtime)').
+        mb = re.search(r'^```\w*\n(.*?)\n```', body, re.M | re.S)
+        if mb:
+            bm = re.match(r'(?://|;) BAD[^\n]*\n(.*?)\n\n(?://|;) GOOD[^\n]*'
+                          r'\n(.*?)(?:\n\n// NOT REPORTED.*)?$',
+                          mb.group(1), re.S)
+            if not bm:
+                melde(rid, 'Codeblock ohne BAD/GOOD-Gliederung', '-', '-')
+            else:
+                ex = r.get('examples') or {}
+                for was, ist, soll in (
+                        ('Beispiel bad', bm.group(1), ex.get('bad', '')),
+                        ('Beispiel good', bm.group(2), ex.get('good', ''))):
+                    if leer(ist) != leer(soll):
+                        melde(rid, was, leer(ist), leer(soll))
+
     return funde, len(sec)
+
+
+def leer(s):
+    """Codevergleich: nur der Leerraum ist normalisiert, Backticks zaehlen."""
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def kind_konfidenzen():
+    """Kind -> 'fcLow'/'fcMedium'/'fcHigh' aus uSCAConsts.KindDefaultConfidence.
+
+    Gelesen wird die IMPLEMENTIERUNG (zweites Vorkommen der Signatur), ohne
+    Kommentare. Was dort nicht steht, ist fcHigh (else-Zweig).
+    """
+    pfad = REPO / 'SCA.Engine' / 'sources' / 'Common' / 'uSCAConsts.pas'
+    text = pfad.read_text(encoding='utf-8-sig', errors='replace')
+    sig = 'function KindDefaultConfidence(K: TFindingKind): TFindingConfidence;'
+    a = text.find(sig, text.find(sig) + 1)
+    if a < 0:
+        return None
+    b = text.find('\nend;', a)
+    rumpf = re.sub(r'//[^\n]*', '', text[a:b])
+    rumpf = re.sub(r'\{[^}]*\}', '', rumpf)
+    out = {}
+    for m in re.finditer(r'((?:fk\w+\s*,\s*)*fk\w+)\s*:\s*Result\s*:=\s*'
+                         r'(fc\w+)', rumpf):
+        for k in re.findall(r'fk(\w+)', m.group(1)):
+            out[k] = m.group(2)
+    return out
+
+
+def pruefe_konfidenz(rules):
+    """Katalogfeld defaultConfidence gegen den Code.
+
+      * Kind mit fcLow in KindDefaultConfidence -> Feld 'low' oder 'mixed'
+        (sonst fehlt der Seite der Hinweis, und ihr Beispiel schweigt im
+        Standardlauf).
+      * Feld 'mixed' -> Kind fcLow, und die Detektor-Unit hebt einzelne
+        Funde an (fcMedium/fcHigh im Quelltext).
+      * Feld 'low' bei einem Kind ohne fcLow -> die Detektor-Unit setzt
+        fcLow selbst (z.B. SCA163 je Fund).
+    """
+    konf = kind_konfidenzen()
+    if konf is None:
+        return [('?', 'KindDefaultConfidence in uSCAConsts.pas nicht gefunden',
+                 '-', '-')]
+    units = {}
+    for p in (REPO / 'SCA.Engine' / 'sources').rglob('*.pas'):
+        units.setdefault(p.name.lower(), p)
+    funde = []
+    for r in rules:
+        rid, feld_ = r['id'], r.get('defaultConfidence')
+        kind_low = konf.get(r['kind']) == 'fcLow'
+        unit = units.get(r.get('detectorUnit', '').lower())
+        utext = (unit.read_text(encoding='utf-8-sig', errors='replace')
+                 if unit else '')
+        if kind_low and feld_ not in ('low', 'mixed'):
+            funde.append((rid, 'defaultConfidence fehlt im Katalog',
+                          str(feld_), 'low (KindDefaultConfidence = fcLow)'))
+        elif feld_ == 'mixed' and not (
+                kind_low and re.search(r'\bfc(Medium|High)\b', utext)):
+            funde.append((rid, 'defaultConfidence mixed ohne Beleg im Code',
+                          'mixed', 'Kind fcLow + Detektor hebt Funde an'))
+        elif feld_ == 'low' and not kind_low and not re.search(
+                r'\bfcLow\b', utext):
+            funde.append((rid, 'defaultConfidence low ohne Beleg im Code',
+                          'low', 'KindDefaultConfidence oder Detektor fcLow'))
+    return funde
 
 
 def pruefe_overlays(rules, katalog_version):
@@ -348,6 +450,7 @@ def main():
     kat_version = json.load(
         io.open(RULES_JSON, encoding='utf-8-sig')).get('version')
     funde, n_sec = pruefe(rules, md, args.full)
+    funde += pruefe_konfidenz(rules)
     ov_funde, ov_zeilen = pruefe_overlays(rules, kat_version)
 
     grenze = 100000 if args.full else 110

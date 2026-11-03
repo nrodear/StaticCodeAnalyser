@@ -4,12 +4,13 @@ unit uStringFromPointer;
 // WideString(P) - Cast aus typisiertem Pointer ohne Length-Prefix-Garantie.
 //
 // Pattern (Bug, Buffer-Overread):
-//   procedure Foo(Buf: PByte);
+//   procedure Foo(PBuf: PByte);
 //   var s: string;
 //   begin
-//     s := string(Buf);              // <-- liest bis #0 in Buf -
-//                                    //     -> Overread wenn Buf nicht
-//                                    //     null-terminiert
+//     s := string(PBuf);             // <-- liest bis #0 in PBuf -
+//                                    //     -> Overread wenn PBuf nicht
+//                                    //     null-terminiert ('Buf' ohne
+//                                    //     P-Praefix trifft der Regex nicht)
 //     s := UTF8String(SomePointer);  // <-- gleicher Bug, UTF-8-Variante
 //   end;
 //
