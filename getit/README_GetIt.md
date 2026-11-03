@@ -53,7 +53,7 @@ Abschnitt 5.3).
 2026-08-15 gegen das offizielle Abbrevia-Sample + Doku-PDF verifiziert):
 
 1. ALLE Skalarwerte sind JSON-STRINGS - auch numerische:
-   `"RequireElevation": "0"`, `"AllUsers": "0"`, Action-`"Id"`,
+   `"RequireElevation": "0"`, `"AllUsers": "1"`, Action-`"Id"`,
    `"ActionId"`, `"Type"`. Zahlen (TJSONNumber) crashen den Mapper
    (MapCatalog -> ScanTimeRegular-Stack).
 2. `Parameter` ist ein ARRAY VON OBJEKTEN: `[{ "Parameter": "..." }]` -
@@ -87,8 +87,8 @@ Abschnitt 5.3).
 - **Updates steuert `Modified`**, nicht `Version` - `Version` ist reiner
   Anzeigetext. Bei jedem Release: `Modified` auf die Buildzeit setzen
   (geplant: Erzeugung in tools\package-release.ps1, Todo P3.3).
-- `AllUsers=0` + `RequireElevation=0`: per-User, kein Admin - passt zum
-  HKCU-Modell des Plugins.
+- `AllUsers=1` + `RequireElevation=0`: kein Admin. `AllUsers=1` wegen der
+  Makro-Aufloesung beim IDE-Start (Lehre Nr. 6).
 - Actions: 7 = InstallPackage (registriert + laedt die Design-BPL,
   ruft `Register`), 8 = UninstallPackage; Type 3 = Before Install,
   5 = Before Uninstall. Die frueher verwendeten 17/18

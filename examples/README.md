@@ -80,8 +80,9 @@ rules:
     ...
 ```
 
-Rule-IDs müssen unique sein — bei Konflikten wird die **letzte**
-Definition genommen.
+Rule-IDs müssen unique sein: der Leser prüft das nicht, zwei Regeln mit
+derselben ID feuern **beide**, und ihre Funde sind im Report nicht
+auseinanderzuhalten.
 
 ## Eigenes Profil schreiben
 
@@ -89,10 +90,14 @@ Vorlage: [`analyser-rules.yml`](analyser-rules.yml). Pflichtfelder
 pro Regel: `id`, `pattern`. Alles andere optional (sinnvolle
 Defaults, siehe Vorlage-Kommentare).
 
-Pattern-Typen:
+Pattern-Typen (Schlüssel `pattern-type`), alle zeilenweise und mit
+Beachtung der Groß-/Kleinschreibung:
 - `substring` (default) — naiver Substring-Match
-- `word` — nur ganze Identifier (Wort-Grenzen)
-- `regex` — .NET-Regex-Syntax
+- `word` — nur ganze Identifier: das Muster ist ein bloßer Bezeichner
+  (`TADOQuery`), der Leser setzt die Wort-Grenzen selbst. Kein Regex: ein
+  `\b` oder `|` im Muster wird als Text gesucht und trifft nie.
+- `regex` — PCRE-Syntax (Delphi `System.RegularExpressions`), z. B.
+  `\bTIB(Query|Table)\b`; `(?i)` am Anfang ignoriert die Schreibweise
 
 Datei-Filter (Glob-Pattern, mehrere möglich, nur als Block-Liste):
 
@@ -127,14 +132,21 @@ Glob-Wildcards:
 4. **Message ohne Code-Snippet** — der Grid zeigt schon Datei + Zeile.
    Die Message soll erklären *warum* das Pattern problematisch ist.
 5. **`fix-hint` für Migrations-Rules** — der konkrete Refactor-Schritt.
-   Wird in HTML-Reports und Plugin-Tooltips angezeigt.
+   Der Leser liest das Feld, zeigt es derzeit aber nirgends an (weder im
+   HTML-Report noch im Plugin); was der Nutzer sehen soll, gehört in
+   `message`.
 
 ## Validierung & Debug
 
-- **YAML kaputt?** → IDE-Plugin loggt via OutputDebugString
-  (Fenster: Tools → Debug-Ausgabe). CLI gibt Error auf stderr.
-- **Regex kaputt?** → Lade-Zeit-Exception mit Rule-ID:
-  `Custom rule R001: invalid regex "[unbalanced": ...`
+- **YAML oder Regex kaputt, Datei fehlt?** → Das hängt am Weg:
+  - CLI mit `--custom-rules <datei>`: Meldung auf stderr, Exit 99, kein
+    Scan, z. B. `Custom rules error: Custom rule R001: invalid regex
+    "[unbalanced": ...` oder `Error: Custom-Rules-Datei existiert nicht: ...`.
+  - `[Detectors] CustomRulesFile=` in der `analyser.ini` (IDE-Plugin,
+    Oberfläche, CLI ohne `--custom-rules`): der Scan läuft still **ohne**
+    Custom-Rules weiter. Den Grund meldet nur OutputDebugString (lesbar z. B.
+    mit DebugView): `StaticCodeAnalyser: Custom-Rules-Datei nicht ladbar
+    (...)` bzw. `StaticCodeAnalyser: CustomRulesFile nicht gefunden: ...`.
 - **Kein Match?** → Pattern-Type checken (substring vs regex),
   File-Globs prüfen: Block-Liste statt `[...]`, Muster mit `**/` am
   Anfang (`**/src/**/*.pas` matcht `src/foo.pas`, NICHT `tests/foo.pas`).

@@ -111,8 +111,9 @@ jobs:
       #       --fail-on=warning `
       #       --quiet | Out-Host
       #
-      # Refreshing the baseline is a SEPARATE run without --baseline:
+      # Refreshing the baseline (locally, then commit the file):
       #     StaticCodeAnalyser.d12.exe --path . --full `
       #       --write-baseline sca.baseline.json
-      # Combining both switches would write only the findings that
-      # survived the filter - that is, it would empty the baseline.
+      # --write-baseline always records ALL current findings - the
+      # snapshot is taken before the --baseline filter, so the two
+      # switches may also be combined in one run.

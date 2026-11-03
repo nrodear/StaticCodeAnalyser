@@ -104,7 +104,7 @@ double-click it.
 
 ### 4.1 Pick the platform (32-bit vs 64-bit)
 
-64-bit is the default and what we recommend.
+We recommend 64-bit. The project file opens on Win32, so switch it:
 
 In the Project Manager:
 
@@ -165,8 +165,9 @@ startup.
 > IDE in it: its folder comes first in the IDE's PATH setting, so the
 > IDE would load the installed engine instead of yours. The other way
 > round, the setup replaces the registrations of your build in every IDE
-> you tick and tells you so; afterwards add the packages again as in 5.2
-> and 5.3. A monolith from version 0.9.18 or older
+> you tick and tells you so; to use your build there again, uninstall the
+> setup (or untick that IDE), then add the packages again as in 5.2 and
+> 5.3. A monolith from version 0.9.18 or older
 > (`StaticCodeAnalyser.Plugin.d12`) cannot be loaded next to these
 > packages: remove it first under **Component → Install Packages**.
 
@@ -213,6 +214,12 @@ You now have three `.bpl` files in
 - `SCA.Engine290.bpl`
 - `SCA.SharedUI290.bpl`
 - `StaticCodeAnalyser.IDE.d12.bpl`
+
+> **Delphi 13, 64-bit IDE:** in step 3 activate **Windows 64-bit (Win64)**
+> instead, for `SCA.Engine`, `SCA.SharedUI`, the plugin and later
+> `reDelphix.d12`. The BPLs then land in `37.0\Bpl\Win64\` (suffix `370`),
+> and in 5.2 you add them in the 64-bit IDE from that folder. The 32-bit
+> IDE of Delphi 13 uses `37.0\Bpl\` and Win32 as described.
 
 ### 5.2 Tell the IDE to load the plugin
 
@@ -271,7 +278,8 @@ same project files, in the Release configuration. The BPLs land under
    EXE for Win32 and Win64 as well (section 4). A package links against
    the DCPs it requires, so whoever rebuilds one package also rebuilds
    those after it, even without a source change. Build All of the project
-   group keeps this order.
+   group keeps this order, but builds every project on its own active
+   platform (see the warning in 5.1): check all four before.
 3. Check the result without creating anything:
 
    ```powershell
@@ -282,8 +290,9 @@ same project files, in the Release configuration. The BPLs land under
    `tools\stale_artifacts_check.py --release` and checks each of the 12
    BPLs: present, VERSIONINFO equal to the version, right bitness.
 
-The full run and its switches:
-[installer/README_Installer.md](installer/README_Installer.md).
+The full run needs the tag `v<Version>` (or `-SkipSource`) and the
+release notes `docs/releases/v<Version>.md` and `_de.md`. The run and its
+switches: [installer/README_Installer.md](installer/README_Installer.md).
 
 ---
 
@@ -328,7 +337,7 @@ correct line (Notepad or your default Pascal viewer).
 
 ### 6.5 Save the report
 
-Use the **Export** buttons (top-right) to save as **HTML**, **JSON**,
+Use **☰ → Export...** (the menu button top-right) to save as **HTML**, **JSON**,
 **CSV**, **SARIF** (for GitHub Code Scanning), the **Sonar** report (for
 SonarQube), or copy to clipboard for Jira/Markdown.
 
@@ -359,8 +368,10 @@ the Project Manager or as a tab at the bottom).
 
 ### 7.4 Jump to a finding
 
-Click any row in the grid: the editor jumps to that file and line and
-highlights the offending code with a colored marker in the gutter.
+Double-click a row in the grid or press **Enter**: the editor jumps to
+that file and line and marks the line. With the arrow keys the editor
+follows once the selection rests. A single click only shows the finding
+in the help panel and paints a stripe in the editor if the file is open.
 
 ### 7.5 Hide false positives
 
@@ -369,10 +380,12 @@ Select a finding and press **Ctrl+Alt+S**. The plugin writes a
 at this place. The finding disappears on the next scan. reDelphix
 offers the same in the context menu of the finding.
 
-### 7.6 Hover hint
+### 7.6 Help panel
 
-If you hover over a finding row, a tooltip shows a **Before / After**
-code example: how the problem looks, and how the fix looks.
+Select a finding: the **help panel** next to the grid shows a
+**Before / After** code example — how the problem looks, and how the fix
+looks. It appears while the window floats; docked into a side bar it
+hides. Hovering the file column shows the full path as a tooltip.
 
 ---
 
@@ -383,7 +396,6 @@ code example: how the problem looks, and how the fix looks.
 | **"Build failed: unresolved external"** | You built the plugin before the engine. Build `SCA.Engine` first, then `SCA.SharedUI`, then the plugin. |
 | **Plugin menu entry is missing after restart** | Wrong platform (you built Win64 instead of Win32) or wrong path in `Tools → Options → Packages`. |
 | **Standalone crashes after a few seconds on a large project** | Stack-size patch not applied. Re-run `tools\patch-stack-size.ps1`. |
-| **EXE complains "file not found" on launch** | You moved the EXE out of its `Output\…` folder. Either put it back, or copy the `.dcu`/`.bpl` files with it. |
 | **"Cannot find SCA.Engine290.bpl"** when the plugin loads | The Windows loader looks for `SCA.Engine290.bpl` on the PATH, not next to the plugin. Own build: build `SCA.Engine` for the same platform (Win32) and configuration (Release). Setup: run it again, it restores its entry in the IDE's PATH setting. |
 | **Undeclared identifier for something that clearly exists in the source** | A package pulls that unit out of another package's **DCP**, not out of the source. If that DCP is older than the source, you compile against the old state and the compiler points at the call site, not at the stale file. Run `python tools\stale_artifacts_check.py`, then rebuild in the order `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 

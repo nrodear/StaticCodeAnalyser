@@ -178,6 +178,13 @@ if ($Backend -eq 'github') {
         exit 0
     }
 
+    # Ohne gh waere '& gh' unter ErrorActionPreference=Stop ein
+    # terminierender Fehler (Exit 1) - der Kommentar ist optional.
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Write-Host "[pr-comment-bot] gh CLI not found - skipping PR comment."
+        exit 0
+    }
+
     Write-Host "[pr-comment-bot] Posting comment to GitHub PR #$PrNumber in $Repo (gh CLI)..."
 
     # Markdown-Body ueber temp-File an gh CLI uebergeben - vermeidet
@@ -186,6 +193,12 @@ if ($Backend -eq 'github') {
     try {
         Set-Content -Path $tmpFile -Value $body -Encoding UTF8
         & gh pr comment $PrNumber --repo $Repo --body-file $tmpFile.FullName
+        # Ein gescheitertes gh wirft nicht; ohne diese Pruefung meldete
+        # das Skript Erfolg, und der Exit-Code von gh braeche den Build.
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[pr-comment-bot] gh pr comment failed (exit $LASTEXITCODE) - no comment posted." -ForegroundColor Yellow
+            exit 0
+        }
         Write-Host "[pr-comment-bot] Comment posted successfully." -ForegroundColor Green
     }
     finally {
@@ -205,12 +218,21 @@ elseif ($Backend -eq 'gitlab') {
         exit 0
     }
 
+    if (-not (Get-Command glab -ErrorAction SilentlyContinue)) {
+        Write-Host "[pr-comment-bot] glab CLI not found - skipping MR comment."
+        exit 0
+    }
+
     Write-Host "[pr-comment-bot] Posting comment to GitLab MR !$PrNumber in $env:CI_PROJECT_PATH (glab CLI)..."
 
     $tmpFile = New-TemporaryFile
     try {
         Set-Content -Path $tmpFile -Value $body -Encoding UTF8
         & glab mr note $PrNumber --message-file $tmpFile.FullName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[pr-comment-bot] glab mr note failed (exit $LASTEXITCODE) - no comment posted." -ForegroundColor Yellow
+            exit 0
+        }
         Write-Host "[pr-comment-bot] Comment posted successfully." -ForegroundColor Green
     }
     finally {

@@ -20,12 +20,14 @@ Reihenfolge wichtig — das Package muss vor dem Demo vorliegen:
    + `SCA.Engine290.bpl` im globalen DCP/BPL-Verzeichnis).
 2. `SCA.CLI.Demo.dproj` öffnen und bauen (Konsolen-EXE, Win32 oder Win64).
 
-Am einfachsten beide Projekte in eine Projektgruppe legen — die
-`DCCReference SCA.Engine.dcp` sorgt für die richtige Build-Reihenfolge.
+Am einfachsten beide Projekte in eine Projektgruppe legen, die Engine vor
+der Demo — die Gruppe baut in ihrer Reihenfolge. Die Paketbindung läuft über
+`DCC_UsePackage SCA.Engine` (keine Quelltextpfade).
 
-> Zur Laufzeit muss `SCA.Engine290.bpl` auffindbar sein (globales BPL-Verzeichnis
-> liegt bei installiertem RAD Studio auf dem Pfad; für eine eigenständige
-> Auslieferung die `.bpl` neben die `.exe` legen).
+> Zur Laufzeit müssen `SCA.Engine290.bpl` und die Delphi-Laufzeitpakete, die
+> es verlangt (`rtl290.bpl`, `xmlrtl290.bpl`), auffindbar sein (globales
+> BPL-Verzeichnis liegt bei installiertem RAD Studio auf dem Pfad; für eine
+> eigenständige Auslieferung alle drei `.bpl` neben die `.exe` legen).
 
 ## Aufruf
 
@@ -36,7 +38,7 @@ SCA.CLI.Demo.exe [<Pfad>] [<Profil>]
 | Argument | Bedeutung |
 |----------|-----------|
 | `<Pfad>`   | Wurzelverzeichnis (Default: aktuelles Verzeichnis) |
-| `<Profil>` | optional. `''` = alle Detektoren (Default). Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<Profil>` | optional. `''` = alle Detektoren (Default); SCA007 nie, die Demo setzt `UsesCheck` nicht. Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
 Exit-Code: eigene, vereinfachte Konvention der Demo, **nicht** der Vertrag
 der CLI.

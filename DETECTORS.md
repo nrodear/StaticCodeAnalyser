@@ -21,6 +21,15 @@ correctness checks that SonarDelphi ships and we ported. The SCA060-119 naming /
 in their own section below (added 2026-07-19); [`rules/sca-rules.json`](rules/sca-rules.json)
 remains the canonical machine-readable roster.
 
+**Rules below the confidence filter.** These rules report their findings
+at confidence *low*: SCA040, SCA049, SCA050, SCA051, SCA052, SCA061,
+SCA062, SCA063, SCA064, SCA069, SCA076, SCA078, SCA079, SCA086, SCA107,
+SCA134, SCA135, SCA142, SCA148, SCA158, SCA170, SCA184, SCA185 (only when
+the non-ASCII text sits in comments alone) and SCA190 (not under the FPC
+dialect). With the shipped `[Rules] MinConfidence=medium` these findings
+are dropped in every profile, `strict` included; `MinConfidence=low`
+shows them. Single findings of other rules can also be lowered to *low*.
+
 🇩🇪 [Deutsche Version](DETECTORS_de.md) · 🇫🇷 [Version française](DETECTORS_fr.md)
 
 ---
@@ -48,9 +57,9 @@ remains the canonical machine-readable roster.
 | 10 | SCA135 | **AbstractNotImpl — abstract method not implemented** | Concrete class inherits from an abstract base but doesn't implement all `abstract` methods | ✅ | `uAbstractNotImpl` (within-unit only) |
 | 11 | SCA132 | **ExceptionTooGeneral — exception type too broad** | `except on E: Exception` instead of a specific type — masks unexpected errors | ✅ | `uExceptionTooGeneral` |
 | 12 | SCA136 | **LeakInConstructor — exception in constructor without cleanup** | Constructor can raise after partial initialisation without calling `Free` | ✅ | `uLeakInConstructor` |
-| 13 | — | **MissingDestructor — destructor missing / field not freed** | Class with object fields: no destructor, or a field isn't freed in `Destroy` | ✅ | `uFieldLeak` |
+| 13 | SCA001 | **MemoryLeak — destructor missing / field not freed** | Class with object fields: no destructor, or a field isn't freed in `Destroy` (Sonar slot MissingDestructor) | ✅ | `uFieldLeak` |
 | 14 | SCA137 | **IntegerOverflow — arithmetic overflow** | Multiplication or exponentiation on `Integer`/`Word` without a prior range check | ✅ | `uIntegerOverflow` (Int64 target only) |
-| 15 | — | **RaiseWithoutClass — bare `raise`** | A bare `raise` outside an `except` block — rejected by Delphi (E2145) and FPC | ✅ | `uRaiseOutsideExcept` |
+| 15 | SCA133 | **RaiseOutsideExcept — bare `raise`** | A bare `raise` outside an `except` block — rejected by Delphi (E2145) and FPC (Sonar slot RaiseWithoutClass) | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
@@ -66,7 +75,7 @@ remains the canonical machine-readable roster.
 | 21 | SCA149 | **MissingOverride — `override` missing** | Method overrides a parent's `virtual`/`dynamic` method without `override` | ✅ | `uMissingOverride` (within-unit only) |
 | 22 | — | **CyclicUnitDep — cyclic unit dependency** | Unit A uses unit B (interface), unit B uses unit A (interface) | 🔲 | |
 | 23 | SCA145 | **ExceptInDestructor — exception from destructor** | Destructor contains code that may raise without a try/except | ✅ | `uExceptInDestructor` |
-| 24 | — | **PublicFieldNoProperty — public field instead of property** | `public` field exposed directly instead of via `property` with getter/setter | ✅ | `uPublicField` |
+| 24 | SCA089 | **PublicField — public field instead of property** | `public` field exposed directly instead of via `property` with getter/setter (Sonar slot PublicFieldNoProperty) | ✅ | `uPublicField` |
 | 25 | SCA139 | **FreeWithoutNil — Free without nil-out** | `obj.Free` not followed by `obj := nil` or `FreeAndNil` — dangling pointer possible | ✅ | `uFreeWithoutNil` |
 
 ---
@@ -75,16 +84,16 @@ remains the canonical machine-readable roster.
 
 | # | SCA | Rule | Description | Status | Unit |
 |---|-----|------|-------------|--------|------|
-| 26 | SCA012 | **LongMethod — method too long** | Method body exceeds 50 executable lines | ✅ | `uLongMethod` |
-| 27 | — | **TooManyParams — too many parameters** | Method has more than 5 parameters | ✅ | `uLongParamList` |
+| 26 | SCA012 | **LongMethod — method too long** | Method body is longer than 50 lines **and** has more than 30 statements (`LongMethodMaxBodyLines`, `LongMethodMaxStatements`) | ✅ | `uLongMethod` |
+| 27 | SCA013 | **LongParamList — too many parameters** | Method has more than 5 parameters (`LongParamListMaxParams`; Sonar slot TooManyParams) | ✅ | `uLongParamList` |
 | 28 | SCA022 | **CyclomaticComplexity — McCabe complexity > 10** | Number of branching paths (`if`, `case` arm, `for`, `while`, `repeat`, `on` handler, `and`/`or`/`xor`) exceeds 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | SCA018 | **DeepNesting — nesting depth > 4** | Code block indented more than four levels deep | ✅ | `uDeepNesting` |
 | 30 | SCA021 | **DuplicateBlock — duplicated code block** | Identical block (≥ `DuplicateBlockMinLines`, default 8 normalized lines) appears more than once in the same file | ✅ | `uDuplicateBlock` (SCA021) — line-based sliding window, normalises trim/lowercase/whitespace-collapse, skips boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, pure comments) and if/end branching blocks |
 | 31 | SCA138 | **GodClass — god class** | Class has more than 20 methods or more than 15 instance fields | ✅ | `uGodClass` |
-| 32 | SCA014 | **MagicNumber — magic number without constant** | Numeric literal (other than 0 and 1) used directly in code instead of a named constant | ✅ | `uMagicNumbers` |
+| 32 | SCA014 | **MagicNumber — magic number without constant** | Numeric literal used directly in code instead of a named constant; `0`, `1`, `2`, `-1`, `10` and `100` are accepted (`[Detectors] MagicNumberTrivials`) | ✅ | `uMagicNumbers` |
 | 33 | SCA146 | **BooleanParam — boolean as flag parameter** | Method takes a `Boolean` parameter used internally for branching | ✅ | `uBooleanParam` |
 | 34 | SCA140 | **MultipleExit — more than 6 exit points** | Method contains more than six `Exit` calls | ✅ | `uMultipleExit` |
-| 35 | SCA141 | **LargeClass — class too big** | Single-class unit exceeds 500 lines of implementation | ✅ | `uLargeClass` |
+| 35 | SCA141 | **LargeClass — class too big** | A class exceeds 500 lines of implementation (class declaration plus its methods), checked per class | ✅ | `uLargeClass` |
 
 ---
 
@@ -92,16 +101,16 @@ remains the canonical machine-readable roster.
 
 | # | SCA | Rule | Description | Status | Unit |
 |---|-----|------|-------------|--------|------|
-| 36 | — | **UnusedVar — unused local variable** | Variable declared in the `var` block but never read (or only written) | ✅ | `uUnusedLocal` |
-| 37 | — | **UnusedMethod — unused private method** | Private method never called inside the unit | ✅ | `uUnusedPrivateMethod` |
-| 38 | — | **UnusedUnit — unit in uses not used** | Unit listed in `uses` whose symbols are never referenced | ✅ | `uUnusedUses` |
-| 39 | — | **CommentedCode — commented-out code** | Block of commented Pascal code (`//` or `{ }`) without explanation | ✅ | `uCommentedOutCode` |
+| 36 | SCA053 | **UnusedLocalVar — unused local variable** | Variable declared in the `var` block but never read (or only written) (Sonar slot UnusedVar) | ✅ | `uUnusedLocal` |
+| 37 | SCA147 | **UnusedPrivateMethod — unused private method** | Private method never called inside the unit (Sonar slot UnusedMethod) | ✅ | `uUnusedPrivateMethod` |
+| 38 | SCA007 | **UnusedUses — unit in uses not used** | Unit listed in `uses` whose symbols are never referenced (Sonar slot UnusedUnit; runs only with `[Detectors] UsesCheck=1`, in the CLI also with `strict`) | ✅ | `uUnusedUses` |
+| 39 | SCA070 | **CommentedOutCode — commented-out code** | Block of commented Pascal code (`//` or `{ }`) without explanation (Sonar slot CommentedCode) | ✅ | `uCommentedOutCode` |
 | 40 | SCA019 | **TodoComment — TODO/FIXME without ticket** | Comment contains `TODO`, `FIXME`, `HACK`, `XXX` without an issue reference | ✅ | `uTodoComment` |
 | 41 | SCA020 | **EmptyMethod — empty method** | Method only contains `inherited`, or is completely empty — a body with an explanatory comment is already compliant and is not reported | ✅ | `uEmptyMethod` |
 | 42 | — | **UnnecessaryCast — redundant type cast** | Cast to the same type or to a direct ancestor without extension | 🔲 | |
 | 43 | SCA151 | **ConstantReturn — method always returns the same value** | Every path returns the same literal — should be a constant | ✅ | `uConstantReturn` |
-| 44 | — | **LongLine — line too long** | Line exceeds 120 characters (configurable via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
-| 45 | — | **MixedIndent — mixed indentation (tabs + spaces)** | Line contains both tab and space indentation | ✅ | `uTabulationCharacter` |
+| 44 | SCA062 | **TooLongLine — line too long** | Line exceeds 120 characters (configurable via `[Detectors] MaxLineLength`; Sonar slot LongLine) | ✅ | `uTooLongLine` |
+| 45 | SCA061 | **TabulationCharacter — tab in source** | Line contains a tab character (Sonar slot MixedIndent) | ✅ | `uTabulationCharacter` |
 
 ---
 
@@ -121,9 +130,9 @@ remains the canonical machine-readable roster.
 
 | Rule | Description | Unit |
 |------|-------------|------|
-| **HardcodedPath** | Hardcoded file or directory paths (`C:\…`, UNC, `/usr/…`) | `uHardcodedPath` |
-| **DebugOutput** | `WriteLn`, `ShowMessage`, `OutputDebugString`, `InputBox` left in production code | `uDebugOutput` |
-| **DuplicateString** | String literal appears 3+ times — should be extracted to a constant | `uDuplicateString` |
+| **HardcodedPath** (SCA016) | Hardcoded file or directory paths (`C:\…`, UNC, `/usr/…`) | `uHardcodedPath` |
+| **DebugOutput** (SCA017) | `WriteLn`, `ShowMessage`, `ShowMessagePos`, `OutputDebugString` left in production code | `uDebugOutput` |
+| **DuplicateString** (SCA015) | String literal appears 3+ times — should be extracted to a constant | `uDuplicateString` |
 
 ---
 
@@ -273,19 +282,14 @@ All ship with before/after fix hints and a DUnitX test fixture.
 
 ---
 
-## Suggested implementation phases
+## Open work
 
 ```
-Phase 1 — missing Blocker / Critical : #7  UseAfterFree, #15 RaiseWithoutClass
-Phase 2 — Major reliability          : #16 UninitVar, #20 ResultNotChecked, #25 FreeWithoutNil
-Phase 3 — Major maintainability      : #28 HighComplexity, #34 MultipleExit, #31 GodClass
-Phase 4 — Minor                      : #36 UnusedVar, #39 CommentedCode, #44 LongLine
-Phase 5 — Info                       : #47 UnsortedUses, #49 DeprecatedAPI, #50 CanBeClassMethod
+Open Sonar slots : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast,
+                   #49 DeprecatedAPI (need type inference / cross-unit resolution)
+Partial          : #16 UninitVar (SCA166, without full path-sensitivity)
 
-DFM Phase 1 (done)  : Dead-Wiring + Data-Access + Security clusters
-DFM Phase 2 (done)  : Layering / UI-UX / Naming clusters
-DFM Phase 3 (open)  : data-module split suggestion, designtime-prop drift,
-                      master-detail-without-LinkField, frame-instance prop overrides
+DFM (open)       : designtime-prop drift, frame-instance prop overrides
 ```
 
 ---
@@ -298,7 +302,7 @@ Checks from the original build-out that predate the Sonar-slot tables above; mos
 |-----|------|-------------|----------|------|--------|------|
 | SCA006 | **FileReadError** | Parser/IO error - source file unreadable or syntactically broken | Error | File Error | ✅ | `uStaticAnalyzer2` |
 | SCA007 | **UnusedUses** | Uses-entry possibly unused (no identifier from it referenced) | Hint | Code Smell | ✅ | `uUnusedUses` |
-| SCA013 | **LongParamList** | Method has more parameters than configured maximum (default 7) | Hint | Code Smell | ✅ | `uLongParamList` |
+| SCA013 | **LongParamList** | Method has more parameters than configured maximum (default 5) | Hint | Code Smell | ✅ | `uLongParamList` |
 | SCA015 | **DuplicateString** | Same string literal appears N+ times - extract to constant | Hint | Code Duplication | ✅ | `uDuplicateString` |
 | SCA016 | **HardcodedPath** | Hardcoded C:\ / UNC / Linux path in source | Warning | Security Hotspot | ✅ | `uHardcodedPath` |
 | SCA017 | **DebugOutput** | Unqualified WriteLn, ShowMessage(Pos) or OutputDebugString call in a non-test unit | Warning | Code Smell | ✅ | `uDebugOutput` |
@@ -467,7 +471,7 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
 
-Some codebases hand a freshly-created object to a routine that **takes ownership** of it (registers it in an owning container, serialises-and-frees it, adds it to a builder tree). SCA001 cannot see across the call boundary, so it reports these as leaks even though the callee frees the object. Whitelist such routines per project in `analyser.ini`:
+Some codebases hand a freshly-created object to a routine that **takes ownership** of it (registers it in an owning container, serialises-and-frees it, adds it to a builder tree). SCA001 cannot see across the call boundary, so it reports these as leaks even though the callee frees the object. Whitelist such routines in `analyser.ini` — the file exists once per user (`%APPDATA%\StaticCodeAnalyser\`), so the list applies to every project you scan:
 
 ```ini
 [Detectors]

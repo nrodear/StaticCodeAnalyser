@@ -8,12 +8,12 @@ a besoin de **deux composants externes**. Sans eux, « Build all projects »
 | Composant | Obligatoire | Rôle |
 |---|---|---|
 | **DUnitX** | obligatoire | Framework de test (Assert / attributs `[Test]` / runner) |
-| **TestInsight** | Win32 optionnel | Intégration IDE (panneau de tests, statut en direct) |
+| **TestInsight** | obligatoire dans l'état actuel du dépôt (voir plus bas) | Intégration IDE (panneau de tests, statut en direct) |
 
 Le moteur SCA proprement dit et l'EXE autonome fonctionnent
 indépendamment — les tests ne concernent que les développeurs. Si vous
-voulez seulement compiler le SCA, vous pouvez exclure le TestProject du
-build IDE (voir les solutions de contournement plus bas).
+voulez seulement compiler le SCA, vous pouvez exclure les deux projets de
+test du build IDE (voir les solutions de contournement plus bas).
 
 ---
 
@@ -32,7 +32,11 @@ parent différent ? Adaptez le chemin dans le dproj ou définissez-le
 globalement via Tools → Options → Language → Delphi → Library (séparément
 pour **Win32 et Win64**).
 
-### TestInsight (optionnel — intégration IDE Win32)
+### TestInsight (obligatoire aujourd'hui — Win32 et Win64)
+
+Les deux projets de test définissent `TESTINSIGHT` (voir _Le define
+TESTINSIGHT_ plus bas) ; dans l'état actuel du dépôt, ils ne compilent
+donc pas sans les unités TestInsight, sur Win32 comme sur Win64.
 
 De préférence via le **GetIt Package Manager** :
 
@@ -45,8 +49,8 @@ automatiquement.
 
 Si l'entrée GetIt manque : chercher `TestInsight Stefan Glienke` sur
 GitHub/Bitbucket, cloner manuellement, compiler + installer le
-`TestInsight.RADxx.dpk`, puis ajouter `Source/` au chemin de
-bibliothèque Win32.
+`TestInsight.RADxx.dpk`, puis ajouter `Source/` aux chemins de
+bibliothèque Win32 et Win64.
 
 ---
 
@@ -61,8 +65,11 @@ bibliothèque Win32.
 | reDelphix.d12.bpl | Win32 ; Win64 **sous Delphi 13 uniquement** | rtl, vcl, designide, SCA.Engine |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (voir plus bas) |
 
-« Build all projects » compile chaque projet du groupe sur la plateforme
-actuellement sélectionnée.
+« Build all projects » compile chaque projet du groupe dans sa propre
+plateforme active ; chaque projet mémorise la sienne. Vérifiez-les avant
+(voir [HowTo_Build_fr.md](HowTo_Build_fr.md), section 5.1). Sous Delphi 12,
+les deux paquets de conception s'arrêtent sur Win64 avec
+`{$MESSAGE FATAL}`.
 
 ---
 
@@ -136,14 +143,15 @@ TestProject.exe --exclude:perf
 
 ## Solutions de contournement
 
-### Exclure complètement TestProject du build
+### Exclure complètement les projets de test du build
 
 Si les tests ne sont pas pertinents pour l'instant et que seul le SCA
 doit être compilé : dans l'IDE → clic droit sur le groupe de projets →
-**Build order** → décocher `TestProject.dproj`. « Build all projects »
-saute alors ce projet.
+**Build order** → décocher `TestProject.dproj` et `reDelphix.Test.dproj`.
+« Build all projects » saute alors les deux. `reDelphix.Test.dproj` exige
+lui aussi DUnitX et définit `TESTINSIGHT` en Debug et en Release.
 
-De façon équivalente, commentez l'entrée TestProject directement dans le
+De façon équivalente, commentez les deux entrées directement dans le
 `.groupproj`.
 
 ### Le define TESTINSIGHT

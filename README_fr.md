@@ -128,7 +128,7 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 | **Naviguer dans les résultats au clavier** | ✅ grille + touches fléchées, l'éditeur suit | grille + touches fléchées | — |
 | **Supprimer un faux positif sur cette ligne** | ✅ `Ctrl+Alt+S` insère `// noinspection RuleName` | manuel | manuel |
 | **Confier un résultat à Claude AI** — prompt Markdown avec contexte de code | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | ✅ menu contextuel → presse-papiers (ou clic de ligne opt-in) | — |
-| **Modifications de branche uniquement** — analyser les fichiers touchés depuis `main` / le diff SVN courant | ✅ bouton branche | ✅ bouton branche | ✅ `--branch` ou `--diff <ref>` |
+| **Modifications de branche uniquement** — analyser les fichiers touchés depuis `main` / le diff SVN courant | ✅ ☰ → Analyser les modifications de branche | ✅ bouton ⎇ | ✅ `--branch` ou `--diff <ref>` |
 | **Analyser un projet hors de Delphi** (RAD non installé / machine batch) | — | ✅ choisir un dossier, cliquer sur **▶ Analyse** | ✅ `StaticCodeAnalyser.d12.exe --path <dossier>` |
 | **Exécuter comme hook pre-commit** | — | — | ✅ `--min-severity error --quiet --fail-on error`, le code de sortie reflète la sévérité |
 | **Exécuter en CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, étape d'upload SARIF |
@@ -140,7 +140,7 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 | **Analyse automatique à l'enregistrement** (Live-Watch) | ✅ opt-in, voir [Live-Watch](#live-watch-plugin-ide-uniquement--%EF%B8%8F-risqué) | — | — |
 | **Créer / éditer des règles personnalisées** (fichier YAML, `[Detectors] CustomRulesFile`) | ✅ éditer `analyser.ini` | ✅ éditer `analyser.ini` | ✅ `--custom-rules <yml>` ou `analyser.ini` |
 | **Configurer les seuils des détecteurs** (`LongMethodMaxBodyLines`, …) | ✅ Paramètres | ✅ Paramètres | éditer `analyser.ini` |
-| **Changer la langue de l'interface** (EN / DE / FR) | ✅ Tools → Options | ✅ menu hamburger → Language | n/a (la CLI est EN uniquement) |
+| **Changer la langue de l'interface** (EN / DE / FR) | ✅ Tools → Options | ✅ menu hamburger → Language | n/a (la CLI n'a pas de choix de langue) |
 | **Choisir un profil de jeu de règles** (`ide-fast`, `default`, `strict`) | ✅ liste de profils | ✅ liste de profils | ✅ `--profile <nom>` |
 
 ### Quel déploiement pour quel rôle
@@ -148,8 +148,10 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 **Développeur au clavier** → plugin IDE. Boucle de retour la plus courte :
 marqueurs en ligne, saut à la ligne, Quick-Fix sur place avec reDelphix,
 presse-papiers vers Claude. Le plugin partage la MÊME engine + le
-même catalogue de règles + les mêmes FixHints que les deux autres — ce que
-vous voyez est ce que la CI verra.
+même catalogue de règles + les mêmes FixHints que les deux autres. Les
+chiffres peuvent malgré tout différer de la CI : le plugin démarre avec le
+profil `ide-fast`, et les scans de projet diffèrent par conception (voir
+[Périmètre d'analyse](#périmètre-danalyse--dossier-projet-ou-groupe-de-projets-cli)).
 
 **Relecteur de code / Tech-Lead sans RAD Studio ouvert** → GUI autonome.
 Même grille, mêmes filtres, même panneau d'aide que le plugin, mais
@@ -325,7 +327,7 @@ Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 | Catégorie | Détecteur | Sévérité |
 |-----------|-----------|----------|
 | **Bug** | `MemoryLeak` (LeakDetector + FieldLeak) | Erreur / Avertissement |
-| | `NilDeref` (déréférencement de nil) | Erreur |
+| | `NilDeref` (déréférencement de nil) | Avertissement |
 | | `DivByZero` (division par zéro) | Erreur / Avertissement |
 | | `FormatMismatch` (format contre nombre d'arguments) | Erreur |
 | **Vulnerability** | `SQLInjection` (basé sur un score) | Erreur |
@@ -338,7 +340,7 @@ Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 | | `LongMethod`, `LongParamList` | Conseil |
 | | `MagicNumber` (dans les conditions if) | Conseil |
 | | `DebugOutput` (`OutputDebugString`, etc.) | Avertissement |
-| | `DeepNesting` | Avertissement |
+| | `DeepNesting` | Conseil |
 | | `TodoComment` (TODO/FIXME/HACK) | Conseil |
 | | `EmptyMethod` | Conseil |
 | **Code Duplication** | `DuplicateString` (même littéral, ≥3 occurrences) | Conseil |
@@ -362,17 +364,33 @@ Statut complet des 50 règles Sonar : voir [DETECTORS_fr.md](DETECTORS_fr.md).
 
 ## Utilisation
 
-### Boutons (de gauche à droite)
+### Barre d'outils et menu ☰
 
-| Bouton | Fonction |
-|--------|----------|
-| **Sélecteur de dossier** (`...`) | Choisir le dossier du projet |
-| **Settings...** | Ouvrir `analyser.ini` — réglages VCS, LeakyClasses personnalisées (voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)) |
-| **Ignore...** | Ouvrir `ignore.txt` — liste d'exclusions de fichiers/dossiers |
-| **▶ Analyse** | Scan récursif — ce qui est analysé (dossier / projet / groupe) est indiqué dans l'infobulle du bouton |
-| **📄 File** | Uniquement le fichier `.pas` actuellement ouvert dans l'éditeur |
-| **Branch-Changes** | Uniquement les fichiers modifiés dans Git/SVN (voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)) |
-| **Cancel** | Interrompt une analyse en cours |
+Le sélecteur de dossier (`...`) se trouve à droite au bout de la ligne du
+chemin. La barre d'outils, de gauche à droite :
+
+| Bouton | Plugin IDE | EXE autonome | Fonction |
+|--------|:---:|:---:|----------|
+| **▶ Analyse** | ✅ | ✅ | Scan récursif — ce qui est analysé (dossier / projet / groupe) est indiqué dans l'infobulle du bouton |
+| **📄 File** | ✅ | ✅ | Plugin : le fichier `.pas` actuellement ouvert dans l'éditeur. EXE : un fichier `.pas` choisi dans une boîte de dialogue |
+| **⊘** | ✅ | — | Effacer les marqueurs de l'éditeur dans tous les fichiers (la grille reste) |
+| **⎇** | — | ✅ | Branch-Changes : uniquement les fichiers modifiés dans Git/SVN (voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)) |
+| **Profil** | ✅ | ✅ | Profil de jeu de règles pour la prochaine exécution (voir _Filtres_ plus bas) |
+| **☰** | ✅ | ✅ | Ouvre le menu ci-dessous |
+
+Tout le reste se trouve dans le **menu ☰** :
+
+| Entrée de menu | Plugin IDE | EXE autonome | Fonction |
+|----------------|:---:|:---:|----------|
+| **Analyser les modifications de branche** | ✅ | — (bouton ⎇) | Uniquement les fichiers modifiés dans Git/SVN (voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)) |
+| **Annuler l'analyse** | ✅ | ✅ | Interrompt une analyse en cours ; pendant le scan, l'EXE affiche en plus un bouton **Annuler** dans la barre d'état |
+| **Effacer tous les marqueurs**, **Réinitialiser tous les résultats** | ✅ | — | Retirer les marqueurs de l'éditeur ; la réinitialisation vide en plus les grilles |
+| **Exporter...** | ✅ | ✅ | Formats d'export, voir _Export_ plus bas |
+| **Écrire la référence à partir de l’analyse actuelle...**, **Afficher uniquement les nouveaux résultats (référence)** | ✅ | ✅ | Écrire une référence, n'afficher que les résultats qui n'y figurent pas |
+| **Paramètres...** | ✅ | ✅ | Ouvrir `analyser.ini` — réglages VCS, LeakyClasses personnalisées (voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)) |
+| **Liste d'exclusions...** | ✅ | ✅ | Ouvrir `ignore.txt` — liste d'exclusions de fichiers/dossiers |
+| **Profils de jeu de règles ...** | ✅ | ✅ | Afficher les profils fournis |
+| **Apparence**, **Ouvrir les résultats avec**, **Langue** | — | ✅ | Thème, cible à l'ouverture des résultats, langue de l'interface ; dans le plugin, l'IDE les fournit |
 
 ![Plugin IDE SCA en action — boutons, grille, surimpressions au survol](docs/PlugInSca.gif)
 
@@ -422,19 +440,28 @@ utilisée de toute façon.
 
 Il n'y a pas de cases à cocher dans la barre d'outils. Tout comportement
 optionnel des détecteurs se configure via `analyser.ini` (voir _Fichiers de
-configuration_ plus bas) — ouvrez-le via le bouton **Settings…**, éditez,
+configuration_ plus bas) — ouvrez-le via **☰ → Paramètres...**, éditez,
 enregistrez, cliquez à nouveau sur **▶ Analyse**. Les réglages sont
 rechargés à chaque exécution, aucun redémarrage de l'IDE n'est nécessaire.
 
 ### Cartes de statistiques
 
-Deux rangées de cartes au-dessus de la grille montrent la répartition des
-résultats :
+Une rangée de tuiles au-dessus de la grille compte les résultats de la
+dernière exécution :
 
-- **Par sévérité** : Erreurs / Avertissements / Conseils / Risques de sécurité / Erreurs de lecture
-- **Par type** : Code Smell / Bug / Vulnerability / Security Hotspot / Code Duplication / Erreurs de lecture
+- **Erreurs / Avertissements / Conseils / Erreurs de lecture** : par
+  sévérité. Une erreur de lecture ne compte que sous Erreurs de lecture.
+- **Bogues / Sécurité / Doublons** : par type — Bug, Vulnerability, Code
+  Duplication. Les code smells et les security hotspots n'ont pas de
+  tuile propre ; ils comptent dans les tuiles de sévérité et dans le
+  Quality Score.
+- **Complexité** : résultats de la règle de complexité de McCabe
+  (SCA022), comptés en plus de leur sévérité.
 
-Les deux rangées totalisent, à coup sûr, le même nombre.
+Un clic sur une tuile filtre la grille sur ce groupe ; un clic sur la
+tuile Qualité réinitialise tous les filtres. Dans une fenêtre de plugin
+étroite, seules Erreurs, Avertissements, Conseils et Qualité restent
+visibles.
 
 Une **tuile Quality Score** à côté d'elles montre la qualité du code en
 note **A–E** (style Sonar) ; le score brut et son détail apparaissent dans
@@ -478,7 +505,9 @@ grille prend toute la largeur (il réapparaît en ~250 ms après le désancrage)
 
 ### Export
 
-| Bouton | Format | Contenu |
+**☰ → Exporter...** ouvre ces entrées :
+
+| Entrée | Format | Contenu |
 |--------|--------|---------|
 | **JSON** | `.json` | La vue filtrée de la grille sous forme de tableau (la légende du menu le dit) |
 | **CSV** | `.csv` | Compatible Excel (séparé par des points-virgules) |
@@ -697,6 +726,11 @@ règles personnalisées et toute la configuration des détecteurs sont
 | `.svn/` | SVN | `svn status` + `svn diff` |
 | aucun | Aucun | `--branch` désactivé, `--full` fonctionne |
 
+La recherche dans les dossiers parents exige un chemin absolu. Un
+`--path` relatif n'est vérifié que tel qu'il est écrit : `--path . --branch`
+fonctionne à la racine du dépôt, mais depuis un sous-dossier il ne trouve
+aucun dépôt et se termine avec le code 99. Indiquez-y le chemin complet.
+
 L'exécutable VCS est localisé via `PATH`, puis les chemins d'installation
 typiques (TortoiseGit, TortoiseSVN, Git for Windows, ...). Surcharge via
 `analyser.ini` (voir plus bas).
@@ -704,7 +738,9 @@ typiques (TortoiseGit, TortoiseSVN, Git for Windows, ...). Surcharge via
 ### Utilisation avec Git
 
 **Plugin/GUI** : pointer le chemin du projet sur l'arbre de travail Git,
-puis cliquer sur **Branch-Changes**. L'analyseur détermine :
+puis lancer **Branch-Changes** (plugin : **☰ → Analyser les
+modifications de branche**, EXE autonome : le bouton **⎇**). L'analyseur
+détermine :
 - les fichiers `.pas` modifiés entre `BaseBranch` et `HEAD` (validés)
 - plus les modifications non validées de l'arbre de travail (quand `IncludeWorkingTree=1`)
 
@@ -762,8 +798,13 @@ StaticCodeAnalyser.d12.exe --path . --full `
 ```
 
 `--dialect=fpc` étend la vue mono-branche effective avec les defines
-FPC/LCL ; `--dialect=auto` résout le dialecte depuis les fichiers
-projet à la racine du scan (voir `--help`).
+FPC/LCL. `--dialect=auto` résout le dialecte par fichier dans un scan
+`--path` récursif : le premier dossier en remontant qui contient des
+fichiers projet décide (à égalité, delphi), les fichiers sans un tel
+dossier héritent du verdict de la racine du scan, et un arbre mixte
+exécute les deux parties puis fusionne les résultats. `--file`,
+`--branch` et `--diff` résolvent une seule fois à la racine du scan ;
+`--project` avec un projet Lazarus impose fpc (voir `--help`).
 
 ### Lazarus / Free Pascal (FPC)
 
@@ -772,7 +813,7 @@ mêmes règles, avec prise en compte du dialecte :
 
 | Quoi | Comment |
 |---|---|
-| **Option de dialecte** | `--dialect fpc` — collecte en plus les unités `*.pp` et `*.lpr`, apparie les fichiers de fiche `.lfm`, parse la vue mono-branche avec les defines FPC/LCL et désactive les trois règles spécifiques à Delphi ci-dessous. `--dialect auto` résout par fichier (voir la section IFDEF ci-dessus). |
+| **Option de dialecte** | `--dialect fpc` — collecte en plus les unités `*.pp` et `*.lpr`, apparie les fichiers de fiche `.lfm`, parse la vue mono-branche avec les defines FPC/LCL et désactive les trois règles spécifiques à Delphi ci-dessous. `--dialect auto` résout par fichier dans un scan `--path` récursif, sinon une seule fois à la racine du scan (voir la section IFDEF ci-dessus). |
 | **Scan de projet** | `--project` accepte `.lpi` / `.lpk` (et `--project-group` accepte `.lpg`) et **force le dialecte fpc** pour ce scan. |
 | **Défaut sans option** | `[Scan] Dialect=delphi\|fpc` dans `analyser.ini` (l'option gagne toujours). L'interface lit la même clé et propose un bascule via **clic droit sur la barre d'état** ; un dialecte fpc actif s'affiche comme `Dialect=fpc` dans l'indicateur de jeu de règles. |
 | **Règles spécifiques Delphi, désactivées sous fpc** | `SCA041` (le modèle de couches VCL ne s'applique pas à la LCL), `SCA129` (le `string` FPC est 8 bits/UTF-8 — le transtypage n'y est pas une perte), `SCA185` (l'UTF-8 sans BOM est la **norme** Lazarus ; les contrôles UTF-8 invalide et ANSI restent actifs). Détails sur les pages de règles. |
@@ -783,7 +824,7 @@ mêmes règles, avec prise en compte du dialecte :
 `StaticCodeAnalyser.d12.exe --help` (aussi `-h`, `-?`, `/?`) imprime
 chaque option avec son explication et sort avec 0, il est donc sans danger
 de l'appeler depuis un script. `--version` imprime seulement la version.
-Les deux sont la liste faisant foi — ce README couvre les options dans le
+L'aide liste chaque option — ce README couvre les options dans le
 contexte d'une tâche, le texte d'aide les couvre toutes, y compris les
 diagnostics comme `--gate-stats` (nombre de déclenchements par filtre de
 faux positifs après le scan).
@@ -823,7 +864,8 @@ GitExe=C:\custom\git\bin\git.exe
 ### Utilisation avec SVN
 
 **Plugin/GUI** : identique à Git — choisir le chemin de la copie de
-travail, cliquer sur **Branch-Changes**. Comme SVN n'a pas de vrai concept
+travail, lancer **Branch-Changes** (menu ☰ ou bouton ⎇, comme
+ci-dessus). Comme SVN n'a pas de vrai concept
 de « branche » dans une copie de travail, le mode branche renvoie ici :
 - toutes les modifications non validées (sortie `svn status` : M/A/R/D/?)
 - optionnellement étendues des différences validées depuis la révision BASE
@@ -914,14 +956,14 @@ for /f "tokens=1,*" %%A in ('""%SVNLOOK%" changed -t "%TXN%" "%REPOS%""') do (
 )
 if not defined FOUND exit /b 0
 
-rem cmd ne peut pas rediriger la sortie console de l'outil ; le CSV porte les résultats.
-"%SCA%" --path "%WORK%\src" --full --quiet --report-csv "%WORK%\sca.csv"
+rem Le CSV porte les résultats ; avant 0.9.19, cmd ne peut pas rediriger la sortie.
+"%SCA%" --path "%WORK%\src" --full --quiet --fail-on error --report-csv "%WORK%\sca.csv"
 set "RC=%ERRORLEVEL%"
 if %RC% GEQ 3 if exist "%WORK%\sca.csv" type "%WORK%\sca.csv" 1>&2
 rd /s /q "%WORK%"
 
 rem SVN refuse le commit pour tout code de sortie non nul et n'affiche que stderr.
-rem 3 = erreurs, 4 = erreurs de lecture, 99 = erreur d'outil : bloquer. 0 à 2 : laisser passer.
+rem 3 = erreurs, 4 = erreurs de lecture, 99 = erreur d'outil : bloquer. 0 : laisser passer.
 if %RC% GEQ 3 (
   echo SCA : commit bloqué, code de sortie %RC%. 1>&2
   exit /b 1
@@ -940,25 +982,31 @@ exit /b 0
 
 - Vérifié avec un dépôt local `file://` (outils en ligne de commande
   Subversion de TortoiseSVN) : les conseils passent, une erreur bloque et
-  affiche les résultats, un outil introuvable bloque aussi. Sous svnserve
+  affiche les résultats, un outil introuvable bloque aussi.
+  `--fail-on error` a été ajouté ensuite et vérifié sur l'EXE seule : une
+  erreur de lecture à côté de conseils renvoie 4 au lieu de 1. Sous svnserve
   ou Apache, le hook tourne sous le compte du service ; ce compte doit
   pouvoir lire l'outil et écrire dans `WORK` et `APPDATA`.
 - Seuls les fichiers du commit sont analysés, pas le reste du dépôt. Les
   résultats qui dépendent d'autres unités peuvent différer d'une analyse
   complète.
 
-Correspondance des codes de sortie :
-- 0 = propre → commit autorisé
-- 1 = conseils uniquement → commit autorisé
-- 2 = avertissements → commit autorisé (pour les bloquer, utiliser
-  `GEQ 2` ci-dessus au lieu de `GEQ 3`)
+Correspondance des codes de sortie avec `--fail-on error` :
+- 0 = aucune erreur (conseils et avertissements ne comptent pas) → commit
+  autorisé
 - 3 = erreurs → **commit bloqué**
-- 4 = erreurs de lecture (fichiers que le scan n'a pas pu lire) →
-  **commit bloqué** ; un scan qui a sauté des fichiers ne doit pas
-  ressembler à un scan propre
+- 4 = erreurs de lecture (fichiers que le scan n'a pas pu lire), aussi à
+  côté de conseils ou d'avertissements → **commit bloqué** ; un scan qui
+  a sauté des fichiers ne doit pas ressembler à un scan propre
 - 99 = erreur d'outil (arguments invalides, rapport non inscriptible) →
   **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
   à un scan propre ; la règle `GEQ 3` ci-dessus couvre les deux.
+
+Sans `--fail-on`, le code de sortie est gradué (1 = conseils,
+2 = avertissements, 3 = erreurs) et ne signale que le rang le plus élevé :
+une erreur de lecture à côté d'un conseil renvoie 1, et le hook la
+laisserait passer. Pour bloquer aussi les avertissements, écrire
+`--fail-on warning` et `GEQ 2` ; les avertissements renvoient alors 2.
 
 ### `--parallel` — correct, mais sans intérêt
 
@@ -1302,9 +1350,10 @@ complet** — typiquement 200 ms à 3 s. Voir [BRANCH_CHANGES_fr.md](BRANCH_CHAN
 ```
 StaticCodeAnalyserForm/tests/
   TestProject.dpr                      Lanceur DUnitX
-  uTest<NomDuDetecteur>.pas            un fichier par détecteur, 286 fichiers
-                                       au total — 5777 tests répartis sur 356
-                                       fixtures
+  uTest<NomDuDetecteur>.pas            un fichier par détecteur, 284 fichiers
+                                       au total — environ 5 770 tests répartis
+                                       sur environ 350 fixtures (comptés dans
+                                       le source, pas lors d'une exécution)
   uTestFindingHelper.pas               harnais partagé (FindingsOf /
                                        FindingsOfFile / FindingsViaPipeline)
   uTestTAstNode.pas                    Tests des assistants AST
@@ -1312,8 +1361,9 @@ StaticCodeAnalyserForm/tests/
                                        (tokens/ms, lignes/ms)
 ```
 
-Les tests tournent sur DUnitX et émettent un rapport XML NUnit — prêt à
-brancher en CI.
+Les tests tournent sur DUnitX. Une compilation sans le define
+`TESTINSIGHT` émet un rapport XML NUnit pour la CI ; le dépôt le définit
+aujourd'hui, voir [HowTo_Tests_fr.md](HowTo_Tests_fr.md).
 
 Choisissez le harnais en connaissance de cause : `FindingsOf` pilote les
 détecteurs AST, `FindingsOfFile` est requis pour les détecteurs qui lisent
@@ -1331,7 +1381,9 @@ suppression et de confiance — c'est ce qu'un utilisateur voit réellement.
   Win32, un paquet de conception 64 bits n'y est donc même pas
   compilable. Delphi 11 et plus
   anciens ne sont pas pris en charge.
-- DUnitX (uniquement pour la suite de tests, pas pour le plugin lui-même)
+- DUnitX et TestInsight (uniquement pour la suite de tests, pas pour le
+  plugin lui-même ; TestInsight parce que les projets de test définissent
+  `TESTINSIGHT`, voir [HowTo_Tests_fr.md](HowTo_Tests_fr.md))
 - Optionnel : Git for Windows ou TortoiseSVN **avec** les outils CLI pour
   la fonction Branch-Changes
 
@@ -1365,8 +1417,8 @@ L'EXE autonome et le plugin IDE partagent le moteur d'analyse de `SCA.Engine/sou
 
 ## Documentation
 
-**[docs/index.md](docs/index.md) est la carte complète** — chaque document
-livré, groupé selon ce que vous cherchez à faire. Les quatre dont vous
+**[docs/index.md](docs/index.md) est la carte** des principaux documents,
+groupés selon ce que vous cherchez à faire. Les quatre dont vous
 aurez le plus probablement besoin :
 
 | Fichier | Contenu | Quand le consulter |

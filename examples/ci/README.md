@@ -20,13 +20,17 @@ All of these examples build on the new CLI flags. Cheat-sheet:
 
 | Flag | Purpose |
 |---|---|
-| `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. A run that hit read errors never drops below exit 4 — only `--fail-on=none` returns 0 there. |
+| `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. A run that hit read errors never reports success: where the policy would otherwise return 0, it returns 4 (1 read error + 2 hints: `graded` → 1, `warning` → 4) — only `--fail-on=none` returns 0 there. |
 | `--baseline <file>` | Drop findings covered by an entry in `<file>`, each entry covering at most one finding. Only NEW findings count. |
 | `--write-baseline <file>` | Write the current findings as the new baseline. Run on `main` after the team accepts the current state. |
 
-Fingerprint = `SHA256(filename | kindname | methodname | detail)`. Stable
-across line-drift; refactors that rename a method DO invalidate the entry
-(intentional — the rule context changed).
+Each baseline entry is matched in two steps. First the context hash: a
+hash over the source lines around the finding (3 above, 3 below,
+normalised), tied to file and rule. It survives line drift, re-indenting,
+a renamed method and a changed message. Only if it does not match, the
+fingerprint `SHA256(filename | kindname | methodname | detail)` decides.
+An entry is lost only when both break — e.g. a method rename that also
+changes the lines around the finding.
 
 ---
 
@@ -66,19 +70,19 @@ git commit -m "ci: capture SCA baseline"
 ```
 
 Refresh the baseline periodically (monthly / per release) so the gap
-between baseline and current state doesn't grow unbounded — but refresh
-it in its **own** run:
+between baseline and current state doesn't grow unbounded:
 
 ```bash
 StaticCodeAnalyser.d12.exe --path . --full --write-baseline sca.baseline.json
 ```
 
-**Never combine `--baseline old --write-baseline new` in one run.** The
-filter removes the known findings first, so the snapshot would contain
-only what survived — i.e. it empties the baseline, and the next build
-reports the whole backlog as new.
+`--write-baseline` always records all current findings: the snapshot is
+taken before the baseline filter. So `--baseline old --write-baseline new`
+in one run is safe — `new` holds the complete current state, while output
+and exit code count only what `old` does not cover.
 
-The path needs a directory part or must be absolute, and the file must
+A bare file name such as `sca.baseline.json` (relative to the current
+directory) works for both switches. The file must
 exist when you pass `--baseline`: a missing baseline is a hard error
 (exit 99) on purpose, so that a typo in CI cannot silently report
 "everything is new".
@@ -150,21 +154,40 @@ Backends auto-detected from environment:
 
 ### Wire-up in GitHub Actions
 
-Add to your existing workflow (after the analyser step):
+Do **not** hand the bot the `sca.sarif` of `github-actions-sca.yml`: that
+report is unfiltered on purpose (Code Scanning needs it complete), so the
+bot would post the whole backlog as "new findings". Give it a report of a
+baseline-filtered run of its own. Add to your existing workflow (after the
+analyser step), and grant the job `pull-requests: write` under
+`permissions:` — the shipped workflow only has `contents: read` and
+`security-events: write`:
 
 ```yaml
+- name: Scan for the PR comment (baseline-filtered)
+  if: github.event_name == 'pull_request'
+  run: |
+    .\tools\sca\StaticCodeAnalyser.d12.exe `
+      --path . --full --base-dir . --profile default `
+      --baseline sca.baseline.json `
+      --report-sarif sca-new.sarif `
+      --fail-on=none --quiet | Out-Host
+
 - name: Comment SCA findings on PR
   if: github.event_name == 'pull_request' && always()
   shell: pwsh
+  env:
+    GH_TOKEN: ${{ github.token }}   # gh needs a token in Actions
   run: |
     .\examples\ci\pr-comment-bot.ps1 `
-      -SarifPath sca.sarif `
+      -SarifPath sca-new.sarif `
       -PrNumber ${{ github.event.pull_request.number }} `
       -Repo ${{ github.repository }}
 ```
 
-The bot **exits 0 on any failure** (missing SARIF, no PR context, CLI
-not installed). PR-comments are nice-to-have, never block-the-build.
+The bot **exits 0** when the SARIF is missing, there is no PR context,
+`gh`/`glab` is not installed or posting the comment fails (it then
+prints a note instead of "posted successfully"). PR-comments are
+nice-to-have, never block-the-build.
 
 ### Comment layout
 

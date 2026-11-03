@@ -13,9 +13,15 @@ fichier se trouve dans
 `repo.ini` est repris automatiquement. Toutes les clés sont facultatives —
 une clé absente signifie la valeur par défaut indiquée ci-dessous.
 
+**Les clés booléennes prennent `1` (activé) ou `0` (désactivé).** `True`,
+`False` ou `yes` ne sont pas lus comme des nombres : la clé garde alors
+sa valeur par défaut, sans message.
+
 Le même fichier est lu par l'exécutable autonome, le plugin IDE et la ligne
-de commande. Là où les trois diffèrent délibérément, le nom de la clé le dit
-(`IdeProfile`, `IdeMinSeverity`). Les options de la ligne de commande
+de commande. Certaines clés portent leur consommateur dans leur nom
+(`IdeProfile`, `IdeMinSeverity`) ; d'autres ne sont pas lues par les trois,
+et leur ligne le dit (`IncludeTests`, `UsesCheck`, `OnlyNew`,
+`[Baseline] File`, `[Scan] Dialect`). Les options de la ligne de commande
 l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 > SCA ne garde aucun réglage SonarQube : serveur, jeton et clé de projet
@@ -35,19 +41,19 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `Dialect` | String | _(vide)_ | Dialecte source sans option `--dialect` : `delphi` ou `fpc` (Lazarus/Free Pascal : collecte `*.pp`/`*.lpr`, apparie `.lfm`, defines FPC/LCL, saute les règles spécifiques Delphi SCA041/SCA129/SCA185). Vide = delphi. L'option CLI et un scan de projet `.lpi`/`.lpk`/`.lpg` gagnent toujours ; l'interface bascule cette clé par clic droit sur la barre d'état. |
+| `Dialect` | String | _(vide)_ | Dialecte source sans option `--dialect` : `delphi` ou `fpc` (Lazarus/Free Pascal : collecte `*.pp`/`*.lpr`, apparie `.lfm`, defines FPC/LCL, saute les règles spécifiques Delphi SCA041/SCA129/SCA185). Vide = delphi. `auto` n'est compris que par la ligne de commande : de la racine de l'analyse vers le haut, le premier dossier contenant `*.dpr`/`*.dproj` ou `*.lpi`/`*.lpk` décide, Delphi l'emporte en cas d'égalité ; l'exécutable autonome traite `auto` comme delphi. L'option CLI et un scan de projet `.lpi`/`.lpk`/`.lpg` gagnent toujours ; l'interface bascule cette clé par clic droit sur la barre d'état. |
 
 ## `[Rules]`
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `Profile` | String | _(vide)_ | Profil de règles pour la ligne de commande et l'exécutable autonome. Vide = toutes les règles. |
+| `Profile` | String | _(vide)_ | Profil de règles pour la ligne de commande et l'exécutable autonome. Vide = `default` (197 règles) ; le modèle écrit `Profile=default`. |
 | `MinSeverity` | String | `hint` | Sévérité la plus basse signalée : `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Seuil de confiance : `low` désactive le filtre, `medium` est la valeur livrée. |
-| `EvidenceTiering` | Bool | `True` | Politique d'évidence « error = prouvé » : la sévérité de chaque résultat est plafonnée par la confiance du détecteur (high → `error` autorisé, medium → `warning` au plus, low → `hint` au plus). Mettre `0` pour retrouver le comportement d'avant 0.9.18, p. ex. pour des portes CI basées sur les anciens totaux d'erreurs. |
+| `EvidenceTiering` | Bool | `1` | Politique d'évidence « error = prouvé » : la sévérité de chaque résultat est plafonnée par la confiance du détecteur (high → `error` autorisé, medium → `warning` au plus, low → `hint` au plus). Mettre `0` pour retrouver le comportement d'avant 0.9.18, p. ex. pour des portes CI basées sur les anciens totaux d'erreurs. |
 | `IdeProfile` | String | `ide-fast` | Profil utilisé par le plugin IDE. Reflété dans `Profile` à chaque exécution — sans l'écraser. |
 | `IdeMinSeverity` | String | `hint` | Seuil de sévérité du plugin IDE, reflété de la même manière. |
-| `EnableDetectorReviewFilter` | Bool | `False` | Filtre optionnel qui masque les règles encore en cours de révision. |
+| `EnableDetectorReviewFilter` | Bool | `0` | Outil de revue interne : ajoute l'entrée « Revue des détecteurs (1 résultat aléatoire par détecteur) » à la liste des sévérités. Seulement dans les builds compilés avec `DEBUG` ; les builds de release ignorent la clé. |
 
 ## `[Detectors]`
 
@@ -56,12 +62,12 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `LeakyClasses` | String | _(vide)_ | Classes supplémentaires que SCA001 considère comme sujettes aux fuites, séparées par des virgules. |
 | `ExcludeLeakyClasses` | String | _(vide)_ | Classes retirées de cette liste. |
 | `OwnershipSinks` | String | _(vide)_ | Routines qui prennent la propriété d'un objet transmis (noms de routines simples, séparés par des virgules). Vide par défaut — voir DETECTORS. Candidats vérifiés sur le corpus (audit S4 2026-09-23) : `AddItem` (mORMot `TPdfDictionary`/`TPdfArray`), `Add` sur Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / objets fpjson. ATTENTION : les noms agissent globalement — un nom listé supprime SCA001 pour TOUTE routine de ce nom ; c'est pourquoi le défaut reste vide. |
-| `AutoDiscoverClasses` | Bool | `False` | Découvrir les classes sujettes aux fuites pendant l'analyse et les journaliser. |
+| `AutoDiscoverClasses` | Bool | `0` | Découvrir les classes sujettes aux fuites pendant l'analyse et les journaliser. |
 | `CustomRulesFile` | String | _(vide)_ | Fichier YAML de règles personnalisées. |
-| `FormatFunctions` | String | _(vide)_ | Fonctions supplémentaires de type `Format` pour la vérification des marqueurs (SCA005). |
-| `MagicNumberTrivials` | String | _(vide)_ | Nombres que SCA014 accepte sans constante nommée. |
-| `IncludeTests` | Bool | `False` | Analyser aussi les répertoires de tests. Désactivé par défaut — les fixtures produisent du bruit. |
-| `UsesCheck` | Bool | `False` | Activer le détecteur coûteux de clauses `uses` inutilisées (SCA007). Le profil `strict` l'active indépendamment de cette clé. |
+| `FormatFunctions` | String | `Format,FormatUtf8,FormatString` | Fonctions de type `Format` pour la vérification des marqueurs (SCA005), séparées par des virgules. Une valeur **remplace** cette liste : citez aussi les trois valeurs par défaut si vous voulez les garder. |
+| `MagicNumberTrivials` | String | `0,1,2,-1,10,100` | Nombres que SCA014 accepte sans constante nommée, séparés par des virgules. Une valeur **remplace** cette liste. |
+| `IncludeTests` | Bool | `0` | Analyser aussi les répertoires de tests. Désactivé par défaut — les fixtures produisent du bruit. Exécutable autonome et plugin IDE seulement ; la ligne de commande utilise `--hide-test-fixtures` / `--show-test-fixtures`. |
+| `UsesCheck` | Bool | `0` | Activer le détecteur coûteux de clauses `uses` inutilisées (SCA007). En ligne de commande, le profil `strict` (`--profile strict` ou `Profile=strict`) l'active indépendamment de cette clé ; l'exécutable autonome et le plugin IDE ne lisent que cette clé. |
 | `MaxFileMB` | Integer | `5` | Les fichiers plus volumineux sont ignorés. |
 | `LongMethodMaxBodyLines` | Integer | `50` | Seuil SCA012 : lignes de corps. |
 | `LongMethodMaxStatements` | Integer | `30` | Seuil SCA012 : instructions. |
@@ -70,7 +76,7 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `CyclomaticMax` | Integer | `10` | Seuil SCA022 : complexité de McCabe. |
 | `CognitiveLimit` | Integer | `15` | Seuil SCA176 : complexité cognitive (l'imbrication pèse davantage que chez McCabe). |
 | `MaxCaseBranches` | Integer | `10` | Seuil SCA091 : branches `case`. |
-| `MaxLineLength` | Integer | `120` | Seuil de la règle sur la longueur de ligne. |
+| `MaxLineLength` | Integer | `120` | Seuil de la règle sur la longueur de ligne (SCA062). La règle signale avec une confiance low ; elle n'apparaît donc qu'avec `[Rules] MinConfidence=low`. |
 | `DuplicateBlockMinLines` | Integer | `8` | Taille minimale d'un bloc avant qu'une duplication soit signalée. |
 
 ## `[Components]`
@@ -83,9 +89,9 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `File` | String | _(vide)_ | JSON de référence. Un chemin relatif se résout par rapport au répertoire du projet ou du groupe, sinon par rapport à la racine de l'analyse ; la CLI se rabat sur le répertoire de travail si le fichier n'existe que là, et le signale. Vide = emplacement standard `.sca`. |
-| `OnlyNew` | Bool | `False` | N'afficher que les résultats absents de la base de référence. |
-| `PathInFingerprint` | Bool | `False` | Inclure le chemin relatif dans l'empreinte — distingue des fichiers homonymes dans des dossiers différents. |
+| `File` | String | _(vide)_ | JSON de référence. Un chemin relatif se résout par rapport au répertoire du projet ou du groupe, sinon par rapport à la racine de l'analyse ; la CLI se rabat sur le répertoire de travail si le fichier n'existe que là, et le signale. Vide = emplacement standard `.sca`. La ligne de commande ne lit cette clé qu'avec `--baseline-scan y`. |
+| `OnlyNew` | Bool | `0` | N'afficher que les résultats absents de la base de référence. Exécutable autonome et plugin IDE seulement ; la ligne de commande utilise `--baseline` / `--baseline-scan`. |
+| `PathInFingerprint` | Bool | `0` | Inclure le chemin relatif dans l'empreinte — distingue des fichiers homonymes dans des dossiers différents. |
 
 **Une base de référence compte.** Le fichier contient une entrée par
 résultat, et chaque entrée couvre au plus un résultat : deux entrées de
@@ -188,25 +194,25 @@ l'argument repose sur la raison structurelle plutôt que sur le taux.
 |---|---|---|---|
 | `Language` | String | `en` | Langue de l'interface : `de`, `en`, `fr`. Vide ou inconnue = anglais. reDelphix suit cette clé tant que son propre `redelphix.ini` n'en décide pas autrement (voir plus haut). |
 | `Theme` | String | `system` | Thème de l'exécutable autonome : `system` (suivre Windows), `light`, `dark`. |
-| `Element.<Nom>` | Bool | `True` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (ampoule avec les actions du résultat sur la ligne du curseur ; elle reçoit ses événements d'éditeur de `LineHighlighter`, donc `LineHighlighter=0` la désactive aussi), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (actions de code sans résultat dans le menu contextuel de l'éditeur, section plate sous les actions du résultat avec l'en-tête désactivé « Actions de code » ; les actions du résultat restent ; sans `EditorContextMenu`, sans effet), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
+| `Element.<Nom>` | Bool | `1` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (ampoule avec les actions du résultat sur la ligne du curseur ; elle reçoit ses événements d'éditeur de `LineHighlighter`, donc `LineHighlighter=0` la désactive aussi), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (actions de code sans résultat dans le menu contextuel de l'éditeur, section plate sous les actions du résultat avec l'en-tête désactivé « Actions de code » ; les actions du résultat restent ; sans `EditorContextMenu`, sans effet), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
 | `ClipboardOnClick` | Integer | `1` | Ce qu'un clic sur une ligne copie : `1` rien, `2` mini-ticket Jira, `3` invite Markdown. |
 | `EditorColorScheme` | String | `default` | Palette de la bande de marqueurs de l'éditeur et de la barre de titre de la surimpression. |
 | `OverlayPosition` | String | `below` | Ancrage de la surimpression au survol par rapport à la ligne du résultat. `below` (par défaut) commence une ligne en dessous, en début de ligne ; `sameline` recouvre la ligne du résultat. |
-| `OverlayShowOnHover` | Bool | `False` | Afficher la surimpression au survol plutôt qu'au clic. |
-| `OverlayTextOnly` | Bool | `False` | Remplacer la fenêtre de surimpression par un conseil transparent sur une ligne. |
+| `OverlayShowOnHover` | Bool | `0` | Afficher la surimpression au survol plutôt qu'au clic. |
+| `OverlayTextOnly` | Bool | `0` | Remplacer la fenêtre de surimpression par un conseil transparent sur une ligne. |
 
 ## `[Silent]`
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `Enabled` | Bool | `True` | Analyse en arrière-plan du fichier en cours d'édition (plugin IDE). |
+| `Enabled` | Bool | `1` | Affiche l'entrée « Analyser le fichier courant (silencieux) » dans le menu contextuel de l'éditeur du plugin IDE : elle analyse le fichier en cours d'édition et marque les résultats dans l'éditeur sans ouvrir la fenêtre ancrable. `0` masque l'entrée. Aussi sur la page d'options du plugin. |
 
 ## `[Repo]`
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
 | `BaseBranch` | String | _(vide)_ | Branche de référence pour « Branch-Changes ». Vide = détection automatique. |
-| `IncludeWorkingTree` | Bool | `True` | Inclure les modifications non validées dans le diff. |
+| `IncludeWorkingTree` | Bool | `1` | Inclure les modifications non validées dans le diff. |
 
 ## `[Paths]`
 

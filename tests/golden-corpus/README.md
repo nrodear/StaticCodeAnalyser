@@ -91,5 +91,5 @@ Entwicklungsintern, nicht Teil des veröffentlichten Repositories:
 - `HowTo_DetectorSelftest.md` - der breitere Dogfooding-Workflow
 
 Öffentlich zugänglich sind stattdessen [HowTo_Tests.md](../../HowTo_Tests.md)
-(Testsuite und Dogfooding-Gate) und die Dokumentenkarte
+(Testsuite) und die Dokumentenkarte
 [docs/index.md](../../docs/index.md).

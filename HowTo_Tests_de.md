@@ -8,11 +8,11 @@ erzeugen" mit `F2613 Unit '...' nicht gefunden`.
 | Komponente | Pflicht | Zweck |
 |---|---|---|
 | **DUnitX** | Pflicht | Test-Framework (Assert/[Test]-Attribute/Runner) |
-| **TestInsight** | Win32 optional | IDE-Integration (Tests-Panel, live-Status) |
+| **TestInsight** | Pflicht beim heutigen Stand (siehe unten) | IDE-Integration (Tests-Panel, live-Status) |
 
 Das eigentliche SCA-Engine + Standalone-EXE laufen unabhaengig — die
 Tests sind nur fuer Entwickler relevant. Wer nur den SCA bauen will,
-kann das TestProject im IDE-Build aushaengen (s. Workarounds unten).
+kann die beiden Testprojekte im IDE-Build aushaengen (s. Workarounds unten).
 
 ---
 
@@ -31,7 +31,11 @@ Andere Parent-Directory? Pfad in der dproj entsprechend anpassen oder via
 Tools -> Options -> Language -> Delphi -> Library global setzen (für
 **Win32 und Win64** je separat).
 
-### TestInsight (optional — Win32 IDE-Integration)
+### TestInsight (heute Pflicht — Win32 und Win64)
+
+Beide Testprojekte definieren `TESTINSIGHT` (siehe _Der TESTINSIGHT-Define_
+unten), beim heutigen Stand kompilieren sie also ohne die TestInsight-Units
+nicht, auf Win32 wie auf Win64.
 
 Bevorzugt via **GetIt Package Manager**:
 
@@ -44,7 +48,7 @@ GetIt setzt Library-Path und installiert das Plugin automatisch.
 Falls GetIt-Eintrag nicht da: GitHub/Bitbucket nach
 `TestInsight Stefan Glienke` durchsuchen, manuell clonen, die
 `TestInsight.RADxx.dpk` kompilieren + installieren, dann `Source/` zum
-Win32-Library-Path adden.
+Win32- und zum Win64-Library-Path adden.
 
 ---
 
@@ -59,8 +63,10 @@ Win32-Library-Path adden.
 | reDelphix.d12.bpl | Win32; Win64 **nur unter Delphi 13** | rtl, vcl, designide, SCA.Engine |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (siehe unten) |
 
-Die Group baut mit "Alle Projekte erzeugen" jedes Projekt der Gruppe auf
-der aktuell gewählten Plattform.
+Die Group baut mit "Alle Projekte erzeugen" jedes Projekt der Gruppe in
+seiner eigenen aktiven Plattform; jedes Projekt merkt sich seine. Vorher
+prüfen (siehe [HowTo_Build_de.md](HowTo_Build_de.md), Abschnitt 5.1). Unter
+Delphi 12 stoppen die beiden Design-Pakete auf Win64 mit `{$MESSAGE FATAL}`.
 
 ---
 
@@ -133,14 +139,15 @@ TestProject.exe --exclude:perf
 
 ## Workarounds
 
-### TestProject komplett vom Build ausnehmen
+### Die Testprojekte komplett vom Build ausnehmen
 
 Wenn Tests gerade nicht relevant sind und nur SCA gebaut werden soll,
 in IDE -> Projektgruppe rechtsklicken -> **Build-Auftrag** -> Haken bei
-`TestProject.dproj` entfernen. "Alle Projekte erzeugen" ueberspringt
-das Projekt dann.
+`TestProject.dproj` und `reDelphix.Test.dproj` entfernen. "Alle Projekte
+erzeugen" ueberspringt dann beide. Auch `reDelphix.Test.dproj` braucht
+DUnitX und definiert `TESTINSIGHT` in Debug und Release.
 
-Aequivalent direkt im `.groupproj`: Eintrag fuer TestProject auskommentieren.
+Aequivalent direkt im `.groupproj`: beide Eintraege auskommentieren.
 
 ### Der TESTINSIGHT-Define
 

@@ -37,9 +37,10 @@ Order matters — the package must exist before the demo:
 Easiest: put both projects in one project group. The package linkage is via
 `DCC_UsePackage SCA.Engine` (no source paths).
 
-> At runtime `SCA.Engine290.bpl` must be findable (the global BPL directory is on
-> the path with RAD Studio installed; for standalone deployment ship the `.bpl`
-> next to the `.exe`).
+> At runtime `SCA.Engine290.bpl` and the Delphi runtime packages it requires
+> (`rtl290.bpl`, `xmlrtl290.bpl`) must be findable (the global BPL directory is
+> on the path with RAD Studio installed; for standalone deployment ship all
+> three `.bpl` next to the `.exe`).
 
 ## Usage
 
@@ -50,7 +51,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Meaning |
 |----------|---------|
 | `<path>`    | Root directory (default: current directory) |
-| `<profile>` | optional. `''` = all detectors (default). Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
 Exit code: the demo's own, simplified convention, **not** the CLI contract.
 

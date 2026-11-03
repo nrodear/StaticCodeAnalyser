@@ -18,14 +18,16 @@ Hover, Workspace-Scan, Pull-Diagnostics.
 
 ## Bekannte Lücke — Spaltenfeld (dokumentiert, nicht gelöst)
 
-`TLeakFinding` hat **kein Spaltenfeld** (`StartCol`/`EndCol`/`EndLine`) —
+`TLeakFinding` hat **kein Spaltenfeld** (`StartCol`/`EndCol`) —
 die Engine-Änderung dafür ist der größte Einzel-Hebel für die
 LSP-Qualität (nützt auch SARIF `region.startColumn` und die
-Plugin-Overlays). Bis dahin:
+Plugin-Overlays). Eine Endzeile gibt es dagegen schon (`EndLine`, zu lesen
+über `SpanEnd`); der Adapter nutzt sie noch nicht, eine mehrzeilige Range
+wäre also ohne Engine-Änderung möglich. Heute:
 
 * Spalte konstant **1** (LSP `character: 0`),
-* Range = **ganze Zeile** (`end.character = 2147483647`, der Client clippt
-  ans Zeilenende — übliche LSP-Konvention).
+* Range = **ganze Anfangszeile** des Funds (`end.character = 2147483647`,
+  der Client clippt ans Zeilenende — übliche LSP-Konvention).
 
 Die Stelle ist in `sources/uLspDiagnostics.pas` mit `TODO E3` markiert.
 Achtung bei der späteren Umsetzung: LSP < 3.17 erwartet
@@ -72,7 +74,7 @@ def recv():
             length = int(line.split(b":")[1])
     return json.loads(p.stdout.read(length))
 
-src = "unit U1;\ninterface\nimplementation\nprocedure P;\nvar o: TObject;\nbegin\n  o := TObject.Create;\nend;\nend.\n"
+src = "unit U1;\ninterface\nimplementation\nprocedure P;\nvar o: TStringList;\nbegin\n  o := TStringList.Create;\nend;\nend.\n"
 
 send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}})
 print("initialize ->", recv())
@@ -89,8 +91,10 @@ print("exit code:", p.wait())
 Erwartung: `initialize` liefert `textDocumentSync {openClose, change:1}` +
 `serverInfo {name: "sca-lsp"}`; nach `didOpen` kommt eine
 `textDocument/publishDiagnostics`-Notification mit mindestens einem
-SCA001-Diagnostic (Memory-Leak `o`) auf der `Create`-Zeile, `character 0`
-(E3-Lücke, s. o.); `exit` nach `shutdown` beendet mit Exit-Code 0.
+SCA001-Diagnostic (Memory-Leak `o`) auf der `Create`-Zeile (Zeile 7, LSP
+`line: 6`), `character 0` (E3-Lücke, s. o.); `exit` nach `shutdown` beendet
+mit Exit-Code 0. Ein `TObject.Create` statt `TStringList.Create` ergibt im
+Profil `ide-fast` keinen Fund.
 
 Hinweise:
 

@@ -89,11 +89,13 @@ Entwickler.
 
 ### Vor dem Release (Checkliste aus der Doku)
 
-- **Versions-Sync** (Doku Punkt 3): `uSCAConsts.SCA_VERSION`,
-  `uIDEExpert.PLUGIN_VERSION`, dproj-`VerInfo` synchronisieren, bei den vier
-  Paket-dproj je Win32 UND Win64, Keys und numerische Felder (der
-  fruehere 0/9/4-vs-0.9.8.0-Drift ist historisch, seit 0.9.10 behoben);
-  danach `#define SCAVersion` im `.iss` nachziehen.
+- **Versions-Sync**: `uSCAConsts.SCA_VERSION` und `SCA_VERSION_FULL`, `tool.version` in
+  `rules/sca-rules.json`, in `StaticCodeAnalyser.d12.dproj` `VerInfo_Keys`
+  und `VerInfo_Release`, bei den vier Paket-dproj je Win32 UND Win64 Keys
+  und numerische Felder (der fruehere 0/9/4-vs-0.9.8.0-Drift ist
+  historisch, seit 0.9.10 behoben); danach `#define SCAVersion` im `.iss`
+  nachziehen. `uIDEExpert.PLUGIN_VERSION` leitet sich aus `SCA_VERSION` ab
+  und muss nicht von Hand gepflegt werden.
   `tools\package_set_gate.py --version <v>` prueft die Paket-dproj.
 - Verwaisten `SCA.Refactor.bpl`-Eintrag in der Dev-Registry bereinigen
   (Doku Punkt 4) — der Koexistenz-Check des Setups fasst nur die SCA-Familie
@@ -130,6 +132,21 @@ Schalter:
 - `-SkipGetIt` ist Default, GetIt ist fuer 0.9.19 ausgesetzt
   (`getit\README_GetIt.md`). `-SkipGetIt:$false` nimmt den Monolithen, braucht
   dessen gebaute BPL und ist kein Releaseweg.
+- `-SkipSource`: kein Quell-ZIP. Ohne den Schalter baut das Skript das
+  Quell-ZIP aus dem Tag `v<Version>` und bricht ab, wenn der Tag fehlt.
+- `-OutDir <ordner>`: Ziel der Artefakte, Default `release-artifacts`
+  (relativ zum Repo).
+- `-StackMB <n>`: Stack-Reserve, auf die die EXEs gepatcht werden, Default 32.
+
+Was der echte Lauf ausserdem voraussetzt:
+
+- Beide EXEs (`Output\Win32 Release`, `Output\Win64 Release`) und die
+  Release-Notes `docs/releases/v<Version>.md` und `v<Version>_de.md`; fehlt
+  eine der Doku-Dateien, bricht das Skript ab.
+- Der Tag-Check kommt zuletzt, nach den ZIPs und dem Setup. Vorher hat das
+  Skript im `OutDir` bereits die alten ZIPs, Setups und GetIt-Manifeste aller
+  Versionen geloescht. Ein Abbruch dort laesst also einen halben Satz
+  Artefakte zurueck: erst taggen oder `-SkipSource` setzen.
 
 Hand-Compile weiterhin moeglich:
 

@@ -12,10 +12,14 @@ next to `ignore.txt`. It is created on first use; an older `repo.ini` is
 migrated automatically. All keys are optional - a missing key means the
 default below.
 
+**Bool keys take `1` (on) or `0` (off).** `True`, `False` or `yes` are
+not read as numbers: the key then keeps its default without a message.
+
 The same file is read by the standalone EXE, the IDE plugin and the CLI.
-Where the three deliberately differ, the key name says so (`IdeProfile`,
-`IdeMinSeverity`). CLI switches win over the file for the run they are
-given in.
+Some keys are named for one consumer (`IdeProfile`, `IdeMinSeverity`);
+others are not read by all three, and their row says so (`IncludeTests`,
+`UsesCheck`, `OnlyNew`, `[Baseline] File`, `[Scan] Dialect`). CLI
+switches win over the file for the run they are given in.
 
 > SCA keeps no SonarQube settings: server, token and project key belong to
 > `sonar-scanner`, see [sonarHowto.md](../sonarHowto.md). `[Sonar]` and
@@ -33,19 +37,19 @@ given in.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `Dialect` | String | _(empty)_ | Source dialect when no `--dialect` switch is given: `delphi` or `fpc` (Lazarus/Free Pascal: collects `*.pp`/`*.lpr`, pairs `.lfm`, FPC/LCL defines, skips the Delphi-only rules SCA041/SCA129/SCA185). Empty = delphi. The CLI switch and an `.lpi`/`.lpk`/`.lpg` project scan always win; the GUI toggles this key via right-click on the status bar. |
+| `Dialect` | String | _(empty)_ | Source dialect when no `--dialect` switch is given: `delphi` or `fpc` (Lazarus/Free Pascal: collects `*.pp`/`*.lpr`, pairs `.lfm`, FPC/LCL defines, skips the Delphi-only rules SCA041/SCA129/SCA185). Empty = delphi. `auto` is understood by the CLI only: from the scan root upwards, the first folder with `*.dpr`/`*.dproj` or `*.lpi`/`*.lpk` decides, Delphi wins a tie; the standalone EXE treats `auto` as delphi. The CLI switch and an `.lpi`/`.lpk`/`.lpg` project scan always win; the GUI toggles this key via right-click on the status bar. |
 
 ## `[Rules]`
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `Profile` | String | _(empty)_ | Rule profile for CLI and standalone runs. Empty = all rules. |
+| `Profile` | String | _(empty)_ | Rule profile for CLI and standalone runs. Empty = `default` (197 rules); the template writes `Profile=default`. |
 | `MinSeverity` | String | `hint` | Lowest severity that is reported: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Confidence floor: `low` disables the filter, `medium` is the shipped default. |
-| `EvidenceTiering` | Bool | `True` | Evidence policy "error = proven": finding severity is capped by the detector's confidence in that specific finding (high → `error` allowed, medium → `warning` at most, low → `hint` at most). Set `0` to restore the pre-0.9.18 behaviour, e.g. for CI gates that count on the old error totals. |
+| `EvidenceTiering` | Bool | `1` | Evidence policy "error = proven": finding severity is capped by the detector's confidence in that specific finding (high → `error` allowed, medium → `warning` at most, low → `hint` at most). Set `0` to restore the pre-0.9.18 behaviour, e.g. for CI gates that count on the old error totals. |
 | `IdeProfile` | String | `ide-fast` | Profile the IDE plugin uses. Mirrored into `Profile` per run - it does not overwrite it. |
 | `IdeMinSeverity` | String | `hint` | Severity floor for the IDE plugin, mirrored the same way. |
-| `EnableDetectorReviewFilter` | Bool | `False` | Opt-in filter that hides rules still under review. |
+| `EnableDetectorReviewFilter` | Bool | `0` | Internal review aid: adds the entry "Detector Review (1 per detector, random)" to the severity combo. Only in builds compiled with `DEBUG`; release builds ignore the key. |
 
 ## `[Detectors]`
 
@@ -54,12 +58,12 @@ given in.
 | `LeakyClasses` | String | _(empty)_ | Extra classes SCA001 treats as leak-capable, comma-separated. |
 | `ExcludeLeakyClasses` | String | _(empty)_ | Classes removed from that list again. |
 | `OwnershipSinks` | String | _(empty)_ | Routines that take ownership of a passed object (bare routine names, comma-separated). Empty by default - see DETECTORS. Corpus-verified candidates for framework code (S4 audit 2026-09-23): `AddItem` (mORMot `TPdfDictionary`/`TPdfArray` own their items), `Add` on Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / fpjson objects. CAUTION: names act globally - a listed name suppresses SCA001 for EVERY routine of that name, which is why the default stays empty. |
-| `AutoDiscoverClasses` | Bool | `False` | Discover leak-capable classes during the scan and log them. |
+| `AutoDiscoverClasses` | Bool | `0` | Discover leak-capable classes during the scan and log them. |
 | `CustomRulesFile` | String | _(empty)_ | YAML file with custom rules. |
-| `FormatFunctions` | String | _(empty)_ | Additional `Format`-like functions for the placeholder check (SCA005). |
-| `MagicNumberTrivials` | String | _(empty)_ | Numbers SCA014 accepts without a named constant. |
-| `IncludeTests` | Bool | `False` | Scan test directories too. Off by default - fixtures produce noise. |
-| `UsesCheck` | Bool | `False` | Enable the expensive unused-uses detector (SCA007). The `strict` profile enables it regardless of this key. |
+| `FormatFunctions` | String | `Format,FormatUtf8,FormatString` | `Format`-like functions for the placeholder check (SCA005), comma-separated. A value **replaces** this list: name the three defaults too if you want to keep them. |
+| `MagicNumberTrivials` | String | `0,1,2,-1,10,100` | Numbers SCA014 accepts without a named constant, comma-separated. A value **replaces** this list. |
+| `IncludeTests` | Bool | `0` | Scan test directories too. Off by default - fixtures produce noise. Standalone EXE and IDE plugin only; the CLI uses `--hide-test-fixtures` / `--show-test-fixtures`. |
+| `UsesCheck` | Bool | `0` | Enable the expensive unused-uses detector (SCA007). In the CLI the `strict` profile (`--profile strict` or `Profile=strict`) enables it regardless of this key; the standalone EXE and the IDE plugin read only this key. |
 | `MaxFileMB` | Integer | `5` | Files above this size are skipped. |
 | `LongMethodMaxBodyLines` | Integer | `50` | SCA012 threshold: body lines. |
 | `LongMethodMaxStatements` | Integer | `30` | SCA012 threshold: statements. |
@@ -68,7 +72,7 @@ given in.
 | `CyclomaticMax` | Integer | `10` | SCA022 threshold: McCabe complexity. |
 | `CognitiveLimit` | Integer | `15` | SCA176 threshold: cognitive complexity (nesting weighs heavier than in McCabe). |
 | `MaxCaseBranches` | Integer | `10` | SCA091 threshold: case branches. |
-| `MaxLineLength` | Integer | `120` | Threshold for the line-length rule. |
+| `MaxLineLength` | Integer | `120` | Threshold for the line-length rule (SCA062). The rule reports at confidence low, so it only shows with `[Rules] MinConfidence=low`. |
 | `DuplicateBlockMinLines` | Integer | `8` | Minimum block length before duplication is reported. |
 
 ## `[Components]`
@@ -81,9 +85,9 @@ given in.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `File` | String | _(empty)_ | Baseline JSON. A relative path resolves against the directory of the project or group, otherwise against the scan root; the CLI falls back to the working directory if the file exists only there, and says so. Empty = `.sca` default location. |
-| `OnlyNew` | Bool | `False` | Show only findings that are not in the baseline. |
-| `PathInFingerprint` | Bool | `False` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
+| `File` | String | _(empty)_ | Baseline JSON. A relative path resolves against the directory of the project or group, otherwise against the scan root; the CLI falls back to the working directory if the file exists only there, and says so. Empty = `.sca` default location. The CLI reads this key only with `--baseline-scan y`. |
+| `OnlyNew` | Bool | `0` | Show only findings that are not in the baseline. Standalone EXE and IDE plugin only; the CLI uses `--baseline` / `--baseline-scan`. |
+| `PathInFingerprint` | Bool | `0` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
 
 **A baseline counts.** The file holds one entry per finding, and each
 entry covers at most one finding: two entries with the same fingerprint
@@ -179,25 +183,25 @@ rate.
 |---|---|---|---|
 | `Language` | String | `en` | UI language: `de`, `en`, `fr`. Empty or unknown = English. reDelphix follows this key unless its own `redelphix.ini` says otherwise (see above). |
 | `Theme` | String | `system` | Standalone theme: `system` (follow Windows), `light`, `dark`. |
-| `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (light bulb with the finding actions at the caret line; it receives its editor events from `LineHighlighter`, so `LineHighlighter=0` silences it too), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (code actions without a finding in the editor context menu, flat section below the finding actions with the disabled header "Code actions"; finding actions stay; without `EditorContextMenu` it has no effect), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
+| `Element.<Name>` | Bool | `1` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (light bulb with the finding actions at the caret line; it receives its editor events from `LineHighlighter`, so `LineHighlighter=0` silences it too), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (code actions without a finding in the editor context menu, flat section below the finding actions with the disabled header "Code actions"; finding actions stay; without `EditorContextMenu` it has no effect), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
 | `ClipboardOnClick` | Integer | `1` | What a row click copies: `1` nothing, `2` Jira mini issue, `3` Markdown prompt. |
 | `EditorColorScheme` | String | `default` | Colour scheme of the editor marker stripe and overlay title bar. |
 | `OverlayPosition` | String | `below` | Where the hover overlay anchors relative to the finding line. `below` (default) starts one line below it, at the start of the line; `sameline` overlays the finding line itself. |
-| `OverlayShowOnHover` | Bool | `False` | Show the overlay on hover instead of on click. |
-| `OverlayTextOnly` | Bool | `False` | Replace the overlay window with a transparent one-line hint. |
+| `OverlayShowOnHover` | Bool | `0` | Show the overlay on hover instead of on click. |
+| `OverlayTextOnly` | Bool | `0` | Replace the overlay window with a transparent one-line hint. |
 
 ## `[Silent]`
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `Enabled` | Bool | `True` | Background analysis of the file being edited (IDE plugin). |
+| `Enabled` | Bool | `1` | Shows the entry "Analyse current file (silent)" in the editor right-click menu of the IDE plugin: it analyses the file being edited and marks the findings in the editor without opening the dock window. `0` hides the entry. Also on the options page of the plugin. |
 
 ## `[Repo]`
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `BaseBranch` | String | _(empty)_ | Base branch for Branch-Changes. Empty = auto-detect. |
-| `IncludeWorkingTree` | Bool | `True` | Include uncommitted changes in the diff. |
+| `IncludeWorkingTree` | Bool | `1` | Include uncommitted changes in the diff. |
 
 ## `[Paths]`
 

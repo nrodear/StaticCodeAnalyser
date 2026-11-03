@@ -52,7 +52,9 @@ Infrastructure transversale :
 
 - **`uAnalyzeContext`** — détient les caches propres à chaque analyse
   (cache AST, index des références de symboles, index du dépôt DFM).
-  Transmis à travers les détecteurs ; aucun état global par analyse.
+  Transmis à travers les détecteurs. La configuration et certains caches
+  (p. ex. le cache des textes de fichiers) restent globaux au processus,
+  voir §4.
 - **`uStaticFiles`** — collecte récursive des fichiers avec exclusions par
   défaut (`__history`, `__recovery`, `.git`, `.svn`, `node_modules`) +
   filtre d'exclusions/de tests (`uIgnoreList`).
@@ -72,7 +74,7 @@ uses uEngineApi;
 
 var Res: TScanResult;
 begin
-  Res := ScanRecursive('C:\monprojet');   // tous les détecteurs, limites par défaut
+  Res := ScanRecursive('C:\monprojet');   // tous les détecteurs sauf SCA007 (UsesCheck), limites par défaut
   try
     WriteLn('Résultats : ', Res.FindingCount,
             '  (erreurs ', Res.ErrorCount,
@@ -105,7 +107,8 @@ commodité.
 ### 3.2 `TScanRequest`
 
 Remplir via `TScanRequest.Init` avec des valeurs par défaut raisonnables
-(`ssRecursive`, tous les détecteurs, seuils les plus permissifs, vue
+(`ssRecursive`, tous les détecteurs sans la vérification des `uses`
+inutilisés, seuils les plus permissifs, vue
 `{$IFDEF}` à une branche avec `TScanRequest.DefaultIfdefDefines`, defines
 d'include activés, `dlDelphi`, en série), puis surcharger de façon ciblée.
 
@@ -115,22 +118,22 @@ d'include activés, `dlDelphi`, en série), puis surcharger de façon ciblée.
 | `Path` | `string` | Racine (récursif) / fichier (unique) / répertoire de base (liste) / `.dproj`, `.lpi`, `.lpk` (projet) / `.groupproj`, `.lpg` (groupe de projets). |
 | `Files` | `TArray<string>` | Liste de fichiers explicite pour `ssFileList`. |
 | `Source` | `string` | Code source en mémoire pour `ssSource`. |
-| `VcsRange` | `string` | `ssVcsChanged` : `''`=auto, sinon `shaA..shaB`. |
-| `Profile` | `string` | `''`=tous les détecteurs, sinon nom de profil (voir 3.6). |
+| `VcsRange` | `string` | `ssVcsChanged` : `''`=auto, sinon `shaA..shaB`. Une erreur du VCS (pas de dépôt, pas de git, plage non résoluble) donne un résultat vide sans motif - comme « aucun fichier modifié ». |
+| `Profile` | `string` | `''`=tous les détecteurs, sinon nom de profil (voir 3.6). SCA007 uniquement avec `UsesCheck`. |
 | `MinSeverity` | `TLeakSeverity` | Les résultats sous ce seuil sont écartés. |
 | `MinConfidence` | `TFindingConfidence` | Seuil anti-faux-positifs (défaut `fcMedium`). |
 | `MaxFileBytes` | `Integer` | `<=0` → défaut du moteur (5 Mo). |
-| `UsesCheck` | `Boolean` | Exécuter le coûteux détecteur de `uses` inutilisés. |
+| `UsesCheck` | `Boolean` | Exécuter le coûteux détecteur de `uses` inutilisés (SCA007). `Init` : `False` - sans lui, aucun profil ne signale SCA007, `strict` compris. En mode INI aussi, seul ce champ décide ; `Run` ne lit pas `[Detectors] UsesCheck`. |
 | `AutoDiscover` | `Boolean` | Découvrir les classes personnalisées pendant l'analyse. |
 | `IfdefDefines` | `TArray<string>` | Parsing sensible aux `{$IFDEF}` avec ces defines : une branche, comme la voit un compilateur. `Init` pose `DefaultIfdefDefines` (`MSWINDOWS`, `WIN64`, `UNICODE`, `CONDITIONALEXPRESSIONS`) ; `nil`/vide = les deux branches de chaque `{$IFDEF}`. Vue d'analyse : `Run` l'applique même avec `SkipConfig`. |
 | `IncludeDefines` | `Boolean` | Lire les fichiers `{$I}` pour l'effet de leurs `{$DEFINE}`. `Init` pose `True` ; `False` = aveugle aux includes (CLI `--no-include-defines`). Vue d'analyse comme `IfdefDefines`. |
 | `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) ou `dlFpc` (`uSCAConsts`) : `dlFpc` collecte en plus les `*.pp` lors du parcours de répertoires et, avec un `IfdefDefines` non vide, ajoute `FPC` et `LCL`. Forcé à `dlFpc` pour les scopes de projet `.lpi`/`.lpk`/`.lpg`. Vue d'analyse comme `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML de règles personnalisées (`''`=aucune). |
-| `BaselinePath` | `string` | Filtrer les résultats contre un JSON de référence (`''`=désactivé). Chaque entrée couvre au plus un résultat. |
-| `WriteBaselinePath` | `string` | Écrire les résultats actuels comme nouvelle référence. |
+| `BaselinePath` | `string` | Filtrer les résultats contre un JSON de référence (`''`=désactivé). Chaque entrée couvre au plus un résultat. Un fichier absent, illisible ou invalide ne filtre rien et ne signale aucune erreur (la CLI s'y arrête avec le code 99). |
+| `WriteBaselinePath` | `string` | Écrire les résultats actuels comme nouvelle référence. Une erreur d'écriture est elle aussi ignorée. |
 | `ApplyRepoIni` | `Boolean` | Charger + appliquer intégralement `analyser.ini` (comme la CLI). |
 | `MinSeverityName` | `string` | Mode INI : surcharge `'error'`/`'warning'`/`'hint'`. |
-| `ConfigRoot` | `string` | Mode INI : racine pour la résolution INI/règles. |
+| `ConfigRoot` | `string` | Mode INI : racine du projet pour résoudre un `CustomRulesFile` relatif de l'INI (`''` = `Path`). Ne déplace pas l'INI : `analyser.ini` vient toujours de `%APPDATA%\StaticCodeAnalyser`. |
 | `SkipConfig` | `Boolean` | `true` : n'appliquer aucune config (le consommateur a posé l'état lui-même). |
 | `IndexRoot` | `string` | `ssProject`/`ssProjectGroup`/`ssFileList` : répertoire sur lequel sont construits les index inter-unités (références de symboles, types, DFM) tandis que l'analyse reste sur la liste. `''` = racine commune de la liste résolue (scopes de projet) ou la liste elle-même (`ssFileList`). |
 | `SingleFileProjectRoot` | `string` | `ssSingleFile` : racine de projet pour l'index inter-unités. |
@@ -171,10 +174,14 @@ configuration des détecteurs :
    `MinSeverity`, `MinConfidence`, `MaxFileBytes`, `IfdefDefines`,
    `CustomRulesPath`). Pas d'`analyser.ini`. → c'est ce que font
    `ScanRecursive`/`AnalyzeSource`.
-2. **`ApplyRepoIni := True` :** charge `analyser.ini` (depuis
-   `ConfigRoot`/`Path`) et l'applique intégralement — 8 seuils, surcharges
-   de chemins, listes magic/format, profil INI + règles personnalisées
-   INI. C'est ainsi que fonctionne la CLI.
+2. **`ApplyRepoIni := True` :** charge
+   `%APPDATA%\StaticCodeAnalyser\analyser.ini` et l'applique intégralement
+   — 8 seuils, surcharges de chemins, listes magic/format, profil INI +
+   règles personnalisées INI. C'est ainsi que fonctionne la CLI.
+   `ConfigRoot` (sinon `Path`) ne sert que de racine du projet pour un
+   `CustomRulesFile` relatif. Effet de bord : le chargement écrit le
+   fichier — depuis le modèle s'il manque, et il ajoute une section
+   `[Components]` manquante.
 3. **`SkipConfig := True` :** `Run` n'applique **aucune** config — le
    consommateur a déjà posé lui-même l'état global des détecteurs/seuils
    (c'est ce que font le plugin IDE et la Form via leur propre
@@ -189,7 +196,7 @@ configuration des détecteurs :
 | `ssRecursive` | Répertoire récursif (défaut). Utilise `Path` + `IgnoreList` en option. |
 | `ssSingleFile` | Un seul fichier `.pas` (`Path`) ; avec `SingleFileProjectRoot`, index de symboles à l'échelle du projet. |
 | `ssFileList` | Liste de fichiers explicite (`Files`) ; `Path` = répertoire de base optionnel. |
-| `ssVcsChanged` | Uniquement les fichiers modifiés selon le VCS (`Path`=dépôt, `VcsRange` en option). |
+| `ssVcsChanged` | Uniquement les fichiers modifiés selon le VCS (`Path`=dépôt, `VcsRange` en option). Une erreur du VCS donne un résultat vide sans motif (voir `VcsRange`). |
 | `ssSource` | Code source en mémoire (`Source`) ; `Path`=nom logique optionnel. |
 | `ssProject` | Fichiers d'un projet (`Path` = `.dproj` : sa liste `DCCReference` ; `.lpi`/`.lpk` : l'équivalent Lazarus) ; signale en plus les fichiers du dossier du projet que celui-ci ne liste pas (SCA194/SCA195). |
 | `ssProjectGroup` | Union des listes de projets d'un groupe (`Path` = `.groupproj` ou `.lpg`). |
@@ -200,7 +207,8 @@ Un fichier de projet non résoluble donne un résultat avec un seul résultat
 ### 3.6 Profils
 
 Un profil est une liste blanche de types de résultats. `''` (vide) =
-**tous** les détecteurs. Profils intégrés (`uRuleCatalog`) :
+**tous** les détecteurs. SCA007 (`uses` inutilisés) n'apparaît dans un
+profil qu'avec `UsesCheck = True`. Profils intégrés (`uRuleCatalog`) :
 
 | Profil | Contenu |
 |--------|---------|
@@ -231,7 +239,7 @@ Chaque résultat :
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | ID de règle personnalisée (sinon vide). |
 | `RelatedLines` | `string` | Autres lignes de la même chose — aujourd'hui seulement SCA015/SCA021 (les emplacements partenaires d'un groupe de doublons) : numéros de ligne à base 1 séparés par des virgules, croissants, sans la ligne d'ancrage ; vide pour toutes les autres règles. |
-| `StructureChain` | `string` | Chaîne d'imbrication jusqu'au résultat, de l'extérieur vers l'intérieur, jointe par `CHAIN_SEP` (`' → '`), p. ex. `if → for → while` ; aujourd'hui seulement SCA018 (DeepNesting), sinon vide. |
+| `StructureChain` | `string` | Chaîne d'imbrication jusqu'au résultat, de l'extérieur vers l'intérieur, jointe par `CHAIN_SEP` (`' → '`), p. ex. `if → for → while` ; aujourd'hui seulement SCA018 (DeepNesting) et SCA176 (CognitiveComplexity), sinon vide. |
 | `LeakVariant` / `MemoryLeakVariant` | `string` | Variante de SCA001 (MemoryLeak) : `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` est le champ que pose le détecteur (vide = non posé) ; `MemoryLeakVariant` le renvoie ou le déduit de `OriginalSeverity` et du message ; `''` pour tout autre type. |
 | `FindingType` | `TFindingType` | Catégorie (voir ci-dessous). |
 | `SeverityText` / `TypeText` | `string` | Libellés lisibles. |

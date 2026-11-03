@@ -16,13 +16,19 @@
 #   type         - bug | code-smell | vulnerability | security-hotspot |
 #                  code-duplication            (informational only)
 #   pattern-type - substring (default) | regex | word
+#                  word: the pattern is a plain identifier ("TADOQuery");
+#                  the word boundaries are added for you. It is no regex:
+#                  a "\\b" or "|" in it is searched as text and never hits.
+#                  regex: PCRE syntax. All three are case-sensitive.
 #   target       - any (default) | identifier | comment | string-literal
 #                  NOT IMPLEMENTED: the key is parsed and then ignored -
 #                  every pattern still matches the whole line. Setting
 #                  'comment' does NOT restrict matches to comments.
 #                  (Checked again 2026-08-04.)
 #   message      - shown in finding output (default: name or description)
-#   fix-hint     - shown in HTML/Plugin-Tooltip
+#   fix-hint     - read, but not shown anywhere yet (neither the HTML
+#                  report nor the plugin) - put what users must see into
+#                  message
 #   file-include - list of glob patterns; rule only fires for matching files
 #   file-exclude - list of glob patterns; rule skips matching files
 #                  Both only as a block list ("- ..." lines); the flow

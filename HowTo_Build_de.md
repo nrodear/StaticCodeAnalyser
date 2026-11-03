@@ -108,7 +108,7 @@ Command-Line oder Doppelklick.
 
 ### 4.1 Plattform waehlen (32-bit vs 64-bit)
 
-64-bit ist Default und empfohlen.
+Empfohlen ist 64-bit. Die Projektdatei öffnet auf Win32, also umstellen:
 
 Im Project Manager:
 
@@ -170,7 +170,9 @@ Start ladet.
 > hake diese IDE darin aus: sein Ordner steht vorn in der PATH-Einstellung
 > der IDE, sie würde also die installierte Engine laden statt deiner. Umgekehrt
 > ersetzt das Setup in jeder angehakten IDE die Registrierungen deines Baus
-> und meldet das; danach die Packages wie in 5.2 und 5.3 neu eintragen. Ein
+> und meldet das; wer dort wieder den eigenen Bau nutzen will,
+> deinstalliert das Setup (oder hakt diese IDE aus) und trägt danach die
+> Packages wie in 5.2 und 5.3 neu ein. Ein
 > Monolith aus Version 0.9.18 oder älter
 > (`StaticCodeAnalyser.Plugin.d12`) lässt sich neben diesen Packages nicht
 > laden: zuerst unter **Komponente → Packages installieren** entfernen.
@@ -220,6 +222,13 @@ Du hast jetzt drei `.bpl`-Dateien in
 - `SCA.Engine290.bpl`
 - `SCA.SharedUI290.bpl`
 - `StaticCodeAnalyser.IDE.d12.bpl`
+
+> **Delphi 13, 64-Bit-IDE:** in Schritt 3 stattdessen **Windows 64-bit
+> (Win64)** aktivieren, für `SCA.Engine`, `SCA.SharedUI`, das Plugin und
+> später `reDelphix.d12`. Die BPLs landen dann in `37.0\Bpl\Win64\`
+> (Suffix `370`), und in 5.2 trägst du sie in der 64-Bit-IDE aus diesem
+> Ordner ein. Die 32-Bit-IDE von Delphi 13 nutzt `37.0\Bpl\` und Win32 wie
+> beschrieben.
 
 ### 5.2 Der IDE sagen, dass sie das Plugin laden soll
 
@@ -279,7 +288,8 @@ unter `C:\Users\Public\Documents\Embarcadero\Studio\`:
    für Win32 und Win64 (Abschnitt 4). Ein Package linkt gegen die DCPs
    seiner Abhängigkeiten: Wer eines neu baut, baut die folgenden mit, auch
    ohne Quelländerung. „Alle erzeugen" der Projektgruppe hält diese
-   Reihenfolge ein.
+   Reihenfolge ein, baut aber jedes Projekt in seiner eigenen aktiven
+   Plattform (siehe die Warnung in 5.1): vorher alle vier prüfen.
 3. Das Ergebnis prüfen, ohne etwas anzulegen:
 
    ```powershell
@@ -290,8 +300,9 @@ unter `C:\Users\Public\Documents\Embarcadero\Studio\`:
    `tools\stale_artifacts_check.py --release` und prüft jede der 12 BPLs:
    vorhanden, VERSIONINFO gleich der Version, richtige Bitbreite.
 
-Der volle Lauf und seine Schalter:
-[installer/README_Installer.md](installer/README_Installer.md).
+Der volle Lauf braucht den Tag `v<Version>` (oder `-SkipSource`) und die
+Release-Notes `docs/releases/v<Version>.md` und `_de.md`. Lauf und
+Schalter: [installer/README_Installer.md](installer/README_Installer.md).
 
 ---
 
@@ -337,7 +348,7 @@ richtigen Zeile (Notepad oder dein Default-Pascal-Viewer).
 
 ### 6.5 Report speichern
 
-Die **Export**-Knöpfe (oben rechts) speichern als **HTML**, **JSON**,
+**☰ → Export...** (der Menü-Knopf oben rechts) speichert als **HTML**, **JSON**,
 **CSV**, **SARIF** (für GitHub Code Scanning), den **Sonar**-Report (für
 SonarQube), oder kopieren in die Zwischenablage für Jira/Markdown.
 
@@ -368,9 +379,11 @@ Project Manager oder als Tab unten zu docken).
 
 ### 7.4 Zu einem Befund springen
 
-Klick auf eine Grid-Zeile: der Editor springt zu Datei + Zeile und
-markiert die problematische Stelle mit einer farbigen Markierung in
-der Gutter-Spalte.
+Doppelklick auf eine Grid-Zeile oder **Enter**: der Editor springt zu
+Datei + Zeile und markiert die Zeile. Mit den Pfeiltasten folgt der
+Editor, sobald die Auswahl stehen bleibt. Ein einfacher Klick zeigt den
+Befund nur im Hilfe-Panel und malt einen Streifen in den Editor, wenn
+die Datei offen ist.
 
 ### 7.5 False-Positives ausblenden
 
@@ -379,11 +392,13 @@ einen `// noinspection`-Kommentar über die Zeile, der genau diese Regel
 an dieser Stelle ausblendet. Beim nächsten Scan ist der Befund weg.
 reDelphix bietet dasselbe im Kontextmenü des Befunds an.
 
-### 7.6 Hover-Hint
+### 7.6 Hilfe-Panel
 
-Wenn du ueber eine Befund-Zeile haengen bleibst, zeigt ein Tooltip ein
-**Vorher / Nachher**-Code-Beispiel: wie das Problem aussieht und wie
-der Fix aussieht.
+Wähle einen Befund: das **Hilfe-Panel** neben dem Grid zeigt ein
+**Vorher / Nachher**-Code-Beispiel — wie das Problem aussieht und wie
+der Fix aussieht. Es erscheint, solange das Fenster schwebt; angedockt
+an eine Seitenleiste blendet es sich aus. Über der Datei-Spalte zeigt
+ein Tooltip den vollen Pfad.
 
 ---
 
@@ -394,7 +409,6 @@ der Fix aussieht.
 | **"Build failed: unresolved external"** | Du hast das Plugin vor dem Engine gebaut. Erst `SCA.Engine`, dann `SCA.SharedUI`, dann das Plugin bauen. |
 | **Plugin-Menue fehlt nach Neustart** | Falsche Plattform (Win64 statt Win32 gebaut) oder falscher Pfad in `Tools → Options → Packages`. |
 | **Standalone crasht nach ein paar Sekunden bei grossem Projekt** | Stack-Patch nicht angewendet. `tools\patch-stack-size.ps1` neu ausfuehren. |
-| **EXE meldet "file not found" beim Start** | Du hast die EXE aus ihrem `Output\…`-Ordner verschoben. Entweder zurueck, oder die `.dcu`/`.bpl`-Files mit kopieren. |
 | **"Cannot find SCA.Engine290.bpl"** beim Plugin-Laden | Der Windows-Loader sucht `SCA.Engine290.bpl` ueber den PATH, nicht neben dem Plugin. Eigener Bau: Engine fuer dieselbe Plattform (Win32) und Konfiguration (Release) bauen. Setup: erneut ausfuehren, es stellt seinen Eintrag in der PATH-Einstellung der IDE wieder her. |
 | **Undeklarierter Bezeichner, obwohl er sichtbar in der Quelle steht** | Ein Paket zieht die Unit aus dem **DCP** eines anderen Pakets, nicht aus der Quelle. Ist das DCP aelter als die Quelle, compilierst du gegen den alten Stand - und der Compiler zeigt auf die Aufrufstelle, nicht auf das veraltete Artefakt. `python tools\stale_artifacts_check.py` laufen lassen, dann in der Reihenfolge `SCA.Engine` -> `SCA.SharedUI` -> Plugin neu bauen. |
 

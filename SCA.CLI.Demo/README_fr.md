@@ -40,9 +40,11 @@ Le plus simple : placer les deux projets dans un même groupe de projets.
 La liaison du package passe par `DCC_UsePackage SCA.Engine` (aucun
 chemin de sources).
 
-> À l'exécution, `SCA.Engine290.bpl` doit être localisable (le répertoire
-> BPL global est sur le chemin quand RAD Studio est installé ; pour un
-> déploiement autonome, livrer la `.bpl` à côté de l'`.exe`).
+> À l'exécution, `SCA.Engine290.bpl` et les packages d'exécution Delphi
+> qu'il requiert (`rtl290.bpl`, `xmlrtl290.bpl`) doivent être localisables
+> (le répertoire BPL global est sur le chemin quand RAD Studio est
+> installé ; pour un déploiement autonome, livrer les trois `.bpl` à côté
+> de l'`.exe`).
 
 ## Utilisation
 
@@ -53,7 +55,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Signification |
 |----------|---------------|
 | `<path>`    | Répertoire racine (défaut : répertoire courant) |
-| `<profile>` | facultatif. `''` = tous les détecteurs (défaut). Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
 Code de sortie : convention propre et simplifiée de la démo, **pas** le
 contrat de la CLI.

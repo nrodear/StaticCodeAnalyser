@@ -52,8 +52,9 @@ Scans:
 Querschnitts-Infrastruktur:
 
 - **`uAnalyzeContext`** — hält die per-Scan-Caches (AST-Cache, Symbol-Referenz-
-  Index, DFM-Repo-Index). Wird durch die Detektoren gereicht; keine globalen
-  per-Scan-Variablen mehr.
+  Index, DFM-Repo-Index). Wird durch die Detektoren gereicht. Die
+  Konfiguration und einige Caches (z. B. der Dateitext-Cache) bleiben
+  prozessweit global, s. §4.
 - **`uStaticFiles`** — rekursive Datei-Sammlung mit Default-Ausschlüssen
   (`__history`, `__recovery`, `.git`, `.svn`, `node_modules`) + Ignore-/Test-
   Filter (`uIgnoreList`).
@@ -72,7 +73,7 @@ uses uEngineApi;
 
 var Res: TScanResult;
 begin
-  Res := ScanRecursive('C:\meinprojekt');   // alle Detektoren, default-Limits
+  Res := ScanRecursive('C:\meinprojekt');   // alle Detektoren außer SCA007 (UsesCheck), default-Limits
   try
     WriteLn('Funde: ', Res.FindingCount,
             '  (Fehler ', Res.ErrorCount,
@@ -104,7 +105,7 @@ Session-Klasse, einem Testfixture-Filter und zwei Convenience-Funktionen.
 ### 3.2 `TScanRequest`
 
 Mit `TScanRequest.Init` mit sinnvollen Defaults befüllen (`ssRecursive`, alle
-Detektoren, loseste Schwellen, Ein-Zweig-`{$IFDEF}`-Sicht mit
+Detektoren ohne den Unused-Uses-Check, loseste Schwellen, Ein-Zweig-`{$IFDEF}`-Sicht mit
 `TScanRequest.DefaultIfdefDefines`, Include-Defines an, `dlDelphi`, seriell),
 dann gezielt überschreiben.
 
@@ -114,22 +115,22 @@ dann gezielt überschreiben.
 | `Path` | `string` | Wurzel (rekursiv) / Datei (single) / Basis-Dir (Liste) / `.dproj`, `.lpi`, `.lpk` (Projekt) / `.groupproj`, `.lpg` (Projektgruppe). |
 | `Files` | `TArray<string>` | Explizite Datei-Liste für `ssFileList`. |
 | `Source` | `string` | In-Memory-Quelltext für `ssSource`. |
-| `VcsRange` | `string` | `ssVcsChanged`: `''`=Auto, sonst `shaA..shaB`. |
-| `Profile` | `string` | `''`=alle Detektoren, sonst Profilname (s. 3.6). |
+| `VcsRange` | `string` | `ssVcsChanged`: `''`=Auto, sonst `shaA..shaB`. Ein VCS-Fehler (kein Repository, kein git, Range nicht auflösbar) liefert ein leeres Ergebnis ohne Grund - wie „keine geänderten Dateien“. |
+| `Profile` | `string` | `''`=alle Detektoren, sonst Profilname (s. 3.6). SCA007 nur mit `UsesCheck`. |
 | `MinSeverity` | `TLeakSeverity` | Funde unter dieser Schwelle werden verworfen. |
 | `MinConfidence` | `TFindingConfidence` | FP-Schwelle (Default `fcMedium`). |
 | `MaxFileBytes` | `Integer` | `<=0` → Engine-Default (5 MB). |
-| `UsesCheck` | `Boolean` | Teuren Unused-Uses-Detektor mitlaufen lassen. |
+| `UsesCheck` | `Boolean` | Teuren Unused-Uses-Detektor (SCA007) mitlaufen lassen. `Init`: `False` - ohne ihn meldet kein Profil SCA007, auch `strict` nicht. Auch im INI-Modus entscheidet nur dieses Feld; `Run` liest `[Detectors] UsesCheck` nicht. |
 | `AutoDiscover` | `Boolean` | Custom-Klassen während des Scans entdecken. |
 | `IfdefDefines` | `TArray<string>` | `{$IFDEF}`-aware Parsing mit diesen Defines: ein Zweig, wie ihn ein Compiler sieht. `Init` setzt `DefaultIfdefDefines` (`MSWINDOWS`, `WIN64`, `UNICODE`, `CONDITIONALEXPRESSIONS`); `nil`/leer = beide Zweige jedes `{$IFDEF}`. Scan-Sicht: `Run` wendet sie auch bei `SkipConfig` an. |
 | `IncludeDefines` | `Boolean` | `{$I}`-Include-Dateien für ihre `{$DEFINE}`-Wirkung lesen. `Init` setzt `True`; `False` = Include-blind (CLI `--no-include-defines`). Scan-Sicht wie `IfdefDefines`. |
 | `Dialect` | `TSourceDialect` | `dlDelphi` (`Init`) oder `dlFpc` (`uSCAConsts`): `dlFpc` sammelt beim Verzeichnis-Walk zusätzlich `*.pp` und ergänzt bei nicht leerem `IfdefDefines` `FPC` und `LCL`. Bei `.lpi`/`.lpk`/`.lpg`-Projekt-Scopes erzwungen `dlFpc`. Scan-Sicht wie `IfdefDefines`. |
 | `CustomRulesPath` | `string` | YAML mit Custom-Rules (`''`=keine). |
-| `BaselinePath` | `string` | Funde gegen Baseline-JSON filtern (`''`=aus). Jeder Eintrag deckt höchstens einen Fund. |
-| `WriteBaselinePath` | `string` | Aktuelle Funde als neue Baseline schreiben. |
+| `BaselinePath` | `string` | Funde gegen Baseline-JSON filtern (`''`=aus). Jeder Eintrag deckt höchstens einen Fund. Eine fehlende, unlesbare oder ungültige Datei filtert nichts und meldet keinen Fehler (die CLI bricht dort mit Exit 99 ab). |
+| `WriteBaselinePath` | `string` | Aktuelle Funde als neue Baseline schreiben. Ein Schreibfehler wird ebenfalls verschluckt. |
 | `ApplyRepoIni` | `Boolean` | `analyser.ini` voll laden+anwenden (wie der CLI). |
 | `MinSeverityName` | `string` | INI-Modus: Override `'error'`/`'warning'`/`'hint'`. |
-| `ConfigRoot` | `string` | INI-Modus: Wurzel für INI-/Rules-Auflösung. |
+| `ConfigRoot` | `string` | INI-Modus: Projektwurzel, gegen die ein relativer `CustomRulesFile` der INI aufgelöst wird (`''` = `Path`). Verlegt die INI nicht: die `analyser.ini` kommt immer aus `%APPDATA%\StaticCodeAnalyser`. |
 | `SkipConfig` | `Boolean` | `true`: keine Config anwenden (Consumer hat State selbst gesetzt). |
 | `IndexRoot` | `string` | `ssProject`/`ssProjectGroup`/`ssFileList`: Verzeichnis, über das die Cross-Unit-Indizes (Symbol-Referenzen, Typen, DFM) gebaut werden, während die Analyse auf der Liste bleibt. `''` = gemeinsamer Wurzelpfad der aufgelösten Liste (Projekt-Scopes) bzw. die Liste selbst (`ssFileList`). |
 | `SingleFileProjectRoot` | `string` | `ssSingleFile`: ProjectRoot für Cross-Unit-Index. |
@@ -169,9 +170,12 @@ Konfiguration kommt:
 1. **Direkt (Default):** Nur die Felder des Requests (`Profile`, `MinSeverity`,
    `MinConfidence`, `MaxFileBytes`, `IfdefDefines`, `CustomRulesPath`). Keine
    `analyser.ini`. → das macht `ScanRecursive`/`AnalyzeSource`.
-2. **`ApplyRepoIni := True`:** Lädt die `analyser.ini` (aus `ConfigRoot`/`Path`)
+2. **`ApplyRepoIni := True`:** Lädt `%APPDATA%\StaticCodeAnalyser\analyser.ini`
    und wendet sie voll an — 8 Schwellen, Pfad-Overrides, Magic-/Format-Listen,
-   INI-Profil + INI-Custom-Rules. So fährt der CLI.
+   INI-Profil + INI-Custom-Rules. So fährt der CLI. `ConfigRoot` (sonst
+   `Path`) dient nur als Projektwurzel für einen relativen `CustomRulesFile`.
+   Nebenwirkung: das Laden schreibt die Datei — aus der Vorlage, wenn sie
+   fehlt, und es hängt einen fehlenden Abschnitt `[Components]` an.
 3. **`SkipConfig := True`:** `Run` wendet **keine** Config an — der Consumer hat
    den globalen Detektor-/Schwellen-State bereits selbst gesetzt (so machen es
    IDE-Plugin und Form über ihre eigene Vorbereitung). `Run` macht dann nur
@@ -185,7 +189,7 @@ Konfiguration kommt:
 | `ssRecursive` | Verzeichnis rekursiv (Default). Nutzt `Path` + optional `IgnoreList`. |
 | `ssSingleFile` | Eine `.pas`-Datei (`Path`); mit `SingleFileProjectRoot` projektweiter Symbol-Index. |
 | `ssFileList` | Explizite Datei-Liste (`Files`); `Path` = optionaler Basis-Dir. |
-| `ssVcsChanged` | Nur per VCS geänderte Dateien (`Path`=Repo, `VcsRange` optional). |
+| `ssVcsChanged` | Nur per VCS geänderte Dateien (`Path`=Repo, `VcsRange` optional). Ein VCS-Fehler ergibt ein leeres Ergebnis ohne Grund (s. `VcsRange`). |
 | `ssSource` | In-Memory-Quelltext (`Source`); `Path`=optionaler logischer Name. |
 | `ssProject` | Dateien eines Projekts (`Path` = `.dproj`: dessen `DCCReference`-Liste; `.lpi`/`.lpk`: das Lazarus-Pendant); meldet zusätzlich Dateien im Projektordner, die das Projekt nicht führt (SCA194/SCA195). |
 | `ssProjectGroup` | Vereinigung der Projekt-Listen einer Gruppe (`Path` = `.groupproj` oder `.lpg`). |
@@ -196,7 +200,8 @@ Eine nicht auflösbare Projektdatei liefert ein Ergebnis mit genau einem
 ### 3.6 Profile
 
 Ein Profil ist eine Whitelist von Befund-Arten. `''` (leer) = **alle**
-Detektoren. Eingebaute Profile (`uRuleCatalog`):
+Detektoren. SCA007 (ungenutzte uses) kommt in jedem Profil nur mit
+`UsesCheck = True`. Eingebaute Profile (`uRuleCatalog`):
 
 | Profil | Inhalt |
 |--------|--------|
@@ -227,7 +232,7 @@ Jeder Befund:
 | `Confidence` | `TFindingConfidence` | `fcLow` / `fcMedium` / `fcHigh`. |
 | `RuleID` | `string` | Custom-Rule-ID (sonst leer). |
 | `RelatedLines` | `string` | Weitere Zeilen derselben Sache — heute nur SCA015/SCA021 (die Partnerstellen einer Duplikat-Gruppe): kommagetrennte 1-basierte Zeilennummern, aufsteigend, ohne die Ankerzeile; leer bei allen anderen Regeln. |
-| `StructureChain` | `string` | Verschachtelungskette zur Fundstelle, von außen nach innen, verbunden mit `CHAIN_SEP` (`' → '`), z. B. `if → for → while`; heute nur SCA018 (DeepNesting), sonst leer. |
+| `StructureChain` | `string` | Verschachtelungskette zur Fundstelle, von außen nach innen, verbunden mit `CHAIN_SEP` (`' → '`), z. B. `if → for → while`; heute nur SCA018 (DeepNesting) und SCA176 (CognitiveComplexity), sonst leer. |
 | `LeakVariant` / `MemoryLeakVariant` | `string` | Variante von SCA001 (MemoryLeak): `never-freed`, `freed-outside-finally`, `return-value-not-freed`, `proven-leak`. `LeakVariant` ist das Feld, das der Detektor setzt (leer = nicht gesetzt); `MemoryLeakVariant` liefert es oder leitet es aus `OriginalSeverity` und Meldung ab; `''` bei jeder anderen Art. |
 | `FindingType` | `TFindingType` | Kategorie (s.u.). |
 | `SeverityText` / `TypeText` | `string` | Lesbare Labels. |

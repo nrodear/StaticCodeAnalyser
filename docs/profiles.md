@@ -2,17 +2,17 @@
 
 A **profile** is a named set of rules. It answers one question: *which of
 the 205 detectors run in this scan?* Everything else - severity floor,
-suppressions, baseline - filters afterwards. The profile decides what is
-looked for in the first place.
+confidence floor, suppressions, baseline - filters afterwards. The
+profile decides what is looked for in the first place.
 
 ## The nine built-in profiles
 
 | Profile | Rules | What it is for |
 |---|---|---|
-| `strict` | 205 | Everything. The completeness promise hangs on this one. |
+| `strict` | 205 | Everything; in the CLI it also switches on SCA007 (unused uses). The completeness promise hangs on this one - rules at confidence low still need `[Rules] MinConfidence=low`, see below. |
 | `default` | 197 | Everything except the eight pure-convention rules of `style`. Those eight account for roughly half of all findings on a large code base - which is why they are not in the default. |
-| `selftest-quiet` | 194 | `default` minus a few formatting rules. Used when this repository scans itself. |
-| `code-quality` | 26 | Maintainability: dead code, long methods, complexity, unused uses. |
+| `selftest-quiet` | 194 | Everything except eleven rules switched off for the self-scan (among them `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Not a subset of `default`: it keeps five of the `style` rules. Used when this repository scans itself. |
+| `code-quality` | 26 | Maintainability: dead code, long methods, complexity, unused uses (SCA007 only with `[Detectors] UsesCheck=1`). |
 | `ide-fast` | 21 | Small enough to run on every file you open in the IDE. Bugs and security, no style. |
 | `dfm-only` | 20 | The form-file checks alone. |
 | `bugs-only` | 20 | Defects only - no smells, no conventions. |
@@ -20,6 +20,13 @@ looked for in the first place.
 | `style` | 8 | The pure-convention rules that `default` leaves out. |
 
 Counts are measured against the current catalogue, not estimated.
+
+**Confidence floor.** After the profile, `[Rules] MinConfidence` (shipped
+as `medium`) drops findings below that confidence. 24 rules report at
+confidence *low* - among them `TooLongLine`, `UnsortedUses`,
+`UseAfterFree` and `AbstractNotImpl` - so they stay silent in every
+profile, `strict` included, until you set `MinConfidence=low`. The list
+is in [DETECTORS.md](../DETECTORS.md).
 
 ## Choosing a profile
 
