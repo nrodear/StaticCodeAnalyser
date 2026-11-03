@@ -76,6 +76,9 @@ type
     class function Build(const Finding: TLeakFinding): TFixHint; static;
     class function HintVariant(const Finding: TLeakFinding): Integer; static;
   public
+    // Hinweis zum Fund: memoisiert je Kind/Severity/Variante; traegt der
+    // Fund einen eigenen Regel-Hinweis (TLeakFinding.CustomFixHint), steht
+    // der in Description - ohne den Cache-Slot zu beruehren.
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
   end;
 
@@ -159,9 +162,20 @@ begin
   // billiger.
   Key := (Ord(Finding.Kind) shl 10) or (Ord(Finding.OriginalSeverity) shl 2)
          or HintVariant(Finding);
-  if FCache.TryGetValue(Key, Result) then Exit;
-  Result := Build(Finding);
-  FCache.AddOrSetValue(Key, Result);
+  if not FCache.TryGetValue(Key, Result) then
+  begin
+    Result := Build(Finding);
+    FCache.AddOrSetValue(Key, Result);
+  end;
+  // Der Hinweis, den die Regel selbst mitbringt (heute: fix-hint einer
+  // Custom Rule), ersetzt die generische Description. Bewusst ERST NACH
+  // dem Cache und nur in der Rueckgabe: der Slot ist je Kind/Severity
+  // geteilt, alle Custom Rules teilen sich also EINEN - stuende der Text
+  // im Cache, erbte jede Regel den fix-hint der zuerst angezeigten (der
+  // Memoize-Bug von 2026-07-26 in neuer Form). Kein _(): Benutzertext.
+  // Before/After bleiben die generischen Beispiele.
+  if Finding.CustomFixHint <> '' then
+    Result.Description := Finding.CustomFixHint;
 end;
 
 const

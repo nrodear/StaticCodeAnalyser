@@ -109,6 +109,20 @@ type
     // Fallback (uFieldLeak und Altpfade setzen nichts).
     // NICHT im Fingerprint - dieselbe Politik wie StructureChain.
     LeakVariant: string;
+    // Fix-Hinweis, den die REGEL selbst mitbringt: heute nur fkCustomRule,
+    // das Feld fix-hint aus analyser-rules.yml (uCustomRuleDetector).
+    // Leer = kein eigener Hinweis, TFixHintResolver nimmt dann seinen
+    // generischen Text. Gesetzt gewinnt er dort die Description - die
+    // eine Zeile, die HTML-Report, Fundbericht V2, Jira-/Claude-Text und
+    // IDE-Hilfe-Panel als "Hinweis zu diesem Fund" zeigen.
+    //
+    // WARUM AM FUND und nicht per Nachschlagen im geladenen Regelsatz:
+    // die Output-Schicht bliebe sonst an den Detektor gebunden, und der
+    // Regelsatz lebt kuerzer als die Funde (der INI-Weg ruft ClearRules,
+    // die IDE zeigt Funde eines frueheren Laufs weiter an).
+    // Benutzertext, NIE durch _() - und wie StructureChain NICHT im
+    // Fingerprint: die Fundidentitaet bleibt unberuehrt.
+    CustomFixHint: string;
     // NEUES FELD -> CopyFrom ergaenzen. uTestFindingCopy zaehlt die
     // Felder per RTTI und wird sonst rot.
 
@@ -324,6 +338,7 @@ begin
   RelatedLines          := ASource.RelatedLines;
   StructureChain        := ASource.StructureChain;
   LeakVariant           := ASource.LeakVariant;
+  CustomFixHint         := ASource.CustomFixHint;
 end;
 
 function TLeakFinding.Clone: TLeakFinding;

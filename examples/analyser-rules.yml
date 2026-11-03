@@ -26,9 +26,11 @@
 #                  'comment' does NOT restrict matches to comments.
 #                  (Checked again 2026-08-04.)
 #   message      - shown in finding output (default: name or description)
-#   fix-hint     - read, but not shown anywhere yet (neither the HTML
-#                  report nor the plugin) - put what users must see into
-#                  message
+#   fix-hint     - one sentence on how to fix it; replaces the generic
+#                  custom-rule text wherever a finding shows its hint
+#                  (HTML report, plugin help panel and editor hint,
+#                  Jira/clipboard text, Claude prompt). Not translated.
+#                  SARIF/CSV/JSON carry only message.
 #   file-include - list of glob patterns; rule only fires for matching files
 #   file-exclude - list of glob patterns; rule skips matching files
 #                  Both only as a block list ("- ..." lines); the flow

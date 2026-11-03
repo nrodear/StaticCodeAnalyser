@@ -52,6 +52,10 @@ type
     // Voll-Review 2026-09-12 (Testluecke 106): target wird NICHT
     // ausgewertet - dokumentierende Pin
     [Test] procedure TargetComment_IsNotEvaluated_KnownLimit;
+    // fix-hint (2026-11-03): bis dahin geparst und verworfen - jetzt
+    // reist er als CustomFixHint am Fund (Anzeige: uFixHint).
+    [Test] procedure FixHint_FromYaml_TravelsOnFinding;
+    [Test] procedure FixHint_SurroundingWhitespaceIsTrimmed;
   end;
 
 implementation
@@ -602,6 +606,69 @@ begin
   finally
     TFile.Delete(TempFile);
   end;
+end;
+
+{ --- fix-hint (2026-11-03) ---------------------------------------- }
+//
+// Bis zu diesem Stand las LoadFromYaml das Feld fix-hint in die Regel,
+// und danach las es niemand mehr: AnalyzeFile setzte am Fund nur
+// Meldung, Schwere und RuleID. Beide Tests sind ohne die Zuweisung an
+// CustomFixHint in AnalyzeFile rot (das Feld bliebe leer).
+
+procedure TTestCustomRuleDetector.FixHint_FromYaml_TravelsOnFinding;
+// Der ganze Nutzerweg: YAML-Datei mit fix-hint -> LoadFromYaml ->
+// AnalyzeFile -> der Fund traegt den Text unveraendert.
+const
+  HINT = 'Swap TBDETable for TFDTable (FireDAC.Comp.Client)';
+  SRC =
+    'rules:'#10+
+    '  - id: PROJ042'#10+
+    '    pattern: "TBDETable"'#10+
+    '    pattern-type: word'#10+
+    '    message: "BDE ist abgekuendigt"'#10+
+    '    fix-hint: "' + HINT + '"'#10;
+var
+  TempFile : string;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    TCustomRuleDetector.LoadFromYaml(TempFile);
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    try
+      TCustomRuleDetector.AnalyzeFile('test.pas',
+        't := TBDETable.Create(nil);'#10, Findings);
+      Assert.AreEqual<Integer>(1, Findings.Count,
+        'Vorbedingung: die Regel trifft genau einmal');
+      Assert.AreEqual(HINT, Findings[0].CustomFixHint,
+        'der fix-hint der Regel haengt am Fund');
+      Assert.AreEqual('BDE ist abgekuendigt', Findings[0].MissingVar,
+        'die Meldung bleibt die Meldung - fix-hint ist ein eigenes Feld');
+    finally Findings.Free; end;
+  finally
+    TFile.Delete(TempFile);
+  end;
+end;
+
+procedure TTestCustomRuleDetector.FixHint_SurroundingWhitespaceIsTrimmed;
+// Ein Block-Scalar (fix-hint: |) endet mit einem Zeilenumbruch, der in
+// Hilfe-Panel und Claude-Prompt als Leerzeile stuende. Ueber AddRule
+// direkt gesetzt, damit der Test nicht vom YAML-Leser abhaengt.
+var
+  Rule     : TCustomRule;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Rule := MakeRule('R043', 'XYZ');
+  Rule.FixHint := '  Rename XYZ to Xyz'#13#10;
+  TCustomRuleDetector.AddRule(Rule);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    TCustomRuleDetector.AnalyzeFile('test.pas', 'XYZ here'#10, Findings);
+    Assert.AreEqual<Integer>(1, Findings.Count);
+    Assert.AreEqual('Rename XYZ to Xyz', Findings[0].CustomFixHint,
+      'Rand-Leerraum und Zeilenumbruch fallen weg');
+  finally Findings.Free; end;
 end;
 
 end.

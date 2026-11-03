@@ -33,6 +33,10 @@ type
     [Test] procedure MultilineFinding_ShowsLineRange;
     [Test] procedure ModeFromInt_MapsOneTwoThree_InvalidFallsToNone;
     [Test] procedure Dispatch_NoneEmpty_JiraStartsWithRule_ClaudeNonEmpty;
+    // fix-hint einer Custom Rule (2026-11-03): ueber den Resolver-Weg
+    // (Build OHNE expliziten Hint) landet er im Jira-Fakt und im
+    // Claude-Prompt.
+    [Test] procedure CustomRuleFixHint_ReachesJiraAndClaudeText;
   end;
 
 implementation
@@ -251,6 +255,36 @@ begin
       'fcmClaudePrompt traegt den Regel-Kind-Namen');
     Assert.IsTrue(Text.Contains(PROBE_FILE),
       'fcmClaudePrompt traegt den Dateipfad');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFindingCopyText.CustomRuleFixHint_ReachesJiraAndClaudeText;
+// Konsumenten-Probe: dieselbe Unit, die das IDE-Kontextmenue und die
+// Zwischenablage fuellt, ruft hier SELBST TFixHintResolver.FixHint auf
+// (Build ohne Hint-Record). Ohne die Verdrahtung rot: der Fakt
+// 'Fix hint' trug bis 2026-11-03 fuer jede Custom Rule den generischen
+// Satz, der Regeltext kam nirgends an.
+const
+  RULE_HINT = 'Replace TBDEQuery with TFDQuery';
+var
+  F    : TLeakFinding;
+  Text : string;
+begin
+  F := TLeakFinding.New(PROBE_FILE, '', PROBE_LINE, PROBE_MSG,
+    fkCustomRule);
+  try
+    F.RuleID        := 'PROJ001';
+    F.CustomFixHint := RULE_HINT;
+    Text := TFindingCopyText.Build(F, fcmJiraMini);
+    Assert.IsTrue(Text.Contains(RULE_HINT),
+      'Jira-Mini traegt den fix-hint der Regel');
+    Assert.AreEqual<Integer>(5, CountBullets(Text),
+      'weiterhin genau fuenf Fakten');
+    Text := TFindingCopyText.Build(F, fcmClaudePrompt);
+    Assert.IsTrue(Text.Contains(RULE_HINT),
+      'Claude-Prompt traegt den fix-hint der Regel');
   finally
     F.Free;
   end;

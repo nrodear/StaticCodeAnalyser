@@ -131,10 +131,16 @@ Glob-Wildcards:
    in CI failen soll. Andernfalls `warning` oder `hint`.
 4. **Message ohne Code-Snippet** — der Grid zeigt schon Datei + Zeile.
    Die Message soll erklären *warum* das Pattern problematisch ist.
-5. **`fix-hint` für Migrations-Rules** — der konkrete Refactor-Schritt.
-   Der Leser liest das Feld, zeigt es derzeit aber nirgends an (weder im
-   HTML-Report noch im Plugin); was der Nutzer sehen soll, gehört in
-   `message`.
+5. **`fix-hint` für Migrations-Rules** — der konkrete Refactor-Schritt,
+   ein Satz. Seit v0.9.19 erscheint er überall dort, wo ein Fund seinen
+   Hinweis zeigt: im HTML-Report und im Fundbericht unter „Hinweis zu
+   diesem Fund“, im Hilfe-Panel und im Editor-Hinweis des Plugins, im
+   Jira-Text (Einzelfund und ganze Liste), im Zwischenablage-Text und im
+   Claude-Prompt. Ohne `fix-hint` steht dort der allgemeine Satz zu Custom
+   Rules. Der Text wird nicht übersetzt und nicht als Markup gelesen (im
+   HTML escaped). SARIF, CSV, JSON und der Sonar-Export tragen ihn nicht,
+   dort steht nur `message` — was die Pipeline sehen soll, gehört deshalb
+   weiter in `message`.
 
 ## Validierung & Debug
 

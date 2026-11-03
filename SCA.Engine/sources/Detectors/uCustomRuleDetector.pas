@@ -42,7 +42,9 @@ type
     // GEPARST, ABER NIE GELESEN - siehe AnalyzeFile.
     Target: TRuleTarget;
     Message: string; // optional, fallback = Description
-    FixHint: string; // optional
+    // optional; geht als TLeakFinding.CustomFixHint an jeden Fund der
+    // Regel und ersetzt dort den generischen Hinweistext (uFixHint).
+    FixHint: string;
     FileInclude: TArray<string>; // Glob-Patterns ueber FullPath
     FileExclude: TArray<string>;
   end;
@@ -469,6 +471,10 @@ begin
           F.Kind := fkCustomRule;
           F.Confidence := KindDefaultConfidence(fkCustomRule);
           F.RuleID := R.ID;
+          // Trim: ein Block-Scalar (fix-hint: |) bringt seinen
+          // Zeilenumbruch am Ende mit; Hilfe-Panel, Jira-Datei-Text und
+          // Claude-Prompt geben die Description ungeglaettet aus.
+          F.CustomFixHint := Trim(R.FixHint);
           Results.Add(F);
         end;
       finally

@@ -87,6 +87,9 @@ type
     [Test] procedure EditorHelpListHtml_EscapetIdSlugUndWirkung;
     [Test] procedure EditorHelpListHtml_JedeWirkungHatEinenSchluessel;
     [Test] procedure EditorHelpSlugText_MachtDenSlugLesbar;
+    // fix-hint einer Custom Rule (2026-11-03): steht als "Hinweis zu
+    // diesem Fund" im Report - und escaped, es ist Benutzertext.
+    [Test] procedure CustomRuleFixHint_EscapedInHintRow;
   end;
 
 
@@ -1449,6 +1452,36 @@ begin
     TExporterHtml.EditorHelpSlugText('delete-debug-output'));
   Assert.AreEqual('X', TExporterHtml.EditorHelpSlugText('x'));
   Assert.AreEqual('', TExporterHtml.EditorHelpSlugText(''));
+end;
+
+procedure TTestExportHtml.CustomRuleFixHint_EscapedInHintRow;
+// Ohne die Verdrahtung rot: der Report zeigte unter "Hinweis zu diesem
+// Fund" fuer jede Custom Rule den generischen Satz, der fix-hint kam
+// nicht an (Doku-Audit 2026-11-01: 0 Treffer im HTML). Der Text traegt
+// '<', '>' und '&', damit der Test zugleich den Element-Vertrag
+// (HtmlEscape) belegt - roh duerfte er nirgends stehen.
+const
+  RULE_HINT     = 'Use <TFDQuery> & FireDAC.Comp.Client';
+  RULE_HINT_ESC = 'Use &lt;TFDQuery&gt; &amp; FireDAC.Comp.Client';
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkCustomRule, FIXTURE_PAS, 3, 'BDE query');
+    Fnd.RuleID        := 'PROJ001';
+    Fnd.CustomFixHint := RULE_HINT;
+    Findings.Add(Fnd);
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.Contains(RULE_HINT_ESC),
+    'der fix-hint steht escaped im Report');
+  Assert.AreEqual<Integer>(0, Pos(RULE_HINT, Html),
+    'der fix-hint steht nirgends roh');
 end;
 
 initialization
