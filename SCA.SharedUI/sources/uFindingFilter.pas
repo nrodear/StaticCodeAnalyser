@@ -255,7 +255,7 @@ begin
     fkDfmDataModuleSplitHint  : Result := 'datamodule split refactor aggregate db';
     fkSqlDangerousStatement   : Result := 'sql dangerous update delete truncate without where alle';
     fkFormatLocaleHint        : Result := 'format locale tformatsettings decimal komma punkt';
-    fkSynchronizeInDestructor : Result := 'synchronize destructor deadlock thread concurrency';
+    fkSynchronizeInDestructor : Result := 'synchronize destructor deadlock thread concurrency freeonterminate hang main';
     fkLockWithoutTryFinally   : Result := 'lock critical section monitor concurrency try finally exception';
     fkEmptyExcept      : Result := 'empty except leer verschluckt';
     fkSQLInjection     : Result := 'sql injection einschleusung';

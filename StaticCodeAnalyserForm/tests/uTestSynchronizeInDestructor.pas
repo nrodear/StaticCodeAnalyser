@@ -1,8 +1,9 @@
 unit uTestSynchronizeInDestructor;
 
 // Tests fuer den TSynchronizeInDestructorDetector (SCA108).
-// Klassischer Threading-Deadlock: TThread.Synchronize-Aufruf im
-// destructor Destroy.
+// TThread.Synchronize-Aufruf im destructor Destroy: haengt, wenn der
+// Destruktor im Worker laeuft (FreeOnTerminate) und der Hauptthread den
+// Aufruf nicht ausfuehrt.
 
 interface
 
@@ -220,6 +221,12 @@ begin
     Assert.AreEqual(lsWarning, Hit.Severity,
       'SCA108 meldet als Warning: haengen kann es nur, wenn der Destruktor ' +
       'im Worker laeuft und der Hauptthread den Aufruf nicht ausfuehrt');
+    // Der Text muss dasselbe enge Szenario nennen wie der Katalog und
+    // darf keinen sicheren Deadlock mit WaitFor/.Free mehr behaupten.
+    Assert.Contains(Hit.MissingVar, 'hangs if the main thread does not',
+      'die Meldung nennt die Bedingung fuer den Haenger');
+    Assert.IsTrue(Pos('classic deadlock', Hit.MissingVar) = 0,
+      'der alte Text behauptete einen klassischen Deadlock mit dem UI-Thread');
   finally F.Free; end;
 end;
 
