@@ -296,7 +296,7 @@ begin
     fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt reraise e2145';
     fkUseAfterFree               : Result := 'use after free dangling pointer benutzt nach freigabe';
     fkAbstractNotImpl            : Result := 'abstract not implemented eabstracterror nicht ueberschrieben override';
-    fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init';
+    fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init destructor';
     fkIntegerOverflow            : Result := 'integer overflow int64 multiplication ueberlauf product cast';
     fkGodClass                   : Result := 'god class methods fields gott zu viele single responsibility';
     fkFreeWithoutNil             : Result := 'free without nil dangling pointer freeandnil';

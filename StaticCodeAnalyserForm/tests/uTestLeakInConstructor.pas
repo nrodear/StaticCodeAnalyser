@@ -244,6 +244,12 @@ begin
     Assert.IsNotNull(Hit, 'fkLeakInConstructor finding expected');
     Assert.AreEqual(fkLeakInConstructor, Hit.Kind);
     Assert.AreEqual(lsError,             Hit.Severity);
+    // Delphi ruft bei einer Ausnahme im Ctor den Destruktor; der Text
+    // darf kein bedingungsloses Leck behaupten.
+    Assert.Contains(Hit.MissingVar, 'unless the destructor frees them',
+      'die Meldung nennt den Destruktor als Ausweg');
+    Assert.IsTrue(Pos('leak on the exception path', Hit.MissingVar) = 0,
+      'der alte Text behauptete ein Leck ohne Blick auf den Destruktor');
   finally F.Free; end;
 end;
 

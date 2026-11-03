@@ -1,7 +1,8 @@
 unit uLeakInConstructor;
 
 // Detektor: Constructor weist Felder via .Create zu UND raised - bei raise
-// nach partieller Initialisierung leaken die schon erzeugten Felder.
+// nach partieller Initialisierung leaken die schon erzeugten Felder, wenn
+// kein Destruktor sie freigibt (Delphi/FPC rufen ihn automatisch, s. u.).
 //
 // Pattern (Bug, Sonar-50 #12):
 //   constructor TFoo.Create;
@@ -613,9 +614,15 @@ begin
         F.FileName   := FileName;
         F.MethodName := M.Name;
         F.LineNumber := IntToStr(M.Line);
+        // Der Text sagt, was der Detektor geprueft hat: Delphi ruft bei
+        // einer Ausnahme im Ctor den Destruktor, ein Leck gibt es nur,
+        // wenn der die Felder nicht freigibt [G1]. Geht in Baseline-
+        // Fingerprint und SARIF-Line-Hash ein - Aenderung = neue Identitaet.
         F.MissingVar :=
           'Constructor allocates fields and raises without try/except - ' +
-          'partially-initialized fields leak on the exception path';
+          'the fields leak unless the destructor frees them; no ' +
+          'destructor of the class in this unit visibly frees all of ' +
+          'them safely';
         F.SetKind(fkLeakInConstructor);
         Results.Add(F);
       end;
