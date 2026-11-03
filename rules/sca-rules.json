@@ -2394,7 +2394,7 @@
       "name": "TThread.Synchronize from destructor",
       "shortDescription": "Synchronize() called from destructor Destroy - a self-freeing thread blocks there until the main thread runs the call, and hangs if the main thread does not",
       "fullDescription": "TThread.Synchronize() in a destructor body is fragile. When the destructor runs in the main thread, Synchronize simply calls the method directly. When it runs in the worker thread itself - the usual case with FreeOnTerminate := True, where the thread frees itself after Execute - Synchronize blocks the worker until the main thread processes the call. If the main thread does not process synchronize requests at that moment (for example because it waits for the thread with WaitForSingleObject instead of TThread.WaitFor, or because the application is shutting down), both threads wait for each other and the process hangs. During shutdown the objects the call touches may also be gone already. Move the notification to an OnTerminate handler (it runs in the main thread before the thread object is freed) or to the end of Execute. AST-based: walks every nkMethod whose name ends in '.Destroy' (or whose TypeRef carries the 'destructor' marker) and flags nkCall to 'Synchronize' / '<obj>.Synchronize'.",
-      "defaultSeverity": "Error",
+      "defaultSeverity": "Warning",
       "type": "Bug",
       "tags": ["concurrency", "deadlock", "threading"],
       "cwe": ["CWE-833"],
@@ -2405,7 +2405,7 @@
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
-        { "softwareQuality": "RELIABILITY", "severity": "HIGH" }
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
     },
     {

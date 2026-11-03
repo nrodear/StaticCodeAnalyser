@@ -383,7 +383,7 @@ Autrefois référencées uniquement via [`rules/sca-rules.json`](rules/sca-rules
 | SCA105 | **InterfaceName** | Les alias d'interface devraient commencer par `I` (`IFoo = interface`) | Hint | Code Smell | ✅ | `uInterfaceName` |
 | SCA106 | **MethodName** | Les méthodes devraient commencer par une majuscule (PascalCase) | Hint | Code Smell | ✅ | `uMethodName` |
 | SCA107 | **CanBeStrictPrivate** | Membre public référencé UNIQUEMENT par les méthodes de sa classe déclarante - `strict private` atteint l'encapsulation la plus forte | Hint | Code Smell | ✅ | `uVisibilityCheck` |
-| SCA108 | **SynchronizeInDestructor** | Synchronize() appelé depuis le destructeur Destroy - un thread qui se libère lui-même s'y fige si le thread principal n'exécute pas l'appel | Error | Bug | ✅ | `uSynchronizeInDestructor` |
+| SCA108 | **SynchronizeInDestructor** | Synchronize() appelé depuis le destructeur Destroy - un thread qui se libère lui-même s'y fige si le thread principal n'exécute pas l'appel | Warning | Bug | ✅ | `uSynchronizeInDestructor` |
 | SCA109 | **LockWithoutTryFinally** | Verrou TCriticalSection / Monitor / WinAPI pris sans try..finally englobant - une exception laisse le verrou tenu | Error | Bug | ✅ | `uLockWithoutTryFinally` |
 | SCA110 | **StringConcatInLoop** | `s := s + x` dans for/while/repeat - réallocations quadratiques | Warning | Code Smell | ✅ | `uPerfHotspots` |
 | SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` dans une boucle - recherche linéaire à chaque itération | Hint | Code Smell | ✅ | `uPerfHotspots` |

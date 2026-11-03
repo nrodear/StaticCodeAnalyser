@@ -111,7 +111,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA105](SCA105.md) | Interface-Typ ohne I-Präfix | Hint | Code Smell | `uInterfaceName.pas` |
 | [SCA106](SCA106.md) | Methode nicht in PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](SCA107.md) | Public-Member könnte strict private sein | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA108](SCA108.md) | TThread.Synchronize aus dem Destruktor | Error | Bug | `uSynchronizeInDestructor.pas` |
+| [SCA108](SCA108.md) | TThread.Synchronize aus dem Destruktor | Warning | Bug | `uSynchronizeInDestructor.pas` |
 | [SCA109](SCA109.md) | Sperre ohne try/finally freigegeben | Error | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](SCA110.md) | String-Verkettung in der Schleife | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](SCA111.md) | ParamByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |

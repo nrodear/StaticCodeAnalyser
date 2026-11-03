@@ -442,10 +442,11 @@ type
                                  // fkCanBeUnitPrivate; beide laufen nur
                                  // single-file (kein gSymbolRefIndex).
     fkSynchronizeInDestructor,   // TThread.Synchronize-Aufruf in einem
-                                 // destructor Destroy. Klassischer Deadlock-
-                                 // Pfad: der Worker-Thread blockiert auf
-                                 // dem UI-Thread, der UI-Thread wartet via
-                                 // WaitFor auf den Worker -> Hang.
+                                 // destructor Destroy. Laeuft der Destruktor
+                                 // im Worker (FreeOnTerminate), blockiert
+                                 // er, bis der Hauptthread den Aufruf
+                                 // ausfuehrt - tut der es nicht, haengen
+                                 // beide. Warning, kein Defektbeweis.
     fkLockWithoutTryFinally,     // TCriticalSection.Enter (oder Acquire,
                                  // EnterCriticalSection, MonitorEnter)
                                  // ohne umschliessendes try/finally
@@ -981,7 +982,7 @@ const
     (Name: 'InterfaceName';              FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkInterfaceName
     (Name: 'MethodName';                 FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkMethodName
     (Name: 'CanBeStrictPrivate';         FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkCanBeStrictPrivate
-    (Name: 'SynchronizeInDestructor';    FindingType: ftBug;          DefaultSeverity: lsError),   // fkSynchronizeInDestructor
+    (Name: 'SynchronizeInDestructor';    FindingType: ftBug;          DefaultSeverity: lsWarning), // fkSynchronizeInDestructor
     (Name: 'LockWithoutTryFinally';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkLockWithoutTryFinally
     (Name: 'StringConcatInLoop';         FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkStringConcatInLoop
     (Name: 'ParamByNameInLoop';          FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkParamByNameInLoop

@@ -111,7 +111,7 @@ All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA105](#sca105) | Interface type not prefixed with I | Hint | Code Smell | `uInterfaceName.pas` |
 | [SCA106](#sca106) | Method not in PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](#sca107) | Public member could be strict private | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA108](#sca108) | TThread.Synchronize from destructor | **Error** | Bug | `uSynchronizeInDestructor.pas` |
+| [SCA108](#sca108) | TThread.Synchronize from destructor | Warning | Bug | `uSynchronizeInDestructor.pas` |
 | [SCA109](#sca109) | Lock acquired without try/finally release | **Error** | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](#sca110) | String concatenation in loop | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](#sca111) | ParamByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |
@@ -2720,7 +2720,7 @@ type
 
 | Field | Value |
 |---|---|
-| Severity | **Error** | Type | Bug |
+| Severity | Warning | Type | Bug |
 | Tags | `concurrency`, `deadlock`, `threading` |
 | CWE | [CWE-833](https://cwe.mitre.org/data/definitions/833.html) |
 | Detector | `uSynchronizeInDestructor.pas` |

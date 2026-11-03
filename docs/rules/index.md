@@ -111,7 +111,7 @@ All 205 detector rules. Click an ID for full details.
 | [SCA105](SCA105.md) | Interface type not prefixed with I | Hint | Code Smell | `uInterfaceName.pas` |
 | [SCA106](SCA106.md) | Method not in PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](SCA107.md) | Public member could be strict private | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA108](SCA108.md) | TThread.Synchronize from destructor | Error | Bug | `uSynchronizeInDestructor.pas` |
+| [SCA108](SCA108.md) | TThread.Synchronize from destructor | Warning | Bug | `uSynchronizeInDestructor.pas` |
 | [SCA109](SCA109.md) | Lock acquired without try/finally release | Error | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](SCA110.md) | String concatenation in loop | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](SCA111.md) | ParamByName(...) called in loop | Hint | Code Smell | `uPerfHotspots.pas` |

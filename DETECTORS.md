@@ -378,7 +378,7 @@ Formerly only referenced via [`rules/sca-rules.json`](rules/sca-rules.json); now
 | SCA105 | **InterfaceName** | Interface aliases should start with `I` (`IFoo = interface`) | Hint | Code Smell | ✅ | `uInterfaceName` |
 | SCA106 | **MethodName** | Methods should start with an uppercase letter (PascalCase) | Hint | Code Smell | ✅ | `uMethodName` |
 | SCA107 | **CanBeStrictPrivate** | Public member is referenced ONLY by methods of its declaring class - `strict private` reaches the strongest encapsulation | Hint | Code Smell | ✅ | `uVisibilityCheck` |
-| SCA108 | **SynchronizeInDestructor** | Synchronize() called from destructor Destroy - a self-freeing thread hangs there if the main thread does not run the call | Error | Bug | ✅ | `uSynchronizeInDestructor` |
+| SCA108 | **SynchronizeInDestructor** | Synchronize() called from destructor Destroy - a self-freeing thread hangs there if the main thread does not run the call | Warning | Bug | ✅ | `uSynchronizeInDestructor` |
 | SCA109 | **LockWithoutTryFinally** | TCriticalSection / Monitor / WinAPI lock taken without enclosing try..finally - exception leaves the lock held | Error | Bug | ✅ | `uLockWithoutTryFinally` |
 | SCA110 | **StringConcatInLoop** | `s := s + x` inside for/while/repeat - quadratic reallocations | Warning | Code Smell | ✅ | `uPerfHotspots` |
 | SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` inside a loop - linear lookup per iteration | Hint | Code Smell | ✅ | `uPerfHotspots` |
