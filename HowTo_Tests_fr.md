@@ -104,6 +104,15 @@ Alors : code de sortie 0 = tout est vert, 1 = au moins un test rouge ou
 une exception dans le runner ; les échecs sortent sur stdout + en XML NUnit
 à côté de l'EXE (via `DUnitX.Loggers.Xml.NUnit`).
 
+Lancée par F9 depuis l'IDE, la fenêtre console se ferme dès la fin de
+l'exécution. Pour lire les résultats, saisir `--exit:Pause` sous Exécuter →
+Paramètres (champ *Paramètres*) : après le résumé, le runner attend avec
+`Done.. press <Enter> key to quit.` La casse de la valeur est indifférente ;
+la forme longue du commutateur est `--exitbehavior:Pause`, la valeur par
+défaut `Continue`. À omettre dans les scripts et la CI, sinon l'exécution
+attend une touche (la configuration `CI` de `reDelphix.Test` saute de toute
+façon la pause).
+
 ### Lancer un sous-ensemble
 
 Fonctionne dans tout build Debug ou Release. Seul un build dans la

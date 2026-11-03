@@ -100,6 +100,14 @@ Then: exit code 0 = all green, 1 = at least one red test or an exception
 in the runner; failures on stdout + NUnit XML next to the EXE (via
 `DUnitX.Loggers.Xml.NUnit`).
 
+Started with F9 from the IDE, the console window closes as soon as the run
+ends. To read the results, enter `--exit:Pause` under Run → Parameters
+(field *Parameters*): after the summary the runner waits with
+`Done.. press <Enter> key to quit.` The value is case-insensitive; the
+long form of the switch is `--exitbehavior:Pause`, the default `Continue`.
+Leave it out in scripts and CI, otherwise the run waits for a key press
+(the `CI` configuration of `reDelphix.Test` skips the pause anyway).
+
 ### Running a subset
 
 Works in every Debug or Release build. Only a build in the `TestInsight`

@@ -3,8 +3,8 @@
 // CLI-Lauf: Console-Subsystem (DUnitX-Console-Logger braucht stdout).
 // TestInsight-Lauf: GUI-Subsystem (sonst flackert beim Start ein cmd-Fenster
 // auf, da Windows fuer Console-Apps die ohne Parent-Console starten eine
-// neue Console allokiert). Termination wird im TestInsight-Pfad ueber
-// Halt(0) erzwungen (siehe begin-Block unten).
+// neue Console allokiert). Der TestInsight-Pfad endet mit Halt(0) und
+// Exit-Code 0 (siehe begin-Block unten).
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}
 {$ENDIF}
@@ -320,12 +320,14 @@ var
 begin
 {$IFDEF TESTINSIGHT}
   TestInsight.DUnitX.RunRegisteredTests;
-  // Expliziter Exit als Sicherheitsnetz: falls der TestInsight-Client einen
-  // Background-Thread / Hidden-Window offen laesst (Embarcadero-Forum-Issue
-  // mehrfach gesehen), wartet die RTL beim impliziten `end.`-Shutdown auf
-  // dessen Cleanup. Halt(0) umgeht Finalization-Sections und beendet den
-  // Prozess sofort - Testergebnisse sind zu diesem Zeitpunkt schon ueber
-  // den IPC-Kanal an die IDE gesendet.
+  // Halt(0) legt den Exit-Code auf 0 fest: TestInsight verwirft ihn, die
+  // Ergebnisse sind zu diesem Zeitpunkt schon ueber den IPC-Kanal an die
+  // IDE gesendet (wie reDelphix.Test.dpr). Halt beendet dabei NICHT
+  // sofort: wie das implizite `end.` laeuft es ueber System._Halt0, fuehrt
+  // die Finalization-Abschnitte aller Units aus und ueberspringt nur noch
+  // offene try/finally-Bloecke (hier keine). Gegen einen Hintergrund-Thread
+  // oder ein verstecktes Fenster des TestInsight-Clients, auf das eine
+  // Finalization wartet, schuetzt der Aufruf also nicht.
   Halt(0);
 {$ELSE}
   try
@@ -335,8 +337,12 @@ begin
     runner := TDUnitX.CreateRunner;
     // Tell the runner to use RTTI to find Fixtures
     runner.UseRTTI := True;
-    // When true, Assertions must be made during tests;
-    runner.FailsOnNoAsserts := False;
+    // Ein Test ohne Assert ist rot - so streng wie TestInsight.DUnitX
+    // (RunRegisteredTests setzt FailsOnNoAsserts := True) und wie
+    // reDelphix.Test.dpr. Seit TESTINSIGHT nur noch in der gleichnamigen
+    // Konfiguration steht, ist dieser Zweig der normale Debug/Release-Lauf;
+    // mit False waere derselbe Test hier gruen und unter TestInsight rot.
+    runner.FailsOnNoAsserts := True;
 
     // tell the runner how we will log things
     // Log to the console window if desired

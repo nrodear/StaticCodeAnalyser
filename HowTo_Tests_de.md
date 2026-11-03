@@ -101,6 +101,15 @@ Dann gilt: Exit-Code 0 = alle gruen, 1 = mindestens ein roter Test oder
 eine Ausnahme im Runner; Failures als stdout + nunit-XML neben der EXE
 (per `DUnitX.Loggers.Xml.NUnit`).
 
+Mit F9 aus der IDE gestartet, schliesst sich das Konsolenfenster, sobald
+der Lauf endet. Um die Ergebnisse zu lesen, unter Start → Parameter (Feld
+*Parameter*) `--exit:Pause` eintragen: nach der Zusammenfassung wartet der
+Runner mit `Done.. press <Enter> key to quit.` Gross-/Kleinschreibung des
+Werts ist egal; die Langform des Schalters ist `--exitbehavior:Pause`, die
+Vorgabe `Continue`. In Skripten und CI weglassen, sonst wartet der Lauf
+auf einen Tastendruck (die Konfiguration `CI` von `reDelphix.Test`
+ueberspringt die Pause ohnehin).
+
 ### Subset laufen lassen
 
 Geht in jedem Debug- oder Release-Bau. Nur ein Bau in der Konfiguration

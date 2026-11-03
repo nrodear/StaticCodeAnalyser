@@ -76,7 +76,9 @@ begin
     TDUnitX.CheckCommandLine;
     runner := TDUnitX.CreateRunner;
     runner.UseRTTI := True;
-    runner.FailsOnNoAsserts := False;
+    // Ein Test ohne Assert ist rot - wie unter TestInsight.DUnitX und in
+    // reDelphix.Test.dpr; dieser Zweig ist der normale Debug/Release-Lauf.
+    runner.FailsOnNoAsserts := True;
     if TDUnitX.Options.ConsoleMode <> TDunitXConsoleMode.Off then
     begin
       logger := TDUnitXConsoleLogger.Create
