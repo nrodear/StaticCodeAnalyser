@@ -202,13 +202,18 @@ suppressed in the IDE stays suppressed in CI.
      **Updating from 0.9.18:** run the new setup. It removes the former
      single-BPL plugin (`StaticCodeAnalyser.Plugin.d12`) from all IDEs, also
      one installed from GetIt, and says so in a message.
-   - **Build it yourself**: open
-     `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
-     run **Build**, then **Install** (right-click the package in Project
-     Manager → **Install**, or use **Component → Install Packages** from
-     the menu and pick the package). Without the install step the plugin
-     compiles but never appears in the IDE menu. Full instructions in
-     [HowTo_Build.md](HowTo_Build.md).
+   - **Build it yourself**: open `StaticCodeAnalyser.d12.groupproj` and
+     build the packages one at a time, in this order: `SCA.Engine`,
+     `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`
+     (right-click → **Build**). Not "Build All": the group also holds test
+     projects that need DUnitX and TestInsight. Build all four for the
+     platform of your IDE; Delphi 12 has a 32-bit IDE only, so **Win32**
+     (on Win64 the plugin stops under Delphi 12 with a deliberate `F1054`).
+     Then install `StaticCodeAnalyser.IDE.d12` and `reDelphix.d12`
+     (right-click → **Install**), never `SCA.Engine` or `SCA.SharedUI`.
+     Without the install step the plugin compiles but never appears in the
+     IDE menu. Full instructions in
+     [HowTo_Build.md](HowTo_Build.md), section 5.
 
    **GetIt** is suspended for 0.9.19: the package set cannot be installed
    through GetIt. If you use GetIt, take the setup.
@@ -851,44 +856,77 @@ tool available in the pipeline image, run
 attach the artifact or process further (SARIF plugins available for most
 CI systems).
 
-**SVN pre-commit hook** (server-side, Linux):
-```bash
-#!/bin/sh
-# /path/to/svn-repo/hooks/pre-commit
-REPOS="$1"
-TXN="$2"
+**SVN pre-commit hook** (Windows, on the machine that holds the repository):
 
-# Adjust tool path and working-copy mirror
-ANALYSER=/opt/sca/StaticCodeAnalyser.d12.exe
-WC=/tmp/sca-precommit-$TXN
+The analyser is a Windows program, so the hook runs where the repository
+lives, on Windows. It takes the added and modified `.pas`/`.dfm` files of
+the transaction from `svnlook`, scans only those, and rejects the commit
+from exit code 3 on.
 
-svn export "$REPOS" "$WC" -r "$TXN" --quiet
-"$ANALYSER" --path "$WC" --full --quiet
-EXIT=$?
-rm -rf "$WC"
+```bat
+@echo off
+rem <repository>\hooks\pre-commit.cmd
+setlocal
+set "REPOS=%~1"
+set "TXN=%~2"
 
-# IMPORTANT: SVN blocks the commit on ANY non-zero exit code, and shows
-# the committer only what went to stderr. So the raw code must not be
-# passed through here - otherwise hints and warnings block too, contrary
-# to the table below. The grading is the hook's job, not the tool's.
-if [ "$EXIT" -ge 3 ]; then
-  echo "SCA: commit blocked (exit $EXIT)." >&2
-  exit 1
-fi
-exit 0
+rem Adjust. Set every path here, do not rely on the hook's environment.
+rem APPDATA selects the analyser.ini the hook uses.
+set "SVNLOOK=C:\Program Files\TortoiseSVN\bin\svnlook.exe"
+set "SCA=C:\Tools\SCA\StaticCodeAnalyser.d12.exe"
+set "APPDATA=C:\Tools\SCA\hook"
+set "WORK=C:\Tools\SCA\work\%TXN%"
+
+rem Copy the added and modified .pas/.dfm files of the transaction.
+set "FOUND="
+for /f "tokens=1,*" %%A in ('""%SVNLOOK%" changed -t "%TXN%" "%REPOS%""') do (
+  if /i not "%%A"=="D" call :copy "%%B"
+)
+if not defined FOUND exit /b 0
+
+rem cmd cannot redirect the tool's console output; the CSV carries the findings.
+"%SCA%" --path "%WORK%\src" --full --quiet --report-csv "%WORK%\sca.csv"
+set "RC=%ERRORLEVEL%"
+if %RC% GEQ 3 if exist "%WORK%\sca.csv" type "%WORK%\sca.csv" 1>&2
+rd /s /q "%WORK%"
+
+rem SVN rejects the commit on any non-zero exit and shows only stderr.
+rem 3 = errors, 4 = read errors, 99 = tool error: block. 0 to 2: allow.
+if %RC% GEQ 3 (
+  echo SCA: commit blocked, exit code %RC%. 1>&2
+  exit /b 1
+)
+exit /b 0
+
+:copy
+set "P=%~1"
+if /i not "%P:~-4%"==".pas" if /i not "%P:~-4%"==".dfm" exit /b 0
+set "FOUND=1"
+set "P=%P:/=\%"
+for %%D in ("%WORK%\src\%P%") do if not exist "%%~dpD" mkdir "%%~dpD"
+"%SVNLOOK%" cat -t "%TXN%" "%REPOS%" "%~1" > "%WORK%\src\%P%"
+exit /b 0
 ```
+
+- Checked with a local `file://` repository (Subversion command-line tools
+  from TortoiseSVN): hints pass, an error blocks and shows the findings,
+  a missing tool blocks too. Under svnserve or Apache the hook runs as the
+  service account; it needs read access to the tool and write access to
+  `WORK` and `APPDATA`.
+- Only the committed files are scanned, not the rest of the repository.
+  Findings that depend on other units can differ from a full scan.
 
 Exit code mapping:
 - 0 = clean → commit allowed
 - 1 = hints only → commit allowed
-- 2 = warnings → commit allowed (to block them, use `-ge 2` above
-  instead of `-ge 3`)
+- 2 = warnings → commit allowed (to block them, use `GEQ 2` above
+  instead of `GEQ 3`)
 - 3 = errors → **commit blocked**
 - 4 = read errors (files the scan could not read) → **commit blocked**;
   a scan that skipped files must not look like a clean one
 - 99 = tool error (bad arguments, report not writable) → **commit
   blocked**. A scan that never happened must not look like a clean one;
-  the `-ge 3` rule above covers both.
+  the `GEQ 3` rule above covers both.
 
 ### `--parallel` — correct, but pointless
 

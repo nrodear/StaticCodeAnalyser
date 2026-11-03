@@ -38,7 +38,20 @@ SCA.CLI.Demo.exe [<Pfad>] [<Profil>]
 | `<Pfad>`   | Wurzelverzeichnis (Default: aktuelles Verzeichnis) |
 | `<Profil>` | optional. `''` = alle Detektoren (Default). Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
-Exit-Code (wie der CLI): `0` = sauber, `3` = Funde vorhanden, `1`/`2` = Fehler.
+Exit-Code: eigene, vereinfachte Konvention der Demo, **nicht** der Vertrag
+der CLI.
+
+| Code | Demo |
+|------|------|
+| `0` | keine Funde |
+| `3` | mindestens ein Fund beliebiger Schwere; Dateifehler zählen mit (ein leerer Ordner ergibt „keine .pas-Dateien“ und damit `3`) |
+| `2` | Pfad nicht gefunden |
+| `1` | Ausnahme |
+
+Die CLI staffelt dagegen nach Schwere (`1` nur Hints, `2` Warnings, `3`
+Errors, `4` Lesefehler, `99` Tool-Fehler), `--fail-on` verschiebt das;
+siehe `StaticCodeAnalyser.d12.exe --help`. Kein CI-Gate auf die Codes der
+Demo bauen: ihre `2` heißt „Pfad nicht gefunden“, nicht „Warnings“.
 
 ## Beispiel-Ausgabe
 

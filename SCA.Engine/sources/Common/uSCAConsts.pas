@@ -1104,7 +1104,7 @@ function IsSonarDelphiKind(K: TFindingKind): Boolean;
 // Detektoren sind sicher (fcHigh) - heuristische Pattern-Matcher und
 // Metrik-basierte Hints sind als fcMedium markiert, damit sie im
 // Default-Profil (FindingMinConfidence=fcMedium) sichtbar bleiben aber
-// per --min-confidence high ausgeblendet werden koennen.
+// per analyser.ini [Rules] MinConfidence=high ausgeblendet werden koennen.
 //   fcLow    - Detektoren die explizit niedrig sein wollen (z.B.
 //              uCommandInjection ohne Taint-Tracking) setzen
 //              Confidence selbst nach SetKind herab.

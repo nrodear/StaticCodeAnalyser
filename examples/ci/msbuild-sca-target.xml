@@ -14,7 +14,11 @@
 
   ====================================================================
   ENTWEDER (a) das Snippet unten in dein .dproj nach <Import .../>
-                  pasten und commitn, ODER
+                  pasten und commitn - ALLES zwischen <Project> und
+                  </Project>: die PropertyGroup UND beide Targets. Die
+                  Targets laufen nur bei SCAEnabled=true, und diesen
+                  Default setzt die PropertyGroup; ohne sie laeuft
+                  nichts, nicht einmal die SKIP-Meldung. ODER
 
   (b) als externes File haben und im .dproj nur
       <Import Project="...\msbuild-sca-target.xml" />

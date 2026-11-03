@@ -239,15 +239,35 @@ tient pas ; la prochaine fermeture de la fenêtre les écrase.
 
 ## `[PathOverrides]`
 
-Section libre : chaque clé est un fragment de chemin, chaque valeur la
-sévérité attribuée aux résultats situés sous ce chemin. Utile pour
-déclasser du code tiers ou généré sans l'exclure.
+Écarte ou reclasse les résultats selon le chemin : le code tiers, généré ou
+de test reste dans l'analyse sans affaiblir le profil. La section n'est lue
+que dans `analyser.ini` sous `%APPDATA%\StaticCodeAnalyser\` (EXE autonome,
+plugin IDE et CLI) ; il n'existe pas de copie par dépôt.
+
+Chaque ligne s'écrit `<glob> = <action>` :
+
+- **Glob :** comparé au chemin **complet et absolu** du fichier du résultat,
+  sans tenir compte de la casse ; `\` et `/` sont équivalents, `*` comme `**`
+  traversent les dossiers. Commencez le motif par `**\` - un motif relatif
+  comme `third_party\**` ne correspond jamais.
+- **Action :** `drop:*` (écarter tous les résultats), `drop:KindA,KindB`
+  (seulement ces types), `severity:hint:<types>`, `severity:warn:<types>`,
+  `severity:error:<types>` (`<types>` = `*` ou une liste séparée par des
+  virgules). Les types sont les noms de règle qu'accepte aussi
+  `// noinspection`, par exemple `MagicNumber`.
+- La première ligne qui correspond l'emporte. Une ligne avec une autre
+  valeur (par exemple `third_party=hint`) est ignorée sans message.
 
 ```ini
 [PathOverrides]
-third_party=hint
-generated\=off
+**\third_party\** = severity:hint:*
+**\generated\**   = drop:*
+**\legacy\**      = drop:MagicNumber,BeginEndRequired
 ```
+
+Les erreurs de lecture (`FileReadError`) ne sont jamais écartées. Les
+résultats abaissés sont exclus de l'export Sonar, sauf avec
+`--sonar-keep-downgraded`.
 
 ---
 

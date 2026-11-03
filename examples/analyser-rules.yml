@@ -25,6 +25,10 @@
 #   fix-hint     - shown in HTML/Plugin-Tooltip
 #   file-include - list of glob patterns; rule only fires for matching files
 #   file-exclude - list of glob patterns; rule skips matching files
+#                  Both only as a block list ("- ..." lines); the flow
+#                  form [..] is ignored silently. A pattern must cover the
+#                  file's FULL path (C:/proj/src/a.pas), so start it with
+#                  "**/": "**/src/**/*.pas" matches, "src/**/*.pas" never.
 
 version: 1
 rules:
@@ -49,7 +53,7 @@ rules:
     pattern-type: regex
     message: "Sleep() blocks the thread - use TTimer or async pattern instead"
     file-include:
-      - "src/production/**/*.pas"
+      - "**/src/production/**/*.pas"
     file-exclude:
       - "**/*Test*.pas"
       - "**/*Tests*.pas"

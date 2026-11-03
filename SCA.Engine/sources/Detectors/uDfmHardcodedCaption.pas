@@ -609,7 +609,7 @@ end;
 // Nutzwert (rw76-Vollzaehlung: 1.838 von 24.980 = 7,4 %;
 // rw114-Nachzaehlung der Namens-Klasse: 1.373 exakt).
 // DEMOTE statt Skip: fcLow faellt unterm fcMedium-Default aus
-// dem Lauf, --min-confidence low holt die Designer-Reste
+// dem Lauf, [Rules] MinConfidence=low holt die Designer-Reste
 // zurueck - wer unfertige UIs jagt, kann das gezielt.
 function IstDesignerDefault(N: TComponentNode; const V: TPropValue): Boolean;
 begin

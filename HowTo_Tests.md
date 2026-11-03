@@ -101,11 +101,29 @@ EXE (via `DUnitX.Loggers.Xml.NUnit`).
 
 ### Running a subset
 
-The DUnitX command line takes filters:
+Only without the `TESTINSIGHT` define (see above): with it, the EXE never
+reaches `TDUnitX.CheckCommandLine` and ignores every switch.
+
+Tests are picked by name with `--run` (short `-r`). DUnitX names a fixture
+after its unit and class (`unit.class`), a test after its method
+(`unit.class.method`). A name selects every test whose fixture name starts
+with it (case-insensitive), a full test name selects that one test.
+Separate several names with commas; `--run` may also be repeated:
 
 ```powershell
-TestProject.exe --include:TTestUninitVar
-TestProject.exe --exclude:TTestPerformance
+TestProject.exe --run:uTestUninitVar.TTestUninitVar
+TestProject.exe --run:uTestUninitVar.TTestUninitVar.NeverWritten_OnlyRead_Flagged
+TestProject.exe --run:uTestUninitVar.TTestUninitVar,uTestPerformance.TTestPerformance
+```
+
+The bare class name (`--run:TTestUninitVar`) matches nothing, because the
+fixture name starts with the unit.
+
+`--include` and `--exclude` filter by `[Category]`, not by class name. In
+this project only `TTestPerformance` carries a category (`perf`):
+
+```powershell
+TestProject.exe --exclude:perf
 ```
 
 ---

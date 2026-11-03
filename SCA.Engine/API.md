@@ -414,7 +414,17 @@ end;
 
 ---
 
-## 7. Exit-code convention (CLI/tools)
+## 7. Exit codes: CLI and demo
 
-Standalone tools typically use: `0` = clean, `3` = findings present, `1`/`2` =
-error (exception / invalid path). See `SCA.CLI.Demo`.
+The API sets no exit code; each tool picks its own convention. Two exist in
+this repo, and they differ:
+
+- **CLI** (`StaticCodeAnalyser.d12.exe`): `0` = clean, `1` = hints only,
+  `2` = warnings, `3` = errors, `4` = read errors, `99` = tool error;
+  `--fail-on` shifts the threshold (see `--help`).
+- **`SCA.CLI.Demo`**: its own, simplified convention, **not** the CLI
+  contract: `0` = no findings, `3` = at least one finding of any severity
+  (`FindingCount`, file errors included), `2` = path not found,
+  `1` = exception.
+
+Whoever builds a CI gate on the demo must not read its `2` as "warnings".

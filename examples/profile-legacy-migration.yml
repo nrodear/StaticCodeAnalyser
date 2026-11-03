@@ -108,7 +108,7 @@ rules:
     pattern-type: regex
     message: "WriteLn = Console-Output, nicht strukturiertes Logging. Logger-Library mit Levels (Debug/Info/Warn/Error) und Sinks (File/Console/EventLog) verwenden"
     file-include:
-      - "src/**/*.pas"
+      - "**/src/**/*.pas"
     file-exclude:
       - "**/*Test*.pas"
       - "**/*ConsoleApp*.pas"

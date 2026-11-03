@@ -97,11 +97,32 @@ the developer only sees findings they introduced.
 
 ### Install
 
+Git for Windows starts hooks through its own `sh`. Do **not** copy the
+script as `.git/hooks/pre-commit`: Windows PowerShell 5.1 does not run a
+file without the `.ps1` extension (`-File` refuses it, a shebang call
+hands it over as a command), so the hook body never runs and every commit
+goes through. Keep the script as `.ps1` and add a two-line `sh` wrapper
+named `pre-commit` that calls it with `-File` and hands its exit code to
+Git (`exec`):
+
 ```powershell
-# From repo root:
-Copy-Item examples/ci/pre-commit-sca.ps1 .git/hooks/pre-commit
-# No file extension! Git looks for "pre-commit" exactly.
+# From repo root, in Windows PowerShell 5.1:
+Copy-Item examples/ci/pre-commit-sca.ps1 .git/hooks/pre-commit-sca.ps1
+Set-Content .git/hooks/pre-commit -Encoding Ascii -NoNewline -Value ("#!/bin/sh`n" +
+  'exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(dirname "$0")/pre-commit-sca.ps1"' + "`n")
 ```
+
+The wrapper needs LF line endings, hence `-NoNewline` with an explicit
+`` `n ``. Use the current script: it calls the analyser with
+`| Out-Host`, because `StaticCodeAnalyser.d12.exe` is a GUI-subsystem
+program and PowerShell waits for it (and sets `$LASTEXITCODE`) only when
+its output is piped - older copies without the pipe let every commit
+through as well. The script expects the EXE at `tools\sca\StaticCodeAnalyser.d12.exe`
+below the repo root; if it is missing, it prints
+`[sca-hook] ... not found ... - skipping.` and lets the commit through.
+Check the hook once: stage a unit with a known warning and commit - the
+hook must print `[sca-hook] Static Code Analyser blocked the commit` and
+the commit must not appear in `git log`.
 
 Or via husky / lefthook / pre-commit-framework if your team prefers a
 config-file-driven hook manager.
@@ -167,8 +188,13 @@ no developer can ship a regression without explicitly opting out.
 ### Wire-up (two options)
 
 **Option A — paste into the `.dproj`:** open the `.dproj` in a text
-editor, copy the `<Target>` blocks from `msbuild-sca-target.xml`, paste
-**right before** the closing `</Project>` tag.
+editor, copy **everything between** `<Project ...>` and `</Project>` of
+`msbuild-sca-target.xml` - the `<PropertyGroup>` with the defaults
+**and** both `<Target>` blocks - and paste it **right before** the
+closing `</Project>` tag. The targets alone do nothing: both run only if
+`SCAEnabled` is `true`, and that default is set in the `<PropertyGroup>`.
+Without it neither the analysis nor the `SCA SKIP` note appears, and the
+build stays green.
 
 **Option B — import from disk (recommended):** keep
 `msbuild-sca-target.xml` somewhere central (e.g. `<repo>\build\`) and

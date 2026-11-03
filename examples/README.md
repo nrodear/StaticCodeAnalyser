@@ -94,12 +94,25 @@ Pattern-Typen:
 - `word` — nur ganze Identifier (Wort-Grenzen)
 - `regex` — .NET-Regex-Syntax
 
-Datei-Filter:
-- `file-include: ["src/**/*.pas"]` — Glob-Pattern, mehrere möglich
-- `file-exclude: ["**/*Test*.pas"]`
+Datei-Filter (Glob-Pattern, mehrere möglich, nur als Block-Liste):
+
+```yaml
+    file-include:
+      - "**/src/**/*.pas"
+    file-exclude:
+      - "**/*Test*.pas"
+```
+
+- Die Flow-Form `file-include: ["src/**/*.pas"]` versteht der YAML-Leser
+  nicht: der Filter fällt still weg, die Regel feuert auf allen Dateien.
+- Das Muster wird gegen den **vollen Pfad** der Datei geprüft
+  (`C:/Projekt/src/a.pas`, `\` als `/`, Groß-/Kleinschreibung egal) und
+  muss ihn ganz abdecken. Darum beginnt jedes Muster mit `**/`:
+  `src/**/*.pas` oder `*.pas` treffen nie, `**/src/**/*.pas` trifft
+  `src/a.pas` und `src/sub/c.pas`, aber nicht `tests/b.pas`.
 
 Glob-Wildcards:
-- `*` — ein Pfad-Segment
+- `*` — beliebige Zeichen innerhalb eines Pfad-Segments
 - `**/` — beliebige Tiefe inkl. null
 - `?` — ein Zeichen
 
@@ -123,7 +136,8 @@ Glob-Wildcards:
 - **Regex kaputt?** → Lade-Zeit-Exception mit Rule-ID:
   `Custom rule R001: invalid regex "[unbalanced": ...`
 - **Kein Match?** → Pattern-Type checken (substring vs regex),
-  File-Globs prüfen (`src/**/*.pas` matcht NICHT `tests/foo.pas`).
+  File-Globs prüfen: Block-Liste statt `[...]`, Muster mit `**/` am
+  Anfang (`**/src/**/*.pas` matcht `src/foo.pas`, NICHT `tests/foo.pas`).
 
 ## Beitragen
 

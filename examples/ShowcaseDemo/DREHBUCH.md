@@ -46,22 +46,33 @@ einfügt oder löscht – darum die Grundregel unten.
    erzeugen, dann `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im
    Projekt-Manager **Installieren** (Details: `reDelphix/README.md`, Abschnitte
    „Voraussetzungen in der IDE“ und „Bauen und installieren“).
-3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitt `[Rules]`:
+3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitte `[Rules]` und
+   `[Detectors]` (vor dem Start der IDE):
 
    ```ini
+   [Rules]
    Profile=strict
    IdeProfile=strict
    MinSeverity=hint
    IdeMinSeverity=hint
    MinConfidence=low
+
+   [Detectors]
+   UsesCheck=1
    ```
 
    `strict` bringt die Konventionsregeln, die `default` auslässt
-   (SCA007, SCA099, SCA101, SCA117, SCA126). `MinConfidence=low` braucht es
+   (SCA099, SCA101, SCA117, SCA126). **`UsesCheck=1`** schaltet den
+   uses-Check SCA007 ein – in der IDE in jedem Profil, auch in `strict`,
+   nur über diesen Schalter. Ohne ihn fehlen die neun SCA007-Funde, und die
+   SCA007-Schritte (Szene 3 #20, Szene 4 Hinweis, Szene 6 #19, Szene 7)
+   bieten nichts an. Die CLI schaltet ihn bei `--profile strict` selbst
+   ein. `MinConfidence=low` braucht es
    für die sechs Formatregeln SCA061, SCA063, SCA064, SCA069, SCA076,
    SCA079 – die Engine meldet sie mit niedriger Konfidenz. Erwartung:
-   **214 Funde** (mit `MinConfidence=medium` 164; Profil `default`: 188
-   bzw. 138).
+   **214 Funde**, davon 9 SCA007 (mit `MinConfidence=medium` 164; Profil
+   `default`: 188 bzw. 138, dort ohne SCA007 – mit `UsesCheck=1` 197 bzw.
+   147).
 4. Zurücksetzen: `git checkout examples/ShowcaseDemo`, `__history`
    löschen.
 5. Probelauf: einmal bauen (Win32, Debug). Erwartet: übersetzt mit
@@ -81,7 +92,8 @@ einfügt oder löscht – darum die Grundregel unten.
 
 ## Szene 2: Scan und Überblick
 
-- Analyse für das Projekt starten. Dock-Fenster: **214 Funde**.
+- Analyse für das Projekt starten. Dock-Fenster: **214 Funde** (ohne
+  `UsesCheck=1` aus Szene 0: 205, die SCA007-Funde fehlen).
 - Nach Schwere sortieren, die Error-Kacheln zeigen. Highlights **ohne**
   Code-Aktion (kurz anklicken, Fundtext vorlesen, von Hand erklären):
   - `uPriceCalculator.pas:157` **SCA202** `not AQuantity = 0` – bindet

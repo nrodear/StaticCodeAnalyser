@@ -102,11 +102,31 @@ neben der EXE (per `DUnitX.Loggers.Xml.NUnit`).
 
 ### Subset laufen lassen
 
-DUnitX-Command-Line nimmt Filter:
+Nur ohne das `TESTINSIGHT`-Define (siehe oben): mit ihm erreicht die EXE
+`TDUnitX.CheckCommandLine` nie und ignoriert jeden Schalter.
+
+Tests wählt `--run` (kurz `-r`) nach Namen aus. DUnitX benennt eine
+Fixture nach Unit und Klasse (`unit.klasse`), einen Test nach seiner
+Methode (`unit.klasse.methode`). Ein Name wählt jeden Test, dessen
+Fixture-Name mit ihm beginnt (ohne Groß-/Kleinschreibung), ein voller
+Testname genau diesen einen Test. Mehrere Namen mit Komma trennen;
+`--run` darf auch mehrfach stehen:
 
 ```powershell
-TestProject.exe --include:TTestUninitVar
-TestProject.exe --exclude:TTestPerformance
+TestProject.exe --run:uTestUninitVar.TTestUninitVar
+TestProject.exe --run:uTestUninitVar.TTestUninitVar.NeverWritten_OnlyRead_Flagged
+TestProject.exe --run:uTestUninitVar.TTestUninitVar,uTestPerformance.TTestPerformance
+```
+
+Der bloße Klassenname (`--run:TTestUninitVar`) trifft nichts, weil der
+Fixture-Name mit der Unit beginnt.
+
+`--include` und `--exclude` filtern nach `[Category]`, nicht nach
+Klassennamen. Im Projekt trägt nur `TTestPerformance` eine Kategorie
+(`perf`):
+
+```powershell
+TestProject.exe --exclude:perf
 ```
 
 ---

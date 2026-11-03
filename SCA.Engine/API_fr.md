@@ -425,8 +425,18 @@ end;
 
 ---
 
-## 7. Convention de codes de sortie (CLI/outils)
+## 7. Codes de sortie : CLI et démo
 
-Les outils autonomes utilisent en général : `0` = propre, `3` = résultats
-présents, `1`/`2` = erreur (exception / chemin invalide). Voir
-`SCA.CLI.Demo`.
+L'API ne fixe aucun code de sortie ; chaque outil choisit sa propre
+convention. Le dépôt en contient deux, et elles diffèrent :
+
+- **CLI** (`StaticCodeAnalyser.d12.exe`) : `0` = propre, `1` = hints
+  seuls, `2` = warnings, `3` = errors, `4` = erreurs de lecture, `99` =
+  erreur de l'outil ; `--fail-on` déplace le seuil (voir `--help`).
+- **`SCA.CLI.Demo`** : convention propre et simplifiée, **pas** le contrat
+  de la CLI : `0` = aucun résultat, `3` = au moins un résultat, quelle que
+  soit sa sévérité (`FindingCount`, erreurs de fichier comprises), `2` =
+  chemin introuvable, `1` = exception.
+
+Qui bâtit un gate CI sur la démo ne doit pas lire son `2` comme
+« warnings ».

@@ -237,15 +237,33 @@ das naechste Schliessen des Fensters ueberschreibt sie.
 
 ## `[PathOverrides]`
 
-Freiform-Sektion: jeder Schluessel ist ein Pfadfragment, jeder Wert die
-Schwere, die Funde unterhalb dieses Pfads bekommen. Damit laesst sich
-zugelieferter oder generierter Code herabstufen, ohne ihn auszuschliessen.
+Verwirft oder stuft Funde je Pfad um. So bleibt zugelieferter, generierter
+oder Test-Code im Scan, ohne dass das Profil leidet. Die Sektion wird nur
+aus der `analyser.ini` in `%APPDATA%\StaticCodeAnalyser\` gelesen (EXE,
+IDE-Plugin und CLI gleichermassen); eine Kopie je Repository gibt es nicht.
+
+Jede Zeile lautet `<Glob> = <Aktion>`:
+
+- **Glob:** wird gegen den **vollen, absoluten** Dateipfad des Fundes
+  geprueft, ohne Gross-/Kleinschreibung, `\` und `/` gleichwertig, `*` und
+  `**` greifen beide ueber Ordner hinweg. Das Muster mit `**\` beginnen -
+  ein relatives Muster wie `third_party\**` trifft nie.
+- **Aktion:** `drop:*` (alle Funde verwerfen), `drop:KindA,KindB` (nur diese
+  Arten), `severity:hint:<Arten>`, `severity:warn:<Arten>`,
+  `severity:error:<Arten>` (`<Arten>` = `*` oder eine Kommaliste). Arten sind
+  die Regelnamen, die auch `// noinspection` nimmt, etwa `MagicNumber`.
+- Die erste passende Zeile gewinnt. Eine Zeile mit anderem Wert (etwa
+  `third_party=hint`) wird ohne Meldung ignoriert.
 
 ```ini
 [PathOverrides]
-third_party=hint
-generated\=off
+**\third_party\** = severity:hint:*
+**\generated\**   = drop:*
+**\legacy\**      = drop:MagicNumber,BeginEndRequired
 ```
+
+Lesefehler (`FileReadError`) werden nie verworfen. Herabgestufte Funde fehlen
+im Sonar-Export, ausser mit `--sonar-keep-downgraded`.
 
 ---
 

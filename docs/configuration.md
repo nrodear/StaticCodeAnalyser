@@ -230,15 +230,33 @@ no lasting effect; the next window close overwrites them.
 
 ## `[PathOverrides]`
 
-Free-form section: each key is a path fragment, each value the severity that
-findings below that path get. Use it to downgrade vendored or generated
-code without excluding it.
+Drops or re-grades findings by path, so vendored, generated or test code
+stays in the scan without weakening the profile. The section is read only
+from `analyser.ini` in `%APPDATA%\StaticCodeAnalyser\` (standalone EXE, IDE
+plugin and CLI alike); there is no per-repository copy.
+
+Each line is `<glob> = <action>`:
+
+- **Glob:** matched against the finding's **full, absolute** file path,
+  case-insensitive, `\` and `/` are interchangeable, `*` and `**` both match
+  across folders. Start the pattern with `**\` - a relative pattern such as
+  `third_party\**` never matches.
+- **Action:** `drop:*` (drop every finding), `drop:KindA,KindB` (drop only
+  these kinds), `severity:hint:<kinds>`, `severity:warn:<kinds>`,
+  `severity:error:<kinds>` (`<kinds>` = `*` or a comma list). Kinds are the
+  rule names also used by `// noinspection`, e.g. `MagicNumber`.
+- The first matching line wins. A line with any other value (for example
+  `third_party=hint`) is ignored without a message.
 
 ```ini
 [PathOverrides]
-third_party=hint
-generated\=off
+**\third_party\** = severity:hint:*
+**\generated\**   = drop:*
+**\legacy\**      = drop:MagicNumber,BeginEndRequired
 ```
+
+Read errors (`FileReadError`) are never dropped. Downgraded findings are left
+out of the Sonar export unless you pass `--sonar-keep-downgraded`.
 
 ---
 

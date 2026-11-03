@@ -416,7 +416,18 @@ end;
 
 ---
 
-## 7. Exit-Code-Konvention (CLI/Tools)
+## 7. Exit-Codes: CLI und Demo
 
-Eigenständige Tools nutzen üblicherweise: `0` = sauber, `3` = Funde vorhanden,
-`1`/`2` = Fehler (Ausnahme / ungültiger Pfad). Siehe `SCA.CLI.Demo`.
+Die API setzt keinen Exit-Code; jedes Tool wählt seine eigene Konvention.
+Im Repo gibt es zwei, und sie unterscheiden sich:
+
+- **CLI** (`StaticCodeAnalyser.d12.exe`): `0` = sauber, `1` = nur Hints,
+  `2` = Warnings, `3` = Errors, `4` = Lesefehler, `99` = Tool-Fehler;
+  `--fail-on` verschiebt die Schwelle (siehe `--help`).
+- **`SCA.CLI.Demo`**: eigene, vereinfachte Konvention, **nicht** der
+  Vertrag der CLI: `0` = keine Funde, `3` = mindestens ein Fund beliebiger
+  Schwere (`FindingCount`, Dateifehler eingeschlossen), `2` = Pfad nicht
+  gefunden, `1` = Ausnahme.
+
+Wer ein CI-Gate auf der Demo aufbaut, darf ihre `2` nicht als „Warnings“
+lesen.

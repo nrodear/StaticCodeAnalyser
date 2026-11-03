@@ -27,12 +27,18 @@ database.
 
 1. Open `ShowcaseDemo.dproj` in Delphi 12 or 13 (the IDE recreates the
    missing `ShowcaseDemo.res`). Build once if you like.
-2. Analyser settings (`%APPDATA%\StaticCodeAnalyser\analyser.ini`, `[Rules]`):
-   `Profile=strict` (IDE plugin: `IdeProfile=strict`), `MinSeverity=hint`
-   and **`MinConfidence=low`**. `strict` adds the convention rules that the
-   `default` profile leaves out (SCA007, SCA099, SCA101, SCA117, SCA126);
-   `low` is needed for the formatting rules SCA061/063/064/069/076/079,
-   which the engine reports with low confidence.
+2. Analyser settings (`%APPDATA%\StaticCodeAnalyser\analyser.ini`):
+   in `[Rules]` `Profile=strict` (IDE plugin: `IdeProfile=strict`),
+   `MinSeverity=hint` (IDE plugin: `IdeMinSeverity=hint`) and
+   **`MinConfidence=low`**; in `[Detectors]` **`UsesCheck=1`**. `strict`
+   adds the convention rules that the `default` profile leaves out
+   (SCA099, SCA101, SCA117, SCA126); `low` is needed for the formatting
+   rules SCA061/063/064/069/076/079, which the engine reports with low
+   confidence. The unused-uses check SCA007 is opt-in: the IDE plugin
+   reports it only with `UsesCheck=1`, in every profile including
+   `strict` (without it the IDE shows the 9 SCA007 findings less, 205
+   instead of 214, and the SCA007 code actions have nothing to offer).
+   The CLI switches it on by itself with `--profile strict`.
 3. Scan the project or the folder. CLI equivalent (the CLI reads
    `MinConfidence` from the same ini):
 
@@ -40,11 +46,13 @@ database.
    StaticCodeAnalyser.d12.exe --path examples\ShowcaseDemo --full --profile strict --min-severity hint --report-html demo.html
    ```
 
-Findings counted per profile and confidence floor:
+Findings counted per profile and confidence floor (CLI run as above; the
+IDE plugin shows the same with `UsesCheck=1`):
 
 | Profile / MinConfidence | medium | low |
 |---|---:|---:|
 | `default` | 138 | 188 |
+| `default` with `UsesCheck=1` | 147 | 197 |
 | `strict` (for the video) | 164 | 214 |
 
 ## Reset

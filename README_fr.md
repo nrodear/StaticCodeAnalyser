@@ -211,13 +211,18 @@ supprimé dans l'IDE reste supprimé en CI.
      **Mise à jour depuis la 0.9.18 :** lancer le nouveau setup. Il retire
      l'ancien plugin à BPL unique (`StaticCodeAnalyser.Plugin.d12`) de tous
      les IDE, y compris celui installé via GetIt, et le signale.
-   - **Compilation maison** : ouvrir
-     `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
-     lancer **Build**, puis **Install** (clic droit sur le paquet dans le
-     Project Manager → **Install**, ou menu **Component → Install Packages**
-     et choisir le paquet). Sans l'étape d'installation, le plugin compile
-     mais n'apparaît jamais dans le menu de l'IDE. Instructions complètes
-     dans [HowTo_Build_fr.md](HowTo_Build_fr.md).
+   - **Compilation maison** : ouvrir `StaticCodeAnalyser.d12.groupproj` et
+     compiler les paquets un par un, dans cet ordre : `SCA.Engine`,
+     `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`
+     (clic droit → **Build**). Pas « Build All » : le groupe contient aussi
+     des projets de test qui exigent DUnitX et TestInsight. Compiler les
+     quatre pour la plateforme de l'IDE ; Delphi 12 n'a qu'un IDE 32 bits,
+     donc **Win32** (en Win64, le plugin s'arrête sous Delphi 12 sur un
+     `F1054` voulu). Ensuite installer `StaticCodeAnalyser.IDE.d12` et
+     `reDelphix.d12` (clic droit → **Install**), jamais `SCA.Engine` ni
+     `SCA.SharedUI`. Sans l'étape d'installation, le plugin compile mais
+     n'apparaît jamais dans le menu de l'IDE. Instructions complètes dans
+     [HowTo_Build_fr.md](HowTo_Build_fr.md), section 5.
 
    **GetIt** est suspendu pour la 0.9.19 : le jeu de paquets ne peut pas
    s'installer via GetIt. Si vous utilisez GetIt, prenez le setup.
@@ -881,46 +886,79 @@ l'outil disponible dans l'image du pipeline, lancer
 joindre l'artefact ou le traiter plus loin (des plugins SARIF existent
 pour la plupart des CI).
 
-**Hook pre-commit SVN** (côté serveur, Linux) :
-```bash
-#!/bin/sh
-# /path/to/svn-repo/hooks/pre-commit
-REPOS="$1"
-TXN="$2"
+**Hook pre-commit SVN** (Windows, sur la machine qui héberge le dépôt) :
 
-# Ajuster le chemin de l'outil et le miroir de la copie de travail
-ANALYSER=/opt/sca/StaticCodeAnalyser.d12.exe
-WC=/tmp/sca-precommit-$TXN
+L'analyseur est un programme Windows : le hook s'exécute donc là où se
+trouve le dépôt, sous Windows. Il récupère via `svnlook` les fichiers
+`.pas`/`.dfm` ajoutés et modifiés de la transaction, n'analyse que
+ceux-là et refuse le commit à partir du code de sortie 3.
 
-svn export "$REPOS" "$WC" -r "$TXN" --quiet
-"$ANALYSER" --path "$WC" --full --quiet
-EXIT=$?
-rm -rf "$WC"
+```bat
+@echo off
+rem <dépôt>\hooks\pre-commit.cmd
+setlocal
+set "REPOS=%~1"
+set "TXN=%~2"
 
-# IMPORTANT : SVN bloque le commit pour TOUT code de sortie non nul, et
-# ne montre au committeur que ce qui est écrit sur stderr. Le code brut
-# ne doit donc pas être transmis tel quel ici - sinon les conseils et
-# les avertissements bloquent aussi, contrairement au tableau
-# ci-dessous. La graduation revient au hook, pas à l'outil.
-if [ "$EXIT" -ge 3 ]; then
-  echo "SCA : commit bloqué (code $EXIT)." >&2
-  exit 1
-fi
-exit 0
+rem À adapter. Fixer chaque chemin ici, sans compter sur l'environnement du hook.
+rem APPDATA désigne l'analyser.ini qu'utilise le hook.
+set "SVNLOOK=C:\Program Files\TortoiseSVN\bin\svnlook.exe"
+set "SCA=C:\Tools\SCA\StaticCodeAnalyser.d12.exe"
+set "APPDATA=C:\Tools\SCA\hook"
+set "WORK=C:\Tools\SCA\work\%TXN%"
+
+rem Copier les fichiers .pas/.dfm ajoutés et modifiés de la transaction.
+set "FOUND="
+for /f "tokens=1,*" %%A in ('""%SVNLOOK%" changed -t "%TXN%" "%REPOS%""') do (
+  if /i not "%%A"=="D" call :copy "%%B"
+)
+if not defined FOUND exit /b 0
+
+rem cmd ne peut pas rediriger la sortie console de l'outil ; le CSV porte les résultats.
+"%SCA%" --path "%WORK%\src" --full --quiet --report-csv "%WORK%\sca.csv"
+set "RC=%ERRORLEVEL%"
+if %RC% GEQ 3 if exist "%WORK%\sca.csv" type "%WORK%\sca.csv" 1>&2
+rd /s /q "%WORK%"
+
+rem SVN refuse le commit pour tout code de sortie non nul et n'affiche que stderr.
+rem 3 = erreurs, 4 = erreurs de lecture, 99 = erreur d'outil : bloquer. 0 à 2 : laisser passer.
+if %RC% GEQ 3 (
+  echo SCA : commit bloqué, code de sortie %RC%. 1>&2
+  exit /b 1
+)
+exit /b 0
+
+:copy
+set "P=%~1"
+if /i not "%P:~-4%"==".pas" if /i not "%P:~-4%"==".dfm" exit /b 0
+set "FOUND=1"
+set "P=%P:/=\%"
+for %%D in ("%WORK%\src\%P%") do if not exist "%%~dpD" mkdir "%%~dpD"
+"%SVNLOOK%" cat -t "%TXN%" "%REPOS%" "%~1" > "%WORK%\src\%P%"
+exit /b 0
 ```
+
+- Vérifié avec un dépôt local `file://` (outils en ligne de commande
+  Subversion de TortoiseSVN) : les conseils passent, une erreur bloque et
+  affiche les résultats, un outil introuvable bloque aussi. Sous svnserve
+  ou Apache, le hook tourne sous le compte du service ; ce compte doit
+  pouvoir lire l'outil et écrire dans `WORK` et `APPDATA`.
+- Seuls les fichiers du commit sont analysés, pas le reste du dépôt. Les
+  résultats qui dépendent d'autres unités peuvent différer d'une analyse
+  complète.
 
 Correspondance des codes de sortie :
 - 0 = propre → commit autorisé
 - 1 = conseils uniquement → commit autorisé
 - 2 = avertissements → commit autorisé (pour les bloquer, utiliser
-  `-ge 2` ci-dessus au lieu de `-ge 3`)
+  `GEQ 2` ci-dessus au lieu de `GEQ 3`)
 - 3 = erreurs → **commit bloqué**
 - 4 = erreurs de lecture (fichiers que le scan n'a pas pu lire) →
   **commit bloqué** ; un scan qui a sauté des fichiers ne doit pas
   ressembler à un scan propre
 - 99 = erreur d'outil (arguments invalides, rapport non inscriptible) →
   **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
-  à un scan propre ; la règle `-ge 3` ci-dessus couvre les deux.
+  à un scan propre ; la règle `GEQ 3` ci-dessus couvre les deux.
 
 ### `--parallel` — correct, mais sans intérêt
 

@@ -47,6 +47,9 @@ jobs:
           # Needed for --branch / --diff if you switch to incremental runs.
           fetch-depth: 50
 
+      # The analyser is a GUI-subsystem program: PowerShell waits for it and
+      # passes on its exit code only when its output is piped. Without
+      # "| Out-Host" a gate step stays green and the SARIF may not exist yet.
       # --------------------------------------------------------------
       # Scan once, unfiltered. --base-dir . makes the paths in the SARIF
       # relative to the repo root, which is what Code Scanning expects.
@@ -61,7 +64,7 @@ jobs:
             --profile default `
             --report-sarif sca.sarif `
             --fail-on=none `
-            --quiet
+            --quiet | Out-Host
 
       - name: Upload SARIF to GitHub Code-Scanning
         if: always()
@@ -96,7 +99,7 @@ jobs:
             --full `
             --profile default `
             --fail-on=warning `
-            --quiet
+            --quiet | Out-Host
 
       # - name: Gate (b) baseline - only new findings break the build
       #   run: |
@@ -106,7 +109,7 @@ jobs:
       #       --profile default `
       #       --baseline sca.baseline.json `
       #       --fail-on=warning `
-      #       --quiet
+      #       --quiet | Out-Host
       #
       # Refreshing the baseline is a SEPARATE run without --baseline:
       #     StaticCodeAnalyser.d12.exe --path . --full `
