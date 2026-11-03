@@ -715,10 +715,9 @@ Workflow funktioniert mit beiden Systemen.
 | `.svn/` | SVN | `svn status` + `svn diff` |
 | keiner | None | `--branch` deaktiviert, `--full` funktioniert |
 
-Die Suche in den Eltern-Ordnern braucht einen absoluten Pfad. Ein
-relativer `--path` wird nur so geprüft, wie er dasteht: `--path . --branch`
-funktioniert in der Repository-Wurzel, aus einem Unterordner findet es
-kein Repository und endet mit Exit 99. Dort den vollen Pfad angeben.
+Ein relativer `--path` wird zuerst gegen das Arbeitsverzeichnis absolut
+gemacht, die Suche in den Eltern-Ordnern geht also auch mit ihm:
+`--path . --branch` findet das Repository auch aus einem Unterordner.
 
 Ausführbare CLI wird automatisch gesucht in: `PATH`, dann typische
 Installations-Pfade (TortoiseGit, TortoiseSVN, Git for Windows, ...).

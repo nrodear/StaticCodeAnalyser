@@ -726,10 +726,9 @@ règles personnalisées et toute la configuration des détecteurs sont
 | `.svn/` | SVN | `svn status` + `svn diff` |
 | aucun | Aucun | `--branch` désactivé, `--full` fonctionne |
 
-La recherche dans les dossiers parents exige un chemin absolu. Un
-`--path` relatif n'est vérifié que tel qu'il est écrit : `--path . --branch`
-fonctionne à la racine du dépôt, mais depuis un sous-dossier il ne trouve
-aucun dépôt et se termine avec le code 99. Indiquez-y le chemin complet.
+Un `--path` relatif est d'abord rendu absolu par rapport au répertoire
+de travail, la recherche dans les dossiers parents fonctionne donc aussi
+avec lui : `--path . --branch` trouve le dépôt même depuis un sous-dossier.
 
 L'exécutable VCS est localisé via `PATH`, puis les chemins d'installation
 typiques (TortoiseGit, TortoiseSVN, Git for Windows, ...). Surcharge via

@@ -640,6 +640,29 @@ begin
     Exit;
   end;
 
+  // Ein relativer --path wird HIER absolut, vor jedem Verbraucher.
+  // TVcsChanges.DetectRepo sucht .git/.svn, indem es mit ExtractFilePath
+  // Ordner fuer Ordner nach oben geht - rein lexikalisch. Aus '.' wird
+  // dabei sofort '', die Suche endet im Startordner: '--path . --branch'
+  // aus einem Unterordner des Repos fand kein Repository und endete mit
+  // Exit 99, '--path src --branch' sogar in der Repo-Wurzel (der Elternteil
+  // von 'src' ist lexikalisch ''). Dasselbe Wort landet auch in BaseDir
+  // (Vorgabe unten), im Baseline-Wurzelordner und im Fixture-Anker; dort
+  // wird es teils nachtraeglich expandiert, teils nicht. Eine Stelle hier
+  // statt Flicken in jedem Verbraucher. Absolute Pfade bleiben Zeichen
+  // fuer Zeichen, wie sie geschrieben sind (kein Normalisieren von '..'
+  // oder '/'), damit sich fuer sie nichts aendert. --file/--project/
+  // --project-group laufen nie durch DetectRepo (--branch und --diff
+  // verlangen --path) und bleiben unberuehrt.
+  // "Verwurzelt" = Laufwerk/UNC (ExtractFileDrive) oder fuehrender
+  // Trenner. Bewusst nicht TPath.IsPathRooted: das wirft bei einem
+  // ungueltigen Zeichen im Pfad, und ParseArgs meldet Fehler nur ueber
+  // ParseError - den falschen Pfad meldet weiter die Existenzpruefung in
+  // Run.
+  if (Result.Path <> '') and (ExtractFileDrive(Result.Path) = '') and
+     not CharInSet(Result.Path[1], ['\', '/']) then
+    Result.Path := ExpandFileName(Result.Path);
+
   // --index-root nur dort, wo ein Listen-Scope existiert (Projekt/Gruppe/
   // Branch/Diff); bei --path ist der Index ohnehin der ganze Baum.
   if (Result.IndexRoot <> '') and (Result.ProjectFile = '') and

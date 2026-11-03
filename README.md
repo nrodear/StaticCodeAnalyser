@@ -700,10 +700,9 @@ works with both systems.
 | `.svn/` | SVN | `svn status` + `svn diff` |
 | neither | None | `--branch` disabled, `--full` works |
 
-The search through the parent folders needs an absolute path. A relative
-`--path` is checked only as written: `--path . --branch` works in the
-repository root, but from a subfolder it finds no repository and ends
-with exit 99. Pass the full path there.
+A relative `--path` is first made absolute against the working
+directory, so the search through the parent folders works with it too:
+`--path . --branch` also finds the repository from a subfolder.
 
 The VCS executable is located via `PATH`, then typical install paths
 (TortoiseGit, TortoiseSVN, Git for Windows, ...). Override via

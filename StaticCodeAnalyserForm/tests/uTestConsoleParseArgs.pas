@@ -71,6 +71,23 @@ type
     [Test] procedure ProjektVorScanWurzel_SonstScanWurzel_SonstLeer;
   end;
 
+  // Relativer --path (2026-11-03): ParseArgs macht ihn absolut, damit
+  // die Repo-Suche fuer --branch/--diff (TVcsChanges.DetectRepo) nach
+  // oben wandern kann. Vorher endete '--path . --branch' aus einem
+  // Unterordner des Repos mit Exit 99. Eigene Klasse aus demselben Grund
+  // wie TTestBaselineConfigDir.
+  [TestFixture]
+  TTestConsolePfadAbsolut = class
+  public
+    // Rot ohne Fix: Path bliebe '.' bzw. 'src'.
+    [Test] procedure RelativerPfad_WirdAbsolut;
+    // Rot ohne Fix: DetectRepo('.') bricht sofort ab, Kind = vkNone.
+    [Test] procedure PunktAusUnterordner_FindetRepoImElternordner;
+    // Waechter der Zusage "absolute Pfade unveraendert" - gruen mit und
+    // ohne Fix, rot erst, wenn jemand hier zu normalisieren beginnt.
+    [Test] procedure AbsoluterPfad_BleibtZeichengleich;
+  end;
+
 implementation
 
 // noinspection-file HardcodedPath, GodClass
@@ -92,6 +109,7 @@ uses
                      // die Unit expandiert der Inline-Helper nicht (H2443)
   System.IOUtils,    // TPath/TDirectory/TFile (AutoV2-Temp-Baum, D5)
   uSCAConsts,        // TSourceDialect/dlFpc (AutoV2-Tests, D5)
+  uVcsChanges,       // TVcsChanges.DetectRepo/vkGit (relativer --path)
   uConsoleRunner;
 
 // WARUM --file UND NICHT --path: bei --path setzt ParseArgs am Ende
@@ -514,8 +532,84 @@ begin
   Assert.AreEqual('', BaselineConfigDir(A, ''), 'ohne Projekt und Pfad leer');
 end;
 
+{ TTestConsolePfadAbsolut }
+
+procedure TTestConsolePfadAbsolut.RelativerPfad_WirdAbsolut;
+// ParseArgs prueft die Existenz von --path nicht (das macht Run), der
+// Test braucht also keinen Ordner. BaseDir erbt den absoluten Wert,
+// weil die Vorgabe unten in ParseArgs von Path abgeleitet wird.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(['--path', '.']);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.IsTrue(SameText(ExcludeTrailingPathDelimiter(GetCurrentDir),
+    ExcludeTrailingPathDelimiter(A.Path)),
+    '--path . muss zum Arbeitsverzeichnis werden, ist: ' + A.Path);
+  Assert.AreEqual(A.Path, A.BaseDir,
+    'BaseDir defaultet auf den schon absoluten Path');
+
+  A := TConsoleRunner.ParseArgs(['--path', 'src']);
+  Assert.IsTrue(SameText(
+    IncludeTrailingPathDelimiter(GetCurrentDir) + 'src',
+    A.Path),
+    '--path src muss unter dem Arbeitsverzeichnis liegen, ist: ' + A.Path);
+end;
+
+procedure TTestConsolePfadAbsolut.PunktAusUnterordner_FindetRepoImElternordner;
+// Der Fall aus der Meldung, ohne git: ein Temp-Baum wurzel\.git und
+// wurzel\sub, Arbeitsverzeichnis sub, '--path . --branch'. DetectRepo
+// prueft nur, ob ein Ordner .git existiert - genau die Stelle, an der
+// der relative Pfad scheiterte. Das Arbeitsverzeichnis wird im finally
+// zurueckgesetzt, bevor der Baum geloescht wird (das aktuelle
+// Verzeichnis liesse sich nicht loeschen).
+var
+  Wurzel, Sub, Alt, Gefunden : string;
+  A    : TCliArgs;
+  Kind : TVcsKind;
+begin
+  Wurzel := TPath.Combine(TPath.GetTempPath,
+    'sca_relpfad_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', '').Replace('-', ''));
+  Sub := TPath.Combine(Wurzel, 'sub');
+  TDirectory.CreateDirectory(TPath.Combine(Wurzel, '.git'));
+  TDirectory.CreateDirectory(Sub);
+  Alt := GetCurrentDir;
+  try
+    Assert.IsTrue(SetCurrentDir(Sub), 'Arbeitsverzeichnis nicht setzbar');
+    A := TConsoleRunner.ParseArgs(['--path', '.', '--branch']);
+    Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+    Gefunden := TVcsChanges.DetectRepo(A.Path, Kind);
+    Assert.IsTrue(Kind = vkGit,
+      'das .git im Elternordner muss gefunden werden - ohne Fix bricht '
+      + 'die Suche bei ''.'' sofort ab (Exit 99 in der CLI)');
+    Assert.IsTrue(SameText(ExcludeTrailingPathDelimiter(Wurzel),
+      ExcludeTrailingPathDelimiter(Gefunden)),
+      'Repo-Wurzel ist der Elternordner, gefunden: ' + Gefunden);
+  finally
+    SetCurrentDir(Alt);
+    TDirectory.Delete(Wurzel, True);
+  end;
+end;
+
+procedure TTestConsolePfadAbsolut.AbsoluterPfad_BleibtZeichengleich;
+// Kein ExpandFileName auf absolute Pfade: das wuerde '..' aufloesen und
+// '/' umschreiben, und schon der Text in Meldungen und Berichten saehe
+// anders aus als bisher.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(['--path', 'C:\repo\..\src']);
+  Assert.AreEqual('C:\repo\..\src', A.Path, 'Laufwerkspfad unveraendert');
+  A := TConsoleRunner.ParseArgs(['--path', '\\server\share\src']);
+  Assert.AreEqual('\\server\share\src', A.Path, 'UNC-Pfad unveraendert');
+  A := TConsoleRunner.ParseArgs(['--path', 'D:/repo/src']);
+  Assert.AreEqual('D:/repo/src', A.Path, 'Schraegstriche unveraendert');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestConsoleParseArgs);
   TDUnitX.RegisterTestFixture(TTestBaselineConfigDir);
+  TDUnitX.RegisterTestFixture(TTestConsolePfadAbsolut);
 
 end.
