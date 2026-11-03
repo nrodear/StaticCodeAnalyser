@@ -217,7 +217,7 @@ supprimé dans l'IDE reste supprimé en CI.
      compiler les paquets un par un, dans cet ordre : `SCA.Engine`,
      `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`
      (clic droit → **Build**). Pas « Build All » : le groupe contient aussi
-     des projets de test qui exigent DUnitX et TestInsight. Compiler les
+     des projets de test qui exigent DUnitX. Compiler les
      quatre pour la plateforme de l'IDE ; Delphi 12 n'a qu'un IDE 32 bits,
      donc **Win32** (en Win64, le plugin s'arrête sous Delphi 12 sur un
      `F1054` voulu). Ensuite installer `StaticCodeAnalyser.IDE.d12` et
@@ -1361,9 +1361,10 @@ StaticCodeAnalyserForm/tests/
                                        (tokens/ms, lignes/ms)
 ```
 
-Les tests tournent sur DUnitX. Une compilation sans le define
-`TESTINSIGHT` émet un rapport XML NUnit pour la CI ; le dépôt le définit
-aujourd'hui, voir [HowTo_Tests_fr.md](HowTo_Tests_fr.md).
+Les tests tournent sur DUnitX. Les builds Debug et Release sont des
+runners console qui émettent un rapport XML NUnit pour la CI ; seule la
+configuration de build `TestInsight` définit `TESTINSIGHT`, voir
+[HowTo_Tests_fr.md](HowTo_Tests_fr.md).
 
 Choisissez le harnais en connaissance de cause : `FindingsOf` pilote les
 détecteurs AST, `FindingsOfFile` est requis pour les détecteurs qui lisent
@@ -1381,9 +1382,10 @@ suppression et de confiance — c'est ce qu'un utilisateur voit réellement.
   Win32, un paquet de conception 64 bits n'y est donc même pas
   compilable. Delphi 11 et plus
   anciens ne sont pas pris en charge.
-- DUnitX et TestInsight (uniquement pour la suite de tests, pas pour le
-  plugin lui-même ; TestInsight parce que les projets de test définissent
-  `TESTINSIGHT`, voir [HowTo_Tests_fr.md](HowTo_Tests_fr.md))
+- DUnitX (uniquement pour la suite de tests, pas pour le plugin
+  lui-même) ; TestInsight en option, uniquement pour la configuration de
+  build `TestInsight` des projets de test, voir
+  [HowTo_Tests_fr.md](HowTo_Tests_fr.md)
 - Optionnel : Git for Windows ou TortoiseSVN **avec** les outils CLI pour
   la fonction Branch-Changes
 

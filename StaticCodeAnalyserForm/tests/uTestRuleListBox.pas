@@ -10,8 +10,9 @@ unit uTestRuleListBox;
 // Test bricht das lautlos, sobald jemand Fill anfasst.
 //
 // Die Klasse braucht ein Elternfenster fuer ihre Steuerelemente. Das
-// Testprojekt ist eine VCL-Anwendung (TestInsight-GUI-Build), ein
-// unsichtbares TForm ist also zulaessig und kostet nichts.
+// Testprojekt bindet die VCL ein - auch im Konsolen-Bau (Debug/Release)
+// darf ein unsichtbares TForm entstehen, es braucht keine Nachrichten-
+// schleife und kostet nichts.
 
 interface
 

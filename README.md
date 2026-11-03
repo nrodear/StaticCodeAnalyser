@@ -208,7 +208,7 @@ suppressed in the IDE stays suppressed in CI.
      build the packages one at a time, in this order: `SCA.Engine`,
      `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12`, `reDelphix.d12`
      (right-click → **Build**). Not "Build All": the group also holds test
-     projects that need DUnitX and TestInsight. Build all four for the
+     projects that need DUnitX. Build all four for the
      platform of your IDE; Delphi 12 has a 32-bit IDE only, so **Win32**
      (on Win64 the plugin stops under Delphi 12 with a deliberate `F1054`).
      Then install `StaticCodeAnalyser.IDE.d12` and `reDelphix.d12`
@@ -1312,9 +1312,9 @@ StaticCodeAnalyserForm/tests/
                                        (tokens/ms, lines/ms)
 ```
 
-Tests run on DUnitX. A build without the `TESTINSIGHT` define emits an
-NUnit XML report for CI; the repository defines it today, see
-[HowTo_Tests.md](HowTo_Tests.md).
+Tests run on DUnitX. Debug and Release builds are console runners that
+emit an NUnit XML report for CI; only the build configuration
+`TestInsight` defines `TESTINSIGHT`, see [HowTo_Tests.md](HowTo_Tests.md).
 
 Pick the harness deliberately: `FindingsOf` drives the AST detectors,
 `FindingsOfFile` is required for detectors that read source lines, and
@@ -1331,9 +1331,9 @@ actually sees.
   IDE. Delphi 12 has no 64-bit IDE — it ships `designide` for Win32
   only, so a 64-bit design-time package cannot even be built there.
   Delphi 11 and older are not supported.
-- DUnitX and TestInsight (only for the test suite, not for the plugin
-  itself; TestInsight because the test projects define `TESTINSIGHT`,
-  see [HowTo_Tests.md](HowTo_Tests.md))
+- DUnitX (only for the test suite, not for the plugin itself);
+  TestInsight optionally, only for the `TestInsight` build configuration
+  of the test projects, see [HowTo_Tests.md](HowTo_Tests.md)
 - Optional: Git for Windows or TortoiseSVN **with** CLI tools for the
   Branch-Changes feature
 

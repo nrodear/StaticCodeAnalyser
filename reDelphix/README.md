@@ -71,7 +71,7 @@ source\uRdxText.pas               Sprache der Texte: _() in die reDelphix-Sprach
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
 data\quickfixes-doc.json          Titel, Wirkung, Sperren und Beispiele je Quick-Fix (von Hand gepflegt) - Quelle fuer QUICKFIXES.md
 QUICKFIXES.md                     alle Quick-Fixes mit Menuetext en/de/fr, Kennzeichnung, Sperren, Beispiel - ERZEUGT von tools\gen-quickfix-doc.py (Repo-Wurzel)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt: Testunits und die zwei Hilfs-Units uTestRdxDetectorKit/uTestRdxTextKit, je Unit mit Zweck im Kopf der .dpr (siehe "Pruefen"); Konfigurationen Debug/Release (TestInsight) und CI (Konsole, Exit-Code)
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt: Testunits und die zwei Hilfs-Units uTestRdxDetectorKit/uTestRdxTextKit, je Unit mit Zweck im Kopf der .dpr (siehe "Pruefen"); Konfigurationen Debug/Release (Konsole, Exit-Code), CI (Konsole ohne Pause) und TestInsight
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik (dazu die Hilfs-Unit tests\uTestRdxTextKit) unter FPC 3.2.2 in einem eigenen Arbeitsverzeichnis je Lauf und fuehrt Tests aus (Sprache 'de', Stub uLocalization.pas liest die echten i18n\*.po); neben dem Skript nur Grabsteine der Kopien (siehe "Pruefen")
 tools\fpc-pruefstand\selftest.sh  Selbsttest von build.sh (zwei Laeufe zugleich, FPC-Exit, Testzahl, Registrierung, Test ohne Assert, PRUEFSTAND_DIR, Grabsteine, TMPDIR mit Backslashes, Hilfs-Unit, mehrere Fixtures und {$IFNDEF FPC}-Teile)
@@ -798,14 +798,16 @@ Literal auch in Arithmetik und Aufrufen) entscheidet P6.
 ## Pruefen
 
 **`tests\reDelphix.Test.dproj`** (DUnitX, in der d12-Projektgruppe): prueft
-den ToolsAPI-freien Teil gegen den echten Core. Die Konfigurationen Debug
-und Release definieren `TESTINSIGHT`: der Lauf geht an TestInsight, der
-Exit-Code ist immer 0. Einen auswertbaren Exit-Code (1 bei einem roten Test
-oder einer Ausnahme im Runner) liefert nur die Konfiguration **CI** (ohne
-`TESTINSIGHT`, mit `CI`: Konsole, NUnit-XML, keine Pause) - nach
-`rsvars.bat` etwa `msbuild reDelphix.Test.dproj /t:Build /p:Config=CI
-/p:Platform=Win32`, dann `Output\reDelphixTest\Win32 CI\reDelphix.Test.exe`
-(frueher galt `TESTINSIGHT` fuer alle Konfigurationen).
+den ToolsAPI-freien Teil gegen den echten Core. Nur die Konfiguration
+**TestInsight** (Kind von Debug) definiert `TESTINSIGHT`: der Lauf geht an
+TestInsight, der Exit-Code ist immer 0. Debug und Release sind
+Konsolen-Runner mit NUnit-XML und auswertbarem Exit-Code (1 bei einem roten
+Test oder einer Ausnahme im Runner) und nehmen die DUnitX-Schalter
+(`--run:...`) an; **CI** (mit `CI`) wartet zusaetzlich nie auf einen
+Tastendruck - nach `rsvars.bat` etwa `msbuild reDelphix.Test.dproj
+/t:Build /p:Config=CI /p:Platform=Win32`, dann
+`Output\reDelphixTest\Win32 CI\reDelphix.Test.exe` (frueher galt
+`TESTINSIGHT` fuer alle Konfigurationen, danach fuer Debug und Release).
 TestInsight, Konsolen-Runner und FPC-Pruefstand werten einen Test ohne
 Assert als rot (`FailsOnNoAsserts`). Jede Testunit meldet ihre Fixture im
 initialization-Teil mit `TDUnitX.RegisterTestFixture` an - ein Runner mit

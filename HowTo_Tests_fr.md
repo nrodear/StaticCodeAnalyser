@@ -2,13 +2,14 @@
 🇬🇧 [English version](HowTo_Tests.md) · 🇩🇪 [Deutsche Fassung](HowTo_Tests_de.md)
 
 La suite de tests DUnitX (`StaticCodeAnalyserForm\tests\TestProject.dproj`)
-a besoin de **deux composants externes**. Sans eux, « Build all projects »
-échoue avec `F2613 Unit '...' not found`.
+utilise **deux composants externes** : DUnitX toujours, TestInsight
+uniquement dans la configuration de build `TestInsight`. S'il en manque un,
+« Build all projects » échoue avec `F2613 Unit '...' not found`.
 
 | Composant | Obligatoire | Rôle |
 |---|---|---|
 | **DUnitX** | obligatoire | Framework de test (Assert / attributs `[Test]` / runner) |
-| **TestInsight** | obligatoire dans l'état actuel du dépôt (voir plus bas) | Intégration IDE (panneau de tests, statut en direct) |
+| **TestInsight** | facultatif, uniquement pour la configuration `TestInsight` (voir plus bas) | Intégration IDE (panneau de tests, statut en direct) |
 
 Le moteur SCA proprement dit et l'EXE autonome fonctionnent
 indépendamment — les tests ne concernent que les développeurs. Si vous
@@ -32,11 +33,13 @@ parent différent ? Adaptez le chemin dans le dproj ou définissez-le
 globalement via Tools → Options → Language → Delphi → Library (séparément
 pour **Win32 et Win64**).
 
-### TestInsight (obligatoire aujourd'hui — Win32 et Win64)
+### TestInsight (facultatif — Win32 et Win64)
 
-Les deux projets de test définissent `TESTINSIGHT` (voir _Le define
-TESTINSIGHT_ plus bas) ; dans l'état actuel du dépôt, ils ne compilent
-donc pas sans les unités TestInsight, sur Win32 comme sur Win64.
+Les trois projets de test (`TestProject`, `reDelphix.Test`,
+`VarNameProject.Test`) ne définissent `TESTINSIGHT` que dans leur
+configuration de build **TestInsight** (voir _Le define TESTINSIGHT_ plus
+bas). Debug et Release compilent sans les unités TestInsight ; elles ne
+servent qu'au panneau de tests de l'IDE.
 
 De préférence via le **GetIt Package Manager** :
 
@@ -63,7 +66,7 @@ bibliothèque Win32 et Win64.
 | StaticCodeAnalyser.d12.exe (autonome) | Win32 + Win64 | rien d'externe |
 | StaticCodeAnalyser.IDE.d12.bpl | Win32 ; Win64 **sous Delphi 13 uniquement** | rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI |
 | reDelphix.d12.bpl | Win32 ; Win64 **sous Delphi 13 uniquement** | rtl, vcl, designide, SCA.Engine |
-| **TestProject.exe** | Win32 + Win64 | **DUnitX** + TestInsight (voir plus bas) |
+| **TestProject.exe** | Win32 + Win64 | **DUnitX** ; TestInsight uniquement pour la configuration `TestInsight` |
 
 « Build all projects » compile chaque projet du groupe dans sa propre
 plateforme active ; chaque projet mémorise la sienne. Vérifiez-les avant
@@ -77,43 +80,35 @@ les deux paquets de conception s'arrêtent sur Win64 avec
 
 ### IDE (Win32 avec TestInsight)
 
-Configuration standard. Le panneau de tests affiche les résultats en
-direct ; un clic sur un test en échec saute à l'assertion.
+Dans la fenêtre Projets, activez la configuration de build
+**TestInsight** (Build Configurations → clic droit → **Activate**), puis
+compilez et lancez. Le panneau de tests affiche les résultats en direct ;
+un clic sur un test en échec saute à l'assertion.
+
+> **Le code de sortie 0 d'un build TestInsight n'est PAS une preuve de
+> test.** Il reçoit le sous-système **GUI** et passe par
+> `TestInsight.DUnitX` ; sans serveur TestInsight dans l'IDE, il se termine
+> aussitôt par `Halt(0)` : pas de stdout, pas de XML NUnit, code de
+> sortie 0. Les résultats n'existent que dans le panneau de tests.
 
 ### IDE sans TestInsight (Win32 ou Win64)
 
-> **ATTENTION — compilé tel que le dépôt est aujourd'hui, cela ne marche
-> PAS, et l'exécution en console a pourtant l'air d'un succès.**
-> `TestProject.dproj` définit `TESTINSIGHT` comme `DCC_Define` dans le
-> PropertyGroup **Base**, donc pour TOUTES les configurations et
-> plateformes. Le `{$IFNDEF TESTINSIGHT}` du `.dpr` ne s'applique donc pas :
-> l'EXE reçoit le sous-système **GUI** au lieu de Console et passe par
-> `TestInsight.DUnitX` au lieu du logger console. Sans serveur TestInsight
-> dans l'IDE, il se termine aussitôt par `Halt(0)` : **pas de stdout, pas
-> de XML NUnit, code de sortie 0.**
->
-> Mesuré le 2026-09-20 sur les deux EXE fraîchement compilés (Win32 et
-> Win64) : sous-système PE 2 = GUI, 0 ligne de sortie, sortie 0.
->
-> **Le code de sortie 0 n'est donc PAS une preuve de test** — on ne peut
-> pas le distinguer de « tout est vert ». Les résultats n'existent que dans
-> le panneau TestInsight de l'IDE. Pour une vraie exécution en console,
-> retirez d'abord `TESTINSIGHT` du groupe Base du `.dproj`.
-
-La voie d'origine (valable uniquement SANS le define) :
+Les configurations **Debug** et **Release** ne définissent pas
+`TESTINSIGHT` : l'EXE est un programme console avec le logger console.
 
 ```powershell
 ".\Output\Tests\Win64 Release\TestProject.exe"
 ```
 
-Alors : code de sortie 0 = tout est vert, les échecs sortent sur stdout +
-en XML NUnit à côté de l'EXE (via `DUnitX.Loggers.Xml.NUnit`).
+Alors : code de sortie 0 = tout est vert, 1 = au moins un test rouge ou
+une exception dans le runner ; les échecs sortent sur stdout + en XML NUnit
+à côté de l'EXE (via `DUnitX.Loggers.Xml.NUnit`).
 
 ### Lancer un sous-ensemble
 
-Uniquement sans le define `TESTINSIGHT` (voir plus haut) : avec lui, l'EXE
-n'atteint jamais `TDUnitX.CheckCommandLine` et ignore tous les
-commutateurs.
+Fonctionne dans tout build Debug ou Release. Seul un build dans la
+configuration `TestInsight` n'atteint jamais `TDUnitX.CheckCommandLine` et
+ignore tous les commutateurs.
 
 `--run` (forme courte `-r`) choisit les tests par leur nom. DUnitX nomme
 une fixture d'après son unité et sa classe (`unite.classe`), un test
@@ -149,25 +144,28 @@ Si les tests ne sont pas pertinents pour l'instant et que seul le SCA
 doit être compilé : dans l'IDE → clic droit sur le groupe de projets →
 **Build order** → décocher `TestProject.dproj` et `reDelphix.Test.dproj`.
 « Build all projects » saute alors les deux. `reDelphix.Test.dproj` exige
-lui aussi DUnitX et définit `TESTINSIGHT` en Debug et en Release.
+lui aussi DUnitX.
 
 De façon équivalente, commentez les deux entrées directement dans le
 `.groupproj`.
 
 ### Le define TESTINSIGHT
 
-Dans `TestProject.dproj`, le define se trouve dans le groupe Base, il
-s'applique donc à toutes les plateformes et configurations :
+Chacun des trois projets de test ne le définit que dans la configuration
+de build `TestInsight`, enfant de Debug (clé `Cfg_3`, dans
+`reDelphix.Test.dproj` `Cfg_4`) :
 
 ```xml
-<PropertyGroup Condition="'$(Base)'!=''">
+<PropertyGroup Condition="'$(Cfg_3)'!=''">
   <DCC_Define>TESTINSIGHT;$(DCC_Define)</DCC_Define>
 </PropertyGroup>
 ```
 
-Le build Win64 a donc lui aussi besoin des unités TestInsight. Si vous ne
-voulez pas du tout de TestInsight, supprimez l'entrée purement et
-simplement ; le logger console prend alors le relais.
+Debug et Release (dans `reDelphix.Test.dproj` aussi `CI`) compilent sans
+lui, n'ont pas besoin des unités TestInsight et acceptent les commutateurs
+DUnitX. Auparavant, le define se trouvait dans le groupe Base (dans
+`reDelphix.Test.dproj` en Debug et en Release) ; chaque build IDE passait
+alors par TestInsight et ignorait `--run`.
 
 ### Dialogue EFOpenError pendant l'exécution des tests
 
@@ -198,4 +196,5 @@ explicite `Assert.AreEqual<Integer>(N, X.Count)`. Déjà corrigé à
 - `StaticCodeAnalyserForm\tests\TestProject.dpr` — code du runner de tests
 - `StaticCodeAnalyserForm\tests\uTest*.pas` — les unités de test individuelles
 - `reDelphix\tests\reDelphix.Test.dproj` — tests des actions de code reDelphix ;
-  sa configuration `CI` est un runner console avec un vrai code de sortie
+  outre Debug, Release et TestInsight, il a `CI`, un runner console qui
+  n'attend jamais de touche à la fin
