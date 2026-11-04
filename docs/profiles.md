@@ -43,6 +43,11 @@ IDE plugin treat `strict` like any other profile - there SCA007 needs
 | CLI | `--profile <name>` |
 | `analyser.ini` | `[Rules] Profile=<name>` |
 
+A name the catalogue does not know is an error in the CLI: whether it came
+from `--profile` or from `[Rules] Profile`, the run stops before the scan
+with exit 99 and lists the known profiles. Case and surrounding blanks do
+not matter. (Up to 0.9.18 an unknown name silently ran all rules.)
+
 Both surfaces can also show you what is *inside* a profile:
 **burger menu -> Rule-set profiles...**, in the standalone app and in the
 IDE plugin alike, lists every rule of the selected profile with its ID,
@@ -98,7 +103,10 @@ Your profile is stored in `profiles.json` next to `analyser.ini`, in
 
 The **engine** reads it, not just the app: a profile you build here also
 works with `--profile <name>` on the command line and shows up in the IDE
-plugin's profile combo.
+plugin's profile combo. It is read from the `%APPDATA%` of the account that
+runs the tool: a CI service account with its own profile does not see
+yours, and `--profile <name>` there ends with exit 99 - copy the file (see
+below) to that account.
 
 A name already used by a built-in profile is refused. Otherwise the same
 name would mean different things on different machines, and comparing two

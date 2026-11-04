@@ -843,6 +843,10 @@ et ensemble elles représentaient 48 % de tout ce qu'un nouveau venu voyait.
 tout, SCA007 compris (l'EXE et le plugin IDE ne lancent SCA007 qu'avec
 `[Detectors] UsesCheck=1`). `--min-severity hint|warning|error` saute les
 détecteurs sous le seuil. Les deux options priment sur `[Rules]` dans `analyser.ini`.
+Un nom de profil inconnu, mal saisi sur la ligne de commande ou dans
+`[Rules] Profile`, termine l'exécution avec le code 99 avant le scan ; le
+message liste les profils connus. Vos propres profils créés dans la fenêtre
+des profils (`profiles.json`) comptent comme connus.
 
 **Réglages `analyser.ini` pour Git** :
 ```ini
@@ -999,8 +1003,8 @@ Correspondance des codes de sortie avec `--fail-on error` :
 - 4 = erreurs de lecture (fichiers que le scan n'a pas pu lire), aussi à
   côté de conseils ou d'avertissements → **commit bloqué** ; un scan qui
   a sauté des fichiers ne doit pas ressembler à un scan propre
-- 99 = erreur d'outil (arguments invalides, rapport non inscriptible) →
-  **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
+- 99 = erreur d'outil (arguments invalides, profil inconnu, rapport non
+  inscriptible) → **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
   à un scan propre ; la règle `GEQ 3` ci-dessus couvre les deux.
 
 Sans `--fail-on`, le code de sortie est gradué (1 = conseils,

@@ -43,6 +43,12 @@ Profil - dort braucht SCA007 in jedem Profil `[Detectors] UsesCheck=1`.
 | CLI | `--profile <name>` |
 | `analyser.ini` | `[Rules] Profile=<name>` |
 
+Ein Name, den der Katalog nicht kennt, ist in der CLI ein Fehler: ob er aus
+`--profile` oder aus `[Rules] Profile` kommt, der Lauf endet vor dem Scan
+mit Exit 99 und nennt die bekannten Profile. Groß-/Kleinschreibung und
+Leerzeichen außen spielen keine Rolle. (Bis 0.9.18 lief ein unbekannter
+Name still mit allen Regeln.)
+
 Beide Oberflächen zeigen auch, was *in* einem Profil steckt:
 **Burger-Menü -> Regelsatz-Profile ...** listet in der Standalone wie im
 IDE-Plugin jede Regel des gewählten Profils mit ID, Kind-Token, Severity
@@ -102,7 +108,10 @@ Das Profil landet in `profiles.json` neben `analyser.ini`, also in
 
 Gelesen wird sie von der **Engine**, nicht nur von der Anwendung: ein
 hier gebautes Profil greift auch mit `--profile <name>` auf der
-Kommandozeile und steht im Profil-Combo des IDE-Plugins.
+Kommandozeile und steht im Profil-Combo des IDE-Plugins. Gelesen wird
+das `%APPDATA%` des Kontos, unter dem das Werkzeug läuft: ein CI-Dienstkonto
+sieht ein hier angelegtes Profil nicht, und `--profile <name>` endet dort
+mit Exit 99 - die Datei (siehe unten) gehört dann in dieses Konto.
 
 Ein Name, den bereits ein eingebautes Profil trägt, wird abgelehnt. Sonst
 bedeutete derselbe Name auf zwei Rechnern Verschiedenes, und ein

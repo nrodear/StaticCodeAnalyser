@@ -102,7 +102,8 @@ einer Profilprüfung.
 | `ScanRecursive(APath, AProfile=''): TScanResult` | Rekursiver Verzeichnis-Scan (Einzeiler). |
 | `AnalyzeSource(ASource, AProfile=''): TScanResult` | In-Memory-Scan eines Quelltext-Strings (Editor-Lint/Embedding). |
 | `TAnalysisSession.Create.Run(Req): TScanResult` | Voller Zugriff über `TScanRequest` (alle Optionen). |
-| `IsKnownProfile(AProfile): Boolean` | Ob der Regelkatalog den Profilnamen kennt (Groß-/Kleinschreibung egal, `''` gilt als bekannt). |
+| `IsKnownProfile(AProfile): Boolean` | Ob der Regelkatalog den Profilnamen kennt (Groß-/Kleinschreibung egal, `''` gilt als bekannt). Eigene Profile aus `profiles.json` zählen mit. |
+| `KnownProfileNames: TArray<string>` | Alle Namen, die `IsKnownProfile` annimmt, sortiert ohne Rücksicht auf Groß-/Kleinschreibung - für eine Fehlermeldung. |
 
 ### 3.2 `TScanRequest`
 
@@ -217,8 +218,10 @@ Detektoren. SCA007 (ungenutzte uses) kommt in jedem Profil nur mit
 | `style` | Nur Stil-Regeln (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
 | `selftest-quiet` | Alle Regeln außer einigen Layout-Regeln — für den Scan des Analysers selbst. |
 
-Ein unbekannter Profilname ist kein Fehler: die Engine fährt alle Detektoren.
-Wer Tippfehler melden will, prüft den Namen vorher mit `IsKnownProfile`.
+Ein unbekannter Profilname ist für die Engine kein Fehler: sie fährt alle
+Detektoren. Wer Tippfehler melden will, prüft den Namen vorher mit
+`IsKnownProfile`. CLI und `SCA.CLI.Demo` tun genau das und brechen vor dem
+Scan ab (CLI Exit 99, Demo Exit 2).
 
 ### 3.7 Datenmodell: `TLeakFinding` (`uMethodd12`)
 

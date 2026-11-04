@@ -16,14 +16,20 @@ program SCA.CLI.Demo;
 //   <Profil>  optional - '' = alle Detektoren (Default). Bekannte Profile:
 //             default, strict, ide-fast, security, bugs-only,
 //             code-quality, style, dfm-only, selftest-quiet
-//             Ein unbekannter Name ist wie im echten CLI kein Fehler: die
-//             Engine faehrt dann alle Detektoren. Bis 2026-11-04 geschah
-//             das hier STILL - der Bericht nannte den vertippten Namen, als
-//             haette er gegriffen. Jetzt sagt es eine Warnzeile vor dem Scan
-//             und die Profil-Zeile im Bericht (IsKnownProfile der Facade).
+//             Ein unbekannter Name ist wie im echten CLI ein Aufruffehler:
+//             Meldung mit den bekannten Profilen, kein Scan, Exit 2
+//             (IsKnownProfile/KnownProfileNames der Facade). Die Engine
+//             selbst wuerde mit einem unbekannten Namen still ALLE
+//             Detektoren fahren - so lief die Demo bis 2026-11-04, und der
+//             Bericht nannte den vertippten Namen, als haette er gegriffen.
 //
 // Exit-Code: EIGENE, vereinfachte Konvention - NICHT der CLI-Vertrag!
-//   0 = sauber, 3 = irgendein Fund, 2 = Pfad fehlt, 1 = Exception.
+//   0 = sauber, 3 = irgendein Fund, 2 = Aufruffehler (Pfad fehlt oder
+//   Profil unbekannt), 1 = Exception. Der CLI meldet ein unbekanntes
+//   Profil mit 99 (Tool-Fehler); die Demo bleibt bei ihrer 2, weil diese
+//   dort schon den anderen Aufruffehler (Pfad fehlt) traegt - eine
+//   einzelne CLI-Zahl hineinzumischen machte die kleine Tabelle nicht
+//   einfacher, sondern zu einer halben Kopie des CLI-Vertrags.
 // Der echte CLI (uConsoleRunner) staffelt: 1 Hints, 2 Warnings,
 // 3 Errors, 4 Read-Errors, 99 Tool-Fehler. Die Vorfassung dieses
 // Kommentars behauptete Gleichheit (G7-5) - wer die Demo als Vorlage
@@ -91,8 +97,8 @@ end;
 
 procedure PrintReport(const APath, AProfile: string; ElapsedMs: Int64;
   const S: TStat);
-// Profil-Zeile: ein unbekannter Name steht mit seinem Rueckfall da - die
-// Engine hat ihn nicht angewandt, sondern alle Detektoren gefahren.
+// Ein unbekanntes Profil kommt hier nicht an - der Hauptblock bricht
+// vorher ab. Die Profil-Zeile nennt also immer ein Profil, das gegriffen hat.
 var
   T : TFindingType;
 begin
@@ -102,8 +108,6 @@ begin
   WriteLn(Format('  Pfad         : %s', [APath]));
   if AProfile = '' then
     WriteLn('  Profil       : (alle Detektoren)')
-  else if not IsKnownProfile(AProfile) then
-    WriteLn(Format('  Profil       : %s (unbekannt - alle Detektoren)', [AProfile]))
   else
     WriteLn(Format('  Profil       : %s', [AProfile]));
   WriteLn(Format('  Dauer        : %d ms', [ElapsedMs]));
@@ -140,12 +144,20 @@ begin
       Exit;
     end;
 
-    // Wie der echte CLI: ein unbekanntes Profil bricht nicht ab (dort
-    // nennt die Startzeile Profil und Regelzahl), hier sagt es eine
-    // Warnzeile. Exit-Code unveraendert.
+    // Wie der echte CLI (Nico-Entscheid 2026-11-04): ein unbekanntes
+    // Profil ist ein Aufruffehler, VOR dem Scan. Die Engine wuerde den
+    // Namen still durch alle Detektoren ersetzen; ein Bericht ueber einen
+    // Lauf, den niemand bestellt hat, ist schlechter als keiner. Die
+    // bekannten Namen stehen dabei, weil es fast immer ein Tippfehler ist.
     if not IsKnownProfile(Profile) then
-      WriteLn(Format('Warnung: Profil "%s" unbekannt - die Engine faehrt ' +
-        'alle Detektoren.', [Profile]));
+    begin
+      WriteLn(ErrOutput, Format('Profil "%s" unbekannt - kein Scan.',
+        [Profile]));
+      WriteLn(ErrOutput, 'Bekannte Profile: ',
+        string.Join(', ', KnownProfileNames));
+      ExitCode := 2;
+      Exit;
+    end;
 
     WriteLn('Scanne ', Path, ' ...');
     SW := TStopwatch.StartNew;

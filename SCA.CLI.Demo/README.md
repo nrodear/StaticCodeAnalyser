@@ -17,6 +17,7 @@ The program scans a directory recursively and prints only a **metrics summary**.
 |-----|---------|
 | `ScanRecursive(path, profile): TScanResult` | One-line recursive scan. |
 | `IsKnownProfile(profile): Boolean` | Detects a mistyped profile name. |
+| `KnownProfileNames: TArray<string>` | The known profiles, sorted, for the error message. |
 | `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` | Severity metrics. |
 | `TScanResult.Findings` (`TObjectList<TLeakFinding>`) | Detail access. |
 | `TLeakFinding.FindingType` / `.FileName` | Category breakdown + file count. |
@@ -52,7 +53,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Meaning |
 |----------|---------|
 | `<path>`    | Root directory (default: current directory) |
-| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. An unknown name is not an error, as in the CLI: the engine runs all detectors, and the demo says so in a warning line and in the report. |
+| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. An unknown name is an error, as in the CLI: the demo lists the known profiles on stderr, does not scan and exits `2`. |
 
 Exit code: the demo's own, simplified convention, **not** the CLI contract.
 
@@ -60,13 +61,14 @@ Exit code: the demo's own, simplified convention, **not** the CLI contract.
 |------|------|
 | `0` | no findings |
 | `3` | at least one finding of any severity; file errors count too (an empty folder yields "no .pas files" and so `3`) |
-| `2` | path not found |
+| `2` | call error: path not found or unknown profile |
 | `1` | exception |
 
 The CLI grades by severity instead (`1` hints only, `2` warnings, `3`
-errors, `4` read errors, `99` tool error) and `--fail-on` shifts that; see
+errors, `4` read errors, `99` tool error, which includes an unknown
+profile) and `--fail-on` shifts that; see
 `StaticCodeAnalyser.d12.exe --help`. Do not build a CI gate on the demo's
-codes: its `2` means "path not found", not "warnings".
+codes: its `2` means "call error", not "warnings".
 
 ## Example output
 

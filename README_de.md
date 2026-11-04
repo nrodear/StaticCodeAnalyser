@@ -827,6 +827,10 @@ allem, was ein Neueinsteiger zu sehen bekam. `--profile style` schaltet genau di
 lassen SCA007 nur mit `[Detectors] UsesCheck=1` laufen). `--min-severity hint|warning|error` skippt
 Detektoren unterhalb der Schwelle. Beide Flags ueberschreiben `[Rules]`
 in `analyser.ini`.
+Ein unbekannter Profilname, vertippt auf der Kommandozeile oder in
+`[Rules] Profile`, beendet den Lauf vor dem Scan mit Exit 99; die Meldung
+nennt die bekannten Profile. Eigene Profile aus dem Profil-Fenster
+(`profiles.json`) gelten als bekannt.
 
 **`analyser.ini`-Settings für Git**:
 ```ini
@@ -981,8 +985,8 @@ Exit-Code-Mapping mit `--fail-on error`:
 - 4 = Read Errors (Dateien, die der Scan nicht lesen konnte), auch neben
   Hints oder Warnings → **commit blockiert**; ein Scan, der Dateien
   übersprungen hat, darf nicht wie ein sauberer aussehen
-- 99 = Werkzeugfehler (ungültige Argumente, Report nicht schreibbar) →
-  **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
+- 99 = Werkzeugfehler (ungültige Argumente, unbekanntes Profil, Report
+  nicht schreibbar) → **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
   nicht wie ein sauberer Scan aussehen; die `GEQ 3`-Regel oben fängt
   beide mit.
 

@@ -65,6 +65,9 @@ type
     // IsKnownProfile (2026-11-04): SCA.CLI.Demo lief mit einem
     // vertippten Profil still mit allen Detektoren weiter.
     [Test] procedure IsKnownProfile_UnknownNameIsFalse;
+    // KnownProfileNames (2026-11-04): Liste fuer die Fehlermeldung von
+    // CLI und SCA.CLI.Demo, wenn ein unbekanntes Profil abbricht.
+    [Test] procedure KnownProfileNames_SortedAndAllKnown;
     // Upstream-Befund 6 (GITLAK, 28.08.)
     [Test] procedure IgnoreList_BrokenMaskDoesNotKillTheScan;
     // Gate-Trefferzaehlung (Review "viele Bedingungen im Core", 29.08.)
@@ -892,6 +895,30 @@ begin
     'Gross-/Kleinschreibung egal wie im Katalog');
   Assert.IsTrue(IsKnownProfile(' security '), 'aeusserer Leerraum egal wie GetProfile');
   Assert.IsTrue(IsKnownProfile(''), 'leer benennt kein Profil und ist kein Tippfehler');
+end;
+
+procedure TTestEngineApi.KnownProfileNames_SortedAndAllKnown;
+// Die Liste steht in der Abbruchmeldung von CLI und Demo. Sie muss genau
+// die Menge sein, die IsKnownProfile annimmt (sonst nennt die Meldung
+// einen Namen, der gleich wieder abgewiesen wird), und sortiert - der
+// Katalog liefert Dictionary-Schluessel in wechselnder Reihenfolge.
+var
+  Namen    : TArray<string>;
+  i        : Integer;
+  Gefunden : Boolean;
+begin
+  Namen := KnownProfileNames;
+  Assert.IsTrue(Length(Namen) > 0, 'mindestens die eingebauten Profile');
+  for i := 0 to High(Namen) do
+    Assert.IsTrue(IsKnownProfile(Namen[i]), 'gelistet = bekannt: ' + Namen[i]);
+  for i := 1 to High(Namen) do
+    Assert.IsTrue(CompareText(Namen[i - 1], Namen[i]) <= 0,
+      'aufsteigend ohne Ruecksicht auf Gross-/Kleinschreibung: ' +
+      Namen[i - 1] + ' vor ' + Namen[i]);
+  Gefunden := False;
+  for i := 0 to High(Namen) do
+    if Namen[i] = 'default' then Gefunden := True;
+  Assert.IsTrue(Gefunden, 'default steht in der Liste');
 end;
 
 procedure TTestEngineApi.FixtureFilter_DropsFixturesKeepsProduction;

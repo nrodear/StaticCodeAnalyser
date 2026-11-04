@@ -47,6 +47,10 @@
 //   * Req.Profile = 'strict'/'security'/'bugs-only'/... -> benanntes Profil
 //   * Unbekannter Name          -> alle Detektoren (TRuleCatalog.GetProfile,
 //                                  ohne Fehler); pruefbar per IsKnownProfile.
+//                                  Die Engine selbst bleibt dabei: ob ein
+//                                  Tippfehler den Lauf abbricht, entscheidet
+//                                  der Consumer. CLI und SCA.CLI.Demo brechen
+//                                  seit 2026-11-04 VOR dem Scan ab.
 //
 // ============================================================================
 
@@ -331,7 +335,19 @@ function AnalyzeSource(const Source: string;
 // Wozu: ein unbekannter Name ist KEIN Fehler, die Engine faehrt dann still
 // alle Detektoren (GetProfile-Rueckfall). Ein Consumer, der Tippfehler
 // melden will, fragt vorher hier - ohne selbst uRuleCatalog zu kennen.
+// Eigene Profile aus profiles.json (%APPDATA%\StaticCodeAnalyser, Profil-
+// Fenster) zaehlen mit: der Katalog laedt sie beim ersten Zugriff in
+// dasselbe Dictionary, aus dem GetProfile aufloest (EnsureLoaded ->
+// LoadUserProfiles) - auch im CLI-Lauf.
 function IsKnownProfile(const AProfile: string): Boolean;
+
+// Alle Profilnamen, die IsKnownProfile als bekannt nimmt (eingebaut und
+// eigene), alphabetisch ohne Ruecksicht auf Gross-/Kleinschreibung. Fuer
+// die Fehlermeldung eines Consumers ("bekannte Profile: ..."); der
+// Katalog liefert Dictionary-Schluessel ohne feste Reihenfolge, und eine
+// Meldung, die bei jedem Lauf anders sortiert ist, laesst sich weder
+// lesen noch in einem Log vergleichen.
+function KnownProfileNames: TArray<string>;
 
 implementation
 
@@ -1120,6 +1136,32 @@ begin
   for ProfName in TRuleCatalog.ProfileNames do
     if Cmp.Equals(ProfName, Lookup) then Exit(True);
   Result := False;
+end;
+
+function VergleicheProfilnamen(List: TStringList; Index1, Index2: Integer): Integer;
+// CompareText: ordinal und ohne Gross-/Kleinschreibung, wie der Katalog
+// (TIStringComparer.Ordinal). NICHT TStringList.Sort - das vergleicht
+// ueber das Gebietsschema (AnsiCompareText), und die Windows-Wortsortierung
+// ueberspringt dabei Bindestriche: die Reihenfolge von 'bugs-only' und
+// Co. hinge am Rechner.
+begin
+  Result := CompareText(List[Index1], List[Index2]);
+end;
+
+function KnownProfileNames: TArray<string>;
+var
+  Namen    : TStringList;
+  ProfName : string;
+begin
+  Namen := TStringList.Create;
+  try
+    for ProfName in TRuleCatalog.ProfileNames do
+      Namen.Add(ProfName);
+    Namen.CustomSort(VergleicheProfilnamen);
+    Result := Namen.ToStringArray;
+  finally
+    Namen.Free;
+  end;
 end;
 
 { TFixtureFilter }
