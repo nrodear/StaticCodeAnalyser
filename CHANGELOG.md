@@ -291,6 +291,8 @@ What can change on an existing setup, in one place. The details follow in the se
 - **Finding messages are never cut inside a character** - shortened texts no longer end on half a surrogate pair.
 - **The rule catalog is read as UTF-8, `profiles.json` is written safely** - a catalog file without BOM was read as ANSI and garbled non-ASCII text; invalid UTF-8 still falls back to ANSI instead of failing. User profiles are written through a temp file per process, and a failed move no longer leaves `profiles.json.tmp` behind.
 - **CLI: a relative `--path` no longer ends `--branch` and `--diff` with exit 99** - the search for `.git`/`.svn` walked up the path as written, so `--path .` from a subfolder of the repository (or `--path src` from its root) found no repository. The CLI now makes a relative `--path` absolute against the working directory first; absolute paths are passed on unchanged. Console lines that echo the path show the absolute path.
+- **CLI start line counts the rules that run** - with no profile given (neither `--profile` nor `[Rules] Profile`), `Rule-set: ... N rules active` counted all 205 rules, while the engine ran the `default` profile (197 rules). The count now follows the same rule as the engine. `--help` lists `selftest-quiet` and no longer speaks of six convention rules (`style` holds eight).
+- **`analyser.ini` template: `EnableDetectorReviewFilter` example takes effect** - the commented example read `=true`, which the ini reader takes as `0`, so uncommenting it switched nothing on. It now reads `=1`. Existing files are not changed.
 
 ### Fixed - rule crashes and stalls
 

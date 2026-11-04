@@ -228,6 +228,18 @@ function PeStackReserveMB(const AExePath: string): Integer;
 function EffektiverUsesCheck(AIniUsesCheck: Boolean;
   const AProfil: string): Boolean;
 
+// Zahl der Regeln, die die Engine fuer das Profil AProfil faehrt - die
+// Zahl der Startzeile "Rule-set: ... N rules active". AProfil ist
+// Settings.Profile (INI-Wert, von --profile ueberschrieben); leer heisst
+// dort 'default' (TRepoSettings.EffectiveProfileName, dieselbe Regel wie
+// ApplyDetectorThresholds). Bis 2026-11-04 zaehlte die Zeile
+// TRuleCatalog.GetProfile('') = AllKinds: 205 statt der 197, die
+// tatsaechlich liefen. Unbekannte Namen zaehlen wie in der Engine
+// AllKinds. Ohne UsesCheck-Gate und Konfidenzfilter - die Zeile nennt
+// das Profil, nicht die Fundmenge. In der interface-Sektion aus
+// demselben Grund wie ApplyFailOnPolicy: testbar ohne Run.
+function AktiveRegelAnzahl(const AProfil: string): Integer;
+
 // dlAuto V2 (D5, 2026-09-19; Zuschnitt Konzept_DlAutoV2): Dialekt-
 // Verdikt fuer EINE Datei - Aufwaertssuche vom Dateiverzeichnis bis
 // einschliesslich AWurzel, die erste Ebene mit Projektdateien
@@ -811,11 +823,13 @@ begin
   WriteLn('Rule-set:');
   WriteLn('  --profile <name>      Bundled or custom profile from rules/sca-rules.json');
   WriteLn('                        (default, strict, ide-fast, security,');
-  WriteLn('                         bugs-only, code-quality, style, dfm-only)');
-  WriteLn('                        default = alles AUSSER den sechs reinen');
-  WriteLn('                        Konventions-Regeln; die liegen in style.');
-  WriteLn('                        strict = wirklich alles.');
+  WriteLn('                         bugs-only, code-quality, style, dfm-only,');
+  WriteLn('                         selftest-quiet)');
+  WriteLn('                        default = everything EXCEPT the pure');
+  WriteLn('                        convention rules, those are in style.');
+  WriteLn('                        strict = really everything.');
   WriteLn('                        Overrides [Rules] Profile in analyser.ini.');
+  WriteLn('                        Neither this nor [Rules] Profile: default.');
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
@@ -1776,7 +1790,6 @@ begin
     begin
       var ProfileSrc  : string;
       var SeveritySrc : string;
-      var ActiveKinds : Integer;
       // Herkunft NICHT am Wert festmachen, sondern daran, ob die INI
       // ueberhaupt existiert. Vorher stand auf einem frischen Rechner
       // 'analyser.ini' in der Zeile, obwohl keine da war - beim
@@ -1789,14 +1802,10 @@ begin
       if Args.MinSeverity <> '' then SeveritySrc := '--min-severity'
       else if HasIni then SeveritySrc := 'analyser.ini/Default'
       else SeveritySrc := 'Default';
-      // GetProfile einmal aufloesen - der Aufruf laedt den Katalog.
-      var Active : TFindingKinds := TRuleCatalog.GetProfile(Settings.Profile);
-      ActiveKinds := 0;
-      for var K := Low(TFindingKind) to High(TFindingKind) do
-        if K in Active then Inc(ActiveKinds);
+      // Zahl ueber dieselbe Leer-Regel wie die Engine (s. AktiveRegelAnzahl).
       WriteLn(Format('Rule-set: Profile=%s (%s), MinSeverity=%s (%s), %d rules active',
         [Settings.Profile, ProfileSrc, Settings.MinSeverity, SeveritySrc,
-         ActiveKinds]));
+         AktiveRegelAnzahl(Settings.Profile)]));
     end;
 
     // Per-Detector-Timing aktivieren wenn --time-detectors angefordert.
@@ -2571,6 +2580,18 @@ function EffektiverUsesCheck(AIniUsesCheck: Boolean;
 // uStaticAnalyzer2 als EIGENER Schalter neben dem Profil.
 begin
   Result := AIniUsesCheck or SameText(AProfil, 'strict');
+end;
+
+function AktiveRegelAnzahl(const AProfil: string): Integer;
+// Vertrag siehe interface. GetProfile laedt den Katalog beim ersten Aufruf.
+var
+  Aktiv : TFindingKinds;
+begin
+  Aktiv := TRuleCatalog.GetProfile(
+    TRepoSettings.EffectiveProfileName(AProfil));
+  Result := 0;
+  for var K := Low(TFindingKind) to High(TFindingKind) do
+    if K in Aktiv then Inc(Result);
 end;
 
 end.

@@ -73,12 +73,24 @@ type
     [Test] procedure DefaultProfilOhneIni_BleibtAus;
   end;
 
+  // ---- Startzeile "N rules active" (2026-11-04) ---------------------
+  // Eigene Fixture: pinnt, dass die Zahl der Startzeile dem Profil folgt,
+  // das die Engine faehrt. Bei leerem Profil zaehlte die Zeile AllKinds
+  // (205), die Engine fuhr 'default' (197).
+  [TestFixture]
+  TTestAktiveRegelAnzahl = class
+  public
+    [Test] procedure LeeresProfil_ZaehltWieDefault;
+    [Test] procedure BenanntesProfil_ZaehltSeineKinds;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
   System.IOUtils,                     // TPath/TFile fuer die PE-Fixtures
-  uMethodd12, uSCAConsts, uConsoleRunner;
+  uMethodd12, uSCAConsts, uConsoleRunner,
+  uRuleCatalog;                       // Erwartungswerte der Regel-Anzahl
 
 const
   // Die Zahlen der Exit-Code-Konvention. Bewusst als Literale und nicht
@@ -379,9 +391,48 @@ begin
   Assert.IsFalse(EffektiverUsesCheck(False, ''));
 end;
 
+{ ---- TTestAktiveRegelAnzahl ---- }
+
+function KindsIn(const AKinds: TFindingKinds): Integer;
+// Unabhaengige Zaehlung fuer die Erwartung - bewusst nicht ueber
+// AktiveRegelAnzahl, sonst prueft der Test nur sich selbst.
+begin
+  Result := 0;
+  for var K := Low(TFindingKind) to High(TFindingKind) do
+    if K in AKinds then Inc(Result);
+end;
+
+procedure TTestAktiveRegelAnzahl.LeeresProfil_ZaehltWieDefault;
+// Der Befund: ohne Profil in INI und Kommandozeile faehrt die Engine
+// 'default' (ApplyDetectorThresholds), die Startzeile zaehlte aber
+// GetProfile('') = AllKinds. Vor dem Fix lieferte die Zaehlung hier
+// alle Kinds - beide Asserts waren rot.
+var
+  AnzahlDefault : Integer;
+begin
+  AnzahlDefault := KindsIn(TRuleCatalog.GetProfile('default'));
+  Assert.AreEqual<Integer>(AnzahlDefault, AktiveRegelAnzahl(''),
+    'leeres Profil zaehlt wie default');
+  Assert.IsTrue(AktiveRegelAnzahl('') < KindsIn(TRuleCatalog.AllKinds),
+    'default laesst die Konventions-Regeln aus - weniger als alle Kinds');
+end;
+
+procedure TTestAktiveRegelAnzahl.BenanntesProfil_ZaehltSeineKinds;
+// Gegenprobe: ein benanntes Profil zaehlt unveraendert seine Menge,
+// ein unbekannter Name wie in der Engine alle Kinds.
+begin
+  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.GetProfile('security')),
+    AktiveRegelAnzahl('security'), 'security zaehlt seine Kinds');
+  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.AllKinds),
+    AktiveRegelAnzahl('strict'), 'strict = alle Kinds');
+  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.AllKinds),
+    AktiveRegelAnzahl('gibt-es-nicht'), 'unbekannt faellt auf alle zurueck');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestStackReserveGuard);
   TDUnitX.RegisterTestFixture(TTestConsoleExitCode);
   TDUnitX.RegisterTestFixture(TTestEffektiverUsesCheck);
+  TDUnitX.RegisterTestFixture(TTestAktiveRegelAnzahl);
 
 end.

@@ -533,7 +533,8 @@ begin
   // wieder raus. Liste analog zum IDE-Plugin (uIDEAnalyserForm.CreateUI).
   SeverityFilterCombo.Items.AddObject(_('All'),                    TObject(Ord(fmAll)));
   // DetectorReview: nur in DEBUG-Builds UND wenn die INI
-  // [Rules] EnableDetectorReviewFilter=true gesetzt hat. Release-Builds
+  // [Rules] EnableDetectorReviewFilter=1 gesetzt hat (numerisch - ReadBool
+  // liest 'true' als 0). Release-Builds
   // sehen den Eintrag nie - internes Review-Tool, nicht fuer End-User.
   {$IFDEF DEBUG}
   begin
