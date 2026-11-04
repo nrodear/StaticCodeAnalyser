@@ -63,6 +63,15 @@ uses
   System.IOUtils,
   uCrashDiag;
 
+// uCrashDiag rechnet gegen das Modul, in dem es selbst liegt (sein
+// HInstance). Mit Laufzeitpaketen (Debug, TestInsight) ist das die
+// SCA.Engine-BPL, nicht die Test-Exe - die kuenstlichen Adressen muessen
+// deshalb auf dieselbe Basis zeigen, sonst liegt Exe+Offset "darunter".
+function CrashDiagBase: UIntPtr;
+begin
+  Result := UIntPtr(FindHInstance(@DescribeException));
+end;
+
 // Baut eine EAccessViolation mit kuenstlichem ExceptionRecord. Der Aufrufer
 // besitzt die Instanz; ARec muss ihn ueberleben (daher Parameter, nicht
 // lokale Variable dieser Funktion).
@@ -146,7 +155,7 @@ begin
   // $C00000FD = STATUS_STACK_OVERFLOW. Genau die Unterscheidung, wegen der
   // der Statuscode im Text steht: eine erschoepfte Stapelgroesse sieht in
   // der RTL-Meldung aus wie eine gewoehnliche Zugriffsverletzung.
-  E := MakeExternal(Rec, $C00000FD, Pointer(UIntPtr(HInstance) + $10));
+  E := MakeExternal(Rec, $C00000FD, Pointer(CrashDiagBase + $10));
   try
     S := LowerCase(DescribeException(E));
   finally
@@ -161,7 +170,7 @@ var
   E   : EAccessViolation;
   S   : string;
 begin
-  E := MakeExternal(Rec, $C0000005, Pointer(UIntPtr(HInstance) + $ABCDE));
+  E := MakeExternal(Rec, $C0000005, Pointer(CrashDiagBase + $ABCDE));
   try
     S := LowerCase(DescribeException(E));
   finally
@@ -203,7 +212,7 @@ begin
   // exakt die Fehlattribution, die die Unit der RTL vorwirft.
   // $40000000 liegt weit ueber jeder realen Bildgroesse dieses Moduls.
   E := MakeExternal(Rec, $C0000005,
-         Pointer(UIntPtr(HInstance) + $40000000));
+         Pointer(CrashDiagBase + $40000000));
   try
     S := DescribeException(E);
   finally

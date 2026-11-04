@@ -345,7 +345,7 @@ procedure TTestLocalization.TranslateTo_Format_TranslatesThenFormats;
 // Erst uebersetzen, dann formatieren - die Uebersetzung darf die
 // Platzhalter umstellen; ohne Eintrag bleibt der Ausgangstext formatiert.
 begin
-  Assert.AreEqual('3 Befunde', TranslateTo('de', '%d findings', [3]));
+  Assert.AreEqual('3 Funde', TranslateTo('de', '%d findings', [3]));
   Assert.AreEqual('3 findings', TranslateTo('xx', '%d findings', [3]));
 end;
 
