@@ -560,7 +560,13 @@ begin
     else if A = '--custom-rules' then
       GetValue(Result.CustomRules, '--custom-rules')
     else if A = '--profile' then
-      GetValue(Result.Profile, '--profile')
+    begin
+      GetValue(Result.Profile, '--profile');
+      // Getrimmt wie der INI-Wert (Load): ' ' hiesse sonst weder leer
+      // (= default) noch unbekannt - GetProfile trimmt und lieferte alle
+      // Kinds, die Profilpruefung liess es als leer durch.
+      Result.Profile := Trim(Result.Profile);
+    end
     // Wert-Schalter (GetValue!) - darf NICHT in CLI_SCHALTER_OHNE_WERT,
     // sonst wird '--dialect=fpc' hart abgelehnt. Wertpruefung strom-
     // abwaerts im Konsistenz-Block (Muster --fail-on).
