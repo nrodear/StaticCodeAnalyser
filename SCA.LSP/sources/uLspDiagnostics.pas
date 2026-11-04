@@ -10,12 +10,15 @@ unit uLspDiagnostics;
 // wird 1:1 in LSP-Diagnostic-JSON-Objekte gemappt.
 //
 // BEKANNTE LUECKE E3 (dokumentiert, hier NICHT geloest):
-//   TLeakFinding hat KEIN Spaltenfeld (StartCol/EndCol/EndLine) - Doku_06,
-//   Punkt "E3 - Spaltenfeld in TLeakFinding". Bis E3 umgesetzt ist, liefert
-//   dieser Adapter die Spalte konstant 1 (LSP character 0) und markiert
-//   die GANZE Zeile als Range (Ganz-Zeilen-Range, wie im MVP-Konzept
-//   vorgesehen). Sobald echte Spalten kommen: UTF-16-Code-Unit-Offsets
-//   beachten (LSP < 3.17 kennt nur utf-16 als positionEncoding).
+//   TLeakFinding hat KEINE Spaltenfelder (StartCol/EndCol) - Doku_06,
+//   Punkt "E3 - Spaltenfeld in TLeakFinding". Eine Endzeile gibt es
+//   dagegen (Rohfeld EndLine, gelesen nur ueber TLeakFinding.SpanEnd);
+//   dieser Adapter nutzt sie noch nicht. Bis dahin liefert er die Spalte
+//   konstant 1 (LSP character 0) und markiert die GANZE Anfangszeile als
+//   Range (Ganz-Zeilen-Range, wie im MVP-Konzept vorgesehen) - auch bei
+//   einem mehrzeiligen Fund. Sobald echte Spalten kommen: UTF-16-Code-
+//   Unit-Offsets beachten (LSP < 3.17 kennt nur utf-16 als
+//   positionEncoding).
 // =============================================================================
 
 interface
@@ -170,7 +173,8 @@ begin
 
         // TODO E3: Spalte konstant 1 (character 0) - TLeakFinding hat noch
         // kein StartCol/EndCol (Doku_06, Engine-Aenderung E3, groesster
-        // Einzel-Hebel fuer LSP-Qualitaet). Bis dahin Ganz-Zeilen-Range:
+        // Einzel-Hebel fuer LSP-Qualitaet). Die Endzeile (F.SpanEnd) waere
+        // schon da, bleibt hier aber ungenutzt. Bis dahin Ganz-Zeilen-Range:
         // end.character = 2147483647 laesst den Client die Range am
         // tatsaechlichen Zeilenende clippen (uebliche LSP-Konvention).
         SPos := TJSONObject.Create;

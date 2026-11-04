@@ -8,14 +8,20 @@ unit uYamlSubsetParser;
 //   - Verschachtelung ueber Indentation (Spaces, kein Tab)
 //   - Single-quoted ('...') und double-quoted ("...") strings
 //   - Line-Comments mit '#' (nur am Zeilenanfang oder nach Whitespace)
-//   - Block-Scalars |  (literal, behaelt Newlines)
 //   - Leerzeilen werden ignoriert
+//   - Mehrzeilige Werte nur ueber double-quoted Escapes (\n)
 //
 // NICHT UNTERSTUETZT (bewusste Vereinfachung):
-//   - Flow-Syntax {key: val} oder [a, b, c]
+//   - Block-Scalars, literal (|) wie folded (>): ParseLines kennt keinen
+//     Indikator. 'key: |' liefert den Scalar '|', die eingerueckten
+//     Folgezeilen brechen mit EYamlParseError 'Unerwartete Einrueckung'
+//     ab. (Bis 2026-11-04 nannte dieser Kopf '|' als unterstuetzt.)
+//   - Flow-Syntax {key: val} oder [a, b, c] - wird NICHT abgewiesen,
+//     sondern still als ein Scalar gelesen ('[a, b]' ist ein String);
+//     eine Sequenz erwartende Abfrage (GetSequenceStrings) findet dann
+//     nichts.
 //   - Anchors (&) und Aliases (*)
 //   - Tags (!str, !!int, ...)
-//   - Folded Block-Scalar (>)
 //   - Multi-Document-Files (---)
 //   - Tab-Indentation
 //
