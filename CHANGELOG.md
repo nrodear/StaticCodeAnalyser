@@ -293,6 +293,7 @@ What can change on an existing setup, in one place. The details follow in the se
 - **CLI: a relative `--path` no longer ends `--branch` and `--diff` with exit 99** - the search for `.git`/`.svn` walked up the path as written, so `--path .` from a subfolder of the repository (or `--path src` from its root) found no repository. The CLI now makes a relative `--path` absolute against the working directory first; absolute paths are passed on unchanged. Console lines that echo the path show the absolute path.
 - **CLI start line counts the rules that run** - with no profile given (neither `--profile` nor `[Rules] Profile`), `Rule-set: ... N rules active` counted all 205 rules, while the engine ran the `default` profile (197 rules). The count now follows the same rule as the engine. `--help` lists `selftest-quiet` and no longer speaks of six convention rules (`style` holds eight).
 - **`analyser.ini` template: `EnableDetectorReviewFilter` example takes effect** - the commented example read `=true`, which the ini reader takes as `0`, so uncommenting it switched nothing on. It now reads `=1`. Existing files are not changed.
+- **`SCA.CLI.Demo` names an unknown profile** - a mistyped profile ran all detectors and the report showed the name as if it had applied. As in the CLI the run goes on with all detectors, but a warning line and the report now say so. The engine API has `IsKnownProfile` for this check.
 
 ### Fixed - rule crashes and stalls
 

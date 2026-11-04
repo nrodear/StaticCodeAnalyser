@@ -38,7 +38,7 @@ SCA.CLI.Demo.exe [<Pfad>] [<Profil>]
 | Argument | Bedeutung |
 |----------|-----------|
 | `<Pfad>`   | Wurzelverzeichnis (Default: aktuelles Verzeichnis) |
-| `<Profil>` | optional. `''` = alle Detektoren (Default); SCA007 nie, die Demo setzt `UsesCheck` nicht. Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<Profil>` | optional. `''` = alle Detektoren (Default); SCA007 nie, die Demo setzt `UsesCheck` nicht. Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. Ein unbekannter Name ist wie im CLI kein Fehler: die Engine fährt alle Detektoren, und die Demo sagt das in einer Warnzeile und im Bericht. |
 
 Exit-Code: eigene, vereinfachte Konvention der Demo, **nicht** der Vertrag
 der CLI.
@@ -86,6 +86,7 @@ Demo bauen: ihre `2` heißt „Pfad nicht gefunden“, nicht „Warnings“.
 ## Was die Demo aus der API benutzt
 
 - `ScanRecursive(Pfad, Profil): TScanResult` — Ein-Zeilen-Rekursiv-Scan.
+- `IsKnownProfile(Profil): Boolean` — erkennt einen vertippten Profilnamen.
 - `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` —
   Schweregrad-Kennwerte.
 - `TScanResult.Findings` (`TObjectList<TLeakFinding>`) + `TLeakFinding.FindingType`

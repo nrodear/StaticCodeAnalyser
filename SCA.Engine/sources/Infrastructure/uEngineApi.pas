@@ -36,9 +36,17 @@
 //     in die Session-Instanz; die hier definierte API-Form bleibt gleich.
 //
 // PROFIL-SEMANTIK:
-//   * Req.Profile = ''          -> alle Detektoren (Engine-Default, [] = kein Filter)
+//   * Req.Profile = ''          -> Direkt-Modus (ApplyRepoIni=False, so auch
+//                                  ScanRecursive/AnalyzeSource): alle Detektoren
+//                                  (Engine-Default, [] = kein Filter).
+//                                  INI-Modus (ApplyRepoIni=True, wie der CLI):
+//                                  [Rules] Profile der analyser.ini, ist auch
+//                                  das leer, dann 'default'
+//                                  (TRepoSettings.EffectiveProfileName).
 //   * Req.Profile = 'default'   -> kuratiertes Default-Profil aus sca-rules.json
 //   * Req.Profile = 'strict'/'security'/'bugs-only'/... -> benanntes Profil
+//   * Unbekannter Name          -> alle Detektoren (TRuleCatalog.GetProfile,
+//                                  ohne Fehler); pruefbar per IsKnownProfile.
 //
 // ============================================================================
 
@@ -139,7 +147,7 @@ type
     Files          : TArray<string>;    // fuer ssFileList
     Source         : string;            // ssSource: In-Memory-Quelltext (statt Path)
     VcsRange       : string;            // ssVcsChanged: '' = Auto (Working-Tree vs Base); sonst 'shaA..shaB'
-    Profile        : string;            // '' = alle Detektoren; sonst Profilname (s. Header)
+    Profile        : string;            // Profilname; '' haengt am Modus (s. Header PROFIL-SEMANTIK)
     MinSeverity    : TLeakSeverity;     // Befunde unter dieser Schwelle werden verworfen
     MinConfidence  : TFindingConfidence;
     MaxFileBytes   : Integer;           // <= 0 -> Engine-Default (5 MB) beibehalten
@@ -160,13 +168,17 @@ type
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
-    ApplyRepoIni   : Boolean;           // true: repo analyser.ini laden + VOLL anwenden (8 Schwellen,
+    ApplyRepoIni   : Boolean;           // true: analyser.ini laden + VOLL anwenden (8 Schwellen,
                                         // PathOverrides, Magic/Format-Listen, INI-Profil/Custom-Rules) wie der CLI.
+                                        // Die Datei liegt IMMER unter %APPDATA%\StaticCodeAnalyser
+                                        // (TRepoSettings.ResolvedConfigPath, wird angelegt, falls sie
+                                        // fehlt) - nicht im Repo und nicht unter ConfigRoot/Path.
                                         // false (Default): nur die Felder dieses Requests, keine INI.
     MinSeverityName: string;            // nur im INI-Modus: Override fuer [Rules] MinSeverity
                                         // ('error'/'warning'/'hint'; '' = INI/Default belassen)
-    ConfigRoot     : string;            // INI-Modus: Wurzel fuer INI-/PathOverrides-/Custom-Rules-
-                                        // Aufloesung (ApplyDetectorThresholds). '' -> Path verwenden.
+    ConfigRoot     : string;            // INI-Modus: Wurzel fuer PathOverrides-/Custom-Rules-
+                                        // Aufloesung (ApplyDetectorThresholds), NICHT fuer den Ort
+                                        // der analyser.ini (s. ApplyRepoIni). '' -> Path verwenden.
                                         // Noetig wenn Scan-Ziel != Config-Root (z.B. Single-File).
     SkipConfig     : Boolean;           // true: Run wendet KEINE Detektor-/Schwellen-Config an - der
                                         // Consumer hat den globalen State bereits selbst gesetzt
@@ -313,11 +325,20 @@ function ScanRecursive(const APath: string;
 function AnalyzeSource(const Source: string;
   const AProfile: string = ''): TScanResult;
 
+// Ob AProfile ein Profil benennt, das der Regel-Katalog kennt (eingebaut
+// oder eigenes, Gross-/Kleinschreibung egal, Leerraum aussen egal - wie
+// TRuleCatalog.GetProfile). '' gilt als bekannt: es benennt kein Profil.
+// Wozu: ein unbekannter Name ist KEIN Fehler, die Engine faehrt dann still
+// alle Detektoren (GetProfile-Rueckfall). Ein Consumer, der Tippfehler
+// melden will, fragt vorher hier - ohne selbst uRuleCatalog zu kennen.
+function IsKnownProfile(const AProfile: string): Boolean;
+
 implementation
 
 uses
   Winapi.Windows,   // OutputDebugString (ProjectScope-Warnungen)
   System.IOUtils,
+  System.Generics.Defaults,   // TIStringComparer - IsKnownProfile wie der Katalog
   uEngineLock,      // prozessweiter Engine-Lock (Blatt-Unit, Review C Major 11)
   uFileTextCache,   // ReleaseTransientCaches (G2-5-Hook)
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
@@ -390,7 +411,7 @@ begin
   Result.Files           := nil;
   Result.Source          := '';
   Result.VcsRange        := '';
-  Result.Profile         := '';          // '' = alle Detektoren (Engine-Default)
+  Result.Profile         := '';          // '' = alle Detektoren (Direkt-Modus, s. Header)
   Result.MinSeverity     := lsHint;      // loseste Schwelle -> alles
   Result.MinConfidence   := fcMedium;    // Engine-Default
   Result.MaxFileBytes    := 0;           // 0 -> Engine-Default (5 MB) belassen
@@ -1080,6 +1101,25 @@ begin
   finally
     Ses.Free;
   end;
+end;
+
+function IsKnownProfile(const AProfile: string): Boolean;
+// Vergleich mit demselben Comparer wie das Profil-Dictionary des
+// Katalogs (TIStringComparer.Ordinal) und demselben Trim wie GetProfile -
+// sonst koennte ein Name hier "bekannt" heissen und dort auf alle
+// Detektoren zurueckfallen.
+// Equals ist an der Klasse protected - deshalb ueber das Interface.
+var
+  Lookup   : string;
+  ProfName : string;
+  Cmp      : IEqualityComparer<string>;
+begin
+  Lookup := Trim(AProfile);
+  if Lookup = '' then Exit(True);
+  Cmp := TIStringComparer.Ordinal;
+  for ProfName in TRuleCatalog.ProfileNames do
+    if Cmp.Equals(ProfName, Lookup) then Exit(True);
+  Result := False;
 end;
 
 { TFixtureFilter }

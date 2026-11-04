@@ -15,7 +15,12 @@ program SCA.CLI.Demo;
 //   <Pfad>    Wurzelverzeichnis (Default: aktuelles Verzeichnis)
 //   <Profil>  optional - '' = alle Detektoren (Default). Bekannte Profile:
 //             default, strict, ide-fast, security, bugs-only,
-//             code-quality, dfm-only
+//             code-quality, style, dfm-only, selftest-quiet
+//             Ein unbekannter Name ist wie im echten CLI kein Fehler: die
+//             Engine faehrt dann alle Detektoren. Bis 2026-11-04 geschah
+//             das hier STILL - der Bericht nannte den vertippten Namen, als
+//             haette er gegriffen. Jetzt sagt es eine Warnzeile vor dem Scan
+//             und die Profil-Zeile im Bericht (IsKnownProfile der Facade).
 //
 // Exit-Code: EIGENE, vereinfachte Konvention - NICHT der CLI-Vertrag!
 //   0 = sauber, 3 = irgendein Fund, 2 = Pfad fehlt, 1 = Exception.
@@ -86,6 +91,8 @@ end;
 
 procedure PrintReport(const APath, AProfile: string; ElapsedMs: Int64;
   const S: TStat);
+// Profil-Zeile: ein unbekannter Name steht mit seinem Rueckfall da - die
+// Engine hat ihn nicht angewandt, sondern alle Detektoren gefahren.
 var
   T : TFindingType;
 begin
@@ -95,6 +102,8 @@ begin
   WriteLn(Format('  Pfad         : %s', [APath]));
   if AProfile = '' then
     WriteLn('  Profil       : (alle Detektoren)')
+  else if not IsKnownProfile(AProfile) then
+    WriteLn(Format('  Profil       : %s (unbekannt - alle Detektoren)', [AProfile]))
   else
     WriteLn(Format('  Profil       : %s', [AProfile]));
   WriteLn(Format('  Dauer        : %d ms', [ElapsedMs]));
@@ -130,6 +139,13 @@ begin
       ExitCode := 2;
       Exit;
     end;
+
+    // Wie der echte CLI: ein unbekanntes Profil bricht nicht ab (dort
+    // nennt die Startzeile Profil und Regelzahl), hier sagt es eine
+    // Warnzeile. Exit-Code unveraendert.
+    if not IsKnownProfile(Profile) then
+      WriteLn(Format('Warnung: Profil "%s" unbekannt - die Engine faehrt ' +
+        'alle Detektoren.', [Profile]));
 
     WriteLn('Scanne ', Path, ' ...');
     SW := TStopwatch.StartNew;

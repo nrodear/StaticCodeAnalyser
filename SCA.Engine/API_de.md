@@ -92,7 +92,8 @@ Ein vollständiges, lauffähiges Beispiel ist das Projekt **`SCA.CLI.Demo`**.
 ## 3. Die API: `uEngineApi`
 
 Die Facade besteht aus einem Request-Record, einem Result-Objekt, einer
-Session-Klasse, einem Testfixture-Filter und zwei Convenience-Funktionen.
+Session-Klasse, einem Testfixture-Filter, zwei Convenience-Funktionen und
+einer Profilprüfung.
 
 ### 3.1 Einstiegspunkte
 
@@ -101,6 +102,7 @@ Session-Klasse, einem Testfixture-Filter und zwei Convenience-Funktionen.
 | `ScanRecursive(APath, AProfile=''): TScanResult` | Rekursiver Verzeichnis-Scan (Einzeiler). |
 | `AnalyzeSource(ASource, AProfile=''): TScanResult` | In-Memory-Scan eines Quelltext-Strings (Editor-Lint/Embedding). |
 | `TAnalysisSession.Create.Run(Req): TScanResult` | Voller Zugriff über `TScanRequest` (alle Optionen). |
+| `IsKnownProfile(AProfile): Boolean` | Ob der Regelkatalog den Profilnamen kennt (Groß-/Kleinschreibung egal, `''` gilt als bekannt). |
 
 ### 3.2 `TScanRequest`
 
@@ -214,6 +216,9 @@ Detektoren. SCA007 (ungenutzte uses) kommt in jedem Profil nur mit
 | `dfm-only` | Nur DFM-/Formular-Regeln. |
 | `style` | Nur Stil-Regeln (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
 | `selftest-quiet` | Alle Regeln außer einigen Layout-Regeln — für den Scan des Analysers selbst. |
+
+Ein unbekannter Profilname ist kein Fehler: die Engine fährt alle Detektoren.
+Wer Tippfehler melden will, prüft den Namen vorher mit `IsKnownProfile`.
 
 ### 3.7 Datenmodell: `TLeakFinding` (`uMethodd12`)
 

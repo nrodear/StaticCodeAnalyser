@@ -16,6 +16,7 @@ The program scans a directory recursively and prints only a **metrics summary**.
 | API | Purpose |
 |-----|---------|
 | `ScanRecursive(path, profile): TScanResult` | One-line recursive scan. |
+| `IsKnownProfile(profile): Boolean` | Detects a mistyped profile name. |
 | `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` | Severity metrics. |
 | `TScanResult.Findings` (`TObjectList<TLeakFinding>`) | Detail access. |
 | `TLeakFinding.FindingType` / `.FileName` | Category breakdown + file count. |
@@ -51,7 +52,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Meaning |
 |----------|---------|
 | `<path>`    | Root directory (default: current directory) |
-| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. An unknown name is not an error, as in the CLI: the engine runs all detectors, and the demo says so in a warning line and in the report. |
 
 Exit code: the demo's own, simplified convention, **not** the CLI contract.
 

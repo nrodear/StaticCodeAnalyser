@@ -93,8 +93,8 @@ Un exemple complet et exécutable est le projet **`SCA.CLI.Demo`**.
 ## 3. L'API : `uEngineApi`
 
 La façade se compose d'un record de requête, d'un objet résultat, d'une
-classe de session, d'un filtre de fixtures de test et de deux fonctions de
-commodité.
+classe de session, d'un filtre de fixtures de test, de deux fonctions de
+commodité et d'une vérification de profil.
 
 ### 3.1 Points d'entrée
 
@@ -103,6 +103,7 @@ commodité.
 | `ScanRecursive(APath, AProfile=''): TScanResult` | Analyse récursive d'un répertoire (une ligne). |
 | `AnalyzeSource(ASource, AProfile=''): TScanResult` | Analyse en mémoire d'une chaîne de code source (lint d'éditeur/intégration). |
 | `TAnalysisSession.Create.Run(Req): TScanResult` | Accès complet via `TScanRequest` (toutes les options). |
+| `IsKnownProfile(AProfile): Boolean` | Indique si le catalogue de règles connaît le nom de profil (casse indifférente, `''` compte comme connu). |
 
 ### 3.2 `TScanRequest`
 
@@ -221,6 +222,10 @@ profil qu'avec `UsesCheck = True`. Profils intégrés (`uRuleCatalog`) :
 | `dfm-only` | Règles DFM/fiches uniquement. |
 | `style` | Règles de style uniquement (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
 | `selftest-quiet` | Toutes les règles sauf quelques règles de mise en page — pour analyser l'analyseur lui-même. |
+
+Un nom de profil inconnu n'est pas une erreur : le moteur exécute tous les
+détecteurs. Pour signaler une faute de frappe, vérifiez d'abord le nom avec
+`IsKnownProfile`.
 
 ### 3.7 Modèle de données : `TLeakFinding` (`uMethodd12`)
 

@@ -18,6 +18,7 @@ Le programme analyse un répertoire récursivement et n'affiche qu'un
 | API | Rôle |
 |-----|------|
 | `ScanRecursive(path, profile): TScanResult` | Analyse récursive en une ligne. |
+| `IsKnownProfile(profile): Boolean` | Détecte un nom de profil mal saisi. |
 | `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` | Métriques de sévérité. |
 | `TScanResult.Findings` (`TObjectList<TLeakFinding>`) | Accès au détail. |
 | `TLeakFinding.FindingType` / `.FileName` | Ventilation par catégorie + nombre de fichiers. |
@@ -55,7 +56,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Signification |
 |----------|---------------|
 | `<path>`    | Répertoire racine (défaut : répertoire courant) |
-| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. Comme dans la CLI, un nom inconnu n'est pas une erreur : le moteur exécute tous les détecteurs, et la démo le signale par une ligne d'avertissement et dans le rapport. |
 
 Code de sortie : convention propre et simplifiée de la démo, **pas** le
 contrat de la CLI.
