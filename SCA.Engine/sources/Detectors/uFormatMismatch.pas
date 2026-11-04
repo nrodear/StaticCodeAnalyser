@@ -36,6 +36,22 @@
 //
 // Hinweis: Positionale Parameter (%0:s) werden als einfache %-Zaehlung
 // behandelt. Fuer uebliche sequenzielle Aufrufe ist das Ergebnis korrekt.
+//
+// JEDER Format-Aufruf eines Knotentextes wird geprueft (2026-11-04): ein
+// nkAssign-RHS oder nkCall-Text kann mehrere Aufrufe tragen -
+// 'S := Format(..) + Format(..)', 'Format(A, [Format(B, [x])])' und vor
+// allem der Rumpf einer anonymen Methode, der seit der Parser-Charge P2
+// (91222cae) auch mit var-Sektion EIN Knotentext ist. Bis dahin pruefte
+// TryExtractCall nur den ersten Aufruf je Text und verlor den Rest
+// (delphimvcframework WebModuleU.pas, 0.9.18 noch gemeldet). Das gilt fuer
+// SCA005 und den Locale-Hint SCA059 gleichermassen.
+// Fundzeile ist die Zeile des KNOTENS, nicht die des Aufrufs: in einer
+// anonymen Methode die Zeile der Anweisung, die sie haelt (gepinnt in
+// TTestParserChargeP.AnonVarSection_FormatMismatchAtAssignment). Daraus
+// folgen zwei bekannte Grenzen: zwei Aufrufe mit demselben Format-String
+// in einem Knoten melden einmal (Dedup Zeile + Format-String), und das
+// IFDEF-Gate (DirektiveImAufruf) sieht nur die Knotenzeile und die
+// Folgezeile, nicht die Zeile eines Aufrufs tief im Rumpf.
 
 interface
 
@@ -63,11 +79,16 @@ type
       Results: TObjectList<TLeakFinding>;
       ConstTable: TDictionary<string, string>);
   private
-    // Prueft ob CallName einen Aufruf einer Format-aequivalenten Funktion
-    // enthaelt (siehe DetectorFormatFunctions). Setzt FuncEnd auf die Pos
-    // direkt nach der oeffnenden '(' und liefert den ersten Argument-Token
-    // (Stringliteral inklusive Anfuehrungszeichen, oder Identifier).
-    class function TryExtractCall(const CallName: string;
+    // Sucht ab AFrom den FRUEHESTEN Aufruf einer Format-aequivalenten
+    // Funktion (siehe DetectorFormatFunctions) in CallName. True, sobald
+    // einer gefunden ist; FuncEnd zeigt dann direkt hinter seine '(' - dort
+    // setzt der Aufrufer die Suche nach dem naechsten Aufruf fort.
+    // FirstArg ist der erste Argument-Token (Stringliteral inklusive
+    // Anfuehrungszeichen, oder Identifier) oder '', wenn das Argument
+    // statisch nicht lesbar ist; ein solcher Aufruf wird uebergangen, die
+    // Suche geht weiter. ANames = FormatFunctionList, einmal je Knotentext.
+    class function TryExtractCall(const CallName: string; AFrom: Integer;
+      const ANames: TArray<string>;
       out FirstArg: string; out FuncEnd: Integer;
       out ArgsStart: Integer; out MatchedFunc: string): Boolean; static;
 
@@ -293,21 +314,31 @@ begin
 end;
 
 class function TFormatMismatchDetector.TryExtractCall(
-  const CallName: string; out FirstArg: string; out FuncEnd: Integer;
+  const CallName: string; AFrom: Integer; const ANames: TArray<string>;
+  out FirstArg: string; out FuncEnd: Integer;
   out ArgsStart: Integer; out MatchedFunc: string): Boolean;
-// Sucht den groessten Match unter allen FormatFunctionList-Eintraegen mit
-// nachfolgendem '('. Pflicht-Pruefung links: vor dem Funktionsnamen darf
+// Sucht ab AFrom unter allen ANames-Eintraegen mit nachfolgendem '(' das
+// FRUEHESTE Vorkommen. Pflicht-Pruefung links: vor dem Funktionsnamen darf
 // kein Identifier-Char stehen (sonst wuerde 'MyFormat(' false-positiv
 // matchen). Punkt davor (z.B. SysUtils.Format) ist erlaubt.
 //
-// Returns True wenn ein Match gefunden + erstes Argument extrahiert
-// (Stringliteral mit Quotes ODER Identifier-Token). MatchedFunc liefert
-// den Lower-Case-Namen zurueck damit Caller den Placeholder-Stil
-// (Standard vs Bare-%) bestimmen kann.
+// Returns True wenn ein Aufruf gefunden ist (FuncEnd gesetzt). FirstArg
+// ist das extrahierte erste Argument (Stringliteral mit Quotes ODER
+// Identifier-Token) oder '', wenn es nicht statisch lesbar ist.
+// MatchedFunc liefert den Lower-Case-Namen zurueck damit Caller den
+// Placeholder-Stil (Standard vs Bare-%) bestimmen kann.
+//
+// WARUM das frueheste Vorkommen und True auch ohne lesbares Argument
+// (2026-11-04): der Aufrufer laeuft damit Aufruf fuer Aufruf durch den
+// ganzen Knotentext. Vorher galt je Text nur das erste Vorkommen des
+// ersten Listennamens, und ein nicht lesbares erstes Argument beendete die
+// Pruefung mit False - jeder weitere Format-Aufruf des Textes blieb
+// ungeprueft (s. Kopf der Unit).
 var
   Low      : string;
   FuncName : string;
   pCall    : Integer;
+  Best     : Integer;
   i, j     : Integer;
   savedI   : Integer;
   Inner    : string;
@@ -319,7 +350,8 @@ begin
   MatchedFunc := '';
   Low := CallName.ToLower;
 
-  for FuncName in FormatFunctionList do
+  Best := 0;
+  for FuncName in ANames do
   begin
     // ALLE Vorkommen dieses Namens pruefen, nicht nur das erste
     // (Voll-Review 2026-09-12, Blocker): bei
@@ -327,82 +359,85 @@ begin
     // INNERHALB von 'logformat(' - das alte Continue sprang zum
     // NAECHSTEN Listeneintrag und der echte innere Call blieb
     // ungeprueft. Ein Fehlkandidat darf nur SICH SELBST verwerfen.
-    pCall := Pos(FuncName + '(', Low);
+    pCall := PosEx(FuncName + '(', Low, AFrom);
     while (pCall > 0) and
           (((pCall > 1) and TDetectorUtils.IsIdentChar(Low[pCall - 1]))
            or IsInsideStringLiteral(CallName, pCall)) do
       pCall := PosEx(FuncName + '(', Low, pCall + 1);
-    if pCall = 0 then Continue;
-
-    MatchedFunc := FuncName;
-    FuncEnd := pCall + Length(FuncName) + 1; // direkt nach '('
-    i := FuncEnd;
-    // fuehrenden Whitespace ueberspringen
-    while (i <= Length(CallName)) and CharInSet(CallName[i], [' ', #9]) do Inc(i);
-    if i > Length(CallName) then Exit;
-
-    if CallName[i] = '''' then
+    if (pCall > 0) and ((Best = 0) or (pCall < Best)) then
     begin
-      // Stringliteral - bis schliessenden Quote sammeln. Anschliessend
-      // pruefen ob ' + ''-fortgesetzte Konkatenation folgt (typisch fuer
-      // mehrzeilige SQL-Strings: 'SELECT...' + 'WHERE %=...').
-      // Inner = der ZUSAMMENGESETZTE Inhalt (ohne aeussere Quotes); FirstArg
-      // wird am Ende einmalig mit Quotes gerahmt damit ResolveFormatString
-      // weiterhin damit umgehen kann.
-      Inner := '';
-      if not ReadStringLiteral(CallName, i, Inner) then Exit(False);
-      // Konkatenation 'a' + 'b' + ... mergen.
-      while True do
-      begin
-        // Position vor dem '+' merken um bei Fehlversuch zurueckzuspringen.
-        savedI := i;
-        SkipSpaces(CallName, i);
-        if (i > Length(CallName)) or (CallName[i] <> '+') then
-        begin
-          i := savedI; // kein '+', ArgsStart soll direkt nach Literal stehen
-          Break;
-        end;
-        Inc(i); // '+' ueberspringen
-        SkipSpaces(CallName, i);
-        if (i > Length(CallName)) or (CallName[i] <> '''') then
-        begin
-          // '+' aber kein weiteres Literal (z.B. + Ident, + sLineBreak,
-          // + IntToStr(x), + benannte-Const) -> der Format-String ist NICHT
-          // vollstaendig statisch aufloesbar. Frueher wurde der bisher
-          // gemergte Teilstring weiterverwendet -> Platzhalter der fehlenden
-          // Fragmente fehlten -> massive FP-Klasse (Jcl-Templates, mehrzeilige
-          // Strings mit sLineBreak, gettext '_()', Char-Consts). Jetzt:
-          // komplett unterdruecken statt mit Teilstring zu zaehlen.
-          Exit(False);
-        end;
-        if not ReadStringLiteral(CallName, i, Inner) then Exit(False);
-      end;
-      FirstArg := '''' + Inner + '''';
-      ArgsStart := i;
-      Exit(True);
-    end
-    else if TDetectorUtils.IsIdentChar(CallName[i]) and
-            not CharInSet(CallName[i], ['0'..'9']) then
-    begin
-      // Identifier (muss mit Buchstabe oder _ anfangen).
-      j := i;
-      while (j <= Length(CallName)) and
-            TDetectorUtils.IsIdentChar(CallName[j]) do
-        Inc(j);
-      // Ident gefolgt von '+' (Konkatenation, z.B. GXHexPrefix + '%x' oder
-      // VersionDir + '%s') -> Format-String nicht vollstaendig statisch
-      // (die angehaengten Literale wuerden ignoriert -> FP). Suppress.
-      savedI := j;
-      SkipSpaces(CallName, savedI);
-      if (savedI <= Length(CallName)) and (CallName[savedI] = '+') then
-        Exit(False);
-      FirstArg  := Copy(CallName, i, j - i);
-      ArgsStart := j;
-      Exit(True);
+      Best        := pCall;
+      MatchedFunc := FuncName;
     end;
-    // Andere Tokens (Klammer, Operator, ...) -> nicht aufloesbar
-    Exit(False);
   end;
+  if Best = 0 then Exit;
+
+  Result  := True;
+  FuncEnd := Best + Length(MatchedFunc) + 1; // direkt nach '('
+  i := FuncEnd;
+  // fuehrenden Whitespace ueberspringen
+  while (i <= Length(CallName)) and CharInSet(CallName[i], [' ', #9]) do Inc(i);
+  if i > Length(CallName) then Exit;
+
+  if CallName[i] = '''' then
+  begin
+    // Stringliteral - bis schliessenden Quote sammeln. Anschliessend
+    // pruefen ob ' + ''-fortgesetzte Konkatenation folgt (typisch fuer
+    // mehrzeilige SQL-Strings: 'SELECT...' + 'WHERE %=...').
+    // Inner = der ZUSAMMENGESETZTE Inhalt (ohne aeussere Quotes); FirstArg
+    // wird am Ende einmalig mit Quotes gerahmt damit ResolveFormatString
+    // weiterhin damit umgehen kann.
+    Inner := '';
+    if not ReadStringLiteral(CallName, i, Inner) then Exit;
+    // Konkatenation 'a' + 'b' + ... mergen.
+    while True do
+    begin
+      // Position vor dem '+' merken um bei Fehlversuch zurueckzuspringen.
+      savedI := i;
+      SkipSpaces(CallName, i);
+      if (i > Length(CallName)) or (CallName[i] <> '+') then
+      begin
+        i := savedI; // kein '+', ArgsStart soll direkt nach Literal stehen
+        Break;
+      end;
+      Inc(i); // '+' ueberspringen
+      SkipSpaces(CallName, i);
+      if (i > Length(CallName)) or (CallName[i] <> '''') then
+      begin
+        // '+' aber kein weiteres Literal (z.B. + Ident, + sLineBreak,
+        // + IntToStr(x), + benannte-Const) -> der Format-String ist NICHT
+        // vollstaendig statisch aufloesbar. Frueher wurde der bisher
+        // gemergte Teilstring weiterverwendet -> Platzhalter der fehlenden
+        // Fragmente fehlten -> massive FP-Klasse (Jcl-Templates, mehrzeilige
+        // Strings mit sLineBreak, gettext '_()', Char-Consts). Jetzt:
+        // komplett unterdruecken statt mit Teilstring zu zaehlen.
+        Exit;
+      end;
+      if not ReadStringLiteral(CallName, i, Inner) then Exit;
+    end;
+    FirstArg := '''' + Inner + '''';
+    ArgsStart := i;
+  end
+  else if TDetectorUtils.IsIdentChar(CallName[i]) and
+          not CharInSet(CallName[i], ['0'..'9']) then
+  begin
+    // Identifier (muss mit Buchstabe oder _ anfangen).
+    j := i;
+    while (j <= Length(CallName)) and
+          TDetectorUtils.IsIdentChar(CallName[j]) do
+      Inc(j);
+    // Ident gefolgt von '+' (Konkatenation, z.B. GXHexPrefix + '%x' oder
+    // VersionDir + '%s') -> Format-String nicht vollstaendig statisch
+    // (die angehaengten Literale wuerden ignoriert -> FP). Suppress.
+    savedI := j;
+    SkipSpaces(CallName, savedI);
+    if (savedI <= Length(CallName)) and (CallName[savedI] = '+') then
+      Exit;
+    FirstArg  := Copy(CallName, i, j - i);
+    ArgsStart := j;
+  end;
+  // Andere Tokens (Klammer, Operator, ...) -> nicht aufloesbar;
+  // FirstArg bleibt '' (Result ist schon True, s. oben).
 end;
 
 class function TFormatMismatchDetector.ResolveFormatString(
@@ -801,7 +836,7 @@ class procedure TFormatMismatchDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   ConstTable: TDictionary<string, string>);
 var
-  // Reported wird im outer-body initialisiert; CheckCallText (nested)
+  // Reported wird im outer-body initialisiert; CheckOneCall (nested)
   // greift erst nach dem Create darauf zu - FP des Nested-Closure-Pattern.
   Reported : TDictionary<string, Boolean>;
   // Real-World-FP-Audit 2026-07-10 (FP-Klasse const-name-collision):
@@ -815,19 +850,17 @@ var
   // ueblich - der Routinen-Scope den Unit-Scope beschattet.
   EffTable : TDictionary<string, string>;
 
-  procedure CheckCallText(const CallText: string; Line: Integer);
+  // EIN Format-Aufruf des Knotentextes: FirstArg/ArgsStart/MatchedFunc
+  // aus TryExtractCall, Line ist die Zeile des Knotens.
+  procedure CheckOneCall(const CallText: string; Line: Integer;
+    const FirstArg: string; ArgsStart: Integer; const MatchedFunc: string);
   var
-    FirstArg    : string;
-    FuncEnd     : Integer;
-    ArgsStart   : Integer;
-    MatchedFunc : string;
     FmtStr      : string;
     PlaceCount  : Integer;
     ArgCount    : Integer;
     F           : TLeakFinding;
     Key         : string;
   begin
-    if not TryExtractCall(CallText, FirstArg, FuncEnd, ArgsStart, MatchedFunc) then Exit;
     // Real-World-FP-Audit 2026-07-10: gegen die Routinen-lokal ueberlagerte
     // EffTable aufloesen (Local-shadows-Unit), NICHT gegen die rohe ConstTable.
     if not ResolveFormatString(FirstArg, EffTable, FmtStr) then Exit;
@@ -880,6 +913,29 @@ var
                            [PlaceCount, ArgCount]);
     F.SetKind(fkFormatMismatch);
     Results.Add(F);
+  end;
+
+  // Alle Format-Aufrufe eines Knotentextes der Reihe nach (2026-11-04,
+  // s. Kopf der Unit): die Suche setzt hinter der '(' des gefundenen
+  // Aufrufs fort, erreicht also auch einen Aufruf in dessen Argumenten
+  // ('Format(A, [Format(B, [x])])').
+  procedure CheckCallText(const CallText: string; Line: Integer);
+  var
+    Names       : TArray<string>;
+    From        : Integer;
+    FirstArg    : string;
+    FuncEnd     : Integer;
+    ArgsStart   : Integer;
+    MatchedFunc : string;
+  begin
+    Names := FormatFunctionList;
+    From  := 1;
+    while TryExtractCall(CallText, From, Names, FirstArg, FuncEnd,
+            ArgsStart, MatchedFunc) do
+    begin
+      From := FuncEnd;
+      CheckOneCall(CallText, Line, FirstArg, ArgsStart, MatchedFunc);
+    end;
   end;
 
 var

@@ -35,6 +35,11 @@ type
     // Real-world Pattern aus mORMot-artigen deutschen Meldungen mit
     // mehreren eingebetteten Apostrophen
     [Test] procedure Format_MultipleEscapedQuotes_CorrectCount;
+    // 2026-11-04: jeder Format-Aufruf eines Knotentextes, nicht nur der
+    // erste (Lambda-Rumpf seit Parser-P2 = ein Text; WebModuleU-Fall)
+    [Test] procedure Format_SecondCallInStatement_Reported;
+    [Test] procedure Format_AfterUnreadableFirstCall_Reported;
+    [Test] procedure Format_AnonMethodWithVarSection_SecondCall_Reported;
   end;
 
   // ---- FormatMismatch Erweiterung ----------------------------------------------------
@@ -60,6 +65,8 @@ type
     [Test] procedure FormatLocale_SpecN_WithSettings_NoFinding;
     [Test] procedure FormatLocale_SpecM_WithoutSettings_Reported;
     [Test] procedure FormatLocale_SpecM_WithSettings_NoFinding;
+    // 2026-11-04: der Hint gilt auch fuer den inneren Aufruf
+    [Test] procedure FormatLocale_InnerCallOfOuterFormat_Reported;
   end;
 
   // ---- Real-World-FP-Triage 2026-06-25 (SCA005, 25-Repo-Korpus) ----------------------
@@ -391,6 +398,107 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
       'Zwei eingebettete '' + %s am Ende: 1 Platzhalter, 1 Argument');
+  finally F.Free; end;
+end;
+
+{ --- 2026-11-04: jeder Format-Aufruf eines Knotentextes ------------- }
+//
+// TryExtractCall pruefte je nkAssign-RHS bzw. nkCall-Text nur EINEN
+// Aufruf (erstes Vorkommen des ersten Listennamens) und brach bei einem
+// unlesbaren ersten Argument ab. Jeder weitere Aufruf desselben Textes
+// blieb ungeprueft. Die drei Fixturen sind so gebaut, dass der ERSTE
+// Aufruf sauber bzw. unlesbar ist und nur der ZWEITE den Fehler traegt -
+// ohne die Vorkommens-Schleife in CheckCallText melden sie 0.
+
+procedure TTestFormatMismatch.Format_SecondCallInStatement_Reported;
+// Erster Aufruf passt (1 zu 1), der zweite hat 0 Platzhalter und ein
+// Argument. Ohne Fix: 0 Funde (der zweite Aufruf wird nie gelesen).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(A, B: Integer);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(''%d'', [A]) + Format(''Nur Text'', [B]);'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'der zweite Format-Aufruf der Anweisung wird geprueft');
+    Hit := TFindingHelper.FirstOf(F, fkFormatMismatch);
+    Assert.AreEqual('Format: 0 placeholders, 1 arguments', Hit.MissingVar,
+      'gemeldet ist der ZWEITE Aufruf, nicht der passende erste');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 's := Format('), Hit.LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_AfterUnreadableFirstCall_Reported;
+// Der erste Aufruf hat einen Parameter als Format-String (statisch nicht
+// lesbar). Das beendete die Pruefung des ganzen Textes; der Fehler im
+// zweiten Aufruf (2 Platzhalter, 1 Argument) blieb stumm. Ohne Fix: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(const AFmt: string; A, B: Integer);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(AFmt, [A]) + Format(''%s %s'', [B]);'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'ein unlesbarer erster Aufruf darf den zweiten nicht maskieren');
+    Hit := TFindingHelper.FirstOf(F, fkFormatMismatch);
+    Assert.AreEqual('Format: 2 placeholders, 1 arguments', Hit.MissingVar);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 's := Format('), Hit.LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_AnonMethodWithVarSection_SecondCall_Reported;
+// delphimvcframework samples\custom_exception_handling\WebModuleU.pas:76
+// (0.9.18 meldete 74, 0.9.19 bis hierher gar nicht): anonyme Methode MIT
+// var-Sektion, seit der Parser-Charge P2 ist ihr ganzer Rumpf EIN RHS-Text.
+// Der erste Format-Aufruf passt, der zweite hat keinen Platzhalter, aber
+// ein Argument. Fundzeile ist die Zuweisung der anonymen Methode - wie
+// bei jedem Fund aus ihrem Rumpf (TTestParserChargeP.
+// AnonVarSection_FormatMismatchAtAssignment). Ohne Fix: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.SysUtils;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Run(Color: string);'#13#10 +
+  'var'#13#10 +
+  '  H: TProc;'#13#10 +
+  'begin'#13#10 +
+  '  H := procedure'#13#10 +
+  '    var'#13#10 +
+  '      S: string;'#13#10 +
+  '    begin'#13#10 +
+  '      S := Format(''<h2 style="color: %s">'', [Color]);'#13#10 +
+  '      S := S + Format(''<h2 style="color: red">'', [Color]);'#13#10 +
+  '    end;'#13#10 +
+  '  H();'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'der zweite Aufruf im Rumpf der anonymen Methode wird geprueft');
+    Hit := TFindingHelper.FirstOf(F, fkFormatMismatch);
+    Assert.AreEqual('Format: 0 placeholders, 1 arguments', Hit.MissingVar);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'H := procedure'),
+      Hit.LineNumber, 'Fund an der Zuweisung H := procedure');
   finally F.Free; end;
 end;
 
@@ -1086,6 +1194,35 @@ begin
     TFindingHelper.Count(F, fkFormatLocaleHint),
     'ohne TFormatSettings bleibt der Hint faellig - auch wenn ein '
     + 'Literal eine Klammer traegt');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_InnerCallOfOuterFormat_Reported;
+// pyscripter Source\frmUnitTests.pas:526 (2026-11-04): der aeussere
+// Aufruf hat keine Float-Spec, der innere ' in %.3fs' ohne
+// TFormatSettings schon. Bis dahin las TryExtractCall nur den aeusseren
+// Aufruf - ohne Fix: 0 Hints. Beide Zahlen passen (Gegenprobe: kein
+// Mismatch).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; n: Integer; t: Double;'#13#10+
+  'begin'#13#10+
+  '  s := Format(''Ran %d%s'', [n, Format('' in %.3fs'', [t])]);'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatLocaleHint),
+      'der innere Aufruf traegt die Float-Spec');
+    Hit := TFindingHelper.FirstOf(F, fkFormatLocaleHint);
+    Assert.IsTrue(Pos(' in %.3fs', Hit.MissingVar) > 0, Hit.MissingVar);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 's := Format('), Hit.LineNumber);
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'Platzhalter und Argumente passen aussen wie innen');
   finally F.Free; end;
 end;
 
