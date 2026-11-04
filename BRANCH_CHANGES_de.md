@@ -60,9 +60,9 @@ Zusaetzliche Funktionen gegenueber Standalone:
 - Help-Panel mit Vorher/Nachher-Snippets
 
 Installieren — am einfachsten zuerst: die Release-**Setup-EXE**
-(`StaticCodeAnalyserSetup-<Version>.exe`) oder das **GetIt Local Package**
-(`StaticCodeAnalyser-v<V>-getit-manifest.zip` → **Load Local Package**
-im GetIt Package Manager). Alternativ Selbstbau:
+(`StaticCodeAnalyserSetup-<Version>.exe`). **GetIt** ist für 0.9.19
+ausgesetzt: der Paketsatz lässt sich über GetIt nicht installieren. Wer
+GetIt nutzt, nimmt das Setup. Alternativ Selbstbau:
 
 ```
 Open StaticCodeAnalyser.IDE.d12.dproj -> Project -> Install
@@ -280,7 +280,7 @@ Liefert UTF-8 statt escaped Sequenzen.
 | Ziel | Schritt |
 |------|---------|
 | Standalone-EXE | `StaticCodeAnalyser.d12.dproj` öffnen → Project → Build |
-| IDE-Plugin (empfohlen) | Release-Setup `StaticCodeAnalyserSetup-<Version>.exe` ausfuehren, oder GetIt Local Package laden (`StaticCodeAnalyser-v<V>-getit-manifest.zip`) |
+| IDE-Plugin (empfohlen) | Release-Setup `StaticCodeAnalyserSetup-<Version>.exe` ausführen (GetIt ist für 0.9.19 ausgesetzt) |
 | IDE-Plugin (Selbstbau) | `StaticCodeAnalyser.IDE.d12.dproj` oeffnen → Project → Install |
 
 Plattform: das Plugin läuft in der 32-Bit-IDE von Delphi 12.0–12.3 und

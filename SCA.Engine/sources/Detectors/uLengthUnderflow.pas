@@ -1,6 +1,7 @@
 unit uLengthUnderflow;
 
-// Detektor: `Length(s) - X` / `.Count - X` ohne vorausgehenden Guard.
+// Detektor: `Length(s) - K` / `.Count - K` ohne vorausgehenden Guard,
+// K ein ganzzahliges Literal >= 2.
 //
 // Pascal's `Length` und `.Count` liefern Native-Int. Wenn der Wert 0 ist
 // und man subtrahiert, gibt das eine ganz normale negative Zahl - aber
@@ -11,16 +12,21 @@ unit uLengthUnderflow;
 //   for i := 0 to Length(s) - 2 do            // Length(s)<=1 -> -2 oder -1
 //   Move(s[Length(s) - 4], buf, 4);           // CRASH wenn Length(s) < 4
 //
-// Der erste Fall ist OK (0 to -1 hat 0 Iterationen). Die anderen sind
-// klassische String-Slicing-Bugs.
+// Der erste Fall ist OK (0 to -1 hat 0 Iterationen). Die letzten beiden
+// sind klassische String-Slicing-Bugs. Der zweite (K = 1) ist einer nur,
+// wenn k danach als Index dient - er meldet wegen der Schwelle unten nicht.
 //
 // Heuristik (file-scan, weil der Parser Length/.Count nicht als AST-Knoten
 // auffaltet, sondern als Token-String in TypeRef):
 //   * RHS / Range-Expression enthaelt 'Length(' oder '.Count' / '.Length'
-//     gefolgt von einem Whitespace-toleranten ' - <ConstOrVar>'.
-//   * Schwelle ConstOrVar > 1: bei -1 ist es das `for ... to Length-1`
-//     Idiom (siehe oben), das ist statistisch fast immer sauber.
-//   * `Length(s) - K` mit `K > 1` ist verdaechtig -> Treffer.
+//     gefolgt von einem Whitespace-toleranten ' - <Ziffern>'.
+//   * NUR ein Zahl-Literal zaehlt (FindMatch liest nur Ziffern): ein
+//     Bezeichner oder Ausdruck als Offset (`Length(s) - N`,
+//     `Length(s) - (a+b)`) meldet nie - sein Wert ist statisch unbekannt.
+//   * Schwelle K >= 2 (MIN_OFFSET_TO_FLAG): bei -1 ist es das
+//     `for ... to Length-1` Idiom (siehe oben), das ist statistisch fast
+//     immer sauber.
+//   * `Length(s) - K` mit Literal `K >= 2` ist verdaechtig -> Treffer.
 //   * Wir koennen statisch nicht checken, ob ein Guard `if Length(s) >= K`
 //     vorausgeht; deshalb nur als Hint melden (lsHint).
 
@@ -47,8 +53,9 @@ uses
   uFileTextCache;
 
 const
-  // Schwelle: bei -1 ist es das Loop-Idiom `0 to Length-1`, bei -2 etc.
-  // wird es verdaechtig (oder bei dynamisch berechnetem K).
+  // Schwelle: bei -1 ist es das Loop-Idiom `0 to Length-1`, ab -2 wird
+  // es verdaechtig. Gilt nur fuer Zahl-Literale - ein berechnetes K
+  // (Bezeichner, Ausdruck) meldet nie, siehe Kopf.
   MIN_OFFSET_TO_FLAG = 2;
 
 function IsDigit(C: Char): Boolean; inline;

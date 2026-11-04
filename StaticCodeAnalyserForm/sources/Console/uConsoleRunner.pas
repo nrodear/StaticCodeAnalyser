@@ -16,7 +16,8 @@
 //   2  = mindestens 1 Warning (keine Errors)
 //   3  = mindestens 1 Error
 //   4  = mindestens 1 Read-Error (Parser-/IO-Fehler)
-//   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, VCS-Fehler bei --diff/--branch, ...)
+//   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, unbekanntes Profil,
+//        VCS-Fehler bei --diff/--branch, ...)
 //
 // Die Rangleiter 1-3 gewinnt gegen 4: ein Lauf mit Errors UND Lesefehlern
 // meldet 3. --fail-on darf einen Lauf mit Lesefehlern aber nicht auf 0
@@ -227,6 +228,41 @@ function PeStackReserveMB(const AExePath: string): Integer;
 // testbar ohne Run-Seiteneffekt.
 function EffektiverUsesCheck(AIniUsesCheck: Boolean;
   const AProfil: string): Boolean;
+
+// Zahl der Regeln, die die Engine fuer das Profil AProfil faehrt - die
+// Zahl der Startzeile "Rule-set: ... N rules active". AProfil ist
+// Settings.Profile (INI-Wert, von --profile ueberschrieben); leer heisst
+// dort 'default' (TRepoSettings.EffectiveProfileName, dieselbe Regel wie
+// ApplyDetectorThresholds). Bis 2026-11-04 zaehlte die Zeile
+// TRuleCatalog.GetProfile('') = AllKinds: 205 statt der 197, die
+// tatsaechlich liefen. Unbekannte Namen zaehlen wie in der Engine
+// AllKinds (die Startzeile erreicht der CLI mit einem unbekannten Namen
+// seit 2026-11-04 nicht mehr, s. ProfilPruefung). Ohne UsesCheck-Gate
+// und Konfidenzfilter - die Zeile nennt das Profil, nicht die Fundmenge. In der interface-Sektion aus
+// demselben Grund wie ApplyFailOnPolicy: testbar ohne Run.
+function AktiveRegelAnzahl(const AProfil: string): Integer;
+
+// Pruefung des effektiven Profils VOR dem Scan (Nico-Entscheid
+// 2026-11-04). Bis dahin lief ein vertipptes Profil - aus --profile wie
+// aus [Rules] Profile der analyser.ini - STILL mit allen Detektoren
+// (TRuleCatalog.GetProfile faellt auf AllKinds zurueck): ein CI-Lauf mit
+// '--profile secuirty' fuhr 205 Regeln statt der Sicherheitsregeln und
+// meldete einen anderen Exit-Code, ohne dass irgendwo ein Fehler stand.
+// Jetzt ist das ein Aufruffehler wie '--fail-on warnings' oder eine
+// fehlende --baseline: Exit 99, Meldung auf stderr, kein Bericht.
+//   AProfil  - Settings.Profile NACH der --profile-Praezedenz
+//   AQuelle  - woher der Name kam, fuer die Meldung ('--profile' bzw. die
+//              analyser.ini mit Pfad)
+//   AMeldung - '' bei bekanntem Profil, sonst die Zeilen fuer stderr
+//              (Name, Quelle, bekannte Profile, Ablage von profiles.json)
+// Liefert 0 (weiter) oder 99 (cecToolError, Abbruch). Bekannt heisst:
+// IsKnownProfile der Facade - eingebaute UND eigene Profile aus
+// profiles.json, Gross-/Kleinschreibung und aeusserer Leerraum egal, ''
+// bekannt (leer heisst 'default', TRepoSettings.EffectiveProfileName).
+// In der interface-Sektion aus demselben Grund wie ApplyFailOnPolicy:
+// testbar ohne Run, der die echte analyser.ini unter %APPDATA% laedt.
+function ProfilPruefung(const AProfil, AQuelle: string;
+  out AMeldung: string): Integer;
 
 // dlAuto V2 (D5, 2026-09-19; Zuschnitt Konzept_DlAutoV2): Dialekt-
 // Verdikt fuer EINE Datei - Aufwaertssuche vom Dateiverzeichnis bis
@@ -524,7 +560,13 @@ begin
     else if A = '--custom-rules' then
       GetValue(Result.CustomRules, '--custom-rules')
     else if A = '--profile' then
-      GetValue(Result.Profile, '--profile')
+    begin
+      GetValue(Result.Profile, '--profile');
+      // Getrimmt wie der INI-Wert (Load): ' ' hiesse sonst weder leer
+      // (= default) noch unbekannt - GetProfile trimmt und lieferte alle
+      // Kinds, die Profilpruefung liess es als leer durch.
+      Result.Profile := Trim(Result.Profile);
+    end
     // Wert-Schalter (GetValue!) - darf NICHT in CLI_SCHALTER_OHNE_WERT,
     // sonst wird '--dialect=fpc' hart abgelehnt. Wertpruefung strom-
     // abwaerts im Konsistenz-Block (Muster --fail-on).
@@ -811,11 +853,16 @@ begin
   WriteLn('Rule-set:');
   WriteLn('  --profile <name>      Bundled or custom profile from rules/sca-rules.json');
   WriteLn('                        (default, strict, ide-fast, security,');
-  WriteLn('                         bugs-only, code-quality, style, dfm-only)');
-  WriteLn('                        default = alles AUSSER den sechs reinen');
-  WriteLn('                        Konventions-Regeln; die liegen in style.');
-  WriteLn('                        strict = wirklich alles.');
+  WriteLn('                         bugs-only, code-quality, style, dfm-only,');
+  WriteLn('                         selftest-quiet)');
+  WriteLn('                        default = everything EXCEPT the pure');
+  WriteLn('                        convention rules, those are in style.');
+  WriteLn('                        strict = really everything.');
   WriteLn('                        Overrides [Rules] Profile in analyser.ini.');
+  WriteLn('                        Neither this nor [Rules] Profile: default.');
+  WriteLn('                        An unknown name (here or in [Rules] Profile)');
+  WriteLn('                        is a tool error (exit 99), the scan does not');
+  WriteLn('                        start. Custom profiles from profiles.json count.');
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
@@ -943,7 +990,8 @@ begin
   WriteLn('   2 = warnings present');
   WriteLn('   3 = errors present');
   WriteLn('   4 = read errors (parser/IO), no higher tier reached');
-  WriteLn('  99 = tool error (bad args, missing path, VCS failure in --diff/--branch, ...)');
+  WriteLn('  99 = tool error (bad args, missing path, unknown profile, VCS failure');
+  WriteLn('       in --diff/--branch, ...)');
   WriteLn('');
   WriteLn('  The tiers outrank each other in that order: a run with errors AND');
   WriteLn('  read errors exits 3, not 4. --fail-on lowers a suppressed tier to');
@@ -1589,6 +1637,27 @@ begin
     if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
     if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
 
+    // Unbekanntes Profil = Aufruffehler (s. ProfilPruefung). HIER, direkt
+    // nach dem Zusammenfuehren von Schalter und ini: weiter oben ist das
+    // ini-Profil noch nicht gelesen, weiter unten beginnt schon die
+    // Baseline- und Report-Arbeit. Gilt auch fuer --quiet - Fehler gehen immer auf
+    // stderr.
+    begin
+      var ProfilQuelle  : string;
+      var ProfilMeldung : string;
+      if Args.Profile <> '' then
+        ProfilQuelle := '--profile'
+      else
+        ProfilQuelle := '[Rules] Profile in ' +
+          TRepoSettings.ResolvedConfigPath;
+      if ProfilPruefung(Settings.Profile, ProfilQuelle, ProfilMeldung) <>
+         Integer(cecClean) then
+      begin
+        WriteLn(ErrOutput, ProfilMeldung);
+        Exit(Integer(cecToolError));
+      end;
+    end;
+
     // ---- Baseline-Scan-Aufloesung (Konzept_BaselineSca Inkrement 2) ----
     // Praezedenz: --baseline <file> > [Baseline] File= > .sca-Standardort.
     // FRUEH und HART: bei --baseline-scan y ohne existierende Datei bricht
@@ -1776,7 +1845,6 @@ begin
     begin
       var ProfileSrc  : string;
       var SeveritySrc : string;
-      var ActiveKinds : Integer;
       // Herkunft NICHT am Wert festmachen, sondern daran, ob die INI
       // ueberhaupt existiert. Vorher stand auf einem frischen Rechner
       // 'analyser.ini' in der Zeile, obwohl keine da war - beim
@@ -1789,14 +1857,10 @@ begin
       if Args.MinSeverity <> '' then SeveritySrc := '--min-severity'
       else if HasIni then SeveritySrc := 'analyser.ini/Default'
       else SeveritySrc := 'Default';
-      // GetProfile einmal aufloesen - der Aufruf laedt den Katalog.
-      var Active : TFindingKinds := TRuleCatalog.GetProfile(Settings.Profile);
-      ActiveKinds := 0;
-      for var K := Low(TFindingKind) to High(TFindingKind) do
-        if K in Active then Inc(ActiveKinds);
+      // Zahl ueber dieselbe Leer-Regel wie die Engine (s. AktiveRegelAnzahl).
       WriteLn(Format('Rule-set: Profile=%s (%s), MinSeverity=%s (%s), %d rules active',
         [Settings.Profile, ProfileSrc, Settings.MinSeverity, SeveritySrc,
-         ActiveKinds]));
+         AktiveRegelAnzahl(Settings.Profile)]));
     end;
 
     // Per-Detector-Timing aktivieren wenn --time-detectors angefordert.
@@ -2571,6 +2635,40 @@ function EffektiverUsesCheck(AIniUsesCheck: Boolean;
 // uStaticAnalyzer2 als EIGENER Schalter neben dem Profil.
 begin
   Result := AIniUsesCheck or SameText(AProfil, 'strict');
+end;
+
+function AktiveRegelAnzahl(const AProfil: string): Integer;
+// Vertrag siehe interface. GetProfile laedt den Katalog beim ersten Aufruf.
+var
+  Aktiv : TFindingKinds;
+begin
+  Aktiv := TRuleCatalog.GetProfile(
+    TRepoSettings.EffectiveProfileName(AProfil));
+  Result := 0;
+  for var K := Low(TFindingKind) to High(TFindingKind) do
+    if K in Aktiv then Inc(Result);
+end;
+
+function ProfilPruefung(const AProfil, AQuelle: string;
+  out AMeldung: string): Integer;
+// Vertrag siehe interface. Die Liste der bekannten Profile steht in der
+// Meldung, weil der haeufigste Fall ein Tippfehler ist und die richtige
+// Schreibweise dann eine Zeile tiefer steht. Die Zeile mit der Ablage von
+// profiles.json zielt auf CI: ein eigenes Profil liegt unter %APPDATA%
+// DES Kontos, das es angelegt hat - ein Build-Dienst mit eigenem Konto
+// kennt es nicht, und genau dort laeuft die Pipeline.
+begin
+  AMeldung := '';
+  if IsKnownProfile(AProfil) then
+    Exit(Integer(cecClean));
+  AMeldung :=
+    Format('Error: unknown profile "%s" (from %s).', [AProfil, AQuelle]) +
+    sLineBreak +
+    'Known profiles: ' + string.Join(', ', KnownProfileNames) + sLineBreak +
+    'Custom profiles are read from: ' + TRuleCatalog.UserProfilesFilePath +
+    sLineBreak +
+    'The scan was not started (an unknown profile used to run all rules).';
+  Result := Integer(cecToolError);
 end;
 
 end.

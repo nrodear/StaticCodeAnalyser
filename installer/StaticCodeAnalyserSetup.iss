@@ -25,13 +25,15 @@
 ;   StaticCodeAnalyser.d12.dproj      VerInfo_Keys + VerInfo_Release
 ;   die vier Paket-dproj (SCA.Engine, SCA.SharedUI, StaticCodeAnalyser.IDE.d12,
 ;   reDelphix.d12)  VerInfo_Keys + numerische Felder, je Win32 UND Win64
-;   uIDEExpert.PLUGIN_VERSION  (Titel im IDE-Fenster)
 ;   diese Datei
+; uIDEExpert.PLUGIN_VERSION (Titel im IDE-Fenster) ist KEINE eigene Stelle
+; mehr: seit 2026-08-23 leitet sie sich aus SCA_VERSION ab ('v' +
+; SCA_VERSION) und zieht von selbst nach. Vorher war sie von Hand
+; gepflegt und blieb zweimal haengen (bis 0.9.11 zwei Releases zurueck,
+; bei 0.9.17 als einzige Stelle).
 ; Der frueher hier vermerkte Drift ist behoben: seit 0.9.10 stimmen die
 ; numerischen VerInfo-Felder mit dem Keys-String ueberein (sie standen
-; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete),
-; und seit 0.9.11 ist auch PLUGIN_VERSION nachgezogen - die stand zwei
-; Releases zurueck.
+; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete).
 ; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
 ; die Version zentral, der Default hier dient nur dem Hand-Compile.
 #ifndef SCAVersion

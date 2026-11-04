@@ -18,6 +18,8 @@ Le programme analyse un répertoire récursivement et n'affiche qu'un
 | API | Rôle |
 |-----|------|
 | `ScanRecursive(path, profile): TScanResult` | Analyse récursive en une ligne. |
+| `IsKnownProfile(profile): Boolean` | Détecte un nom de profil mal saisi. |
+| `KnownProfileNames: TArray<string>` | Les profils connus, triés, pour le message d'erreur. |
 | `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` | Métriques de sévérité. |
 | `TScanResult.Findings` (`TObjectList<TLeakFinding>`) | Accès au détail. |
 | `TLeakFinding.FindingType` / `.FileName` | Ventilation par catégorie + nombre de fichiers. |
@@ -55,7 +57,7 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Signification |
 |----------|---------------|
 | `<path>`    | Répertoire racine (défaut : répertoire courant) |
-| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. Comme dans la CLI, un nom inconnu est une erreur : la démo liste les profils connus sur stderr, n'analyse rien et termine avec `2`. |
 
 Code de sortie : convention propre et simplifiée de la démo, **pas** le
 contrat de la CLI.
@@ -64,14 +66,15 @@ contrat de la CLI.
 |------|------|
 | `0` | aucun résultat |
 | `3` | au moins un résultat, quelle que soit sa sévérité ; les erreurs de fichier comptent aussi (un dossier vide donne « aucun fichier .pas » et donc `3`) |
-| `2` | chemin introuvable |
+| `2` | erreur d'appel : chemin introuvable ou profil inconnu |
 | `1` | exception |
 
 La CLI, elle, gradue selon la sévérité (`1` hints seuls, `2` warnings,
-`3` errors, `4` erreurs de lecture, `99` erreur de l'outil) et `--fail-on`
+`3` errors, `4` erreurs de lecture, `99` erreur de l'outil, profil
+inconnu compris) et `--fail-on`
 déplace ce seuil ; voir `StaticCodeAnalyser.d12.exe --help`. Ne pas bâtir
-un gate CI sur les codes de la démo : son `2` signifie « chemin
-introuvable », pas « warnings ».
+un gate CI sur les codes de la démo : son `2` signifie « erreur
+d'appel », pas « warnings ».
 
 ## Exemple de sortie
 

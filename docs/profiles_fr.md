@@ -43,6 +43,12 @@ y exige `[Detectors] UsesCheck=1` dans tous les profils.
 | CLI | `--profile <nom>` |
 | `analyser.ini` | `[Rules] Profile=<nom>` |
 
+Un nom que le catalogue ne connaît pas est une erreur dans la CLI : qu'il
+vienne de `--profile` ou de `[Rules] Profile`, l'exécution s'arrête avant
+le scan avec le code 99 et liste les profils connus. La casse et les
+espaces autour ne comptent pas. (Jusqu'à 0.9.18, un nom inconnu lançait
+silencieusement toutes les règles.)
+
 Les deux interfaces montrent aussi ce qu'il y a *dans* un profil :
 **menu burger -> Profils de jeu de règles ...** liste, dans l'application
 autonome comme dans le plugin IDE, chaque règle du profil choisi avec son
@@ -102,7 +108,10 @@ jour ne touche ce fichier.
 
 C'est le **moteur** qui le lit, pas seulement l'application : un profil
 construit ici fonctionne aussi avec `--profile <nom>` en ligne de
-commande et apparaît dans la liste déroulante du plugin IDE.
+commande et apparaît dans la liste déroulante du plugin IDE. Il est lu
+dans le `%APPDATA%` du compte qui exécute l'outil : un compte de service CI
+ne voit pas votre profil, et `--profile <nom>` y termine avec le code 99 -
+copiez le fichier (voir plus bas) vers ce compte.
 
 Un nom déjà porté par un profil intégré est refusé. Sinon le même nom
 signifierait des choses différentes selon la machine, et comparer deux

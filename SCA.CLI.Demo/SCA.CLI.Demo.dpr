@@ -15,10 +15,21 @@ program SCA.CLI.Demo;
 //   <Pfad>    Wurzelverzeichnis (Default: aktuelles Verzeichnis)
 //   <Profil>  optional - '' = alle Detektoren (Default). Bekannte Profile:
 //             default, strict, ide-fast, security, bugs-only,
-//             code-quality, dfm-only
+//             code-quality, style, dfm-only, selftest-quiet
+//             Ein unbekannter Name ist wie im echten CLI ein Aufruffehler:
+//             Meldung mit den bekannten Profilen, kein Scan, Exit 2
+//             (IsKnownProfile/KnownProfileNames der Facade). Die Engine
+//             selbst wuerde mit einem unbekannten Namen still ALLE
+//             Detektoren fahren - so lief die Demo bis 2026-11-04, und der
+//             Bericht nannte den vertippten Namen, als haette er gegriffen.
 //
 // Exit-Code: EIGENE, vereinfachte Konvention - NICHT der CLI-Vertrag!
-//   0 = sauber, 3 = irgendein Fund, 2 = Pfad fehlt, 1 = Exception.
+//   0 = sauber, 3 = irgendein Fund, 2 = Aufruffehler (Pfad fehlt oder
+//   Profil unbekannt), 1 = Exception. Der CLI meldet ein unbekanntes
+//   Profil mit 99 (Tool-Fehler); die Demo bleibt bei ihrer 2, weil diese
+//   dort schon den anderen Aufruffehler (Pfad fehlt) traegt - eine
+//   einzelne CLI-Zahl hineinzumischen machte die kleine Tabelle nicht
+//   einfacher, sondern zu einer halben Kopie des CLI-Vertrags.
 // Der echte CLI (uConsoleRunner) staffelt: 1 Hints, 2 Warnings,
 // 3 Errors, 4 Read-Errors, 99 Tool-Fehler. Die Vorfassung dieses
 // Kommentars behauptete Gleichheit (G7-5) - wer die Demo als Vorlage
@@ -86,6 +97,8 @@ end;
 
 procedure PrintReport(const APath, AProfile: string; ElapsedMs: Int64;
   const S: TStat);
+// Ein unbekanntes Profil kommt hier nicht an - der Hauptblock bricht
+// vorher ab. Die Profil-Zeile nennt also immer ein Profil, das gegriffen hat.
 var
   T : TFindingType;
 begin
@@ -127,6 +140,21 @@ begin
     if not DirectoryExists(Path) then
     begin
       WriteLn('Verzeichnis nicht gefunden: ', Path);
+      ExitCode := 2;
+      Exit;
+    end;
+
+    // Wie der echte CLI (Nico-Entscheid 2026-11-04): ein unbekanntes
+    // Profil ist ein Aufruffehler, VOR dem Scan. Die Engine wuerde den
+    // Namen still durch alle Detektoren ersetzen; ein Bericht ueber einen
+    // Lauf, den niemand bestellt hat, ist schlechter als keiner. Die
+    // bekannten Namen stehen dabei, weil es fast immer ein Tippfehler ist.
+    if not IsKnownProfile(Profile) then
+    begin
+      WriteLn(ErrOutput, Format('Profil "%s" unbekannt - kein Scan.',
+        [Profile]));
+      WriteLn(ErrOutput, 'Bekannte Profile: ',
+        string.Join(', ', KnownProfileNames));
       ExitCode := 2;
       Exit;
     end;

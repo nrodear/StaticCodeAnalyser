@@ -38,7 +38,7 @@ SCA.CLI.Demo.exe [<Pfad>] [<Profil>]
 | Argument | Bedeutung |
 |----------|-----------|
 | `<Pfad>`   | Wurzelverzeichnis (Default: aktuelles Verzeichnis) |
-| `<Profil>` | optional. `''` = alle Detektoren (Default); SCA007 nie, die Demo setzt `UsesCheck` nicht. Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<Profil>` | optional. `''` = alle Detektoren (Default); SCA007 nie, die Demo setzt `UsesCheck` nicht. Bekannt: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `style`, `dfm-only`, `selftest-quiet`. Ein unbekannter Name ist wie im CLI ein Fehler: die Demo nennt auf stderr die bekannten Profile, scannt nicht und endet mit `2`. |
 
 Exit-Code: eigene, vereinfachte Konvention der Demo, **nicht** der Vertrag
 der CLI.
@@ -47,13 +47,14 @@ der CLI.
 |------|------|
 | `0` | keine Funde |
 | `3` | mindestens ein Fund beliebiger Schwere; Dateifehler zählen mit (ein leerer Ordner ergibt „keine .pas-Dateien“ und damit `3`) |
-| `2` | Pfad nicht gefunden |
+| `2` | Aufruffehler: Pfad nicht gefunden oder Profil unbekannt |
 | `1` | Ausnahme |
 
 Die CLI staffelt dagegen nach Schwere (`1` nur Hints, `2` Warnings, `3`
-Errors, `4` Lesefehler, `99` Tool-Fehler), `--fail-on` verschiebt das;
+Errors, `4` Lesefehler, `99` Tool-Fehler, darunter ein unbekanntes
+Profil), `--fail-on` verschiebt das;
 siehe `StaticCodeAnalyser.d12.exe --help`. Kein CI-Gate auf die Codes der
-Demo bauen: ihre `2` heißt „Pfad nicht gefunden“, nicht „Warnings“.
+Demo bauen: ihre `2` heißt „Aufruffehler“, nicht „Warnings“.
 
 ## Beispiel-Ausgabe
 
@@ -86,6 +87,9 @@ Demo bauen: ihre `2` heißt „Pfad nicht gefunden“, nicht „Warnings“.
 ## Was die Demo aus der API benutzt
 
 - `ScanRecursive(Pfad, Profil): TScanResult` — Ein-Zeilen-Rekursiv-Scan.
+- `IsKnownProfile(Profil): Boolean` — erkennt einen vertippten Profilnamen.
+- `KnownProfileNames: TArray<string>` — die bekannten Profile, sortiert, für
+  die Fehlermeldung.
 - `TScanResult.FindingCount / ErrorCount / WarningCount / HintCount` —
   Schweregrad-Kennwerte.
 - `TScanResult.Findings` (`TObjectList<TLeakFinding>`) + `TLeakFinding.FindingType`

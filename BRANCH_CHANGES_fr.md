@@ -63,9 +63,9 @@ Fonctions en plus de l'exécutable autonome :
 - Panneau d'aide avec extraits avant/après
 
 Installation — le plus simple d'abord : l'**EXE d'installation** de la
-release (`StaticCodeAnalyserSetup-<Version>.exe`) ou le **paquet local
-GetIt** (`StaticCodeAnalyser-v<V>-getit-manifest.zip` → **Load Local
-Package** dans le GetIt Package Manager). Pour compiler depuis les
+release (`StaticCodeAnalyserSetup-<Version>.exe`). **GetIt** est suspendu
+pour la 0.9.19 : le jeu de paquets ne peut pas s'installer via GetIt. Si
+vous utilisez GetIt, prenez le setup. Pour compiler depuis les
 sources :
 
 ```
@@ -291,7 +291,7 @@ Ainsi `git status --porcelain` émet de l'UTF-8 au lieu de séquences
 | Cible | Étape |
 |-------|-------|
 | EXE autonome | Ouvrir `StaticCodeAnalyser.d12.dproj` → Project → Build |
-| Plugin IDE (recommandé) | Exécuter le setup de release `StaticCodeAnalyserSetup-<Version>.exe`, ou charger le paquet local GetIt (`StaticCodeAnalyser-v<V>-getit-manifest.zip`) |
+| Plugin IDE (recommandé) | Exécuter le setup de release `StaticCodeAnalyserSetup-<Version>.exe` (GetIt est suspendu pour la 0.9.19) |
 | Plugin IDE (depuis les sources) | Ouvrir `StaticCodeAnalyser.IDE.d12.dproj` → Project → Install |
 
 Plateforme : le plugin s'exécute dans l'IDE 32 bits de Delphi 12.0–12.3

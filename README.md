@@ -810,6 +810,10 @@ turns exactly those on; `--profile strict` turns on everything, SCA007
 included (the EXE and the IDE plugin run SCA007 only with `[Detectors]
 UsesCheck=1`). `--min-severity hint|warning|error` skips
 detectors below the threshold. Both flags override `[Rules]` in `analyser.ini`.
+An unknown profile name, mistyped on the command line or in `[Rules]
+Profile`, ends the run with exit 99 before the scan, and the message lists
+the known profiles. Your own profiles from the profile window
+(`profiles.json`) count as known.
 
 **`analyser.ini` settings for Git**:
 ```ini
@@ -963,8 +967,8 @@ Exit code mapping with `--fail-on error`:
 - 4 = read errors (files the scan could not read), also next to hints or
   warnings → **commit blocked**; a scan that skipped files must not look
   like a clean one
-- 99 = tool error (bad arguments, report not writable) → **commit
-  blocked**. A scan that never happened must not look like a clean one;
+- 99 = tool error (bad arguments, unknown profile, report not writable)
+  → **commit blocked**. A scan that never happened must not look like a clean one;
   the `GEQ 3` rule above covers both.
 
 Without `--fail-on` the exit code is graded (1 = hints, 2 = warnings,

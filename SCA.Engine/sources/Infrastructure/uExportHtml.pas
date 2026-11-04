@@ -73,8 +73,11 @@ type
     // kamen im ganzen Report nicht vor).
     BaseDir    : string;
     // Name des Regelprofils, mit dem gescannt wurde - er landet im
-    // sca-meta-Block. LEER heisst 'kein Profilfilter, alle Detektoren'
-    // und ist NICHT dasselbe wie das kuratierte Profil 'default'.
+    // sca-meta-Block. LEER heisst 'kein Profil benannt' (weder --profile
+    // noch [Rules] Profile). Was dann lief, haengt am Konfigurationsweg:
+    // CLI, EXE und Plugin (INI-Modus) fahren 'default'
+    // (TRepoSettings.EffectiveProfileName), nur der Direkt-Modus der
+    // Engine-API ohne INI faehrt alle Detektoren.
     Profile    : string;
     // Obergrenze der in die Tabelle gerenderten Zeilen.
     //   -1 = Voreinstellung (HTML_MAX_ROWS_DEFAULT), 0 = unbegrenzt.

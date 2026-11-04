@@ -73,12 +73,40 @@ type
     [Test] procedure DefaultProfilOhneIni_BleibtAus;
   end;
 
+  // ---- Startzeile "N rules active" (2026-11-04) ---------------------
+  // Eigene Fixture: pinnt, dass die Zahl der Startzeile dem Profil folgt,
+  // das die Engine faehrt. Bei leerem Profil zaehlte die Zeile AllKinds
+  // (205), die Engine fuhr 'default' (197).
+  [TestFixture]
+  TTestAktiveRegelAnzahl = class
+  public
+    [Test] procedure LeeresProfil_ZaehltWieDefault;
+    [Test] procedure BenanntesProfil_ZaehltSeineKinds;
+  end;
+
+  // ---- Unbekanntes Profil = Exit 99 (Nico-Entscheid 2026-11-04) -----
+  // Eigene Fixture: pinnt die Pruefung, die der CLI VOR dem Scan auf das
+  // effektive Profil (--profile vor [Rules] Profile) anwendet. Bis dahin
+  // lief ein vertippter Name still mit allen Detektoren. Der Run selbst
+  // ist hier nicht greifbar - er laedt die echte analyser.ini unter
+  // %APPDATA% -, deshalb die reine Funktion ProfilPruefung.
+  [TestFixture]
+  TTestProfilPruefung = class
+  public
+    [Test] procedure UnbekanntesProfil_Exit99_MitMeldung;
+    [Test] procedure UnbekanntesProfilAusIni_NenntDieIni;
+    [Test] procedure BekanntesProfil_GrossKleinUndLeerraum_KeinFehler;
+    [Test] procedure LeeresProfil_KeinFehler;
+    [Test] procedure EigenesProfilAusProfilesJson_KeinFehler;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
   System.IOUtils,                     // TPath/TFile fuer die PE-Fixtures
-  uMethodd12, uSCAConsts, uConsoleRunner;
+  uMethodd12, uSCAConsts, uConsoleRunner,
+  uRuleCatalog;                       // Erwartungswerte der Regel-Anzahl
 
 const
   // Die Zahlen der Exit-Code-Konvention. Bewusst als Literale und nicht
@@ -90,6 +118,7 @@ const
   EXIT_WARNINGS   = 2;
   EXIT_ERRORS     = 3;
   EXIT_READERRORS = 4;
+  EXIT_TOOLERROR  = 99;
 
   // Die --fail-on-Werte und die beiden Lesefehler-Zustaende als Konstanten:
   // als Literale wiederholt zaehlt sie der eigene DuplicateString-Detektor.
@@ -379,9 +408,167 @@ begin
   Assert.IsFalse(EffektiverUsesCheck(False, ''));
 end;
 
+{ ---- TTestAktiveRegelAnzahl ---- }
+
+function KindsIn(const AKinds: TFindingKinds): Integer;
+// Unabhaengige Zaehlung fuer die Erwartung - bewusst nicht ueber
+// AktiveRegelAnzahl, sonst prueft der Test nur sich selbst.
+begin
+  Result := 0;
+  for var K := Low(TFindingKind) to High(TFindingKind) do
+    if K in AKinds then Inc(Result);
+end;
+
+function AnzahlAllerKinds: Integer;
+// Die Zahl, die KindsIn(AllKinds) liefern wuerde. TRuleCatalog.AllKinds
+// ist strict private (E2361 von aussen) - und AllKinds nimmt ohnehin
+// jeden Wert von Low bis High auf, also genau diese Spanne.
+begin
+  Result := Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1;
+end;
+
+procedure TTestAktiveRegelAnzahl.LeeresProfil_ZaehltWieDefault;
+// Der Befund: ohne Profil in INI und Kommandozeile faehrt die Engine
+// 'default' (ApplyDetectorThresholds), die Startzeile zaehlte aber
+// GetProfile('') = AllKinds. Vor dem Fix lieferte die Zaehlung hier
+// alle Kinds - beide Asserts waren rot.
+var
+  AnzahlDefault : Integer;
+begin
+  AnzahlDefault := KindsIn(TRuleCatalog.GetProfile('default'));
+  Assert.AreEqual<Integer>(AnzahlDefault, AktiveRegelAnzahl(''),
+    'leeres Profil zaehlt wie default');
+  Assert.IsTrue(AktiveRegelAnzahl('') < AnzahlAllerKinds,
+    'default laesst die Konventions-Regeln aus - weniger als alle Kinds');
+end;
+
+procedure TTestAktiveRegelAnzahl.BenanntesProfil_ZaehltSeineKinds;
+// Gegenprobe: ein benanntes Profil zaehlt unveraendert seine Menge,
+// ein unbekannter Name wie in der Engine alle Kinds.
+begin
+  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.GetProfile('security')),
+    AktiveRegelAnzahl('security'), 'security zaehlt seine Kinds');
+  Assert.AreEqual<Integer>(AnzahlAllerKinds,
+    AktiveRegelAnzahl('strict'), 'strict = alle Kinds');
+  Assert.AreEqual<Integer>(AnzahlAllerKinds,
+    AktiveRegelAnzahl('gibt-es-nicht'), 'unbekannt faellt auf alle zurueck');
+end;
+
+{ ---- TTestProfilPruefung ---- }
+
+const
+  QUELLE_SCHALTER = '--profile';
+  QUELLE_INI      = 'analyser.ini';
+
+procedure TTestProfilPruefung.UnbekanntesProfil_Exit99_MitMeldung;
+// Der Befund: '--profile secuirty' fuhr bis 2026-11-04 alle Detektoren
+// und meldete Exit 0..4 wie ein gewollter Lauf. Ohne die Pruefung gibt es
+// ProfilPruefung nicht (der Test uebersetzt nicht), und jede Fassung, die
+// den Namen durchliesse, scheitert am Exit-Code. Die Meldung muss den
+// Namen, die Quelle und die richtige Schreibweise zeigen - sonst ist der
+// Abbruch fuer den CI-Autor ein Raetsel.
+var
+  Meldung : string;
+begin
+  Assert.AreEqual<Integer>(EXIT_TOOLERROR,
+    ProfilPruefung('secuirty', QUELLE_SCHALTER, Meldung),
+    'unbekanntes Profil ist ein Tool-Fehler');
+  Assert.Contains(Meldung, '"secuirty"', 'Meldung nennt den Namen');
+  Assert.Contains(Meldung, QUELLE_SCHALTER, 'Meldung nennt die Quelle');
+  Assert.Contains(Meldung, 'security',
+    'Meldung nennt die bekannten Profile, also auch die richtige Schreibweise');
+end;
+
+procedure TTestProfilPruefung.UnbekanntesProfilAusIni_NenntDieIni;
+// Derselbe Abbruch fuer einen Tippfehler in [Rules] Profile: der
+// gefaehrlichere Fall, weil er in keinem Pipeline-Skript steht.
+var
+  Meldung : string;
+begin
+  Assert.AreEqual<Integer>(EXIT_TOOLERROR,
+    ProfilPruefung('bugsonly', QUELLE_INI, Meldung));
+  Assert.Contains(Meldung, QUELLE_INI, 'Meldung nennt die analyser.ini');
+end;
+
+procedure TTestProfilPruefung.BekanntesProfil_GrossKleinUndLeerraum_KeinFehler;
+// Gegenprobe: was die Engine aufloest, darf der CLI nicht abweisen.
+// GetProfile vergleicht case-insensitiv und trimmt; die Pruefung muss
+// dieselbe Menge sehen, sonst bricht ein Lauf ab, der vorher richtig lief.
+var
+  Meldung : string;
+begin
+  Assert.AreEqual<Integer>(EXIT_CLEAN,
+    ProfilPruefung('default', QUELLE_SCHALTER, Meldung), 'default');
+  Assert.AreEqual('', Meldung, 'keine Meldung fuer ein bekanntes Profil');
+  Assert.AreEqual<Integer>(EXIT_CLEAN,
+    ProfilPruefung('STRICT', QUELLE_SCHALTER, Meldung), 'Grossschreibung');
+  Assert.AreEqual<Integer>(EXIT_CLEAN,
+    ProfilPruefung(' Bugs-Only ', QUELLE_INI, Meldung),
+    'aeusserer Leerraum und gemischte Schreibweise');
+end;
+
+procedure TTestProfilPruefung.LeeresProfil_KeinFehler;
+// Weder --profile noch [Rules] Profile: das ist der Normalfall und
+// heisst 'default' (TRepoSettings.EffectiveProfileName), kein Tippfehler.
+var
+  Meldung : string;
+begin
+  Assert.AreEqual<Integer>(EXIT_CLEAN,
+    ProfilPruefung('', QUELLE_INI, Meldung));
+  Assert.AreEqual('', Meldung);
+end;
+
+procedure TTestProfilPruefung.EigenesProfilAusProfilesJson_KeinFehler;
+// Ein eigenes Profil aus dem Profil-Fenster liegt in profiles.json und
+// laeuft mit --profile <name> (Katalog: EnsureLoaded -> LoadUserProfiles).
+// Es darf NIE als unbekannt gelten. Die Datei kommt aus TEMP ueber den
+// Test-Hook UserProfilesPath - die echte profiles.json unter %APPDATA%
+// wird nicht geschrieben; der Reload am Ende stellt den Katalog so her,
+// wie ihn jeder andere Test vorfindet.
+var
+  AltPfad : string;
+  TmpPfad : string;
+  Meldung : string;
+begin
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_cli_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  try
+    TFile.WriteAllText(TmpPfad,
+      '{"profiles":{"team-probe":["MemoryLeak","EmptyExcept"]}}');
+    TRuleCatalog.UserProfilesPath := TmpPfad;
+    TRuleCatalog.Reload;
+    Assert.AreEqual<Integer>(EXIT_CLEAN,
+      ProfilPruefung('team-probe', QUELLE_SCHALTER, Meldung),
+      'eigenes Profil ist bekannt: ' + Meldung);
+    Assert.AreEqual<Integer>(EXIT_CLEAN,
+      ProfilPruefung('Team-Probe', QUELLE_INI, Meldung),
+      'auch in anderer Schreibweise, wie im Katalog');
+    // Gegenprobe im selben Katalogstand: die Pruefung ist nicht einfach
+    // abgeschaltet, ein Name daneben faellt weiter durch.
+    Assert.AreEqual<Integer>(EXIT_TOOLERROR,
+      ProfilPruefung('team-probe2', QUELLE_SCHALTER, Meldung));
+    // Nur die Listenzeile pruefen und mit Trennern einrahmen: der
+    // abgewiesene Name 'team-probe2' steht selbst in der Meldung und
+    // enthaelt 'team-probe' - ein blosses Contains waere immer gruen.
+    var Liste := '';
+    for var Zeile in Meldung.Split([sLineBreak]) do
+      if Zeile.StartsWith('Known profiles: ') then
+        Liste := ', ' + Zeile.Substring(Length('Known profiles: ')) + ',';
+    Assert.Contains(Liste, ', team-probe,',
+      'die Liste der bekannten Profile fuehrt das eigene Profil');
+  finally
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    TRuleCatalog.Reload;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestStackReserveGuard);
   TDUnitX.RegisterTestFixture(TTestConsoleExitCode);
   TDUnitX.RegisterTestFixture(TTestEffektiverUsesCheck);
+  TDUnitX.RegisterTestFixture(TTestAktiveRegelAnzahl);
+  TDUnitX.RegisterTestFixture(TTestProfilPruefung);
 
 end.

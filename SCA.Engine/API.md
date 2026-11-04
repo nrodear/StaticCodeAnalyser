@@ -90,7 +90,7 @@ A complete, runnable example is the **`SCA.CLI.Demo`** project.
 ## 3. The API: `uEngineApi`
 
 The facade consists of a request record, a result object, a session class, a
-test-fixture filter and two convenience functions.
+test-fixture filter, two convenience functions and a profile check.
 
 ### 3.1 Entry points
 
@@ -99,6 +99,8 @@ test-fixture filter and two convenience functions.
 | `ScanRecursive(APath, AProfile=''): TScanResult` | Recursive directory scan (one-liner). |
 | `AnalyzeSource(ASource, AProfile=''): TScanResult` | In-memory scan of a source-code string (editor lint/embedding). |
 | `TAnalysisSession.Create.Run(Req): TScanResult` | Full access via `TScanRequest` (all options). |
+| `IsKnownProfile(AProfile): Boolean` | Whether the rule catalog knows the profile name (case-insensitive, `''` counts as known). Your own profiles from `profiles.json` count. |
+| `KnownProfileNames: TArray<string>` | Every name `IsKnownProfile` accepts, sorted case-insensitively - for an error message. |
 
 ### 3.2 `TScanRequest`
 
@@ -212,6 +214,11 @@ Built-in profiles (`uRuleCatalog`):
 | `dfm-only` | DFM/form rules only. |
 | `style` | Style rules only (PublicMemberWithoutDoc, BeginEndRequired, WithStatement, …). |
 | `selftest-quiet` | All rules except a few layout rules — for scanning the analyser itself. |
+
+An unknown profile name is not an error for the engine: it runs all
+detectors. To report a typo, check the name with `IsKnownProfile` first.
+The CLI and `SCA.CLI.Demo` do exactly that and stop before the scan
+(CLI exit 99, demo exit 2).
 
 ### 3.7 Data model: `TLeakFinding` (`uMethodd12`)
 

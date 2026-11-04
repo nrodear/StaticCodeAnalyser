@@ -40,6 +40,8 @@ type
     // ---- Wert-Schalter nehmen weiter beide Schreibweisen ----
     [Test] procedure WertSchalter_MitGleichheitszeichen;
     [Test] procedure WertSchalter_MitLeerzeichen;
+    // Rot ohne Fix: der Wert bliebe ' ' bzw. ' strict '.
+    [Test] procedure Profil_WirdGetrimmt;
     [Test] procedure FailOn_MitGleichheitszeichen;
     [Test] procedure FailOn_GrossgeschriebenKommtRohAn;
     // --dialect (Lazarus A2): Wertemenge hart, auto mit eigenem Text
@@ -256,6 +258,20 @@ begin
   Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
   Assert.AreEqual(PROFILWERT, A.Profile,
     'die =-Form muss bei Wert-Schaltern weiter greifen');
+end;
+
+procedure TTestConsoleParseArgs.Profil_WirdGetrimmt;
+// Nur Leerzeichen heisst wie leer 'default' (EffectiveProfileName), Rand-
+// Leerzeichen gehoeren nicht zum Namen - wie beim INI-Wert.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--profile', '  ']);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.AreEqual('', A.Profile, False, 'nur Leerzeichen ist leer');
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--profile= ' + PROFILWERT + ' ']);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.AreEqual(PROFILWERT, A.Profile, False, 'Rand-Leerzeichen fallen weg');
 end;
 
 procedure TTestConsoleParseArgs.WertSchalter_MitLeerzeichen;

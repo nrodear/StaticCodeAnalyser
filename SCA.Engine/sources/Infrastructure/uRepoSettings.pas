@@ -317,6 +317,16 @@ type
     // APPDATA-INI anzufassen.
     class function DefaultTemplate: string; static;
 
+    // Name des Profils, das ApplyDetectorThresholds fuer AProfile
+    // TATSAECHLICH aufloest: leer -> 'default', sonst AProfile
+    // unveraendert. Eigene Funktion, damit Leser des Profils (die
+    // CLI-Startzeile "N rules active") dieselbe Regel nehmen wie die
+    // Engine - die Startzeile zaehlte bei leerem Profil AllKinds (die
+    // ''-Semantik von TRuleCatalog.GetProfile), die Engine fuhr
+    // 'default'. Bewusst ohne Trim: ApplyDetectorThresholds vergleicht
+    // seit jeher mit '' (Load trimmt den INI-Wert schon).
+    class function EffectiveProfileName(const AProfile: string): string; static;
+
     // '' bedeutet auto-detect (origin/HEAD, dann main, dann master).
     property BaseBranch: string read FBaseBranch write FBaseBranch;
     // True (Default): committed Branch-Diff + uncommitted Working Tree;
@@ -424,7 +434,9 @@ type
                                                   write FCustomRulesFile;
 
     // Profile-Name aus [Rules] Profile. Bekannte Werte (Catalog-definiert):
-    //   '' / 'default' -> alle Detektoren laufen
+    //   '' / 'default' -> alle Regeln ausser den reinen Konventions-
+    //                     Regeln des Profils 'style' (leer wird ueber
+    //                     EffectiveProfileName zu 'default')
     //   'ide-fast'     -> nur Bugs/Vulnerabilities (Live-Analyse im IDE)
     //   'strict'       -> alle + opt-in Detektoren (UsesCheck)
     // ApplyDetectorThresholds loest den Namen via TRuleCatalog.GetProfile
@@ -470,7 +482,9 @@ type
     property IdeMinSeverity:          string      read FIdeMinSeverity
                                                   write FIdeMinSeverity;
 
-    // [Rules] EnableDetectorReviewFilter (bool, default False).
+    // [Rules] EnableDetectorReviewFilter (0/1, default 0). ReadBool liest
+    // nur Zahlen ('true' ergibt still die Vorgabe 0) - deshalb steht in der
+    // Vorlage '=1'; bis 2026-11-04 stand dort '=true' und schaltete nichts.
     // Wenn True UND der Build hat das DEBUG-Symbol gesetzt, erscheint der
     // 'Detector Review (1 per detector, random)'-Eintrag in der Severity-
     // Filter-Combo. Release-Builds sehen ihn nie - das ist ein internes
@@ -916,8 +930,8 @@ const
     '; An explicit PathOverride upgrade (severity:error:*) still wins'#13#10 +
     '; against the cap - that is the pipeline order, on purpose.'#13#10 +
     '; Read errors are exempt (they are diagnostics, not findings).'#13#10 +
-    '; With EvidenceTiering=0 the SARIF is byte-identical to the'#13#10 +
-    '; behaviour before the policy existed.'#13#10 +
+    '; With EvidenceTiering=0 severities are not capped and no SARIF'#13#10 +
+    '; result carries properties.confidence.'#13#10 +
     'EvidenceTiering=1'#13#10 +
     ';EvidenceTiering=0'#13#10 +
     ''#13#10 +
@@ -932,12 +946,12 @@ const
     'IdeMinSeverity=hint'#13#10 +
     ';IdeMinSeverity=warning'#13#10 +
     ''#13#10 +
-    '; EnableDetectorReviewFilter (bool, default: False)'#13#10 +
+    '; EnableDetectorReviewFilter (0/1, default: 0)'#13#10 +
     '; Internal review tool: adds a severity-combo entry'#13#10 +
     '; "Detector Review (1 per detector, random)". Takes effect ONLY when'#13#10 +
     '; the build was compiled with {$DEFINE DEBUG} - release builds never'#13#10 +
     '; show the entry, whatever this setting says. Off by default.'#13#10 +
-    ';EnableDetectorReviewFilter=true'#13#10 +
+    ';EnableDetectorReviewFilter=1'#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [Baseline] - hide findings that already existed'#13#10 +
@@ -1315,7 +1329,7 @@ begin
   FFormatFunctions.AddStrings(['format', 'formatutf8', 'formatstring']);
 
   FCustomRulesFile := '';
-  FProfile        := '';              // '' = default (= AllKinds, kein Filter)
+  FProfile        := '';              // '' = Profil 'default' (EffectiveProfileName)
   FMinSeverity    := 'hint';          // 'hint' = alles laeuft
   FMinConfidence  := 'medium';        // 'medium' = nur fcLow raus (Default)
   FEvidenceTiering := True;           // Politik AN: Error nur fuer fcHigh
@@ -1633,6 +1647,14 @@ begin
   Result := DEFAULT_INI_CONTENT;
 end;
 
+class function TRepoSettings.EffectiveProfileName(const AProfile: string): string;
+begin
+  if AProfile = '' then
+    Result := 'default'
+  else
+    Result := AProfile;
+end;
+
 function TRepoSettings.ConfigFilePath: string;
 begin
   if FConfigPath = '' then
@@ -1820,7 +1842,7 @@ begin
     // Rule-Detector laed sie beim naechsten Analyse-Start. Leer = aus.
     FCustomRulesFile := Trim(Ini.ReadString('Detectors', 'CustomRulesFile', ''));
 
-    // [Rules] Profile=...     -> FProfile (default leer = AllKinds-Filter)
+    // [Rules] Profile=...     -> FProfile (default leer = Profil 'default')
     // [Rules] MinSeverity=... -> FMinSeverity (default 'hint' = alles).
     // Beide werden in ApplyDetectorThresholds in die uSCAConsts-Globals
     // gespiegelt; Default-Werte erhalten alte Semantik (kein Skip).
@@ -2251,13 +2273,13 @@ begin
   uSCAConsts.DetectorMaxLineLength   := FMaxLineLength;
   uSCAConsts.DetectorMaxCaseBranches := FMaxCaseBranches;
 
-  // [Rules] Profile -> EnabledKinds Whitelist. Leer = AllKinds = kein
-  // Filter (alte Semantik). Unbekannter Name faellt im Catalog auf
-  // AllKinds zurueck (kein Crash).
-  if FProfile = '' then
-    uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile('default')
-  else
-    uSCAConsts.DetectorEnabledKinds := TRuleCatalog.GetProfile(FProfile);
+  // [Rules] Profile -> EnabledKinds Whitelist. Leer = 'default' (NICHT
+  // AllKinds - die ''=alle-Semantik gilt nur im Direkt-Modus der
+  // Engine-API ohne INI). Unbekannter Name faellt im Catalog auf
+  // AllKinds zurueck (kein Crash). Die Leer-Regel steht in
+  // EffectiveProfileName, damit die CLI-Startzeile dieselbe nimmt.
+  uSCAConsts.DetectorEnabledKinds :=
+    TRuleCatalog.GetProfile(EffectiveProfileName(FProfile));
 
   // [Rules] MinSeverity -> globaler Severity-Schwellwert.
   uSCAConsts.DetectorMinSeverity := ParseMinSev(FMinSeverity);
