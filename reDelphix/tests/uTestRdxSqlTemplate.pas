@@ -405,7 +405,7 @@ begin
   AssertRefused(Req([Target('S'), Lit('''SELECT * FROM t WHERE a = s.'''),
     Op('X')]), 'ist Teil eines Bezeichners');
   AssertRefused(Req([Target('S'), Lit('''SELECT * FROM t WHERE "'''),
-    Op('X'), Lit('''" = 1''')]), 'in einem gequoteten Namen');
+    Op('X'), Lit('''" = 1''')]), 'in einem Namen in Anf');
   AssertRefused(Req([Target('S'), Lit('''SELECT * FROM t -- '''),
     Op('X')]), 'in einem SQL-Kommentar');
 end;

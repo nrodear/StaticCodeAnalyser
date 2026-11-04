@@ -432,7 +432,7 @@ begin
   Assert.AreEqual('Assigned() statt Vergleich mit nil verwenden',
     TRdxFixTable.CaptionFor(fkNilComparison, O));
   O.Variant := 1;
-  Assert.AreEqual('else-Zweig mit Exception erg'#$00E4'nzen',
+  Assert.AreEqual('else-Zweig erg'#$00E4'nzen, der eine Ausnahme ausl'#$00F6'st',
     TRdxFixTable.CaptionFor(fkDefaultCaseInCaseStatement, O));
   Assert.AreEqual('ENotImplemented im leeren Rumpf ausl'#$00F6'sen',
     TRdxFixTable.CaptionFor(fkEmptyMethod, O));

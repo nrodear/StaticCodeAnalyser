@@ -471,10 +471,10 @@ const
     + 'Compiler', ' une constante inline');
   // Netzpfad: der Satz vor MsgByHand.
   NET_TAIL: array[0..2] of string = ('(the menu is built in the main thread); ',
-    'im Hauptthread); ', 'dans le thread principal); ');
+    'im Hauptthread); ', 'dans le thread principal) ; ');
   // Fehlendes Include: das Muster R_INC_UNSEEN hinter der Ursache.
   INC_TAIL: array[0..2] of string = (' - the quick fix does not see its '
-    + 'compiler switches (FPC, older Delphi)', ' Delphi) sieht die Hilfe nicht',
+    + 'compiler switches (FPC, older Delphi)', ' Delphi-Versionen) sieht die Hilfe nicht',
     ' - le Quick-Fix ne voit pas ses aiguillages de compilation (FPC, Delphi '
     + 'plus anciens)');
   // Lazarus-/FPC-Datei je Sprachmittel (TRdxLateFeature): je Sprache und

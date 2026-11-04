@@ -235,7 +235,7 @@ begin
   // Umlaut, die Quelle bleibt ASCII.
   AssertNoHelp(InImplementation(Join(['procedure P;', 'var', '  A: Integer;',
     'resourcestring', '  SFoo = ''foo'';', 'begin', '  A := 1;', '  Foo(SFoo);',
-    'end;'])), fkUnusedLocalVar, 'Parser las eine Section als Variable');
+    'end;'])), fkUnusedLocalVar, 'Parser las einen Abschnitt als Variable');
 end;
 
 procedure TTestRdxCleanupDetector.Sca053_With_RoundTrip;

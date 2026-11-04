@@ -347,7 +347,7 @@ begin
   B := Buf(['procedure P;', 'begin', '  X := if C then A', '  else',
     '    Foo(42);', 'end;']);
   // Zeile 5, die 42 in Spalte 9.
-  AssertRefusedWith(TargetIn(B, 5, 9), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 5, 9), 'bedingten Ausdruck',
     'else-Arm des Ausdrucks');
   B := Buf(['procedure P;', 'begin', '  if C then A', '  else', '    Foo(42);',
     'end;']);
@@ -372,22 +372,22 @@ begin
   B := Buf(['procedure P;', 'begin', '  X := if C then', '    A', '  else',
     '    Foo(42);', 'end;']);
   // Zeile 6, die 42 in Spalte 9.
-  AssertRefusedWith(TargetIn(B, 6, 9), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 6, 9), 'bedingten Ausdruck',
     'then-Arm auf eigener Zeile, else-Arm darunter');
   B := Buf(['procedure P;', 'begin', '  X :=', '    if C then', '      A',
     '    else', '      Foo(42);', 'end;']);
-  AssertRefusedWith(TargetIn(B, 7, 11), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 7, 11), 'bedingten Ausdruck',
     'if als erstes Wort hinter X :=');
   // Unvollstaendiger Ausdruck (noch ohne else, mit ';' - mitten im Tippen):
   // Zeile 5, die 42 in Spalte 11, Zweigzeile 'if C then', darueber das
   // offene 'X :=' - vorher bekam die Zeile begin..end.
   B := Buf(['procedure P;', 'begin', '  X :=', '    if C then', '      Foo(42);',
     'end;']);
-  AssertRefusedWith(TargetIn(B, 5, 11), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 5, 11), 'bedingten Ausdruck',
     'then-Arm hinter if als erstem Wort');
   B := Buf(['procedure P;', 'begin', '  Y := Foo(', '    if C then', '      1',
     '    else', '      Bar(42));', 'end;']);
-  AssertRefusedWith(TargetIn(B, 7, 11), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 7, 11), 'bedingten Ausdruck',
     'if als Argument hinter Foo(');
   // if-Anweisung: die Zeile ueber dem if beendet eine Anweisung.
   B := Buf(['procedure P;', 'begin', '  Z := 1;', '  if C then', '    A',
@@ -409,11 +409,11 @@ begin
   // 11 bzw. 9.
   B := Buf(['procedure P;', 'begin', '  X := if A then 1 else', '    if B then',
     '      Foo(42);', 'end;']);
-  AssertRefusedWith(TargetIn(B, 5, 11), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 5, 11), 'bedingten Ausdruck',
     'geschachteltes if als else-Arm');
   B := Buf(['procedure P;', 'begin', '  X := if A then 1', '  else if B then',
     '    Foo(42);', 'end;']);
-  AssertRefusedWith(TargetIn(B, 5, 9), 'Bedingungsausdruck',
+  AssertRefusedWith(TargetIn(B, 5, 9), 'bedingten Ausdruck',
     'else-if-Kette des Ausdrucks');
   // Dieselben Formen als Anweisung bleiben Zweige.
   B := Buf(['procedure P;', 'begin', '  if A then Z := 1', '  else if B then',
