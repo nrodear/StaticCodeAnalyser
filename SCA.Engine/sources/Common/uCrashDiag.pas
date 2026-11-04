@@ -94,6 +94,15 @@ type
 /// </summary>
 function DescribeException(E: Exception): string;
 
+/// <summary>
+///   Basisadresse des Moduls, gegen das DescribeException eine
+///   Fehleradresse einordnet: das HInstance DIESER Unit, mit
+///   Laufzeitpaketen also die SCA.Engine-BPL, nicht die Exe. Fuer Tests,
+///   die kuenstliche Adressen relativ zu genau dieser Basis bauen; @Routine
+///   zeigt mit Paketen auf einen Sprungstub der Exe und taugt dafuer nicht.
+/// </summary>
+function CrashDiagModuleBase: UIntPtr;
+
 // ---------------------------------------------------------------------------
 // Diagnose-Stapel (SCA_CRASH_STACK, 2026-10-25)
 // ---------------------------------------------------------------------------
@@ -286,6 +295,11 @@ begin
   else
     Result := ExceptAddr;
   {$WARN SYMBOL_PLATFORM ON}
+end;
+
+function CrashDiagModuleBase: UIntPtr;
+begin
+  Result := UIntPtr(HInstance);
 end;
 
 function DescribeException(E: Exception): string;

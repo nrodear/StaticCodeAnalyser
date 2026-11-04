@@ -66,10 +66,11 @@ uses
 // uCrashDiag rechnet gegen das Modul, in dem es selbst liegt (sein
 // HInstance). Mit Laufzeitpaketen (Debug, TestInsight) ist das die
 // SCA.Engine-BPL, nicht die Test-Exe - die kuenstlichen Adressen muessen
-// deshalb auf dieselbe Basis zeigen, sonst liegt Exe+Offset "darunter".
+// deshalb auf dieselbe Basis zeigen, sonst liegt Exe+Offset "darunter"
+// (oder, je nach ASLR-Lage, Exe+$40000000 nicht "darueber").
 function CrashDiagBase: UIntPtr;
 begin
-  Result := UIntPtr(FindHInstance(@DescribeException));
+  Result := CrashDiagModuleBase;
 end;
 
 // Baut eine EAccessViolation mit kuenstlichem ExceptionRecord. Der Aufrufer
