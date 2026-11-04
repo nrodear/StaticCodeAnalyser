@@ -402,6 +402,14 @@ begin
     if K in AKinds then Inc(Result);
 end;
 
+function AnzahlAllerKinds: Integer;
+// Die Zahl, die KindsIn(AllKinds) liefern wuerde. TRuleCatalog.AllKinds
+// ist strict private (E2361 von aussen) - und AllKinds nimmt ohnehin
+// jeden Wert von Low bis High auf, also genau diese Spanne.
+begin
+  Result := Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1;
+end;
+
 procedure TTestAktiveRegelAnzahl.LeeresProfil_ZaehltWieDefault;
 // Der Befund: ohne Profil in INI und Kommandozeile faehrt die Engine
 // 'default' (ApplyDetectorThresholds), die Startzeile zaehlte aber
@@ -413,7 +421,7 @@ begin
   AnzahlDefault := KindsIn(TRuleCatalog.GetProfile('default'));
   Assert.AreEqual<Integer>(AnzahlDefault, AktiveRegelAnzahl(''),
     'leeres Profil zaehlt wie default');
-  Assert.IsTrue(AktiveRegelAnzahl('') < KindsIn(TRuleCatalog.AllKinds),
+  Assert.IsTrue(AktiveRegelAnzahl('') < AnzahlAllerKinds,
     'default laesst die Konventions-Regeln aus - weniger als alle Kinds');
 end;
 
@@ -423,9 +431,9 @@ procedure TTestAktiveRegelAnzahl.BenanntesProfil_ZaehltSeineKinds;
 begin
   Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.GetProfile('security')),
     AktiveRegelAnzahl('security'), 'security zaehlt seine Kinds');
-  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.AllKinds),
+  Assert.AreEqual<Integer>(AnzahlAllerKinds,
     AktiveRegelAnzahl('strict'), 'strict = alle Kinds');
-  Assert.AreEqual<Integer>(KindsIn(TRuleCatalog.AllKinds),
+  Assert.AreEqual<Integer>(AnzahlAllerKinds,
     AktiveRegelAnzahl('gibt-es-nicht'), 'unbekannt faellt auf alle zurueck');
 end;
 
