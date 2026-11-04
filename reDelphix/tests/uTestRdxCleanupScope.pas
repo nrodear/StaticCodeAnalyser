@@ -312,7 +312,7 @@ begin
   // schon die Suche nach dem var-Abschnitt ab - sie zaehlt Klammern.
   AssertRefused(InImpl(['procedure Outer;', '  procedure Inner(A: Integer;',
     '    X: Integer);', '  begin', '  end;', 'begin', '  Inner(1, 2);',
-    'end;']), 6, 'X', 'var-Section');
+    'end;']), 6, 'X', 'var-Abschnitt');
 end;
 
 procedure TTestRdxCleanupScope.Sca053_SectionAfterLongHeader;

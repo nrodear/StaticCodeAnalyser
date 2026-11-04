@@ -111,13 +111,13 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA105](SCA105.md) | Interface-Typ ohne I-Präfix | Hint | Code Smell | `uInterfaceName.pas` |
 | [SCA106](SCA106.md) | Methode nicht in PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](SCA107.md) | Public-Member könnte strict private sein | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA108](SCA108.md) | TThread.Synchronize aus dem Destruktor | Error | Bug | `uSynchronizeInDestructor.pas` |
+| [SCA108](SCA108.md) | TThread.Synchronize aus dem Destruktor | Warning | Bug | `uSynchronizeInDestructor.pas` |
 | [SCA109](SCA109.md) | Sperre ohne try/finally freigegeben | Error | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](SCA110.md) | String-Verkettung in der Schleife | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](SCA111.md) | ParamByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](SCA113.md) | TThread.Resume ist veraltet | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](SCA114.md) | TThread ohne Terminate+WaitFor freigegeben | Error | Bug | `uConcurrencyExt.pas` |
+| [SCA114](SCA114.md) | TThread per FreeAndNil freigegeben - Beendigung prüfen | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](SCA115.md) | HTTP-URL im Klartext | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](SCA116.md) | TLS-Prüfung abgeschaltet | Error | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](SCA117.md) | Public-Member ohne Doku-Kommentar | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |

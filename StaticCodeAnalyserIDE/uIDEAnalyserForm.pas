@@ -1442,19 +1442,21 @@ procedure TAnalyserFrame.PopulateFilterCombo;
 // darauf behandelt der Fuzzy-Helfer (CommitSelection springt zum ersten
 // Eintrag der Sektion), FilterChange ignoriert Tag -1 nur noch defensiv.
 
+  // ACaption kommt schon UEBERSETZT an: das _() steht an jeder
+  // Aufrufstelle mit dem Literal (i18n-Luecken 2026-11-03, C11). Ein
+  // _(ACaption) hier drin ist fuer tools/i18n_extract.py dynamisch - die
+  // Texte kamen nur zufaellig an, weil uMainForm dieselben Wortlaute mit
+  // _() fuehrt; aendert die EXE ihren Text, fiele die IDE still auf
+  // Englisch. Der nie gerufene Geschwister-Helfer Sep (dasselbe
+  // dynamische _()) ist mit entfallen.
   procedure Add(const ACaption: string; AMode: TFilterMode);
   begin
-    FFilterCombo.Items.AddObject(_(ACaption), TObject(Ord(AMode)));
-  end;
-
-  procedure Sep(const ACaption: string);
-  begin
-    FFilterCombo.Items.AddObject(_(ACaption), TObject(-1));
+    FFilterCombo.Items.AddObject(ACaption, TObject(Ord(AMode)));
   end;
 
 begin
   // ---- Gesamt-Kategorien ----
-  Add('All',            fmAll);
+  Add(_('All'),            fmAll);
   // Spezial-Modus fuer Detector-Qualitaets-Review: zeigt EINEN zufaelligen
   // Befund pro Detector-Kind. Severity/Type-Filter wirken danach auf die
   // Stichprobe (kein erneutes Sampling beim Toggle).
@@ -1462,11 +1464,11 @@ begin
   // gesetzt hat - Release-Builds sehen den Eintrag nie (internes Tool).
   {$IFDEF DEBUG}
   if Assigned(FRepoSettings) and FRepoSettings.DetectorReviewFilterEnabled then
-    Add('Detector Review (1 per detector, random)', fmDetectorReview);
+    Add(_('Detector Review (1 per detector, random)'), fmDetectorReview);
   {$ENDIF}
-  Add('Errors (all)',   fmErrors);
-  Add('Warnings (all)', fmWarnings);
-  Add('Hints (all)',    fmHints);
+  Add(_('Errors (all)'),   fmErrors);
+  Add(_('Warnings (all)'), fmWarnings);
+  Add(_('Hints (all)'),    fmHints);
 
   // Checklist-Drift-Fix 2026-07-24 (Dedup-Runde): Hand-Sektionen
   // (--- Errors --- usw. mit Einzel-Detektoren) ENTFERNT - die
@@ -2282,7 +2284,10 @@ begin
   if Status = '' then
     StatusMode('')
   else
-    StatusMode('[watch] ' + Status);
+    // Praefix als Format-msgid statt Konkatenation (i18n-Luecken C2):
+    // so kann die Uebersetzung die Marke umstellen, und Status bleibt
+    // Argument - ein '%' darin ist kein Formatfehler.
+    StatusMode(_('[watch] %s', [Status]));
 end;
 
 procedure TAnalyserFrame.OnWatchFindings(const FileName: string;
@@ -2348,7 +2353,7 @@ begin
     // 4) UI auffrischen
     UpdateStats;
     ApplyFilter;
-    StatusMode(Format('[watch] updated %s (%d findings)',
+    StatusMode(_('[watch] updated %s (%d findings)',
       [ExtractFileName(FileName), Findings.Count]));
   finally
     Findings.Free;
@@ -3545,8 +3550,9 @@ begin
 
   // Liste sofort neu laden, damit Aenderungen ohne Frame-Neustart wirken
   try FIgnoreList.LoadDefault; except end;
-  StatusMode(Format(
-    'Ignore-Liste neu geladen (%d Muster). Pfad: %s',
+  // Englische msgid wie alle Statustexte (i18n-Luecken C1): das deutsche
+  // Literal stand ohne _() in jeder Oberflaechensprache.
+  StatusMode(_('Ignore list reloaded (%d patterns). Path: %s',
     [FIgnoreList.PatternCount, Path]));
 end;
 
@@ -4682,8 +4688,14 @@ end;
 // ---------------------------------------------------------------------------
 
 function TAnalyserDockableForm.GetCaption: string;
+// Dieselbe msgid wie der Ansicht-Menueeintrag (AddViewMenuItem),
+// sonst stand der Menueeintrag uebersetzt und der Fenstertitel englisch
+// (i18n-Luecken C4). Die IDE fragt GetCaption beim Anlegen des Fensters
+// ab; einen Neubeschriftungs-Pass beim Sprachwechsel gibt es im Plugin
+// nicht (s. TSCAOptionsFrame.BuildLanguageSection) - der Titel folgt der
+// Sprache, die beim Oeffnen gilt.
 begin
-  Result := 'Static Code Analysis';
+  Result := _('Static Code Analysis');
 end;
 
 function TAnalyserDockableForm.GetIdentifier: string;
@@ -6260,9 +6272,12 @@ begin
     on E: Exception do
       // Sichtbares Feedback statt stilles Schlucken - der User sieht
       // sonst gar nichts beim Menueklick und kann den Fehler nicht melden.
+      // Titel ueber dieselbe msgid wie das Geschwister im Properties-
+      // Fenster (uIDEFindingsPropertiesForm, i18n-Luecken C5); das
+      // Praefix im Text ist der Produktname und bleibt.
       Application.MessageBox(
         PChar('Static Code Analyser: ' + E.ClassName + #10#13 + E.Message),
-        'Plugin Open Error',
+        PChar(_('Plugin Open Error')),
         MB_ICONERROR or MB_OK);
   end;
 end;

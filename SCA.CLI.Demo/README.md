@@ -37,9 +37,10 @@ Order matters — the package must exist before the demo:
 Easiest: put both projects in one project group. The package linkage is via
 `DCC_UsePackage SCA.Engine` (no source paths).
 
-> At runtime `SCA.Engine290.bpl` must be findable (the global BPL directory is on
-> the path with RAD Studio installed; for standalone deployment ship the `.bpl`
-> next to the `.exe`).
+> At runtime `SCA.Engine290.bpl` and the Delphi runtime packages it requires
+> (`rtl290.bpl`, `xmlrtl290.bpl`) must be findable (the global BPL directory is
+> on the path with RAD Studio installed; for standalone deployment ship all
+> three `.bpl` next to the `.exe`).
 
 ## Usage
 
@@ -50,9 +51,21 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Meaning |
 |----------|---------|
 | `<path>`    | Root directory (default: current directory) |
-| `<profile>` | optional. `''` = all detectors (default). Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | optional. `''` = all detectors (default); SCA007 never, the demo does not set `UsesCheck`. Known: `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
-Exit code (like the CLI): `0` = clean, `3` = findings present, `1`/`2` = error.
+Exit code: the demo's own, simplified convention, **not** the CLI contract.
+
+| Code | Demo |
+|------|------|
+| `0` | no findings |
+| `3` | at least one finding of any severity; file errors count too (an empty folder yields "no .pas files" and so `3`) |
+| `2` | path not found |
+| `1` | exception |
+
+The CLI grades by severity instead (`1` hints only, `2` warnings, `3`
+errors, `4` read errors, `99` tool error) and `--fail-on` shifts that; see
+`StaticCodeAnalyser.d12.exe --help`. Do not build a CI gate on the demo's
+codes: its `2` means "path not found", not "warnings".
 
 ## Example output
 

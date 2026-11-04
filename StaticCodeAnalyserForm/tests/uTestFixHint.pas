@@ -73,6 +73,13 @@ type
     [Test] procedure AfterChainForCognitiveIsCallOrder;
     [Test] procedure AfterChainEmptyWhenExampleHasNoRoutines;
     [Test] procedure AfterChainOnlyForTheThreeChainRules;
+    // ---- fix-hint der Custom Rules (2026-11-03) -----------------
+    // Der Hinweis am Fund (CustomFixHint) wird die Description.
+    [Test] procedure CustomRuleFixHintBecomesDescription;
+    // Ohne fix-hint bleibt der generische Text - auch nachdem eine
+    // ANDERE Custom Rule mit fix-hint den geteilten Cache-Slot gefuellt
+    // hat, und zwei Regeln behalten jede ihren eigenen Text.
+    [Test] procedure CustomRuleFixHintDoesNotLeakThroughCache;
   end;
 
 implementation
@@ -535,6 +542,82 @@ begin
       'deklarieren, sonst waere die Kette auch ohne Gate leer');
   finally
     F.Free;
+  end;
+end;
+
+{ ---- fix-hint der Custom Rules (2026-11-03) ---------------------- }
+//
+// Bis 2026-11-03 las uCustomRuleDetector das Feld fix-hint und warf es
+// weg: jede Custom Rule zeigte denselben generischen Satz. Der Text
+// reist jetzt als TLeakFinding.CustomFixHint am Fund, der Resolver
+// legt ihn NACH dem Cache in die Description.
+
+const
+  // Benutzertexte zweier Regeln - absichtlich verschieden, damit ein
+  // im Cache haengengebliebener Text auffaellt.
+  CUSTOM_HINT_A = 'Replace TBDEQuery with TFDQuery';
+  CUSTOM_HINT_B = 'Move Sleep() into a TTimer handler';
+
+procedure TTestFixHint.CustomRuleFixHintBecomesDescription;
+// Ohne die Verdrahtung rot: Description waere der generische Satz
+// ('Custom rule defined in analyser-rules.yml matched this code' bzw.
+// seine Uebersetzung), nie der Regeltext. Vergleich auf GLEICHHEIT -
+// der Regeltext laeuft nicht durch _() und ist damit sprachunabhaengig.
+var
+  F : TLeakFinding;
+  H : TFixHint;
+begin
+  F := MakeKindFinding(fkCustomRule);
+  try
+    F.RuleID        := 'PROJ001';
+    F.CustomFixHint := CUSTOM_HINT_A;
+    H := TFixHintResolver.FixHint(F);
+    Assert.AreEqual(CUSTOM_HINT_A, H.Description,
+      'der fix-hint der Regel ist der Hinweis zu diesem Fund');
+    // Die Code-Beispiele bleiben die generischen - der fix-hint ist ein
+    // Satz, kein Vorher/Nachher-Code.
+    Assert.IsTrue(Pos('analyser-rules.yml', H.Before) > 0,
+      'Before bleibt das generische Custom-Rule-Beispiel');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFixHint.CustomRuleFixHintDoesNotLeakThroughCache;
+// Alle Custom Rules teilen EINEN Cache-Slot (Kind/Severity gleich).
+// Rot ohne Verdrahtung (HA/HB sind dann generisch) UND rot bei der
+// naheliegenden falschen Verdrahtung, die den Text in Build() und
+// damit in den Cache legt: dann erbt FB den Text von FA und FC
+// (ohne fix-hint) ebenfalls.
+var
+  FA, FB, FC : TLeakFinding;
+  HA, HB, HC : TFixHint;
+begin
+  FA := nil;
+  FB := nil;
+  FC := nil;
+  try
+    FA := MakeKindFinding(fkCustomRule);
+    FA.CustomFixHint := CUSTOM_HINT_A;
+    FB := MakeKindFinding(fkCustomRule);
+    FB.CustomFixHint := CUSTOM_HINT_B;
+    FC := MakeKindFinding(fkCustomRule);   // Regel ohne fix-hint
+    HA := TFixHintResolver.FixHint(FA);
+    HB := TFixHintResolver.FixHint(FB);
+    HC := TFixHintResolver.FixHint(FC);
+    Assert.AreEqual(CUSTOM_HINT_A, HA.Description, 'Regel A');
+    Assert.AreEqual(CUSTOM_HINT_B, HB.Description,
+      'Regel B darf den Text von A nicht erben');
+    Assert.IsNotEmpty(HC.Description,
+      'ohne fix-hint bleibt der generische Rueckfall stehen');
+    Assert.AreNotEqual(CUSTOM_HINT_A, HC.Description,
+      'ohne fix-hint kein geerbter Regeltext (A)');
+    Assert.AreNotEqual(CUSTOM_HINT_B, HC.Description,
+      'ohne fix-hint kein geerbter Regeltext (B)');
+  finally
+    FA.Free;
+    FB.Free;
+    FC.Free;
   end;
 end;
 

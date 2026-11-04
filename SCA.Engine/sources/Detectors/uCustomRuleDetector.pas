@@ -42,7 +42,9 @@ type
     // GEPARST, ABER NIE GELESEN - siehe AnalyzeFile.
     Target: TRuleTarget;
     Message: string; // optional, fallback = Description
-    FixHint: string; // optional
+    // optional; geht als TLeakFinding.CustomFixHint an jeden Fund der
+    // Regel und ersetzt dort den generischen Hinweistext (uFixHint).
+    FixHint: string;
     FileInclude: TArray<string>; // Glob-Patterns ueber FullPath
     FileExclude: TArray<string>;
   end;
@@ -380,6 +382,23 @@ begin
     Result := False;
 end;
 
+{ ---- Fix-Hinweis ---- }
+
+function OneLineFixHint(const AFixHint: string): string;
+// Der fix-hint ist laut Doku ein Satz und wird von jedem Konsumenten als
+// EINE Zeile hinter einem Praefix ausgegeben (Zwischenablage '  Hint: ',
+// Jira-Mini-Fakt, HTML-Hinweiszeile). Trim allein reicht nicht: ein
+// \n oder \r im double-quoted YAML-Wert wird zum echten Umbruch
+// (uYamlSubsetParser.UnquoteScalar), ebenso kann ein Aufrufer von AddRule
+// mehrzeiligen Text setzen. Die Folgezeile stand in der Zwischenablage
+// dann ohne Einrueckung am Zeilenanfang. Darum jede CR/LF-Folge samt dem
+// Leerraum drumherum zu genau einem Leerzeichen; anderer Leerraum bleibt,
+// wie der Autor ihn schrieb. (Einen Block-Scalar 'fix-hint: |' kennt der
+// Subset-Parser trotz seines Kopfkommentars nicht.)
+begin
+  Result := TRegEx.Replace(Trim(AFixHint), '[ \t]*[\r\n]+[ \t]*', ' ');
+end;
+
 { ---- Pattern-Matching ---- }
 
 function MatchPattern(const Source: string; const R: TCustomRule;
@@ -469,6 +488,11 @@ begin
           F.Kind := fkCustomRule;
           F.Confidence := KindDefaultConfidence(fkCustomRule);
           F.RuleID := R.ID;
+          // Einzeilig: ein \n im YAML-Wert bringt Umbrueche am Ende und
+          // mittendrin mit; Hilfe-Panel, Zwischenablage, Jira-Datei-Text
+          // und Claude-Prompt geben die Description ungeglaettet aus
+          // (OneLineFixHint).
+          F.CustomFixHint := OneLineFixHint(R.FixHint);
           Results.Add(F);
         end;
       finally

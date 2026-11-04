@@ -31,9 +31,15 @@ type
     [Test] procedure Build_SnippetContainsMarkedLine;
     [Test] procedure Build_ReflectsFileChangesAfterEdit;
     [Test] procedure Build_DeletedFileDropsSnippet;
+    // Rot ohne Fix: der fix-hint einer Custom Rule stand unter
+    // '## Rule description'.
+    [Test] procedure Build_CustomFixHintUnderFixHintHeading;
   end;
 
 implementation
+
+uses
+  uLocalization;   // _() - Ueberschriften in der Sprache des Testlaufs
 
 const
   // Marker-Inhalte der Probedatei. Bewusst verschieden LANG - der Cache
@@ -150,6 +156,42 @@ begin
   Prompt := BuildForLine6;
   Assert.IsFalse(Prompt.Contains(CONTENT_A),
     'Zeilen einer geloeschten Datei duerfen nicht aus dem Cache kommen');
+end;
+
+procedure TTestClaudePromptSnippet.Build_CustomFixHintUnderFixHintHeading;
+// Der fix-hint ist der Reparaturschritt des Regelautors; unter
+// '## Rule description' lesen ihn Mensch und Modell als Erklaerung der
+// Regel. Hint kommt wie in IDE und Zwischenablage vom Resolver, der den
+// fix-hint in Description legt. Ueberschriften ueber _() verglichen, damit
+// der Test nicht an der Sprache des Laufs haengt. Gegenprobe ohne
+// fix-hint: dieselbe Regelart behaelt '## Rule description'. Die
+// Probedatei existiert nicht - der Prompt kommt dann ohne Code-Auszug.
+const
+  RULE_HINT = 'Replace TBDEQuery with TFDQuery';
+var
+  F      : TLeakFinding;
+  Prompt : string;
+begin
+  F := TLeakFinding.New(FPath, '', MARKED_LINE, 'probe', fkCustomRule);
+  try
+    F.RuleID        := 'PROJ001';
+    F.CustomFixHint := RULE_HINT;
+    Prompt := TClaudePrompt.Build(F, TFixHintResolver.FixHint(F));
+    Assert.IsTrue(Prompt.Contains(
+      '## ' + _('Fix hint') + sLineBreak + RULE_HINT),
+      'der fix-hint steht unter der Ueberschrift Fix hint');
+    Assert.IsFalse(Prompt.Contains('## ' + _('Rule description')),
+      'keine Regelbeschreibung-Ueberschrift ueber dem fix-hint');
+
+    F.CustomFixHint := '';
+    Prompt := TClaudePrompt.Build(F, TFixHintResolver.FixHint(F));
+    Assert.IsTrue(Prompt.Contains('## ' + _('Rule description')),
+      'ohne fix-hint bleibt die Regelbeschreibung');
+    Assert.IsFalse(Prompt.Contains('## ' + _('Fix hint')),
+      'ohne fix-hint keine Fix-hint-Ueberschrift');
+  finally
+    F.Free;
+  end;
 end;
 
 end.

@@ -500,8 +500,9 @@ var
   Meta      : TRuleMeta;
   Bad, Good : string;
 begin
-  // 'bad' des Katalogs ('MyThread := TWorker.Create(True); MyThread.Resume;')
-  // wird 'good' - TWorker erbt in der Datei von TThread.
+  // 'bad' des Katalogs ('MyThread := TWorkerThread.Create(True);
+  // MyThread.Resume;') wird 'good' - die Deklaration 'MyThread: TWorker'
+  // gewinnt die Typaufloesung, und TWorker erbt in der Datei von TThread.
   Meta := TRuleCatalog.GetRuleCanonical(fkThreadResumeDeprecated);
   Bad := CatalogText(Meta.BadExample);
   Good := CatalogText(Meta.GoodExample);

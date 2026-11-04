@@ -1,24 +1,36 @@
 unit uSynchronizeInDestructor;
 
-// Detektor fuer den klassischen Threading-Deadlock-Pfad:
+// Detektor fuer Synchronize im Destruktor (SCA108, Warning):
 //   - destructor Destroy ruft TThread.Synchronize(...) auf
-//   - Synchronize blockiert den Worker-Thread bis der UI-Thread (Main)
-//     den Closure-Aufruf abgeschlossen hat
-//   - der UI-Thread haengt aber typischerweise selbst in TThread.WaitFor
-//     oder Free (das implizit WaitFor ruft)
-//   - -> beide warten aufeinander, Hang.
+//   - laeuft der Destruktor im Hauptthread, ruft Synchronize die Methode
+//     einfach direkt auf - kein Problem
+//   - laeuft er im Worker selbst (der uebliche Fall bei FreeOnTerminate,
+//     der Thread gibt sich nach Execute selbst frei), blockiert
+//     Synchronize den Worker, bis der Hauptthread den Aufruf ausfuehrt
+//   - fuehrt der Hauptthread ihn nicht aus (wartet per
+//     WaitForSingleObject statt TThread.WaitFor, oder die Anwendung wird
+//     beendet), warten beide aufeinander -> Hang
+// Der frueher behauptete Deadlock mit WaitFor/.Free im Hauptthread trifft
+// nicht zu: TThread.WaitFor im Hauptthread arbeitet Synchronize-Anfragen
+// ab, und ein Free aus dem Hauptthread fuehrt den Destruktor dort aus.
+// Daher Warning, und der Meldetext beschreibt das enge Szenario, nicht
+// einen sicheren Hang.
 //
 // Beispiel:
 //   destructor TWorker.Destroy;
 //   begin
-//     Synchronize(procedure begin Form1.Log('done') end);  // Deadlock!
+//     Synchronize(procedure begin Form1.Log('done') end);  // blockt den Worker
 //     inherited;
 //   end;
 //
 // Fix:
-//   - Synchronize-Aufrufe aus dem Destruktor entfernen (last-call via
-//     Queue oder Notify-Mechanismus VOR dem Free auf dem Worker-Thread)
-//   - oder garantieren dass das Free niemals vom UI-Thread kommt
+//   - die Benachrichtigung in einen OnTerminate-Handler verlegen (laeuft
+//     im Hauptthread, bevor das Thread-Objekt freigegeben wird) oder ans
+//     Ende von Execute
+//
+// Grenze: der Detektor prueft weder FreeOnTerminate noch, ob die Klasse
+// von TThread erbt - er meldet jedes Synchronize in einem Destruktor.
+// Deshalb formuliert der Meldetext das Szenario als Bedingung.
 //
 // Erkennung: AST-basiert. Walk durch nkMethod-Knoten, deren Name auf
 // 'Destroy' endet. Im Body nach nkCall mit Name 'Synchronize' oder
@@ -105,11 +117,17 @@ begin
           F.FileName   := FileName;
           F.MethodName := M.Name;
           F.LineNumber := IntToStr(C.Line);
+          // Der Text nennt das Szenario als Bedingung, weil der Detektor
+          // FreeOnTerminate nicht prueft: haengen kann es nur, wenn der
+          // Destruktor im Worker laeuft und der Hauptthread den Aufruf
+          // nicht ausfuehrt (Katalogtext SCA108). Geht in Baseline-
+          // Fingerprint und SARIF-Line-Hash ein - Aenderung = neue Identitaet.
           F.MissingVar :=
-            Format('Synchronize() called from destructor %s - classic ' +
-                   'deadlock: worker blocks on UI thread which may be ' +
-                   'waiting on this worker (WaitFor / .Free). Move ' +
-                   'Synchronize-based cleanup out of the destructor.',
+            Format('Synchronize() called from destructor %s - if the ' +
+                   'destructor runs in the worker thread (FreeOnTerminate), ' +
+                   'the call blocks it until the main thread runs it, and ' +
+                   'hangs if the main thread does not. Move the ' +
+                   'notification to OnTerminate or the end of Execute.',
                    [M.Name]);
           F.SetKind(fkSynchronizeInDestructor);
           Results.Add(F);

@@ -1105,7 +1105,7 @@ begin
   T := MakeTable(['forms=FMX.Forms;Vcl.Forms', 'comctrls=Vcl.ComCtrls']);
   try
     Assert.IsFalse(T.Resolve('Forms', fwUnknown, Q, Why));
-    Assert.IsTrue(Pos('Rahmenwerk', Why) > 0, Why);
+    Assert.IsTrue(Pos('Framework', Why) > 0, Why);
     // Nit 16: ein einziger Kandidat ist nicht mehrdeutig.
     Assert.IsTrue(T.Resolve('ComCtrls', fwUnknown, Q, Why), Why);
     Assert.AreEqual('Vcl.ComCtrls', Q);

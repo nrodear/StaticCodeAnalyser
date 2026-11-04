@@ -87,6 +87,22 @@ type
     [Test] procedure EditorHelpListHtml_EscapetIdSlugUndWirkung;
     [Test] procedure EditorHelpListHtml_JedeWirkungHatEinenSchluessel;
     [Test] procedure EditorHelpSlugText_MachtDenSlugLesbar;
+    // fix-hint einer Custom Rule (2026-11-03): steht als "Hinweis zu
+    // diesem Fund" im Report - und escaped, es ist Benutzertext.
+    [Test] procedure CustomRuleFixHint_EscapedInHintRow;
+    // i18n-Luecken 2026-11-03, C12: die Labels geben die Sprache vor, in
+    // der auch die Regeltexte gebacken sind (CurrentLanguage) - nicht die
+    // Browsersprache, und als Ersatz "en" statt "de".
+    [Test] procedure ReportLang_VorgabeIstErzeugungssprache;
+    [Test] procedure ReportLang_UnbekannteOderLeereSprache_FaelltAufEn;
+    // C13: der de-Block des I18N-Woerterbuchs folgt den Hausregeln der
+    // de.po (Fund, Schweregrad, echte Umlaute als \uXXXX).
+    [Test] procedure DeI18nBlock_HausregelnUndUmlaute;
+    // Nachtrag: fr-Block nach den fr-Entscheiden (resultat, severite,
+    // normales Leerzeichen vor : ; ? !), und die bisher nur deutschen
+    // DOM-Texte tragen Schluessel in allen drei Sprachen.
+    [Test] procedure FrI18nBlock_HausregelnUndTypografie;
+    [Test] procedure DomTexte_SchluesselInAllenSprachen;
   end;
 
 
@@ -103,6 +119,7 @@ uses
   System.IOUtils,
   System.RegularExpressions,   // EditorHelp_Aus_...: Hilfe-Teile herausnehmen
   uRuleCatalog,                // TRuleEditorHelp (EditorHelpListHtml)
+  uLocalization,               // SetLanguage/CurrentLanguage (ReportLang_*)
   Winapi.Windows;
 
 // Der Pfad steht in drei Fixtures - einmal benannt statt dreimal
@@ -934,7 +951,8 @@ begin
   Assert.IsTrue(Html.Contains('id="findingsTable"'),
     'Tabellen-Skelett bleibt');
   Assert.IsTrue(Html.Contains('</tbody>'), 'tbody bleibt (leer)');
-  Assert.IsTrue(Html.Contains('data-count="0">0 Befunde'),
+  // DOM-Vorgabe seit 2026-11-03 "Funde" (Hausregel der de.po, C13).
+  Assert.IsTrue(Html.Contains('data-count="0">0 Funde'),
     'Zeilenzaehler 0');
   Assert.IsTrue(Html.Contains('class="health-panel health-green"'),
     'Health gruen');
@@ -1155,7 +1173,8 @@ var
   Html : string;
 begin
   Html := RenderReport;
-  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Befund-Details">',
+  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Fund-Details" ' +
+    'data-i18n-aria="aria-drawer">',
     Html) > 0, 'Drawer-Markup fehlt');
   Assert.IsTrue(Pos('id="drawer-schliessen"', Html) > 0,
     'Close-Button fehlt');
@@ -1200,7 +1219,8 @@ begin
     'en-Schluessel hint-what fehlt');
   Assert.IsTrue(Pos('"hint-this": "Note on this finding"', Html) > 0,
     'en-Schluessel hint-this fehlt');
-  Assert.IsTrue(Pos('"hint-this": "Remarque sur cette occurrence"',
+  // fr-Entscheid 2026-11-03: finding = "resultat".
+  Assert.IsTrue(Pos('"hint-this": "Remarque sur ce r\u00e9sultat"',
     Html) > 0, 'fr-Schluessel hint-this fehlt');
 end;
 
@@ -1449,6 +1469,218 @@ begin
     TExporterHtml.EditorHelpSlugText('delete-debug-output'));
   Assert.AreEqual('X', TExporterHtml.EditorHelpSlugText('x'));
   Assert.AreEqual('', TExporterHtml.EditorHelpSlugText(''));
+end;
+
+procedure TTestExportHtml.CustomRuleFixHint_EscapedInHintRow;
+// Ohne die Verdrahtung rot: der Report zeigte unter "Hinweis zu diesem
+// Fund" fuer jede Custom Rule den generischen Satz, der fix-hint kam
+// nicht an (Doku-Audit 2026-11-01: 0 Treffer im HTML). Der Text traegt
+// '<', '>' und '&', damit der Test zugleich den Element-Vertrag
+// (HtmlEscape) belegt - roh duerfte er nirgends stehen.
+const
+  RULE_HINT     = 'Use <TFDQuery> & FireDAC.Comp.Client';
+  RULE_HINT_ESC = 'Use &lt;TFDQuery&gt; &amp; FireDAC.Comp.Client';
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkCustomRule, FIXTURE_PAS, 3, 'BDE query');
+    Fnd.RuleID        := 'PROJ001';
+    Fnd.CustomFixHint := RULE_HINT;
+    Findings.Add(Fnd);
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.Contains(RULE_HINT_ESC),
+    'der fix-hint steht escaped im Report');
+  Assert.AreEqual<Integer>(0, Pos(RULE_HINT, Html),
+    'der fix-hint steht nirgends roh');
+end;
+
+{ --- Sprachwahl und de-Woerterbuch (i18n-Luecken 2026-11-03) ---------- }
+
+function RenderInSprache(const ALang: string): string;
+// Ein Fund, Bericht unter der Oberflaechensprache ALang - die alte
+// Sprache kommt zurueck, auch wenn Run wirft.
+var
+  AltSpr : string;
+begin
+  AltSpr := CurrentLanguage;
+  try
+    SetLanguage(ALang);
+    Result := RenderMitProfil('');
+  finally
+    SetLanguage(AltSpr);
+  end;
+end;
+
+const
+  LANG_DEFAULT_FMT = 'var SCA_LANG_DEFAULT = "%s";';
+
+procedure TTestExportHtml.ReportLang_VorgabeIstErzeugungssprache;
+// Rot ohne den Fix: der Bericht kannte keine Vorgabe und nahm
+// navigator.language - deutsche Labels ueber englischen Regeltexten.
+var
+  Html : string;
+begin
+  Html := RenderInSprache('fr');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['fr'])),
+    'unter fr muss der Bericht fr als Vorgabe tragen');
+  Assert.AreEqual<Integer>(0, Pos('navigator.language', Html),
+    'die Browsersprache darf die Vorgabe nicht mehr bestimmen');
+
+  Html := RenderInSprache('de');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['de'])),
+    'unter de muss der Bericht de als Vorgabe tragen');
+
+  // Regionale Kuerzel wie in der INI: CurrentLanguage liefert den
+  // Rohwert, die Vorgabe muss trotzdem die Basissprache sein.
+  Html := RenderInSprache('de-DE');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['de'])),
+    'de-DE muss auf de normalisiert werden');
+
+  // Eine gespeicherte Wahl des Lesers geht weiter vor.
+  Assert.IsTrue(Html.Contains('var s = localStorage.getItem("sca-html-lang");'),
+    'die gespeicherte Sprachwahl muss erhalten bleiben');
+end;
+
+procedure TTestExportHtml.ReportLang_UnbekannteOderLeereSprache_FaelltAufEn;
+// Die CLI setzt nie eine Sprache (leer = Englisch, die Regeltexte
+// stehen englisch); eine Sprache ohne I18N-Block (externe es.po) backt
+// ebenfalls englische Regeltexte. Beide Male muss "en" vorgegeben
+// sein - vorher war der Ersatz "de".
+var
+  Html : string;
+begin
+  Html := RenderInSprache('');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['en'])),
+    'ohne Sprache muss en vorgegeben sein');
+  Html := RenderInSprache('es');
+  Assert.IsTrue(Html.Contains(Format(LANG_DEFAULT_FMT, ['en'])),
+    'eine Sprache ohne I18N-Block muss auf en fallen');
+  Assert.IsTrue(Html.Contains(
+    'return I18N[SCA_LANG_DEFAULT] ? SCA_LANG_DEFAULT : "en";'),
+    'der JS-Ersatz muss en sein, nicht de');
+end;
+
+procedure TTestExportHtml.DeI18nBlock_HausregelnUndUmlaute;
+// Rot ohne den Fix: "Severity", "Befunde", "Loesung", "Schliessen",
+// "Prioritaeten" und das geduzte "Starte oben" standen im de-Block.
+// Geprueft wird NUR der Block zwischen 'de: {' und 'fr: {' - im
+// uebrigen Skript stehen deutsche Kommentare, die "Befund" sagen duerfen.
+const
+  VERBOTEN : array[0..6] of string = ('Befund', 'Severity', 'Loesung',
+    'Schliessen', 'Prioritaeten', 'zaehlt', 'Starte ');
+var
+  Html, Block : string;
+  PDe, PFr, i : Integer;
+begin
+  Html := RenderMitProfil('');
+  PDe := Pos('      de: {', Html);
+  PFr := Pos('      fr: {', Html);
+  Assert.IsTrue((PDe > 0) and (PFr > PDe), 'de-Block nicht gefunden');
+  Block := Copy(Html, PDe, PFr - PDe);
+  for i := Low(VERBOTEN) to High(VERBOTEN) do
+    Assert.AreEqual<Integer>(0, Pos(VERBOTEN[i], Block),
+      QuotedStr(VERBOTEN[i]) + ' steht noch im de-Block');
+  Assert.IsTrue(Block.Contains('"th-sev": "Schweregrad"'),
+    'Spaltenkopf Schweregrad fehlt');
+  Assert.IsTrue(Block.Contains('"row-count": "{0} Funde"'),
+    'Zeilenzaehler sagt nicht "Funde"');
+  // Genau EIN Backslash - wie im FR-Block (Bug Doku_06 #21).
+  Assert.IsTrue(Block.Contains('L\u00f6sung'), 'Umlaut nicht als \uXXXX');
+  Assert.AreEqual<Integer>(0, Pos('\\u00', Block),
+    'doppelter Backslash vor \u - im JS waere das literaler Text');
+end;
+
+procedure TTestExportHtml.FrI18nBlock_HausregelnUndTypografie;
+// Rot ohne den Nachtrag: der fr-Block sagte "d\u00e9tections" und
+// "gravit\u00e9", trug \u00a0 vor jedem Doppelpunkt, ein typografisches
+// Apostroph und "occurrence". Geprueft wird der Block zwischen 'fr: {'
+// und dem Ende des Woerterbuchs.
+const
+  VERBOTEN : array[0..5] of string = ('\u00a0', 'd\u00e9tections',
+    'D\u00e9tections', 'gravit\u00e9', '\u2019', 'sur cette occurrence');
+var
+  Html, Block : string;
+  PFr, PEnde, i : Integer;
+begin
+  Html := RenderMitProfil('');
+  PFr := Pos('      fr: {', Html);
+  PEnde := Pos('var SCA_LANG_DEFAULT', Html);
+  Assert.IsTrue((PFr > 0) and (PEnde > PFr), 'fr-Block nicht gefunden');
+  Block := Copy(Html, PFr, PEnde - PFr);
+  for i := Low(VERBOTEN) to High(VERBOTEN) do
+    Assert.AreEqual<Integer>(0, Pos(VERBOTEN[i], Block),
+      QuotedStr(VERBOTEN[i]) + ' steht noch im fr-Block');
+  Assert.IsTrue(Block.Contains('"row-count": "{0} r\u00e9sultats"'),
+    'Zeilenzaehler sagt nicht "r\u00e9sultats"');
+  Assert.IsTrue(Block.Contains(
+    '"chart-sev-title": "R\u00e9partition par s\u00e9v\u00e9rit\u00e9"'),
+    'Donut-Titel sagt nicht "s\u00e9v\u00e9rit\u00e9"');
+  Assert.IsTrue(Block.Contains('"lbl-lang": "Langue :"'),
+    'vor dem Doppelpunkt muss ein normales Leerzeichen stehen');
+end;
+
+procedure TTestExportHtml.DomTexte_SchluesselInAllenSprachen;
+// Rot ohne den Nachtrag: Tooltips von Theme/Baseline, die Quick-Wins-
+// Option, der QF-Tooltip, Quick-Wins-Ueberschrift und "Vorkommen" der
+// Sprint-Liste und die Drawer-aria-labels standen nur deutsch im DOM -
+// ohne Schluessel, also in jeder Sprache deutsch.
+const
+  SCHLUESSEL : array[0..12] of string = ('btn-theme', 'ttl-theme',
+    'aria-theme', 'btn-base-save', 'ttl-base-save', 'btn-base-load',
+    'ttl-base-load', 'opt-qf', 'ttl-qf', 'sprint-qf-hdr', 'sprint-occ',
+    'aria-drawer', 'aria-drawer-close');
+  MARKUP : array[0..10] of string = (
+    'data-i18n="btn-theme" data-i18n-title="ttl-theme" data-i18n-aria="aria-theme"',
+    'data-i18n="btn-base-save" data-i18n-title="ttl-base-save"',
+    'data-i18n-title="ttl-base-load"',
+    '<span data-i18n="btn-base-load">',
+    '<option value="qf" data-i18n="opt-qf">',
+    'data-i18n-aria="aria-drawer"',
+    'data-i18n-aria="aria-drawer-close"',
+    'data-i18n-aria="chart-sev-title"',
+    'T("sprint-qf-hdr")',
+    'T("sprint-occ", k.c)',
+    'data-i18n-title="ttl-qf" title="'' + T("ttl-qf")');
+var
+  Html : string;
+  i, P, N : Integer;
+begin
+  Html := RenderMitProfil('');
+  // Jeder Schluessel genau dreimal: en, de, fr.
+  for i := Low(SCHLUESSEL) to High(SCHLUESSEL) do
+  begin
+    N := 0;
+    P := Pos('"' + SCHLUESSEL[i] + '": "', Html);
+    while P > 0 do
+    begin
+      Inc(N);
+      P := Pos('"' + SCHLUESSEL[i] + '": "', Html, P + 1);
+    end;
+    Assert.AreEqual<Integer>(3, N,
+      'Schluessel ' + SCHLUESSEL[i] + ' nicht in en/de/fr');
+  end;
+  for i := Low(MARKUP) to High(MARKUP) do
+    Assert.IsTrue(Html.Contains(MARKUP[i]),
+      'Markup/Aufruf fehlt: ' + MARKUP[i]);
+  // aria-labels werden umgeschaltet - auch im Drawer, der HINTER dem
+  // Skript steht und beim Laden noch nicht im DOM ist.
+  Assert.IsTrue(Html.Contains('function i18nAria(root)'), 'i18nAria fehlt');
+  Assert.IsTrue(Html.Contains('      i18nAria(document);'),
+    'applyLanguage schaltet die aria-labels nicht um');
+  Assert.IsTrue(Html.Contains('      i18nAria(dw);'),
+    'openDrawer beschriftet den Drawer nicht');
+  // Die alten festen deutschen Texte im Skript sind weg.
+  Assert.AreEqual<Integer>(0, Pos(' Vorkommen)', Html),
+    '"Vorkommen" steht noch fest in der Sprint-Liste');
+  Assert.AreEqual<Integer>(0, Pos('### Quick-Wins (Quick-Fix: Gl', Html),
+    'die Quick-Wins-Ueberschrift steht noch fest im Skript');
 end;
 
 initialization

@@ -76,6 +76,9 @@ type
     class function Build(const Finding: TLeakFinding): TFixHint; static;
     class function HintVariant(const Finding: TLeakFinding): Integer; static;
   public
+    // Hinweis zum Fund: memoisiert je Kind/Severity/Variante; traegt der
+    // Fund einen eigenen Regel-Hinweis (TLeakFinding.CustomFixHint), steht
+    // der in Description - ohne den Cache-Slot zu beruehren.
     class function FixHint(const Finding: TLeakFinding): TFixHint; static;
   end;
 
@@ -159,9 +162,20 @@ begin
   // billiger.
   Key := (Ord(Finding.Kind) shl 10) or (Ord(Finding.OriginalSeverity) shl 2)
          or HintVariant(Finding);
-  if FCache.TryGetValue(Key, Result) then Exit;
-  Result := Build(Finding);
-  FCache.AddOrSetValue(Key, Result);
+  if not FCache.TryGetValue(Key, Result) then
+  begin
+    Result := Build(Finding);
+    FCache.AddOrSetValue(Key, Result);
+  end;
+  // Der Hinweis, den die Regel selbst mitbringt (heute: fix-hint einer
+  // Custom Rule), ersetzt die generische Description. Bewusst ERST NACH
+  // dem Cache und nur in der Rueckgabe: der Slot ist je Kind/Severity
+  // geteilt, alle Custom Rules teilen sich also EINEN - stuende der Text
+  // im Cache, erbte jede Regel den fix-hint der zuerst angezeigten (der
+  // Memoize-Bug von 2026-07-26 in neuer Form). Kein _(): Benutzertext.
+  // Before/After bleiben die generischen Beispiele.
+  if Finding.CustomFixHint <> '' then
+    Result.Description := Finding.CustomFixHint;
 end;
 
 const
@@ -638,25 +652,24 @@ begin
 
     fkDivByZero:
     begin
-      Result.Description := _('Division by zero: EZeroDivide or EDivByZero possible');
+      Result.Description := _('Division by zero: EDivByZero possible');
       Result.Before :=
-        'function Avg(Sum, Count: Integer): Double;'#13#10 +
+        'function Avg(Sum, Count: Integer): Integer;'#13#10 +
         'begin'#13#10 +
-        '  Result := Sum / Count;'#13#10 +
-        '  // Count = 0 -> EZeroDivide'#13#10 +
+        '  Result := Sum div Count;'#13#10 +
+        '  // Count = 0 -> EDivByZero'#13#10 +
         '  // Easy to hit on an empty list / filtered query.'#13#10 +
         'end;';
       Result.After :=
-        'function Avg(Sum, Count: Integer): Double;'#13#10 +
+        'function Avg(Sum, Count: Integer): Integer;'#13#10 +
         'begin'#13#10 +
         '  if Count = 0 then'#13#10 +
         '    Exit(0); // or raise a domain-specific exception'#13#10 +
-        '  Result := Sum / Count;'#13#10 +
+        '  Result := Sum div Count;'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
-        '// For floats, x / 0.0 yields Inf / NaN, not an exception,'#13#10 +
-        '// unless FPU exceptions are enabled (Set8087CW).'#13#10 +
-        '// Either way, validate the divisor before dividing.';
+        '// The same guard applies to mod. Validate the divisor'#13#10 +
+        '// before dividing.';
     end;
 
     fkDeadCode:
@@ -783,7 +796,7 @@ begin
         'Logger.Warn(''Database connection lost'');'#13#10 +
         '// ... 30 lines later ...'#13#10 +
         'Logger.Error(''Database connection lost'');'#13#10 +
-        '// ... in another unit ...'#13#10 +
+        '// ... in another method of the same unit ...'#13#10 +
         'StatusBar.SimpleText := ''Database connection lost'';'#13#10 +
         ''#13#10 +
         '// Three copies. Fix a typo in one, miss the others.'#13#10 +
@@ -1240,8 +1253,12 @@ begin
         'object btnSave   : TButton OnClick = MainClick end'#13#10 +
         'object btnLoad   : TButton OnClick = MainClick end'#13#10 +
         'object btnDelete : TButton OnClick = MainClick end'#13#10 +
-        'object btnExport : TButton OnClick = MainClick end'#13#10 +
-        'object btnImport : TButton OnClick = MainClick end'#13#10 +
+        'object edtName   : TEdit   OnChange = MainClick end'#13#10 +
+        'object chkActive : TCheckBox OnClick = MainClick end'#13#10 +
+        ''#13#10 +
+        '// Reported only for MIXED bindings (different component'#13#10 +
+        '// classes or events) - five TButton.OnClick on one handler'#13#10 +
+        '// are parametrised bundling and stay silent.'#13#10 +
         ''#13#10 +
         '// uMainForm.pas'#13#10 +
         'procedure TMainForm.MainClick(Sender: TObject);'#13#10 +
@@ -1781,7 +1798,7 @@ begin
         'k := Length(s) - 4;'#13#10 +
         'Move(s[1], buf, k);'#13#10 +
         ''#13#10 +
-        '// When Length(s) < 4, k becomes negative (or huge as NativeUInt).'#13#10 +
+        '// When Length(s) < 4, k becomes negative (Length is a signed Integer).'#13#10 +
         '// Move with bogus count -> AV / data corruption.';
       Result.After :=
         'if Length(s) >= 4 then'#13#10 +
@@ -2119,11 +2136,11 @@ begin
     begin
       Result.Description := _('Source line exceeds 120 characters - wrap or extract');
       Result.Before :=
-        'Result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive);';
+        'Result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive, ArgumentSix, ArgumentSeven);';
       Result.After :=
         'Result := SomeReallyLongFunction('#13#10 +
-        '  ArgumentOne, ArgumentTwo,'#13#10 +
-        '  ArgumentThree, ArgumentFour, ArgumentFive);'#13#10 +
+        '  ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour,'#13#10 +
+        '  ArgumentFive, ArgumentSix, ArgumentSeven);'#13#10 +
         ''#13#10 +
         '// Side-by-side diff is 2*120+gutter; longer lines break review tools.';
     end;
@@ -2245,10 +2262,13 @@ begin
     begin
       Result.Description := _('Comment contains Pascal-code markers - delete it or restore it');
       Result.Before :=
-        '// FOldDb.Connect(Host, User);'#13#10 +
-        '// FOldDb.Open;'#13#10 +
-        '// if not FOldDb.IsOpen then'#13#10 +
-        '//   raise EOldDbError.Create(''cannot open'');';
+        'LoadSettings;'#13#10 +
+        '// FOldDb.Active := True;'#13#10 +
+        'ApplySettings;'#13#10 +
+        ''#13#10 +
+        '// A single // line between code is reported. A block of'#13#10 +
+        '// adjacent // lines counts as documentation with code'#13#10 +
+        '// samples and stays silent.';
       Result.After :=
         '// Delete the dead block - git history keeps it forever.'#13#10 +
         ''#13#10 +
@@ -3040,12 +3060,14 @@ begin
 
     fkSynchronizeInDestructor:
     begin
-      Result.Description := _('Synchronize() in a destructor - worker and UI thread deadlock each other');
+      Result.Description := _('Synchronize() in a destructor - a self-freeing thread can hang waiting for the main thread');
       Result.Before :=
         'destructor TWorker.Destroy;'#13#10 +
         'begin'#13#10 +
-        '  // UI-Thread wartet typischerweise schon auf WaitFor / .Free,'#13#10 +
-        '  // dieser Aufruf blockt den Worker auf eben diesen UI-Thread.'#13#10 +
+        '  // Mit FreeOnTerminate laeuft der Destruktor im Worker selbst:'#13#10 +
+        '  // der Aufruf blockt ihn, bis der Hauptthread ihn ausfuehrt -'#13#10 +
+        '  // wartet der gerade per WaitForSingleObject oder beendet die'#13#10 +
+        '  // Anwendung, haengen beide.'#13#10 +
         '  Synchronize('#13#10 +
         '    procedure'#13#10 +
         '    begin'#13#10 +
@@ -3054,21 +3076,24 @@ begin
         '  inherited;'#13#10 +
         'end;';
       Result.After :=
-        '// Notify VOR der Zerstoerung - OnTerminate laeuft im UI-Thread'#13#10 +
+        '// Notify VOR der Zerstoerung - OnTerminate laeuft im Hauptthread'#13#10 +
         '// nachdem der Worker Execute verlassen hat, aber BEVOR der'#13#10 +
         '// Destruktor anlaeuft. Kein Synchronize noetig.'#13#10 +
+        '// OnTerminate ist ein TNotifyEvent - eine Methode, keine'#13#10 +
+        '// anonyme Prozedur:'#13#10 +
+        'procedure TMainForm.WorkerDone(Sender: TObject);'#13#10 +
+        'begin'#13#10 +
+        '  Log(''worker done'');'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
         'Worker := TWorker.Create(True);'#13#10 +
-        'Worker.OnTerminate :='#13#10 +
-        '  procedure(Sender: TObject)'#13#10 +
-        '  begin'#13#10 +
-        '    Form1.Log(''worker done'');'#13#10 +
-        '  end;'#13#10 +
+        'Worker.OnTerminate := WorkerDone;'#13#10 +
         'Worker.Start;'#13#10 +
         ''#13#10 +
         '// Destruktor bleibt Synchronize-frei.'#13#10 +
         ''#13#10 +
         '// Suppression: // noinspection SynchronizeInDestructor'#13#10 +
-        '// (nur wenn DU SICHER bist, dass das Free niemals vom UI-Thread kommt).';
+        '// (nur wenn sicher ist, dass der Destruktor nie im Worker laeuft).';
     end;
 
     fkLockWithoutTryFinally:
@@ -3175,21 +3200,32 @@ begin
 
     fkTThreadDestroyWithoutTerminate:
     begin
-      Result.Description := _('TThread destroyed without Terminate+WaitFor - worker may still be running');
+      Result.Description := _('TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect');
       Result.Before :=
         '// inside an OnClick or destructor:'#13#10 +
-        'FreeAndNil(FWorker);';
+        'FreeAndNil(FWorkerThread);        // does Execute honor Terminated?';
       Result.After :=
-        'FWorker.Terminate;'#13#10 +
-        'FWorker.WaitFor;'#13#10 +
-        'FreeAndNil(FWorker);'#13#10 +
+        '// TThread.Destroy ends the thread itself, FreeAndNil alone is fine.'#13#10 +
+        '// Review these three points:'#13#10 +
         ''#13#10 +
-        '// Worker selbst muss Terminated regelmaessig pruefen:'#13#10 +
-        '//   while not Terminated do DoStep;'#13#10 +
+        '// 1. Execute honors Terminated, otherwise Destroy waits until it'#13#10 +
+        '//    returns by itself:'#13#10 +
+        'procedure TWorkerThread.Execute;'#13#10 +
+        'begin'#13#10 +
+        '  while not Terminated do'#13#10 +
+        '    DoStep;'#13#10 +
+        'end;'#13#10 +
         ''#13#10 +
-        '// Alternative: FreeOnTerminate := True;'#13#10 +
-        '//   - dann NIEMALS manuell Free aufrufen'#13#10 +
-        '//   - der Thread ist nach Execute selber weg.';
+        '// 2. The thread destructor frees what Execute uses only after'#13#10 +
+        '//    the thread has ended:'#13#10 +
+        'destructor TWorkerThread.Destroy;'#13#10 +
+        'begin'#13#10 +
+        '  inherited;                      // ends the thread first'#13#10 +
+        '  FreeAndNil(FQueue);'#13#10 +
+        'end;'#13#10 +
+        ''#13#10 +
+        '// 3. With FreeOnTerminate := True the thread frees itself:'#13#10 +
+        '//    do not call Free or FreeAndNil on it as well.';
     end;
 
     // -------- REST/HTTP-Security (SCA115-116) --------
@@ -3484,15 +3520,18 @@ begin
         's := DateToStr(Now);           //    Output flips between . and / by locale.'#13#10 +
         'x := StrToFloat(''3.14'');      //    DE machine expects ''3,14''.';
       Result.After :=
-        'var FS: TFormatSettings;'#13#10 +
-        'FS := TFormatSettings.Invariant;     // for machine-readable IO'#13#10 +
+        'var LFormatSettings: TFormatSettings;'#13#10 +
+        'LFormatSettings := TFormatSettings.Invariant;  // for machine-readable IO'#13#10 +
         ''#13#10 +
-        'd := StrToDate(UserInput, FS);'#13#10 +
-        's := DateToStr(Now,       FS);'#13#10 +
-        'x := StrToFloat(''3.14'',   FS);'#13#10 +
+        'd := StrToDate(UserInput, LFormatSettings);'#13#10 +
+        's := DateToStr(Now,       LFormatSettings);'#13#10 +
+        'x := StrToFloat(''3.14'',   LFormatSettings);'#13#10 +
+        ''#13#10 +
+        '// The rule recognises the argument by its name: it must'#13#10 +
+        '// contain FormatSettings or FmtSettings.'#13#10 +
         ''#13#10 +
         '// For UI: snapshot the user-locale once on form create:'#13#10 +
-        '// FS := TFormatSettings.Create(LOCALE_USER_DEFAULT);';
+        '// LFormatSettings := TFormatSettings.Create(LOCALE_USER_DEFAULT);';
     end;
 
     fkUnicodeToAnsiCast:
@@ -3502,9 +3541,11 @@ begin
         'var u: UnicodeString;'#13#10 +
         'u := ''Smiley: '' + #$1F600;'#13#10 +
         ''#13#10 +
-        'logStream.WriteString(AnsiString(u));'#13#10 +
-        '//                    ^^^^^^^^^ smiley becomes ''?'';'#13#10 +
-        '//                              umlauts on EN-locale machines too.';
+        'var a: AnsiString;'#13#10 +
+        'a := AnsiString(u);'#13#10 +
+        '//   ^^^^^^^^^^ smiley becomes ''?'';'#13#10 +
+        '//              umlauts on EN-locale machines too.'#13#10 +
+        'logStream.WriteString(a);';
       Result.After :=
         '// Pick an explicit encoding for the wire/disk format:'#13#10 +
         'var utf8: UTF8String;'#13#10 +
@@ -3541,14 +3582,14 @@ begin
     begin
       Result.Description := _('IfThen() evaluates both branches - no short-circuit semantics');
       Result.Before :=
-        'x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);'#13#10 +
+        'x := Math.IfThen(IsCacheHit, FetchFromCache(Key), FetchFromDb(Key));'#13#10 +
         '//   ^^^^^^^^^^^ both FetchFromCache AND FetchFromDb run, every call;'#13#10 +
         '//               side effects + cost of both branches always paid.';
       Result.After :=
         'if IsCacheHit then'#13#10 +
-        '  x := FetchFromCache'#13#10 +
+        '  x := FetchFromCache(Key)'#13#10 +
         'else'#13#10 +
-        '  x := FetchFromDb;'#13#10 +
+        '  x := FetchFromDb(Key);'#13#10 +
         ''#13#10 +
         '// if/then/else has short-circuit semantics:'#13#10 +
         '// only the selected branch runs. Same applies to StrUtils.IfThen.';
@@ -3580,13 +3621,13 @@ begin
 
     fkRaiseOutsideExcept:
     begin
-      Result.Description := _('Bare raise; outside an except/on handler raises NIL - Access Violation');
+      Result.Description := _('Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form');
       Result.Before :=
         'procedure Foo(x: Integer);'#13#10 +
         'begin'#13#10 +
         '  if x < 0 then'#13#10 +
-        '    raise;                    // <- no current exception ->'#13#10 +
-        'end;                          //    System._Raise gets NIL -> AV';
+        '    raise;                    // <- not inside a handler:'#13#10 +
+        'end;                          //    compiler error E2145';
       Result.After :=
         'procedure Foo(x: Integer);'#13#10 +
         'begin'#13#10 +
@@ -3645,14 +3686,14 @@ begin
 
     fkLeakInConstructor:
     begin
-      Result.Description := _('Constructor allocates fields and raises - partially-initialized fields leak');
+      Result.Description := _('Constructor allocates fields and raises - the fields leak unless the destructor frees them');
       Result.Before :=
         'constructor TFoo.Create;'#13#10 +
         'begin'#13#10 +
         '  FList := TStringList.Create;'#13#10 +
         '  FOther := TOtherThing.Create;'#13#10 +
         '  if not Valid then'#13#10 +
-        '    raise EInvalidOp.Create(''bad'');     // <- FList + FOther leak'#13#10 +
+        '    raise EInvalidOp.Create(''bad'');     // <- FList/FOther leak unless Destroy frees them'#13#10 +
         'end;';
       Result.After :=
         'constructor TFoo.Create;'#13#10 +
@@ -3717,15 +3758,19 @@ begin
         'begin'#13#10 +
         '  if Id < 0 then begin Result := nil; Exit; end;'#13#10 +
         '  if not Db.Connected then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsLocked(Id) then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;'#13#10 +
+        '  if Db.IsArchived(Id) then begin Result := nil; Exit; end;'#13#10 +
         '  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;'#13#10 +
         '  Result := Cache.Get(Id);'#13#10 +
-        '  Exit;                                       // 4. Exit'#13#10 +
+        '  Exit;                                       // 7th Exit'#13#10 +
         'end;';
       Result.After :=
         'function Find(Id: Integer): TUser;'#13#10 +
         'begin'#13#10 +
         '  Result := nil;'#13#10 +
         '  if (Id < 0) or not Db.Connected then Exit;'#13#10 +
+        '  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;'#13#10 +
         '  if Cache.Has(Id) then'#13#10 +
         '    Result := Cache.Get(Id)'#13#10 +
         '  else'#13#10 +
@@ -4146,33 +4191,33 @@ begin
 
     fkPointerArithmeticOnString:
     begin
-      Result.Description := _('PChar(s) arithmetic without empty-check - PChar('''') is nil, arithmetic triggers AV');
+      Result.Description := _('PChar(s) arithmetic without empty-check - on a short string the pointer lands behind the terminator');
       Result.Before :=
         'procedure Foo(const s: string);'#13#10 +
         'var p: PChar;'#13#10 +
         'begin'#13#10 +
-        '  p := PChar(s) + 5;       // <- if s='''' then PChar(s) = nil'#13#10 +
-        '  while p^ <> #0 do Inc(p);// <- AV at address $00000005'#13#10 +
+        '  p := PChar(s) + 5;       // <- s shorter than 5 chars:'#13#10 +
+        '  while p^ <> #0 do Inc(p);// <- reads behind the terminator'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
-        '// Delphi optimizes PChar('''') to NIL (not a pointer to #0).'#13#10 +
-        '// Any arithmetic on the result without a prior empty-check'#13#10 +
-        '// is a latent Access Violation: nil + 5 is dereferenced'#13#10 +
-        '// as a real address. mORMot internals avoid this with'#13#10 +
-        '// explicit `if s <> '''' then` guards; user code copying'#13#10 +
-        '// the idiom often skips the guard.';
+        '// For an empty string PChar(s) points to a static #0'#13#10 +
+        '// character (not nil); + 5 moves five characters past it.'#13#10 +
+        '// The same happens for every string shorter than the'#13#10 +
+        '// offset - the loop reads garbage or raises an access'#13#10 +
+        '// violation. mORMot internals avoid this with explicit'#13#10 +
+        '// guards; user code copying the idiom often skips them.';
       Result.After :=
-        '// Option 1: empty-check before arithmetic.'#13#10 +
+        '// Option 1: length-check before the arithmetic.'#13#10 +
         'procedure Foo(const s: string);'#13#10 +
         'var p: PChar;'#13#10 +
         'begin'#13#10 +
-        '  if s = '''' then Exit;'#13#10 +
+        '  if Length(s) < 5 then Exit;'#13#10 +
         '  p := PChar(s) + 5;'#13#10 +
         '  while p^ <> #0 do Inc(p);'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
-        '// Option 2: length-check makes the offset safe explicitly.'#13#10 +
-        'if Length(s) >= 6 then'#13#10 +
+        '// Option 2: the same check around a single statement.'#13#10 +
+        'if Length(s) >= 5 then'#13#10 +
         '  p := PChar(s) + 5;'#13#10 +
         ''#13#10 +
         '// Option 3: use higher-level helpers that take a string'#13#10 +
@@ -4221,10 +4266,10 @@ begin
     begin
       Result.Description := _('String cast from raw pointer assumes a null-terminator - heap overread if missing');
       Result.Before :=
-        'procedure Foo(Buf: PByte);'#13#10 +
+        'procedure Foo(PBuf: PByte);'#13#10 +
         'var s: string;'#13#10 +
         'begin'#13#10 +
-        '  s := string(Buf);              // reads until next #0 -'#13#10 +
+        '  s := string(PBuf);             // reads until next #0 -'#13#10 +
         '                                 // may walk past the buffer end'#13#10 +
         '  s := UTF8String(SomePointer);  // same bug, UTF-8 flavor'#13#10 +
         'end;'#13#10 +
@@ -4416,32 +4461,35 @@ begin
     begin
       Result.Description := _('Local variable read before its first assignment - undefined value (garbage / AV)');
       Result.Before :=
-        'procedure DoIt(N: Integer);'#13#10 +
+        'procedure DoIt(const A: array of Integer);'#13#10 +
         'var'#13#10 +
-        '  Total: Integer;'#13#10 +
+        '  I, Best: Integer;'#13#10 +
         'begin'#13#10 +
-        '  if N > 0 then'#13#10 +
-        '    Total := N * 2;'#13#10 +
-        '  // N=0 oder N<0 -> Total NIE zugewiesen!'#13#10 +
-        '  WriteLn(Total);    // <- liest Stack-Garbage'#13#10 +
+        '  for I := 0 to High(A) do'#13#10 +
+        '    if A[I] > Best then  // <- Best gelesen, bevor es je zugewiesen wurde'#13#10 +
+        '      Best := A[I];'#13#10 +
+        '  WriteLn(Best);         // <- Stack-Garbage, wenn A leer ist'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
         '// Bei nicht-managed Typen (Integer, Boolean, Pointer, record,'#13#10 +
         '// class instance) startet die Variable mit undefiniertem Inhalt.'#13#10 +
-        '// Lesen vor Schreiben liefert Garbage oder loest AV aus.';
+        '// Lesen vor Schreiben liefert Garbage oder loest AV aus.'#13#10 +
+        '// Gemeldet wird nach Quelltext-Reihenfolge: ein Lesen vor dem'#13#10 +
+        '// ersten Schreiben oder eine nie geschriebene Variable.';
       Result.After :=
-        'procedure DoIt(N: Integer);'#13#10 +
+        'procedure DoIt(const A: array of Integer);'#13#10 +
         'var'#13#10 +
-        '  Total: Integer;'#13#10 +
+        '  I, Best: Integer;'#13#10 +
         'begin'#13#10 +
-        '  Total := 0;        // <- explicit default vor jedem Read'#13#10 +
-        '  if N > 0 then'#13#10 +
-        '    Total := N * 2;'#13#10 +
-        '  WriteLn(Total);    // safe: hat IMMER definierten Wert'#13#10 +
+        '  Best := Low(Integer);  // <- explicit default vor jedem Read'#13#10 +
+        '  for I := 0 to High(A) do'#13#10 +
+        '    if A[I] > Best then'#13#10 +
+        '      Best := A[I];'#13#10 +
+        '  WriteLn(Best);         // safe: hat IMMER definierten Wert'#13#10 +
         'end;'#13#10 +
         ''#13#10 +
         '// Alternativen:'#13#10 +
-        '//   * Total := Default(Integer);'#13#10 +
+        '//   * Best := Default(Integer);'#13#10 +
         '//   * jeden if-Pfad zuweisen lassen (auch else)'#13#10 +
         '//   * FillChar(rec, SizeOf(rec), 0) fuer records'#13#10 +
         '//   * Managed-Typen (string, dynamic array) sind auto-init,'#13#10 +

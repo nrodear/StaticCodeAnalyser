@@ -1,7 +1,7 @@
 ﻿# Documentation index
 
-Everything the project ships as documentation, in one place. The README is
-the front door; this page is the map behind it.
+The project's main documents in one place. The README is the front door;
+this page is the map behind it.
 
 🇩🇪 🇫🇷 Most documents exist in all three languages — the German
 version carries the `_de` suffix, the French version the `_fr` suffix
@@ -14,8 +14,8 @@ version carries the `_de` suffix, the French version the `_fr` suffix
 | Document | What it answers |
 |---|---|
 | [../README.md](../README.md) | What the tool does, how to run it, architecture, performance, suppression, theming. Start here if you have not used it before. |
-| [../HowTo_Build.md](../HowTo_Build.md) | How to build the EXE, the IDE plugin and the test project from source (building is optional - releases ship a setup). |
-| [../HowTo_Tests.md](../HowTo_Tests.md) | How to run the DUnitX suite and the dogfooding gate. |
+| [../HowTo_Build.md](../HowTo_Build.md) | How to build the EXE and the IDE plugin from source (building is optional - releases ship a setup). |
+| [../HowTo_Tests.md](../HowTo_Tests.md) | How to build and run the DUnitX test suite. |
 | [../CHANGELOG.md](../CHANGELOG.md) | What changed, release by release, with the reasoning. |
 | [configuration.md](configuration.md) | **Every `analyser.ini` key** with its default and meaning - thresholds, profiles, baseline, UI. Also in [German](configuration_de.md) and [French](configuration_fr.md). |
 
@@ -23,7 +23,7 @@ version carries the `_de` suffix, the French version the `_fr` suffix
 
 | Document | What it answers |
 |---|---|
-| [rules.md](rules.md) | The rule catalogue: every `SCA###` with severity, default profile membership and a one-line description. |
+| [rules.md](rules.md) | The rule catalogue: every `SCA###` with severity, type, detector unit and description. |
 | [profiles.md](profiles.md) | **Scan profiles**: what the nine built-in ones contain, how to pick one, and how to write your own. Also in [German](profiles_de.md) and [French](profiles_fr.md). |
 | [rules/index.md](rules/index.md) | One page per rule — what it flags, why it matters, how to fix it, and how to suppress it when the finding is intentional. |
 | [rules/de/index.md](rules/de/index.md) · [rules/fr/index.md](rules/fr/index.md) | The same per-rule pages with German and French rule names and one-line descriptions. Full descriptions and examples stay English — the pages say so where that begins. |
@@ -56,7 +56,7 @@ GetIt is suspended for 0.9.19.
 | [../BRANCH_CHANGES.md](../BRANCH_CHANGES.md) | The Branch-Changes feature: Git/SVN detection, Tortoise compatibility, configuration, troubleshooting. |
 | [../installer/README_Installer.md](../installer/README_Installer.md) | Building and running the plugin installer. |
 | [../getit/README_GetIt.md](../getit/README_GetIt.md) | GetIt local package, suspended for 0.9.19 - why, plus the manifest contracts and lessons. |
-| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the optional package with the code actions: prerequisites, building, behaviour. Part of the setup; the [README](../README.md#code-actions-redelphix-optional-ide-package) has the short version. In German. |
+| [../reDelphix/README.md](../reDelphix/README.md) | reDelphix, the SCA feature with the code actions: prerequisites, building, behaviour. Always installed with the plugin; the [README](../README.md#code-actions-redelphix) has the short version. In German. |
 | [../reDelphix/QUICKFIXES.md](../reDelphix/QUICKFIXES.md) | Every code action with its menu texts (en/de/fr), effect, locks and an example. In German. |
 
 ## Embedding the engine

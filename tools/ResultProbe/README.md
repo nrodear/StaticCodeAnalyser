@@ -1,7 +1,9 @@
 ﻿# ResultProbe — was passiert mit einem nicht zugewiesenen Funktionsergebnis?
 
-Diagnose-Programm für die geplante Regel **SCA196
-`ManagedResultNotInitialized`**. Es beantwortet zwei Fragen, die sich am
+Diagnose-Programm, mit dem die Regel **SCA196 `ManagedResultUninit`**
+vorbereitet wurde. Die Regel ist inzwischen gebaut
+([Regelseite](../../docs/rules/de/SCA196.md)); die Probe bleibt als
+historischer Beleg stehen. Sie beantwortet zwei Fragen, die sich am
 RTL-Quelltext allein **nicht** klären lassen:
 
 1. **Behält `Result` wirklich den Altwert der Zielvariablen des Aufrufers?**
@@ -58,7 +60,8 @@ schweigt dort, wo der Fehler still ist.
 Unklar und deshalb interessant: `SS_Never` (ShortString) und `RM_Never`
 (Record mit verwaltetem Feld).
 
-## Abbruchkriterium
+## Abbruchkriterium (vor dem Bau der Regel)
 
 **Zeigt Probe 2a nicht `[ALT]`, ist die Prämisse der Regel hinfällig.**
-Dann bitte zuerst melden — dann wird nichts gebaut.
+So galt es vor dem Bau; heute hieße ein solches Ergebnis, die Regel
+SCA196 zu überprüfen.

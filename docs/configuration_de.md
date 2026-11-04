@@ -13,10 +13,16 @@ neben `ignore.txt`. Sie wird beim ersten Start angelegt; eine aeltere
 `repo.ini` wird automatisch uebernommen. Alle Schluessel sind optional - ein
 fehlender Schluessel bedeutet den unten genannten Standardwert.
 
-Dieselbe Datei lesen die eigenstaendige EXE, das IDE-Plugin und die CLI. Wo
-sich die drei bewusst unterscheiden, sagt es der Schluesselname
-(`IdeProfile`, `IdeMinSeverity`). CLI-Schalter schlagen die Datei fuer den
-Lauf, in dem sie angegeben werden.
+**Bool-Schlüssel nehmen `1` (an) oder `0` (aus).** `True`, `False` oder
+`yes` werden nicht als Zahl gelesen: Der Schlüssel behält dann ohne
+Meldung seinen Standardwert.
+
+Dieselbe Datei lesen die eigenstaendige EXE, das IDE-Plugin und die CLI.
+Manche Schlüssel tragen den Konsumenten im Namen (`IdeProfile`,
+`IdeMinSeverity`); andere lesen nicht alle drei, und ihre Zeile sagt es
+(`IncludeTests`, `UsesCheck`, `OnlyNew`, `[Baseline] File`,
+`[Scan] Dialect`). CLI-Schalter schlagen die Datei fuer den Lauf, in dem
+sie angegeben werden.
 
 > SCA fuehrt keine SonarQube-Einstellungen: Server, Token und Projektschluessel
 > gehoeren zu `sonar-scanner`, siehe [sonarHowto_de.md](../sonarHowto_de.md).
@@ -34,19 +40,19 @@ Lauf, in dem sie angegeben werden.
 
 | Schlüssel | Typ | Default | Bedeutung |
 |---|---|---|---|
-| `Dialect` | String | _(leer)_ | Quelltext-Dialekt ohne `--dialect`-Schalter: `delphi` oder `fpc` (Lazarus/Free Pascal: sammelt `*.pp`/`*.lpr`, paart `.lfm`, FPC/LCL-Defines, überspringt die Delphi-spezifischen Regeln SCA041/SCA129/SCA185). Leer = delphi. Der CLI-Schalter und ein `.lpi`/`.lpk`/`.lpg`-Projekt-Scan gewinnen immer; die GUI schaltet den Schlüssel per Rechtsklick auf die Statusleiste um. |
+| `Dialect` | String | _(leer)_ | Quelltext-Dialekt ohne `--dialect`-Schalter: `delphi` oder `fpc` (Lazarus/Free Pascal: sammelt `*.pp`/`*.lpr`, paart `.lfm`, FPC/LCL-Defines, überspringt die Delphi-spezifischen Regeln SCA041/SCA129/SCA185). Leer = delphi. `auto` versteht nur die CLI: Von der Scan-Wurzel aufwärts entscheidet der erste Ordner mit `*.dpr`/`*.dproj` oder `*.lpi`/`*.lpk`, bei Gleichstand gewinnt Delphi; die eigenständige EXE behandelt `auto` wie delphi. Der CLI-Schalter und ein `.lpi`/`.lpk`/`.lpg`-Projekt-Scan gewinnen immer; die GUI schaltet den Schlüssel per Rechtsklick auf die Statusleiste um. |
 
 ## `[Rules]`
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `Profile` | String | _(leer)_ | Regelprofil fuer CLI und Standalone. Leer = alle Regeln. |
+| `Profile` | String | _(leer)_ | Regelprofil fuer CLI und Standalone. Leer = `default` (197 Regeln); die Vorlage schreibt `Profile=default`. |
 | `MinSeverity` | String | `hint` | Niedrigste gemeldete Schwere: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Konfidenz-Untergrenze: `low` schaltet den Filter aus, `medium` ist Auslieferungsstand. |
-| `EvidenceTiering` | Bool | `True` | Evidenz-Politik "Error = bewiesen": die Severity jedes Funds wird auf seine Konfidenz gedeckelt (high → `error` erlaubt, medium → höchstens `warning`, low → höchstens `hint`). `0` stellt das Verhalten vor 0.9.18 wieder her, z. B. für CI-Gates, die auf den alten Error-Zahlen stehen. |
+| `EvidenceTiering` | Bool | `1` | Evidenz-Politik "Error = bewiesen": die Severity jedes Funds wird auf seine Konfidenz gedeckelt (high → `error` erlaubt, medium → höchstens `warning`, low → höchstens `hint`). `0` stellt das Verhalten vor 0.9.18 wieder her, z. B. für CI-Gates, die auf den alten Error-Zahlen stehen. |
 | `IdeProfile` | String | `ide-fast` | Profil des IDE-Plugins. Wird je Lauf nach `Profile` gespiegelt, ueberschreibt es aber nicht. |
 | `IdeMinSeverity` | String | `hint` | Schwere-Untergrenze des IDE-Plugins, gleich gespiegelt. |
-| `EnableDetectorReviewFilter` | Bool | `False` | Opt-in-Filter, der Regeln in Ueberpruefung ausblendet. |
+| `EnableDetectorReviewFilter` | Bool | `0` | Internes Prüfwerkzeug: ergänzt die Schwere-Auswahl um den Eintrag "Detector-Review (1 zufaelliger Befund pro Detector)". Nur in Builds mit `DEBUG`; Release-Builds ignorieren den Schlüssel. |
 
 ## `[Detectors]`
 
@@ -55,12 +61,12 @@ Lauf, in dem sie angegeben werden.
 | `LeakyClasses` | String | _(leer)_ | Zusaetzliche Klassen, die SCA001 als leck-faehig behandelt, kommagetrennt. |
 | `ExcludeLeakyClasses` | String | _(leer)_ | Klassen, die aus dieser Liste wieder entfernt werden. |
 | `OwnershipSinks` | String | _(leer)_ | Routinen, die die Ownership eines uebergebenen Objekts uebernehmen (nackte Routinennamen, kommagetrennt). Standardmaessig leer - siehe DETECTORS. Am Korpus belegte Kandidaten fuer Framework-Code (S4-Audit 2026-09-23): `AddItem` (mORMot `TPdfDictionary`/`TPdfArray` besitzen ihre Elemente), `Add` an Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / fpjson-Objekten. VORSICHT: Namen wirken global - ein gelisteter Name unterdrueckt SCA001 fuer JEDE gleichnamige Routine; genau deshalb bleibt der Default leer. |
-| `AutoDiscoverClasses` | Bool | `False` | Leck-faehige Klassen waehrend des Scans entdecken und protokollieren. |
+| `AutoDiscoverClasses` | Bool | `0` | Leck-faehige Klassen waehrend des Scans entdecken und protokollieren. |
 | `CustomRulesFile` | String | _(leer)_ | YAML-Datei mit eigenen Regeln. |
-| `FormatFunctions` | String | _(leer)_ | Zusaetzliche Format-artige Funktionen fuer die Platzhalter-Pruefung (SCA005). |
-| `MagicNumberTrivials` | String | _(leer)_ | Zahlen, die SCA014 ohne benannte Konstante durchgehen laesst. |
-| `IncludeTests` | Bool | `False` | Testverzeichnisse mitscannen. Standardmaessig aus - Fixtures erzeugen Rauschen. |
-| `UsesCheck` | Bool | `False` | Den teuren Unused-Uses-Detektor (SCA007) einschalten. Das Profil `strict` aktiviert ihn unabhängig von diesem Schlüssel. |
+| `FormatFunctions` | String | `Format,FormatUtf8,FormatString` | Format-artige Funktionen fuer die Platzhalter-Pruefung (SCA005), kommagetrennt. Ein Wert **ersetzt** diese Liste: die drei Vorgaben mit aufführen, wenn sie bleiben sollen. |
+| `MagicNumberTrivials` | String | `0,1,2,-1,10,100` | Zahlen, die SCA014 ohne benannte Konstante durchgehen laesst, kommagetrennt. Ein Wert **ersetzt** diese Liste. |
+| `IncludeTests` | Bool | `0` | Testverzeichnisse mitscannen. Standardmaessig aus - Fixtures erzeugen Rauschen. Nur eigenständige EXE und IDE-Plugin; die CLI nimmt `--hide-test-fixtures` / `--show-test-fixtures`. |
+| `UsesCheck` | Bool | `0` | Den teuren Unused-Uses-Detektor (SCA007) einschalten. In der CLI aktiviert ihn das Profil `strict` (`--profile strict` oder `Profile=strict`) unabhängig von diesem Schlüssel; eigenständige EXE und IDE-Plugin lesen nur diesen Schlüssel. |
 | `MaxFileMB` | Integer | `5` | Groessere Dateien werden uebersprungen. |
 | `LongMethodMaxBodyLines` | Integer | `50` | Schwelle SCA012: Rumpfzeilen. |
 | `LongMethodMaxStatements` | Integer | `30` | Schwelle SCA012: Anweisungen. |
@@ -69,7 +75,7 @@ Lauf, in dem sie angegeben werden.
 | `CyclomaticMax` | Integer | `10` | Schwelle SCA022: McCabe-Komplexitaet. |
 | `CognitiveLimit` | Integer | `15` | Schwelle SCA176: kognitive Komplexitaet (Verschachtelung zaehlt staerker als bei McCabe). |
 | `MaxCaseBranches` | Integer | `10` | Schwelle SCA091: case-Zweige. |
-| `MaxLineLength` | Integer | `120` | Schwelle fuer die Zeilenlaengen-Regel. |
+| `MaxLineLength` | Integer | `120` | Schwelle fuer die Zeilenlaengen-Regel (SCA062). Die Regel meldet mit Konfidenz low und erscheint daher nur mit `[Rules] MinConfidence=low`. |
 | `DuplicateBlockMinLines` | Integer | `8` | Mindestlaenge eines Blocks, bevor Duplikate gemeldet werden. |
 
 ## `[Components]`
@@ -82,9 +88,9 @@ Lauf, in dem sie angegeben werden.
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `File` | String | _(leer)_ | Baseline-JSON. Ein relativer Pfad löst gegen das Verzeichnis des Projekts oder der Gruppe auf, sonst gegen die Scan-Wurzel; die CLI fällt auf das Arbeitsverzeichnis zurück, wenn die Datei nur dort liegt, und sagt das. Leer = `.sca`-Standardort. |
-| `OnlyNew` | Bool | `False` | Nur Funde anzeigen, die nicht in der Baseline stehen. |
-| `PathInFingerprint` | Bool | `False` | Den Relativpfad in den Fingerprint aufnehmen - trennt gleichnamige Dateien in verschiedenen Ordnern. |
+| `File` | String | _(leer)_ | Baseline-JSON. Ein relativer Pfad löst gegen das Verzeichnis des Projekts oder der Gruppe auf, sonst gegen die Scan-Wurzel; die CLI fällt auf das Arbeitsverzeichnis zurück, wenn die Datei nur dort liegt, und sagt das. Leer = `.sca`-Standardort. Die CLI liest den Schlüssel nur mit `--baseline-scan y`. |
+| `OnlyNew` | Bool | `0` | Nur Funde anzeigen, die nicht in der Baseline stehen. Nur eigenständige EXE und IDE-Plugin; die CLI nimmt `--baseline` / `--baseline-scan`. |
+| `PathInFingerprint` | Bool | `0` | Den Relativpfad in den Fingerprint aufnehmen - trennt gleichnamige Dateien in verschiedenen Ordnern. |
 
 **Eine Baseline zählt.** Die Datei hält je Fund einen Eintrag, und jeder
 Eintrag deckt höchstens einen Fund: zwei Einträge mit demselben
@@ -186,25 +192,25 @@ dort traegt der strukturelle Grund, nicht die Rate.
 |---|---|---|---|
 | `Language` | String | `en` | Oberflaechensprache: `de`, `en`, `fr`. Leer oder unbekannt = Englisch. reDelphix folgt dem Schluessel, solange seine eigene `redelphix.ini` nichts anderes sagt (siehe oben). |
 | `Theme` | String | `system` | Design der EXE: `system` (Windows folgen), `light`, `dark`. |
-| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (Code-Aktionen ohne Fund im Editor-Kontextmenue, flacher Abschnitt unter den Fund-Aktionen mit der deaktivierten Kopfzeile "Code-Aktionen"; die Fund-Aktionen bleiben; ohne `EditorContextMenu` wirkungslos), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
+| `Element.<Name>` | Bool | `1` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `EditorBulb` (Gluehbirne mit den Fund-Aktionen an der Caret-Zeile; sie bekommt ihre Editor-Ereignisse vom `LineHighlighter`, `LineHighlighter=0` legt sie also mit still), `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `EditorContextActions` (Code-Aktionen ohne Fund im Editor-Kontextmenue, flacher Abschnitt unter den Fund-Aktionen mit der deaktivierten Kopfzeile "Code-Aktionen"; die Fund-Aktionen bleiben; ohne `EditorContextMenu` wirkungslos), `OptionsPageSCA`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
 | `ClipboardOnClick` | Integer | `1` | Was ein Zeilenklick kopiert: `1` nichts, `2` Jira-Mini-Ticket, `3` Markdown-Prompt. |
 | `EditorColorScheme` | String | `default` | Farbschema von Editor-Markerstreifen und Overlay-Titelleiste. |
 | `OverlayPosition` | String | `below` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. `below` (Standard) beginnt eine Zeile darunter am Zeilenanfang; `sameline` legt sich ueber die Fundzeile. |
-| `OverlayShowOnHover` | Bool | `False` | Overlay beim Ueberfahren statt beim Klick zeigen. |
-| `OverlayTextOnly` | Bool | `False` | Das Overlay-Fenster durch einen transparenten Einzeiler ersetzen. |
+| `OverlayShowOnHover` | Bool | `0` | Overlay beim Ueberfahren statt beim Klick zeigen. |
+| `OverlayTextOnly` | Bool | `0` | Das Overlay-Fenster durch einen transparenten Einzeiler ersetzen. |
 
 ## `[Silent]`
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `Enabled` | Bool | `True` | Hintergrundanalyse der bearbeiteten Datei (IDE-Plugin). |
+| `Enabled` | Bool | `1` | Zeigt im Editor-Rechtsklick-Menü des IDE-Plugins den Eintrag "Aktuelle Datei analysieren (Silent)": Er analysiert die bearbeitete Datei und markiert die Funde im Editor, ohne das Dock-Fenster zu öffnen. `0` blendet den Eintrag aus. Auch auf der Optionsseite des Plugins. |
 
 ## `[Repo]`
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
 | `BaseBranch` | String | _(leer)_ | Basiszweig fuer Branch-Changes. Leer = automatisch. |
-| `IncludeWorkingTree` | Bool | `True` | Nicht committete Aenderungen in den Diff aufnehmen. |
+| `IncludeWorkingTree` | Bool | `1` | Nicht committete Aenderungen in den Diff aufnehmen. |
 
 ## `[Paths]`
 
@@ -237,15 +243,33 @@ das naechste Schliessen des Fensters ueberschreibt sie.
 
 ## `[PathOverrides]`
 
-Freiform-Sektion: jeder Schluessel ist ein Pfadfragment, jeder Wert die
-Schwere, die Funde unterhalb dieses Pfads bekommen. Damit laesst sich
-zugelieferter oder generierter Code herabstufen, ohne ihn auszuschliessen.
+Verwirft oder stuft Funde je Pfad um. So bleibt zugelieferter, generierter
+oder Test-Code im Scan, ohne dass das Profil leidet. Die Sektion wird nur
+aus der `analyser.ini` in `%APPDATA%\StaticCodeAnalyser\` gelesen (EXE,
+IDE-Plugin und CLI gleichermassen); eine Kopie je Repository gibt es nicht.
+
+Jede Zeile lautet `<Glob> = <Aktion>`:
+
+- **Glob:** wird gegen den **vollen, absoluten** Dateipfad des Fundes
+  geprueft, ohne Gross-/Kleinschreibung, `\` und `/` gleichwertig, `*` und
+  `**` greifen beide ueber Ordner hinweg. Das Muster mit `**\` beginnen -
+  ein relatives Muster wie `third_party\**` trifft nie.
+- **Aktion:** `drop:*` (alle Funde verwerfen), `drop:KindA,KindB` (nur diese
+  Arten), `severity:hint:<Arten>`, `severity:warn:<Arten>`,
+  `severity:error:<Arten>` (`<Arten>` = `*` oder eine Kommaliste). Arten sind
+  die Regelnamen, die auch `// noinspection` nimmt, etwa `MagicNumber`.
+- Die erste passende Zeile gewinnt. Eine Zeile mit anderem Wert (etwa
+  `third_party=hint`) wird ohne Meldung ignoriert.
 
 ```ini
 [PathOverrides]
-third_party=hint
-generated\=off
+**\third_party\** = severity:hint:*
+**\generated\**   = drop:*
+**\legacy\**      = drop:MagicNumber,BeginEndRequired
 ```
+
+Lesefehler (`FileReadError`) werden nie verworfen. Herabgestufte Funde fehlen
+im Sonar-Export, ausser mit `--sonar-keep-downgraded`.
 
 ---
 

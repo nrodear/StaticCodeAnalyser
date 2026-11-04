@@ -9,6 +9,12 @@
 #   - Idealer Einsatz: ein Migrations-Sprint pro Quartal, fix N Hits
 #     ab und tracke den Fortschritt im SARIF/HTML-Report.
 #
+# pattern-type word: das Muster ist ein blosser Bezeichner, KEIN Regex.
+# Der Leser setzt die Wortgrenzen selbst ('\b' + Muster + '\b', das Muster
+# woertlich, Gross-/Kleinschreibung zaehlt). Ein '\\b' im Muster wuerde
+# als Text gesucht und nie gefunden. Alternativen ('A|B') gehen nur mit
+# pattern-type regex.
+#
 # Anpassung: pro Treffer in deinem Code entweder migrieren ODER die
 # Rule mit file-exclude fuer Legacy-Module rausnehmen die nie migriert
 # werden.
@@ -21,7 +27,7 @@ rules:
     name: "TADOConnection -> TFDConnection"
     severity: hint
     type: code-smell
-    pattern: "\\bTADOConnection\\b"
+    pattern: "TADOConnection"
     pattern-type: word
     message: "ADO-Komponenten werden von Embarcadero nicht mehr aktiv gewartet. FireDAC bietet besseres Connection-Pooling, Mac/Linux-Support, Async"
     fix-hint: "Replace TADOConnection with TFDConnection (FireDAC.Comp.Client)"
@@ -30,7 +36,7 @@ rules:
     name: "TADOQuery -> TFDQuery"
     severity: hint
     type: code-smell
-    pattern: "\\bTADOQuery\\b"
+    pattern: "TADOQuery"
     pattern-type: word
     message: "Siehe MIG001"
     fix-hint: "Replace TADOQuery with TFDQuery"
@@ -39,7 +45,7 @@ rules:
     name: "TADOTable -> TFDTable"
     severity: hint
     type: code-smell
-    pattern: "\\bTADOTable\\b"
+    pattern: "TADOTable"
     pattern-type: word
     message: "Siehe MIG001"
     fix-hint: "Replace TADOTable with TFDTable"
@@ -48,7 +54,7 @@ rules:
     name: "TADOStoredProc -> TFDStoredProc"
     severity: hint
     type: code-smell
-    pattern: "\\bTADOStoredProc\\b"
+    pattern: "TADOStoredProc"
     pattern-type: word
     message: "Siehe MIG001"
     fix-hint: "Replace TADOStoredProc with TFDStoredProc"
@@ -67,7 +73,7 @@ rules:
     name: "TIdHTTP -> THTTPClient (System.Net.HttpClient)"
     severity: hint
     type: code-smell
-    pattern: "\\bTIdHTTP\\b"
+    pattern: "TIdHTTP"
     pattern-type: word
     message: "TIdHTTP ist Indy-Komponente mit eigener Threading-Architektur. THTTPClient (RTL) ist async, plattform-agnostisch und wird mit Delphi mitgewartet"
 
@@ -75,7 +81,7 @@ rules:
     name: "TIdHTTPServer -> Embedded HTTP-Lib"
     severity: hint
     type: code-smell
-    pattern: "\\bTIdHTTPServer\\b"
+    pattern: "TIdHTTPServer"
     pattern-type: word
     message: "Fuer neue REST-APIs: mORMot 2 Web-Server, Horse, Bromine oder DMVCFramework - alle moderner als Indy"
 
@@ -84,7 +90,7 @@ rules:
     name: "SuperObject (TSuperObject)"
     severity: hint
     type: code-smell
-    pattern: "\\bTSuperObject\\b"
+    pattern: "TSuperObject"
     pattern-type: word
     message: "SuperObject hat seit Jahren keine Updates. System.JSON (RTL) deckt 95% der Use-Cases ab"
 
@@ -108,7 +114,7 @@ rules:
     pattern-type: regex
     message: "WriteLn = Console-Output, nicht strukturiertes Logging. Logger-Library mit Levels (Debug/Info/Warn/Error) und Sinks (File/Console/EventLog) verwenden"
     file-include:
-      - "src/**/*.pas"
+      - "**/src/**/*.pas"
     file-exclude:
       - "**/*Test*.pas"
       - "**/*ConsoleApp*.pas"
@@ -131,6 +137,8 @@ rules:
     name: "AssignFile / Reset / Rewrite (alte File-API)"
     severity: hint
     type: code-smell
-    pattern: "\\b(AssignFile|Reset|Rewrite|CloseFile)\\b"
-    pattern-type: word
+    # Nur der Aufruf als Routine mit Klammer: 'Sw.Reset', 'R.Reset(1)' und
+    # 'DoRewrite(2)' sind andere Routinen und bleiben still.
+    pattern: "(?<![.\\w])(AssignFile|Reset|Rewrite|CloseFile)\\s*\\("
+    pattern-type: regex
     message: "Pre-Delphi-2 File-Handling. TFileStream / TStreamReader / TFile.ReadAllText nutzen - exception-safe, encoding-aware, plattformagnostisch"

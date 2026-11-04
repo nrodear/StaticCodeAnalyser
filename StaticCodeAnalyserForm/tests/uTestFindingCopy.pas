@@ -31,7 +31,7 @@ uses
 const
   // Felder von TLeakFinding. Neues Feld: erst CopyFrom ergaenzen, dann
   // diese Zahl.
-  FINDING_FIELD_COUNT = 14;
+  FINDING_FIELD_COUNT = 15;   // 15: CustomFixHint (fix-hint der Custom Rules)
 
 type
   [TestFixture]

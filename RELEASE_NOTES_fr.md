@@ -10,17 +10,16 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   dans le menu contextuel du résultat, ainsi que neuf actions de code au
   curseur, en anglais, en allemand et en français. Chaque action
   revérifie d'abord le tampon de l'éditeur et écrit en une seule étape
-  d'annulation, jamais dans un fichier. Le setup l'installe pour
-  Delphi 12 et pour les IDE 32 et 64 bits de Delphi 13 ; il est
-  présélectionné et décochable.
+  d'annulation, jamais dans un fichier. Le setup l'installe toujours avec
+  le plugin, pour Delphi 12 et pour les IDE 32 et 64 bits de Delphi 13.
 - **GetIt est suspendu pour la 0.9.19 : si vous utilisez GetIt, prenez le
   setup.** Le setup installe désormais un jeu de quatre paquets par IDE au
   lieu d'une seule BPL, et ce jeu ne peut pas s'installer via GetIt.
   Lancez le nouveau setup par-dessus la v0.9.18 : il retire l'ancien
   plugin, y compris une installation GetIt, et le signale. Son dossier
   passe en tête du réglage PATH de l'IDE ; la désinstallation ne retire
-  que cette entrée. Avec reDelphix, un plugin installé garde ses
-  quick-fixes et `Ctrl+Alt+F`.
+  que cette entrée. reDelphix étant toujours inclus, un plugin installé
+  garde ses quick-fixes et `Ctrl+Alt+F`.
 - **Les réglages Sonar et le test de connexion disparaissent. SCA écrit
   le fichier, `sonar-scanner` l'envoie. Les options `--sonar-test`,
   `--sonar-init`, `--sonar-host`, `--sonar-token`, `--sonar-project`,

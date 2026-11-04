@@ -1,8 +1,9 @@
 unit uTestSynchronizeInDestructor;
 
 // Tests fuer den TSynchronizeInDestructorDetector (SCA108).
-// Klassischer Threading-Deadlock: TThread.Synchronize-Aufruf im
-// destructor Destroy.
+// TThread.Synchronize-Aufruf im destructor Destroy: haengt, wenn der
+// Destruktor im Worker laeuft (FreeOnTerminate) und der Hauptthread den
+// Aufruf nicht ausfuehrt.
 
 interface
 
@@ -21,6 +22,8 @@ type
     // Posten 210: Destruktor, der nicht Destroy heisst (TypeRef-Zweig)
     [Test] procedure NonDestroyNamedDestructor_Reported;
     [Test] procedure SameNameAsProcedure_NotReported_Kontrolle;
+    // Schwere Warning: haengen kann es nur in einem engen Szenario
+    [Test] procedure SynchronizeInDestructor_DefaultSeverity_IsWarning;
   end;
 
 implementation
@@ -215,9 +218,27 @@ begin
         Break;
       end;
     Assert.IsNotNull(Hit, 'fkSynchronizeInDestructor finding expected');
-    Assert.AreEqual(lsError, Hit.Severity,
-      'Concurrency-Deadlock muss als Error (nicht Hint/Warning) emittieren');
+    Assert.AreEqual(lsWarning, Hit.Severity,
+      'SCA108 meldet als Warning: haengen kann es nur, wenn der Destruktor ' +
+      'im Worker laeuft und der Hauptthread den Aufruf nicht ausfuehrt');
+    // Der Text muss dasselbe enge Szenario nennen wie der Katalog und
+    // darf keinen sicheren Deadlock mit WaitFor/.Free mehr behaupten.
+    Assert.Contains(Hit.MissingVar, 'hangs if the main thread does not',
+      'die Meldung nennt die Bedingung fuer den Haenger');
+    Assert.IsTrue(Pos('classic deadlock', Hit.MissingVar) = 0,
+      'der alte Text behauptete einen klassischen Deadlock mit dem UI-Thread');
   finally F.Free; end;
+end;
+
+procedure TTestSynchronizeInDestructor.SynchronizeInDestructor_DefaultSeverity_IsWarning;
+// Synchronize im Destruktor blockiert nur, wenn der Destruktor im Worker
+// selbst laeuft (FreeOnTerminate); im Hauptthread ruft Synchronize die
+// Methode direkt. Dass der Katalog dieselbe Schwere traegt, prueft
+// uTestRuleCatalog fuer alle Kinds.
+begin
+  Assert.AreEqual<TLeakSeverity>(lsWarning,
+    KindDefaultSeverity(fkSynchronizeInDestructor),
+    'SCA108 haengt nur in einem engen Szenario, kein Error');
 end;
 
 initialization

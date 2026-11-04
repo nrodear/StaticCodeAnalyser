@@ -1,13 +1,20 @@
-#!/usr/bin/env pwsh
 # Git pre-commit hook: runs Static Code Analyser on the .pas/.dfm files
 # changed in the working tree, fails the commit on Warnings or Errors.
 #
-# Install:
-#   1. Copy this file to .git\hooks\pre-commit  (no extension!)
-#   2. On Windows: ensure pwsh.exe is in PATH (PowerShell 7+) - or
-#      adapt the shebang to powershell.exe (5.1).
+# Install (details: examples/ci/README.md, "pre-commit-sca.ps1"):
+#   1. Copy this file to .git\hooks\pre-commit-sca.ps1 - KEEP the .ps1
+#      extension. Do not copy it as .git\hooks\pre-commit: Git for Windows
+#      starts hooks through sh, and PowerShell does not run a file without
+#      the .ps1 extension - the hook body never runs and every commit
+#      goes through.
+#   2. Create .git\hooks\pre-commit as a two-line sh wrapper (LF line
+#      endings) that calls this script with -File and hands its exit code
+#      to Git:
+#        #!/bin/sh
+#        exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(dirname "$0")/pre-commit-sca.ps1"
 #   3. Make sure StaticCodeAnalyser.d12.exe is reachable - adjust $SCA_EXE
-#      below.
+#      below. If it is missing, the hook prints a note and lets the
+#      commit through.
 #
 # Usage:
 #   git commit       (hook runs automatically)
@@ -39,13 +46,17 @@ if (Test-Path $BASELINE) {
     $BaselineArg = @('--baseline', $BASELINE)
 }
 
+# "| Out-Host" is required: StaticCodeAnalyser.d12.exe is a GUI-subsystem
+# program that also serves the CLI. PowerShell does not wait for such a
+# program unless its output is piped - $LASTEXITCODE would then still hold
+# the 0 of "git rev-parse" above, and every commit would go through.
 & $SCA_EXE `
     --path $REPO_ROOT `
     --branch `
     --quiet `
     --fail-on=warning `
     --report-sarif $SarifOut `
-    @BaselineArg
+    @BaselineArg | Out-Host
 
 $ExitCode = $LASTEXITCODE
 

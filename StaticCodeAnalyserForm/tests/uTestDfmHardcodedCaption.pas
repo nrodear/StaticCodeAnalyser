@@ -829,7 +829,7 @@ end;
 // Caption gleich Komponenten- oder Klassenname ist der Designer-
 // Vorschlagswert, kein getexteter UI-String - fuer den i18n-Zweck der
 // Regel ohne Nutzwert (rw76: 7,4 % aller Funde). DEMOTE auf fcLow
-// statt Skip: unterm fcMedium-Default unsichtbar, --min-confidence low
+// statt Skip: unterm fcMedium-Default unsichtbar, [Rules] MinConfidence=low
 // holt die Designer-Reste gezielt zurueck.
 
 procedure TTestDfmHardcodedCaption.G5_CaptionGleichName_WirdFcLow;

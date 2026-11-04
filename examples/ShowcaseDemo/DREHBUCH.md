@@ -40,28 +40,39 @@ einfügt oder löscht – darum die Grundregel unten.
 ## Szene 0: Vorbereitung (vor der Aufnahme)
 
 1. Delphi 12 Athens (Win32-IDE) oder Delphi 13 Florence.
-2. SCA und reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
-   ausführen, die Komponente reDelphix bleibt angehakt. Aus den Quellen geht
+2. SCA samt reDelphix installieren: `StaticCodeAnalyserSetup-<Version>.exe`
+   ausführen, reDelphix kommt mit dem Plugin. Aus den Quellen geht
    es auch: Projektgruppe `StaticCodeAnalyser.d12.groupproj` öffnen, Gruppe
    erzeugen, dann `StaticCodeAnalyser.IDE.d12` und `reDelphix.d12` im
    Projekt-Manager **Installieren** (Details: `reDelphix/README.md`, Abschnitte
    „Voraussetzungen in der IDE“ und „Bauen und installieren“).
-3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitt `[Rules]`:
+3. `%APPDATA%\StaticCodeAnalyser\analyser.ini`, Abschnitte `[Rules]` und
+   `[Detectors]` (vor dem Start der IDE):
 
    ```ini
+   [Rules]
    Profile=strict
    IdeProfile=strict
    MinSeverity=hint
    IdeMinSeverity=hint
    MinConfidence=low
+
+   [Detectors]
+   UsesCheck=1
    ```
 
    `strict` bringt die Konventionsregeln, die `default` auslässt
-   (SCA007, SCA099, SCA101, SCA117, SCA126). `MinConfidence=low` braucht es
+   (SCA099, SCA101, SCA117, SCA126). **`UsesCheck=1`** schaltet den
+   uses-Check SCA007 ein – in der IDE in jedem Profil, auch in `strict`,
+   nur über diesen Schalter. Ohne ihn fehlen die neun SCA007-Funde, und die
+   SCA007-Schritte (Szene 3 #20, Szene 4 Hinweis, Szene 6 #19, Szene 7)
+   bieten nichts an. Die CLI schaltet ihn bei `--profile strict` selbst
+   ein. `MinConfidence=low` braucht es
    für die sechs Formatregeln SCA061, SCA063, SCA064, SCA069, SCA076,
    SCA079 – die Engine meldet sie mit niedriger Konfidenz. Erwartung:
-   **214 Funde** (mit `MinConfidence=medium` 164; Profil `default`: 188
-   bzw. 138).
+   **214 Funde**, davon 9 SCA007 (mit `MinConfidence=medium` 164; Profil
+   `default`: 188 bzw. 138, dort ohne SCA007 – mit `UsesCheck=1` 197 bzw.
+   147).
 4. Zurücksetzen: `git checkout examples/ShowcaseDemo`, `__history`
    löschen.
 5. Probelauf: einmal bauen (Win32, Debug). Erwartet: übersetzt mit
@@ -81,7 +92,8 @@ einfügt oder löscht – darum die Grundregel unten.
 
 ## Szene 2: Scan und Überblick
 
-- Analyse für das Projekt starten. Dock-Fenster: **214 Funde**.
+- Analyse für das Projekt starten. Dock-Fenster: **214 Funde** (ohne
+  `UsesCheck=1` aus Szene 0: 205, die SCA007-Funde fehlen).
 - Nach Schwere sortieren, die Error-Kacheln zeigen. Highlights **ohne**
   Code-Aktion (kurz anklicken, Fundtext vorlesen, von Hand erklären):
   - `uPriceCalculator.pas:157` **SCA202** `not AQuantity = 0` – bindet
@@ -117,10 +129,10 @@ uses, Zeichen aus einer Webseite kopiert. Von unten nach oben:
 | # | Zeile | Fund | Aktion (Menütext) | Erwartung danach |
 |---:|---:|---|---|---|
 | 1 | 125 | SCA088 | begin durch initialization ersetzen | `initialization` statt `begin` vor `end.` |
-| 2 | 115 | SCA154 | SizeOf(Integer) statt der Zeigergröße verwenden (ändert Verhalten) | `Move(ASource^, ATarget^, SizeOf(Integer))` |
-| 3 | 110 | SCA161 | Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen (ändert Verhalten) | `NativeInt(PEnd) - NativeInt(PStart)` – richtig auch unter Win64 |
-| 4 | 108 | SCA148 | **Hier unterdrücken** (Strg+Alt+S) statt Hilfe; im selben Menü steht „In dieser Datei unterdrücken“ | Zeile `// noinspection CanBeClassMethod` darüber; Fund weg |
-| 5 | 122 | SCA068 | Überzähliges Komma entfernen – im Dock-Grid per **Strg+Alt+F** | `AExcel.Workbooks.Open(AFileName);` |
+| 2 | 122 | SCA068 | Überzähliges Komma entfernen – im Dock-Grid per **Strg+Alt+F** | `AExcel.Workbooks.Open(AFileName);` |
+| 3 | 115 | SCA154 | SizeOf(Integer) statt der Zeigergröße verwenden (ändert Verhalten) | `Move(ASource^, ATarget^, SizeOf(Integer))` |
+| 4 | 110 | SCA161 | Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen (ändert Verhalten) | `NativeInt(PEnd) - NativeInt(PStart)` – richtig auch unter Win64 |
+| 5 | 108 | SCA148 | **Hier unterdrücken** (Strg+Alt+S) statt Hilfe; im selben Menü steht „In dieser Datei unterdrücken“ | Zeile `// noinspection CanBeClassMethod` darüber; Fund weg |
 | 6 | 95–97 | SCA070 | Auskommentierten Code löschen | der `{ if Price = 0 ... }`-Block ist weg (neu analysieren) |
 | 7 | 93 | SCA014 | Lokale Konstante für 20 einführen | `const MagicNr01 = 20;` vor dem `if` (neu analysieren) |
 | 8 | 81 | SCA193 | Namen in ASCII-Buchstaben schreiben: Amount | alle vier `Amоunt` (kyrillisches о) heißen `Amount` |
@@ -141,7 +153,7 @@ uses, Zeichen aus einer Webseite kopiert. Von unten nach oben:
 Hinweis zu 21: die uses-Aktionen stehen nur im Kontextmenü (Refactoring,
 nicht in der Glühbirne); vor Schritt 20 sind es vier Einträge.
 
-Hinweis zu 5: `OpenInExcel` (Zeile 120) ruft niemand auf, dazu meldet
+Hinweis zu 2: `OpenInExcel` (Zeile 120) ruft niemand auf, dazu meldet
 SCA164 „Ungenutzte Routine OpenInExcel löschen“. Stehen lassen – die Hilfe
 löschte die Routine samt der SCA068-Stelle; SCA164 zeigt Szene 5.
 

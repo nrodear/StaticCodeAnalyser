@@ -377,9 +377,9 @@ var
 begin
   // Die 42 in Spalte 9.
   P := PlanIntroduce('    Foo(42);', '  X := if C then Bar else', 9, 'N01');
-  AssertRefusedWith(P, 'Bedingungsausdruck', 'X := if ... else');
+  AssertRefusedWith(P, 'bedingten Ausdruck', 'X := if ... else');
   P := PlanIntroduce('    Foo(42);', '  Y := Foo(if C then', 9, 'N01');
-  AssertRefusedWith(P, 'Bedingungsausdruck', 'Foo(if ... then');
+  AssertRefusedWith(P, 'bedingten Ausdruck', 'Foo(if ... then');
   P := PlanIntroduce('    Foo(42);', '  if C then Bar else', 9, 'N01');
   Assert.IsTrue(P.Ok, 'if-Anweisung mit else: ' + P.Reason);
   Assert.IsTrue(P.Wrap, 'if-Anweisung mit else, Wrap');

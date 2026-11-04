@@ -41,7 +41,7 @@
     },
     "SCA010": {
       "name": "Mögliche Division durch null",
-      "shortDescription": "Division durch eine Variable oder einen Ausdruck, der null sein kann"
+      "shortDescription": "Ganzzahl-Division (div / mod) durch eine Variable, die null sein kann"
     },
     "SCA011": {
       "name": "Code nach Exit/Raise ist unerreichbar",
@@ -49,11 +49,11 @@
     },
     "SCA012": {
       "name": "Methode überschreitet die Zeilengrenze",
-      "shortDescription": "Methode länger als das konfigurierte Maximum (Vorgabe 80 Zeilen)"
+      "shortDescription": "Methodenrumpf länger als das konfigurierte Maximum (Vorgabe: mehr als 50 Zeilen und mehr als 30 Anweisungen)"
     },
     "SCA013": {
       "name": "Zu viele Parameter",
-      "shortDescription": "Methode hat mehr Parameter als konfiguriert erlaubt (Vorgabe 7)"
+      "shortDescription": "Methode hat mehr Parameter als konfiguriert erlaubt (Vorgabe 5)"
     },
     "SCA014": {
       "name": "Zahlenliteral ohne benannte Konstante",
@@ -61,7 +61,7 @@
     },
     "SCA015": {
       "name": "String-Literal an mehreren Stellen wiederholt",
-      "shortDescription": "Dasselbe String-Literal kommt N-mal oder öfter vor - in eine Konstante herausziehen"
+      "shortDescription": "Dasselbe String-Literal kommt in einer Datei dreimal oder öfter vor - in eine Konstante herausziehen"
     },
     "SCA016": {
       "name": "Dateisystempfad als String-Literal",
@@ -197,7 +197,7 @@
     },
     "SCA049": {
       "name": "Length(s) - N ohne Absicherung",
-      "shortDescription": "Length oder .Count mit Subtraktion - Unterlauf des vorzeichenlosen Typs, wenn leer"
+      "shortDescription": "`Length(s) - K` bzw. `.Count - K` mit K >= 2 ohne Absicherung - negativer Index oder negative Anzahl, wenn die Eingabe kürzer als K ist"
     },
     "SCA050": {
       "name": "Public-Member könnte unit-private sein",
@@ -433,7 +433,7 @@
     },
     "SCA108": {
       "name": "TThread.Synchronize aus dem Destruktor",
-      "shortDescription": "Synchronize() aus dem Destruktor Destroy gerufen - der klassische Deadlock zwischen Worker und UI-Thread"
+      "shortDescription": "Synchronize() aus dem Destruktor Destroy gerufen - ein sich selbst freigebender Thread blockiert dort, bis der Hauptthread den Aufruf ausführt, und hängt, wenn er es nicht tut"
     },
     "SCA109": {
       "name": "Sperre ohne try/finally freigegeben",
@@ -456,8 +456,8 @@
       "shortDescription": "`MyThread.Resume` - `MyThread.Start` verwenden (seit Delphi 2010)"
     },
     "SCA114": {
-      "name": "TThread ohne Terminate+WaitFor freigegeben",
-      "shortDescription": "`FreeAndNil(MyThread)` ohne vorheriges `Terminate; WaitFor` - der Worker läuft möglicherweise noch"
+      "name": "TThread per FreeAndNil freigegeben - Beendigung prüfen",
+      "shortDescription": "`FreeAndNil(MyThread)` ohne nahes `Terminate` - ein Prüfhinweis, kein bewiesener Defekt: `TThread.Destroy` beendet den Thread selbst; `Execute`, den Thread-Destruktor und `FreeOnTerminate` prüfen"
     },
     "SCA115": {
       "name": "HTTP-URL im Klartext",
@@ -533,7 +533,7 @@
     },
     "SCA133": {
       "name": "Blankes raise außerhalb eines except/on-Handlers",
-      "shortDescription": "`raise;` ohne Exception-Ausdruck funktioniert nur INNERHALB eines except-Handlers (erneutes Auslösen) - außerhalb löst es NIL aus und erzeugt eine Access Violation"
+      "shortDescription": "`raise;` ohne Exception-Ausdruck ist nur INNERHALB eines except-Handlers gültig (erneutes Auslösen) - überall sonst lehnen Delphi (E2145) und FPC es ab"
     },
     "SCA134": {
       "name": "Variable nach Free / FreeAndNil verwendet",
@@ -545,7 +545,7 @@
     },
     "SCA136": {
       "name": "Konstruktor belegt Felder und löst ohne try/except aus",
-      "shortDescription": "Der Konstruktor weist Felder per `<Klasse>.Create` zu und löst später aus - die teilweise belegten Felder lecken auf dem Ausnahmepfad"
+      "shortDescription": "Der Konstruktor weist Felder per `<Klasse>.Create` zu und löst später ohne try/except aus - die Felder lecken, wenn der Destruktor sie nicht freigibt"
     },
     "SCA137": {
       "name": "Int64-Ziel bekommt das Produkt zweier 32-Bit-Operanden",
@@ -561,7 +561,7 @@
     },
     "SCA140": {
       "name": "Methode hat zu viele Exit-Anweisungen",
-      "shortDescription": "Eine Methode mit mehr als 3 Exit-Aufrufen hat zu viele Rücksprungpfade - schwer zu lesen, schwer zu testen, leicht einen zu übersehen"
+      "shortDescription": "Eine Methode mit mehr als 6 Exit-Aufrufen hat zu viele Rücksprungpfade - schwer zu lesen, schwer zu testen, leicht einen zu übersehen"
     },
     "SCA141": {
       "name": "Klassenimplementierung überschreitet 500 Zeilen",
@@ -633,7 +633,7 @@
     },
     "SCA158": {
       "name": "PChar(s) +/- Offset ohne Leerprüfung",
-      "shortDescription": "`PChar(s) + n` und Verwandte ohne vorherige Leerprüfung auf `s` - PChar('') wird zu NIL optimiert, die Rechnung darauf ist eine latente Access Violation"
+      "shortDescription": "`PChar(s) + n` und Verwandte ohne vorherige Leerprüfung auf `s` - bei einem String kürzer als n zeigt der Zeiger hinter den Terminator"
     },
     "SCA159": {
       "name": "Typisierter Exception-Handler mit leerem Rumpf",
@@ -665,7 +665,7 @@
     },
     "SCA166": {
       "name": "Uninitialisierte lokale Variable",
-      "shortDescription": "Lokale Variable wird gelesen, bevor sie auf jedem Pfad durch die Methode zugewiesen wurde"
+      "shortDescription": "Lokale Variable wird vor ihrer ersten Zuweisung in Quelltext-Reihenfolge gelesen oder nie zugewiesen"
     },
     "SCA167": {
       "name": "Random-Aufruf ohne vorheriges Randomize",

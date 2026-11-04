@@ -76,8 +76,10 @@ begin
   // damit nur die aktuellen Befunde sichtbar sind.
   MsgServices.ClearAllMessages;
 
-  // Header mit Zeitstempel als visueller Trenner.
-  MsgServices.AddTitleMessage(Format('=== Static Code Analysis (%s) ===',
+  // Header mit Zeitstempel als visueller Trenner. Uebersetzt wie die
+  // Severity-Praefixe darunter (i18n-Luecken C8): der Titel nennt
+  // dasselbe "Static Code Analysis" wie Ansicht-Menue und Dockfenster.
+  MsgServices.AddTitleMessage(_('=== Static Code Analysis (%s) ===',
     [FormatDateTime('hh:nn:ss', Now)]));
 
   for F in Findings do

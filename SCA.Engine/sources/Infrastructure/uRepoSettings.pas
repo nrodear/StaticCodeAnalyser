@@ -311,6 +311,12 @@ type
     /// </remarks>
     class function EnsureSection(const ASection: string): Boolean; static;
 
+    // Die mitgelieferte Vorlage (DEFAULT_INI_CONTENT), wie
+    // EnsureConfigExists sie schreibt. Fuer Tests, die die Beispiele der
+    // Vorlage gegen ihre Leser pruefen (uTestPathOverrides) - ohne die
+    // APPDATA-INI anzufassen.
+    class function DefaultTemplate: string; static;
+
     // '' bedeutet auto-detect (origin/HEAD, dann main, dann master).
     property BaseBranch: string read FBaseBranch write FBaseBranch;
     // True (Default): committed Branch-Diff + uncommitted Working Tree;
@@ -990,21 +996,27 @@ const
     ';'#13#10 +
     '; Format:   <glob> = <action>'#13#10 +
     ';'#13#10 +
-    '; Glob:     forward or backslashes; case-insensitive; ** = any depth'#13#10 +
+    '; Glob:     matched against the FULL, absolute path of the file'#13#10 +
+    ';           (C:\repo\tests\uFoo.pas), so a folder pattern has to'#13#10 +
+    ';           start with **\ - a bare tests\** never matches.'#13#10 +
+    ';           Forward or backslashes; case-insensitive; * and **'#13#10 +
+    ';           both match across folders.'#13#10 +
     '; Action:   drop:*                    - drop every finding'#13#10 +
     ';           drop:KindA,KindB,...      - drop only these kinds'#13#10 +
     ';           severity:hint:<KindList>  - downgrade severity'#13#10 +
     ';           severity:warn:<KindList>  -      "'#13#10 +
     ';           severity:error:<KindList> -      " (escalation)'#13#10 +
+    ';           ONE action per line. A line with any other action is'#13#10 +
+    ';           skipped without a message.'#13#10 +
     ';'#13#10 +
     '; The first matching rule wins - order matters.'#13#10 +
     ';'#13#10 +
     '; Examples (commented out):'#13#10 +
     '[PathOverrides]'#13#10 +
-    ';tests\**.pas        = drop:*'#13#10 +
-    ';**\test_*.pas       = drop:MissingFinally,MagicNumber'#13#10 +
-    ';demos\legacy\**.pas = drop:LongMethod,DeepNesting,CyclomaticComplexity'#13#10 +
-    ';src\generated\**    = severity:hint:*'#13#10 +
+    ';**\tests\**          = drop:*'#13#10 +
+    ';**\test_*.pas        = drop:MissingFinally,MagicNumber'#13#10 +
+    ';**\demos\legacy\**   = drop:LongMethod,DeepNesting,CyclomaticComplexity'#13#10 +
+    ';**\src\generated\**  = severity:hint:*'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -1614,6 +1626,11 @@ begin
     // Stelle behandeln koennte - dann fehlt eben die Erklaerung.
     Result := False;
   end;
+end;
+
+class function TRepoSettings.DefaultTemplate: string;
+begin
+  Result := DEFAULT_INI_CONTENT;
 end;
 
 function TRepoSettings.ConfigFilePath: string;

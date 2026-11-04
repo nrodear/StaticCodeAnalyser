@@ -651,6 +651,93 @@ begin
   end;
 end;
 
+function ReportLangOf(const AAppLang: string): string;
+// Vorgabesprache der Beschriftung im CLI-Report (i18n-Luecken
+// 2026-11-03, C12). Die Regeltexte backt der Report in der Sprache der
+// erzeugenden Anwendung (TRuleCatalog.GetRule(K, CurrentLanguage)); die
+// Labels muessen dieselbe Sprache vorgeben, sonst stehen deutsche Labels
+// ueber englischen Regeltexten - genau das passierte, als der Report die
+// Browsersprache nahm (und jede andere als en/fr auf "de" fiel, auch
+// unter der CLI, die nie eine Sprache setzt und damit englisch backt).
+// Die Browsersprache entfaellt GANZ: auch eine unterstuetzte waere nur
+// dann richtig, wenn sie zufaellig der Erzeugungssprache gleicht - dann
+// liefert diese Regel dasselbe Ergebnis. Eine Sprache ohne I18N-Block
+// (z.B. eine externe es.po) faellt auf "en", wie GetRule und
+// TWorkbenchI18n auch.
+begin
+  Result := NormalizeLangCode(AAppLang);
+  if not TWorkbenchI18n.IstBekannt(Result) then
+    Result := 'en';
+end;
+
+function BerichtI18nZeilen(const ALang: string): string;
+// Schluessel fuer Texte, die bis 2026-11-03 NUR deutsch im DOM standen und
+// in jeder Sprache deutsch blieben (i18n-Luecken, Nachtrag zu C13):
+// Tooltips/aria-labels der Kopfknoepfe (Theme, Baseline speichern/laden),
+// die Quick-Wins-Option, der QF-Tooltip, Ueberschrift und Zaehler der
+// Quick-Wins in der Sprint-Liste, die aria-labels des Drawers (der Donut
+// nutzt chart-sev-title mit). Je Schluessel eine Zeile mit Komma, wie EditorHelpI18nZeilen.
+// Werte sind JS-String-Inhalt: Umlaute/Akzente als \uXXXX, KEINE
+// HTML-Entities in title-/aria-Werten - applyLanguage streicht dort jede
+// Entity (sonst stuende '&uuml;' als Luecke im Tooltip). Theme und
+// Drawer kommen aus TWorkbenchI18n: dieselben Woerter wie auf den
+// Workbench-Seiten, EINE Quelle.
+const
+  KEYS : array[0..7] of string = (
+    'btn-base-save', 'ttl-base-save', 'btn-base-load', 'ttl-base-load',
+    'opt-qf', 'ttl-qf', 'sprint-qf-hdr', 'sprint-occ');
+  // 0 = de, 1 = en, 2 = fr (Reihenfolge wie TWorkbenchI18n).
+  TEXTE : array[0..7] of array[0..2] of string = (
+    ('&#128190; Baseline speichern', '&#128190; Save baseline',
+     '&#128190; Enregistrer la r\u00e9f\u00e9rence'),
+    ('Aktuelle Funde als Baseline-JSON speichern (Download)',
+     'Save the current findings as baseline JSON (download)',
+     'Enregistrer les r\u00e9sultats actuels comme r\u00e9f\u00e9rence JSON (t\u00e9l\u00e9chargement)'),
+    ('&#128193; Baseline laden', '&#128193; Load baseline',
+     '&#128193; Charger une r\u00e9f\u00e9rence'),
+    ('Baseline-JSON laden und Funde als neu/bestehend/behoben markieren',
+     'Load a baseline JSON and mark findings as new/existing/fixed',
+     'Charger une r\u00e9f\u00e9rence JSON et marquer les r\u00e9sultats comme nouveaux/existants/corrig\u00e9s'),
+    ('Quick-Wins (Quick-Fix verf\u00fcgbar)', 'Quick wins (quick-fix available)',
+     'Quick-Wins (Quick-Fix disponible)'),
+    ('Quick-Fix verf\u00fcgbar (Gl\u00fchbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)',
+     'Quick-fix available (light bulb / Ctrl+Alt+F in the IDE plugin with reDelphix)',
+     'Quick-Fix disponible (ampoule / Ctrl+Alt+F dans le plugin IDE avec reDelphix)'),
+    ('Quick-Wins (Quick-Fix: Gl\u00fchbirne / Ctrl+Alt+F im IDE-Plugin)',
+     'Quick wins (quick-fix: light bulb / Ctrl+Alt+F in the IDE plugin)',
+     'Quick-Wins (Quick-Fix : ampoule / Ctrl+Alt+F dans le plugin IDE)'),
+    ('{0} Vorkommen', '{0} occurrences', '{0} occurrences'));
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  L  : Integer;
+begin
+  if SameText(ALang, 'de') then
+    L := 0
+  else if SameText(ALang, 'fr') then
+    L := 2
+  else
+    L := 1;
+  SB := TStringBuilder.Create;
+  try
+    for i := Low(KEYS) to High(KEYS) do
+      SB.AppendLine('        "' + KEYS[i] + '": "' + TEXTE[i][L] + '",');
+    SB.AppendLine('        "btn-theme": "&#9681; '
+      + TWorkbenchI18n.TJs(wtThema, ALang) + '",');
+    SB.AppendLine('        "ttl-theme": "'
+      + TWorkbenchI18n.TJs(wtThemaWechseln, ALang) + '",');
+    SB.AppendLine('        "aria-theme": "'
+      + TWorkbenchI18n.TJs(wtThema, ALang) + '",');
+    SB.AppendLine('        "aria-drawer": "'
+      + TWorkbenchI18n.TJs(wtDrawerAriaFunde, ALang) + '",');
+    SB.AppendLine('        "aria-drawer-close": "'
+      + TWorkbenchI18n.TJs(wtDrawerSchliessen, ALang) + '",');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 function EditorHelpI18nZeilen(const ALang: string): string;
 // Die sechs Schluessel der Editorhilfen im I18N-Woerterbuch des
 // CLI-Berichts, je eine Zeile mit Komma (es folgen weitere Eintraege).
@@ -975,8 +1062,9 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
-    // lang-Attribute wird per JS aus localStorage / navigator.language
-    // auf en/de/fr gesetzt - Default 'de' fuer den Pre-JS-Render.
+    // lang-Attribut setzt applyLanguage per JS (gespeicherte Wahl, sonst
+    // die Erzeugungssprache, s. SCA_LANG unten). 'de' gilt nur fuer den
+    // Pre-JS-Render, weil die DOM-Vorgabetexte deutsch sind.
     SB.AppendLine('<html lang="de">');
     SB.AppendLine('<head>');
     SB.AppendLine('  <meta charset="UTF-8">');
@@ -1620,7 +1708,7 @@ begin
     SB.Append    (IntToStr(Files.Count));
     SB.Append    ('">');
     SB.Append    (IntToStr(nTotal));
-    SB.Append    (' Befunde in ');
+    SB.Append    (' Funde in ');
     SB.Append    (IntToStr(Files.Count));
     SB.Append    (' Dateien</span>');
     if SourceFile <> '' then
@@ -1715,7 +1803,7 @@ begin
       SB.AppendLine('    <div class="chart-box">');
       SB.AppendLine('      <h3 data-i18n="chart-sev-title">Schweregrad-Verteilung</h3>');
       SB.AppendLine('      <div class="donut-wrap">');
-      SB.AppendLine('      <svg viewBox="0 0 120 120" class="donut" role="img" aria-label="Severity">');
+      SB.AppendLine('      <svg viewBox="0 0 120 120" class="donut" role="img" aria-label="Schweregrad-Verteilung" data-i18n-aria="chart-sev-title">');
       SB.AppendLine('        <circle cx="60" cy="60" r="45" fill="none" stroke="#eee" stroke-width="18"/>');
       if nErr > 0 then
       begin
@@ -1785,12 +1873,16 @@ begin
     // Aufbau dieser Seite. Volltext wird im I18N-Dict gehalten -
     // data-i18n=audience-hint laesst applyLanguage den kompletten HTML-
     // Block durch T() schreiben.
+    // DOM-Vorgaben dieser Seite: Umlaute als HTML-Entities (die Quelle
+    // bleibt ASCII, im Markup sind Entities gueltig), Wortwahl wie der
+    // de-Block des I18N-Woerterbuchs (Fund, Schweregrad, unpersoenlich -
+    // i18n-Luecken 2026-11-03, C13).
     SB.AppendLine('  <div class="audience-hint" data-i18n="audience-hint">');
-    SB.AppendLine('    <b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> ' +
+    SB.AppendLine('    <b>Optimiert f&uuml;r Tech-Lead / Senior-Dev Review</b> ' +
                   '&middot; Refactoring-Priorisierung. ' +
-                  'Starte oben mit den Top-Detektoren (groesstes Volumen, ' +
-                  '<span class="td-qf">QF</span> = Quick-Fix vorhanden), ' +
-                  'die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).');
+                  'Oben mit den Top-Detektoren beginnen (gr&ouml;&szlig;tes Volumen, ' +
+                  '<span class="td-qf">QF</span> = Quick-Fix vorhanden); ' +
+                  'die Tabelle ist nach Schweregrad sortiert (Fehler &rarr; Hinweis).');
     SB.AppendLine('  </div>');
 
     // Header-Actions: zwei Tech-Lead-Tools direkt unter dem Hint.
@@ -1801,7 +1893,7 @@ begin
     SB.AppendLine('  <div class="header-actions">');
     SB.AppendLine('    <button class="tl-btn" id="btnSprintCopy" ' +
                   'data-i18n="btn-sprint" data-i18n-title="ttl-sprint" ' +
-                  'title="Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage">' +
+                  'title="Sichtbare Top-Funde als Markdown-Liste in die Zwischenablage">' +
                   '&#128203; Sprint-Liste kopieren</button>');
     SB.AppendLine('    <button class="tl-btn" id="btnShareLink" ' +
                   'data-i18n="btn-share" data-i18n-title="ttl-share" ' +
@@ -1810,13 +1902,25 @@ begin
     SB.AppendLine('    <button class="tl-btn secondary" id="btnKbdHelp" ' +
                   'data-i18n="btn-kbd" data-i18n-title="ttl-kbd" ' +
                   'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
+    // Theme/Baseline: bis 2026-11-03 ohne i18n-Schluessel, also in jeder
+    // Sprache deutsch. Muster wie Sprint/Teilen/Shortcuts: data-i18n fuer
+    // den Text, data-i18n-title fuer den Tooltip, data-i18n-aria fuer das
+    // aria-label. Der Text von "Baseline laden" steht in einem eigenen
+    // span: applyLanguage setzt innerHTML, und am label haengt das
+    // versteckte file-input - ein innerHTML am label loeschte es.
+    // Theme-Woerter aus TWorkbenchI18n (wie die Workbench-Seiten).
     SB.AppendLine('    <button class="tl-btn secondary" id="btnTheme" ' +
-                  'title="Theme wechseln: Hell / Dunkel / Sepia" aria-label="Theme">&#9681; Theme</button>');
+                  'data-i18n="btn-theme" data-i18n-title="ttl-theme" data-i18n-aria="aria-theme" ' +
+                  'title="' + TWorkbenchI18n.T(wtThemaWechseln, 'de') + '" ' +
+                  'aria-label="' + TWorkbenchI18n.T(wtThema, 'de') + '">&#9681; ' +
+                  TWorkbenchI18n.T(wtThema, 'de') + '</button>');
     SB.AppendLine('    <button class="tl-btn secondary" id="btnBaseSave" ' +
+                  'data-i18n="btn-base-save" data-i18n-title="ttl-base-save" ' +
                   'title="Aktuelle Funde als Baseline-JSON speichern (Download)">&#128190; Baseline speichern</button>');
     SB.AppendLine('    <label class="tl-btn secondary" id="btnBaseLoad" ' +
+                  'data-i18n-title="ttl-base-load" ' +
                   'title="Baseline-JSON laden und Funde als neu/bestehend/behoben markieren">' +
-                  '&#128193; Baseline laden<input type="file" id="baseFile" accept=".json,application/json" style="display:none"></label>');
+                  '<span data-i18n="btn-base-load">&#128193; Baseline laden</span><input type="file" id="baseFile" accept=".json,application/json" style="display:none"></label>');
     SB.AppendLine('  </div>');
 
     SB.AppendLine('  <div class="summary">');
@@ -1862,7 +1966,7 @@ begin
         SB.Append(IntToStr(KindPairs[i].Value));
         SB.Append('</span>');
         if HasQf then
-          SB.Append(' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
+          SB.Append(' <span class="td-qf" data-i18n-title="ttl-qf" title="Quick-Fix verf&uuml;gbar (Gl&uuml;hbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>');
         SB.AppendLine('</li>');
       end;
       SB.AppendLine('    </ol>');
@@ -1888,7 +1992,7 @@ begin
       SB.Append    (IntToStr(KindPairs.Count));
       SB.Append    (' Regeln, ');
       SB.Append    (IntToStr(nTotal));
-      SB.AppendLine(' Befunde</summary>');
+      SB.AppendLine(' Funde</summary>');
       SB.AppendLine('    <table class="rule-table">');
       SB.AppendLine('      <thead><tr>');
       SB.AppendLine('        <th data-i18n="rr-rule">Regel</th>');
@@ -2017,7 +2121,7 @@ begin
     // Tech-Lead-Workflow: "was kann das Team per Gluehbirne / Ctrl+Alt+F im
     // IDE-Plugin beheben?". Die Regeln liefert das Katalogfeld editorHelp
     // (HelpKinds); konkretes Matching passiert im JS gegen ALL_KINDS[*].qf.
-    SB.AppendLine('      <option value="qf">Quick-Wins (Quick-Fix verfuegbar)</option>');
+    SB.AppendLine('      <option value="qf" data-i18n="opt-qf">Quick-Wins (Quick-Fix verf&uuml;gbar)</option>');
     SB.AppendLine('      <option value="sec">Security (CWE / OWASP)</option>');
     // Profile-Optionen aus rules/sca-rules.json (TRuleCatalog.ProfileNames).
     // Werte: "profile:<Name>", damit der JS-Filter Profile von "all"/"top10"
@@ -2146,7 +2250,7 @@ begin
     SB.Append    (IntToStr(nTotal));
     SB.Append    ('">');
     SB.Append    (IntToStr(nTotal));
-    SB.AppendLine(' Befunde</span>');
+    SB.AppendLine(' Funde</span>');
     SB.AppendLine('    <span class="hint" data-i18n="hint-bar">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
     SB.AppendLine('  </div>');
 
@@ -2158,9 +2262,9 @@ begin
       SB.Append    (IntToStr(RowsDropped));
       SB.Append    ('">');
       SB.Append    (IntToStr(RowsDropped));
-      SB.Append    (' weitere Befunde sind nicht in diesem Bericht. ');
+      SB.Append    (' weitere Funde sind nicht in diesem Report. ');
       SB.Append    ('Filter, Suche und Sortierung arbeiten nur auf den ');
-      SB.Append    ('angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.');
+      SB.Append    ('angezeigten Zeilen; die Zusammenfassung z&auml;hlt alle Funde.');
       SB.AppendLine('</div>');
     end;
 
@@ -2171,7 +2275,7 @@ begin
     // Text-Teil aktualisiert, ohne die <span class="sort-ind"> zu zerstoeren.
     if SourceFile = '' then
       SB.AppendLine('      <th class="sortable" data-col="file"><span data-i18n="th-file">Datei</span><span class="sort-ind"></span></th>');
-    SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Severity</span><span class="sort-ind"></span></th>');
+    SB.AppendLine('      <th class="sortable" data-col="sev"><span data-i18n="th-sev">Schweregrad</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="conf"><span data-i18n="th-conf">Konfidenz</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable" data-col="type"><span data-i18n="th-type">Typ</span><span class="sort-ind"></span></th>');
     SB.AppendLine('      <th class="sortable num" data-col="line"><span data-i18n="th-line">Zeile</span><span class="sort-ind"></span></th>');
@@ -2484,7 +2588,7 @@ begin
             end;
             if Hint.After <> '' then
             begin
-              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (L&ouml;sung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
               SB.Append(#10#10);
               SB.Append('</pre></div>');
@@ -2507,7 +2611,7 @@ begin
             end;
             if Meta.GoodExample <> '' then
             begin
-              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
+              SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (L&ouml;sung)</h5><pre>');
               SB.Append(HtmlEscape(Meta.GoodExample));
               SB.Append(#10#10);
               SB.Append('</pre></div>');
@@ -2524,8 +2628,9 @@ begin
     // ---- i18n: Sprach-Wahlmoeglichkeit EN / DE / FR -----------------------
     // Strings die im DOM stehen werden via data-i18n-Attribut markiert;
     // dynamische Strings (im JS gebaut) gehen ueber T(key, ...args).
-    // Auswahl wird in localStorage["sca-html-lang"] persistiert. Beim
-    // ersten Laden: navigator.language -> en/de/fr fallback de.
+    // Auswahl wird in localStorage["sca-html-lang"] persistiert. Ohne
+    // gespeicherte Wahl gilt die Erzeugungssprache (SCA_LANG_DEFAULT, s.
+    // ReportLangOf), Ersatz "en".
     SB.AppendLine('    var I18N = {');
     SB.AppendLine('      en: {');
     SB.AppendLine('        "lbl-lang": "Language:",');
@@ -2588,6 +2693,7 @@ begin
     // (EditorHelpI18nZeilen).
     if AOptions.EditorHelp then
       SB.Append(EditorHelpI18nZeilen('en'));
+    SB.Append(BerichtI18nZeilen('en'));
     SB.AppendLine('        "kbd-help-title": "Keyboard shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Close",');
     SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:",');
@@ -2602,6 +2708,11 @@ begin
     SB.AppendLine('        "hint-before": "Before (Problem)",');
     SB.AppendLine('        "hint-after":  "After (Fix)"');
     SB.AppendLine('      },');
+    // DE-Block (i18n-Luecken 2026-11-03, C13): Umlaute wie im FR-Block als
+    // \uXXXX mit EINEM Backslash (Quelle bleibt ASCII; s. Kommentar am
+    // FR-Block). Wortwahl nach den Hausregeln der de.po: "Fund" (nicht
+    // "Befund"), "Schweregrad" (nicht "Severity"), "Report" (nicht
+    // "Bericht"), unpersoenliche Anrede.
     SB.AppendLine('      de: {');
     SB.AppendLine('        "lbl-lang": "Sprache:",');
     SB.AppendLine('        "lbl-profile": "Profil:",');
@@ -2610,11 +2721,11 @@ begin
     SB.AppendLine('        "ph-search": "Methode, Datei, Detail...",');
     SB.AppendLine('        "opt-all": "Alle",');
     SB.AppendLine('        "opt-all-files": "Alle ({0} Dateien)",');
-    SB.AppendLine('        "row-count": "{0} Befunde",');
-    SB.AppendLine('        "trunc-banner": "{0} weitere Befunde sind nicht in diesem Bericht. Filter, Suche und Sortierung arbeiten nur auf den angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.",');
+    SB.AppendLine('        "row-count": "{0} Funde",');
+    SB.AppendLine('        "trunc-banner": "{0} weitere Funde sind nicht in diesem Report. Filter, Suche und Sortierung arbeiten nur auf den angezeigten Zeilen; die Zusammenfassung z\u00e4hlt alle Funde.",');
     SB.AppendLine('        "hint-bar": "Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts",');
     SB.AppendLine('        "th-file": "Datei",');
-    SB.AppendLine('        "th-sev": "Severity",');
+    SB.AppendLine('        "th-sev": "Schweregrad",');
     SB.AppendLine('        "th-type": "Typ",');
     SB.AppendLine('        "th-line": "Zeile",');
     SB.AppendLine('        "th-method": "Methode",');
@@ -2642,15 +2753,15 @@ begin
     SB.AppendLine('        "health-summary": "{0} Fehler, {1} Warnungen in {2} Dateien; Schwerpunkt <b>{3}</b>",');
     SB.AppendLine('        "hdr-top-files": "Top {0} Risiko-Dateien (von {1})",');
     SB.AppendLine('        "meta-tool": "Tool: {0}",');
-    SB.AppendLine('        "meta-scope": "{0} Befunde in {1} Dateien",');
+    SB.AppendLine('        "meta-scope": "{0} Funde in {1} Dateien",');
     SB.AppendLine('        "btn-sprint": "&#128203; Sprint-Liste kopieren",');
-    SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Befunde als Markdown-Liste in die Zwischenablage",');
+    SB.AppendLine('        "ttl-sprint": "Sichtbare Top-Funde als Markdown-Liste in die Zwischenablage",');
     SB.AppendLine('        "btn-share": "&#128279; Sicht teilen",');
     SB.AppendLine('        "ttl-share": "Aktuelle Filter-Sicht als URL in die Zwischenablage (zum Teilen)",');
     SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
     SB.AppendLine('        "ttl-kbd":   "Tastatur-Shortcuts anzeigen (?)",');
     SB.AppendLine('        "hdr-top-detectors": "Top {0} Detektoren (von {1})",');
-    SB.AppendLine('        "hdr-rule-report": "Regel-Report: {0} Regeln, {1} Befunde",');
+    SB.AppendLine('        "hdr-rule-report": "Regel-Report: {0} Regeln, {1} Funde",');
     SB.AppendLine('        "rr-rule": "Regel",');
     SB.AppendLine('        "rr-detector": "Detektor",');
     SB.AppendLine('        "rr-total": "Summe",');
@@ -2659,19 +2770,20 @@ begin
     SB.AppendLine('        "rr-share": "Anteil",');
     if AOptions.EditorHelp then
       SB.Append(EditorHelpI18nZeilen('de'));
+    SB.Append(BerichtI18nZeilen('de'));
     SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
-    SB.AppendLine('        "kbd-help-close": "Schliessen",');
-    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
+    SB.AppendLine('        "kbd-help-close": "Schlie\u00dfen",');
+    SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Funde. Top {1} Priorit\u00e4ten:",');
     SB.AppendLine('        "meta-created": "Erstellt: {0}",');
     SB.AppendLine('        "meta-file":    "Datei: {0}",');
-    SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; ' +
-      'Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
+    SB.AppendLine('        "audience-hint": "<b>Optimiert f\u00fcr Tech-Lead / Senior-Dev Review</b> &middot; ' +
+      'Refactoring-Priorisierung. Oben mit den Top-Detektoren beginnen (gr\u00f6\u00dftes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden); die Tabelle ist nach Schweregrad sortiert (Fehler &rarr; Hinweis).",');
     SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
     SB.AppendLine('        "hint-what": "Was wird erkannt?",');
     SB.AppendLine('        "hint-why":  "Warum ist das relevant?",');
     SB.AppendLine('        "hint-this": "Hinweis zu diesem Fund",');
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
-    SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
+    SB.AppendLine('        "hint-after":  "Nachher (L\u00f6sung)"');
     SB.AppendLine('      },');
     // FR-Block: Nicht-ASCII-Zeichen als JS-Unicode-Escapes (\uXXXX), damit die
     // Pascal-Quelle ASCII-rein bleibt. ACHTUNG: Delphi-Strings kennen KEIN
@@ -2681,17 +2793,20 @@ begin
     // Doku_06_CLI_LSP_Reporting.md #21, behoben 2026-07-25).
     // Verifikation: Report erzeugen, Sprache FR waehlen bzw. Output auf
     // '\\u00' greppen - es darf kein Treffer mit Doppel-Backslash existieren.
+    // Wortwahl (i18n-Luecken 2026-11-03, fr-Entscheide): finding =
+    // "resultat", severite (nicht gravite), Quick-Fix, normales
+    // Leerzeichen vor : ; ? ! (kein geschuetztes Leerzeichen), gerader Apostroph.
     SB.AppendLine('      fr: {');
-    SB.AppendLine('        "lbl-lang": "Langue\u00a0:",');
-    SB.AppendLine('        "lbl-profile": "Profil\u00a0:",');
-    SB.AppendLine('        "lbl-file": "Fichier\u00a0:",');
-    SB.AppendLine('        "lbl-search": "Rechercher\u00a0:",');
+    SB.AppendLine('        "lbl-lang": "Langue :",');
+    SB.AppendLine('        "lbl-profile": "Profil :",');
+    SB.AppendLine('        "lbl-file": "Fichier :",');
+    SB.AppendLine('        "lbl-search": "Rechercher :",');
     SB.AppendLine('        "ph-search": "M\u00e9thode, fichier, d\u00e9tail...",');
     SB.AppendLine('        "opt-all": "Tous",');
     SB.AppendLine('        "opt-all-files": "Tous ({0} fichiers)",');
-    SB.AppendLine('        "row-count": "{0} d\u00e9tections",');
-    SB.AppendLine('        "trunc-banner": "{0} d\u00e9tections suppl\u00e9mentaires ne figurent pas dans ce rapport. Les filtres, la recherche et le tri ne s''appliquent qu''aux lignes affich\u00e9es ; le r\u00e9sum\u00e9 compte toutes les d\u00e9tections.",');
-    SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l\u2019indice &middot; <kbd>?</kbd> raccourcis",');
+    SB.AppendLine('        "row-count": "{0} r\u00e9sultats",');
+    SB.AppendLine('        "trunc-banner": "{0} r\u00e9sultats suppl\u00e9mentaires ne figurent pas dans ce rapport. Les filtres, la recherche et le tri ne s''appliquent qu''aux lignes affich\u00e9es ; le r\u00e9sum\u00e9 compte tous les r\u00e9sultats.",');
+    SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l''indice &middot; <kbd>?</kbd> raccourcis",');
     SB.AppendLine('        "th-file": "Fichier",');
     SB.AppendLine('        "th-sev": "S\u00e9v\u00e9rit\u00e9",');
     SB.AppendLine('        "th-type": "Type",');
@@ -2705,25 +2820,25 @@ begin
     SB.AppendLine('        "sev-total": "Total",');
     SB.AppendLine('        "th-conf": "Confiance",');
     SB.AppendLine('        "rule-example-note": "Exemple canonique de r\u00e8gle",');
-    SB.AppendLine('        "chart-sev-title": "R\u00e9partition par gravit\u00e9",');
+    SB.AppendLine('        "chart-sev-title": "R\u00e9partition par s\u00e9v\u00e9rit\u00e9",');
     SB.AppendLine('        "chart-cat-title": "Cat\u00e9gories principales",');
     SB.AppendLine('        "conf-high": "\u00e9lev\u00e9e",');
     SB.AppendLine('        "conf-medium": "moyenne",');
     SB.AppendLine('        "conf-low": "faible",');
-    SB.AppendLine('        "lbl-conf-filter": "d\u00e9tections fiables uniquement",');
+    SB.AppendLine('        "lbl-conf-filter": "r\u00e9sultats fiables uniquement",');
     SB.AppendLine('        "lbl-base-new": "nouveaux depuis la r\u00e9f\u00e9rence",');
-    SB.AppendLine('        "sec-panel-lbl": "D\u00e9tections li\u00e9es \u00e0 la s\u00e9curit\u00e9",');
+    SB.AppendLine('        "sec-panel-lbl": "R\u00e9sultats li\u00e9s \u00e0 la s\u00e9curit\u00e9",');
     SB.AppendLine('        "sec-panel-btn": "afficher uniquement la s\u00e9curit\u00e9",');
     SB.AppendLine('        "health-label": "Score de sant\u00e9",');
     SB.AppendLine('        "health-green": "Sain",');
     SB.AppendLine('        "health-yellow": "Attention",');
     SB.AppendLine('        "health-red": "Critique",');
-    SB.AppendLine('        "health-summary": "{0} erreurs, {1} avertissements dans {2} fichiers\u00a0; point cl\u00e9 <b>{3}</b>",');
+    SB.AppendLine('        "health-summary": "{0} erreurs, {1} avertissements dans {2} fichiers ; point cl\u00e9 <b>{3}</b>",');
     SB.AppendLine('        "hdr-top-files": "Top {0} fichiers \u00e0 risque (sur {1})",');
-    SB.AppendLine('        "meta-tool": "Outil\u00a0: {0}",');
-    SB.AppendLine('        "meta-scope": "{0} d\u00e9tections dans {1} fichiers",');
+    SB.AppendLine('        "meta-tool": "Outil : {0}",');
+    SB.AppendLine('        "meta-scope": "{0} r\u00e9sultats dans {1} fichiers",');
     SB.AppendLine('        "btn-sprint": "&#128203; Copier la liste sprint",');
-    SB.AppendLine('        "ttl-sprint": "D\u00e9tections visibles comme liste Markdown dans le presse-papiers",');
+    SB.AppendLine('        "ttl-sprint": "R\u00e9sultats visibles comme liste Markdown dans le presse-papiers",');
     SB.AppendLine('        "btn-share": "&#128279; Partager la vue",');
     SB.AppendLine('        "ttl-share": "Vue de filtre actuelle comme URL dans le presse-papiers (\u00e0 partager)",');
     SB.AppendLine('        "btn-kbd":   "&#9000; Raccourcis",');
@@ -2738,28 +2853,34 @@ begin
     SB.AppendLine('        "rr-share": "Part",');
     if AOptions.EditorHelp then
       SB.Append(EditorHelpI18nZeilen('fr'));
+    SB.Append(BerichtI18nZeilen('fr'));
     SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
     SB.AppendLine('        "kbd-help-close": "Fermer",');
-    SB.AppendLine('        "sprint-header": "Visibles au total\u00a0: {0} d\u00e9tections. Top {1} priorit\u00e9s\u00a0:",');
-    SB.AppendLine('        "meta-created": "G\u00e9n\u00e9r\u00e9\u00a0: {0}",');
-    SB.AppendLine('        "meta-file":    "Fichier\u00a0: {0}",');
+    SB.AppendLine('        "sprint-header": "Visibles au total : {0} r\u00e9sultats. Top {1} priorit\u00e9s :",');
+    SB.AppendLine('        "meta-created": "G\u00e9n\u00e9r\u00e9 : {0}",');
+    SB.AppendLine('        "meta-file":    "Fichier : {0}",');
     SB.AppendLine('        "audience-hint": "<b>Optimis\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; ' +
-      'priorisation du refactoring. Commencez par les Top D\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\u00a0; le tableau est tri\u00e9 par s\u00e9v\u00e9rit\u00e9 (erreurs &rarr; indices).",');
-    SB.AppendLine('        "src-snippet-hdr": "Source\u00a0: {0}, ligne {1}",');
+      'priorisation du refactoring. Commencez par les Top D\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = Quick-Fix disponible) ; le tableau est tri\u00e9 par s\u00e9v\u00e9rit\u00e9 (erreurs &rarr; indices).",');
+    SB.AppendLine('        "src-snippet-hdr": "Source : {0}, ligne {1}",');
     SB.AppendLine('        "hint-what": "Qu''est-ce qui est d\u00e9tect\u00e9 ?",');
     SB.AppendLine('        "hint-why":  "Pourquoi est-ce pertinent ?",');
-    SB.AppendLine('        "hint-this": "Remarque sur cette occurrence",');
+    SB.AppendLine('        "hint-this": "Remarque sur ce r\u00e9sultat",');
     SB.AppendLine('        "hint-before": "Avant (probl\u00e8me)",');
     SB.AppendLine('        "hint-after":  "Apr\u00e8s (solution)"');
     SB.AppendLine('      }');
     SB.AppendLine('    };');
+    // Sprachwahl (C12, s. ReportLangOf): 1. die gespeicherte Wahl des
+    // Lesers - er hat bewusst umgeschaltet und weiss, dass die Regeltexte
+    // gebacken sind; 2. die Erzeugungssprache, in der auch die Regeltexte
+    // stehen; 3. "en". Die Browsersprache zaehlt nicht mehr.
+    // ReportLangOf liefert nur de/en/fr - als JS-Literal unbedenklich.
+    SB.AppendLine('    var SCA_LANG_DEFAULT = "' + ReportLangOf(CurrentLanguage) + '";');
     SB.AppendLine('    var SCA_LANG = (function() {');
     SB.AppendLine('      try {');
     SB.AppendLine('        var s = localStorage.getItem("sca-html-lang");');
     SB.AppendLine('        if (s && I18N[s]) return s;');
     SB.AppendLine('      } catch(e) {}');
-    SB.AppendLine('      var nav = (navigator.language || "de").substring(0,2).toLowerCase();');
-    SB.AppendLine('      return I18N[nav] ? nav : "de";');
+    SB.AppendLine('      return I18N[SCA_LANG_DEFAULT] ? SCA_LANG_DEFAULT : "en";');
     SB.AppendLine('    })();');
     SB.AppendLine('    function T(key) {');
     SB.AppendLine('      var s = (I18N[SCA_LANG] && I18N[SCA_LANG][key]) || (I18N["en"] && I18N["en"][key]) || key;');
@@ -2767,6 +2888,15 @@ begin
     SB.AppendLine('        s = s.replace(new RegExp("\\{" + (i-1) + "\\}", "g"), arguments[i]);');
     SB.AppendLine('      }');
     SB.AppendLine('      return s;');
+    SB.AppendLine('    }');
+    // aria-labels: Muster wie data-i18n-title (Entities gestrichen - der
+    // Wert ist kein Markup). root darf selbst das Element sein.
+    SB.AppendLine('    function i18nAria(root) {');
+    SB.AppendLine('      var els = Array.prototype.slice.call(root.querySelectorAll("[data-i18n-aria]"));');
+    SB.AppendLine('      if (root.getAttribute && root.getAttribute("data-i18n-aria")) els.push(root);');
+    SB.AppendLine('      els.forEach(function(el) {');
+    SB.AppendLine('        el.setAttribute("aria-label", T(el.getAttribute("data-i18n-aria")).replace(/&[#a-z0-9]+;/g, ""));');
+    SB.AppendLine('      });');
     SB.AppendLine('    }');
     SB.AppendLine('    function applyLanguage(lang) {');
     SB.AppendLine('      if (!I18N[lang]) return;');
@@ -2806,6 +2936,8 @@ begin
     SB.AppendLine('      document.querySelectorAll("[data-i18n-title]").forEach(function(el) {');
     SB.AppendLine('        el.title = T(el.getAttribute("data-i18n-title")).replace(/&[#a-z0-9]+;/g, "");');
     SB.AppendLine('      });');
+    SB.AppendLine('      // aria-label-Attribute (Screenreader-Texte)');
+    SB.AppendLine('      i18nAria(document);');
     SB.AppendLine('      // Sprach-Select selbst auf den aktiven Wert ziehen');
     SB.AppendLine('      var sel = document.getElementById("langSelect");');
     SB.AppendLine('      if (sel) sel.value = lang;');
@@ -2948,6 +3080,7 @@ begin
     end;
     SB.AppendLine('    function openDrawer(row, hint) {');
     SB.AppendLine('      var dw = drawerEl(); if (!dw) return;');
+    SB.AppendLine('      i18nAria(dw);');
     SB.AppendLine('      var kopf   = document.getElementById(''drawer-kopf'');');
     SB.AppendLine('      var inhalt = document.getElementById(''drawer-inhalt'');');
     SB.AppendLine('      if (!kopf || !inhalt) return;');
@@ -3262,7 +3395,7 @@ begin
     SB.AppendLine('      var html = '''';');
     SB.AppendLine('      topN.forEach(function(k) {');
     SB.AppendLine('        var qfHtml = (k.qf === 1)');
-    SB.AppendLine('          ? '' <span class="td-qf" title="Quick-Fix verfuegbar (Gluehbirne / Ctrl+Alt+F im IDE-Plugin mit reDelphix)">QF</span>''');
+    SB.AppendLine('          ? '' <span class="td-qf" data-i18n-title="ttl-qf" title="'' + T("ttl-qf").replace(/&[#a-z0-9]+;/g, "") + ''">QF</span>''');
     SB.AppendLine('          : '''';');
     SB.AppendLine('        html += ''<li data-kind="'' + k.n + ''">'' +');
     SB.AppendLine('                ''<span class="td-name">'' + k.n + ''</span> '' +');
@@ -3560,9 +3693,9 @@ begin
     SB.AppendLine('      aggList.sort(function(a, b) { return b.c - a.c; });');
     SB.AppendLine('      var qfAgg = aggList.filter(function(k){ return QF_KINDS[k.n] === 1; });');
     SB.AppendLine('      if (qfAgg.length) {');
-    SB.AppendLine('        md += ''\n### Quick-Wins (Quick-Fix: Gluehbirne / Ctrl+Alt+F im IDE-Plugin)\n\n'';');
+    SB.AppendLine('        md += ''\n### '' + T("sprint-qf-hdr") + ''\n\n'';');
     SB.AppendLine('        qfAgg.slice(0, 10).forEach(function(k) {');
-    SB.AppendLine('          md += ''- [ ] '' + k.n + '' ('' + k.c + '' Vorkommen)\n'';');
+    SB.AppendLine('          md += ''- [ ] '' + k.n + '' ('' + T("sprint-occ", k.c) + '')\n'';');
     SB.AppendLine('        });');
     SB.AppendLine('      }');
     SB.AppendLine('      return md;');
@@ -3728,9 +3861,10 @@ begin
     // Steuerzeichen-Fund ungueltig gemacht hat (uBaseline.TBaseline.Write,
     // seit 2026-08-28 behoben); der stille Zweig bleibt aber fuer jede
     // fremde oder von Hand bearbeitete Datei erreichbar - deshalb sagt er
-    // jetzt Bescheid, statt zu schweigen. Ohne Akzente, damit der
-    // FR-Text keine \u-Sequenz braucht.
-    SB.AppendLine('      var TPLERR = { en: "Baseline: not loaded - invalid JSON", de: "Baseline: nicht geladen - ungueltiges JSON", fr: "Base: non chargee - JSON invalide" };');
+    // jetzt Bescheid, statt zu schweigen. Umlaut und Akzent als \uXXXX
+    // wie in TPL darueber (i18n-Luecken C13; vorher bewusst ohne, was
+    // "ungueltiges"/"chargee" ergab).
+    SB.AppendLine('      var TPLERR = { en: "Baseline: not loaded - invalid JSON", de: "Baseline: nicht geladen - ung\u00fcltiges JSON", fr: "Base: non charg\u00e9e - JSON invalide" };');
     SB.AppendLine('      var bf = document.getElementById("baseFile");');
     SB.AppendLine('      if (bf) bf.addEventListener("change", function(){');
     SB.AppendLine('        var f = bf.files && bf.files[0]; if (!f) return;');
@@ -3782,8 +3916,14 @@ begin
     // jeweils angeklickten Befund-Zeile). Steht bewusst NACH dem
     // Skript - das JS greift deshalb lazy zu (drawerEl) und verdrahtet
     // den Close-Button per Delegation.
-    SB.AppendLine('<aside id="drawer" aria-label="Befund-Details">');
-    SB.AppendLine('  <button id="drawer-schliessen" aria-label="Details schliessen">&times;</button>');
+    // aria-labels aus TWorkbenchI18n (wie die Workbench-Seiten); data-
+    // i18n-aria schaltet sie um. Weil der Drawer HINTER dem Skript steht,
+    // erreicht ihn das applyLanguage beim Laden nicht - openDrawer ruft
+    // i18nAria deshalb selbst.
+    SB.AppendLine('<aside id="drawer" aria-label="' + TWorkbenchI18n.T(wtDrawerAriaFunde, 'de') +
+                  '" data-i18n-aria="aria-drawer">');
+    SB.AppendLine('  <button id="drawer-schliessen" aria-label="' + TWorkbenchI18n.T(wtDrawerSchliessen, 'de') +
+                  '" data-i18n-aria="aria-drawer-close">&times;</button>');
     SB.AppendLine('  <div id="drawer-kopf"></div>');
     SB.AppendLine('  <div id="drawer-inhalt"></div>');
     SB.AppendLine('</aside>');

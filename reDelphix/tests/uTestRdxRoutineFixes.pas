@@ -589,10 +589,10 @@ begin
     4, 'Dead', 'hinter dem Ende steht Code');
   AssertRefused(InImpl(['{ Kommentar', '  ueber Zeilen } procedure Dead;',
     'begin', 'end;', 'procedure B;', 'begin', 'end;']), 5, 'Dead',
-    'auf der Kopfzeile endet ein Kommentar');
+    'auf der Kopfzeile endet ein mehrzeiliger Kommentar');
   AssertRefused(InImpl(['procedure Dead;', 'begin', 'end; { Kommentar',
     '  ueber Zeilen }', 'procedure B;', 'begin', 'end;']), 4, 'Dead',
-    'hinter dem Ende beginnt ein Kommentar');
+    'hinter dem Ende beginnt ein mehrzeiliger Kommentar');
   AssertRefused(Join(['unit u;', 'interface', 'implementation',
     'procedure Dead;', 'begin', 'end;']), 4, 'Dead',
     'letzten Zeile der Datei');

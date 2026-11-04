@@ -483,11 +483,12 @@ begin
   cboEditorColorScheme.Style   := csDropDownList;
   // Aus der Tabelle, nicht aus drei literalen Zeilen: ein neues
   // Farbschema erscheint damit von selbst, statt still zu fehlen
-  // (Fremdbericht 2026-08-23, Befund 3). Die msgids bleiben dieselben -
-  // _() bekommt weiterhin den englischen Text.
+  // (Fremdbericht 2026-08-23, Befund 3). Uebersetzt wird in
+  // uAnalyserTheme.EditorColorSchemeCaption - ein _() hier ueber die
+  // Unitgrenze sah der Extraktor nicht (i18n-Luecken C10).
   for var Idx := Low(EDITOR_COLOR_SCHEME_ORDER) to High(EDITOR_COLOR_SCHEME_ORDER) do
     cboEditorColorScheme.Items.Add(
-      _(EDITOR_COLOR_SCHEME_INFO[EDITOR_COLOR_SCHEME_ORDER[Idx]].Caption));
+      EditorColorSchemeCaption(EDITOR_COLOR_SCHEME_ORDER[Idx]));
   // Vierter Eintrag = Nur-Text-Variante ([UI] OverlayTextOnly=1,
   // Nutzerentscheid 2026-08-13): bright/gray/subtle behalten das
   // Fenster-Overlay mit voller Hint-Ansicht (Stufe 2) wie bisher,

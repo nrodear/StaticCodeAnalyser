@@ -68,9 +68,9 @@ gerenderten Zeilen.
 
 **Mit welchem Regelsatz der Bericht entstand.** Der maschinenlesbare
 `sca-meta`-Block im Seitenkopf trägt `profile`: den Namen des
-Regelprofils des Laufs. Ein leerer Wert heißt *kein Profilfilter* —
-alle Detektoren liefen — und ist nicht dasselbe wie das kuratierte
-Profil `default`.
+Regelprofils des Laufs. Ein leerer Wert heißt, dass der Lauf kein
+Profil benannt hat (weder `--profile` noch `[Rules] Profile`); der
+Analyser fuhr dann das Profil `default`.
 
 **Editorhilfen in beiden HTML-Berichten.** Für eine Regel mit **Editorhilfe**
 (einer Code-Aktion des IDE-Moduls reDelphix: Glühbirne, Strg+Alt+F)
@@ -174,11 +174,6 @@ mit 4 — ein unvollständiger Scan darf nie wie ein sauberer aussehen.
 Werkzeugfehler (99) werden vor `--fail-on` entschieden und lassen sich gar
 nicht herabstufen.
 
-**Für `--write-baseline` einen absoluten Pfad oder einen mit
-Verzeichnisanteil verwenden.** Ein bloßer Dateiname
-(`--write-baseline b.json`) scheitert mit *„Baseline write error:
-Verzeichnis kann nicht erstellt werden"* — an v0.9.14 nachgemessen.
-
 **In CI besser `--baseline-scan y` als einen Dateinamen.** Der Schalter
 löst die Baseline dreistufig auf — `--baseline`, dann `[Baseline] File=`
 aus der `analyser.ini`, dann der `.sca`-Ordner neben `--project` /
@@ -209,19 +204,20 @@ darunter eine SQL-Injection, die nie jemand geprüft hatte; mit dem Schalter
 bleiben sie im selben Lauf erhalten. Er ändert die Fingerprints — beim
 Einschalten also eine frische Baseline schreiben.
 
-Ein Rest bleibt bewusst: Ein Fund, dessen umgebende Zeilen in beiden
-Dateien gleich sind, matcht weiterhin über die `contextHash`-Stufe. Genau
-das lässt eine Baseline Umzüge und Refactorings überleben — und ist der
-Grund, warum zwei byte-identische Kopien verbunden bleiben, unabhängig von
-diesem Schalter.
+Die `contextHash`-Stufe (die Zeilen rund um einen Fund) hängt am selben
+Datei-Token, dazu an Regel und Hash. Standardmäßig ist der Token der
+Dateiname: Eine Baseline übersteht dann den Umzug einer Datei in einen
+anderen Ordner, und byte-identische Kopien einer Datei teilen sich ihre
+Einträge. Mit `--baseline-path-fingerprint y` ist der Token der
+relative Pfad: Verschobene Dateien melden ihre Funde einmal als neu, und
+Kopien in verschiedenen Ordnern bleiben getrennt.
 
-**Eine Baseline NICHT durch Kombination der beiden Schalter
-auffrischen.** Das naheliegend wirkende `--baseline alt
---write-baseline neu` schreibt nur die Funde, die den Filter
-*überlebt* haben — also die neuen. An einem echten Repository gemessen:
-aus einer Baseline mit 226 Einträgen wurden **0**, und der nächste Build
-meldete den gesamten Altbestand erneut. Zum Auffrischen eine frische
-Baseline aus einem Lauf **ohne** `--baseline` schreiben.
+**Eine Baseline mit beiden Schaltern auffrischen.** `--baseline alt
+--write-baseline neu` schreibt den vollen Ist-Stand nach `neu` — jeden
+Fund des Laufs, die neuen eingeschlossen — und filtert im selben Lauf
+gegen `alt`. Das frischt die Baseline auf, nimmt aber auch alles an, was
+heute neu ist: Die neuen Funde dieses Laufs ansehen, bevor man die
+aufgefrischte Datei behält.
 
 ## Workflow 2 — Pull-Request-Review: nur das Geänderte
 
@@ -231,9 +227,10 @@ StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
 ```
 
 `--branch` nimmt die geänderten Dateien aus der Versionsverwaltung (Git
-und SVN werden erkannt), `--diff <range>` einen Git-Bereich inklusive
-`a...b` für den gemeinsamen Vorfahren. Beide schließen ungespeicherte
-Änderungen ein (`--diff` vergleicht nur committete Stände).
+und SVN werden erkannt) und schließt nicht committete Änderungen ein,
+solange nicht `[Repo] IncludeWorkingTree=0` gesetzt ist. `--diff <range>`
+nimmt einen Git-Bereich inklusive `a...b` für den gemeinsamen Vorfahren
+und vergleicht nur committete Stände.
 
 Seit dem 2026-08-25 beendet ein **gescheiterter VCS-Aufruf den Lauf mit
 Exit 99** und dem Grund auf stderr — ein Shallow-Clone, dessen
@@ -346,8 +343,8 @@ Default an), trägt jedes Result zusätzlich `properties.confidence`
 mit `level: warning` meldet. Der Zustand wird zur **Scan**-Zeit
 gestempelt und wandert mit der Fund-Kohorte: ein ini-Wechsel zwischen
 Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
-mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
-Stand vor 0.9.18.
+mischen. Mit `EvidenceTiering=0` werden die Levels nicht gedeckelt, und
+kein Result trägt `properties.confidence`.
 
 Mit **`--sarif-editor-help`** (Voreinstellung aus; ohne den Schalter
 bleibt das SARIF unverändert) trägt ein Result einer Regel mit
@@ -410,16 +407,11 @@ sie mitschreibt.
 
 ## Bekannte Einschränkungen
 
-Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
+Ehrliche Liste, Stand v0.9.19:
 
 | Bereich | Verhalten |
 |---|---|
-| Baseline-Auffrischen mit beiden Schaltern | kürzt die Baseline auf die neuen Funde |
-| `--write-baseline` mit bloßem Dateinamen | schreibt nicht |
-| JSON-Exporte | UTF-8 **mit** BOM — nach v0.9.14 behoben, jetzt BOM-frei |
-| HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
-| Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |
-| unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
+| Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. Workflow 1) |
 | `--parallel` | seit 2026-08-20 deterministisch (byte-identisch zum seriellen Lauf), aber ohne Tempogewinn - die serielle Vorphase dominiert |
 
 ---

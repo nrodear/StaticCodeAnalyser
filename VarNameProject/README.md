@@ -164,7 +164,7 @@ Datei -> H1 belegt, je Ansicht; keine AV -> H1 widerlegt.
 Nico 2026-10-11: "erstelle auch tests um die editorhelper zu testen". Der
 ToolsAPI-freie Teil (`uVnpPlan`, `uVnpEdits` - genau die Units, die das
 Paket benutzt) hat ein DUnitX-Testprojekt, `tests/VarNameProject.Test.dproj`
-(Konsole; mit TestInsight in der IDE). Die Tests pruefen den TEXT, der
+(Debug/Release: Konsole; Konfiguration TestInsight: TestInsight in der IDE). Die Tests pruefen den TEXT, der
 danach im Puffer steht - `uVnpEdits.ApplyByteEdits` stellt den
 IOTAEditWriter nach -, nicht nur Offsets.
 

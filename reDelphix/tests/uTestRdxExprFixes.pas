@@ -183,7 +183,7 @@ const
     ('  if Assigned(GetObj()) then Exit;', '21', 'Ausdrucks'),
     ('  X := Foo().Bar;', '11', 'Ausdrucks'),
     ('  F()();', '4', 'Ausdrucks'),
-    ('  Arr[0]();', '9', 'Element- oder Ergebnisaufruf'),
+    ('  Arr[0]();', '9', 'Member- oder Ergebnisaufruf'),
     ('  Foo( { leer } );', '6', 'nur Leerraum'),
     ('  Foo(X);', '6', 'nur Leerraum'),
     ('  Foo {x} ();', '11', 'nur Leerraum'),

@@ -72,8 +72,8 @@ You can pick any path. In this guide we assume `D:\projects\StaticCodeAnalyser`.
 ## 3. Open the project group in Delphi
 
 The project ships as a **project group** with the engine, the shared UI,
-the standalone app and the IDE plugin, plus the optional reDelphix
-package, a CLI demo, the test projects and two probes. Delphi 13 uses
+the standalone app, the IDE plugin and reDelphix, plus a CLI demo, the
+test projects and two probes. Delphi 13 uses
 the same project files. `StaticCodeAnalyser.d13.64bit.groupproj` groups
 them for the 64-bit IDE, but without reDelphix.
 
@@ -90,7 +90,7 @@ sub-projects matter here:
 - `SCA.SharedUI` — UI components used by both standalone and plugin.
 - `StaticCodeAnalyser.d12` — the standalone EXE.
 - `StaticCodeAnalyser.IDE.d12` — the IDE plugin (a BPL package).
-- `reDelphix.d12` — the optional code actions (section 5.3).
+- `reDelphix.d12` — the code actions of the plugin (section 5.3).
 
 Delphi shows a green **bold** font for the **active** sub-project.
 You will switch the active project as needed below.
@@ -104,7 +104,7 @@ double-click it.
 
 ### 4.1 Pick the platform (32-bit vs 64-bit)
 
-64-bit is the default and what we recommend.
+We recommend 64-bit. The project file opens on Win32, so switch it:
 
 In the Project Manager:
 
@@ -165,8 +165,9 @@ startup.
 > IDE in it: its folder comes first in the IDE's PATH setting, so the
 > IDE would load the installed engine instead of yours. The other way
 > round, the setup replaces the registrations of your build in every IDE
-> you tick and tells you so; afterwards add the packages again as in 5.2
-> and 5.3. A monolith from version 0.9.18 or older
+> you tick and tells you so; to use your build there again, uninstall the
+> setup (or untick that IDE), then add the packages again as in 5.2 and
+> 5.3. A monolith from version 0.9.18 or older
 > (`StaticCodeAnalyser.Plugin.d12`) cannot be loaded next to these
 > packages: remove it first under **Component → Install Packages**.
 
@@ -204,7 +205,7 @@ is built as Win64.
 > monolith from version 0.9.18 or older is registered on top of that,
 > Delphi 13 refuses the plugin with "contains unit 'uLocalization', which
 > is also contained in package 'SCA.Engine'". Only the two design-time
-> packages get installed, `StaticCodeAnalyser.IDE.d12` and optionally
+> packages get installed, `StaticCodeAnalyser.IDE.d12` and
 > `reDelphix.d12`: from your build or from the setup, never both at once.
 
 You now have three `.bpl` files in
@@ -213,6 +214,12 @@ You now have three `.bpl` files in
 - `SCA.Engine290.bpl`
 - `SCA.SharedUI290.bpl`
 - `StaticCodeAnalyser.IDE.d12.bpl`
+
+> **Delphi 13, 64-bit IDE:** in step 3 activate **Windows 64-bit (Win64)**
+> instead, for `SCA.Engine`, `SCA.SharedUI`, the plugin and later
+> `reDelphix.d12`. The BPLs then land in `37.0\Bpl\Win64\` (suffix `370`),
+> and in 5.2 you add them in the 64-bit IDE from that folder. The 32-bit
+> IDE of Delphi 13 uses `37.0\Bpl\` and Win32 as described.
 
 ### 5.2 Tell the IDE to load the plugin
 
@@ -232,11 +239,11 @@ After restart, the IDE shows a new dockable window:
 If the menu entry is missing, the plugin failed to load. Check
 **View → Window List…** or read the splash-screen errors carefully.
 
-### 5.3 Optional: install reDelphix (code actions)
+### 5.3 Install reDelphix (code actions)
 
 reDelphix adds quick fixes and refactorings to the plugin (see the
-[README](README.md#code-actions-redelphix-optional-ide-package)). The
-setup ships it, so you need this section only for your own build. It
+[README](README.md#code-actions-redelphix)). The setup always installs
+it with the plugin, so you need this section only for your own build. It
 needs the dev set from 5.1 and 5.2, because it links against
 `SCA.Engine`.
 
@@ -271,7 +278,8 @@ same project files, in the Release configuration. The BPLs land under
    EXE for Win32 and Win64 as well (section 4). A package links against
    the DCPs it requires, so whoever rebuilds one package also rebuilds
    those after it, even without a source change. Build All of the project
-   group keeps this order.
+   group keeps this order, but builds every project on its own active
+   platform (see the warning in 5.1): check all four before.
 3. Check the result without creating anything:
 
    ```powershell
@@ -282,8 +290,9 @@ same project files, in the Release configuration. The BPLs land under
    `tools\stale_artifacts_check.py --release` and checks each of the 12
    BPLs: present, VERSIONINFO equal to the version, right bitness.
 
-The full run and its switches:
-[installer/README_Installer.md](installer/README_Installer.md).
+The full run needs the tag `v<Version>` (or `-SkipSource`) and the
+release notes `docs/releases/v<Version>.md` and `_de.md`. The run and its
+switches: [installer/README_Installer.md](installer/README_Installer.md).
 
 ---
 
@@ -328,7 +337,7 @@ correct line (Notepad or your default Pascal viewer).
 
 ### 6.5 Save the report
 
-Use the **Export** buttons (top-right) to save as **HTML**, **JSON**,
+Use **☰ → Export...** (the menu button top-right) to save as **HTML**, **JSON**,
 **CSV**, **SARIF** (for GitHub Code Scanning), the **Sonar** report (for
 SonarQube), or copy to clipboard for Jira/Markdown.
 
@@ -359,20 +368,24 @@ the Project Manager or as a tab at the bottom).
 
 ### 7.4 Jump to a finding
 
-Click any row in the grid: the editor jumps to that file and line and
-highlights the offending code with a colored marker in the gutter.
+Double-click a row in the grid or press **Enter**: the editor jumps to
+that file and line and marks the line. With the arrow keys the editor
+follows once the selection rests. A single click only shows the finding
+in the help panel and paints a stripe in the editor if the file is open.
 
 ### 7.5 Hide false positives
 
 Select a finding and press **Ctrl+Alt+S**. The plugin writes a
 `// noinspection` comment above the line that hides exactly this rule
-at this place. The finding disappears on the next scan. With reDelphix
-the context menu of the finding offers the same.
+at this place. The finding disappears on the next scan. reDelphix
+offers the same in the context menu of the finding.
 
-### 7.6 Hover hint
+### 7.6 Help panel
 
-If you hover over a finding row, a tooltip shows a **Before / After**
-code example: how the problem looks, and how the fix looks.
+Select a finding: the **help panel** next to the grid shows a
+**Before / After** code example — how the problem looks, and how the fix
+looks. It appears while the window floats; docked into a side bar it
+hides. Hovering the file column shows the full path as a tooltip.
 
 ---
 
@@ -383,7 +396,6 @@ code example: how the problem looks, and how the fix looks.
 | **"Build failed: unresolved external"** | You built the plugin before the engine. Build `SCA.Engine` first, then `SCA.SharedUI`, then the plugin. |
 | **Plugin menu entry is missing after restart** | Wrong platform (you built Win64 instead of Win32) or wrong path in `Tools → Options → Packages`. |
 | **Standalone crashes after a few seconds on a large project** | Stack-size patch not applied. Re-run `tools\patch-stack-size.ps1`. |
-| **EXE complains "file not found" on launch** | You moved the EXE out of its `Output\…` folder. Either put it back, or copy the `.dcu`/`.bpl` files with it. |
 | **"Cannot find SCA.Engine290.bpl"** when the plugin loads | The Windows loader looks for `SCA.Engine290.bpl` on the PATH, not next to the plugin. Own build: build `SCA.Engine` for the same platform (Win32) and configuration (Release). Setup: run it again, it restores its entry in the IDE's PATH setting. |
 | **Undeclared identifier for something that clearly exists in the source** | A package pulls that unit out of another package's **DCP**, not out of the source. If that DCP is older than the source, you compile against the old state and the compiler points at the call site, not at the stale file. Run `python tools\stale_artifacts_check.py`, then rebuild in the order `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 

@@ -21,6 +21,16 @@ wir portiert haben. Die SCA060-119 Naming-/Formatting-Checks sind seit 2026-07-1
 einer eigenen Sektion unten enumeriert; [`rules/sca-rules.json`](rules/sca-rules.json)
 bleibt die kanonische maschinenlesbare Liste.
 
+**Regeln unter dem Konfidenzfilter.** Diese Regeln melden ihre Funde mit
+Konfidenz *low*: SCA040, SCA049, SCA050, SCA051, SCA052, SCA061, SCA062,
+SCA063, SCA064, SCA069, SCA076, SCA078, SCA079, SCA086, SCA107, SCA134,
+SCA135, SCA142, SCA148, SCA158, SCA170, SCA184, SCA185 (nur wenn das
+Nicht-ASCII allein in Kommentaren steht) und SCA190 (nicht unter dem
+FPC-Dialekt). Mit dem ausgelieferten `[Rules] MinConfidence=medium`
+fallen diese Funde in jedem Profil heraus, auch in `strict`;
+`MinConfidence=low` zeigt sie. Auch andere Regeln können einzelne Funde
+auf *low* senken.
+
 🇬🇧 [English version](DETECTORS.md) · 🇫🇷 [Version française](DETECTORS_fr.md)
 
 ---
@@ -48,9 +58,9 @@ bleibt die kanonische maschinenlesbare Liste.
 | 10 | SCA135 | **AbstractNotImpl: Abstrakte Methode nicht implementiert** | Konkrete Klasse erbt von abstrakter Basis, implementiert aber nicht alle `abstract`-Methoden | ✅ | `uAbstractNotImpl` (nur within-unit) |
 | 11 | SCA132 | **ExceptionTooGeneral: Zu allgemeiner Exception-Typ** | `except on E: Exception` statt spezifischem Typ – verdeckt unerwartete Fehler | ✅ | `uExceptionTooGeneral` |
 | 12 | SCA136 | **LeakInConstructor: Exception im Konstruktor ohne Cleanup** | Konstruktor kann nach partieller Objektinitialisierung eine Exception werfen ohne `Free` | ✅ | `uLeakInConstructor` |
-| 13 | — | **MissingDestructor: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben | ✅ | `uFieldLeak` |
+| 13 | SCA001 | **MemoryLeak: Destruktor fehlt / Feld nicht freigegeben** | Klasse mit Objekt-Feldern: kein Destruktor oder Feld nicht in `Destroy` freigegeben (Sonar-Slot MissingDestructor) | ✅ | `uFieldLeak` |
 | 14 | SCA137 | **IntegerOverflow: Überlauf bei Arithmetik** | Multiplikation oder Potenz mit `Integer`/`Word` ohne vorherige Bereichsprüfung | ✅ | `uIntegerOverflow` (nur Int64-Ziel) |
-| 15 | — | **RaiseWithoutClass: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – löst Access Violation aus | ✅ | `uRaiseOutsideExcept` |
+| 15 | SCA133 | **RaiseOutsideExcept: `raise` ohne Exception-Objekt** | Nacktes `raise` außerhalb eines `except`-Blocks – von Delphi (E2145) und FPC abgelehnt (Sonar-Slot RaiseWithoutClass) | ✅ | `uRaiseOutsideExcept` |
 
 ---
 
@@ -58,7 +68,7 @@ bleibt die kanonische maschinenlesbare Liste.
 
 | # | SCA | Regel | Beschreibung | Status | Unit |
 |---|-----|-------|-------------|--------|------|
-| 16 | SCA166 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird gelesen bevor sie in allen Codepfaden zugewiesen wurde | 🟡 | MVP ausgeliefert als `SCA166` (`uUninitVar.pas`) — konservativer single-method-Scope ohne volle Path-Sensitivity. Slot #16 bleibt `🟡 partial` bis Phase 3 (CFG + Symboltabelle). |
+| 16 | SCA166 | **UninitVar: Uninitialisierte Variable** | Lokale Variable wird vor ihrer ersten Zuweisung in Quelltext-Reihenfolge gelesen oder nie zugewiesen | 🟡 | MVP ausgeliefert als `SCA166` (`uUninitVar.pas`) — konservativer single-method-Scope ohne volle Path-Sensitivity. Slot #16 bleibt `🟡 partial` bis Phase 3 (CFG + Symboltabelle). |
 | 17 | SCA011 | **DeadCode: Unerreichbarer Code** | Anweisungen nach `Exit`, `Break`, `Continue` oder `raise` auf gleicher Ebene | ✅ | `uDeadCode` |
 | 18 | SCA150 | **BoolAlwaysTrue: Boolean-Ausdruck immer wahr/falsch** | Vergleich wie `x >= 0` für `Cardinal` oder `Length(s) >= 0` – ergibt immer True | ✅ | `uBoolAlwaysTrue` (nur Length-Pattern) |
 | 19 | SCA144 | **FloatEquality: Fließkomma-Vergleich mit =** | `if a = b` wobei `a` oder `b` vom Typ `Single`/`Double`/`Extended` ist | ✅ | `uFloatEquality` |
@@ -66,7 +76,7 @@ bleibt die kanonische maschinenlesbare Liste.
 | 21 | SCA149 | **MissingOverride: `override` fehlt** | Methode überschreibt eine `virtual`/`dynamic`-Methode der Elternklasse ohne `override` | ✅ | `uMissingOverride` (nur within-unit) |
 | 22 | — | **CyclicUnitDep: Zyklische Unit-Abhängigkeit** | Unit A verwendet Unit B (interface), Unit B verwendet Unit A (interface) | 🔲 | |
 | 23 | SCA145 | **ExceptInDestructor: Exception aus Destruktor** | Destruktor enthält Code der eine Exception auslösen kann ohne try/except | ✅ | `uExceptInDestructor` |
-| 24 | — | **PublicFieldNoProperty: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter | ✅ | `uPublicField` |
+| 24 | SCA089 | **PublicField: Öffentliches Feld statt Property** | `public`-Feld direkt exponiert statt über `property` mit Getter/Setter (Sonar-Slot PublicFieldNoProperty) | ✅ | `uPublicField` |
 | 25 | SCA139 | **FreeWithoutNil: Free ohne anschließendes Nil** | `obj.Free` ohne nachfolgendes `obj := nil` oder `FreeAndNil` – Dangling Pointer möglich | ✅ | `uFreeWithoutNil` |
 
 ---
@@ -75,16 +85,16 @@ bleibt die kanonische maschinenlesbare Liste.
 
 | # | SCA | Regel | Beschreibung | Status | Unit |
 |---|-----|-------|-------------|--------|------|
-| 26 | SCA012 | **LongMethod: Methode zu lang** | Methoden-Rumpf überschreitet 50 ausführbare Zeilen | ✅ | `uLongMethod` |
-| 27 | — | **TooManyParams: Zu viele Parameter** | Methode hat mehr als 5 Parameter | ✅ | `uLongParamList` |
+| 26 | SCA012 | **LongMethod: Methode zu lang** | Methoden-Rumpf ist länger als 50 Zeilen **und** hat mehr als 30 Anweisungen (`LongMethodMaxBodyLines`, `LongMethodMaxStatements`) | ✅ | `uLongMethod` |
+| 27 | SCA013 | **LongParamList: Zu viele Parameter** | Methode hat mehr als 5 Parameter (`LongParamListMaxParams`; Sonar-Slot TooManyParams) | ✅ | `uLongParamList` |
 | 28 | SCA022 | **CyclomaticComplexity: McCabe-Komplexität > 10** | Anzahl der Verzweigungspfade (`if`, `case`-Arm, `for`, `while`, `repeat`, `on`-Handler, `and`/`or`/`xor`) überschreitet 10 | ✅ | `uCyclomaticComplexity` |
 | 29 | SCA018 | **DeepNesting: Verschachtelungstiefe > 4** | Code-Block ist mehr als 4 Ebenen tief eingerückt | ✅ | `uDeepNesting` |
 | 30 | SCA021 | **DuplicateBlock: Duplizierter Code-Block** | Identischer Block (≥ `DuplicateBlockMinLines`, Default 8 normalisierte Zeilen) erscheint mehrfach in derselben Datei | ✅ | `uDuplicateBlock` (SCA021) — zeilenbasierter Sliding-Window, normalisiert Trim/Lowercase/Whitespace-Collapse, überspringt Boilerplate (`begin`/`end`/`else`/`try`/`finally`/`except`, reine Kommentare) und if/end-Branching-Blöcke |
 | 31 | SCA138 | **GodClass: Gottklasse** | Klasse hat mehr als 20 Methoden oder mehr als 15 Instanzfelder | ✅ | `uGodClass` |
-| 32 | SCA014 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal (außer 0 und 1) direkt im Code statt benannter Konstante | ✅ | `uMagicNumbers` |
+| 32 | SCA014 | **MagicNumber: Magic Number ohne Konstante** | Numerisches Literal direkt im Code statt benannter Konstante; `0`, `1`, `2`, `-1`, `10` und `100` gehen durch (`[Detectors] MagicNumberTrivials`) | ✅ | `uMagicNumbers` |
 | 33 | SCA146 | **BooleanParam: Boolean als Flag-Parameter** | Methode erhält `Boolean`-Parameter der intern als Verzweigung genutzt wird | ✅ | `uBooleanParam` |
-| 34 | SCA140 | **MultipleExit: Mehr als 3 Exit-Punkte** | Methode enthält mehr als 3 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
-| 35 | SCA141 | **LargeClass: Klasse zu groß** | Unit mit einer Klasse überschreitet 500 Zeilen Implementierungscode | ✅ | `uLargeClass` |
+| 34 | SCA140 | **MultipleExit: Mehr als 6 Exit-Punkte** | Methode enthält mehr als 6 `Exit`-Aufrufe | ✅ | `uMultipleExit` |
+| 35 | SCA141 | **LargeClass: Klasse zu groß** | Eine Klasse überschreitet 500 Zeilen Implementierung (Klassendeklaration plus ihre Methoden), geprüft je Klasse | ✅ | `uLargeClass` |
 
 ---
 
@@ -92,16 +102,16 @@ bleibt die kanonische maschinenlesbare Liste.
 
 | # | SCA | Regel | Beschreibung | Status | Unit |
 |---|-----|-------|-------------|--------|------|
-| 36 | — | **UnusedVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben | ✅ | `uUnusedLocal` |
-| 37 | — | **UnusedMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen | ✅ | `uUnusedPrivateMethod` |
-| 38 | — | **UnusedUnit: Unit im uses nicht genutzt** | Unit im `uses`-Abschnitt, deren Symbole im Quelltext nicht referenziert werden | ✅ | `uUnusedUses` |
-| 39 | — | **CommentedCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung | ✅ | `uCommentedOutCode` |
+| 36 | SCA053 | **UnusedLocalVar: Unbenutzte lokale Variable** | Variable im `var`-Block deklariert, aber nie gelesen oder nur geschrieben (Sonar-Slot UnusedVar) | ✅ | `uUnusedLocal` |
+| 37 | SCA147 | **UnusedPrivateMethod: Unbenutzte private Methode** | Private Methode wird innerhalb der Unit nirgendwo aufgerufen (Sonar-Slot UnusedMethod) | ✅ | `uUnusedPrivateMethod` |
+| 38 | SCA007 | **UnusedUses: Unit im uses nicht genutzt** | Unit im `uses`-Abschnitt, deren Symbole im Quelltext nicht referenziert werden (Sonar-Slot UnusedUnit; läuft nur mit `[Detectors] UsesCheck=1`, in der CLI auch mit `strict`) | ✅ | `uUnusedUses` |
+| 39 | SCA070 | **CommentedOutCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung (Sonar-Slot CommentedCode) | ✅ | `uCommentedOutCode` |
 | 40 | SCA019 | **TodoComment: TODO/FIXME ohne Ticket** | Kommentar enthält `TODO`, `FIXME`, `HACK`, `XXX` ohne zugehörige Issue-Nummer | ✅ | `uTodoComment` |
 | 41 | SCA020 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer — ein Rumpf mit erklärendem Kommentar ist bereits konform und wird nicht gemeldet | ✅ | `uEmptyMethod` |
 | 42 | — | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
 | 43 | SCA151 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
-| 44 | — | **LongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`) | ✅ | `uTooLongLine` |
-| 45 | — | **MixedIndent: Gemischte Einrückung (Tabs + Spaces)** | Zeile enthält sowohl Tabulator- als auch Leerzeichen-Einrückung | ✅ | `uTabulationCharacter` |
+| 44 | SCA062 | **TooLongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`; Sonar-Slot LongLine) | ✅ | `uTooLongLine` |
+| 45 | SCA061 | **TabulationCharacter: Tabulator im Quelltext** | Zeile enthält ein Tabulatorzeichen (Sonar-Slot MixedIndent) | ✅ | `uTabulationCharacter` |
 
 ---
 
@@ -121,9 +131,9 @@ bleibt die kanonische maschinenlesbare Liste.
 
 | Regel | Beschreibung | Unit |
 |-------|-------------|------|
-| **HardcodedPath** | Hardkodierte Datei-/Verzeichnispfade (`C:\…`, UNC, `/usr/…`) | `uHardcodedPath` |
-| **DebugOutput** | `WriteLn`, `ShowMessage`, `OutputDebugString`, `InputBox` in Produktionscode | `uDebugOutput` |
-| **DuplicateString** | String-Literal kommt 3+ mal vor – sollte als Konstante extrahiert werden | `uDuplicateString` |
+| **HardcodedPath** (SCA016) | Hardkodierte Datei-/Verzeichnispfade (`C:\…`, UNC, `/usr/…`) | `uHardcodedPath` |
+| **DebugOutput** (SCA017) | `WriteLn`, `ShowMessage`, `ShowMessagePos`, `OutputDebugString` in Produktionscode | `uDebugOutput` |
+| **DuplicateString** (SCA015) | String-Literal kommt 3+ mal vor – sollte als Konstante extrahiert werden | `uDuplicateString` |
 
 ---
 
@@ -218,7 +228,7 @@ Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
 
 | # | SCA | Regel (`fk…`-ID) | Beschreibung | Typ | Unit |
 |---|-----|------------------|--------------|-----|------|
-| D21 | SCA184 | **DfmComponentUnused** | Im DFM deklarierte Komponente wird nirgends referenziert — nicht im Code der Form, nicht aus einer anderen Unit über die globale Form-Variable (`Form1.Comp`, aufgelöst via `TSymbolReferenceIndex`) und nicht von einer anderen Komponente im DFM (`DataSource=`, `Action=`, …). Vermutlich nach einem Refactoring übrig. Läuft als `fcLow` (unter dem Default-`fcMedium`-Confidence-Filter — opt-in via `--min-confidence low`); ohne repo-weiten Symbol-Index kein Fund. Persistente `TField`s, eingebettete Frames und Units mit `FindComponent`-by-Name werden in v1 bewusst übersprungen. Bekannte v1-Lücke: Cross-Unit-**Mutationen**, bei denen die Komponente ein mittleres Kettenglied ist (`Form.Comp.Prop := x` / `.Method`), werden noch nicht erkannt. | Code Smell | `uDfmComponentUnused` |
+| D21 | SCA184 | **DfmComponentUnused** | Im DFM deklarierte Komponente wird nirgends referenziert — nicht im Code der Form, nicht aus einer anderen Unit über die globale Form-Variable (`Form1.Comp`, aufgelöst via `TSymbolReferenceIndex`) und nicht von einer anderen Komponente im DFM (`DataSource=`, `Action=`, …). Vermutlich nach einem Refactoring übrig. Läuft als `fcLow` (unter dem Default-`fcMedium`-Confidence-Filter — opt-in via `[Rules] MinConfidence=low` in der `analyser.ini`; einen CLI-Schalter dafür gibt es nicht); ohne repo-weiten Symbol-Index kein Fund. Persistente `TField`s, eingebettete Frames und Units mit `FindComponent`-by-Name werden in v1 bewusst übersprungen. Bekannte v1-Lücke: Cross-Unit-**Mutationen**, bei denen die Komponente ein mittleres Kettenglied ist (`Form.Comp.Prop := x` / `.Method`), werden noch nicht erkannt. | Code Smell | `uDfmComponentUnused` |
 | D24 | SCA056 | **DfmMasterDetailUnlinked** | `TDataSet` hat `MasterSource` gesetzt, aber keine `MasterFields` / `IndexFieldNames` — das Detail-Set filtert nie | Bug | `uDfmMasterDetailUnlinked` |
 | D25 | SCA057 | **DfmDataModuleSplitHint** | Aggregierter Hinweis: Form hält ≥ N DB-Komponenten — Auslagerung in ein DataModule erwägen | Code Smell | `uDfmDataModuleSplitHint` |
 
@@ -266,26 +276,21 @@ Alle bringen Vorher/Nachher-Fix-Hints und ein DUnitX-Fixture mit.
 | SCA155 | **WithMultipleTargets** | `with A, B do` (zwei oder mehr Komma-getrennte Ziele) — mehrdeutige Member-Auflösung; eine neue Methode an A oder B verändert still die Bedeutung des Bodies | Hint | Code Smell | `uWithMultipleTargets` |
 | SCA156 | **GetMemWithoutFreeMem** | `GetMem` / `AllocMem` / `ReallocMem` mit passendem `FreeMem` in derselben Routine, aber ohne umgebendes `try/finally` — eine Exception verliert den allokierten Heap-Buffer | Warning | Bug | `uGetMemWithoutFreeMem` |
 | SCA157 | **SetLengthAppendInLoop** | `SetLength(arr, Length(arr) + N)` innerhalb einer `for/while/repeat`-Schleife — O(n*n) Realloc-Aufwand; einmal vor der Schleife vergrößern oder Block-Grow benutzen | Warning | Code Smell | `uSetLengthAppendInLoop` |
-| SCA158 | **PointerArithmeticOnString** | `PChar(s) +/- Offset` (oder `PAnsiChar` / `PWideChar`) ohne vorherigen Empty-Check auf `s` — `PChar('')` ist NIL, Arithmetik auf nil führt zur Access-Violation | Warning | Bug | `uPointerArithmeticOnString` |
+| SCA158 | **PointerArithmeticOnString** | `PChar(s) + n` (oder `PAnsiChar` / `PWideChar`) ohne vorherige Leerprüfung auf `s` — bei einem String kürzer als n zeigt der Zeiger hinter den Terminator | Warning | Bug | `uPointerArithmeticOnString` |
 | SCA159 | **EmptyOnHandler** | `on E: SomeException do ;` (oder leerer `begin end`) — typisierter Exception-Handler schluckt eine spezifische Exception still; schlimmer als `except end` weil die Typ-Annotation absichtlich wirkt | Warning | Bug | `uEmptyOnHandler` |
 | SCA160 | **StringFromPointer** | `string(P)` / `AnsiString(P)` / `UTF8String(P)` Cast aus P-Präfix-Pointer setzt Null-Terminator voraus — liest über das Buffer-Ende hinaus wenn Terminator fehlt; Heap-Overread | Warning | Bug | `uStringFromPointer` |
 | SCA161 | **PointerSubtraction** | `Cardinal(P1) - Cardinal(P2)` (oder Integer/LongWord/LongInt-Varianten) trunkiert die oberen 32 Bit eines 64-Bit-Pointers auf Win64; stattdessen `NativeInt`/`NativeUInt` benutzen | Warning | Bug | `uPointerSubtraction` |
 
 ---
 
-## Nächste Phasen (Empfehlung)
+## Offene Arbeit
 
 ```
-Phase 1 – fehlende Blocker/Critical: #7 UseAfterFree, #15 RaiseWithoutClass
-Phase 2 – Major Zuverl.:              #16 UninitVar, #20 ResultNotChecked, #25 FreeWithoutNil
-Phase 3 – Major Wartb.:               #28 HighComplexity, #34 MultipleExit, #31 GodClass
-Phase 4 – Minor:                      #36 UnusedVar, #39 CommentedCode, #44 LongLine
-Phase 5 – Info:                       #47 UnsortedUses, #49 DeprecatedAPI, #50 CanBeClassMethod
+Offene Sonar-Slots : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast,
+                     #49 DeprecatedAPI (brauchen Typ-Inferenz / Cross-Unit-Auflösung)
+Teilweise          : #16 UninitVar (SCA166, ohne volle Pfadsensitivität)
 
-DFM Phase 1 (erledigt) : Dead-Wiring + Data-Access + Security
-DFM Phase 2 (erledigt) : Layering / UI-UX / Naming
-DFM Phase 3 (offen)    : Data-Modul-Split-Vorschlag, DesignTime-Property-Drift,
-                         Master-Detail-ohne-LinkField, Frame-Instance-Property-Overrides
+DFM (offen)        : DesignTime-Property-Drift, Frame-Instance-Property-Overrides
 ```
 
 ---
@@ -298,8 +303,8 @@ Checks aus dem ursprünglichen Aufbau, die vor den Sonar-Slot-Tabellen oben ents
 |-----|-------|--------------|----------|-----|--------|------|
 | SCA006 | **FileReadError** | Parser-/IO-Fehler - Quelldatei unlesbar oder syntaktisch defekt | Error | File Error | ✅ | `uStaticAnalyzer2` |
 | SCA007 | **UnusedUses** | Uses-Eintrag vermutlich ungenutzt (kein Bezeichner daraus referenziert) | Hint | Code Smell | ✅ | `uUnusedUses` |
-| SCA013 | **LongParamList** | Methode hat mehr Parameter als das konfigurierte Maximum (Default 7) | Hint | Code Smell | ✅ | `uLongParamList` |
-| SCA015 | **DuplicateString** | Gleiches String-Literal kommt N+-mal vor - in Konstante extrahieren | Hint | Code Duplication | ✅ | `uDuplicateString` |
+| SCA013 | **LongParamList** | Methode hat mehr Parameter als das konfigurierte Maximum (Default 5) | Hint | Code Smell | ✅ | `uLongParamList` |
+| SCA015 | **DuplicateString** | Gleiches String-Literal kommt in einer Datei dreimal oder öfter vor - in Konstante extrahieren | Hint | Code Duplication | ✅ | `uDuplicateString` |
 | SCA016 | **HardcodedPath** | Hartkodierter C:\ / UNC- / Linux-Pfad im Quelltext | Warning | Security Hotspot | ✅ | `uHardcodedPath` |
 | SCA017 | **DebugOutput** | Debug-Ausgabe-Statement in einer Produktions-Unit gefunden | Warning | Code Smell | ✅ | `uDebugOutput` |
 | SCA023 | **CustomRule** | Pattern einer aus analyser-rules.yml geladenen Regel hat gematcht | Warning | Code Smell | ✅ | `uCustomRuleDetector` |
@@ -308,7 +313,7 @@ Checks aus dem ursprünglichen Aufbau, die vor den Sonar-Slot-Tabellen oben ents
 | SCA046 | **ReversedForRange** | for i := 10 to 1 do - der Schleifenkörper läuft nie | Error | Bug | ✅ | `uReversedForRange` |
 | SCA047 | **SelfAssignment** | Selbstzuweisung - No-op oder Copy-Paste-Tippfehler | Warning | Bug | ✅ | `uSelfAssignment` |
 | SCA048 | **VirtualCallInCtor** | Virtuelle Methode aus dem Konstruktor gerufen - Subklassen-Override sieht halbinitialisiertes Self | Error | Bug | ✅ | `uVirtualCallInCtor` |
-| SCA049 | **LengthUnderflow** | Length / .Count mit Subtraktion - Native-UInt-Underflow bei leerer Menge | Hint | Bug | ✅ | `uLengthUnderflow` |
+| SCA049 | **LengthUnderflow** | `Length(s) - K` / `.Count - K` mit K >= 2 ohne Absicherung - negativer Index oder negative Anzahl | Hint | Bug | ✅ | `uLengthUnderflow` |
 | SCA050 | **CanBeUnitPrivate** | Public-Member wird nur innerhalb der eigenen Unit referenziert - klassisches Delphi-`private` (Unit-Scope) reicht | Hint | Code Smell | ✅ | `uVisibilityCheck` |
 | SCA051 | **CanBeProtected** | Public-Member wird nur aus Subklassen referenziert, nie extern | Hint | Code Smell | ✅ | `uVisibilityCheck` |
 | SCA052 | **UnusedPublicMember** | Public-Member wird von keiner Subklasse und keinem Cross-Unit-Pfad referenziert | Hint | Code Smell | ✅ | `uStaticAnalyzer2` |
@@ -374,13 +379,13 @@ Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; je
 | SCA105 | **InterfaceName** | Interface-Aliase sollten mit `I` beginnen (`IFoo = interface`) | Hint | Code Smell | ✅ | `uInterfaceName` |
 | SCA106 | **MethodName** | Methoden sollten mit Großbuchstaben beginnen (PascalCase) | Hint | Code Smell | ✅ | `uMethodName` |
 | SCA107 | **CanBeStrictPrivate** | Public-Member wird NUR von Methoden der eigenen Klasse referenziert - `strict private` erreicht die stärkste Kapselung | Hint | Code Smell | ✅ | `uVisibilityCheck` |
-| SCA108 | **SynchronizeInDestructor** | Synchronize() im Destruktor Destroy - klassischer Deadlock zwischen Worker- und UI-Thread | Error | Bug | ✅ | `uSynchronizeInDestructor` |
+| SCA108 | **SynchronizeInDestructor** | Synchronize() im Destruktor Destroy - ein sich selbst freigebender Thread hängt dort, wenn der Hauptthread den Aufruf nicht ausführt | Warning | Bug | ✅ | `uSynchronizeInDestructor` |
 | SCA109 | **LockWithoutTryFinally** | TCriticalSection / Monitor / WinAPI-Lock ohne umschließendes try..finally - eine Exception lässt den Lock gehalten | Error | Bug | ✅ | `uLockWithoutTryFinally` |
 | SCA110 | **StringConcatInLoop** | `s := s + x` in for/while/repeat - quadratische Reallokationen | Warning | Code Smell | ✅ | `uPerfHotspots` |
 | SCA111 | **ParamByNameInLoop** | `Query.ParamByName('x').AsXxx := ...` in einer Schleife - linearer Lookup pro Iteration | Hint | Code Smell | ✅ | `uPerfHotspots` |
 | SCA112 | **FieldByNameInLoop** | `DataSet.FieldByName('x').AsXxx` in einer Schleife - linearer Lookup pro Zeile | Hint | Code Smell | ✅ | `uPerfHotspots` |
 | SCA113 | **ThreadResumeDeprecated** | `MyThread.Resume` - `MyThread.Start` verwenden (seit Delphi 2010) | Warning | Code Smell | ✅ | `uConcurrencyExt` |
-| SCA114 | **TThreadDestroyWithoutTerminate** | `FreeAndNil(MyThread)` ohne vorheriges `Terminate; WaitFor` - der Worker kann noch laufen | Error | Bug | ✅ | `uConcurrencyExt` |
+| SCA114 | **TThreadDestroyWithoutTerminate** | `FreeAndNil(MyThread)` ohne nahes `Terminate` - ein Prüfhinweis, kein bewiesener Defekt: `TThread.Destroy` beendet den Thread selbst; `Execute`, den Thread-Destruktor und `FreeOnTerminate` prüfen | Hint | Bug | ✅ | `uConcurrencyExt` |
 | SCA115 | **HttpInsteadOfHttps** | `'http://...'`-Literal für einen Remote-Endpunkt - MITM-anfällig | Warning | Security Hotspot | ✅ | `uRestHttpSecurity` |
 | SCA116 | **DisabledTlsVerification** | Leere `SecureProtocols`, `IgnoreCertificateErrors := True` oder `OnVerifyPeer := nil` | Error | Vulnerability | ✅ | `uRestHttpSecurity` |
 | SCA117 | **PublicMemberWithoutDoc** | Public-Methode oder -Property im `interface`-Abschnitt ohne Doku-Kommentar direkt darüber | Hint | Code Smell | ✅ | `uPublicMemberWithoutDoc` |
@@ -395,7 +400,7 @@ Spätere Wellen: Security/Injection, Suppression-Maschinerie, die Unused-Code-Fa
 
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
-| SCA133 | **RaiseOutsideExcept** | `raise;` ohne Exception-Ausdruck funktioniert nur *innerhalb* eines except-Handlers (Re-Raise) - außerhalb raist es NIL und erzeugt eine Access Violation | Error | Bug | ✅ | `uRaiseOutsideExcept` |
+| SCA133 | **RaiseOutsideExcept** | `raise;` ohne Exception-Ausdruck ist nur *innerhalb* eines except-Handlers gültig (Re-Raise) - überall sonst lehnen Delphi (E2145) und FPC es ab | Error | Bug | ✅ | `uRaiseOutsideExcept` |
 | SCA147 | **UnusedPrivateMethod** | Eine private Methode, die von keiner anderen Methode der Unit referenziert wird, ist toter Code - löschen oder anbinden | Hint | Code Smell | ✅ | `uUnusedPrivateMethod` |
 | SCA162 | **InsecureCryptoAlgorithm** | Algorithmus-Name ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') oder Wrapper-Klasse (THashMD5, TIdHashSHA1, ...) referenziert - anfällig für Kollisions-/Known-Plaintext-Angriffe | Warning | Vulnerability | ✅ | `uInsecureCryptoAlgorithm` |
 | SCA163 | **CommandInjection** | ShellExecute / CreateProcess / WinExec mit `+` in den Argumenten - ist ein Operand user-kontrolliert, wird daraus ein Command-Injection-Vektor | Error | Vulnerability | ✅ | `uCommandInjection` |
@@ -467,7 +472,7 @@ Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interface
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 
-Manche Codebasen übergeben ein frisch erzeugtes Objekt an eine Routine, die die **Ownership übernimmt** (registriert es in einem besitzenden Container, serialisiert-und-gibt-frei, hängt es in einen Builder-Baum). SCA001 kann nicht über die Aufrufgrenze schauen und meldet das als Leak, obwohl der Aufgerufene das Objekt freigibt. Solche Routinen pro Projekt in `analyser.ini` whitelisten:
+Manche Codebasen übergeben ein frisch erzeugtes Objekt an eine Routine, die die **Ownership übernimmt** (registriert es in einem besitzenden Container, serialisiert-und-gibt-frei, hängt es in einen Builder-Baum). SCA001 kann nicht über die Aufrufgrenze schauen und meldet das als Leak, obwohl der Aufgerufene das Objekt freigibt. Solche Routinen in `analyser.ini` whitelisten — die Datei gibt es einmal je Benutzer (`%APPDATA%\StaticCodeAnalyser\`), die Liste gilt also für jedes gescannte Projekt:
 
 ```ini
 [Detectors]

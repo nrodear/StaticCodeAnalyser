@@ -40,9 +40,11 @@ Le plus simple : placer les deux projets dans un même groupe de projets.
 La liaison du package passe par `DCC_UsePackage SCA.Engine` (aucun
 chemin de sources).
 
-> À l'exécution, `SCA.Engine290.bpl` doit être localisable (le répertoire
-> BPL global est sur le chemin quand RAD Studio est installé ; pour un
-> déploiement autonome, livrer la `.bpl` à côté de l'`.exe`).
+> À l'exécution, `SCA.Engine290.bpl` et les packages d'exécution Delphi
+> qu'il requiert (`rtl290.bpl`, `xmlrtl290.bpl`) doivent être localisables
+> (le répertoire BPL global est sur le chemin quand RAD Studio est
+> installé ; pour un déploiement autonome, livrer les trois `.bpl` à côté
+> de l'`.exe`).
 
 ## Utilisation
 
@@ -53,10 +55,23 @@ SCA.CLI.Demo.exe [<path>] [<profile>]
 | Argument | Signification |
 |----------|---------------|
 | `<path>`    | Répertoire racine (défaut : répertoire courant) |
-| `<profile>` | facultatif. `''` = tous les détecteurs (défaut). Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
+| `<profile>` | facultatif. `''` = tous les détecteurs (défaut) ; jamais SCA007, la démo ne pose pas `UsesCheck`. Connus : `default`, `strict`, `ide-fast`, `security`, `bugs-only`, `code-quality`, `dfm-only` |
 
-Code de sortie (comme la CLI) : `0` = propre, `3` = résultats présents,
-`1`/`2` = erreur.
+Code de sortie : convention propre et simplifiée de la démo, **pas** le
+contrat de la CLI.
+
+| Code | Démo |
+|------|------|
+| `0` | aucun résultat |
+| `3` | au moins un résultat, quelle que soit sa sévérité ; les erreurs de fichier comptent aussi (un dossier vide donne « aucun fichier .pas » et donc `3`) |
+| `2` | chemin introuvable |
+| `1` | exception |
+
+La CLI, elle, gradue selon la sévérité (`1` hints seuls, `2` warnings,
+`3` errors, `4` erreurs de lecture, `99` erreur de l'outil) et `--fail-on`
+déplace ce seuil ; voir `StaticCodeAnalyser.d12.exe --help`. Ne pas bâtir
+un gate CI sur les codes de la démo : son `2` signifie « chemin
+introuvable », pas « warnings ».
 
 ## Exemple de sortie
 

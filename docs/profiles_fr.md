@@ -2,17 +2,17 @@
 
 Un **profil** est un ensemble de règles nommé. Il répond à une seule
 question : *lesquels des 205 détecteurs s'exécutent dans cette analyse ?*
-Tout le reste - seuil de sévérité, suppressions, référence - filtre
-ensuite. Le profil décide de ce qui est cherché au départ.
+Tout le reste - seuil de sévérité, seuil de confiance, suppressions,
+référence - filtre ensuite. Le profil décide de ce qui est cherché au départ.
 
 ## Les neuf profils intégrés
 
 | Profil | Règles | À quoi il sert |
 |---|---|---|
-| `strict` | 205 | Tout. C'est de ce profil que dépend la promesse d'exhaustivité. |
+| `strict` | 205 | Tout ; en ligne de commande, il active en plus SCA007 (uses inutilisés), pas dans l'EXE ni dans le plugin IDE (voir plus bas). C'est de ce profil que dépend la promesse d'exhaustivité - les règles de confiance low exigent tout de même `[Rules] MinConfidence=low`, voir ci-dessous. |
 | `default` | 197 | Tout sauf les huit règles de pure convention de `style`. Ces huit-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
-| `selftest-quiet` | 194 | `default` moins quelques règles de formatage. Utilisé quand ce dépôt s'analyse lui-même. |
-| `code-quality` | 26 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés. |
+| `selftest-quiet` | 194 | Tout sauf onze règles désactivées pour l'auto-analyse (dont `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Pas un sous-ensemble de `default` : il garde cinq des règles de `style`. Utilisé quand ce dépôt s'analyse lui-même. |
+| `code-quality` | 26 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés (SCA007 seulement avec `[Detectors] UsesCheck=1`). |
 | `ide-fast` | 21 | Assez léger pour tourner sur chaque fichier ouvert dans l'IDE. Bugs et sécurité, pas de style. |
 | `dfm-only` | 20 | Uniquement les contrôles sur les fichiers de fiche. |
 | `bugs-only` | 20 | Uniquement les défauts - ni smells, ni conventions. |
@@ -20,6 +20,19 @@ ensuite. Le profil décide de ce qui est cherché au départ.
 | `style` | 8 | Les règles de pure convention que `default` laisse de côté. |
 
 Les nombres sont mesurés sur le catalogue actuel, non estimés.
+
+**Seuil de confiance.** Après le profil, `[Rules] MinConfidence` (livré à
+`medium`) écarte les résultats sous cette confiance. 24 règles signalent
+avec une confiance *low* - dont `TooLongLine`, `UnsortedUses`,
+`UseAfterFree` et `AbstractNotImpl` - et restent donc muettes dans tous
+les profils, `strict` compris, tant que `MinConfidence=low` n'est pas
+réglé. La liste se trouve dans [DETECTORS_fr.md](../DETECTORS_fr.md).
+
+**`strict` et SCA007.** Seule la ligne de commande ajoute SCA007 (uses
+inutilisés) à `strict` : `--profile strict`, ou `[Rules] Profile=strict`
+dans une exécution CLI, le lance sans `[Detectors] UsesCheck=1`. L'EXE
+autonome et le plugin IDE traitent `strict` comme tout autre profil - SCA007
+y exige `[Detectors] UsesCheck=1` dans tous les profils.
 
 ## Choisir un profil
 
@@ -142,7 +155,7 @@ avec `--profile <nom>` en ligne de commande.
 
 Le dépôt fournit un tel fichier : `reDelphix/data/profile-code-aktionen.json`
 contient le profil `code-aktionen`, les règles dotées d'une action de code
-du paquet optionnel reDelphix plus `FileReadError`. Il ne fait pas partie
+de reDelphix plus `FileReadError`. Il ne fait pas partie
 des profils intégrés et doit être importé.
 
 ## Trouver une règle dans la liste

@@ -262,7 +262,7 @@ begin
   // Ohne Abschnitt: Vorgabe public bzw. published.
   AssertRefused(UnitOf(['  TFoo = class', '    procedure Dead;', '  end;'],
     ['procedure TFoo.Dead;', 'begin', 'end;']), 5, 'TFoo', 'Dead',
-    'Vorgabe');
+    'Standard-Abschnitt');
 end;
 
 procedure TTestRdxMethodFixes.Sca147_Dispatch_NoHelp;

@@ -50,6 +50,12 @@ type
     // Laden ist die Wahl weg - ohne Fehler, ohne Hinweis. Der Rundlauf
     // haelt fest, dass jedes Schema seinen eigenen Token hat.
     [Test] procedure EverySchemeSurvivesTheIniRoundTrip;
+    // i18n-Luecken 2026-11-03, C10: die Combo-Texte liefen als Record-Feld
+    // ueber die Unitgrenze durch _() - der Extraktor sah die msgids nicht.
+    // Jetzt uebersetzt EditorColorSchemeCaption in uAnalyserTheme selbst;
+    // der Test haelt fest, dass jedes Schema dort uebersetzt ankommt und
+    // unter Englisch die msgid zurueckgibt.
+    [Test] procedure EverySchemeCaptionIsTranslated;
     // System-Color-Indices muessen aufgeloest werden, nicht durchrutschen.
     [Test] procedure SystemColorIndexIsResolved;
     // EnsureHintContrast (Nur-Text-Hint 2026-08-12): der Akzent haelt
@@ -68,7 +74,8 @@ uses
                      // Vcl.Graphics, das liefert nur ColorToRGB
   System.SysUtils,   // Format in den Kontrast-Fehlermeldungen
   System.Classes,    // TStringList - Doppelte-Token-Probe
-  System.UITypes, Vcl.Graphics, uAnalyserTypes, uAnalyserTheme;
+  System.UITypes, Vcl.Graphics, uAnalyserTypes, uAnalyserTheme,
+  uLocalization;     // SetLanguage/CurrentLanguage - Schema-Captions
 
 function Lum601(C: TColor): Integer;
 // Vergleichsrechnung im Test, damit die Erwartungen nicht geraten sind.
@@ -237,6 +244,37 @@ begin
       'der TextOnly-Eintrag ueberdeckt ein Farbschema im Combo');
   finally
     Gesehen.Free;
+  end;
+end;
+
+procedure TTestContrastColor.EverySchemeCaptionIsTranslated;
+// Deutsch statt eines festen Wortlauts: die de.po steht unter Pflege,
+// der Vertrag ist "kommt uebersetzt an", nicht eine bestimmte Wahl.
+// Rot ohne den Fix: EditorColorSchemeCaption gab es nicht (der Aufrufer
+// uebersetzte selbst, in einer Unit, die kein Testprojekt erreicht).
+var
+  Sch    : TEditorColorScheme;
+  AltSpr : string;
+begin
+  AltSpr := CurrentLanguage;
+  try
+    SetLanguage('en');
+    for Sch := Low(TEditorColorScheme) to High(TEditorColorScheme) do
+    begin
+      Assert.IsNotEmpty(EDITOR_COLOR_SCHEME_CAPTION[Sch],
+        'Schema ohne Anzeigetext');
+      Assert.AreEqual(EDITOR_COLOR_SCHEME_CAPTION[Sch],
+        EditorColorSchemeCaption(Sch),
+        'unter Englisch muss die msgid selbst erscheinen');
+    end;
+    SetLanguage('de');
+    for Sch := Low(TEditorColorScheme) to High(TEditorColorScheme) do
+      Assert.AreNotEqual(EDITOR_COLOR_SCHEME_CAPTION[Sch],
+        EditorColorSchemeCaption(Sch),
+        'Schema-Text ' + QuotedStr(EDITOR_COLOR_SCHEME_CAPTION[Sch]) +
+        ' kommt unter Deutsch unuebersetzt an');
+  finally
+    SetLanguage(AltSpr);
   end;
 end;
 

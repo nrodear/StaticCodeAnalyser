@@ -255,7 +255,7 @@ begin
     fkDfmDataModuleSplitHint  : Result := 'datamodule split refactor aggregate db';
     fkSqlDangerousStatement   : Result := 'sql dangerous update delete truncate without where alle';
     fkFormatLocaleHint        : Result := 'format locale tformatsettings decimal komma punkt';
-    fkSynchronizeInDestructor : Result := 'synchronize destructor deadlock thread concurrency';
+    fkSynchronizeInDestructor : Result := 'synchronize destructor deadlock thread concurrency freeonterminate hang main';
     fkLockWithoutTryFinally   : Result := 'lock critical section monitor concurrency try finally exception';
     fkEmptyExcept      : Result := 'empty except leer verschluckt';
     fkSQLInjection     : Result := 'sql injection einschleusung';
@@ -293,10 +293,10 @@ begin
     fkIfThenShortCircuit         : Result := 'ifthen short circuit math strutils kurzschluss';
     // Sonar-50 Critical (SCA132-137)
     fkExceptionTooGeneral        : Result := 'exception too general base basisklasse fanger handler catch';
-    fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt access violation av';
+    fkRaiseOutsideExcept         : Result := 'raise outside except bare nackt reraise e2145';
     fkUseAfterFree               : Result := 'use after free dangling pointer benutzt nach freigabe';
     fkAbstractNotImpl            : Result := 'abstract not implemented eabstracterror nicht ueberschrieben override';
-    fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init';
+    fkLeakInConstructor          : Result := 'leak constructor raise field create exception partial init destructor';
     fkIntegerOverflow            : Result := 'integer overflow int64 multiplication ueberlauf product cast';
     fkGodClass                   : Result := 'god class methods fields gott zu viele single responsibility';
     fkFreeWithoutNil             : Result := 'free without nil dangling pointer freeandnil';

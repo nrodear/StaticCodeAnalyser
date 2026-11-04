@@ -833,9 +833,9 @@ begin
   // Umstellung (E29, Gruppe G4) mit echtem Umlaut, die Quelle bleibt ASCII.
   AssertRefused(ckVar, InImpl(['procedure P;', 'resourcestring',
     '  SX = ''x'';', 'begin', 'end;']), 5, VarMsg('resourcestring'),
-    'Parser las eine Section als Variable');
+    'Parser las einen Abschnitt als Variable');
   AssertRefused(ckVar, InImpl(['procedure P;', 'const', '  C: Integer = 1;',
-    '  X: Integer = 2;', 'begin', 'end;']), 7, VarMsg('X'), 'const-Section');
+    '  X: Integer = 2;', 'begin', 'end;']), 7, VarMsg('X'), 'const-Abschnitt');
   AssertRefused(ckVar, InImpl(['procedure P;', 'var', '  X: Integer = 2;',
     'begin', 'end;']), 6, VarMsg('X'), 'initialisierte Variable');
   AssertRefused(ckVar, InImpl(['procedure P(A: Integer);', 'var',

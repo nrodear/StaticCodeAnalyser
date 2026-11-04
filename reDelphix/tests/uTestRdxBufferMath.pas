@@ -220,7 +220,8 @@ begin
   // Der gemeinsame Text aus uRdxText (de 'gueltiger' mit echtem Umlaut).
   Assert.AreEqual(MsgNoValidRange, Err);
   Assert.IsFalse(PlanByteEdits(B, nil, Plan, Err), 'keine Ersetzung');
-  Assert.IsTrue(Pos('keine Ersetzung', Err) > 0, Err);
+  // de.po schreibt den Satzanfang gross wie die Nachbarmeldungen.
+  Assert.IsTrue(Pos('Keine Ersetzung', Err) > 0, Err);
 end;
 
 procedure TTestRdxBufferMath.Plan_EmptyBuffer_Rejected;

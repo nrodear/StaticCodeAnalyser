@@ -195,7 +195,7 @@ procedure TTestRdxTextMsgs.LineMoved_ThreeLanguages;
 // Funktion.
 begin
   Check3(MsgLineMoved, 'line moved? Analyse the file again',
-    'Zeile verschoben? Datei neu pruefen', 1,
+    'Zeile verschoben? Datei erneut analysieren', 0,
     'ligne deplacee ? Analysez a nouveau le fichier');
 end;
 
@@ -205,7 +205,7 @@ procedure TTestRdxTextMsgs.MovedSuffix_ThreeLanguages;
 // Grund geht woertlich durch (kein Muster).
 begin
   Check3(ProbeMovedSuffix, 'R%d - line moved? Analyse the file again',
-    'R%d - Zeile verschoben? Datei neu pruefen', 1,
+    'R%d - Zeile verschoben? Datei erneut analysieren', 0,
     'R%d - ligne deplacee ? Analysez a nouveau le fichier');
 end;
 
@@ -214,7 +214,7 @@ procedure TTestRdxTextMsgs.StaleSuffix_ThreeLanguages;
 // uRdxRoutineFixes und uRdxStructFixes.
 begin
   Check3(ProbeStaleSuffix, 'R%d - finding outdated? Analyse the file again',
-    'R%d - Fund veraltet? Datei neu pruefen', 1,
+    'R%d - Fund veraltet? Datei erneut analysieren', 0,
     'R%d - resultat perime ? Analysez a nouveau le fichier');
 end;
 
@@ -334,7 +334,7 @@ begin
   Check3(ProbeDecls,
     '2 declarations of Create in classes of this name - overload?',
     '2 Deklarationen von Create in Klassen dieses Namens - Overload?', 0,
-    '2 declarations de Create dans des classes de ce nom - overload ?');
+    '2 declarations de Create dans des classes de ce nom - surcharge ?');
 end;
 
 procedure TTestRdxTextMsgs.NoLongerAtReportedPlace_ThreeLanguages;

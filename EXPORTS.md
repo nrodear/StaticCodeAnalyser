@@ -66,9 +66,9 @@ search and sorting only ever work on the rendered rows.
 
 **Which rule set produced this report.** The machine-readable
 `sca-meta` block in the page head carries `profile`: the name of the
-rule profile the scan ran with. An empty value means *no profile
-filter* — every detector ran — and is not the same as the curated
-`default` profile.
+rule profile the scan ran with. An empty value means the run named no
+profile (neither `--profile` nor `[Rules] Profile`); the analyser then
+ran the `default` profile.
 
 **Editor helps in both HTML reports.** For a rule with an **editor help**
 (a code action of the IDE module reDelphix: light bulb, Ctrl+Alt+F)
@@ -169,11 +169,6 @@ the policy would otherwise return 0, the run exits 4 instead — an
 incomplete scan must never look like a clean one. Tool errors (99) are
 decided before `--fail-on` is consulted and cannot be lowered at all.
 
-**Use an absolute path or a path with a directory part for
-`--write-baseline`.** A bare file name (`--write-baseline b.json`)
-fails with *"Baseline write error: Verzeichnis kann nicht erstellt
-werden"* — verified on v0.9.14.
-
 **In CI, prefer `--baseline-scan y` over naming the file.** It resolves
 the baseline in three steps — `--baseline`, then `[Baseline] File=` from
 `analyser.ini`, then the `.sca` folder next to `--project` /
@@ -202,18 +197,20 @@ including an SQL injection nobody had ever reviewed; with the switch the
 same run keeps them. It changes fingerprints, so write a fresh baseline
 when you turn it on.
 
-One residue remains by design: a finding whose surrounding lines are
-identical in both files still matches through the `contextHash` stage.
-That is what lets a baseline survive moves and refactoring, and it is the
-reason two byte-identical copies stay linked no matter what this switch
-says.
+The `contextHash` stage (the lines around a finding) is keyed by the
+same file token, plus rule and hash. By default the token is the file
+name: a baseline then survives moving a file to another folder, and
+byte-identical copies of a file share their entries. With
+`--baseline-path-fingerprint y` the token is the relative path: moved
+files show their findings as new once, and copies in different folders
+stay apart.
 
-**Do not refresh a baseline by combining the two switches.** The
-documented-looking `--baseline old --write-baseline new` writes only the
-findings that *survived* the filter — that is, the new ones. Measured on
-a real repository: a 226-entry baseline became **0 entries**, and the
-next build reported the whole backlog again. To refresh, write a fresh
-baseline from a clean run without `--baseline`.
+**Refreshing a baseline with both switches.** `--baseline old
+--write-baseline new` writes the full current state into `new` — every
+finding of the run, the new ones included — and filters against `old`
+in the same run. That refreshes the baseline, but it also accepts
+everything that is new today: look at the new findings of that run
+before you keep the refreshed file.
 
 ## Workflow 2 — Pull-request review: only what changed
 
@@ -222,9 +219,10 @@ StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
   --report-html build/review.html
 ```
 
-`--branch` uses the VCS's changed-file set (Git and SVN auto-detected),
-`--diff <range>` a Git range including `a...b` common-ancestor form.
-Both include uncommitted edits (`--diff` compares committed states only).
+`--branch` uses the VCS's changed-file set (Git and SVN auto-detected)
+and includes uncommitted edits unless `[Repo] IncludeWorkingTree=0`.
+`--diff <range>` takes a Git range including the `a...b`
+common-ancestor form and compares committed states only.
 
 Since 2026-08-25 a **failed VCS call exits 99** with the reason on
 stderr - a shallow clone whose base commit was never fetched (the GitHub
@@ -339,8 +337,8 @@ active, every result also carries `properties.confidence`
 `level: warning` explains itself. The flag is stamped at **scan** time
 and travels with the finding cohort, so toggling the ini between scan
 and export cannot mix levels and confidence values from two different
-policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
-pre-0.9.18 output.
+policy states. With `EvidenceTiering=0` levels are not capped and no
+result carries `properties.confidence`.
 
 With **`--sarif-editor-help`** (off by default; without it the SARIF
 is unchanged) a result of a rule that has an **editor help** (a code
@@ -398,16 +396,11 @@ to graph if you capture them.
 
 ## Known limitations
 
-Honest list, as of v0.9.14 — all reproduced:
+Honest list, as of v0.9.19:
 
 | Area | Behaviour |
 |---|---|
-| Baseline refresh with both switches | Truncates the baseline to the new findings |
-| `--write-baseline` with a bare file name | Fails to write |
-| JSON exports | UTF-8 **with** BOM — fixed after v0.9.14, they are BOM-free now |
-| HTML report | Stores base file names only; same-named units in different folders collide |
-| Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |
-| Unreadable source files | Counted differently in console, SARIF/Sonar/HTML and baseline |
+| Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see Workflow 1) |
 | `--parallel` | Deterministic since 2026-08-20 (byte-identical to serial runs), but no speedup yet - the serial pre-phase dominates |
 
 ---

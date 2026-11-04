@@ -240,15 +240,17 @@ program reDelphix.Test;
 // ..\source. Kein ToolsAPI: uRdxEditor und uRdxProvider bleiben draussen -
 // den Ablauf des Anbieters ohne IDE prueft uTestRdxActionCore am Kern.
 //
-// LAUF: Debug und Release definieren TESTINSIGHT - GUI-Subsystem,
-// TestInsight.DUnitX.RunRegisteredTests, Exit-Code immer 0 (TestInsight
-// verwirft das Ergebnis). Einen auswertbaren Exit-Code liefert nur die
-// Konfiguration CI (ohne TESTINSIGHT, mit CI): Console-Subsystem,
-// Konsolen- und NUnit-Logger, ExitCode 1 bei einem roten Test oder einer
-// Ausnahme im Runner, keine Pause am Ende (Review R6-09 - bis dahin galt
-// TESTINSIGHT fuer alle Konfigurationen, der Zweig unten wurde nie
-// uebersetzt). Beide Runner werten einen Test ohne Assert als rot
-// (FailsOnNoAsserts wie TestInsight; ebenso der FPC-Pruefstand).
+// LAUF: Nur die Konfiguration TestInsight (Kind von Debug) definiert
+// TESTINSIGHT - GUI-Subsystem, TestInsight.DUnitX.RunRegisteredTests,
+// Exit-Code immer 0 (TestInsight verwirft das Ergebnis). Debug, Release
+// und CI bauen den Konsolen-Zweig: Console-Subsystem, Konsolen- und
+// NUnit-Logger, TDUnitX.CheckCommandLine (die Filter --run/--include
+// greifen), ExitCode 1 bei einem roten Test oder einer Ausnahme im
+// Runner; CI ueberspringt zusaetzlich die Pause am Ende. Frueher stand
+// TESTINSIGHT in allen Konfigurationen (bis Review R6-09), danach noch in
+// Debug und Release - ein IDE-Bau ignorierte damit jeden DUnitX-Schalter.
+// Beide Runner werten einen Test ohne Assert als rot (FailsOnNoAsserts wie
+// TestInsight; ebenso der FPC-Pruefstand).
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}
 {$ENDIF}

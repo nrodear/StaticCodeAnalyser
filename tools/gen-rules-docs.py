@@ -111,6 +111,16 @@ LABELS = {
         "col_id": "ID", "col_name": "Name", "col_sev": "Severity",
         "col_type": "Type", "col_det": "Detector",
         "untranslated": "",
+        "confidence": "Default confidence",
+        "conf_low": (
+            "> This rule reports with low confidence: with the default "
+            "`[Rules] MinConfidence=medium` the example below stays "
+            "hidden. Set `[Rules] MinConfidence=low` to see it."),
+        "conf_mixed": (
+            "> Part of this rule's findings carry low confidence (see the "
+            "description) and stay hidden with the default "
+            "`[Rules] MinConfidence=medium`; set `[Rules] MinConfidence=low` "
+            "to see all of them."),
     },
     "de": {
         "meta": "Metadaten", "field": "Feld", "value": "Wert",
@@ -134,6 +144,16 @@ LABELS = {
         "untranslated": ("> Dieser Abschnitt liegt nur auf Englisch vor. "
                          "Übersetzt sind Name und Kurzbeschreibung; die "
                          "Volltexte folgen der englischen Fassung."),
+        "confidence": "Standard-Konfidenz",
+        "conf_low": (
+            "> Diese Regel meldet mit niedriger Konfidenz: mit der Vorgabe "
+            "`[Rules] MinConfidence=medium` bleibt das folgende Beispiel "
+            "unsichtbar. Mit `[Rules] MinConfidence=low` erscheint es."),
+        "conf_mixed": (
+            "> Ein Teil der Funde dieser Regel trägt niedrige Konfidenz "
+            "(siehe Beschreibung) und bleibt mit der Vorgabe "
+            "`[Rules] MinConfidence=medium` unsichtbar; mit "
+            "`[Rules] MinConfidence=low` erscheinen alle."),
     },
     "fr": {
         "meta": "Métadonnées", "field": "Champ", "value": "Valeur",
@@ -158,6 +178,17 @@ LABELS = {
         "untranslated": ("> Cette section n'existe qu'en anglais. Le nom et "
                          "la description courte sont traduits ; les textes "
                          "complets suivent la version anglaise."),
+        "confidence": "Confiance par défaut",
+        "conf_low": (
+            "> Cette règle signale avec une confiance faible : avec la "
+            "valeur par défaut `[Rules] MinConfidence=medium`, l'exemple "
+            "ci-dessous reste masqué. Avec `[Rules] MinConfidence=low`, il "
+            "apparaît."),
+        "conf_mixed": (
+            "> Une partie des résultats de cette règle porte une confiance "
+            "faible (voir la description) et reste masquée avec la valeur "
+            "par défaut `[Rules] MinConfidence=medium` ; avec "
+            "`[Rules] MinConfidence=low`, tous apparaissent."),
     },
 }
 
@@ -217,6 +248,12 @@ def render_rule(rule: dict[str, Any], lang: str = "en",
     parts.append(f"| **{L['kind']}** | `{rule['kind']}` |")
     parts.append(f"| **{L['severity']}** | {rule['defaultSeverity']} |")
     parts.append(f"| **{L['type']}** | {rule['type']} |")
+    # Konfidenz nur, wo sie unter der Standard-Schwelle liegt (Feld fehlt
+    # = medium/high). Ohne diese Zeile sagt die Seite "Bad (triggers the
+    # rule)", und im Standardlauf erscheint trotzdem nichts.
+    if rule.get("defaultConfidence"):
+        parts.append(f"| **{L['confidence']}** | "
+                     f"`{rule['defaultConfidence']}` |")
     parts.append(f"| **{L['unit']}** | `{rule['detectorUnit']}` |")
     if rule.get("configKey"):
         parts.append(f"| **{L['config']}** | `{rule['configKey']}` |")
@@ -251,6 +288,10 @@ def render_rule(rule: dict[str, Any], lang: str = "en",
         parts.append("")
         parts.append(f"### {L['bad']}")
         parts.append("")
+        konf = rule.get("defaultConfidence")
+        if konf in ("low", "mixed"):
+            parts.append(L["conf_" + konf])
+            parts.append("")
         parts.append("```pascal")
         parts.append(rule["examples"]["bad"])
         parts.append("```")

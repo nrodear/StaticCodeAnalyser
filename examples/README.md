@@ -80,8 +80,9 @@ rules:
     ...
 ```
 
-Rule-IDs müssen unique sein — bei Konflikten wird die **letzte**
-Definition genommen.
+Rule-IDs müssen unique sein: der Leser prüft das nicht, zwei Regeln mit
+derselben ID feuern **beide**, und ihre Funde sind im Report nicht
+auseinanderzuhalten.
 
 ## Eigenes Profil schreiben
 
@@ -89,17 +90,34 @@ Vorlage: [`analyser-rules.yml`](analyser-rules.yml). Pflichtfelder
 pro Regel: `id`, `pattern`. Alles andere optional (sinnvolle
 Defaults, siehe Vorlage-Kommentare).
 
-Pattern-Typen:
+Pattern-Typen (Schlüssel `pattern-type`), alle zeilenweise und mit
+Beachtung der Groß-/Kleinschreibung:
 - `substring` (default) — naiver Substring-Match
-- `word` — nur ganze Identifier (Wort-Grenzen)
-- `regex` — .NET-Regex-Syntax
+- `word` — nur ganze Identifier: das Muster ist ein bloßer Bezeichner
+  (`TADOQuery`), der Leser setzt die Wort-Grenzen selbst. Kein Regex: ein
+  `\b` oder `|` im Muster wird als Text gesucht und trifft nie.
+- `regex` — PCRE-Syntax (Delphi `System.RegularExpressions`), z. B.
+  `\bTIB(Query|Table)\b`; `(?i)` am Anfang ignoriert die Schreibweise
 
-Datei-Filter:
-- `file-include: ["src/**/*.pas"]` — Glob-Pattern, mehrere möglich
-- `file-exclude: ["**/*Test*.pas"]`
+Datei-Filter (Glob-Pattern, mehrere möglich, nur als Block-Liste):
+
+```yaml
+    file-include:
+      - "**/src/**/*.pas"
+    file-exclude:
+      - "**/*Test*.pas"
+```
+
+- Die Flow-Form `file-include: ["src/**/*.pas"]` versteht der YAML-Leser
+  nicht: der Filter fällt still weg, die Regel feuert auf allen Dateien.
+- Das Muster wird gegen den **vollen Pfad** der Datei geprüft
+  (`C:/Projekt/src/a.pas`, `\` als `/`, Groß-/Kleinschreibung egal) und
+  muss ihn ganz abdecken. Darum beginnt jedes Muster mit `**/`:
+  `src/**/*.pas` oder `*.pas` treffen nie, `**/src/**/*.pas` trifft
+  `src/a.pas` und `src/sub/c.pas`, aber nicht `tests/b.pas`.
 
 Glob-Wildcards:
-- `*` — ein Pfad-Segment
+- `*` — beliebige Zeichen innerhalb eines Pfad-Segments
 - `**/` — beliebige Tiefe inkl. null
 - `?` — ein Zeichen
 
@@ -113,17 +131,34 @@ Glob-Wildcards:
    in CI failen soll. Andernfalls `warning` oder `hint`.
 4. **Message ohne Code-Snippet** — der Grid zeigt schon Datei + Zeile.
    Die Message soll erklären *warum* das Pattern problematisch ist.
-5. **`fix-hint` für Migrations-Rules** — der konkrete Refactor-Schritt.
-   Wird in HTML-Reports und Plugin-Tooltips angezeigt.
+5. **`fix-hint` für Migrations-Rules** — der konkrete Refactor-Schritt,
+   ein Satz. Seit v0.9.19 erscheint er überall dort, wo ein Fund seinen
+   Hinweis zeigt: im HTML-Report und im Fundbericht unter „Hinweis zu
+   diesem Fund“, im Hilfe-Panel und im Editor-Hinweis des Plugins, im
+   Jira-Text (Einzelfund und ganze Liste), im Zwischenablage-Text und im
+   Claude-Prompt. Ohne `fix-hint` steht dort der allgemeine Satz zu Custom
+   Rules. Der Text wird nicht übersetzt und nicht als Markup gelesen (im
+   HTML escaped). SARIF, CSV, JSON und der Sonar-Export tragen ihn nicht,
+   dort steht nur `message` — was die Pipeline sehen soll, gehört deshalb
+   weiter in `message`. Der Hinweis bleibt einzeilig: ein Zeilenumbruch
+   (`\n` im Wert in Anführungszeichen) wird zu einem Leerzeichen. Im
+   Claude-Prompt steht er unter der Überschrift „Fix hint“ (deutsch
+   „Fix-Hinweis“), nicht unter „Rule description“.
 
 ## Validierung & Debug
 
-- **YAML kaputt?** → IDE-Plugin loggt via OutputDebugString
-  (Fenster: Tools → Debug-Ausgabe). CLI gibt Error auf stderr.
-- **Regex kaputt?** → Lade-Zeit-Exception mit Rule-ID:
-  `Custom rule R001: invalid regex "[unbalanced": ...`
+- **YAML oder Regex kaputt, Datei fehlt?** → Das hängt am Weg:
+  - CLI mit `--custom-rules <datei>`: Meldung auf stderr, Exit 99, kein
+    Scan, z. B. `Custom rules error: Custom rule R001: invalid regex
+    "[unbalanced": ...` oder `Error: Custom-Rules-Datei existiert nicht: ...`.
+  - `[Detectors] CustomRulesFile=` in der `analyser.ini` (IDE-Plugin,
+    Oberfläche, CLI ohne `--custom-rules`): der Scan läuft still **ohne**
+    Custom-Rules weiter. Den Grund meldet nur OutputDebugString (lesbar z. B.
+    mit DebugView): `StaticCodeAnalyser: Custom-Rules-Datei nicht ladbar
+    (...)` bzw. `StaticCodeAnalyser: CustomRulesFile nicht gefunden: ...`.
 - **Kein Match?** → Pattern-Type checken (substring vs regex),
-  File-Globs prüfen (`src/**/*.pas` matcht NICHT `tests/foo.pas`).
+  File-Globs prüfen: Block-Liste statt `[...]`, Muster mit `**/` am
+  Anfang (`**/src/**/*.pas` matcht `src/foo.pas`, NICHT `tests/foo.pas`).
 
 ## Beitragen
 

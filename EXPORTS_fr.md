@@ -71,8 +71,8 @@ lignes affichées.
 **Avec quel jeu de règles ce rapport a été produit.** Le bloc
 `sca-meta` lisible par machine, dans l'en-tête de la page, porte
 `profile` : le nom du profil de règles utilisé. Une valeur vide
-signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
-et n'équivaut pas au profil curé `default`.
+signifie que l'exécution n'a nommé aucun profil (ni `--profile` ni
+`[Rules] Profile`) ; l'analyseur a alors utilisé le profil `default`.
 
 **Aides d'édition dans les deux rapports HTML.** Pour une règle dotée d'une
 **aide d'édition** (une action de code du module IDE reDelphix :
@@ -181,11 +181,6 @@ sort avec 4 — un scan incomplet ne doit jamais ressembler à un scan
 propre. Les erreurs d'outil (99) sont décidées avant même la
 consultation de `--fail-on` et ne peuvent pas du tout être abaissées.
 
-**Utilisez un chemin absolu ou un chemin avec une partie répertoire
-pour `--write-baseline`.** Un simple nom de fichier
-(`--write-baseline b.json`) échoue avec *« Baseline write error:
-Verzeichnis kann nicht erstellt werden »* — vérifié sur v0.9.14.
-
 **En CI, préférez `--baseline-scan y` au nom de fichier explicite.**
 L'option résout la référence en trois étapes — `--baseline`, puis
 `[Baseline] File=` dans `analyser.ini`, puis le dossier `.sca` à côté
@@ -218,20 +213,22 @@ voisin — dont une injection SQL que personne n'avait jamais examinée ;
 avec l'option, la même exécution les conserve. Elle change les
 empreintes : écrivez donc une référence fraîche en l'activant.
 
-Un résidu subsiste à dessein : un résultat dont les lignes environnantes
-sont identiques dans les deux fichiers correspond toujours via l'étape
-`contextHash`. C'est ce qui permet à une référence de survivre aux
-déplacements et aux refactorings, et c'est la raison pour laquelle deux
-copies identiques à l'octet près restent liées, quoi que dise cette
-option.
+L'étape `contextHash` (les lignes autour d'un résultat) est indexée par
+le même jeton de fichier, plus la règle et le hash. Par défaut, le jeton
+est le nom de fichier : une référence survit alors au déplacement d'un
+fichier vers un autre dossier, et des copies identiques à l'octet près
+partagent leurs entrées. Avec `--baseline-path-fingerprint y`, le jeton
+est le chemin relatif : un fichier déplacé signale une fois ses résultats
+comme nouveaux, et les copies dans des dossiers différents restent
+séparées.
 
-**Ne rafraîchissez pas une référence en combinant les deux options.**
-Le `--baseline ancienne --write-baseline nouvelle` d'apparence
-documentée n'écrit que les résultats qui ont *survécu* au filtre —
-c'est-à-dire les nouveaux. Mesuré sur un dépôt réel : une référence de
-226 entrées est devenue **0 entrée**, et le build suivant a signalé de
-nouveau tout l'arriéré. Pour rafraîchir, écrivez une référence fraîche
-à partir d'une exécution propre sans `--baseline`.
+**Rafraîchir une référence avec les deux options.** `--baseline
+ancienne --write-baseline nouvelle` écrit l'état actuel complet dans
+`nouvelle` — tous les résultats de l'exécution, nouveaux compris — et
+filtre contre `ancienne` dans la même exécution. Cela rafraîchit la
+référence, mais accepte aussi tout ce qui est nouveau aujourd'hui :
+examinez les nouveaux résultats de cette exécution avant de garder le
+fichier rafraîchi.
 
 ## Workflow 2 — Revue de pull request : seulement ce qui a changé
 
@@ -241,10 +238,11 @@ StaticCodeAnalyser.d12.exe --path . --diff main...HEAD \
 ```
 
 `--branch` utilise l'ensemble des fichiers modifiés selon le
-gestionnaire de versions (Git et SVN détectés automatiquement),
-`--diff <plage>` une plage Git, y compris la forme `a...b` de
-l'ancêtre commun. Les deux incluent les modifications non validées
-(`--diff` ne compare que des états committés).
+gestionnaire de versions (Git et SVN détectés automatiquement) et
+inclut les modifications non validées, sauf avec
+`[Repo] IncludeWorkingTree=0`. `--diff <plage>` prend une plage Git, y
+compris la forme `a...b` de l'ancêtre commun, et ne compare que des
+états committés.
 
 Depuis le 2026-08-25, un **appel VCS échoué termine avec le code 99** et
 la raison sur stderr — un clone superficiel dont le commit de base n'a
@@ -361,8 +359,8 @@ règle d'erreur du catalogue rapportée en `level: warning` s'explique.
 L'état est estampillé au moment du **scan** et voyage avec la cohorte
 de résultats : basculer l'ini entre le scan et l'export ne peut pas
 mélanger niveaux et confiances de deux mondes différents. Avec
-`EvidenceTiering=0`, le SARIF est identique octet pour octet à la
-sortie d'avant 0.9.18.
+`EvidenceTiering=0`, les niveaux ne sont pas plafonnés et aucun
+résultat ne porte `properties.confidence`.
 
 Avec **`--sarif-editor-help`** (désactivé par défaut ; sans lui le
 SARIF reste inchangé), un résultat d'une règle dotée d'une **aide
@@ -427,16 +425,11 @@ capturez.
 
 ## Limitations connues
 
-Liste honnête, état v0.9.14 — tout a été reproduit :
+Liste honnête, état v0.9.19 :
 
 | Domaine | Comportement |
 |---|---|
-| Rafraîchir la référence avec les deux options | tronque la référence aux seuls nouveaux résultats |
-| `--write-baseline` avec un simple nom de fichier | n'écrit pas |
-| Exports JSON | UTF-8 **avec** BOM — corrigé après v0.9.14, désormais sans BOM |
-| Rapport HTML | ne stocke que les noms de fichiers de base ; des unités homonymes dans des dossiers différents entrent en collision |
-| Empreintes de référence | les unités homonymes de dossiers différents partagent par défaut un même espace de noms — désactivable avec `--baseline-path-fingerprint y` (voir ci-dessous) |
-| Fichiers source illisibles | comptés différemment dans la console, SARIF/Sonar/HTML et la référence |
+| Empreintes de référence | les unités homonymes de dossiers différents partagent par défaut un même espace de noms — désactivable avec `--baseline-path-fingerprint y` (voir Workflow 1) |
 | `--parallel` | déterministe depuis le 2026-08-20 (identique octet pour octet aux exécutions sérielles), mais sans gain de vitesse - la phase préalable sérielle domine |
 
 ---

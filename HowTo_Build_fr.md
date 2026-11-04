@@ -79,8 +79,8 @@ supposons `D:\projects\StaticCodeAnalyser`.
 ## 3. Ouvrir le groupe de projets dans Delphi
 
 Le projet est livré comme **groupe de projets** avec le moteur, l'UI
-partagée, l'application autonome et le plugin IDE, plus le paquet
-optionnel reDelphix, une démo CLI, les projets de test et deux sondes.
+partagée, l'application autonome, le plugin IDE et reDelphix, plus une
+démo CLI, les projets de test et deux sondes.
 Delphi 13 utilise les mêmes fichiers de projet.
 `StaticCodeAnalyser.d13.64bit.groupproj` les regroupe pour l'IDE 64 bits,
 mais sans reDelphix.
@@ -98,7 +98,7 @@ sous-projets comptent ici :
 - `SCA.SharedUI` — composants UI communs à l'autonome et au plugin.
 - `StaticCodeAnalyser.d12` — l'EXE autonome.
 - `StaticCodeAnalyser.IDE.d12` — le plugin IDE (un paquet BPL).
-- `reDelphix.d12` — les actions de code optionnelles (section 5.3).
+- `reDelphix.d12` — les actions de code du plugin (section 5.3).
 
 Delphi affiche le sous-projet **actif** en **gras** vert. Vous
 changerez de projet actif au fil des étapes ci-dessous.
@@ -112,7 +112,7 @@ commande ou par double-clic.
 
 ### 4.1 Choisir la plateforme (32 bits vs 64 bits)
 
-64 bits est la valeur par défaut et notre recommandation.
+Nous recommandons 64 bits. Le fichier projet s'ouvre sur Win32, changez donc la plateforme :
 
 Dans le Project Manager :
 
@@ -177,8 +177,9 @@ démarrage.
 > le setup ou décochez-y cet IDE : son dossier vient en tête du réglage
 > PATH de l'IDE, qui chargerait donc le moteur installé au lieu du vôtre.
 > À l'inverse, le setup remplace les enregistrements de votre compilation
-> dans chaque IDE coché et le signale ; ajoutez ensuite de nouveau les
-> paquets comme en 5.2 et 5.3. Un monolithe de la version 0.9.18 ou
+> dans chaque IDE coché et le signale ; pour y réutiliser votre
+> compilation, désinstallez le setup (ou décochez cet IDE), puis ajoutez
+> de nouveau les paquets comme en 5.2 et 5.3. Un monolithe de la version 0.9.18 ou
 > antérieure (`StaticCodeAnalyser.Plugin.d12`) ne peut pas être chargé à
 > côté de ces paquets : retirez-le d'abord sous **Composant → Installer
 > des packages**.
@@ -220,7 +221,7 @@ il est compilé en Win64.
 > est enregistré en plus, Delphi 13 refuse le plugin avec « contient
 > l'unité 'uLocalization', qui est également contenue dans le paquet
 > 'SCA.Engine' ». Seuls les deux paquets de conception s'installent,
-> `StaticCodeAnalyser.IDE.d12` et, en option, `reDelphix.d12` : depuis
+> `StaticCodeAnalyser.IDE.d12` et `reDelphix.d12` : depuis
 > votre compilation ou depuis le setup, jamais les deux à la fois.
 
 Vous avez maintenant trois fichiers `.bpl` dans
@@ -229,6 +230,13 @@ Vous avez maintenant trois fichiers `.bpl` dans
 - `SCA.Engine290.bpl`
 - `SCA.SharedUI290.bpl`
 - `StaticCodeAnalyser.IDE.d12.bpl`
+
+> **Delphi 13, IDE 64 bits :** à l'étape 3, activez plutôt **Windows
+> 64-bit (Win64)**, pour `SCA.Engine`, `SCA.SharedUI`, le plugin et plus
+> tard `reDelphix.d12`. Les BPL arrivent alors dans `37.0\Bpl\Win64\`
+> (suffixe `370`), et en 5.2 vous les ajoutez dans l'IDE 64 bits depuis ce
+> dossier. L'IDE 32 bits de Delphi 13 utilise `37.0\Bpl\` et Win32 comme
+> décrit.
 
 ### 5.2 Dire à l'IDE de charger le plugin
 
@@ -249,12 +257,12 @@ Si l'entrée de menu manque, le plugin n'a pas pu se charger. Regardez
 dans **View → Window List…** ou lisez attentivement les erreurs de
 l'écran de démarrage.
 
-### 5.3 Optionnel : installer reDelphix (actions de code)
+### 5.3 Installer reDelphix (actions de code)
 
 reDelphix ajoute au plugin des quick-fixes et des refactorisations (voir
-le [README](README_fr.md#actions-de-code--redelphix-paquet-ide-optionnel)).
-Le setup le livre : cette section ne sert donc que pour votre propre
-compilation. Il nécessite le jeu de développement de 5.1 et 5.2, car il
+le [README](README_fr.md#actions-de-code--redelphix)).
+Le setup l'installe toujours avec le plugin : cette section ne sert donc
+que pour votre propre compilation. Il nécessite le jeu de développement de 5.1 et 5.2, car il
 est lié à `SCA.Engine`.
 
 1. Terminez 5.1 et 5.2, et vérifiez que `reDelphix.d12` est sur la même
@@ -289,7 +297,9 @@ sous `C:\Users\Public\Documents\Embarcadero\Studio\` :
    aussi l'EXE autonome pour Win32 et Win64 (section 4). Un paquet se lie
    aux DCP de ses dépendances : qui recompile un paquet recompile aussi les
    suivants, même sans changement de source. « Tout construire » du
-   groupe de projets respecte cet ordre.
+   groupe de projets respecte cet ordre, mais compile chaque projet dans
+   sa propre plateforme active (voir l'avertissement en 5.1) : vérifiez
+   les quatre avant.
 3. Vérifiez le résultat sans rien créer :
 
    ```powershell
@@ -300,8 +310,9 @@ sous `C:\Users\Public\Documents\Embarcadero\Studio\` :
    `tools\stale_artifacts_check.py --release` et contrôle chacune des
    12 BPL : présente, VERSIONINFO égale à la version, bonne architecture.
 
-L'exécution complète et ses options :
-[installer/README_Installer.md](installer/README_Installer.md).
+L'exécution complète exige le tag `v<Version>` (ou `-SkipSource`) et les
+notes de version `docs/releases/v<Version>.md` et `_de.md`. L'exécution et
+ses options : [installer/README_Installer.md](installer/README_Installer.md).
 
 ---
 
@@ -350,7 +361,7 @@ par défaut).
 
 ### 6.5 Enregistrer le rapport
 
-Utilisez les boutons **Export** (en haut à droite) pour enregistrer en
+Utilisez **☰ → Exporter...** (le bouton de menu en haut à droite) pour enregistrer en
 **HTML**, **JSON**, **CSV**, **SARIF** (pour GitHub Code Scanning), le
 rapport **Sonar** (pour SonarQube), ou copiez dans le presse-papiers pour
 Jira/Markdown.
@@ -386,23 +397,27 @@ l'ancrer à côté du Project Manager ou comme onglet en bas).
 
 ### 7.4 Sauter vers un résultat
 
-Cliquez sur une ligne de la grille : l'éditeur saute vers ce fichier
-et cette ligne et surligne le code fautif avec un marqueur coloré dans
-la gouttière.
+Double-cliquez sur une ligne de la grille ou appuyez sur **Entrée** :
+l'éditeur saute vers ce fichier et cette ligne et marque la ligne. Avec
+les flèches, l'éditeur suit dès que la sélection s'arrête. Un simple clic
+affiche seulement le résultat dans le panneau d'aide et peint une bande
+dans l'éditeur si le fichier est ouvert.
 
 ### 7.5 Masquer les faux positifs
 
 Sélectionnez un résultat et appuyez sur **Ctrl+Alt+S**. Le plugin écrit
 au-dessus de la ligne un commentaire `// noinspection` qui masque
 exactement cette règle à cet endroit. Le résultat disparaît à la
-prochaine analyse. Avec reDelphix, le menu contextuel du résultat
-propose la même chose.
+prochaine analyse. reDelphix propose la même chose dans le menu
+contextuel du résultat.
 
-### 7.6 Conseil au survol
+### 7.6 Panneau d'aide
 
-Si vous survolez une ligne de résultat, une infobulle montre un
-exemple de code **Avant / Après** : à quoi ressemble le problème, et à
-quoi ressemble la correction.
+Sélectionnez un résultat : le **panneau d'aide** à côté de la grille
+montre un exemple de code **Avant / Après** — à quoi ressemble le
+problème, et à quoi ressemble la correction. Il apparaît tant que la
+fenêtre est flottante ; ancrée dans une barre latérale, il se masque. Au
+survol de la colonne fichier, une infobulle montre le chemin complet.
 
 ---
 
@@ -413,7 +428,6 @@ quoi ressemble la correction.
 | **« Build failed: unresolved external »** | Vous avez compilé le plugin avant le moteur. Compilez d'abord `SCA.Engine`, puis `SCA.SharedUI`, puis le plugin. |
 | **L'entrée de menu du plugin manque après le redémarrage** | Mauvaise plateforme (vous avez compilé Win64 au lieu de Win32) ou mauvais chemin dans `Tools → Options → Packages`. |
 | **L'autonome plante après quelques secondes sur un gros projet** | Patch de taille de pile non appliqué. Relancez `tools\patch-stack-size.ps1`. |
-| **L'EXE se plaint « file not found » au lancement** | Vous avez déplacé l'EXE hors de son dossier `Output\…`. Remettez-le en place, ou copiez les fichiers `.dcu`/`.bpl` avec lui. |
 | **« Cannot find SCA.Engine290.bpl »** au chargement du plugin | Le chargeur Windows cherche `SCA.Engine290.bpl` via le PATH, pas à côté du plugin. Compilation maison : compilez `SCA.Engine` pour la même plateforme (Win32) et la même configuration (Release). Setup : relancez-le, il rétablit son entrée dans le réglage PATH de l'IDE. |
 | **Identificateur non déclaré alors qu'il figure bien dans les sources** | Un paquet prend cette unité dans le **DCP** d'un autre paquet, pas dans les sources. Si ce DCP est plus ancien que les sources, vous compilez contre l'ancien état — et le compilateur désigne l'appel, pas le fichier périmé. Lancez `python tools\stale_artifacts_check.py`, puis recompilez dans l'ordre `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 

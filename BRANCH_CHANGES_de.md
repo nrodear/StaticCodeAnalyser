@@ -11,7 +11,7 @@ Das Repository enthält drei Komponenten:
 |------------|-------|------|
 | **Standalone-EXE** | Stand-alone-Tool zum Analysieren von Verzeichnissen | `StaticCodeAnalyserForm/` |
 | **IDE-Plugin** | Dockbares Tool-Fenster in der Delphi-IDE | `StaticCodeAnalyserIDE/` |
-| **reDelphix** | Optionales IDE-Paket mit Code-Aktionen, aus den Quellen gebaut | `reDelphix/` |
+| **reDelphix** | Code-Aktionen des IDE-Plugins, immer mit ihm installiert | `reDelphix/` |
 
 ---
 
@@ -307,7 +307,7 @@ StaticCodeAnalyser/
 │   ├── uIDEAnalyserForm.pas        # Frame + Dockable-Form-Wrapper
 │   ├── StaticCodeAnalyser.IDE.d12.dpk       # Designtime-Paket (Dev-Satz)
 │   └── StaticCodeAnalyser.Plugin.d12.dpk    # Release-Monolith-Paket
-├── reDelphix/                      # Optionales IDE-Paket mit Code-Aktionen
+├── reDelphix/                      # IDE-Paket mit den Code-Aktionen
 ├── docs/                           # Mockups, Skizzen
 └── DETECTORS_de.md                 # Vollstaendiger Detektor-Katalog mit Status
 ```

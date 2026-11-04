@@ -108,9 +108,9 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | InlineLoopVarExplicitTypeCheck | N | – | – |
 | InlineVarExplicitTypeCheck | N | – | – |
 | InstanceInvokedConstructorCheck | J | uInstanceInvokedConstructor | – |
-| InterfaceGuidCheck | N | – | – |
+| InterfaceGuidCheck | J | uInterfaceGuid | SCA197; dazu SCA198 für doppelte GUIDs |
 | InterfaceNameCheck | J | uInterfaceName | – |
-| IterationPastHighBoundCheck | ~ | uLengthUnderflow | thematisch verwandt (Loop-Boundary-Bugs) |
+| IterationPastHighBoundCheck | ~ | uLoopPastHighBound | SCA203; meldet nur, wenn der Rumpf dieselbe Sammlung mit der Laufvariablen indiziert |
 | LegacyInitializationSectionCheck | J | uLegacyInitializationSection | – |
 | LoopExecutingAtMostOnceCheck | N | – | – |
 | LowercaseKeywordCheck | J | uLowercaseKeyword | – |
@@ -125,7 +125,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | NoreturnContractCheck | N | – | – |
 | ObjectPassedAsInterfaceCheck | N | – | – |
 | ObjectTypeCheck | N | – | – |
-| PascalStyleResultCheck | N | – | – |
+| PascalStyleResultCheck | J | uFunctionNameResult | SCA204; dazu SCA205 für den Lesezugriff als Rekursion |
 | PlatformDependentCastCheck | ~ | uPointerSubtraction | lokal nur die Cast-Subtraktions-Form, upstream jeder Cast |
 | PlatformDependentTruncationCheck | N | – | – |
 | PointerNameCheck | J | uPointerName | – |
@@ -171,7 +171,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | UnusedPropertyCheck | N | – | – |
 | UnusedRoutineCheck | J | uUnusedRoutine + uUnusedPrivateMethod | SCA164 fuer Top-Level, private Klassenmethoden separat |
 | UnusedTypeCheck | N | – | – |
-| VariableInitializationCheck | J | uUninitVar | SCA166, pfadsensitiv |
+| VariableInitializationCheck | J | uUninitVar | SCA166, konservativ, ohne volle Pfadsensitivität |
 | VariableNameCheck | N | – | – |
 | VisibilityKeywordIndentationCheck | ~ | uVisibilityCheck | thematisch verwandt |
 | VisibilitySectionOrderCheck | ~ | uVisibilityCheck | thematisch verwandt |
@@ -182,19 +182,19 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | Status | Anzahl |
 |---|---:|
 | Sonar-Checks insgesamt | 144 |
-| `J` (umgesetzt) | 71 |
+| `J` (umgesetzt) | 73 |
 | `~` (teilweise) | 22 |
-| `N` (nicht umgesetzt) | 51 |
+| `N` (nicht umgesetzt) | 49 |
 
-Coverage (J + ~): **65 %** der Sonar-Checks haben ein lokales Pendant.
+Coverage (J + ~): **66 %** der Sonar-Checks haben ein lokales Pendant.
 
 Die Summenzeile muss der Zeilenzahl der Tabelle oben entsprechen
-(70 + 18 + 56 = 144); wer Zeilen ändert, zählt hier nach. Bis 2026-08-08
+(73 + 22 + 49 = 144); wer Zeilen ändert, zählt hier nach. Bis 2026-08-08
 stand hier 138 bei 144 Tabellenzeilen, und fünfzehn Zeilen meldeten „nicht
 umgesetzt", obwohl die Detektor-Unit existierte — die veröffentlichte
 Quote war um 16 Prozentpunkte zu niedrig.
 
-> **Stand der Erhebung: 2026-08-09, beide Seiten geprüft.**
+> **Stand der Erhebung: Sonar-Seite 2026-08-09, lokale Seite 2026-11-03.**
 >
 > *Sonar-Seite:* über die GitHub-API gegen den heutigen Stand von
 > `delphi-checks/.../checks` abgeglichen — 154 Dateien, davon 144
@@ -202,14 +202,16 @@ Quote war um 16 Prozentpunkte zu niedrig.
 > `ParsingErrorCheck`. Die Tabelle hat exakt diese 144: keine fehlt, keine
 > ist zu viel.
 >
-> *Lokale Seite:* alle 178 Units aus `SCA.Engine/sources/Detectors/`
+> *Lokale Seite:* alle 190 Units aus `SCA.Engine/sources/Detectors/`
 > kommen jetzt vor — entweder als Pendant in der Tabelle oder in den
-> Listen unten. Bis 2026-08-09 fehlten 53 davon; sechs Tabellenzeilen
+> Listen unten. Bis 2026-11-03 fehlten die zwölf Units von SCA197 bis
+> SCA205 samt ihren Scanner-Kernen; zwei Tabellenzeilen standen dadurch
+> zu niedrig, eine nannte ein entfernteres Pendant. Bis 2026-08-09 fehlten 53 davon; sechs Tabellenzeilen
 > standen dadurch zu niedrig (`CatchingRawExceptionCheck` hatte in
 > Wahrheit ein volles Pendant, fünf weitere ein teilweises).
 >
 > Wer die Quote neu ausrechnet: die Summe der drei Statuszahlen muss der
-> Zeilenzahl der Tabelle entsprechen (71 + 22 + 51 = 144).
+> Zeilenzahl der Tabelle entsprechen (73 + 22 + 49 = 144).
 
 ## Lokale Detektoren ohne Sonar-Pendant
 
@@ -247,6 +249,8 @@ Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 - uSQLInjectionScore
 - uSqlDangerousStatement
 - uRestHttpSecurity
+- uHardcodedIpAddress
+- uHardcodedIpInConfig
 - uHardcodedSecret
 - uCommandInjection
 - uInsecureCryptoAlgorithm
@@ -336,8 +340,10 @@ Muster, die erst unter Win64 zu Datenverlust fuehren.
 Fehler, die zur Laufzeit zuschlagen, nicht beim Uebersetzen.
 
 - uAbstractNotImpl
+- uComparisonPrecedence
 - uManagedResultUninit
 - uMissingOverride
+- uParamNameMismatch
 - uRaiseOutsideExcept
 
 ### Datei- & Projekt-Ebene
@@ -356,3 +362,6 @@ Befunde ueber die Datei als Ganzes bzw. ihre Projektzugehoerigkeit - ausserhalb 
 - uNamingExt — Naming-Conventions-Erweiterung
 - uPerfHotspots — Performance-Hotspot-Bündel
 - uVisibilityCheck — Visibility-Klassifikation
+- uComparisonPrecedenceScan, uFuncNameResultScan, uIpAddressScan,
+  uLoopBoundScan, uParamNameScan — reine Scanner-Kerne (ohne AST) der
+  Detektoren SCA202, SCA204/205, SCA200/201, SCA203 und SCA199

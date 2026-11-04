@@ -341,7 +341,17 @@ begin
 
     if Hint.Description <> '' then
     begin
-      SB.AppendLine('## ' + _('Rule description'));
+      // Traegt der Fund den fix-hint einer Custom Rule, hat der Resolver
+      // ihn in Description gelegt (uFixHint) - das ist dann ein konkreter
+      // Reparaturschritt des Regelautors, keine Regelbeschreibung. Er steht
+      // unter derselben Ueberschrift wie der Jira-Fakt 'Fix hint'
+      // (uFindingCopyText, vorhandene Uebersetzung). Vergleich mit dem
+      // Fund statt nur 'CustomFixHint <> ''': ein Aufrufer mit eigenem
+      // Hint-Record behaelt seine Ueberschrift.
+      if Hint.Description = F.CustomFixHint then
+        SB.AppendLine('## ' + _('Fix hint'))
+      else
+        SB.AppendLine('## ' + _('Rule description'));
       SB.AppendLine(Hint.Description);
       SB.AppendLine('');
     end;

@@ -199,10 +199,39 @@ const
 
 var
   OutRedirected, ErrRedirected, Attached: Boolean;
+  OutStart, ErrStart: THandle;
 begin
-  OutRedirected := IsRedirected(GetStdHandle(STD_OUTPUT_HANDLE));
-  ErrRedirected := IsRedirected(GetStdHandle(STD_ERROR_HANDLE));
+  // Die Std-Handles VOR AttachConsole festhalten, nicht nur ihre Einordnung.
+  OutStart      := GetStdHandle(STD_OUTPUT_HANDLE);
+  ErrStart      := GetStdHandle(STD_ERROR_HANDLE);
+  OutRedirected := IsRedirected(OutStart);
+  ErrRedirected := IsRedirected(ErrStart);
   Attached      := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
+
+  // AttachConsole ERSETZT die Std-Handles des Prozesses durch die der
+  // Konsole, wenn der Elternprozess sie NICHT per STARTF_USESTDHANDLES
+  // uebergeben hat. Genau so startet cmd.exe: 'sca.exe > log.txt 2>&1'
+  // und 'sca.exe | more' reichen Datei bzw. Pipe nur ueber die
+  // Handle-Vererbung durch. Bis 2026-11 band BindeKanal den Kanal danach
+  // ueber GetStdHandle - und bekam die Konsole statt der Umleitung: die
+  // Datei blieb leer, der Text stand im Konsolenfenster. Git Bash,
+  // PowerShell-Pipes und CI-Runner uebergeben per STARTF_USESTDHANDLES;
+  // dort laesst AttachConsole die Handles stehen, und dieses
+  // Zuruecksetzen schreibt denselben Wert noch einmal (No-op).
+  // Gemessen 2026-11-03 mit einer GUI-Subsystem-Sonde (pythonw) aus cmd,
+  // PowerShell 5.1 und Git Bash.
+  // SetStdHandle statt nur TTextRec.Handle: die RTL bestimmt in Rewrite
+  // die Codepage aus GetFileType DIESES Handles (Konsole -> OEM, Datei
+  // oder Pipe -> ANSI), und ihre eigene Runtime-Error-Ausgabe schreibt
+  // ebenfalls auf GetStdHandle. Beides soll die Umleitung sehen, wie
+  // beim Start aus Git Bash.
+  if Attached then
+  begin
+    if OutRedirected then
+      SetStdHandle(STD_OUTPUT_HANDLE, OutStart);
+    if ErrRedirected then
+      SetStdHandle(STD_ERROR_HANDLE, ErrStart);
+  end;
 
   BindeKanal(Output, STD_OUTPUT_HANDLE, OutRedirected, Attached);
   // Der 64-KB-Puffer nur fuer den umgeleiteten Normalausgabe-Fall (P13:

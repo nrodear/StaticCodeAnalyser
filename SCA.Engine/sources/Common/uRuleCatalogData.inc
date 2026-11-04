@@ -108,8 +108,10 @@ const
       RuleID   : 'SCA008';
       Name     : 'Possible nil-dereference';
       ShortDesc: 'Access to a variable that may be nil at this point';
-      BadEx    : 'obj := FindObject(id);' + #13#10 + 'obj.DoStuff;   // <-- AV if FindObject returns nil';
-      GoodEx   : 'obj := FindObject(id);' + #13#10 + 'if Assigned(obj) then obj.DoStuff;';
+      BadEx    : 'obj := nil;' + #13#10 + '// ... obj is not assigned on this path ...' + #13#10 +
+        'obj.DoStuff;   // <-- AV: obj is still nil';
+      GoodEx   : 'obj := nil;' + #13#10 + '// ...' + #13#10 + 'if Assigned(obj) then' + #13#10 +
+        '  obj.DoStuff;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -120,8 +122,8 @@ const
       RuleID   : 'SCA009';
       Name     : 'Object created without protective try/finally';
       ShortDesc: '.Create call without surrounding try/finally - leak risk on exception';
-      BadEx    : 'obj := TFoo.Create;' + #13#10 + 'obj.DoStuff;' + #13#10 + 'obj.Free;';
-      GoodEx   : 'obj := TFoo.Create;' + #13#10 + 'try obj.DoStuff finally obj.Free end;';
+      BadEx    : 'obj := TStringList.Create;' + #13#10 + 'LoadNames(obj);' + #13#10 + 'obj.Free;';
+      GoodEx   : 'obj := TStringList.Create;' + #13#10 + 'try LoadNames(obj) finally obj.Free end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -131,9 +133,12 @@ const
     (
       RuleID   : 'SCA010';
       Name     : 'Possible division by zero';
-      ShortDesc: 'Division by a variable / expression that may be zero';
-      BadEx    : 'result := total / count;';
-      GoodEx   : 'if count <> 0 then result := total / count;';
+      ShortDesc: 'Integer division (div / mod) by a variable that may be zero';
+      BadEx    : 'function Average(Total, Count: Integer): Integer;' + #13#10 + 'begin' + #13#10 +
+        '  Result := Total div Count;   // EDivByZero when Count = 0' + #13#10 + 'end;';
+      GoodEx   : 'function Average(Total, Count: Integer): Integer;' + #13#10 + 'begin' + #13#10 +
+        '  if Count = 0 then' + #13#10 + '    Exit(0);' + #13#10 + '  Result := Total div Count;' +
+        #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -156,8 +161,8 @@ const
     (
       RuleID   : 'SCA012';
       Name     : 'Method exceeds line-count threshold';
-      ShortDesc: 'Method longer than configured maximum (default 80 lines)';
-      BadEx    : '(150-line procedure doing parsing + validation + persistence)';
+      ShortDesc: 'Method body longer than configured maximum (default: more than 50 lines and more than 30 statements)';
+      BadEx    : '(procedure with more than 50 body lines and more than 30 statements doing parsing + validation + persistence)';
       GoodEx   : '(extract into ParseInput, Validate, Persist helper methods)';
       Anchor   : '';
       FixMode  : '';
@@ -168,7 +173,7 @@ const
     (
       RuleID   : 'SCA013';
       Name     : 'Too many parameters';
-      ShortDesc: 'Method has more parameters than configured maximum (default 7)';
+      ShortDesc: 'Method has more parameters than configured maximum (default 5)';
       BadEx    : 'procedure SaveOrder(id, customer, address, city, zip, country, total, tax, shipping: ...);';
       GoodEx   : 'procedure SaveOrder(const Order: TOrder);';
       Anchor   : '';
@@ -192,11 +197,12 @@ const
     (
       RuleID   : 'SCA015';
       Name     : 'String literal repeated across multiple sites';
-      ShortDesc: 'Same string literal appears N+ times - extract to constant';
-      BadEx    : 'ShowMessage(''File not found'');' + #13#10 + '... ' + #13#10 +
-        'LogError(''File not found'');';
+      ShortDesc: 'Same string literal appears 3 or more times in a file - extract to constant';
+      BadEx    : 'ShowMessage(''File not found'');' + #13#10 + 'LogError(''File not found'');' + #13#10 +
+        'StatusBar.SimpleText := ''File not found'';';
       GoodEx   : 'const MSG_FILE_NOT_FOUND = ''File not found'';' + #13#10 +
-        'ShowMessage(MSG_FILE_NOT_FOUND);';
+        'ShowMessage(MSG_FILE_NOT_FOUND);' + #13#10 + 'LogError(MSG_FILE_NOT_FOUND);' + #13#10 +
+        'StatusBar.SimpleText := MSG_FILE_NOT_FOUND;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -231,10 +237,10 @@ const
       RuleID   : 'SCA018';
       Name     : 'Block nesting exceeds threshold';
       ShortDesc: 'Nested if/for/while depth higher than configured maximum (default 4); an else-if chain counts as ONE level, like a case';
-      BadEx    : 'if a then' + #13#10 + '  if b then' + #13#10 + '    if c then' + #13#10 +
-        '      if d then DoStuff;';
+      BadEx    : 'if a then' + #13#10 + '  if b then' + #13#10 + '    if c then' + #13#10 + '      if d then' +
+        #13#10 + '        if e then DoStuff;';
       GoodEx   : 'if not a then Exit;' + #13#10 + 'if not b then Exit;' + #13#10 + 'if not c then Exit;' +
-        #13#10 + 'if d then DoStuff;';
+        #13#10 + 'if not d then Exit;' + #13#10 + 'if e then DoStuff;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -248,8 +254,7 @@ const
       BadEx    : '// TODO: handle the case where input is empty';
       GoodEx   : 'if Input = '''' then' + #13#10 +
         '  raise EArgumentException.Create(''Input must not be empty'');' + #13#10 +
-        'Result := Parse(Input);' + #13#10 + #13#10 + '// Or, if it is not this change''s job:' +
-        #13#10 + '// TODO(#4711): handle empty input - see issue 4711';
+        'Result := Parse(Input);';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -273,7 +278,7 @@ const
       RuleID   : 'SCA021';
       Name     : 'Duplicated code block';
       ShortDesc: 'Multiple identical code blocks (>= configured minimum lines)';
-      BadEx    : '(20 lines of validation code copy-pasted across 3 methods)';
+      BadEx    : '(the same 20 lines of validation code copy-pasted into 3 methods of one unit)';
       GoodEx   : '(extract into a single ValidateXxx procedure)';
       Anchor   : '';
       FixMode  : '';
@@ -298,7 +303,7 @@ const
       Name     : 'User-defined custom rule';
       ShortDesc: 'Pattern matched by a rule loaded from analyser-rules.yml';
       BadEx    : '(pattern from analyser-rules.yml matches)';
-      GoodEx   : '(fix per the custom rule''s message)';
+      GoodEx   : '(fix per the custom rule''s fix-hint, shown with the finding, or its message)';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -541,12 +546,20 @@ const
       RuleID   : 'SCA042';
       Name     : 'God event handler';
       ShortDesc: 'Single method wired to >= N component events (default N=5)';
-      BadEx    : 'btn1.OnClick = HandleEverything' + #13#10 + 'btn2.OnClick = HandleEverything' + #13#10 +
-        'btn3.OnClick = HandleEverything' + #13#10 + 'btn4.OnClick = HandleEverything' + #13#10 +
-        'btn5.OnClick = HandleEverything';
-      GoodEx   : 'btnNew.OnClick    = btnNewClick' + #13#10 + 'btnOpen.OnClick   = btnOpenClick' + #13#10 +
-        'btnSave.OnClick   = btnSaveClick' + #13#10 + 'btnPrint.OnClick  = btnPrintClick' + #13#10 +
-        'btnClose.OnClick  = btnCloseClick';
+      BadEx    : 'object Form1: TForm1' + #13#10 + '  object btnSave: TButton' + #13#10 +
+        '    OnClick = HandleEverything' + #13#10 + '  end' + #13#10 + '  object btnOpen: TButton' +
+        #13#10 + '    OnClick = HandleEverything' + #13#10 + '  end' + #13#10 +
+        '  object btnClose: TButton' + #13#10 + '    OnClick = HandleEverything' + #13#10 + '  end' +
+        #13#10 + '  object edtName: TEdit' + #13#10 + '    OnChange = HandleEverything' + #13#10 +
+        '  end' + #13#10 + '  object edtCity: TEdit' + #13#10 + '    OnChange = HandleEverything' +
+        #13#10 + '  end' + #13#10 + 'end';
+      GoodEx   : 'object Form1: TForm1' + #13#10 + '  object btnSave: TButton' + #13#10 +
+        '    OnClick = btnSaveClick' + #13#10 + '  end' + #13#10 + '  object btnOpen: TButton' +
+        #13#10 + '    OnClick = btnOpenClick' + #13#10 + '  end' + #13#10 +
+        '  object btnClose: TButton' + #13#10 + '    OnClick = btnCloseClick' + #13#10 + '  end' +
+        #13#10 + '  object edtName: TEdit' + #13#10 + '    OnChange = edtNameChange' + #13#10 +
+        '  end' + #13#10 + '  object edtCity: TEdit' + #13#10 + '    OnChange = edtCityChange' +
+        #13#10 + '  end' + #13#10 + 'end';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -635,9 +648,11 @@ const
     (
       RuleID   : 'SCA049';
       Name     : 'Length(s) - N without guard';
-      ShortDesc: 'Length / .Count with subtraction - native-uint underflow when empty';
-      BadEx    : 'Last := s[Length(s) - 1];';
-      GoodEx   : 'if Length(s) >= 2 then Last := s[Length(s) - 1];';
+      ShortDesc: '`Length(s) - K` / `.Count - K` with K >= 2 without guard - negative index or count when the input is shorter than K';
+      BadEx    : 'if s[Length(s) - 3] = ''.'' then   // 3-letter extension? Index below 1 when s has fewer than 4 chars' +
+        #13#10 + '  DoStuff;';
+      GoodEx   : 'if Length(ExtractFileExt(s)) = 4 then   // the RTL handles short strings' + #13#10 +
+        '  DoStuff;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -664,8 +679,17 @@ const
       RuleID   : 'SCA051';
       Name     : 'Public member could be protected';
       ShortDesc: 'Public member referenced only from subclasses, never externally';
-      BadEx    : 'public' + #13#10 + '  procedure HookForSubclasses; virtual;';
-      GoodEx   : 'protected' + #13#10 + '  procedure HookForSubclasses; virtual;';
+      BadEx    : 'type' + #13#10 + '  TBase = class' + #13#10 + '  public' + #13#10 +
+        '    procedure Hook;          // only called from TSub' + #13#10 + '  end;' + #13#10 +
+        '  TSub = class(TBase)' + #13#10 + '  public' + #13#10 + '    procedure Run;' + #13#10 +
+        '  end;' + #13#10 + #13#10 + 'procedure TBase.Hook;' + #13#10 + 'begin' + #13#10 + 'end;' +
+        #13#10 + #13#10 + 'procedure TSub.Run;' + #13#10 + 'begin' + #13#10 + '  Hook;' + #13#10 +
+        'end;';
+      GoodEx   : 'type' + #13#10 + '  TBase = class' + #13#10 + '  protected' + #13#10 +
+        '    procedure Hook;' + #13#10 + '  end;' + #13#10 + '  TSub = class(TBase)' + #13#10 +
+        '  public' + #13#10 + '    procedure Run;' + #13#10 + '  end;' + #13#10 + #13#10 +
+        'procedure TBase.Hook;' + #13#10 + 'begin' + #13#10 + 'end;' + #13#10 + #13#10 +
+        'procedure TSub.Run;' + #13#10 + 'begin' + #13#10 + '  Hook;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -801,9 +825,10 @@ const
       RuleID   : 'SCA062';
       Name     : 'Source line too long';
       ShortDesc: 'Line exceeds 120 characters - wrap or extract subexpression';
-      BadEx    : 'result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive);';
-      GoodEx   : 'result := SomeReallyLongFunction(' + #13#10 + '  ArgumentOne, ArgumentTwo,' + #13#10 +
-        '  ArgumentThree, ArgumentFour, ArgumentFive);';
+      BadEx    : 'Result := SomeReallyLongFunction(ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour, ArgumentFive, ArgumentSix, ArgumentSeven);';
+      GoodEx   : 'Result := SomeReallyLongFunction(' + #13#10 +
+        '  ArgumentOne, ArgumentTwo, ArgumentThree, ArgumentFour,' + #13#10 +
+        '  ArgumentFive, ArgumentSix, ArgumentSeven);';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -902,8 +927,9 @@ const
       RuleID   : 'SCA070';
       Name     : 'Commented-out code';
       ShortDesc: 'Comment looks like Pascal code - delete or document';
-      BadEx    : '// X := 42;' + #13#10 + '// if Active then Process;';
-      GoodEx   : '// TODO: re-enable once issue #123 is fixed - see history';
+      BadEx    : 'LoadSettings;' + #13#10 + '// FCacheSize := 42;' + #13#10 + 'ApplySettings;';
+      GoodEx   : 'LoadSettings;' + #13#10 + '// TODO: re-enable once issue #123 is fixed - see history' +
+        #13#10 + 'ApplySettings;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -1385,14 +1411,15 @@ const
     (
       RuleID   : 'SCA108';
       Name     : 'TThread.Synchronize from destructor';
-      ShortDesc: 'Synchronize() called from destructor Destroy - classic deadlock between worker and UI thread';
+      ShortDesc: 'Synchronize() called from destructor Destroy - a self-freeing thread blocks there until the main thread runs the call, and hangs if the main thread does not';
       BadEx    : 'destructor TWorker.Destroy;' + #13#10 + 'begin' + #13#10 +
-        '  Synchronize(procedure begin Form1.Log(''done'') end);  // deadlock' + #13#10 +
-        '  inherited;' + #13#10 + 'end;';
-      GoodEx   : '// Move the notify outside the destructor:' + #13#10 +
-        '// trigger an OnTerminate handler that runs BEFORE TThread.Destroy waits.' + #13#10 +
-        'FOnDone := procedure begin Form1.Log(''done'') end;' + #13#10 + 'OnTerminate := FOnDone;' +
-        #13#10 + '// destructor stays Synchronize-free.';
+        '  Synchronize(procedure begin Form1.Log(''done'') end);  // worker blocks until the main thread runs this' +
+        #13#10 + '  inherited;' + #13#10 + 'end;';
+      GoodEx   : 'procedure TWorker.WorkerTerminated(Sender: TObject);  // in the constructor:' + #13#10 +
+        'begin                                                 //   OnTerminate := WorkerTerminated;' +
+        #13#10 + '  Form1.Log(''done'');   // OnTerminate runs in the main thread, before Destroy' +
+        #13#10 + 'end;' + #13#10 + #13#10 + 'destructor TWorker.Destroy;' + #13#10 + 'begin' +
+        #13#10 + '  inherited;   // no Synchronize here' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -1460,8 +1487,8 @@ const
       RuleID   : 'SCA113';
       Name     : 'TThread.Resume is deprecated';
       ShortDesc: '`MyThread.Resume` - use `MyThread.Start` (since Delphi 2010)';
-      BadEx    : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Resume;';
-      GoodEx   : 'MyThread := TWorker.Create(True);' + #13#10 + 'MyThread.Start;';
+      BadEx    : 'MyThread := TWorkerThread.Create(True);' + #13#10 + 'MyThread.Resume;';
+      GoodEx   : 'MyThread := TWorkerThread.Create(True);' + #13#10 + 'MyThread.Start;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -1470,10 +1497,26 @@ const
     // SCA114
     (
       RuleID   : 'SCA114';
-      Name     : 'TThread destroyed without Terminate+WaitFor';
-      ShortDesc: '`FreeAndNil(MyThread)` without prior `Terminate; WaitFor` - worker may still run';
-      BadEx    : '// inside an OnClick:' + #13#10 + 'FreeAndNil(FWorker);  // FWorker.Execute still running?';
-      GoodEx   : 'FWorker.Terminate;' + #13#10 + 'FWorker.WaitFor;' + #13#10 + 'FreeAndNil(FWorker);';
+      Name     : 'TThread freed with FreeAndNil - review shutdown';
+      ShortDesc: '`FreeAndNil(MyThread)` with no nearby `Terminate` - a review hint, not a proven defect: `TThread.Destroy` ends the thread itself; check `Execute`, the thread''s destructor and `FreeOnTerminate`';
+      BadEx    : 'type' + #13#10 + '  TWorkerThread = class(TThread)' + #13#10 + '  protected' + #13#10 +
+        '    procedure Execute; override;' + #13#10 + '  end;' + #13#10 + #13#10 + 'var' + #13#10 +
+        '  FWorkerThread: TWorkerThread;' + #13#10 + #13#10 + 'procedure TWorkerThread.Execute;' +
+        #13#10 + 'begin' + #13#10 + '  RunLongJob;                 // never looks at Terminated' +
+        #13#10 + 'end;' + #13#10 + #13#10 + 'procedure TMainForm.BtnStopClick(Sender: TObject);' +
+        #13#10 + 'begin' + #13#10 +
+        '  FreeAndNil(FWorkerThread);  // waits until RunLongJob has returned' + #13#10 + 'end;';
+      GoodEx   : 'type' + #13#10 + '  TWorkerThread = class(TThread)' + #13#10 + '  private' + #13#10 +
+        '    FQueue: TList;' + #13#10 + '  protected' + #13#10 + '    procedure Execute; override;' +
+        #13#10 + '  public' + #13#10 + '    destructor Destroy; override;' + #13#10 + '  end;' +
+        #13#10 + #13#10 + 'var' + #13#10 + '  FWorkerThread: TWorkerThread;' + #13#10 + #13#10 +
+        'procedure TWorkerThread.Execute;' + #13#10 + 'begin' + #13#10 + '  while not Terminated do' +
+        #13#10 + '    DoStep;' + #13#10 + 'end;' + #13#10 + #13#10 +
+        'destructor TWorkerThread.Destroy;' + #13#10 + 'begin' + #13#10 +
+        '  inherited;                  // ends the thread first' + #13#10 +
+        '  FreeAndNil(FQueue);         // Execute no longer runs' + #13#10 + 'end;' + #13#10 +
+        #13#10 + 'procedure TMainForm.BtnStopClick(Sender: TObject);' + #13#10 + 'begin' + #13#10 +
+        '  FreeAndNil(FWorkerThread);  // Destroy ends the thread itself' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -1672,8 +1715,9 @@ const
       ShortDesc: '`StrToDate(s)`, `FormatFloat(...)` etc. without TFormatSettings depend on the system locale - breaks across machines / users';
       BadEx    : 'var d := StrToDate(UserInput);     // breaks under EN locale' + #13#10 +
         'WriteLn(DateToStr(Now));';
-      GoodEx   : 'var FS := TFormatSettings.Invariant;' + #13#10 + 'var d := StrToDate(UserInput, FS);' +
-        #13#10 + 'WriteLn(DateToStr(Now, FS));';
+      GoodEx   : 'var LFormatSettings := TFormatSettings.Invariant;' + #13#10 +
+        'var d := StrToDate(UserInput, LFormatSettings);' + #13#10 +
+        'WriteLn(DateToStr(Now, LFormatSettings));';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -1684,8 +1728,10 @@ const
       RuleID   : 'SCA129';
       Name     : 'Cast from string to 8-bit string type without explicit encoding';
       ShortDesc: '`AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` silently drops characters outside the active code page';
-      BadEx    : 'var u: UnicodeString;' + #13#10 + 'u := ''Smiley: '' + #$1F600;' + #13#10 +
-        'logStream.WriteString(AnsiString(u));   // smiley becomes ''?''';
+      BadEx    : 'var u: UnicodeString;' + #13#10 + 'var a: AnsiString;' + #13#10 +
+        'u := ''Smiley: '' + #$1F600;' + #13#10 +
+        'a := AnsiString(u);          // smiley becomes ''?''' + #13#10 +
+        'logStream.WriteString(a);';
       GoodEx   : 'var u: UnicodeString;' + #13#10 + 'u := ''Smiley: '' + #$1F600;' + #13#10 +
         'logStream.WriteString(UTF8Encode(u));   // explicit, full Unicode';
       Anchor   : '';
@@ -1712,10 +1758,10 @@ const
       RuleID   : 'SCA131';
       Name     : 'IfThen() evaluates both branches - no short-circuit';
       ShortDesc: '`Math.IfThen(cond, A(), B())` / `StrUtils.IfThen` are normal functions - both arms run before the function is called';
-      BadEx    : 'x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);' + #13#10 +
+      BadEx    : 'x := Math.IfThen(IsCacheHit, FetchFromCache(Key), FetchFromDb(Key));' + #13#10 +
         '//                            both calls run every time';
-      GoodEx   : 'if IsCacheHit then' + #13#10 + '  x := FetchFromCache' + #13#10 + 'else' + #13#10 +
-        '  x := FetchFromDb;';
+      GoodEx   : 'if IsCacheHit then' + #13#10 + '  x := FetchFromCache(Key)' + #13#10 + 'else' + #13#10 +
+        '  x := FetchFromDb(Key);';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
@@ -1741,10 +1787,9 @@ const
     (
       RuleID   : 'SCA133';
       Name     : 'Bare raise outside an except/on handler';
-      ShortDesc: '`raise;` without an exception expression only works *inside* an except handler (re-raise) - outside it raises NIL and produces an Access Violation';
+      ShortDesc: '`raise;` without an exception expression is only valid *inside* an except handler (re-raise) - Delphi (E2145) and FPC reject it anywhere else';
       BadEx    : 'procedure Foo(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
-        '    raise;             // <- no current exception -> AV inside System._Raise' + #13#10 +
-        'end;';
+        '    raise;             // <- not inside a handler: compiler error E2145' + #13#10 + 'end;';
       GoodEx   : 'procedure Foo(x: Integer);' + #13#10 + 'begin' + #13#10 + '  if x < 0 then' + #13#10 +
         '    raise EArgumentException.CreateFmt(''x = %d (must be >= 0)'', [x]);' + #13#10 + 'end;';
       Anchor   : '';
@@ -1786,10 +1831,11 @@ const
     (
       RuleID   : 'SCA136';
       Name     : 'Constructor allocates fields and raises without try/except';
-      ShortDesc: 'Constructor assigns fields with `<Class>.Create` and raises later - partially initialised fields leak on the exception path';
+      ShortDesc: 'Constructor assigns fields with `<Class>.Create` and raises later without try/except - the fields leak unless the destructor frees them';
       BadEx    : 'constructor TFoo.Create;' + #13#10 + 'begin' + #13#10 + '  FList := TStringList.Create;' +
         #13#10 + '  FOther := TOther.Create;' + #13#10 + '  if not Valid then' + #13#10 +
-        '    raise EInvalidOp.Create(''bad'');     // <- FList + FOther leak' + #13#10 + 'end;';
+        '    raise EInvalidOp.Create(''bad'');     // <- FList/FOther leak unless Destroy frees them' +
+        #13#10 + 'end;';
       GoodEx   : 'constructor TFoo.Create;' + #13#10 + 'begin' + #13#10 + '  FList := TStringList.Create;' +
         #13#10 + '  try' + #13#10 + '    FOther := TOther.Create;' + #13#10 +
         '    if not Valid then' + #13#10 + '      raise EInvalidOp.Create(''bad'');' + #13#10 +
@@ -1854,17 +1900,21 @@ const
     (
       RuleID   : 'SCA140';
       Name     : 'Method has too many Exit statements';
-      ShortDesc: 'A method with more than 3 Exit calls has too many return paths - hard to read, hard to test, easy to miss one';
+      ShortDesc: 'A method with more than 6 Exit calls has too many return paths - hard to read, hard to test, easy to miss one';
       BadEx    : 'function Find(Id: Integer): TUser;' + #13#10 + 'begin' + #13#10 +
         '  if Id < 0 then begin Result := nil; Exit; end;' + #13#10 +
         '  if not Db.Connected then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsLocked(Id) then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsDeleted(Id) then begin Result := nil; Exit; end;' + #13#10 +
+        '  if Db.IsArchived(Id) then begin Result := nil; Exit; end;' + #13#10 +
         '  if not Cache.Has(Id) then begin Result := DbLoad(Id); Exit; end;' + #13#10 +
-        '  Result := Cache.Get(Id);' + #13#10 + '  Exit;                              // 4. Exit' +
+        '  Result := Cache.Get(Id);' + #13#10 + '  Exit;                              // 7th Exit' +
         #13#10 + 'end;';
       GoodEx   : 'function Find(Id: Integer): TUser;' + #13#10 + 'begin' + #13#10 + '  Result := nil;' +
-        #13#10 + '  if (Id < 0) or not Db.Connected then Exit;' + #13#10 + '  if Cache.Has(Id) then' +
-        #13#10 + '    Result := Cache.Get(Id)' + #13#10 + '  else' + #13#10 +
-        '    Result := DbLoad(Id);' + #13#10 + 'end;';
+        #13#10 + '  if (Id < 0) or not Db.Connected then Exit;' + #13#10 +
+        '  if Db.IsLocked(Id) or Db.IsDeleted(Id) or Db.IsArchived(Id) then Exit;' + #13#10 +
+        '  if Cache.Has(Id) then' + #13#10 + '    Result := Cache.Get(Id)' + #13#10 + '  else' +
+        #13#10 + '    Result := DbLoad(Id);' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -2125,9 +2175,9 @@ const
     (
       RuleID   : 'SCA158';
       Name     : 'PChar(s) +/- offset without empty-check';
-      ShortDesc: '`PChar(s) + n`, `PAnsiChar(s) + n`, or `PWideChar(s) + n` without a prior empty-check on `s` - PChar('''') optimizes to NIL, so arithmetic on the result is a latent Access Violation';
-      BadEx    : 'p := PChar(s) + 5;       // if s='''' then PChar(s)=nil -> AV at $00000005';
-      GoodEx   : 'if s <> '''' then' + #13#10 + '  p := PChar(s) + 5;';
+      ShortDesc: '`PChar(s) + n`, `PAnsiChar(s) + n`, or `PWideChar(s) + n` without a prior empty-check on `s` - on a string shorter than n the pointer lands behind the terminator';
+      BadEx    : 'p := PChar(s) + 5;       // s shorter than 5 chars -> p points behind the terminator';
+      GoodEx   : 'if Length(s) >= 5 then' + #13#10 + '  p := PChar(s) + 5;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -2151,8 +2201,9 @@ const
       RuleID   : 'SCA160';
       Name     : 'String cast from raw pointer';
       ShortDesc: '`string(P)` / `AnsiString(P)` / `UTF8String(P)` / `RawByteString(P)` cast from a P-prefixed pointer assumes a null-terminator that may not exist - heap overread';
-      BadEx    : 's := string(Buf);    // PByte cast assumes null-terminator';
-      GoodEx   : 'SetString(s, PChar(Buf), Len);   // explicit length';
+      BadEx    : 'PText := PChar(Buf);' + #13#10 +
+        's := string(PText);   // reads up to the next #0 - overread if Buf has no terminator';
+      GoodEx   : 'SetString(s, PChar(Buf), Len);   // explicit length, no terminator needed';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -2227,13 +2278,15 @@ const
     (
       RuleID   : 'SCA166';
       Name     : 'Uninitialised local variable';
-      ShortDesc: 'Local variable read before being assigned on every code path through the method';
-      BadEx    : 'procedure Foo;' + #13#10 + 'var L: TStringList;' + #13#10 + 'begin' + #13#10 +
-        '  if Cond then L := TStringList.Create;' + #13#10 +
-        '  L.Add(''x'');   // L undefined if Cond was false -> AV' + #13#10 + 'end;';
-      GoodEx   : 'procedure Foo;' + #13#10 + 'var L: TStringList;' + #13#10 + 'begin' + #13#10 +
-        '  L := TStringList.Create;' + #13#10 + '  try' + #13#10 + '    L.Add(''x'');' + #13#10 +
-        '  finally' + #13#10 + '    L.Free;' + #13#10 + '  end;' + #13#10 + 'end;';
+      ShortDesc: 'Local variable read before its first assignment in source order, or never assigned at all';
+      BadEx    : 'function MaxOf(const A: array of Integer): Integer;' + #13#10 + 'var' + #13#10 +
+        '  I, Best: Integer;' + #13#10 + 'begin' + #13#10 + '  for I := Low(A) to High(A) do' +
+        #13#10 + '    if A[I] > Best then      // Best is read before its first assignment' + #13#10 +
+        '      Best := A[I];' + #13#10 + '  Result := Best;' + #13#10 + 'end;';
+      GoodEx   : 'function MaxOf(const A: array of Integer): Integer;' + #13#10 + 'var' + #13#10 +
+        '  I, Best: Integer;' + #13#10 + 'begin' + #13#10 + '  Best := Low(Integer);' + #13#10 +
+        '  for I := Low(A) to High(A) do' + #13#10 + '    if A[I] > Best then' + #13#10 +
+        '      Best := A[I];' + #13#10 + '  Result := Best;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -2390,7 +2443,7 @@ const
         '  for var I := 0 to AOrder.Count - 1 do                // +1 (depth 0)' + #13#10 +
         '    while AOrder[I].NeedsRetry do                      // +1+1 (depth 1)' + #13#10 +
         '      ShipItem(AOrder[I]);' + #13#10 + 'end;' + #13#10 +
-        '// ShipItem = 4, ProcessOrder = 5 - beide klar unter 15';
+        '// ShipItem = 4, ProcessOrder = 5 - both well below 15';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
@@ -2402,9 +2455,9 @@ const
       Name     : 'Thread variable accessed after FreeOnTerminate := True';
       ShortDesc: 'After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed';
       BadEx    : 'T := TMyThread.Create(True);' + #13#10 + 'T.FreeOnTerminate := True;' + #13#10 + 'T.Start;' +
-        #13#10 + 'T.Resume;   // T may be freed';
+        #13#10 + 'T.WaitFor;   // T may already be freed -> AV';
       GoodEx   : 'T := TMyThread.Create(True);' + #13#10 + 'T.FreeOnTerminate := True;' + #13#10 + 'T.Start;' +
-        #13#10 + 'T := nil;   // drop reference';
+        #13#10 + 'T := nil;   // drop the reference';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;

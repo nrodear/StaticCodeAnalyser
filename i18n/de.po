@@ -72,7 +72,7 @@ msgid "Ignore..."
 msgstr "Ignorieren..."
 
 msgid "Filter file / method / finding..."
-msgstr "Filter Datei / Methode / Befund..."
+msgstr "Filter Datei / Methode / Fund..."
 
 msgid "Include tests"
 msgstr "Tests einschließen"
@@ -117,7 +117,7 @@ msgid "Ready."
 msgstr "Bereit."
 
 msgid "%d / %d findings"
-msgstr "%d / %d Befunde"
+msgstr "%d / %d Funde"
 
 msgid "Analysis running..."
 msgstr "Analyse läuft..."
@@ -147,13 +147,13 @@ msgid "no base branch (main/master) found - working tree only"
 msgstr "kein Base-Branch (main/master) gefunden - nur Working Tree"
 
 msgid "git not found. Install Git for Windows."
-msgstr "git nicht gefunden. Installiere Git für Windows."
+msgstr "git nicht gefunden. Bitte Git for Windows installieren."
 
 msgid "svn not found. Install TortoiseSVN with command line tools."
-msgstr "svn nicht gefunden. Installiere TortoiseSVN mit Command-Line-Tools."
+msgstr "svn nicht gefunden. Bitte TortoiseSVN mit Command-Line-Tools installieren."
 
 msgid "No findings - clean baseline"
-msgstr "Keine Befunde - sauberer Stand"
+msgstr "Keine Funde - sauberer Stand"
 
 msgid "Clean - minor smells only"
 msgstr "Sauber - nur kleinere Smells"
@@ -162,10 +162,10 @@ msgid "Visible tech debt, no critical bugs"
 msgstr "Sichtbare technische Schulden, keine kritischen Bugs"
 
 msgid "Multiple errors/vulnerabilities - refactor advised"
-msgstr "Mehrere Errors/Vulnerabilities - Refactor empfohlen"
+msgstr "Mehrere Fehler/Sicherheitslücken - Refactoring empfohlen"
 
 msgid "Refactor needed - many critical findings"
-msgstr "Refactor noetig - viele kritische Befunde"
+msgstr "Refactoring nötig - viele kritische Funde"
 
 msgid "Raw score: %d"
 msgstr "Rohwert: %d"
@@ -180,13 +180,13 @@ msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
 msgstr "Notenskala: A=0, B<=%d, C<=%d, D<=%d, E>%d"
 
 msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
-msgstr "Gewichte: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
+msgstr "Gewichte: Vuln 10, Fehler 7, Hotspot 5, Warnung 3, Hinweis 1, Lesefehler 2"
 
 msgid "Click: reset filters (show everything)"
 msgstr "Klick: Filter zurücksetzen (alles anzeigen)"
 
 msgid "// NOSONAR suppression marker found - audit it"
-msgstr "// NOSONAR-Suppression gefunden - bitte prüfen"
+msgstr "// NOSONAR-Unterdrückungs-Marker gefunden - bitte prüfen"
 
 msgid "A single method handles too many component events - split it up"
 msgstr "Eine einzelne Methode bedient zu viele Komponenten-Events - aufteilen"
@@ -201,13 +201,13 @@ msgid "Asymmetric begin/end in if/else - format consistently"
 msgstr "Asymmetrische begin/end in if/else - konsistent formatieren"
 
 msgid "Binary expression has identical left and right side - copy-paste bug?"
-msgstr "Binaer-Ausdruck mit gleicher linker und rechter Seite - Copy-Paste-Bug?"
+msgstr "Binärer Ausdruck mit gleicher linker und rechter Seite - Copy-Paste-Bug?"
 
 msgid "Boolean compared to True/False - redundant"
 msgstr "Boolean gegen True/False verglichen - redundant"
 
 msgid "Branch body without begin..end - add explicit block"
-msgstr "Branch-Body ohne begin..end - expliziten Block setzen"
+msgstr "Zweig ohne begin..end - expliziten Block setzen"
 
 msgid "Class field without \"F\" prefix"
 msgstr "Klassenfeld ohne \"F\"-Prefix"
@@ -222,7 +222,7 @@ msgid "Component class is on the project-defined forbidden list"
 msgstr "Komponenten-Klasse steht auf der Projekt-Forbidden-Liste"
 
 msgid "Component event is wired but the handler body is empty"
-msgstr "Komponenten-Event ist gebunden, aber der Handler-Body ist leer"
+msgstr "Komponenten-Event ist gebunden, aber der Handler-Rumpf ist leer"
 
 msgid "Component has both Action and OnClick - the OnClick handler is dead code"
 msgstr "Komponente hat Action UND OnClick - der OnClick-Handler ist toter Code"
@@ -234,7 +234,7 @@ msgid "Constructor does not call inherited - parent state uninitialized"
 msgstr "Konstruktor ruft kein inherited - Eltern-State uninitialisiert"
 
 msgid "Create without try/finally - exception path leaks the object"
-msgstr "Create ohne try/finally - Exception-Pfad leakt das Objekt"
+msgstr "Create ohne try/finally - Ausnahmepfad leakt das Objekt"
 
 msgid "Custom rule defined in analyser-rules.yml matched this code"
 msgstr "Custom-Regel aus analyser-rules.yml hat diesen Code getroffen"
@@ -243,7 +243,7 @@ msgid "Cyclomatic complexity too high - too many branches; extract methods or si
 msgstr "Cyclomatic Complexity zu hoch - zu viele Verzweigungen; Methoden extrahieren oder Bedingungen vereinfachen"
 
 msgid "DB-control class does not fit the field data type"
-msgstr "DB-Control-Klasse passt nicht zum Field-Data-Type"
+msgstr "DB-Control-Klasse passt nicht zum Datentyp des Felds"
 
 msgid "DFM declares a component but the form class has no published field for it"
 msgstr "DFM deklariert eine Komponente, aber die Form-Klasse hat kein published-Feld dafür"
@@ -263,8 +263,8 @@ msgstr "Debug-Ausgabe im Produktionscode vergessen"
 msgid "Destructor does not call inherited - resource leak"
 msgstr "Destruktor ruft kein inherited - Ressourcen-Leck"
 
-msgid "Division by zero: EZeroDivide or EDivByZero possible"
-msgstr "Division durch Null: EZeroDivide oder EDivByZero möglich"
+msgid "Division by zero: EDivByZero possible"
+msgstr "Division durch Null: EDivByZero möglich"
 
 msgid "Double semicolon \";;\" - one is enough"
 msgstr "Doppelte Semikolons \";;\" - eines reicht"
@@ -279,25 +279,25 @@ msgid "Empty begin..end block"
 msgstr "Leerer begin..end-Block"
 
 msgid "Empty except block silently swallows every exception"
-msgstr "Leerer except-Block schluckt jede Exception ohne Reaktion"
+msgstr "Leerer except-Block schluckt jede Ausnahme ohne Reaktion"
 
 msgid "Empty finally block - either drop the try or add cleanup"
 msgstr "Leerer finally-Block - try entfernen oder Cleanup ergänzen"
 
 msgid "Empty visibility section in class - delete it"
-msgstr "Leere Visibility-Sektion in der Klasse - entfernen"
+msgstr "Leerer Sichtbarkeitsabschnitt in der Klasse - entfernen"
 
 msgid "Event handler in DFM points to a method that no longer exists"
 msgstr "Event-Handler im DFM zeigt auf eine Methode, die nicht (mehr) existiert"
 
 msgid "Exception class without E-prefix"
-msgstr "Exception-Klasse ohne E-Prefix"
+msgstr "Ausnahmeklasse ohne E-Prefix"
 
 msgid "Exit/Continue directly before end - redundant"
 msgstr "Exit/Continue direkt vor end - redundant"
 
 msgid "FieldByName in loop - cache the TField reference outside"
-msgstr "FieldByName in der Loop - TField-Referenz ausserhalb cachen"
+msgstr "FieldByName in der Schleife - TField-Referenz außerhalb cachen"
 
 msgid "File could not be read or parsed"
 msgstr "Datei konnte nicht gelesen oder geparst werden"
@@ -345,7 +345,7 @@ msgid "Local variable declared but never read or written"
 msgstr "Lokale Variable deklariert, aber nie gelesen oder geschrieben"
 
 msgid "Lock acquired without try..finally release - exception leaves the lock held"
-msgstr "Lock ohne umschliessendes try..finally - bei Exception bleibt der Lock dauerhaft gesperrt"
+msgstr "Lock ohne umschließendes try..finally - bei einer Ausnahme bleibt der Lock dauerhaft gesperrt"
 
 msgid "Long string concatenation - prefer Format() for readability"
 msgstr "Lange String-Konkatenation - Format() ist lesbarer"
@@ -384,16 +384,16 @@ msgid "Multiple identical code blocks - extract a method (DRY)"
 msgstr "Mehrere identische Code-Blöcke - Methode extrahieren (DRY)"
 
 msgid "Nested procedure/function - consider extracting"
-msgstr "Geschachtelte procedure/function - extrahieren"
+msgstr "Verschachtelte procedure/function - extrahieren"
 
 msgid "Nested try block - consider extracting a procedure"
-msgstr "Geschachtelter try-Block - Methode extrahieren"
+msgstr "Verschachtelter try-Block - Methode extrahieren"
 
 msgid "Nesting too deep - use early exit (guard clauses) or extract a method"
 msgstr "Zu tief verschachtelt - Early-Exit (Guard-Clauses) oder Methode extrahieren"
 
 msgid "Nil dereference: access through a possibly nil reference"
-msgstr "Nil-Dereferenz: Zugriff über eine eventuell null-Referenz"
+msgstr "Nil-Dereferenz: Zugriff über eine Referenz, die nil sein kann"
 
 msgid "Object created but never freed (memory leak)"
 msgstr "Objekt erzeugt, aber nie freigegeben (Speicherleck)"
@@ -402,10 +402,10 @@ msgid "Open marker (TODO / FIXME / HACK / XXX) - resolve before release"
 msgstr "Offener Marker (TODO / FIXME / HACK / XXX) - vor Release auflösen"
 
 msgid "ParamByName in loop - cache the TParam reference outside"
-msgstr "ParamByName in der Loop - TParam-Referenz ausserhalb cachen"
+msgstr "ParamByName in der Schleife - TParam-Referenz außerhalb cachen"
 
 msgid "Parameter never read in method body"
-msgstr "Parameter wird im Methoden-Body nie gelesen"
+msgstr "Parameter wird im Methodenrumpf nie gelesen"
 
 msgid "Pascal keyword not in lowercase"
 msgstr "Pascal-Keyword nicht in Kleinschreibung"
@@ -414,7 +414,7 @@ msgid "Password / token literal in source code"
 msgstr "Passwort/Token als Stringliteral im Quellcode"
 
 msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
-msgstr "Plaintext-HTTP-URL - https:// fuer Remote-Endpoints bevorzugen"
+msgstr "Plaintext-HTTP-URL - https:// für Remote-Endpoints bevorzugen"
 
 msgid "Pointer type alias should start with \"P\""
 msgstr "Pointer-Typ-Alias sollte mit \"P\" beginnen"
@@ -459,19 +459,19 @@ msgid "Source line exceeds 120 characters - wrap or extract"
 msgstr "Zeile > 120 Zeichen - umbrechen oder Teilausdruck extrahieren"
 
 msgid "String concatenation in loop - quadratic reallocations"
-msgstr "String-Konkatenation in der Loop - quadratische Allokationen"
+msgstr "String-Konkatenation in der Schleife - quadratische Allokationen"
 
 msgid "String literal repeated - extract to a constant or resourcestring"
 msgstr "Stringliteral mehrfach genutzt - in Konstante / resourcestring auslagern"
 
-msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
-msgstr "Synchronize() im Destruktor - Worker- und UI-Thread blockieren sich gegenseitig"
+msgid "Synchronize() in a destructor - a self-freeing thread can hang waiting for the main thread"
+msgstr "Synchronize() im Destruktor - ein sich selbst freigebender Thread kann beim Warten auf den Hauptthread hängen bleiben"
 
 msgid "TLS verification disabled - MITM-attack surface"
-msgstr "TLS-Validierung deaktiviert - MITM-Angriffsflaeche"
+msgstr "TLS-Validierung deaktiviert - MITM-Angriffsfläche"
 
-msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
-msgstr "TThread zerstoert ohne Terminate+WaitFor - Worker laeuft eventuell noch"
+msgid "TThread freed with FreeAndNil - review shutdown; a hint, not a proven defect"
+msgstr "TThread per FreeAndNil freigegeben - Beendigung prüfen; ein Hinweis, kein bewiesener Defekt"
 
 msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
 msgstr "TThread.Resume ist deprecated - stattdessen TThread.Start (seit Delphi 2010)"
@@ -486,13 +486,13 @@ msgid "Trailing comma in argument list"
 msgstr "Trailing-Komma in der Argument-Liste"
 
 msgid "Two consecutive const/type/var sections - merge them"
-msgstr "Zwei aufeinanderfolgende const/type/var-Sektionen - zusammenfassen"
+msgstr "Zwei aufeinanderfolgende const/type/var-Abschnitte - zusammenfassen"
 
 msgid "Two sibling controls share the same TabOrder - tab navigation is undefined"
 msgstr "Zwei Geschwister-Controls teilen dieselbe TabOrder - Tab-Reihenfolge undefiniert"
 
 msgid "Two visibility sections with the same keyword - merge them"
-msgstr "Zwei Visibility-Sektionen mit gleichem Keyword - zusammenfassen"
+msgstr "Zwei Sichtbarkeitsabschnitte mit gleichem Schlüsselwort - zusammenfassen"
 
 msgid "UI text in DFM is a literal string - route it through the localization layer"
 msgstr "UI-Text im DFM ist Stringliteral - über die Lokalisierungs-Schicht führen"
@@ -501,19 +501,19 @@ msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
 msgstr "UPDATE/DELETE/TRUNCATE ohne WHERE - betrifft ALLE Zeilen"
 
 msgid "Unit ends with begin..end. - use initialization section"
-msgstr "Unit endet mit begin..end. - initialization-Section verwenden"
+msgstr "Unit endet mit begin..end. - initialization-Abschnitt verwenden"
 
 msgid "Unit has no declarations - delete it or fill it"
 msgstr "Unit ohne Deklarationen - löschen oder füllen"
 
 msgid "Unit-level keyword not at column 1"
-msgstr "Unit-Section-Keyword nicht in Spalte 1"
+msgstr "Schlüsselwort auf Unit-Ebene nicht in Spalte 1"
 
 msgid "Uses entry may be unused - remove to reduce coupling"
 msgstr "Uses-Eintrag möglicherweise ungenutzt - entfernen reduziert Kopplung"
 
 msgid "Virtual method called from constructor - override sees half-initialized Self"
-msgstr "Virtuelle Methode im Constructor gerufen - Override sieht halb-initialisiertes Self"
+msgstr "Virtuelle Methode im Konstruktor aufgerufen - Override sieht halb initialisiertes Self"
 
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr "X.Free; X := nil; -> FreeAndNil(X) nutzen"
@@ -522,13 +522,13 @@ msgid "asm..end block - platform-specific, hard to port"
 msgstr "asm..end-Block - plattformspezifisch, schlecht portierbar"
 
 msgid "case statement has many branches - consider dispatch table"
-msgstr "case-Statement mit vielen Branches - Dispatch-Tabelle erwägen"
+msgstr "case-Anweisung mit vielen Zweigen - Dispatch-Tabelle erwägen"
 
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr "class(TObject) - TObject ist Default-Basis, redundant"
 
 msgid "for-loop range is reversed - the loop body never runs"
-msgstr "for-Schleife-Bereich ist umgekehrt - der Body läuft nie"
+msgstr "Bereich der for-Schleife ist umgekehrt - der Rumpf läuft nie"
 
 msgid "goto weakens structured control flow"
 msgstr "goto bricht den strukturierten Kontrollfluss"
@@ -543,13 +543,13 @@ msgid "out parameter - prefer Result or var"
 msgstr "out-Parameter - Result oder var bevorzugen"
 
 msgid "with statement can silently rebind identifiers - avoid it"
-msgstr "with-Statement bindet Bezeichner still um - vermeiden"
+msgstr "with-Anweisung bindet Bezeichner still um - vermeiden"
 
 msgid "Exception is constructed but never raised"
-msgstr "Exception wird konstruiert, aber nie geworfen"
+msgstr "Ausnahme wird konstruiert, aber nie geworfen"
 
 msgid "Function never assigns Result - return value undefined"
-msgstr "Function weist Result nie zu - Rückgabewert undefiniert"
+msgstr "Funktion weist Result nie zu - Rückgabewert undefiniert"
 
 msgid "Re-raise of bound variable loses the original stack trace"
 msgstr "Re-raise der gebundenen Variable verliert den ursprünglichen Stack-Trace"
@@ -561,13 +561,13 @@ msgid "Constructor invoked on instance - no allocation, fields re-initialised ov
 msgstr "Konstruktor auf Instanz aufgerufen - keine Allokation, Felder werden über Live-Daten re-initialisiert"
 
 msgid "Override whose body is just \"inherited\" adds nothing"
-msgstr "Override, dessen Body nur \"inherited\" enthält, hat keinen Effekt"
+msgstr "Override, dessen Rumpf nur \"inherited\" enthält, hat keinen Effekt"
 
 msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
 msgstr "Assigned() statt \"= nil\" / \"<> nil\" verwenden"
 
 msgid "Raise a specific exception class, not the base Exception"
-msgstr "Eine spezifische Exception-Klasse werfen, nicht die Basis-Exception"
+msgstr "Eine spezifische Ausnahmeklasse werfen, nicht die Basisklasse Exception"
 
 msgid "Locale-dependent conversion without explicit TFormatSettings"
 msgstr "Locale-abhängige Konvertierung ohne explizite TFormatSettings"
@@ -708,7 +708,7 @@ msgid "Result Unassigned"
 msgstr "Result nicht zugewiesen"
 
 msgid "Re-Raise Exception"
-msgstr "Exception erneut raisen"
+msgstr "Ausnahme erneut auslösen"
 
 msgid "Cast And Free"
 msgstr "Cast vor Free"
@@ -723,7 +723,7 @@ msgid "Nil Comparison"
 msgstr "Nil-Vergleich"
 
 msgid "Raising Raw Exception"
-msgstr "Basis-Exception raisen"
+msgstr "Basisklasse Exception auslösen"
 
 msgid "Date Format Settings"
 msgstr "Datumsformat-Einstellungen"
@@ -753,13 +753,13 @@ msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr "Raise im Destruktor ohne try/except - Cleanup wird abgebrochen"
 
 msgid "Boolean parameter drives internal branching - consider two methods with descriptive names"
-msgstr "Boolean-Parameter steuert internes Branching - zwei Methoden mit sprechenden Namen sind klarer"
+msgstr "Boolean-Parameter steuert interne Verzweigungen - zwei Methoden mit sprechenden Namen sind klarer"
 
 msgid "Unused private method"
 msgstr "Ungenutzte private Methode"
 
 msgid "Could be class method"
-msgstr "Könnte Klassen-Methode sein"
+msgstr "Könnte Klassenmethode sein"
 
 msgid "Missing override"
 msgstr "Fehlendes override"
@@ -786,13 +786,13 @@ msgid "Boolean comparison is always true / always false"
 msgstr "Boolescher Vergleich ist immer wahr / immer falsch"
 
 msgid "Function always returns the same literal on every code path"
-msgstr "Function liefert auf jedem Pfad dasselbe Literal zurück"
+msgstr "Funktion liefert auf jedem Pfad dasselbe Literal zurück"
 
 msgid "User-visible string is hardcoded - move to resourcestring / i18n"
 msgstr "User-sichtbarer String ist hartcodiert - in resourcestring / i18n verschieben"
 
 msgid "Unpaired Lock"
-msgstr "Lock ohne paired UnLock"
+msgstr "Sperre ohne Freigabe"
 
 msgid "Move/FillChar SizeOf(Pointer)"
 msgstr "Move/FillChar mit SizeOf(Pointer)"
@@ -801,7 +801,7 @@ msgid "with on multiple targets"
 msgstr "`with` mit mehreren Zielen"
 
 msgid "Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller"
-msgstr "Lock ohne try/finally akquiriert - eine Exception verliert das Lock und blockiert den nächsten Aufrufer"
+msgstr "Sperre ohne try/finally angefordert - bei einer Ausnahme bleibt sie gehalten und blockiert den nächsten Aufrufer"
 
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr "Move / FillChar benutzt SizeOf(Pointer-Typ) - kopiert nur 4/8 Bytes (Pointer-Größe), nicht den Zielpuffer"
@@ -819,16 +819,16 @@ msgid "PChar arithmetic without empty-check"
 msgstr "PChar-Arithmetik ohne Empty-Check"
 
 msgid "GetMem / AllocMem without try/finally - an exception leaks the heap buffer"
-msgstr "GetMem / AllocMem ohne try/finally - eine Exception leakt den Heap-Buffer"
+msgstr "GetMem / AllocMem ohne try/finally - eine Ausnahme leakt den Heap-Buffer"
 
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr "SetLength-Wachstum um 1 in einer Schleife - O(n²) Realloc; stattdessen einmal vor der Schleife vor-allokieren"
 
-msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
-msgstr "PChar(s)-Arithmetik ohne Empty-Check - PChar('') ist nil, Arithmetik darauf löst AV aus"
+msgid "PChar(s) arithmetic without empty-check - on a short string the pointer lands behind the terminator"
+msgstr "PChar(s)-Arithmetik ohne Empty-Check - bei einem kurzen String zeigt der Zeiger hinter den Terminator"
 
 msgid "Empty typed exception handler"
-msgstr "Leerer typisierter Exception-Handler"
+msgstr "Leerer typisierter Ausnahme-Handler"
 
 msgid "String cast from raw pointer"
 msgstr "String-Cast aus Raw-Pointer"
@@ -837,7 +837,7 @@ msgid "Pointer subtraction (Win64 truncation)"
 msgstr "Pointer-Subtraktion (Win64-Trunkierung)"
 
 msgid "Typed exception handler is empty - swallows a specific exception silently"
-msgstr "Typisierter Exception-Handler ist leer - eine spezifische Exception wird kommentarlos verschluckt"
+msgstr "Typisierter Ausnahme-Handler ist leer - eine spezifische Ausnahme wird kommentarlos verschluckt"
 
 msgid "String cast from raw pointer assumes a null-terminator - heap overread if missing"
 msgstr "String-Cast aus Raw-Pointer setzt einen Null-Terminator voraus - Heap-Overread wenn er fehlt"
@@ -855,10 +855,10 @@ msgid "Top-level routine appears unused (dead code)"
 msgstr "Top-Level-Routine scheint ungenutzt (toter Code)"
 
 msgid "Detector Review (1 per detector, random)"
-msgstr "Detector-Review (1 zufaelliger Befund pro Detector)"
+msgstr "Detektor-Review (1 zufälliger Fund pro Detektor)"
 
 msgid "Exception Too General"
-msgstr "Zu allgemeine Exception"
+msgstr "Zu allgemeine Ausnahme"
 
 msgid "Raise outside except"
 msgstr "Raise außerhalb except"
@@ -866,8 +866,8 @@ msgstr "Raise außerhalb except"
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr "`except on E: Exception` fängt alles - lieber spezifische Subklasse benutzen"
 
-msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
-msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers wirft NIL - Access Violation"
+msgid "Bare raise; outside an except/on handler - Delphi (E2145) and FPC reject this form"
+msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"
 
 msgid "Use After Free"
 msgstr "Zugriff nach Free"
@@ -887,8 +887,8 @@ msgstr "Variable nach Free / FreeAndNil verwendet - dangling pointer, AV wahrsch
 msgid "Class inherits an abstract method but does not override it - EAbstractError"
 msgstr "Klasse erbt eine abstrakte Methode ohne sie zu überschreiben - EAbstractError zur Laufzeit"
 
-msgid "Constructor allocates fields and raises - partially-initialized fields leak"
-msgstr "Konstruktor erzeugt Felder und raised - teil-initialisierte Felder leaken auf dem Exception-Pfad"
+msgid "Constructor allocates fields and raises - the fields leak unless the destructor frees them"
+msgstr "Konstruktor erzeugt Felder und raised - die Felder leaken, wenn der Destruktor sie nicht freigibt"
 
 msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
 msgstr "Int64-Ziel bekommt Produkt zweier Int32 - Multiplikation überläuft in 32-Bit"
@@ -939,10 +939,10 @@ msgid "%d file(s) - running..."
 msgstr "%d Datei(en) - läuft..."
 
 msgid "%d findings"
-msgstr "%d Befunde"
+msgstr "%d Funde"
 
 msgid "%d findings on this line"
-msgstr "%d Befunde auf dieser Zeile"
+msgstr "%d Funde auf dieser Zeile"
 
 msgid "..."
 msgstr "..."
@@ -954,7 +954,7 @@ msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr "KI-Prompt in Zwischenablage: %s, Zeile %s (%s)"
 
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
-msgstr "Aktionen-Menue: Branch-Aenderungen, Abbrechen, Export, Einstellungen, Ignorieren"
+msgstr "Aktionsmenü: Branch-Änderungen, Abbrechen, Export, Einstellungen, Ignorieren"
 
 msgid "Before"
 msgstr "Vorher"
@@ -975,7 +975,7 @@ msgid "Analyse current file (silent)"
 msgstr "Aktuelle Datei analysieren (Silent)"
 
 msgid "Analysing %d changed file(s). %s"
-msgstr "Analysiere %d geaenderte Datei(en). %s"
+msgstr "Analysiere %d geänderte Datei(en). %s"
 
 msgid "Analysing: "
 msgstr "Analysiere: "
@@ -984,7 +984,7 @@ msgid "Analysing: %s"
 msgstr "Analysiere: %s"
 
 msgid "Analysis cancelled - no new findings loaded"
-msgstr "Analyse abgebrochen - keine neuen Befunde geladen"
+msgstr "Analyse abgebrochen - keine neuen Funde geladen"
 
 msgid "Analysis error: "
 msgstr "Analysefehler: "
@@ -1002,7 +1002,7 @@ msgid "Before:"
 msgstr "Vorher:"
 
 msgid "Branch changes: please provide a valid project path (for repo detection)."
-msgstr "Branch-Changes: bitte einen gültigen Projektpfad angeben (zur Repo-Erkennung)."
+msgstr "Branch-Änderungen: bitte einen gültigen Projektpfad angeben (zur Repo-Erkennung)."
 
 msgid "Bug"
 msgstr "Bug"
@@ -1017,7 +1017,7 @@ msgid "CSV file (*.csv)|*.csv"
 msgstr "CSV-Datei (*.csv)|*.csv"
 
 msgid "CSV files|*.csv|Log files|*.log"
-msgstr "CSV Dateien|*.csv|Log Dateien|*.log"
+msgstr "CSV-Dateien|*.csv|Log-Dateien|*.log"
 
 msgid "CSV saved: %s (%d entries)"
 msgstr "CSV gespeichert: %s (%d Einträge)"
@@ -1029,10 +1029,10 @@ msgid "Cancelling analysis..."
 msgstr "Analyse wird abgebrochen..."
 
 msgid "Clear all markers"
-msgstr "Alle Markierungen loeschen"
+msgstr "Alle Markierungen löschen"
 
 msgid "All markers cleared."
-msgstr "Alle Markierungen geloescht."
+msgstr "Alle Markierungen gelöscht."
 
 msgid "Cause"
 msgstr "Ursache"
@@ -1044,13 +1044,13 @@ msgid "Choose folder"
 msgstr "Ordner wählen"
 
 msgid "Click: filter grid to Bug type"
-msgstr "Klick: Grid auf Bug-Type filtern"
+msgstr "Klick: Grid auf Typ Bug filtern"
 
 msgid "Click: filter grid to Cyclomatic"
-msgstr "Klick: Grid auf Cyclomatic filtern"
+msgstr "Klick: Grid auf Komplexität filtern"
 
 msgid "Click: filter grid to Duplicate type"
-msgstr "Klick: Grid auf Duplicate-Type filtern"
+msgstr "Klick: Grid auf Typ Code Duplication filtern"
 
 msgid "Click: filter grid to Errors"
 msgstr "Klick: Grid auf Fehler filtern"
@@ -1059,7 +1059,7 @@ msgid "Click: filter grid to Hints"
 msgstr "Klick: Grid auf Hinweise filtern"
 
 msgid "Click: filter grid to Vulnerability type"
-msgstr "Klick: Grid auf Vulnerability-Type filtern"
+msgstr "Klick: Grid auf Typ Vulnerability filtern"
 
 msgid "Click: filter grid to Warnings"
 msgstr "Klick: Grid auf Warnungen filtern"
@@ -1074,7 +1074,7 @@ msgid "Code (>>> marks the line that triggered the rule)"
 msgstr "Code (>>> markiert die Zeile, die die Regel ausgelöst hat)"
 
 msgid "Code Duplication"
-msgstr "Code-Duplikat"
+msgstr "Code Duplication"
 
 msgid "Code Smell"
 msgstr "Code Smell"
@@ -1083,7 +1083,7 @@ msgid "Code analysis: "
 msgstr "Code-Analyse: "
 
 msgid "Code review request - Delphi static analysis finding"
-msgstr "Code-Review-Anfrage - Delphi Static-Analysis-Befund"
+msgstr "Code-Review-Anfrage - Delphi Static-Analysis-Fund"
 
 msgid "Code smells / style. Refactoring candidates."
 msgstr "Code-Smells / Stilfragen. Refactoring-Kandidaten."
@@ -1095,7 +1095,7 @@ msgid "Could not open editor. File: "
 msgstr "Konnte Editor nicht öffnen. Datei: "
 
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
-msgstr "Severity-übergreifend - Bugs können Errors ODER Warnings sein."
+msgstr "Schweregrad-übergreifend - Bugs können Fehler ODER Warnungen sein."
 
 msgid "Current file is not a Pascal file."
 msgstr "Aktuelle Datei ist keine Pascal-Datei."
@@ -1116,10 +1116,10 @@ msgid "Detectors (analyser.ini [Detectors])"
 msgstr "Detektoren (analyser.ini [Detectors])"
 
 msgid "Dismiss this finding (remove marker)"
-msgstr "Diesen Befund verwerfen (Marker entfernen)"
+msgstr "Diesen Fund verwerfen (Marker entfernen)"
 
 msgid "Done. No findings."
-msgstr "Fertig. Keine Befunde."
+msgstr "Fertig. Keine Funde."
 
 msgid "ERROR"
 msgstr "FEHLER"
@@ -1155,19 +1155,19 @@ msgid "Filter: %s%s"
 msgstr "Filter: %s%s"
 
 msgid "Filtered: %d of %d findings"
-msgstr "Gefiltert: %d von %d Befunden"
+msgstr "Gefiltert: %d von %d Funden"
 
 msgid "Filtered: 0 of %d findings"
-msgstr "Gefiltert: 0 von %d Befunden"
+msgstr "Gefiltert: 0 von %d Funden"
 
 msgid "Finding"
-msgstr "Befund"
+msgstr "Fund"
 
 msgid "Findings in detail"
-msgstr "Befunde im Detail"
+msgstr "Funde im Detail"
 
 msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
-msgstr "Findings vom Typ Bug (falsches Verhalten, Crash, falsches Ergebnis)."
+msgstr "Funde vom Typ Bug (falsches Verhalten, Crash, falsches Ergebnis)."
 
 msgid "Fix"
 msgstr "Fix"
@@ -1191,7 +1191,7 @@ msgid "HTML file (*.html)|*.html"
 msgstr "HTML-Datei (*.html)|*.html"
 
 msgid "HTML report (all findings)..."
-msgstr "HTML-Report (alle Befunde)..."
+msgstr "HTML-Report (alle Funde)..."
 
 msgid "HTML report saved: %s"
 msgstr "HTML-Report gespeichert: %s"
@@ -1209,10 +1209,10 @@ msgid "IDE editor service not available."
 msgstr "IDE-Editor-Service nicht verfügbar."
 
 msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."
-msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile direkt über der betroffenen Zeile vor."
+msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen Unterdrückungs-Marker `%s` in einer eigenen Zeile direkt über der betroffenen Zeile vor."
 
 msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line in the unit `%s` (a form file takes no comment marker; the file-wide marker in its unit covers the form)."
-msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile in der Unit `%s` vor (eine Formdatei kennt keinen Kommentar-Marker; der dateiweite Marker in ihrer Unit deckt die Form ab)."
+msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen Unterdrückungs-Marker `%s` in einer eigenen Zeile in der Unit `%s` vor (eine Formdatei kennt keinen Kommentar-Marker; der dateiweite Marker in ihrer Unit deckt die Form ab)."
 
 msgid "Ignore list..."
 msgstr "Ignore-Liste..."
@@ -1257,16 +1257,16 @@ msgid "Min-Severity:"
 msgstr "Min-Schweregrad:"
 
 msgid "MinSeverity \"%s\" - active on next analysis run"
-msgstr "MinSeverity \"%s\" - aktiv beim naechsten Analyse-Lauf"
+msgstr "Min-Schweregrad \"%s\" - aktiv beim nächsten Analyse-Lauf"
 
 msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
-msgstr "Mehr als %d Dateien gefunden - Scan angehalten. Unterordner wählen oder Ordner über die Ignorierliste ausschließen (Hamburger-Menü)."
+msgstr "Mehr als %d Dateien gefunden - Scan angehalten. Unterordner wählen oder Ordner über die Ignore-Liste ausschließen (Hamburger-Menü)."
 
 msgid "No file opened."
 msgstr "Keine Datei geöffnet."
 
 msgid "No findings."
-msgstr "Keine Befunde."
+msgstr "Keine Funde."
 
 msgid "No matches."
 msgstr "Keine Treffer."
@@ -1290,13 +1290,13 @@ msgid "Plain text -> Clipboard"
 msgstr "Plain-Text -> Clipboard"
 
 msgid "Please provide a valid project path."
-msgstr "Bitte gib einen gültigen Projektpfad an."
+msgstr "Bitte einen gültigen Projektpfad angeben."
 
 msgid "Please respond with three sections"
 msgstr "Bitte antworte in drei Abschnitten"
 
 msgid "Profile \"%s\" - active on next analysis run"
-msgstr "Profil \"%s\" - aktiv beim naechsten Analyse-Lauf"
+msgstr "Profil \"%s\" - aktiv beim nächsten Analyse-Lauf"
 
 msgid "Profile (CLI/Form):"
 msgstr "Profil (CLI/Form):"
@@ -1326,7 +1326,7 @@ msgid "Suppress not available: %s"
 msgstr "Unterdrücken nicht verfügbar: %s"
 
 msgid "Real bugs / security holes (severity Error). Fix immediately."
-msgstr "Sichere Bugs / Sicherheitslücken (Severity Error). Sofort fixen."
+msgstr "Echte Bugs / Sicherheitslücken (Schweregrad Fehler). Sofort beheben."
 
 msgid "Recommended fix"
 msgstr "Empfohlener Fix"
@@ -1338,7 +1338,7 @@ msgid "Rule-Set (analyser.ini [Rules])"
 msgstr "Regelsatz (analyser.ini [Rules])"
 
 msgid "Rule-set: Profile=%s, MinSeverity=%s"
-msgstr "Regel-Set: Profil=%s, MinSeverity=%s"
+msgstr "Regelsatz: Profil=%s, MinSeverity=%s"
 
 msgid "SVN call failed (exit code = %d)"
 msgstr "SVN-Aufruf fehlgeschlagen (ExitCode=%d)"
@@ -1359,7 +1359,7 @@ msgid "Search: "
 msgstr "Suche: "
 
 msgid "Security Hotspot"
-msgstr "Sicherheits-Hotspot"
+msgstr "Security Hotspot"
 
 msgid "Security holes (SQL injection, hardcoded secrets ...)."
 msgstr "Sicherheitslücken (SQL-Injection, hartcodierte Secrets ...)."
@@ -1389,16 +1389,16 @@ msgid "Sonar export needs a project directory (run analysis first)."
 msgstr "Sonar-Export braucht ein Projektverzeichnis (zuerst analysieren)."
 
 msgid "Sonar export: select at least one finding first."
-msgstr "Sonar-Export: zuerst mindestens einen Befund auswaehlen."
+msgstr "Sonar-Export: zuerst mindestens einen Fund auswählen."
 
 msgid "Sonar report saved: %s"
 msgstr "Sonar-Report gespeichert: %s"
 
 msgid "Sonar report saved: %s (%d findings)"
-msgstr "Sonar-Report gespeichert: %s (%d Befunde)"
+msgstr "Sonar-Report gespeichert: %s (%d Funde)"
 
 msgid "Sonar: write Generic Issue report (all findings)..."
-msgstr "Sonar: Generic-Issue-Report schreiben (alle Befunde)..."
+msgstr "Sonar: Generic-Issue-Report schreiben (alle Funde)..."
 
 msgid "Sonar: write Generic Issue report..."
 msgstr "Sonar: Generic-Issue-Report schreiben..."
@@ -1416,13 +1416,13 @@ msgid "Summary"
 msgstr "Zusammenfassung"
 
 msgid "Suppress inserted: %s"
-msgstr "Suppress eingefuegt: %s"
+msgstr "Unterdrückung eingefügt: %s"
 
 msgid "Suppress: cannot locate source line"
-msgstr "Suppress: Quell-Zeile nicht erreichbar"
+msgstr "Unterdrücken: Quellzeile nicht gefunden"
 
 msgid "Suppress: editor write failed (file not in IDE?)"
-msgstr "Suppress: Editor-Write fehlgeschlagen (Datei nicht in der IDE offen?)"
+msgstr "Unterdrücken: Schreiben im Editor fehlgeschlagen (Datei nicht in der IDE offen?)"
 
 msgid "Type"
 msgstr "Typ"
@@ -1437,7 +1437,7 @@ msgid "Verify"
 msgstr "Verifikation"
 
 msgid "Vulnerability"
-msgstr "Sicherheitslücke"
+msgstr "Vulnerability"
 
 msgid "WARNING"
 msgstr "WARNUNG"
@@ -1449,10 +1449,10 @@ msgid "Watching: %s"
 msgstr "Beobachte: %s"
 
 msgid "Weighted quality score (lower = better)."
-msgstr "Gewichteter Quality-Score (niedriger = besser)."
+msgstr "Gewichteter Qualitäts-Score (niedriger = besser)."
 
 msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
-msgstr "Gewichte: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
+msgstr "Gewichte: Vulnerability 10, Fehler 7, Hotspot 5, Warnung 3, Hinweis 1, Lesefehler 2."
 
 msgid "analyse only files changed in current branch"
 msgstr "nur Dateien analysieren, die im aktuellen Branch geändert wurden"
@@ -1467,16 +1467,16 @@ msgid "in"
 msgstr "in"
 
 msgid "no findings"
-msgstr "keine Befunde"
+msgstr "keine Funde"
 
 msgid "text"
 msgstr "Text"
 
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
-msgstr "der geänderte Code als Pascal-Block. Diff minimal halten: nur die Zeilen, die sich ändern müssen. Indent und Namensstil anpassen."
+msgstr "der geänderte Code als Pascal-Block. Diff minimal halten: nur die Zeilen, die sich ändern müssen. Einrückung und Namensstil des umgebenden Codes übernehmen."
 
 msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
-msgstr "was nach dem Fix zu testen ist um zu bestätigen dass der Befund weg ist (und keine Regressionen entstanden)."
+msgstr "was nach dem Fix zu testen ist, um zu bestätigen, dass der Fund weg ist (und keine Regressionen entstanden)."
 
 msgid "▶ Analyse"
 msgstr "▶ Analysieren"
@@ -1485,7 +1485,7 @@ msgid "📄 File"
 msgstr "📄 Datei"
 
 msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"
-msgstr "UTF-8-Quelltext ohne BOM - der Delphi-Compiler liest ihn als ANSI (Mojibake)"
+msgstr "UTF-8-Quelltext ohne BOM - Delphi liest ihn als ANSI, FPC als UTF-8 (Mojibake unter Delphi)"
 
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr "Ungültige UTF-8-Sequenz - der Compiler ersetzt sie durch U+FFFD (Datenkorruption)"
@@ -1512,28 +1512,28 @@ msgid "Anonymous method inside `for i := ... do` references i - all closures see
 msgstr "Anonyme Methode in `for i := ... do` referenziert i - alle Closures sehen denselben Endwert"
 
 msgid "Sonar-style cognitive-complexity exceeds 15 - nested if/for/while/case is hard to follow mentally"
-msgstr "Kognitive Komplexitaet ueber 15 (Sonar-Stil) - verschachtelte if/for/while/case sind mental schwer zu folgen"
+msgstr "Kognitive Komplexität über 15 (Sonar-Stil) - verschachtelte if/for/while/case sind schwer nachzuvollziehen"
 
 msgid "After T.FreeOnTerminate := True, any subsequent T.Field/T.Method access risks Access-Violation if the thread has already self-destructed"
-msgstr "Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access-Violation, wenn der Thread bereits beendet ist"
+msgstr "Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access-Violation, wenn sich der Thread bereits selbst freigegeben hat"
 
 msgid "File-open call (TFileStream.Create, AssignFile, ...) with a path expression that concatenates user input (Edit.Text, Request.Params, ...) - path-traversal risk"
 msgstr "Datei-Open mit Pfad aus Benutzereingabe zusammengesetzt - Path-Traversal-Risiko; Eingabe validieren/normalisieren"
 
 msgid "[Ignore] (no string arg) skips the test silently - add a message explaining why the test is disabled"
-msgstr "[Ignore] ohne Begruendungs-String ueberspringt den Test stillschweigend - Nachricht ergaenzen, warum er deaktiviert ist"
+msgstr "[Ignore] ohne Begründungs-String überspringt den Test stillschweigend - Nachricht ergänzen, warum er deaktiviert ist"
 
 msgid "Two identical [X] attributes on the same member - copy-paste leftover, no effect"
 msgstr "Zwei identische [X]-Attribute am selben Member - Copy-Paste-Rest ohne Wirkung"
 
 msgid "[Category] (no arg) is a compile-time error in DUnitX - always pass a category name"
-msgstr "[Category] ohne Argument ist in DUnitX ein Compile-Fehler - immer einen Kategorienamen uebergeben"
+msgstr "[Category] ohne Argument ist in DUnitX ein Compile-Fehler - immer einen Kategorienamen übergeben"
 
 msgid "Class is marked [TestFixture] but contains no [Test] methods - zombie fixture visible in TestInsight but executes nothing"
-msgstr "Klasse ist [TestFixture], enthaelt aber keine [Test]-Methoden - Zombie-Fixture: sichtbar in TestInsight, wird aber nie ausgefuehrt"
+msgstr "Klasse ist [TestFixture], enthält aber keine [Test]-Methoden - Zombie-Fixture: sichtbar in TestInsight, wird aber nie ausgeführt"
 
 msgid "Attribute line followed by a blank line - visually loose, often a refactoring leftover"
-msgstr "Attributzeile gefolgt von einer Leerzeile - optisch losgeloest, oft ein Refactoring-Rest"
+msgstr "Attributzeile gefolgt von einer Leerzeile - optisch losgelöst, oft ein Refactoring-Rest"
 
 msgid "DFM component is never referenced in code, other units, or the DFM itself - possibly a refactoring leftover"
 msgstr "DFM-Komponente wird weder im Code noch in anderen Units noch im DFM referenziert - vermutlich ein Refactoring-Rest"
@@ -1542,7 +1542,7 @@ msgid "A .pas/.dfm file lies in the project folder but is not referenced by the 
 msgstr "Eine .pas-/.dfm-Datei liegt im Projektordner, ist aber nicht im Projekt (.dproj/.groupproj) referenziert - vermutlich verwaist"
 
 msgid "A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project"
-msgstr "Eine .pas-Datei wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), steht aber nicht in der Projektdatei (.dproj/.groupproj) - ins Projekt aufnehmen"
+msgstr "Eine .pas-Datei wird von Projekt-Units per uses gezogen (kompiliert über den Suchpfad), steht aber nicht in der Projektdatei (.dproj/.groupproj) - ins Projekt aufnehmen"
 
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr "Nicht-ASCII-Zeichen im Bezeichner - Homoglyphen-/Verwechslungsrisiko"
@@ -1566,13 +1566,13 @@ msgid "More actions (Settings, Ignore list, Branch-Changes)"
 msgstr "Weitere Aktionen (Einstellungen, Ignore-Liste, Branch-Änderungen)"
 
 msgid "Done. %d findings. Click a row -> AI prompt on clipboard."
-msgstr "Fertig. %d Befunde. Zeile anklicken -> KI-Prompt in der Zwischenablage."
+msgstr "Fertig. %d Funde. Zeile anklicken -> KI-Prompt in der Zwischenablage."
 
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
-msgstr "git nicht gefunden. Installiere Git for Windows (git-scm.com) oder setze in analyser.ini den Pfad zu git.exe."
+msgstr "git nicht gefunden. Git for Windows (git-scm.com) installieren oder in analyser.ini den Pfad zu git.exe setzen."
 
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
-msgstr "svn nicht gefunden. Installiere TortoiseSVN MIT der Option \"command line client tools\" oder setze in analyser.ini den Pfad zu svn.exe."
+msgstr "svn nicht gefunden. TortoiseSVN MIT der Option \"command line client tools\" installieren oder in analyser.ini den Pfad zu svn.exe setzen."
 
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr "Du bist ein erfahrener Delphi-Entwickler und reviewst die Ausgabe eines statischen Code-Analyzers. Zielversion: Delphi 12 Athens (RTL/VCL). Schlage minimal-invasive, idiomatische Fixes vor - keine Refactor-Sprees, keine Stil-Überarbeitungen, keine neuen Abhängigkeiten ohne zwingenden Grund."
@@ -1581,7 +1581,7 @@ msgid "Reference pattern (generic example for this rule, NOT the user's code)"
 msgstr "Referenz-Pattern (generisches Beispiel für diese Regel, NICHT der User-Code)"
 
 msgid "Editor right-click triggers a single-file analysis; findings appear as stripes + hover overlays in the editor (no dock)."
-msgstr "Editor-Rechtsklick startet eine Einzeldatei-Analyse; Befunde erscheinen als Markierungen + Hover-Overlays im Editor (kein Dock-Fenster)."
+msgstr "Editor-Rechtsklick startet eine Einzeldatei-Analyse; Funde erscheinen als Markierungen + Hover-Overlays im Editor (kein Dock-Fenster)."
 
 msgid "UsesCheck - report unused entries in uses clause (may produce false positives)"
 msgstr "UsesCheck - ungenutzte Einträge in uses-Klausel melden (kann False-Positives erzeugen)"
@@ -1600,7 +1600,7 @@ msgid "UI language:"
 msgstr "Oberflächensprache:"
 
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
-msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Befunde und Exporte werden nie übersetzt. Die Liste enthält die eingebauten Übersetzungen sowie jede i18n\\<code>.po neben der Plugin-BPL. Bereits angezeigte Beschriftungen wechseln erst nach einem IDE-Neustart."
+msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Funde und Exporte werden nie übersetzt. Die Liste enthält die eingebauten Übersetzungen sowie jede i18n\\<code>.po neben der Plugin-BPL. Bereits angezeigte Beschriftungen wechseln erst nach einem IDE-Neustart."
 
 msgid "Language"
 msgstr "Sprache"
@@ -1619,7 +1619,7 @@ msgid "All files"
 msgstr "Alle Dateien"
 
 msgid "All findings reset."
-msgstr "Alle Befunde zurückgesetzt."
+msgstr "Alle Funde zurückgesetzt."
 
 msgid "An analysis is already running."
 msgstr "Es läuft bereits eine Analyse."
@@ -1637,7 +1637,7 @@ msgid "Annotation overlay position:"
 msgstr "Position der Anmerkung:"
 
 msgid "Baseline (show only new findings)"
-msgstr "Baseline (nur neue Befunde anzeigen)"
+msgstr "Baseline (nur neue Funde anzeigen)"
 
 msgid "Baseline JSON"
 msgstr "Baseline-JSON"
@@ -1646,7 +1646,7 @@ msgid "Baseline file:"
 msgstr "Baseline-Datei:"
 
 msgid "Baseline written: %s (%d findings)"
-msgstr "Baseline geschrieben: %s (%d Befunde)"
+msgstr "Baseline geschrieben: %s (%d Funde)"
 
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr "Alle Editor-Markierungen in allen Dateien löschen (Tabellen bleiben)"
@@ -1667,10 +1667,10 @@ msgid "Gray (neutral)"
 msgstr "Grau (neutral)"
 
 msgid "Ignore list opened: %s"
-msgstr "Ignorierliste geöffnet: %s"
+msgstr "Ignore-Liste geöffnet: %s"
 
 msgid "No findings to write. Run an analysis first."
-msgstr "Keine Befunde zum Schreiben. Bitte zuerst eine Analyse ausführen."
+msgstr "Keine Funde zum Schreiben. Bitte zuerst eine Analyse ausführen."
 
 msgid "One line below (default)"
 msgstr "Eine Zeile darunter (Standard)"
@@ -1679,7 +1679,7 @@ msgid "Plugin Open Error"
 msgstr "Fehler beim Öffnen im Plugin"
 
 msgid "Reset all findings (clear panels + markers)"
-msgstr "Alle Befunde zurücksetzen (Panels und Markierungen leeren)"
+msgstr "Alle Funde zurücksetzen (Panels und Markierungen leeren)"
 
 msgid "Same line at end"
 msgstr "Gleiche Zeile am Ende"
@@ -1691,7 +1691,7 @@ msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr "Anmerkung beim Überfahren anzeigen (sonst markierte Zeile anklicken)"
 
 msgid "Show only findings new since the baseline (hide the legacy backlog)"
-msgstr "Nur Befunde anzeigen, die seit der Baseline neu sind (Altbestand ausblenden)"
+msgstr "Nur Funde anzeigen, die seit der Baseline neu sind (Altbestand ausblenden)"
 
 msgid "Subtle (muted colors)"
 msgstr "Dezent (gedämpfte Farben)"
@@ -1789,13 +1789,13 @@ msgstr "Dunkel"
 # --- 2026-08-05: Befund oeffnen (externer Editor / DFM-Ziel) ---
 
 msgid "Open findings with"
-msgstr "Befunde öffnen mit"
+msgstr "Funde öffnen mit"
 
 msgid "DFM findings: Delphi IDE"
-msgstr "DFM-Befunde: Delphi-IDE"
+msgstr "DFM-Funde: Delphi-IDE"
 
 msgid "DFM findings: built-in viewer"
-msgstr "DFM-Befunde: eingebauter Betrachter"
+msgstr "DFM-Funde: eingebauter Betrachter"
 
 msgid "Configure external editor..."
 msgstr "Externen Editor einrichten..."
@@ -1842,10 +1842,10 @@ msgstr "Sonar Generic Issue Format (*.json)|*.json"
 # --- 2026-08-06: Plugin-Tasten in der EXE (Suppress/Quick-Fix) ---
 
 msgid "Suppress: could not write file: %s"
-msgstr "Suppress: Datei nicht schreibbar: %s"
+msgstr "Unterdrücken: Datei nicht schreibbar: %s"
 
 msgid "Suppress: cannot place the marker: %s"
-msgstr "Suppress: Marker nicht platzierbar: %s"
+msgstr "Unterdrücken: Marker nicht platzierbar: %s"
 
 # --- 2026-08-07: Kacheln, Statusleiste, Export (EXE) ---
 
@@ -1856,7 +1856,7 @@ msgid "CSV (filtered view)..."
 msgstr "CSV (gefilterte Sicht)..."
 
 msgid "SARIF (all findings)..."
-msgstr "SARIF (alle Befunde)..."
+msgstr "SARIF (alle Funde)..."
 
 msgid "SARIF export"
 msgstr "SARIF-Export"
@@ -1865,13 +1865,13 @@ msgid "SARIF file (*.sarif)|*.sarif"
 msgstr "SARIF-Datei (*.sarif)|*.sarif"
 
 msgid "SARIF report saved: %s (%d findings)"
-msgstr "SARIF-Bericht gespeichert: %s (%d Befunde)"
+msgstr "SARIF-Report gespeichert: %s (%d Funde)"
 
 msgid "SARIF export failed: "
 msgstr "SARIF-Export fehlgeschlagen: "
 
 msgid "Nothing to export - no findings."
-msgstr "Nichts zu exportieren - keine Befunde."
+msgstr "Nichts zu exportieren - keine Funde."
 
 # --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---
 
@@ -1882,13 +1882,13 @@ msgid "Baseline JSON (*.json)|*.json"
 msgstr "Baseline-JSON (*.json)|*.json"
 
 msgid "Show only new findings (baseline)"
-msgstr "Nur neue Befunde zeigen (Baseline)"
+msgstr "Nur neue Funde zeigen (Baseline)"
 
 msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
 msgstr "Noch keine Baseline-Datei eingerichtet - erst eine schreiben, dann [Baseline] File in der analyser.ini setzen."
 
 msgid "Open finding"
-msgstr "Befund öffnen"
+msgstr "Fund öffnen"
 
 msgid "Copy AI prompt"
 msgstr "KI-Prompt kopieren"
@@ -1919,7 +1919,7 @@ msgid "Looked for:"
 msgstr "Gesucht wurde:"
 
 msgid "Write a new baseline with the current findings now?"
-msgstr "Jetzt eine neue Baseline mit den aktuellen Befunden schreiben?"
+msgstr "Jetzt eine neue Baseline mit den aktuellen Funden schreiben?"
 
 msgid "No scan target selected - pick a path or project first."
 msgstr "Kein Scan-Ziel gewählt - erst einen Pfad oder ein Projekt auswählen."
@@ -1929,7 +1929,7 @@ msgstr "Kein Scan-Ziel gewählt - erst einen Pfad oder ein Projekt auswählen."
 # --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---
 
 msgid "Opened in Delphi IDE: %s"
-msgstr "In der Delphi-IDE geoeffnet: %s"
+msgstr "In der Delphi-IDE geöffnet: %s"
 
 msgid "Opened: %s  Line: %d"
 msgstr "Geöffnet: %s  Zeile: %d"
@@ -1968,7 +1968,7 @@ msgid "Message"
 msgstr "Meldung"
 
 msgid "Fix hint"
-msgstr "Fix-Hinweis"
+msgstr "Lösungshinweis"
 
 # Nur-Text-Annotation-Hint 2026-08-13 ([UI] OverlayTextOnly).
 
@@ -1976,7 +1976,7 @@ msgid "Text only, transparent (no window)"
 msgstr "Nur Text, transparent (kein Fenster)"
 
 msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by double-clicking its text. Takes effect on save."
-msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gekürzt, ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
+msgstr "Wo sich die Hover-Einblendung relativ zur Fundzeile verankert; Positionswechsel wirken nach einem Neustart der IDE. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Fund-Panel), lange Titel werden gekürzt, ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
 
 # Combo-Umbau Nur-Text-Variante 2026-08-13.
 
@@ -1984,7 +1984,7 @@ msgid "Text (one-line hint, no window)"
 msgstr "Text (einzeiliger Hinweis, kein Fenster)"
 
 msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by double-clicking its text. Takes effect on save."
-msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
+msgstr "Betrifft nur den Markierungsstreifen im Editor, die Mini-Infoleiste und die Titelzeile der Hover-Einblendung. Eigenschaften-Panel und Haupttabelle behalten die Standardfarben der Schweregrade. Hell- und Dunkelvariante ergeben sich automatisch. \"Text\" ersetzt das Einblendungsfenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Fund-Panel); ein Fund lässt sich per Doppelklick auf seinen Text verwerfen. Wirkt beim Speichern."
 
 # i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-
 # Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.
@@ -2019,7 +2019,7 @@ msgid "Rule-set profiles"
 msgstr "Regelsatz-Profile"
 
 msgid "Rule-set profiles..."
-msgstr "Regelsatz-Profile ..."
+msgstr "Regelsatz-Profile..."
 
 msgid "ID"
 msgstr "ID"
@@ -2033,7 +2033,7 @@ msgstr "Schließen"
 msgid "No rule catalogue found - profiles unavailable."
 msgstr "Kein Regelkatalog gefunden - Profile nicht verfügbar."
 msgid "Kind (profile token)"
-msgstr "Kind (Profil-Token)"
+msgstr "Art (Profil-Token)"
 
 # --- 2026-08-24: Profil-Fenster Stufe 2 (eigene Profile) ---
 
@@ -2050,7 +2050,7 @@ msgid "Add rules"
 msgstr "Regeln aufnehmen"
 
 msgid "Add rules..."
-msgstr "Regeln aufnehmen ..."
+msgstr "Regeln aufnehmen..."
 
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr "Erlaubt sind Buchstaben, Ziffern, Bindestrich, Unterstrich und Punkt."
@@ -2059,7 +2059,7 @@ msgid "Copy profile"
 msgstr "Profil kopieren"
 
 msgid "Copy..."
-msgstr "Kopieren ..."
+msgstr "Kopieren..."
 
 msgid "Delete profile"
 msgstr "Profil löschen"
@@ -2071,7 +2071,7 @@ msgid "Name of the new profile:"
 msgstr "Name des neuen Profils:"
 
 msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own."
-msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren ...\" ein eigenes anlegen."
+msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren...\" ein eigenes anlegen."
 
 msgid "Profile \"%s\": %d of %d rules. Your own profile, stored in %s"
 msgstr "Profil \"%s\": %d von %d Regeln. Eigenes Profil, abgelegt in %s"
@@ -2109,12 +2109,12 @@ msgid "Reload"
 msgstr "Neu laden"
 
 msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."
-msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren ...\" ein eigenes anlegen (Ablage: %s)."
+msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren...\" ein eigenes anlegen (Ablage: %s)."
 
 # --- 2026-08-25: Regelliste sortierbar + durchsuchbar ---
 
 msgid "Search ID, kind, rule text, severity or type..."
-msgstr "ID, Kind, Regeltext, Schweregrad oder Typ suchen ..."
+msgstr "ID, Art, Regeltext, Schweregrad oder Typ suchen..."
 
 msgid "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
 msgstr "Profil \"%s\": %d von %d Regeln angezeigt (Filter \"%s\")."
@@ -2137,7 +2137,7 @@ msgid "%s is not a valid JSON object."
 msgstr "%s ist kein gültiges JSON-Objekt."
 
 msgid "Import..."
-msgstr "Importieren ..."
+msgstr "Importieren..."
 
 msgid "Import profiles"
 msgstr "Profile importieren"
@@ -2185,10 +2185,10 @@ msgid "Dialect: FPC/Lazarus"
 msgstr "Dialekt: FPC/Lazarus"
 
 msgid "Dialect set to %s - applies to the next analysis run."
-msgstr "Dialekt auf %s gesetzt - wirkt beim naechsten Analyse-Lauf."
+msgstr "Dialekt auf %s gesetzt - wirkt beim nächsten Analyse-Lauf."
 
 msgid "analyser.ini is not writable - dialect unchanged."
-msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."
+msgstr "analyser.ini ist nicht schreibbar - Dialekt unverändert."
 
 msgid "Finding actions: provider failed - %s"
 msgstr "Fund-Aktionen: Anbieter meldet Fehler - %s"
@@ -2218,7 +2218,7 @@ msgid "Suppress in this file"
 msgstr "In dieser Datei unterdrücken"
 
 msgid "Remove ineffective suppression marker"
-msgstr "Wirkungslosen Unterdrück-Marker entfernen"
+msgstr "Wirkungslosen Unterdrückungs-Marker entfernen"
 
 msgid "Use FreeAndNil(%s)"
 msgstr "FreeAndNil(%s) verwenden"
@@ -2251,7 +2251,7 @@ msgid "Add an empty else branch"
 msgstr "Leeren else-Zweig ergänzen"
 
 msgid "Add an else branch that raises an exception"
-msgstr "else-Zweig mit Exception ergänzen"
+msgstr "else-Zweig ergänzen, der eine Ausnahme auslöst"
 
 msgid "Put the branch in begin..end"
 msgstr "Zweig in begin..end setzen"
@@ -2260,7 +2260,7 @@ msgid "Remove the extra semicolon"
 msgstr "Überzähliges Semikolon entfernen"
 
 msgid "Move the keyword to column 1"
-msgstr "Schlüsselwort an Spalte 1 setzen"
+msgstr "Schlüsselwort in Spalte 1 verschieben"
 
 msgid "Replace begin with initialization"
 msgstr "begin durch initialization ersetzen"
@@ -2275,7 +2275,7 @@ msgid "Raise ENotImplemented in the empty body"
 msgstr "ENotImplemented im leeren Rumpf auslösen"
 
 msgid "Raise the exception"
-msgstr "Exception auslösen"
+msgstr "Ausnahme auslösen"
 
 msgid "Use raise; to keep the original stack trace"
 msgstr "raise; verwenden (Original-Stack-Trace bleibt)"
@@ -2344,7 +2344,7 @@ msgid "Build Format() from concatenation"
 msgstr "Format() aus Verkettung bilden"
 
 msgid "Copy parameterized template to clipboard"
-msgstr "Parametrisierte Vorlage in die Zwischenablage"
+msgstr "Parametrisierte Vorlage in die Zwischenablage kopieren"
 
 msgid "uses: qualify all %d entries"
 msgstr "uses: alle %d Einträge qualifizieren"
@@ -2398,7 +2398,7 @@ msgid "Line too long for the editor selection (the editor reaches at most column
 msgstr "Zeile zu lang für die Editor-Markierung (der Editor erreicht höchstens Spalte %d)"
 
 msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
-msgstr "Bereich %d:%d bis %d:%d liegt hinter dem Ende des Editor-Puffers (%d Zeilen) - Datei neu prüfen"
+msgstr "Bereich %d:%d bis %d:%d liegt hinter dem Ende des Editor-Puffers (%d Zeilen) - Datei erneut analysieren"
 
 msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr "Editor-Cursor lässt sich nicht auf Zeile %d, Spalte %d setzen"
@@ -2406,13 +2406,13 @@ msgstr "Editor-Cursor lässt sich nicht auf Zeile %d, Spalte %d setzen"
 # reDelphix C1 (uRdxText, gemeinsame Texte)
 
 msgid "line moved? Analyse the file again"
-msgstr "Zeile verschoben? Datei neu prüfen"
+msgstr "Zeile verschoben? Datei erneut analysieren"
 
 msgid "%s - line moved? Analyse the file again"
-msgstr "%s - Zeile verschoben? Datei neu prüfen"
+msgstr "%s - Zeile verschoben? Datei erneut analysieren"
 
 msgid "%s - finding outdated? Analyse the file again"
-msgstr "%s - Fund veraltet? Datei neu prüfen"
+msgstr "%s - Fund veraltet? Datei erneut analysieren"
 
 msgid "the message has no column"
 msgstr "Spalte fehlt in der Meldung"
@@ -2517,7 +2517,7 @@ msgid "followed by \".\", \"[\" or \"(\" - the parentheses belong to a chain"
 msgstr "es folgt \".\", \"[\" oder \"(\" - die Klammern gehören zu einer Kette"
 
 msgid "line %d carries %d pointer subtractions (SCA161) - ambiguous"
-msgstr "Zeile %d trägt %d Zeigerabzüge (SCA161) - mehrdeutig"
+msgstr "Zeile %d trägt %d Pointer-Subtraktionen (SCA161) - mehrdeutig"
 
 msgid "no \"((X))\" at the reported place"
 msgstr "kein \"((X))\" an der gemeldeten Stelle"
@@ -2535,7 +2535,7 @@ msgid "the parentheses start the line - they could belong to a multi-line consta
 msgstr "die Klammern stehen am Zeilenanfang - sie könnten zu einer mehrzeiligen Konstante gehören"
 
 msgid "the subtraction continues with another 32-bit cast (\"- Integer(c)\") - the chain would stay half converted"
-msgstr "der Abzug setzt sich mit einem weiteren 32-Bit-Cast fort (\"- Integer(c)\") - die Kette bliebe halb umgestellt"
+msgstr "die Subtraktion setzt sich mit einem weiteren 32-Bit-Cast fort (\"- Integer(c)\") - die Kette bliebe halb umgestellt"
 
 msgid "the two casts differ (Cardinal or LongWord against Integer or LongInt) - NativeInt or NativeUInt would be a guess"
 msgstr "die beiden Casts sind verschieden (Cardinal oder LongWord gegen Integer oder LongInt) - NativeInt oder NativeUInt wäre geraten"
@@ -2694,7 +2694,7 @@ msgid "the \"on\" does not start a handler of an except block"
 msgstr "das \"on\" beginnt keinen Handler eines except-Blocks"
 
 msgid "the \"with\" expression could be a type cast - \"Name(X);\" would not be a statement"
-msgstr "der \"with\"-Ausdruck könnte ein Typecast sein - \"Name(X);\" ist keine Anweisung"
+msgstr "der \"with\"-Ausdruck könnte ein Typecast sein - \"Name(X);\" wäre keine Anweisung"
 
 msgid "the \"with\" expression is no call - nothing valid would remain as a statement"
 msgstr "der \"with\"-Ausdruck ist kein Aufruf - als Anweisung bliebe nichts Gültiges"
@@ -2825,7 +2825,7 @@ msgid "the header of \"%s\" in line %d cannot be read safely"
 msgstr "der Kopf von \"%s\" in Zeile %d ist nicht sicher zu lesen"
 
 msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
-msgstr "\"%s\" ist \"%s\" - ein Linker, eine Bibliothek oder C-Code bindet die Routine beim genauen Namen"
+msgstr "\"%s\" ist \"%s\" - ein Linker, eine Bibliothek oder C-Code bindet die Routine über ihren genauen Namen"
 
 msgid "the unit links an object file ({$L} in line %d) - C code may call \"%s\" by its exact name"
 msgstr "die Unit linkt eine Objektdatei ({$L} in Zeile %d) - C-Code kann \"%s\" beim genauen Namen rufen"
@@ -2843,7 +2843,7 @@ msgid "\"%s\" stands after \"%s\" - it is conditional, the code after it runs"
 msgstr "\"%s\" steht hinter \"%s\" - es ist bedingt, der Code danach läuft"
 
 msgid "\"%s\" stands in a list that is not a call argument (enumeration, set or declaration)"
-msgstr "\"%s\" steht in einer Liste, die kein Aufrufargument ist (Aufzählung, Menge oder Deklaration)"
+msgstr "\"%s\" steht in einer Liste, die kein Aufrufargument ist (Aufzählung, Set oder Deklaration)"
 
 msgid "\"%s.Assert\" is not System.Assert"
 msgstr "\"%s.Assert\" ist nicht System.Assert"
@@ -2861,10 +2861,10 @@ msgid "\"else\" in the unreachable code without an \"if\" of its statement"
 msgstr "\"else\" im unerreichbaren Code ohne ein \"if\" seiner Anweisung"
 
 msgid "%d declarations of \"%s\" in classes named %s - overload or conditional twin?"
-msgstr "%d Deklarationen von \"%s\" in Klassen namens %s - Überladung oder bedingter Zwilling?"
+msgstr "%d Deklarationen von \"%s\" in Klassen namens %s - Overload oder bedingter Zwilling?"
 
 msgid "%d implementations of %s.%s in this file - overload or conditional twin?"
-msgstr "%d Implementierungen von %s.%s in dieser Datei - Überladung oder bedingter Zwilling?"
+msgstr "%d Implementierungen von %s.%s in dieser Datei - Overload oder bedingter Zwilling?"
 
 msgid "%d sections \"%s\" - ambiguous"
 msgstr "%d Abschnitte \"%s\" - mehrdeutig"
@@ -2960,7 +2960,7 @@ msgid "IfThen has %d arguments here, not three"
 msgstr "IfThen hat hier %d Argumente statt drei"
 
 msgid "IfThen with two arguments - the default of the third depends on the overload (0 or an empty string)"
-msgstr "IfThen mit zwei Argumenten - die Vorgabe des dritten hängt an der Überladung (0 oder leerer String)"
+msgstr "IfThen mit zwei Argumenten - die Vorgabe des dritten hängt am Overload (0 oder leerer String)"
 
 msgid "IfThen(..) does not close on its line"
 msgstr "IfThen(..) schließt nicht auf seiner Zeile"
@@ -2990,7 +2990,7 @@ msgid "Resume stands in a conditional compilation block - an older compiler may 
 msgstr "Resume steht in einem Block bedingter Übersetzung - ein älterer Compiler braucht es womöglich"
 
 msgid "Single %s compared with %s - the SameValue overloads could be ambiguous (E2251)"
-msgstr "Single %s mit %s verglichen - die Überladungen von SameValue könnten mehrdeutig sein (E2251)"
+msgstr "Single %s mit %s verglichen - die Overloads von SameValue könnten mehrdeutig sein (E2251)"
 
 msgid "SysUtils is in no uses clause of the file - the call need not bind to the RTL"
 msgstr "SysUtils steht in keiner uses-Klausel der Datei - der Aufruf bindet nicht sicher an die RTL"
@@ -3017,7 +3017,7 @@ msgid "a string literal names \"%s\" (line %d) - a lookup by name (RTTI, MethodA
 msgstr "ein String-Literal nennt \"%s\" (Zeile %d) - eine Suche per Name (RTTI, MethodAddress, Skript) kann Groß- und Kleinschreibung unterscheiden"
 
 msgid "a with statement stands before the call in its routine (line %d) - the names could bind to a member"
-msgstr "vor dem Aufruf steht in seiner Routine ein with (Zeile %d) - die Namen könnten an einen Member binden"
+msgstr "vor dem Aufruf steht in seiner Routine ein with (Zeile %d) - die Namen könnten an ein Member binden"
 
 msgid "an \"else\" follows the Assert call - the new if would take it over"
 msgstr "hinter dem Assert-Aufruf folgt ein \"else\" - das neue if nähme es an sich"
@@ -3257,7 +3257,7 @@ msgid "the file supports compilers without TThread.Start (%s, line %d) - Start e
 msgstr "die Datei unterstützt Compiler ohne TThread.Start (%s, Zeile %d) - Start gibt es ab Delphi 2010 und FPC 2.6"
 
 msgid "the file uses FormatSettings as a member (line %d) - inside such a class the bare name binds to the member"
-msgstr "die Datei nutzt FormatSettings als Member (Zeile %d) - in einer solchen Klasse bindet der bloße Name an den Member"
+msgstr "die Datei nutzt FormatSettings als Member (Zeile %d) - in einer solchen Klasse bindet der bloße Name an das Member"
 
 msgid "the format string has a currency spec (m) - TFormatSettings.Invariant writes the generic currency sign instead of the local one"
 msgstr "der Formatstring hat eine Währungs-Spec (m) - TFormatSettings.Invariant schreibt das allgemeine Währungszeichen statt des lokalen"
@@ -3296,7 +3296,7 @@ msgid "the message does not name the comparison"
 msgstr "die Meldung nennt den Vergleich nicht"
 
 msgid "the message does not name the format string - analyse the file again"
-msgstr "die Meldung nennt den Formatstring nicht - Datei neu prüfen"
+msgstr "die Meldung nennt den Formatstring nicht - Datei erneut analysieren"
 
 msgid "the message does not name the routine and the pointer type"
 msgstr "die Meldung nennt Routine und Zeigertyp nicht"
@@ -3452,7 +3452,7 @@ msgid "Rename the constant to %s"
 msgstr "Konstante in %s umbenennen"
 
 msgid "Rename the exception class to %s"
-msgstr "Exception-Klasse in %s umbenennen"
+msgstr "Ausnahmeklasse in %s umbenennen"
 
 msgid "Replace \"out\" with \"var\" for %s"
 msgstr "\"out\" für %s durch \"var\" ersetzen"
@@ -3467,7 +3467,7 @@ msgid "a string literal names \"%s\" (ClassName, FindClass, RTTI)"
 msgstr "ein String-Literal nennt \"%s\" (ClassName, FindClass, RTTI)"
 
 msgid "asm in the routine - it can read parameters through registers without their names"
-msgstr "asm in der Routine - es kann Parameter über Register lesen, ohne ihren Namen"
+msgstr "asm in der Routine - es kann Parameter über Register lesen, ohne ihre Namen"
 
 msgid "attribute on the routine or its class - RTTI-based code can bind parameters by their names"
 msgstr "Attribut an der Routine oder ihrer Klasse - RTTI-gestützter Code kann Parameter per Namen binden"
@@ -3563,7 +3563,7 @@ msgid "parameter \"%s\" is passed to %s in line %d - it can be a var or out para
 msgstr "der Parameter \"%s\" geht an %s (Zeile %d) - dort kann er ein var- oder out-Parameter sein"
 
 msgid "parameter \"%s\" is written in line %d"
-msgstr "der Parameter \"%s\" wird in Zeile %d beschrieben"
+msgstr "dem Parameter \"%s\" wird in Zeile %d ein Wert zugewiesen"
 
 msgid "parameter \"%s\" occurs in the routine in line %d"
 msgstr "der Parameter \"%s\" kommt in Zeile %d der Routine vor"
@@ -3584,7 +3584,7 @@ msgid "the class \"%s\" already carries the \"E\" prefix"
 msgstr "die Klasse \"%s\" trägt schon das Präfix \"E\""
 
 msgid "the class implements %s - the method can be one of its members"
-msgstr "die Klasse implementiert %s - die Methode kann einer seiner Member sein"
+msgstr "die Klasse implementiert %s - die Methode kann eines seiner Member sein"
 
 msgid "the class is declared before \"implementation\" - other units may use its name"
 msgstr "die Klasse ist vor \"implementation\" deklariert - andere Units können ihren Namen benutzen"
@@ -3638,7 +3638,7 @@ msgid "the message does not name the constant and its routine"
 msgstr "die Meldung nennt die Konstante und ihre Routine nicht"
 
 msgid "the message does not name the exception class"
-msgstr "die Meldung nennt die Exception-Klasse nicht"
+msgstr "die Meldung nennt die Ausnahmeklasse nicht"
 
 msgid "the message names no parameter"
 msgstr "die Meldung nennt keinen Parameter"
@@ -3863,7 +3863,7 @@ msgid "line %d adds an object that is not created right there (or with a non-lit
 msgstr "Zeile %d fügt ein Objekt hinzu, das nicht genau dort entsteht (oder mit einem Argument, das kein Literal ist, etwa einem Besitzer) - es kann einen anderen Besitzer haben"
 
 msgid "line %d assigns to a property of \"%s\" - an owning list frees the items it drops"
-msgstr "Zeile %d weist einer Eigenschaft von \"%s\" zu - eine besitzende Liste gibt die Elemente frei, die sie abgibt"
+msgstr "Zeile %d weist einer Property von \"%s\" zu - eine besitzende Liste gibt die Elemente frei, die sie entfernt"
 
 msgid "line %d spells the name differently - the help renames one spelling only"
 msgstr "Zeile %d schreibt den Namen anders - die Hilfe benennt nur eine Schreibweise um"
@@ -3872,10 +3872,10 @@ msgid "line %d uses an item of the list as a value or frees it - after the chang
 msgstr "Zeile %d nutzt ein Element der Liste als Wert oder gibt es frei - nach der Änderung gibt die Liste es ebenfalls frei"
 
 msgid "method of a nested type (%s)"
-msgstr "Methode eines geschachtelten Typs (%s)"
+msgstr "Methode eines verschachtelten Typs (%s)"
 
 msgid "nested type in the class declaration"
-msgstr "geschachtelter Typ in der Klassendeklaration"
+msgstr "verschachtelter Typ in der Klassendeklaration"
 
 msgid "no \"%s\" on the reported line"
 msgstr "kein \"%s\" auf der gemeldeten Zeile"
@@ -4160,7 +4160,7 @@ msgid "\"%s\" follows the section - it is not empty"
 msgstr "nach dem Abschnitt folgt \"%s\" - er ist nicht leer"
 
 msgid "compiler directive up to the next section - the empty section may apply only in one branch"
-msgstr "Compiler-Direktive bis zum nächsten Abschnitt - der leere Abschnitt gilt evtl. nur in einem Zweig"
+msgstr "Compiler-Direktive bis zum nächsten Abschnitt - der leere Abschnitt gilt vielleicht nur in einem Zweig"
 
 msgid "the message has no section"
 msgstr "Abschnitt fehlt in der Meldung"
@@ -4211,7 +4211,7 @@ msgid "the parentheses contain more than whitespace"
 msgstr "in den Klammern steht nicht nur Leerraum"
 
 msgid "no plain name before () (member or result call)"
-msgstr "vor () steht kein bloßer Name (Element- oder Ergebnisaufruf)"
+msgstr "vor () steht kein bloßer Name (Member- oder Ergebnisaufruf)"
 
 msgid "more than whitespace between the name and ()"
 msgstr "zwischen Name und () steht nicht nur Leerraum"
@@ -4298,7 +4298,7 @@ msgid "type of %s not proven - \"= nil\" would call a function or method pointer
 msgstr "Typ von %s nicht bewiesen - einen Funktions- oder Methodenzeiger riefe \"= nil\" auf, Assigned() nicht"
 
 msgid "%s ends in %s - not proven as a field in this unit: \"= nil\" would call a method without arguments, Assigned() would only check the method pointer"
-msgstr "%s endet auf %s - in dieser Unit nicht als Feld bewiesen: eine Methode ohne Argumente riefe \"= nil\" auf, Assigned() prüfte nur den Methodenzeiger"
+msgstr "%s endet auf %s - in dieser Unit nicht als Feld bewiesen: \"= nil\" riefe eine Methode ohne Argumente auf, Assigned() prüfte nur den Methodenzeiger"
 
 msgid "%s has the procedural type %s (declared in this unit) - \"= nil\" calls it, Assigned() does not"
 msgstr "%s hat den Prozedurtyp %s (in dieser Unit deklariert) - \"= nil\" ruft ihn auf, Assigned() nicht"
@@ -4403,7 +4403,7 @@ msgid "%s in line %d - a conditional, deeper or second release in the range; wit
 msgstr "%s in Zeile %d - eine bedingte, tiefer liegende oder zweite Freigabe im Bereich; mit finally liefe sie doppelt"
 
 msgid "the release in line %d frees %s in a different spelling (Self., typecast, Leave/Release) - with finally it would run twice; %s"
-msgstr "die Freigabe in Zeile %d gibt %s in anderer Schreibweise frei (Self., Typumwandlung, Leave/Release) - mit finally liefe sie doppelt; %s"
+msgstr "die Freigabe in Zeile %d gibt %s in anderer Schreibweise frei (Self., Typecast, Leave/Release) - mit finally liefe sie doppelt; %s"
 
 msgid "the lock is taken again in line %d - %s"
 msgstr "die Sperre wird in Zeile %d noch einmal genommen - %s"
@@ -4514,7 +4514,7 @@ msgid "the first argument of GetMem is not a simple identifier"
 msgstr "das erste Argument von GetMem ist kein einfacher Bezeichner"
 
 msgid "AllocMem without assignment - the buffer cannot be tracked"
-msgstr "AllocMem ohne Zuweisung - der Puffer ist nicht zu fassen"
+msgstr "AllocMem ohne Zuweisung - der Puffer lässt sich nicht verfolgen"
 
 msgid "ReallocMem - the buffer existed before (foreign or existing memory); %s"
 msgstr "ReallocMem - der Puffer bestand schon vorher (fremder bzw. vorhandener Speicher); %s"
@@ -4649,7 +4649,7 @@ msgid "jump in the finally part - Delphi (E2126) and FPC (06040) do not compile 
 msgstr "Sprung im finally-Teil - Delphi (E2126) und FPC (06040) übersetzen ihn nicht; %s"
 
 msgid "the unit declares its own routine %s - the jump may call it"
-msgstr "die Unit deklariert eine eigene Routine %s - der Sprung ruft vielleicht sie auf"
+msgstr "die Unit deklariert eine eigene Routine %s - der Sprung ruft sie vielleicht auf"
 
 msgid "%s - the jump is the only statement there"
 msgstr "%s - der Sprung ist dort die einzige Anweisung"
@@ -4670,7 +4670,7 @@ msgid "%d self-assignments of %s"
 msgstr "%d Selbstzuweisungen von %s"
 
 msgid "Result := Result may silence a compiler message (Delphi W1035, FPC \"Function result does not seem to be set\") - removed, it would come back; decide by hand or suppress"
-msgstr "Result := Result stillt vielleicht eine Compiler-Meldung (Delphi W1035, FPC \"Function result does not seem to be set\") - entfernt käme sie zurück; von Hand entscheiden oder unterdrücken"
+msgstr "Result := Result bringt vielleicht eine Compiler-Meldung zum Schweigen (Delphi W1035, FPC \"Function result does not seem to be set\") - entfernt käme sie zurück; von Hand entscheiden oder unterdrücken"
 
 msgid "%s is also the name of a routine of this unit - the right side may be a (recursive) call"
 msgstr "%s ist auch der Name einer Routine dieser Unit - rechts kann ein (rekursiver) Aufruf stehen"
@@ -4772,13 +4772,13 @@ msgid "\"%s\" after the type still belongs to the declaration - %s"
 msgstr "\"%s\" hinter dem Typ gehört noch zur Deklaration - %s"
 
 msgid "local %s section - not a variable"
-msgstr "lokale %s-Section - keine Variable"
+msgstr "lokaler %s-Abschnitt - keine Variable"
 
 msgid "no var section before the declaration"
-msgstr "keine var-Section vor der Deklaration"
+msgstr "kein var-Abschnitt vor der Deklaration"
 
 msgid "the declaration is not in a var section (\"%s\")"
-msgstr "die Deklaration steht nicht in einer var-Section (\"%s\")"
+msgstr "die Deklaration steht nicht in einem var-Abschnitt (\"%s\")"
 
 msgid "attribute before the declaration - %s"
 msgstr "Attribut vor der Deklaration - %s"
@@ -4841,7 +4841,7 @@ msgid "comment in the declaration - it would be lost"
 msgstr "Kommentar in der Deklaration - er ginge verloren"
 
 msgid "directive in the declaration or its var section - a branch could become empty"
-msgstr "Direktive in der Deklaration bzw. ihrer var-Section - ein Zweig könnte leer werden"
+msgstr "Direktive in der Deklaration bzw. ihrem var-Abschnitt - ein Zweig könnte leer werden"
 
 msgid "the name list does not start on the reported line"
 msgstr "die Namensliste beginnt nicht auf der gemeldeten Zeile"
@@ -4850,7 +4850,7 @@ msgid "the message has no variable name"
 msgstr "Variablenname fehlt in der Meldung"
 
 msgid "\"%s\" is a keyword, not a variable (the parser read a section as a variable) - no quick fix"
-msgstr "\"%s\" ist ein Schlüsselwort, keine Variable (der Parser las eine Section als Variable) - keine Hilfe"
+msgstr "\"%s\" ist ein Schlüsselwort, keine Variable (der Parser las einen Abschnitt als Variable) - keine Hilfe"
 
 msgid "noinspection marker in the range - it suppresses other findings"
 msgstr "noinspection-Marker im Bereich - er unterdrückt andere Funde"
@@ -4964,10 +4964,10 @@ msgid "code follows the end on the same line (two routines on one line?)"
 msgstr "hinter dem Ende steht Code auf derselben Zeile (zwei Routinen auf einer Zeile?)"
 
 msgid "a comment spanning several lines ends on the header line"
-msgstr "auf der Kopfzeile endet ein Kommentar über Zeilen"
+msgstr "auf der Kopfzeile endet ein mehrzeiliger Kommentar"
 
 msgid "a comment spanning several lines begins after the end"
-msgstr "hinter dem Ende beginnt ein Kommentar über Zeilen"
+msgstr "hinter dem Ende beginnt ein mehrzeiliger Kommentar"
 
 msgid "{$%s} in line %d without a counterpart in the range"
 msgstr "{$%s} in Zeile %d ohne Gegenstück im Bereich"
@@ -5042,7 +5042,7 @@ msgid "the declaration is not in the body of class %s"
 msgstr "die Deklaration steht nicht im Rumpf der Klasse %s"
 
 msgid "the method is in the default section without a visibility keyword, not under private"
-msgstr "die Methode steht unter \"Vorgabe ohne Abschnitt\", nicht unter private"
+msgstr "die Methode steht im Standard-Abschnitt ohne Sichtbarkeitsschlüsselwort, nicht unter private"
 
 msgid "the method is under \"%s\", not under private"
 msgstr "die Methode steht unter \"%s\", nicht unter private"
@@ -5159,7 +5159,7 @@ msgid "line %d carries %s, the finding names %s"
 msgstr "Zeile %d trägt %s, der Fund nennt %s"
 
 msgid "chain on line %d has %d x '+', the finding names %d - line changed? Analyse the file again"
-msgstr "Kette auf Zeile %d hat %d x '+', der Fund nennt %d - Zeile verändert? Datei neu prüfen"
+msgstr "Kette auf Zeile %d hat %d x '+', der Fund nennt %d - Zeile verändert? Datei erneut analysieren"
 
 msgid "chain on line %d: the source text splits differently than the parser sees it (%d x '+')"
 msgstr "Kette auf Zeile %d: der Quelltext zerfällt anders als der Parser sie sieht (%d x '+')"
@@ -5360,7 +5360,7 @@ msgid "comment or directive in the range to be deleted"
 msgstr "Kommentar oder Direktive im zu löschenden Bereich"
 
 msgid "the range contains more than this entry - would another one be deleted with it? Analyse the file again"
-msgstr "im Bereich steht mehr als dieser Eintrag - ginge ein weiterer mit? Datei neu prüfen"
+msgstr "im Bereich steht mehr als dieser Eintrag - würde ein weiterer mitgelöscht? Datei erneut analysieren"
 
 msgid "no such uses entry"
 msgstr "kein solcher uses-Eintrag"
@@ -5384,10 +5384,10 @@ msgid "no end found for the case"
 msgstr "kein end zum case gefunden"
 
 msgid "there is a compiler directive between an open ( and the case - a branch can leave the parenthesis open, so it is unclear whether the case is a statement"
-msgstr "zwischen einer offenen ( und dem case steht eine Compiler-Direktive - ein Zweig kann die Klammer offen lassen, ob das case eine Anweisung ist, ist unklar"
+msgstr "zwischen einer offenen ( und dem case steht eine Compiler-Direktive - ein Zweig kann die Klammer offen lassen, darum ist unklar, ob das case eine Anweisung ist"
 
 msgid "the case is in the variant part of a record - not a case statement (finding moved? Analyse the file again)"
-msgstr "das case steht im Variantenteil eines Records - kein case-Statement (Fund verschoben? Datei neu prüfen)"
+msgstr "das case steht im Variantenteil eines Records - keine case-Anweisung (Fund verschoben? Datei erneut analysieren)"
 
 msgid "no block found around the case (fragment?) - it is unclear whether it is a statement"
 msgstr "kein Block um das case gefunden (Fragment?) - ob es eine Anweisung ist, ist unklar"
@@ -5489,7 +5489,7 @@ msgid "operand '%s' is in a join condition (ON) - a column is usually meant ther
 msgstr "Operand '%s' steht in einer Join-Bedingung (ON) - dort ist meist eine Spalte gemeint. %s"
 
 msgid "operand '%s' is in a quoted name. %s"
-msgstr "Operand '%s' steht in einem gequoteten Namen. %s"
+msgstr "Operand '%s' steht in einem Namen in Anführungszeichen. %s"
 
 msgid "operand '%s' is in an SQL comment - no template"
 msgstr "Operand '%s' steht in einem SQL-Kommentar - keine Vorlage"
@@ -5579,7 +5579,7 @@ msgid "the include %s shows traces of older compilers (%s, line %d) - an inline 
 msgstr "das Include %s trägt Spuren älterer Compiler (%s, Zeile %d) - eine Inline-Konstante gibt es erst ab Delphi 10.3; %s"
 
 msgid "include %s %s - the quick fix does not see its compiler switches (FPC, older Delphi)"
-msgstr "Include %s %s - seine Compiler-Weichen (FPC, ältere Delphi) sieht die Hilfe nicht"
+msgstr "Include %s %s - seine Compiler-Weichen (FPC, ältere Delphi-Versionen) sieht die Hilfe nicht"
 
 msgid "the literal is in the declaration before \":=\" (type, default value or dispid) - the action changes nothing there"
 msgstr "das Literal steht in der Deklaration vor \":=\" (Typ, Vorgabewert oder dispid) - dort ändert die Aktion nichts"
@@ -5597,7 +5597,7 @@ msgid "the line starts with \"%s\" - a declaration, label or asm line; no declar
 msgstr "die Zeile beginnt mit \"%s\" - eine Deklaration, Sprungmarke oder asm-Zeile; dort ist keine Deklaration erlaubt"
 
 msgid "the line starts with \"%s\" - the continuation of a routine header or a property (message, dispid, external ...); no declaration is allowed there"
-msgstr "die Zeile beginnt mit \"%s\" - die Fortsetzung eines Routinen-Kopfs oder einer Eigenschaft (message, dispid, external ...); dort ist keine Deklaration erlaubt"
+msgstr "die Zeile beginnt mit \"%s\" - die Fortsetzung eines Routinen-Kopfs oder einer Property (message, dispid, external ...); dort ist keine Deklaration erlaubt"
 
 msgid "the line is an attribute (\"[...]\") - only constants are allowed there"
 msgstr "die Zeile ist ein Attribut (\"[...]\") - dort sind nur Konstanten erlaubt"
@@ -5606,13 +5606,13 @@ msgid "the line is a declaration \"Name = ...\" (const or type section) - no inl
 msgstr "die Zeile ist eine Deklaration \"Name = ...\" (const- oder type-Abschnitt) - dort ist keine Inline-Deklaration erlaubt"
 
 msgid "the line starts with \"%s\" - no declaration may precede it"
-msgstr "die Zeile beginnt mit \"%s\" - davor darf keine Deklaration"
+msgstr "die Zeile beginnt mit \"%s\" - davor darf keine Deklaration stehen"
 
 msgid "the line is a typed constant or initialized variable \"Name: Type = Value\" (const/var section) - its value stays as it is"
 msgstr "die Zeile ist eine typisierte Konstante oder initialisierte Variable \"Name: Typ = Wert\" (const-/var-Abschnitt) - ihr Wert bleibt, wie er ist"
 
 msgid "the line is a case branch, a label or an on handler - no declaration may precede it"
-msgstr "die Zeile ist ein case-Zweig, eine Sprungmarke oder ein on-Handler - davor darf keine Deklaration"
+msgstr "die Zeile ist ein case-Zweig, eine Sprungmarke oder ein on-Handler - davor darf keine Deklaration stehen"
 
 msgid "the line starts with a value - it continues an expression and is not a statement"
 msgstr "die Zeile beginnt mit einem Wert - sie setzt einen Ausdruck fort und ist keine Anweisung"
@@ -5621,7 +5621,7 @@ msgid "the line ends with \",\" - a list (e.g. case labels) that continues in th
 msgstr "die Zeile endet mit \",\" - eine Liste (z. B. case-Marken), die in der nächsten Zeile weitergeht"
 
 msgid "the line above belongs to a conditional expression (Delphi 13: \"X := if C then ...\") - a begin..end in the middle of the expression is not code"
-msgstr "die Zeile darüber gehört zu einem Bedingungsausdruck (Delphi 13: \"X := if C then ...\") - ein begin..end mitten im Ausdruck ist kein Code"
+msgstr "die Zeile darüber gehört zu einem bedingten Ausdruck (Delphi 13: \"X := if C then ...\") - ein begin..end mitten im Ausdruck ist kein Code"
 
 msgid "the statement in the branch does not end on this line with \";\" (multi-line or before else) - not supported"
 msgstr "die Anweisung im Zweig endet nicht auf dieser Zeile mit \";\" (mehrzeilig oder vor else) - nicht unterstützt"
@@ -5663,7 +5663,7 @@ msgid "the statement ends in an open comment or string - \"end;\" would end up i
 msgstr "die Anweisung endet in einem offenen Kommentar oder String - \"end;\" landete darin"
 
 msgid "the then/else above belongs to a conditional expression (Delphi 13: \"X := if C then A\" / \"else\" / ...) - a begin..end in the middle of the expression is not code"
-msgstr "das then/else darüber gehört zu einem Bedingungsausdruck (Delphi 13: \"X := if C then A\" / \"else\" / ...) - ein begin..end mitten im Ausdruck ist kein Code"
+msgstr "das then/else darüber gehört zu einem bedingten Ausdruck (Delphi 13: \"X := if C then A\" / \"else\" / ...) - ein begin..end mitten im Ausdruck ist kein Code"
 
 msgid "there is a directive on the line above or between it and the statement - in another branch of the conditional compilation the declaration would be somewhere else"
 msgstr "auf der Zeile darüber oder zwischen ihr und der Anweisung steht eine Direktive - in einem anderen Zweig der bedingten Übersetzung stünde die Deklaration woanders"
@@ -5672,7 +5672,7 @@ msgid "the caret line %d is not in the buffer"
 msgstr "die Caret-Zeile %d liegt nicht im Puffer"
 
 msgid "replacement at byte %d (length %d) does not ascend or reaches beyond the buffer (position %d, buffer %d)"
-msgstr "Ersetzung bei Byte %d (Länge %d) steigt nicht auf oder ragt aus dem Puffer (Stand %d, Puffer %d)"
+msgstr "Ersetzung bei Byte %d (Länge %d) liegt nicht aufsteigend oder ragt aus dem Puffer (Position %d, Puffer %d)"
 
 msgid "the file does not start with unit/program/library (include or script?) - only the compiler knows %s"
 msgstr "die Datei beginnt nicht mit unit/program/library (Include oder Skript?) - %s kennt nur der Compiler"
@@ -5795,16 +5795,16 @@ msgid "something else follows the begin - a line of its own would not fit"
 msgstr "hinter dem begin steht noch etwas - eine eigene Zeile passte nicht"
 
 msgid "a comment spanning several lines starts after the begin"
-msgstr "hinter dem begin beginnt ein Kommentar über Zeilen"
+msgstr "hinter dem begin beginnt ein mehrzeiliger Kommentar"
 
 msgid "%s - an exception there would leave a half-built object or no destructor"
-msgstr "%s - eine Exception dort hinterließe ein halbes Objekt bzw. keinen Destruktor"
+msgstr "%s - eine Ausnahme dort hinterließe ein halbes Objekt bzw. keinen Destruktor"
 
 msgid "name of the method not on the header line"
 msgstr "Name der Methode nicht auf der Kopfzeile"
 
 msgid "the message has no exception class"
-msgstr "Exception-Klasse fehlt in der Meldung"
+msgstr "Ausnahmeklasse fehlt in der Meldung"
 
 msgid "no %s.Create"
 msgstr "kein %s.Create"
@@ -5816,7 +5816,7 @@ msgid "%s.Create(..) is not a whole statement - part of an expression?"
 msgstr "%s.Create(..) steht nicht als ganze Anweisung - Teil eines Ausdrucks?"
 
 msgid "raise is in the except/finally of an inner try - \"raise;\" would re-raise a different exception there"
-msgstr "raise steht im except/finally eines inneren try - \"raise;\" würde dort eine andere Exception weiterwerfen"
+msgstr "raise steht im except/finally eines inneren try - \"raise;\" würde dort eine andere Ausnahme weiterwerfen"
 
 msgid "anonymous method in the handler (the raise inside it or one before it) - cannot be checked safely"
 msgstr "anonyme Methode im Handler (das raise darin oder eine davor) - nicht sicher prüfbar"
@@ -5873,7 +5873,7 @@ msgid "class %s - without an inheritance chain, inherited does not belong there"
 msgstr "class %s - ohne Vererbungskette, inherited gehört nicht hinein"
 
 msgid "%s without a class (no TClass.Name) - %s"
-msgstr "%s ohne Klasse (kein TKlasse.Name) - %s"
+msgstr "%s ohne Klasse (kein TClass.Name) - %s"
 
 msgid "\"inherited\" already appears in line %d (inactive branch, comment, string literal or local routine) - %s"
 msgstr "\"inherited\" steht schon in Zeile %d (inaktiver Zweig, Kommentar, String-Literal oder lokale Routine) - %s"
@@ -5906,7 +5906,7 @@ msgid "declaration: %s"
 msgstr "Deklaration: %s"
 
 msgid "parent class %s and no override declaration - which parent constructor should run with which arguments is a design decision; %s"
-msgstr "Elternklasse %s und keine override-Deklaration - welcher Elternkonstruktor mit welchen Argumenten laufen soll, ist Entwurf; %s"
+msgstr "Elternklasse %s und keine override-Deklaration - welcher Elternkonstruktor mit welchen Argumenten laufen soll, ist eine Entwurfsentscheidung; %s"
 
 msgid "override with overload - which inherited constructor is meant is not certain; %s"
 msgstr "override mit overload - welcher geerbte Konstruktor gemeint ist, ist nicht sicher; %s"
@@ -6032,7 +6032,7 @@ msgid "Byte range differs from the state when the menu was built - nothing writt
 msgstr "Byte-Bereich weicht vom Stand beim Menüaufbau ab - nicht geschrieben (ab Zeichen %d: erwartet \"%s\", Editor \"%s\")"
 
 msgid "No replacement"
-msgstr "keine Ersetzung"
+msgstr "Keine Ersetzung"
 
 msgid "Replacements overlap (bytes %d..%d and %d..%d)"
 msgstr "Ersetzungen überlappen (Bytes %d..%d und %d..%d)"
@@ -6113,10 +6113,10 @@ msgid "file uses VCL and FMX: %s"
 msgstr "Datei nutzt VCL und FMX: %s"
 
 msgid "framework (VCL/FMX) of the file not recognizable: %s"
-msgstr "Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: %s"
+msgstr "Framework (VCL/FMX) der Datei nicht erkennbar: %s"
 
 msgid "no scope prefix of the framework fits: %s"
-msgstr "kein Scope-Präfix des Rahmenwerks passt: %s"
+msgstr "kein Scope-Präfix des Frameworks passt: %s"
 
 msgid "network path in the unit search path or next to the file (%s) - reDelphix does not read there (the menu is built in the main thread); whether the project has a unit of this name is open - %s"
 msgstr "Netzpfad im Unit-Suchpfad oder neben der Datei (%s) - reDelphix liest dort nicht (Menüaufbau im Hauptthread); ob das Projekt eine Unit dieses Namens hat, ist offen - %s"
@@ -6200,10 +6200,10 @@ msgid "the intent is in the body - a reason after it helps the next reader"
 msgstr "die Absicht steht im Rumpf - ein Grund dahinter hilft dem nächsten Leser"
 
 msgid "the exception is now raised - the code after it no longer runs in the error case"
-msgstr "die Exception wird jetzt ausgelöst - der Code dahinter läuft im Fehlerfall nicht mehr"
+msgstr "die Ausnahme wird jetzt ausgelöst - der Code dahinter läuft im Fehlerfall nicht mehr"
 
 msgid "the same exception - the original stack trace is kept"
-msgstr "dieselbe Exception - der Original-Stack-Trace bleibt erhalten"
+msgstr "dieselbe Ausnahme - der Original-Stack-Trace bleibt erhalten"
 
 msgid "the skeleton is empty - fill in summary, param and returns"
 msgstr "das Gerüst ist leer - summary, param und returns ausfüllen"
@@ -6227,7 +6227,7 @@ msgid "same meaning - declaration and implementation go, the name appears nowher
 msgstr "gleiche Bedeutung - Deklaration und Implementierung gehen, der Name steht sonst nirgends im Code der Datei"
 
 msgid "same meaning - only a comment is removed; version control still knows it"
-msgstr "gleiche Bedeutung - nur Kommentar fällt weg; die Versionsverwaltung kennt ihn noch"
+msgstr "gleiche Bedeutung - nur ein Kommentar fällt weg; die Versionsverwaltung kennt ihn noch"
 
 msgid "same meaning - the variable appears nowhere else"
 msgstr "gleiche Bedeutung - die Variable kommt nirgends sonst vor"
@@ -6374,7 +6374,7 @@ msgid "same meaning - a parameter name is not part of the call; declaration, imp
 msgstr "gleiche Bedeutung - ein Parametername ist nicht Teil des Aufrufs; Deklaration, Implementierung und <param name> der Doku heißen danach \"_Name\", der Detektor übergeht solche Namen"
 
 msgid "same meaning - the body does not write the parameter, nobody uses the routine as a value; declaration and implementation get the const. Exception: if the routine itself changes the variable the caller passes (field, global variable), the const parameter then hangs on freed text"
-msgstr "gleiche Bedeutung - der Rumpf beschreibt den Parameter nicht, niemand nutzt die Routine als Wert; Deklaration und Implementierung bekommen das const. Ausnahme: ändert die Routine selbst die Variable, die der Aufrufer übergibt (Feld, globale Variable), hängt der const-Parameter danach an freigegebenem Text"
+msgstr "gleiche Bedeutung - der Rumpf schreibt nicht in den Parameter, niemand nutzt die Routine als Wert; Deklaration und Implementierung bekommen das const. Ausnahme: ändert die Routine selbst die Variable, die der Aufrufer übergibt (Feld, globale Variable), hängt der const-Parameter danach an freigegebenem Text"
 
 msgid "same meaning - the class is in the implementation part and only visible in this file; every reference in the code is renamed too, comments keep the old name"
 msgstr "gleiche Bedeutung - die Klasse steht im implementation-Teil und ist nur in dieser Datei sichtbar; jeder Verweis im Code wird mit umbenannt, Kommentare behalten den alten Namen"
@@ -6479,7 +6479,7 @@ msgid "no host name in the address"
 msgstr "kein Rechnername in der Adresse"
 
 msgid "the address contains credentials, a port or an IPv6 address - https would not simply work there"
-msgstr "die Adresse enthält Zugangsdaten, einen Port oder eine IPv6-Adresse - https lief dort nicht ohne Weiteres"
+msgstr "die Adresse enthält Zugangsdaten, einen Port oder eine IPv6-Adresse - https liefe dort nicht ohne Weiteres"
 
 msgid "the host name is not a fixed name (placeholder or special characters)"
 msgstr "der Rechnername ist kein fester Name (Platzhalter oder Sonderzeichen)"
@@ -6554,7 +6554,7 @@ msgid "%s is not certainly a keyword here (also allowed as an identifier)"
 msgstr "%s ist hier nicht sicher ein Schlüsselwort (auch als Bezeichner zulässig)"
 
 msgid "the message does not name the bounds - analyse the file again"
-msgstr "die Meldung nennt die Grenzen nicht - Datei neu prüfen"
+msgstr "die Meldung nennt die Grenzen nicht - Datei erneut analysieren"
 
 msgid "no reversed for header with literal bounds"
 msgstr "kein umgekehrter for-Kopf mit Literalgrenzen"
@@ -6590,7 +6590,7 @@ msgid "the neighbouring lines fit tab width %d as well as %d, and the rest of th
 msgstr "die Nachbarzeilen passen zu Tabweite %d ebenso wie zu %d, und der Rest der Datei entscheidet nicht zwischen ihnen; %s"
 
 msgid "the message does not name the loop head - analyse the file again"
-msgstr "die Meldung nennt den Schleifenkopf nicht - Datei neu prüfen"
+msgstr "die Meldung nennt den Schleifenkopf nicht - Datei erneut analysieren"
 
 msgid "the loop runs from 1 to Count - whether the index should be i - 1 or the bound Count - 1 is for you to decide"
 msgstr "die Schleife läuft von 1 bis Count - ob der Index i - 1 oder die Grenze Count - 1 sein soll, ist von Hand zu entscheiden"
@@ -6662,7 +6662,7 @@ msgid "visibility of the ancestor not proven - %s is not declared in this file; 
 msgstr "Sichtbarkeit des Vorfahren nicht belegt - %s ist nicht in dieser Datei deklariert; %s"
 
 msgid "%d declarations of %s in the ancestor %s - overload?"
-msgstr "%d Deklarationen von %s im Vorfahren %s - Überladung?"
+msgstr "%d Deklarationen von %s im Vorfahren %s - Overload?"
 
 msgid "the method of the ancestor %s is abstract - without the override a call raises EAbstractError"
 msgstr "die Methode des Vorfahren %s ist abstrakt - ohne das Override löst ein Aufruf EAbstractError aus"
@@ -6677,7 +6677,7 @@ msgid "the override or the method of the ancestor %s stands before any visibilit
 msgstr "das Override oder die Methode des Vorfahren %s steht vor jedem Sichtbarkeitsabschnitt - die Sichtbarkeit ist nicht sicher; %s"
 
 msgid "same meaning - without the override, virtual dispatch calls the method of the ancestor directly; declaration and implementation go together"
-msgstr "bedeutungsgleich - ohne das Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; Deklaration und Implementierung gehen zusammen"
+msgstr "gleiche Bedeutung - ohne das Override ruft die virtuelle Bindung die Methode des Vorfahren direkt; Deklaration und Implementierung gehen zusammen"
 
 msgid "Remove the empty override %s"
 msgstr "Leeres Override %s entfernen"
@@ -6698,7 +6698,7 @@ msgid "no routine with a begin..end body around the line"
 msgstr "keine Routine mit begin..end-Rumpf um die Zeile"
 
 msgid "same meaning - on the left of \":=\" Result and the function name are the same variable; the name in an expression stays (a recursive call, SCA205)"
-msgstr "bedeutungsgleich - links vom \":=\" sind Result und der Funktionsname dieselbe Variable; der Name in einem Ausdruck bleibt (ein rekursiver Aufruf, SCA205)"
+msgstr "gleiche Bedeutung - links vom \":=\" sind Result und der Funktionsname dieselbe Variable; der Name in einem Ausdruck bleibt (ein rekursiver Aufruf, SCA205)"
 
 msgid "the bounds of the routine around the line are not safe to read"
 msgstr "die Grenzen der Routine um die Zeile sind nicht sicher lesbar"
@@ -6707,7 +6707,7 @@ msgid "the head or the declarations of %s declare \"Result\""
 msgstr "Kopf oder Deklarationen von %s deklarieren \"Result\""
 
 msgid "the head or the declarations of %s name \"%s\" again (parameter, local, nested routine) - it may not be the result"
-msgstr "Kopf oder Deklarationen von %s nennen \"%s\" noch einmal (Parameter, lokal, geschachtelte Routine) - es ist vielleicht nicht das Ergebnis"
+msgstr "Kopf oder Deklarationen von %s nennen \"%s\" noch einmal (Parameter, lokal, verschachtelte Routine) - es ist vielleicht nicht das Ergebnis"
 
 msgid "the line belongs to %s, not to the function %s - there \"Result\" would be another result"
 msgstr "die Zeile gehört zu %s, nicht zur Funktion %s - dort wäre \"Result\" ein anderes Ergebnis"
@@ -6736,7 +6736,7 @@ msgid "the else branch is another if (else-if chain) - after the swap it would t
 msgstr "der else-Zweig ist wieder ein if (else-if-Kette) - nach dem Tausch nähme es das neue else"
 
 msgid "the else branch ends with an if without else - after the swap that if would take the new else"
-msgstr "der else-Zweig endet auf ein if ohne else - nach dem Tausch nähme dieses if das neue else"
+msgstr "der else-Zweig endet mit einem if ohne else - nach dem Tausch nähme dieses if das neue else"
 
 msgid "the if statement is not safe to read (anonymous method, conditional expression, asm or label in it)"
 msgstr "die if-Anweisung ist nicht sicher lesbar (anonyme Methode, bedingter Ausdruck, asm oder Marke darin)"
@@ -6807,7 +6807,7 @@ msgid "the uses clause in line %d is not read here (it lies in a conditional bra
 msgstr "die uses-Klausel in Zeile %d wird hier nicht gelesen (sie steht in einem bedingten Zweig) - Unit von Hand ergänzen"
 
 msgid "the declaration carries %s - an empty body there is a hook that callers (inherited, the framework) expect to do nothing; raise would break them"
-msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, den Aufrufer (inherited, das Framework) still erwarten; raise bräche sie"
+msgstr "die Deklaration trägt %s - ein leerer Rumpf dort ist ein Haken, von dem Aufrufer (inherited, das Framework) erwarten, dass er nichts tut; raise bräche sie"
 
 msgid "the routine is passed as a callback (@%s) - raise would break its caller"
 msgstr "die Routine wird als Callback übergeben (@%s) - raise bräche ihren Aufrufer"
@@ -6905,16 +6905,16 @@ msgid "the class implements %s, declared outside this file - the method may impl
 msgstr "die Klasse implementiert %s, deklariert außerhalb dieser Datei - die Methode kann dazugehören, und Aufrufer des Interfaces erwarten, dass der leere Rumpf nichts tut; raise bräche sie"
 
 msgid "the routine is %s - a callback for foreign code; an exception must not leave it"
-msgstr "die Routine ist %s - ein Callback für fremden Code; eine Exception darf sie nicht verlassen"
+msgstr "die Routine ist %s - ein Callback für fremden Code; eine Ausnahme darf sie nicht verlassen"
 
 msgid "the routine is passed as a callback (%s in line %d) - raise would break its caller"
 msgstr "die Routine wird als Callback übergeben (%s in Zeile %d) - raise bräche ihren Aufrufer"
 
 msgid "the method is the write accessor of a property (line %d) - an empty setter ignores assignments on purpose; raise would make every assignment fail"
-msgstr "die Methode ist der Schreibzugriff einer Eigenschaft (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"
+msgstr "die Methode ist der Schreib-Accessor einer Property (Zeile %d) - ein leerer Setter ignoriert Zuweisungen mit Absicht; mit raise scheiterte jede Zuweisung"
 
 msgid "the handler is in %s - \"raise;\" would skip the rest of it (inherited, freeing) and let an exception leave the destructor"
-msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, Freigaben) und ließe eine Exception aus dem Destruktor"
+msgstr "der Handler steht in %s - \"raise;\" überspränge den Rest (inherited, Freigaben) und ließe eine Ausnahme aus dem Destruktor"
 
 msgid "the try only releases (%s) - an error while freeing or closing is swallowed on purpose so that the cleanup after it still runs; \"raise;\" would skip it"
 msgstr "der try-Teil gibt nur frei (%s) - ein Fehler beim Freigeben oder Schließen wird mit Absicht geschluckt, damit das Aufräumen danach läuft; \"raise;\" überspränge es"
@@ -7021,3 +7021,27 @@ msgstr "Zeile %d zeigt das Ergebnis an (%s) - dort ist die Locale des Benutzers 
 
 msgid "the class %s carries its own format settings %s (line %d) - pass those by hand instead of TFormatSettings.Invariant, which would drop what is set there"
 msgstr "die Klasse %s hat eigene Formateinstellungen %s (Zeile %d) - diese von Hand statt TFormatSettings.Invariant übergeben, das ihre Einstellungen verwürfe"
+
+#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1861
+msgid "(unnamed)"
+msgstr "(ohne Namen)"
+
+#: StaticCodeAnalyserIDE/uIDEMessages.pas:82
+msgid "=== Static Code Analysis (%s) ==="
+msgstr "=== Statische Code-Analyse (%s) ==="
+
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3555
+msgid "Ignore list reloaded (%d patterns). Path: %s"
+msgstr "Ignore-Liste neu geladen (%d Muster). Pfad: %s"
+
+#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1731
+msgid "READ ERROR"
+msgstr "LESEFEHLER"
+
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2290
+msgid "[watch] %s"
+msgstr "[Beobachtung] %s"
+
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2356
+msgid "[watch] updated %s (%d findings)"
+msgstr "[Beobachtung] %s aktualisiert (%d Funde)"

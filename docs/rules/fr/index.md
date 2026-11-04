@@ -111,13 +111,13 @@ Les 205 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA105](SCA105.md) | Type interface sans préfixe I | Hint | Code Smell | `uInterfaceName.pas` |
 | [SCA106](SCA106.md) | Méthode pas en PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](SCA107.md) | Le membre public pourrait être strict private | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA108](SCA108.md) | TThread.Synchronize depuis le destructeur | Error | Bug | `uSynchronizeInDestructor.pas` |
+| [SCA108](SCA108.md) | TThread.Synchronize depuis le destructeur | Warning | Bug | `uSynchronizeInDestructor.pas` |
 | [SCA109](SCA109.md) | Verrou pris sans libération par try/finally | Error | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](SCA110.md) | Concaténation de chaîne dans une boucle | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](SCA111.md) | ParamByName(...) appelé dans une boucle | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) appelé dans une boucle | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA113](SCA113.md) | TThread.Resume est obsolète | Warning | Code Smell | `uConcurrencyExt.pas` |
-| [SCA114](SCA114.md) | TThread libéré sans Terminate+WaitFor | Error | Bug | `uConcurrencyExt.pas` |
+| [SCA114](SCA114.md) | TThread libéré par FreeAndNil - vérifier l'arrêt | Hint | Bug | `uConcurrencyExt.pas` |
 | [SCA115](SCA115.md) | URL HTTP en clair | Warning | Security Hotspot | `uRestHttpSecurity.pas` |
 | [SCA116](SCA116.md) | Vérification TLS désactivée | Error | Vulnerability | `uRestHttpSecurity.pas` |
 | [SCA117](SCA117.md) | Membre public sans commentaire de documentation | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |
