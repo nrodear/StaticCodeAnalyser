@@ -34,7 +34,7 @@ const
     (
       RuleID   : 'SCA002';
       Name     : 'Leerer except-Block';
-      ShortDesc: 'Leerer except-Block schluckt jede Exception ohne Reaktion';
+      ShortDesc: 'Leerer except-Block schluckt jede Ausnahme ohne Reaktion';
       FullDesc : 'Ein except-Block ohne Anweisungen f' + #$00E4 +
         'ngt jede Ausnahme ab, auch unerwartete (EAccessViolation, EOutOfMemory). Bugs werden unsichtbar. Die Ausnahme mindestens protokollieren oder erneut ausl' +
         #$00F6 + 'sen.'
@@ -43,7 +43,8 @@ const
     (
       RuleID   : 'SCA003';
       Name     : 'SQL-String per Verkettung gebaut';
-      ShortDesc: 'SQL-String mit ''+'' aus beeinflussbarer Eingabe zusammengesetzt (Injection-Risiko)';
+      ShortDesc: 'SQL-String per ''+''-Verkettung mit einem nicht-literalen Operanden gebaut (Injection-Risiko, wenn dieser Operand nicht vertrauensw' +
+        #$00FC + 'rdig ist)';
       FullDesc : 'SQL per ''WHERE x='' + operand zu bauen erm' + #$00F6 +
         'glicht SQL-Injection, wenn dieser Operand nicht vertrauensw' + #$00FC +
         'rdig ist. Der Detektor meldet die VERKETTUNG - er verfolgt nicht, woher der Operand stammt, daher ist ein Fund ein Pr' +
@@ -211,7 +212,7 @@ const
     (
       RuleID   : 'SCA017';
       Name     : 'WriteLn/ShowMessage im Produktivcode';
-      ShortDesc: 'Debug-Ausgabe in einer Produktiv-Unit gefunden';
+      ShortDesc: 'Unqualifizierter Aufruf von WriteLn, ShowMessage(Pos) oder OutputDebugString in einer Nicht-Test-Unit';
       FullDesc : 'WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA in Nicht-Test-Code ist fast immer ' +
         #$00FC +
         'brig gebliebenes Debugging: besonders ShowMessage blockiert den UI-Thread und taugt f' +
@@ -229,7 +230,9 @@ const
     (
       RuleID   : 'SCA018';
       Name     : 'Blockverschachtelung ' + #$00FC + 'berschreitet die Grenze';
-      ShortDesc: 'Verschachtelungstiefe von if/for/while h' + #$00F6 + 'her als konfiguriert (Vorgabe 4)';
+      ShortDesc: 'Verschachtelungstiefe von if/for/while h' + #$00F6 +
+        'her als konfiguriert (Vorgabe 4); eine else-if-Kette z' + #$00E4 +
+        'hlt wie ein case als EINE Ebene';
       FullDesc : 'Tiefe Verschachtelung schadet der Lesbarkeit und zeigt, dass die Methode zu viel tut. Guard-Clauses (fr' +
         #$00FC + 'hes Exit) verwenden oder innere Bl' + #$00F6 +
         'cke in Hilfsmethoden herausziehen. Ein Block wird gemeldet, wenn seine Tiefe die Grenze ' +
@@ -361,7 +364,7 @@ const
     (
       RuleID   : 'SCA030';
       Name     : 'Leerer gebundener Ereignisbehandler';
-      ShortDesc: 'Ereignis ist im DFM verdrahtet, die Methode existiert, der Rumpf ist leer';
+      ShortDesc: 'Ereignis ist im DFM gebunden, die Methode existiert, der Rumpf ist leer';
       FullDesc : 'Ein leerer Ereignisbehandler mit aktiver DFM-Bindung ist fast immer ein Stub, der vergessen wurde, nachdem der Designer ihn angelegt hat. Entweder die Bindung entfernen oder den Ereignisbehandler implementieren.'
     ),
     // SCA031
@@ -615,7 +618,7 @@ const
     // SCA052
     (
       RuleID   : 'SCA052';
-      Name     : 'Ungenutzter Public-Member (tote API)';
+      Name     : 'Ungenutztes Public-Member (tote API)';
       ShortDesc: 'Public-Member wird von keiner Ableitung und ' + #$00FC +
         'ber keine Unit-Grenze referenziert';
       FullDesc : 'Keine interne Verwendung UND keine externe Verwendung gefunden - tote API-Oberfl' + #$00E4 +
@@ -761,8 +764,8 @@ const
     // SCA065
     (
       RuleID   : 'SCA065';
-      Name     : 'NOSONAR-Unterdr' + #$00FC + 'ckungsmarker';
-      ShortDesc: '`// NOSONAR` sollte keine Befunde stillstellen - Verwendung pr' + #$00FC + 'fen';
+      Name     : 'NOSONAR-Unterdr' + #$00FC + 'ckungs-Marker';
+      ShortDesc: '`// NOSONAR` sollte keine Funde unterdr' + #$00FC + 'cken - Verwendung pr' + #$00FC + 'fen';
       FullDesc : 'NOSONAR-Marker sind technische Schulden: jeder stellt einen Fund still, ohne das eigentliche Problem zu beheben. SCA meldet jedes NOSONAR, damit Reviewer die Unterdr' +
         #$00FC + 'ckungen im Code-Review pr' + #$00FC + 'fen k' + #$00F6 + 'nnen. SCA nutzt f' +
         #$00FC + 'r die native Unterdr' + #$00FC +
@@ -829,7 +832,7 @@ const
     // SCA071
     (
       RuleID   : 'SCA071';
-      Name     : 'Unit-Section-Keyword nicht in Spalte 1';
+      Name     : 'Schl' + #$00FC + 'sselwort auf Unit-Ebene nicht in Spalte 1';
       ShortDesc: '`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen';
       FullDesc : 'Nach Object-Pascal-Konvention stehen die strukturellen Abschnitts-Schl' + #$00FC + 'sselw' +
         #$00F6 + 'rter einer Unit b' + #$00FC + 'ndig links in Spalte 1. Einger' + #$00FC +
@@ -914,7 +917,7 @@ const
     // SCA079
     (
       RuleID   : 'SCA079';
-      Name     : 'Aufeinanderfolgende const/type/var-Sektion';
+      Name     : 'Aufeinanderfolgende const/type/var-Abschnitte';
       ShortDesc: 'Zwei `const`-, `type`- oder `var`-Bl' + #$00F6 + 'cke hintereinander geh' + #$00F6 +
         'ren zusammengefasst';
       FullDesc : '`const A = 1; const B = 2;` sollte `const A = 1; B = 2;` hei' + #$00DF +
@@ -1004,8 +1007,8 @@ const
     // SCA087
     (
       RuleID   : 'SCA087';
-      Name     : 'Leere Sichtbarkeitssektion in der Klasse';
-      ShortDesc: 'Sektionskopf `public`/`private`/... ohne Member darunter';
+      Name     : 'Leerer Sichtbarkeitsabschnitt in der Klasse';
+      ShortDesc: 'Abschnittskopf `public`/`private`/... ohne Member darunter';
       FullDesc : 'Eine Klasse mit einem Sichtbarkeits-Schl' + #$00FC +
         'sselwort, auf das unmittelbar ein weiteres Sichtbarkeits-Schl' + #$00FC +
         'sselwort (oder `end`) folgt, ist meist ein Refactoring-Rest - alle Member dieses Abschnitts wurden anderswohin verschoben. Den leeren Abschnittskopf l' +
@@ -1096,8 +1099,8 @@ const
     // SCA095
     (
       RuleID   : 'SCA095';
-      Name     : 'Wiederholte Sichtbarkeitssektion';
-      ShortDesc: 'Dieselbe Sektion `public`/`private`/... kommt in einer Klasse zweimal vor';
+      Name     : 'Wiederholter Sichtbarkeitsabschnitt';
+      ShortDesc: 'Derselbe Abschnitt `public`/`private`/... kommt in einer Klasse zweimal vor';
       FullDesc : 'Zwei `private`-Abschnitte (oder `public`/`protected`/`published`) in derselben Klasse mit Membern dazwischen sollten zu einem zusammengefasst werden. Das hilft Reviewern, die Form der Klasse auf einen Blick zu erfassen. Entspricht SonarDelphi communi' +
         'tydelphi:ConsecutiveVisibilitySection. Hinweis: ein leerer Abschnittskopf, auf den ein weiterer Kopf folgt, ist die verwandte, aber eigenst' +
         #$00E4 + 'ndige Regel `EmptyVisibilitySection` (SCA087).'
@@ -1256,7 +1259,7 @@ const
     // SCA109
     (
       RuleID   : 'SCA109';
-      Name     : 'Sperre ohne try/finally freigegeben';
+      Name     : 'Sperre ohne Freigabe per try/finally genommen';
       ShortDesc: 'TCriticalSection, Monitor oder WinAPI-Sperre ohne umschlie' + #$00DF +
         'endes try..finally genommen - eine Ausnahme l' + #$00E4 + 'sst sie gesperrt';
       FullDesc : 'Eine Sperre anzufordern (TCriticalSection.Enter / .Acquire, TMonitor.Enter, TMultiReadExclusiveWriteSynchronizer.BeginWrite, WinAPI EnterCriticalSection), ohne unmittelbar ein try..finally mit dem passenden Leave / Release / EndWrite folgen zu lassen' +
@@ -1388,7 +1391,7 @@ const
     (
       RuleID   : 'SCA117';
       Name     : 'Public-Member ohne Doku-Kommentar';
-      ShortDesc: 'Public-Methode oder -Property in der `interface`-Sektion ohne Doku-Kommentar direkt dar' +
+      ShortDesc: 'Public-Methode oder -Property im `interface`-Abschnitt ohne Doku-Kommentar direkt dar' +
         #$00FC + 'ber';
       FullDesc : 'Ein Public-Member im `interface`-Abschnitt einer Unit geh' + #$00F6 +
         'rt zur dokumentierten API-Oberfl' + #$00E4 +
@@ -1430,7 +1433,7 @@ const
     // SCA120
     (
       RuleID   : 'SCA120';
-      Name     : 'Exception erzeugt, aber nie ausgel' + #$00F6 + 'st';
+      Name     : 'Ausnahme erzeugt, aber nie ausgel' + #$00F6 + 'st';
       ShortDesc: '`EFoo.Create(''msg'');` legt ein Exception-Objekt an, ohne es zu `raise`n - der Fehlerpfad wird stillschweigend ' +
         #$00FC + 'bersprungen';
       FullDesc : 'Das Muster `EConvertError.Create(''bad input'');` ohne vorangehendes `raise` erzeugt eine Exception-Instanz, l' +
@@ -1470,9 +1473,9 @@ const
     // SCA122
     (
       RuleID   : 'SCA122';
-      Name     : 'Erneutes raise der gebundenen Exception-Variablen';
+      Name     : 'Erneutes raise der gebundenen Ausnahme-Variablen';
       ShortDesc: '`on E: T do ... raise E;` verwirft den urspr' + #$00FC +
-        'nglichen Stack Trace - das blanke `raise;` erh' + #$00E4 + 'lt ihn';
+        'nglichen Stack-Trace - das blanke `raise;` erh' + #$00E4 + 'lt ihn';
       FullDesc : '`raise E` in einem Handler `on E: SomeException do ...` startet eine neue Ausnahme-Weitergabe, deren Ursprung die Stelle des erneuten Ausl' +
         #$00F6 + 'sens ist. Der urspr' + #$00FC +
         'ngliche Stack-Trace - der Weg von der Stelle, an der die Ausnahme zuerst ausgel' + #$00F6 +
@@ -1486,8 +1489,8 @@ const
     // SCA123
     (
       RuleID   : 'SCA123';
-      Name     : 'Typumwandlung direkt vor Free / Destroy';
-      ShortDesc: '`TFoo(x).Free` - die Typumwandlung beeinflusst nicht, welches Destroy l' + #$00E4 +
+      Name     : 'Typecast direkt vor Free / Destroy';
+      ShortDesc: '`TFoo(x).Free` - der Typecast beeinflusst nicht, welches Destroy l' + #$00E4 +
         'uft (Destroy ist virtuell)';
       FullDesc : '`TStringList(L).Free` oder `TObject(L).Destroy` zu schreiben ist ein Verwirrungs-Smell. `TObject.Free` ist ein nicht virtueller Wrapper um das *virtuelle* `Destroy`, daher erfolgt der virtuelle Dispatch ' +
         #$00FC + 'ber den Laufzeittyp von `L`, nicht ' + #$00FC +
@@ -1616,7 +1619,7 @@ const
     // SCA129
     (
       RuleID   : 'SCA129';
-      Name     : 'String-Umwandlung in einen 8-Bit-Typ ohne explizite Kodierung';
+      Name     : 'Typecast von string in einen 8-Bit-String-Typ ohne explizite Kodierung';
       ShortDesc: '`AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` verwirft stillschweigend alle Zeichen au' +
         #$00DF + 'erhalb der aktiven Codepage';
       FullDesc : 'Ein UnicodeString (oder jeder String-typisierte Ausdruck - der Delphi-string ist seit XE UnicodeString) per Typecast in eine der verlustbehafteten 8-Bit-String-Familien (AnsiString, RawByteString, ShortString) umzuwandeln, l' +
@@ -1642,8 +1645,8 @@ const
     // SCA130
     (
       RuleID   : 'SCA130';
-      Name     : 'Char-Wert nach PChar umgewandelt - Codepoint wird zur Adresse';
-      ShortDesc: '`PChar(''A'')` ist nicht `PChar("A")` - die Umwandlung deutet den 16-Bit-Codepoint als rohe Speicheradresse';
+      Name     : 'Typecast eines Char-Werts nach PChar - Codepoint wird zur Adresse';
+      ShortDesc: '`PChar(''A'')` ist nicht `PChar("A")` - der Typecast deutet den 16-Bit-Codepoint als rohe Speicheradresse';
       FullDesc : 'Delphi kompiliert anstandslos `PChar(c)`, wenn `c` vom Typ `Char`, `WideChar` oder `AnsiChar` ist. Das Ergebnis ist **kein** nullterminierter 1-Zeichen-String - der Typecast deutet den 16-Bit-/8-Bit-Codepoint einfach als Zeiger. `PChar(''A'')` liefert ' +
         'also den Zeigerwert `$00000041`, der in den unteren Prozessspeicher zeigt; jede Dereferenzierung ist undefiniertes Verhalten und endet typischerweise in einer Access Violation, liest auf manchen Plattformen aber stattdessen veraltete Daten. Gemeint i' +
         'st fast immer das Muster `PChar(stringExpr)`, das einen Zeiger in den tats' + #$00E4 +
@@ -1697,7 +1700,7 @@ const
     (
       RuleID   : 'SCA133';
       Name     : 'Blankes raise au' + #$00DF + 'erhalb eines except/on-Handlers';
-      ShortDesc: '`raise;` ohne Exception-Ausdruck ist nur INNERHALB eines except-Handlers g' + #$00FC +
+      ShortDesc: '`raise;` ohne Ausnahme-Ausdruck ist nur INNERHALB eines except-Handlers g' + #$00FC +
         'ltig (erneutes Ausl' + #$00F6 + 'sen) - ' + #$00FC +
         'berall sonst lehnen Delphi (E2145) und FPC es ab';
       FullDesc : 'Ein blankes `raise;` l' + #$00F6 +
@@ -2154,7 +2157,7 @@ const
     // SCA159
     (
       RuleID   : 'SCA159';
-      Name     : 'Typisierter Exception-Handler mit leerem Rumpf';
+      Name     : 'Typisierter Ausnahme-Handler mit leerem Rumpf';
       ShortDesc: '`on E: SomeException do ;` schluckt eine bestimmte Exception-Klasse stillschweigend - schlimmer als ein blankes `except end`, weil die Typangabe absichtsvoll aussieht';
       FullDesc : 'Lexikalischer Scan nach `on [E:] <ExceptionType> do (;|begin end)`. Die typisierte Form `on E:` erweckt den Eindruck einer durchdachten Behandlung - ein Leser nimmt an, dass sich der Entwickler mit genau dieser Ausnahme befasst hat. Ein leerer Rumpf ' +
         'bedeutet, dass der Fehler in Produktion unsichtbar ist: kein Log, keine R' + #$00FC +
@@ -2165,7 +2168,7 @@ const
     // SCA160
     (
       RuleID   : 'SCA160';
-      Name     : 'String-Cast aus Raw-Pointer';
+      Name     : 'String-Typecast aus einem rohen Zeiger';
       ShortDesc: '`string(P)` und Verwandte aus einem P-pr' + #$00E4 +
         'fixierten Zeiger setzen einen Nullterminator voraus, den es nicht geben muss - ' + #$00DC +
         'berlesen des Heaps';
@@ -2186,7 +2189,7 @@ const
     // SCA161
     (
       RuleID   : 'SCA161';
-      Name     : 'Zeigersubtraktion ' + #$00FC + 'ber eine 32-Bit-Umwandlung';
+      Name     : 'Zeigersubtraktion ' + #$00FC + 'ber einen 32-Bit-Typecast';
       ShortDesc: '`Cardinal(P1) - Cardinal(P2)` (auch Integer/LongWord/LongInt) schneidet unter Win64 die oberen 32 Bit ab - die Differenz ist zeitweise falsch';
       FullDesc : 'Lexikalischer Scan nach `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - zwei 32-Bit-Typecasts, durch Minus verbunden. Unter Win64 ist ein Pointer 64 Bit breit, Cardinal/Integer/LongWord/LongInt dagegen 32 Bit, daher verwirft der ' +
         'Typecast die oberen vier Bytes der Adresse. Die resultierende Differenz ist falsch, sobald der Allokator hohe Adressen vergibt - der Code funktioniert unter Win32 und bricht unter Win64 zeitweise. H' +
@@ -2198,7 +2201,7 @@ const
     // SCA162
     (
       RuleID   : 'SCA162';
-      Name     : 'Schwaches oder veraltetes Kryptoverfahren verwendet';
+      Name     : 'Schwacher oder veralteter Kryptoalgorithmus verwendet';
       ShortDesc: 'Algorithmusname (''MD5'', ''SHA1'', ''DES'', ''RC4'', ''TLS1.0'', ''SSLv3'') oder Wrapper-Klasse (THashMD5, TIdHashSHA1, ...) referenziert - anf' +
         #$00E4 + 'llig f' + #$00FC + 'r Kollisions- und Known-Plaintext-Angriffe';
       FullDesc : 'MD5 hat seit 2004 praktische Kollisionen (Wang et al.), SHA1 seit 2017 (SHAttered, Identical-Prefix; Chosen-Prefix seit 2020). DES hat 56 Bit und ist per Brute Force zu brechen, 3DES hat die Sweet32-CBC-Kollision (CVE-2016-2183). RC4 hat dokumentiert' +
@@ -2228,8 +2231,8 @@ const
       RuleID   : 'SCA164';
       Name     : 'Routine auf oberster Ebene wird nie gerufen';
       ShortDesc: 'Eine eigenst' + #$00E4 +
-        'ndige Prozedur oder Funktion in der implementation-Sektion wird nirgends in der Unit gerufen und ist nicht ' +
-        #$00FC + 'ber die interface-Sektion exportiert - toter Code';
+        'ndige Prozedur oder Funktion im implementation-Abschnitt wird nirgends in der Unit gerufen und ist nicht ' +
+        #$00FC + 'ber den interface-Abschnitt exportiert - toter Code';
       FullDesc : 'Schlie' + #$00DF + 't die L' + #$00FC +
         'cke zwischen SCA147 (UnusedPrivateMethod - nur private Klassenmethoden) und der Familie der Sichtbarkeitspr' +
         #$00FC +
@@ -2248,7 +2251,7 @@ const
       RuleID   : 'SCA165';
       Name     : 'Ungenutzter noinspection-Marker';
       ShortDesc: 'Ein `// noinspection X` unterdr' + #$00FC +
-        'ckt an seiner Zielzeile keinen Befund - entweder ist der Detektor besser geworden oder das Ziel war falsch';
+        'ckt an seiner Zielzeile keinen Fund - entweder ist der Detektor besser geworden oder das Ziel war falsch';
       FullDesc : 'Der Unterdr' + #$00FC +
         'ckungsfilter (uSuppression) erfasst jeden Kommentar `// noinspection KindName` und die n' +
         #$00E4 + 'chste Codezeile, auf die er zielt. Nachdem alle Detektoren fertig sind, pr' +
@@ -2338,8 +2341,8 @@ const
     (
       RuleID   : 'SCA170';
       Name     : 'string-Parameter ohne const';
-      ShortDesc: 'string-Parameter ohne const deklariert - erzwingt bei jedem Aufruf eine Refcount-Erh' +
-        #$00F6 + 'hung';
+      ShortDesc: 'string-Parameter ohne const deklariert - erzwingt bei jedem Aufruf eine Erh' + #$00F6 +
+        'hung des Referenzz' + #$00E4 + 'hlers';
       FullDesc : 'Delphi erh' + #$00F6 + 'ht bei jedem Aufruf den Referenzz' + #$00E4 +
         'hler des Strings, wenn der Parameter ohne `const` deklariert ist. Mit `const` ' + #$00FC +
         'bergibt der Compiler eine reine Referenz und spart sich das Hoch- und Herunterz' + #$00E4 +
@@ -2352,7 +2355,7 @@ const
     // SCA171
     (
       RuleID   : 'SCA171';
-      Name     : 'Compilerschalter OFF ohne passendes ON in derselben Datei';
+      Name     : 'Compiler-Schalter OFF ohne passendes ON in derselben Datei';
       ShortDesc: '{$WARNINGS OFF} (oder HINTS/RANGECHECKS/...) ohne schlie' + #$00DF +
         'endes ON - wirkt in die folgenden Units hinein';
       FullDesc : 'Delphi-Direktiven f' + #$00FC +
@@ -2424,7 +2427,7 @@ const
       RuleID   : 'SCA176';
       Name     : 'Methode mit hoher kognitiver Komplexit' + #$00E4 + 't (verschachtelter Kontrollfluss)';
       ShortDesc: 'Kognitive Komplexit' + #$00E4 + 't ' + #$00FC +
-        'ber 15 (Sonar-Stil) - verschachtelte if/for/while/case sind mental schwer zu folgen';
+        'ber 15 (Sonar-Stil) - verschachtelten if/for/while/case ist gedanklich schwer zu folgen';
       FullDesc : 'Die zyklomatische Komplexit' + #$00E4 + 't (SCA022) z' + #$00E4 + 'hlt unabh' + #$00E4 +
         'ngige Pfade linear - zehn flache if-Anweisungen wiegen so viel wie ein dreifach verschachteltes if. Die kognitive Komplexit' +
         #$00E4 + 't, 2017 von Sonar eingef' + #$00FC +
@@ -2439,7 +2442,7 @@ const
     (
       RuleID   : 'SCA177';
       Name     : 'Thread-Variable nach FreeOnTerminate := True verwendet';
-      ShortDesc: 'Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access-Violation, wenn der Thread bereits beendet ist';
+      ShortDesc: 'Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access Violation, wenn der Thread bereits beendet ist';
       FullDesc : 'TThread.FreeOnTerminate := True ' + #$00FC + 'bertr' + #$00E4 +
         'gt den Besitz der Thread-Instanz an diese selbst - der Thread gibt seinen eigenen Speicher in seinem Lebenszyklus Execute-dann-Destroy frei. Der Aufrufer MUSS alle Referenzen darauf sofort aufgeben (typischerweise, indem er die lokale Variable auf ni' +
         'l setzt), weil es keine Synchronisation zwischen der n' + #$00E4 +
@@ -2455,7 +2458,7 @@ const
     (
       RuleID   : 'SCA178';
       Name     : 'Datei-Open-API bekommt verkettete Benutzereingabe';
-      ShortDesc: 'Datei-Open mit Pfad aus Benutzereingabe zusammengesetzt - Path-Traversal-Risiko; Eingabe validieren/normalisieren';
+      ShortDesc: 'Datei-Open-Aufruf (TFileStream.Create, AssignFile, ...) mit einem Pfadausdruck, der Benutzereingaben (Edit.Text, Request.Params, ...) verkettet - Path-Traversal-Risiko';
       FullDesc : 'Klassische Path-Traversal-Schwachstelle: Vom Benutzer kontrollierte Eingabe flie' + #$00DF +
         't in eine Dateisystem-API. Ein Angreifer kann `../../../etc/passwd` oder ' + #$00C4 +
         'hnliches ' + #$00FC +
@@ -2790,7 +2793,7 @@ const
     (
       RuleID   : 'SCA200';
       Name     : 'IP-Adresse als String-Literal';
-      ShortDesc: 'Hartcodierte IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$00F6 +
+      ShortDesc: 'Hartkodierte IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$00F6 +
         'ffentlich) in einem String-Literal - in die Konfiguration auslagern oder einen Hostnamen verwenden';
       FullDesc : 'Eine in den Quelltext geschriebene IP-Adresse bindet das Programm an ein Netz: Jeder Umzug auf einen anderen Server, in eine andere Umgebung (Entwicklung, Test, Produktion) oder zu einem anderen Kunden erfordert eine Code' +
         #$00E4 + 'nderung und einen neuen Build, und die Adresse verr' + #$00E4 +
@@ -2935,8 +2938,9 @@ const
     (
       RuleID   : 'SCA003';
       Name     : 'Cha' + #$00EE + 'ne SQL construite par concat' + #$00E9 + 'nation';
-      ShortDesc: 'Cha' + #$00EE + 'ne SQL concat' + #$00E9 + 'n' + #$00E9 + 'e avec ''+'' ' + #$00E0 +
-        ' partir d''une saisie contr' + #$00F4 + 'lable (risque d''injection)';
+      ShortDesc: 'Cha' + #$00EE + 'ne SQL concat' + #$00E9 + 'n' + #$00E9 + 'e avec ''+'' et un op' + #$00E9 +
+        'rande non litt' + #$00E9 + 'ral (risque d''injection si cet op' + #$00E9 +
+        'rande n''est pas fiable)';
       FullDesc : 'Construire du SQL via ''WHERE x='' + op' + #$00E9 +
         'rande permet une injection SQL lorsque cet op' + #$00E9 + 'rande n''est pas fiable. Le d' +
         #$00E9 + 'tecteur signale la CONCAT' + #$00C9 +
@@ -2951,7 +2955,7 @@ const
     (
       RuleID   : 'SCA004';
       Name     : 'Identifiant / jeton d''API en dur';
-      ShortDesc: 'Mot de passe, cl' + #$00E9 + ' d''API ou jeton sous forme de litt' + #$00E9 + 'ral cha' +
+      ShortDesc: 'Mot de passe, cl' + #$00E9 + ' d''API ou jeton sous forme de litt' + #$00E9 + 'ral de cha' +
         #$00EE + 'ne dans le code source';
       FullDesc : 'Les identifiants pr' + #$00E9 + 'sents dans le code source finissent dans le contr' +
         #$00F4 + 'le de version, les artefacts de build, les d' + #$00E9 +
@@ -2982,10 +2986,10 @@ const
     // SCA007
     (
       RuleID   : 'SCA007';
-      Name     : 'Unit inutilis' + #$00E9 + 'e dans la clause uses';
+      Name     : 'Unit' + #$00E9 + ' inutilis' + #$00E9 + 'e dans la clause uses';
       ShortDesc: 'Entr' + #$00E9 + 'e uses probablement inutilis' + #$00E9 +
-        'e (aucun identifiant qui en provienne n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 +
-        ')';
+        'e (aucun identificateur qui en provienne n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' +
+        #$00E9 + ')';
       FullDesc : 'Heuristique : recherche n''importe quel identificateur de l''unit' + #$00E9 + ' utilis' +
         #$00E9 + 'e. Faux positifs possibles pour les unit' + #$00E9 +
         's qui se contentent d''enregistrer des classes / d''initialiser un ' + #$00E9 +
@@ -2995,7 +2999,8 @@ const
     (
       RuleID   : 'SCA008';
       Name     : 'D' + #$00E9 + 'r' + #$00E9 + 'f' + #$00E9 + 'rencement nil possible';
-      ShortDesc: 'Acc' + #$00E8 + 's a une variable qui peut valoir nil a cet endroit';
+      ShortDesc: 'Acc' + #$00E8 + 's ' + #$00E0 + ' une variable qui peut valoir nil ' + #$00E0 +
+        ' cet endroit';
       FullDesc : 'Une variable locale est explicitement mise ' + #$00E0 + ' nil puis d' + #$00E9 + 'r' +
         #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 + 'e (appel de m' + #$00E9 + 'thode ou acc' + #$00E8 +
         's ' + #$00E0 + ' une propri' + #$00E9 + 't' + #$00E9 + ') sans r' + #$00E9 +
@@ -3128,9 +3133,9 @@ const
     // SCA015
     (
       RuleID   : 'SCA015';
-      Name     : 'Litt' + #$00E9 + 'ral cha' + #$00EE + 'ne r' + #$00E9 + 'p' + #$00E9 + 't' + #$00E9 +
-        ' a plusieurs endroits';
-      ShortDesc: 'Le m' + #$00EA + 'me litt' + #$00E9 + 'ral cha' + #$00EE + 'ne appara' + #$00EE +
+      Name     : 'Litt' + #$00E9 + 'ral de cha' + #$00EE + 'ne r' + #$00E9 + 'p' + #$00E9 + 't' + #$00E9 +
+        ' ' + #$00E0 + ' plusieurs endroits';
+      ShortDesc: 'Le m' + #$00EA + 'me litt' + #$00E9 + 'ral de cha' + #$00EE + 'ne appara' + #$00EE +
         't au moins 3 fois dans un fichier - extraire vers une constante';
       FullDesc : 'Les cha' + #$00EE + 'nes r' + #$00E9 + 'p' + #$00E9 + 't' + #$00E9 + 'es cr' + #$00E9 +
         'ent un risque de couplage au changement (une faute de frappe ' + #$00E0 +
@@ -3145,7 +3150,7 @@ const
     // SCA016
     (
       RuleID   : 'SCA016';
-      Name     : 'Chemin de fichier en litt' + #$00E9 + 'ral cha' + #$00EE + 'ne';
+      Name     : 'Chemin de fichier en litt' + #$00E9 + 'ral de cha' + #$00EE + 'ne';
       ShortDesc: 'Chemin C:\, UNC ou Linux ' + #$00E9 + 'crit en dur dans le source';
       FullDesc : 'Les chemins ' + #$00E9 + 'crits en dur nuisent ' + #$00E0 + ' la portabilit' + #$00E9 +
         ' et au d' + #$00E9 +
@@ -3156,8 +3161,8 @@ const
     (
       RuleID   : 'SCA017';
       Name     : 'WriteLn/ShowMessage en code de production';
-      ShortDesc: 'Instruction de sortie de d' + #$00E9 + 'bogage trouv' + #$00E9 +
-        'e dans une unit de production';
+      ShortDesc: 'Appel non qualifi' + #$00E9 + ' ' + #$00E0 +
+        ' WriteLn, ShowMessage(Pos) ou OutputDebugString dans une unit' + #$00E9 + ' hors test';
       FullDesc : 'WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA dans du code hors test est presque toujours un reste de d' +
         #$00E9 + 'bogage : ShowMessage en particulier bloque le thread d''interface et ne convient ' +
         #$00E0 + ' aucun chemin de code de production. Remplacer par un logger structur' + #$00E9 +
@@ -3182,7 +3187,8 @@ const
       RuleID   : 'SCA018';
       Name     : 'L''imbrication de blocs d' + #$00E9 + 'passe le seuil';
       ShortDesc: 'Profondeur d''imbrication if/for/while sup' + #$00E9 + 'rieure au maximum configur' +
-        #$00E9 + ' (4 par d' + #$00E9 + 'faut)';
+        #$00E9 + ' (4 par d' + #$00E9 + 'faut) ; une cha' + #$00EE +
+        'ne else-if compte pour UN seul niveau, comme un case';
       FullDesc : 'Une imbrication profonde nuit ' + #$00E0 + ' la lisibilit' + #$00E9 +
         ' et indique que la m' + #$00E9 +
         'thode en fait trop. Utiliser des clauses de garde (Exit anticip' + #$00E9 +
@@ -3195,7 +3201,7 @@ const
     (
       RuleID   : 'SCA019';
       Name     : 'Marqueur TODO/FIXME en commentaire';
-      ShortDesc: 'Marqueur TODO, FIXME, HACK ou XXX ouvert - a traiter avant la livraison';
+      ShortDesc: 'Marqueur TODO, FIXME, HACK ou XXX ouvert - ' + #$00E0 + ' traiter avant la livraison';
       FullDesc : 'Les marqueurs de travail ouverts (TODO, FIXME, HACK, XXX) forment un suivi de t' + #$00E2 +
         'ches parall' + #$00E8 + 'le ' + #$00E0 + ' l''int' + #$00E9 + 'rieur du source. Ce sch' +
         #$00E9 + 'ma ' + #$00E9 + 'choue par accumulation : des marqueurs ajout' + #$00E9 + 's ' +
@@ -3331,7 +3337,7 @@ const
       RuleID   : 'SCA028';
       Name     : 'Le gestionnaire d''' + #$00E9 + 'v' + #$00E9 + 'nement DFM pointe vers une m' + #$00E9 +
         'thode absente';
-      ShortDesc: 'OnClick / On... renvoie a une m' + #$00E9 +
+      ShortDesc: 'OnClick / On... renvoie ' + #$00E0 + ' une m' + #$00E9 +
         'thode qui n''existe pas dans la classe de la fiche';
       FullDesc : 'Le streaming DFM plante au chargement de la fiche avec *"class TForm has no published method X"*. G' +
         #$00E9 + 'n' + #$00E9 + 'ralement caus' + #$00E9 +
@@ -3356,8 +3362,8 @@ const
     (
       RuleID   : 'SCA030';
       Name     : 'Gestionnaire d''' + #$00E9 + 'v' + #$00E9 + 'nement li' + #$00E9 + ' mais vide';
-      ShortDesc: 'L''' + #$00E9 + 'v' + #$00E9 + 'nement est c' + #$00E2 + 'bl' + #$00E9 +
-        ' dans le DFM, la m' + #$00E9 + 'thode existe, le corps est vide';
+      ShortDesc: 'L''' + #$00E9 + 'v' + #$00E9 + 'nement est li' + #$00E9 + ' dans le DFM, la m' + #$00E9 +
+        'thode existe, le corps est vide';
       FullDesc : 'Un gestionnaire vide avec une liaison DFM active est presque toujours un stub oubli' +
         #$00E9 + ' apr' + #$00E8 +
         's son ajout par le concepteur de fiches. Supprimer la liaison ou impl' + #$00E9 +
@@ -3380,7 +3386,7 @@ const
     // SCA032
     (
       RuleID   : 'SCA032';
-      Name     : 'Boucle DataSource / ma' + #$00EE + 'tre-detail circulaire';
+      Name     : 'Boucle DataSource / ma' + #$00EE + 'tre-d' + #$00E9 + 'tail circulaire';
       ShortDesc: 'Cycle dans les ar' + #$00EA + 'tes DataSource.DataSet / DataSet.MasterSource';
       FullDesc : 'Un cycle dans le graphe ma' + #$00EE + 'tre-d' + #$00E9 + 'tail provoque une r' + #$00E9 +
         'cursion infinie pendant BeforeOpen ou tout rafra' + #$00EE + 'chissement et fait d' +
@@ -3413,9 +3419,9 @@ const
     // SCA035
     (
       RuleID   : 'SCA035';
-      Name     : 'Champ obligatoire li' + #$00E9 + ' uniquement a des contr' + #$00F4 + 'les cach' + #$00E9 +
-        's';
-      ShortDesc: 'Un TField avec Required=True n''est li' + #$00E9 + ' qu''a des contr' + #$00F4 +
+      Name     : 'Champ obligatoire li' + #$00E9 + ' uniquement ' + #$00E0 + ' des contr' + #$00F4 +
+        'les cach' + #$00E9 + 's';
+      ShortDesc: 'Un TField avec Required=True n''est li' + #$00E9 + ' qu''' + #$00E0 + ' des contr' + #$00F4 +
         'les ayant Visible=False';
       FullDesc : 'Le contr' + #$00F4 +
         'le existe mais l''utilisateur ne peut ni le voir ni interagir avec lui - les insertions ' +
@@ -3426,8 +3432,8 @@ const
     (
       RuleID   : 'SCA036';
       Name     : 'Type de contr' + #$00F4 + 'le incompatible avec le TField';
-      ShortDesc: 'La classe du contr' + #$00F4 + 'le de donn' + #$00E9 +
-        'es ne correspond pas a TField.DataType (TDBEdit pour un TBooleanField)';
+      ShortDesc: 'La classe du contr' + #$00F4 + 'le de donn' + #$00E9 + 'es ne correspond pas ' + #$00E0 +
+        ' TField.DataType (TDBEdit pour un TBooleanField)';
       FullDesc : 'L''utilisateur voit la valeur brute et peut corrompre le type. Choisir un contr' + #$00F4 +
         'le compatible avec le type du champ (TDBCheckBox pour les bool' + #$00E9 +
         'ens, TDBLookupComboBox pour les cl' + #$00E9 + 's ' + #$00E9 + 'trang' + #$00E8 + 'res).'
@@ -3467,7 +3473,7 @@ const
     // SCA040
     (
       RuleID   : 'SCA040';
-      Name     : 'Acc' + #$00E8 + 's a un champ d''une autre fiche';
+      Name     : 'Acc' + #$00E8 + 's ' + #$00E0 + ' un champ d''une autre fiche';
       ShortDesc: 'Du code dans Form1 lit ou ' + #$00E9 + 'crit directement Form2.<champ_published>';
       FullDesc : 'Aller chercher un contr' + #$00F4 +
         'le enfant dans une autre fiche casse l''encapsulation - tout renommage dans Form2 casse silencieusement Form1. Exposer plut' +
@@ -3490,8 +3496,9 @@ const
     // SCA042
     (
       RuleID   : 'SCA042';
-      Name     : 'Gestionnaire d''' + #$00E9 + 'v' + #$00E9 + 'nement surcharge';
-      ShortDesc: 'Une seule m' + #$00E9 + 'thode est c' + #$00E2 + 'bl' + #$00E9 + 'e sur N ' + #$00E9 + 'v' +
+      Name     : 'Gestionnaire d''' + #$00E9 + 'v' + #$00E9 + 'nement li' + #$00E9 + ' ' + #$00E0 +
+        ' trop d''' + #$00E9 + 'v' + #$00E9 + 'nements';
+      ShortDesc: 'Une seule m' + #$00E9 + 'thode est li' + #$00E9 + 'e ' + #$00E0 + ' N ' + #$00E9 + 'v' +
         #$00E9 + 'nements de composants ou plus (N=5 par d' + #$00E9 + 'faut)';
       FullDesc : 'Indicateur de code spaghetti : un gestionnaire unique qui r' + #$00E9 +
         'partit de nombreux ' + #$00E9 + 'v' + #$00E9 +
@@ -3528,8 +3535,8 @@ const
     (
       RuleID   : 'SCA044';
       Name     : 'Longue concat' + #$00E9 + 'nation - pr' + #$00E9 + 'f' + #$00E9 + 'rer Format()';
-      ShortDesc: 'Concat' + #$00E9 + 'nation de cha' + #$00EE +
-        'ne en plusieurs segments - a transformer en appel a Format()';
+      ShortDesc: 'Concat' + #$00E9 + 'nation de cha' + #$00EE + 'ne en plusieurs segments - ' + #$00E0 +
+        ' transformer en appel ' + #$00E0 + ' Format()';
       FullDesc : 'Les encha' + #$00EE + 'nements comme `''a'' + Var + ''b'' + IntToStr(N)` (trois concat' +
         #$00E9 + 'nations ou plus impliquant des segments non litt' + #$00E9 +
         'raux) sont plus difficiles ' + #$00E0 + ' parcourir et ' + #$00E0 +
@@ -3644,10 +3651,11 @@ const
     // SCA050
     (
       RuleID   : 'SCA050';
-      Name     : 'Le membre public pourrait ' + #$00EA + 'tre priv' + #$00E9 + ' a l''unit';
-      ShortDesc: 'Ce membre public n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 +
-        ' que dans l''unit courante - le `private` classique de Delphi (port' + #$00E9 +
-        'e unit) suffit';
+      Name     : 'Le membre public pourrait ' + #$00EA + 'tre priv' + #$00E9 + ' ' + #$00E0 + ' l''unit' +
+        #$00E9;
+      ShortDesc: 'Ce membre public n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 + ' que dans l''unit' +
+        #$00E9 + ' courante - le `private` classique de Delphi (port' + #$00E9 + 'e unit' + #$00E9 +
+        ') suffit';
       FullDesc : 'Analyse d''un seul fichier : le membre `public` est r' + #$00E9 + 'f' + #$00E9 + 'renc' +
         #$00E9 + ' depuis un endroit de la m' + #$00EA + 'me unit' + #$00E9 +
         ' (autres classes, proc' + #$00E9 +
@@ -3700,7 +3708,8 @@ const
       RuleID   : 'SCA052';
       Name     : 'Membre public inutilis' + #$00E9 + ' (API morte)';
       ShortDesc: 'Le membre public n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 +
-        ' par aucune classe d' + #$00E9 + 'riv' + #$00E9 + 'e ni par aucun chemin inter-unit';
+        ' par aucune classe d' + #$00E9 + 'riv' + #$00E9 + 'e ni par aucun chemin inter-unit' +
+        #$00E9 + 's';
       FullDesc : 'Aucune utilisation interne ET aucune utilisation externe trouv' + #$00E9 +
         'e - surface d''API morte. La supprimer ou la documenter comme export' + #$00E9 +
         'e volontairement (p. ex. pour la compatibilit' + #$00E9 + ' binaire).'
@@ -3731,7 +3740,8 @@ const
     (
       RuleID   : 'SCA054';
       Name     : 'Param' + #$00E8 + 'tre de m' + #$00E9 + 'thode inutilis' + #$00E9;
-      ShortDesc: 'Le param' + #$00E8 + 'tre de la m' + #$00E9 + 'thode n''est jamais utilise dans le corps';
+      ShortDesc: 'Le param' + #$00E8 + 'tre de la m' + #$00E9 + 'thode n''est jamais utilis' + #$00E9 +
+        ' dans le corps';
       FullDesc : 'Un param' + #$00E8 + 'tre formel est d' + #$00E9 + 'clar' + #$00E9 +
         ' mais jamais lu dans le corps de la m' + #$00E9 + 'thode. Le param' + #$00E8 +
         'tre encombre le site d''appel (chaque appelant passe une valeur sans effet) et occulte les v' +
@@ -3777,7 +3787,7 @@ const
     // SCA056
     (
       RuleID   : 'SCA056';
-      Name     : 'Ma' + #$00EE + 'tre-detail sans MasterFields';
+      Name     : 'Ma' + #$00EE + 'tre-d' + #$00E9 + 'tail sans MasterFields';
       ShortDesc: 'Le TDataSet a MasterSource mais ni MasterFields ni IndexFieldNames';
       FullDesc : 'La VCL effectue silencieusement un produit cart' + #$00E9 +
         'sien au lieu de la jointure ma' + #$00EE + 'tre-d' + #$00E9 + 'tail pr' + #$00E9 +
@@ -3829,7 +3839,7 @@ const
     (
       RuleID   : 'SCA060';
       Name     : 'Instruction goto';
-      ShortDesc: '`goto` affaiblit le flot de contr' + #$00F4 + 'le structure';
+      ShortDesc: '`goto` affaiblit le flot de contr' + #$00F4 + 'le structur' + #$00E9;
       FullDesc : '`goto` et les ' + #$00E9 + 'tiquettes rendent le flot de contr' + #$00F4 +
         'le non structur' + #$00E9 +
         ' : les boucles, l''imbrication et try/finally deviennent difficiles ' + #$00E0 +
@@ -3958,7 +3968,7 @@ const
     (
       RuleID   : 'SCA070';
       Name     : 'Code en commentaire';
-      ShortDesc: 'Le commentaire ressemble a du code Pascal - supprimer ou justifier';
+      ShortDesc: 'Le commentaire ressemble ' + #$00E0 + ' du code Pascal - supprimer ou justifier';
       FullDesc : 'Heuristique : un contenu de commentaire avec 2 marqueurs de style code ou plus (`;` final, `:=`, mots-cl' +
         #$00E9 +
         's `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) est presque certainement du code mis en commentaire. Ce code pourrit en silence : personne n''ose le supprimer, personne ne le met ' +
@@ -3978,7 +3988,7 @@ const
     // SCA071
     (
       RuleID   : 'SCA071';
-      Name     : 'Mot-cl' + #$00E9 + ' de section d''unit qui n''est pas en colonne 1';
+      Name     : 'Mot-cl' + #$00E9 + ' de section d''unit' + #$00E9 + ' qui n''est pas en colonne 1';
       ShortDesc: '`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1';
       FullDesc : 'La convention Object Pascal veut que les mots-cl' + #$00E9 +
         's de section structurels d''une unit' + #$00E9 + ' soient align' + #$00E9 + 's ' + #$00E0 +
@@ -4123,7 +4133,7 @@ const
     (
       RuleID   : 'SCA081';
       Name     : 'Plusieurs d' + #$00E9 + 'clarations de classe dans un fichier';
-      ShortDesc: 'Une classe par unit facilite le remaniement';
+      ShortDesc: 'Une classe par unit' + #$00E9 + ' facilite le refactoring';
       FullDesc : 'Lorsqu''une unit' + #$00E9 + ' d' + #$00E9 +
         'clare deux classes publiques ou plus, les retrouver et les d' + #$00E9 +
         'placer entre unit' + #$00E9 + 's est plus difficile que n' + #$00E9 +
@@ -4147,7 +4157,7 @@ const
     (
       RuleID   : 'SCA083';
       Name     : 'Bloc finally vide';
-      ShortDesc: '`try ... finally end;` ne lib' + #$00E9 + 'r' + #$00E9 + ' rien - compl' + #$00E9 +
+      ShortDesc: '`try ... finally end;` ne lib' + #$00E8 + 're rien - compl' + #$00E9 +
         'ter ou supprimer le finally';
       FullDesc : 'Un bloc `finally` vide est presque toujours un nettoyage oubli' + #$00E9 +
         '. S''il n''y a vraiment rien ' + #$00E0 +
@@ -4181,7 +4191,7 @@ const
     (
       RuleID   : 'SCA086';
       Name     : #$00C9 + 'viter le modificateur out';
-      ShortDesc: 'Pr' + #$00E9 + 'f' + #$00E9 + 'rer `var` a `out` (out a une s' + #$00E9 +
+      ShortDesc: 'Pr' + #$00E9 + 'f' + #$00E9 + 'rer `var` ' + #$00E0 + ' `out` (out a une s' + #$00E9 +
         'mantique surprenante)';
       FullDesc : 'Les param' + #$00E8 + 'tres `out` vident les types manag' + #$00E9 +
         's (string/Interface/tableaux dynamiques) ' + #$00E0 + ' l''entr' + #$00E9 + 'e de la m' +
@@ -4208,7 +4218,7 @@ const
     // SCA088
     (
       RuleID   : 'SCA088';
-      Name     : 'Initialisation d''unit ' + #$00E0 + ' l''ancienne begin..end.';
+      Name     : 'Initialisation d''unit' + #$00E9 + ' ' + #$00E0 + ' l''ancienne begin..end.';
       ShortDesc: 'Utiliser `initialization..end.` plut' + #$00F4 + 't que l''ancien `begin..end.`';
       FullDesc : 'Avant Delphi 2, les unit' + #$00E9 +
         's marquaient leur bloc d''initialisation avec `begin..end.`. Depuis Delphi 2, la forme idiomatique est `initialization..end.`, qui peut ' +
@@ -4266,9 +4276,10 @@ const
     // SCA092
     (
       RuleID   : 'SCA092';
-      Name     : 'Unit sans aucune d' + #$00E9 + 'claration';
-      ShortDesc: 'L''unit n''a ni type, ni const, ni var, ni proc' + #$00E9 +
-        'dure/function - supprimer ou compl' + #$00E9 + 'ter';
+      Name     : 'Unit' + #$00E9 + ' sans aucune d' + #$00E9 + 'claration';
+      ShortDesc: 'L''unit' + #$00E9 +
+        ' n''a ni type, ni const, ni var, ni procedure/function - supprimer ou compl' + #$00E9 +
+        'ter';
       FullDesc : 'Un fichier `.pas` avec un en-t' + #$00EA + 'te d''unit' + #$00E9 + ' mais sans aucune d' +
         #$00E9 + 'claration est un poids mort. Soit supprimer le fichier, soit compl' + #$00E9 +
         'ter l''emplacement r' + #$00E9 + 'serv' + #$00E9 + '. Correspond ' + #$00E0 +
@@ -4316,7 +4327,7 @@ const
     // SCA096
     (
       RuleID   : 'SCA096';
-      Name     : 'Constructeur sans appel a inherited';
+      Name     : 'Constructeur sans appel ' + #$00E0 + ' inherited';
       ShortDesc: 'Il manque `inherited Create` au constructeur - le parent reste non initialis' + #$00E9;
       FullDesc : 'Un constructeur qui n''appelle pas `inherited Create(...)` (ni `inherited;`) saute l''initialisation de la classe parente. Les champs et enregistrements du parent restent ' +
         #$00E0 + ' l''' + #$00E9 + 'tat par d' + #$00E9 + 'faut/nil, ce qui entra' + #$00EE +
@@ -4327,7 +4338,7 @@ const
     // SCA097
     (
       RuleID   : 'SCA097';
-      Name     : 'Destructeur sans appel a inherited';
+      Name     : 'Destructeur sans appel ' + #$00E0 + ' inherited';
       ShortDesc: 'Il manque `inherited Destroy` au destructeur - le nettoyage du parent est saut' + #$00E9 +
         ' (risque de fuite)';
       FullDesc : 'Un destructeur sans `inherited Destroy` (ni `inherited;`) emp' + #$00EA +
@@ -4390,8 +4401,8 @@ const
     (
       RuleID   : 'SCA102';
       Name     : 'Routine imbriqu' + #$00E9 + 'e dans une m' + #$00E9 + 'thode';
-      ShortDesc: 'Proc' + #$00E9 + 'dure ou fonction locale imbriqu' + #$00E9 +
-        'e - a extraire au niveau de l''unit';
+      ShortDesc: 'Proc' + #$00E9 + 'dure ou fonction locale imbriqu' + #$00E9 + 'e - ' + #$00E0 +
+        ' extraire au niveau de l''unit' + #$00E9;
       FullDesc : 'Les routines imbriqu' + #$00E9 + 'es (une `procedure`/`function` d' + #$00E9 + 'clar' +
         #$00E9 + 'e dans la section de d' + #$00E9 +
         'clarations locales d''une autre routine) sont syntaxiquement autoris' + #$00E9 +
@@ -4631,7 +4642,7 @@ const
       RuleID   : 'SCA115';
       Name     : 'URL HTTP en clair';
       ShortDesc: 'Litt' + #$00E9 + 'ral `''http://...''` pour un point d''acc' + #$00E8 + 's distant - vuln' +
-        #$00E9 + 'rable a l''interception';
+        #$00E9 + 'rable ' + #$00E0 + ' l''interception';
       FullDesc : 'Un litt' + #$00E9 + 'ral de cha' + #$00EE + 'ne commen' + #$00E7 +
         'ant par `http://` pour tout point d''acc' + #$00E8 +
         's autre que localhost transmet sa charge utile sans chiffrement. Identifiants de connexion, jetons de session et donn' +
@@ -4768,7 +4779,7 @@ const
     // SCA122
     (
       RuleID   : 'SCA122';
-      Name     : 'Relev' + #$00E9 + 'e de la variable d''exception li' + #$00E9 + 'e';
+      Name     : 'Relance de la variable d''exception li' + #$00E9 + 'e';
       ShortDesc: '`on E: T do ... raise E;` perd la pile d''appels d''origine - le `raise;` nu la conserve';
       FullDesc : '`raise E` dans un gestionnaire `on E: SomeException do ...` d' + #$00E9 +
         'marre une nouvelle propagation d''exception enracin' + #$00E9 +
@@ -4850,7 +4861,7 @@ const
     // SCA125
     (
       RuleID   : 'SCA125';
-      Name     : 'Red' + #$00E9 + 'finition dont le corps se r' + #$00E9 + 'duit a `inherited;`';
+      Name     : 'Red' + #$00E9 + 'finition dont le corps se r' + #$00E9 + 'duit ' + #$00E0 + ' `inherited;`';
       ShortDesc: 'Une red' + #$00E9 + 'finition qui ne fait que transmettre au parent ne sert ' + #$00E0 +
         ' rien - la supprimer';
       FullDesc : 'Une m' + #$00E9 + 'thode d' + #$00E9 + 'clar' + #$00E9 + 'e avec `override` dont l''impl' +
@@ -5093,7 +5104,7 @@ const
     // SCA134
     (
       RuleID   : 'SCA134';
-      Name     : 'Variable utilisee apr' + #$00E8 + 's Free / FreeAndNil';
+      Name     : 'Variable utilis' + #$00E9 + 'e apr' + #$00E8 + 's Free / FreeAndNil';
       ShortDesc: 'D' + #$00E9 + 'r' + #$00E9 + 'f' + #$00E9 + 'rencer une variable apr' + #$00E8 +
         's `Free` ou `FreeAndNil` lit un pointeur pendant et provoque une violation d''acc' + #$00E8 +
         's';
@@ -5285,10 +5296,9 @@ const
     // SCA141
     (
       RuleID   : 'SCA141';
-      Name     : 'L''implementation de la classe d' + #$00E9 + 'passe 500 lignes';
-      ShortDesc: 'Une classe dont la d' + #$00E9 + 'claration et les m' + #$00E9 +
-        'thodes d''implementation totalisent plus de 500 lignes a trop de responsabilit' + #$00E9 +
-        's';
+      Name     : 'L''impl' + #$00E9 + 'mentation de la classe d' + #$00E9 + 'passe 500 lignes';
+      ShortDesc: 'Une classe dont la d' + #$00E9 + 'claration et les m' + #$00E9 + 'thodes d''impl' + #$00E9 +
+        'mentation totalisent plus de 500 lignes a trop de responsabilit' + #$00E9 + 's';
       FullDesc : 'Comme GodClass (SCA138), mais mesur' + #$00E9 + ' en ' + #$00E9 + 'tendue de lignes plut' +
         #$00F4 + 't qu''en nombre de m' + #$00E9 + 'thodes/champs. Rep' + #$00E8 +
         're les classes qui paraissent petites d''apr' + #$00E8 +
@@ -5324,8 +5334,9 @@ const
     // SCA143
     (
       RuleID   : 'SCA143';
-      Name     : 'L''unit n''a pas de commentaire d''en-t' + #$00EA + 'te descriptif';
-      ShortDesc: 'L''unit commence directement par `interface`, sans bloc de commentaire explicatif entre `unit ...;` et `interface`';
+      Name     : 'L''unit' + #$00E9 + ' n''a pas de commentaire d''en-t' + #$00EA + 'te descriptif';
+      ShortDesc: 'L''unit' + #$00E9 +
+        ' commence directement par `interface`, sans bloc de commentaire explicatif entre `unit ...;` et `interface`';
       FullDesc : 'Un court commentaire d''en-t' + #$00EA + 'te entre la d' + #$00E9 +
         'claration `unit ...;` et le mot-cl' + #$00E9 +
         ' `interface` indique aux futurs mainteneurs ' + #$00E0 + ' quoi sert l''unit' + #$00E9 +
@@ -5342,7 +5353,8 @@ const
       RuleID   : 'SCA144';
       Name     : 'Comparaison d''' + #$00E9 + 'galit' + #$00E9 + ' ou d''in' + #$00E9 + 'galit' + #$00E9 +
         ' entre flottants';
-      ShortDesc: '`a = b` ou `a <> b` entre Single/Double/Extended n''est pas fiable a cause de l''arrondi IEEE-754 - utiliser SameValue ou Math.IsZero';
+      ShortDesc: '`a = b` ou `a <> b` entre Single/Double/Extended n''est pas fiable ' + #$00E0 +
+        ' cause de l''arrondi IEEE-754 - utiliser SameValue ou Math.IsZero';
       FullDesc : 'L''arithm' + #$00E9 + 'tique flottante IEEE-754 ne garantit pas l''' + #$00E9 + 'galit' +
         #$00E9 + ' exacte, m' + #$00EA + 'me pour des r' + #$00E9 +
         'sultats qui semblent identiques au d' + #$00E9 +
@@ -5413,9 +5425,9 @@ const
     // SCA147
     (
       RuleID   : 'SCA147';
-      Name     : 'M' + #$00E9 + 'thode priv' + #$00E9 + 'e sans appelant dans l''unit';
+      Name     : 'M' + #$00E9 + 'thode priv' + #$00E9 + 'e sans appelant dans l''unit' + #$00E9;
       ShortDesc: 'Une m' + #$00E9 + 'thode priv' + #$00E9 + 'e que nulle autre m' + #$00E9 + 'thode de la m' +
-        #$00EA + 'me unit ne r' + #$00E9 + 'f' + #$00E9 +
+        #$00EA + 'me unit' + #$00E9 + ' ne r' + #$00E9 + 'f' + #$00E9 +
         'rence est du code mort - la supprimer ou la brancher';
       FullDesc : 'Les m' + #$00E9 + 'thodes priv' + #$00E9 + 'es ne peuvent ' + #$00EA + 'tre appel' + #$00E9 +
         'es que depuis la m' + #$00EA + 'me unit' + #$00E9 + ' (Delphi classique) ou la m' + #$00EA +
@@ -5443,8 +5455,8 @@ const
     // SCA148
     (
       RuleID   : 'SCA148';
-      Name     : 'M' + #$00E9 + 'thode d''instance n''acc' + #$00E9 + 'dant jamais a Self - pourrait ' +
-        #$00EA + 'tre de classe';
+      Name     : 'M' + #$00E9 + 'thode d''instance n''acc' + #$00E9 + 'dant jamais ' + #$00E0 +
+        ' Self - pourrait ' + #$00EA + 'tre de classe';
       ShortDesc: 'Une m' + #$00E9 + 'thode qui n''utilise que ses param' + #$00E8 +
         'tres (ni Self, ni champs d''instance, ni cha' + #$00EE +
         'ne virtuelle) est fonctionnellement une m' + #$00E9 + 'thode de classe - la d' + #$00E9 +
@@ -5518,8 +5530,9 @@ const
     (
       RuleID   : 'SCA151';
       Name     : 'La fonction renvoie toujours le m' + #$00EA + 'me litt' + #$00E9 + 'ral';
-      ShortDesc: 'Tous les chemins de la fonction affectent le m' + #$00EA + 'me litt' + #$00E9 +
-        'ral a Result - la logique conditionnelle ne change rien au comportement, remplacer la fonction par une constante';
+      ShortDesc: 'Tous les chemins de la fonction affectent le m' + #$00EA + 'me litt' + #$00E9 + 'ral ' +
+        #$00E0 +
+        ' Result - la logique conditionnelle ne change rien au comportement, remplacer la fonction par une constante';
       FullDesc : 'Quand chaque affectation ' + #$00E0 +
         ' `Result` (ou au nom de la fonction dans le style Pascal classique) est le m' + #$00EA +
         'me litt' + #$00E9 + 'ral, la fonction renvoie ce litt' + #$00E9 +
@@ -5541,9 +5554,9 @@ const
     (
       RuleID   : 'SCA152';
       Name     : 'Texte visible par l''utilisateur affect' + #$00E9 + ' en litt' + #$00E9 + 'ral';
-      ShortDesc: 'Les affectations a Caption/Hint/Text et les appels a ShowMessage/MessageDlg avec du texte litt' +
-        #$00E9 + 'ral contournent resourcestring et i18n - la cha' + #$00EE +
-        'ne n''est pas traduisible';
+      ShortDesc: 'Les affectations ' + #$00E0 + ' Caption/Hint/Text et les appels ' + #$00E0 +
+        ' ShowMessage/MessageDlg avec du texte litt' + #$00E9 +
+        'ral contournent resourcestring et i18n - la cha' + #$00EE + 'ne n''est pas traduisible';
       FullDesc : 'Un texte visible par l''utilisateur cod' + #$00E9 +
         ' en dur rend l''application intraduisible sans modifier le code source. Le d' + #$00E9 +
         'tecteur analyse lexicalement chaque ligne source ' + #$00E0 +
@@ -5590,8 +5603,8 @@ const
     (
       RuleID   : 'SCA154';
       Name     : 'Move/FillChar avec SizeOf d''un type pointeur';
-      ShortDesc: 'Move, FillChar, CopyMemory ou ZeroMemory appel' + #$00E9 +
-        ' avec SizeOf(PXxx) ou PXxx est un type pointeur - ne copie que 4 ou 8 octets (la taille du pointeur) au lieu du tampon vis' +
+      ShortDesc: 'Move, FillChar, CopyMemory ou ZeroMemory appel' + #$00E9 + ' avec SizeOf(PXxx) o' + #$00F9 +
+        ' PXxx est un type pointeur - ne copie que 4 ou 8 octets (la taille du pointeur) au lieu du tampon vis' +
         #$00E9;
       FullDesc : 'Analyse lexicale ' + #$00E0 +
         ' la recherche de `Move|FillChar|CopyMemory|ZeroMemory(...SizeOf(<Name>)...)` o' + #$00F9 +
@@ -5610,8 +5623,8 @@ const
       RuleID   : 'SCA155';
       Name     : 'Instruction with sur plusieurs cibles';
       ShortDesc: '`with A, B do` (deux receveurs ou plus s' + #$00E9 + 'par' + #$00E9 +
-        's par des virgules) rend la resolution des membres ambigu' + #$00EB + ' - ajouter une m' +
-        #$00E9 + 'thode ' + #$00E0 + ' A ou ' + #$00E0 +
+        's par des virgules) rend la r' + #$00E9 + 'solution des membres ambigu' + #$00EB +
+        ' - ajouter une m' + #$00E9 + 'thode ' + #$00E0 + ' A ou ' + #$00E0 +
         ' B change silencieusement le sens du corps';
       FullDesc : 'Correspondance regex \bwith\s+<id>,\s*<id>\s*do\b sur tout le fichier (multiligne / commentaires retir' +
         #$00E9 + 's), suivie d''une passe d''' + #$00E9 + 'quilibrage des parenth' + #$00E8 +
@@ -5728,8 +5741,8 @@ const
     (
       RuleID   : 'SCA160';
       Name     : 'Transtypage en cha' + #$00EE + 'ne depuis un pointeur brut';
-      ShortDesc: '`string(P)` et variantes depuis un pointeur pr' + #$00E9 +
-        'fixe P supposent un terminateur nul qui peut ne pas exister - lecture au-del' + #$00E0 +
+      ShortDesc: '`string(P)` et variantes depuis un pointeur pr' + #$00E9 + 'fix' + #$00E9 +
+        ' par P supposent un terminateur nul qui peut ne pas exister - lecture au-del' + #$00E0 +
         ' du tas';
       FullDesc : 'Analyse lexicale de `(string|RawByteString|AnsiString|UTF8String|WideString)(<id>)` o' +
         #$00F9 + ' `<id>` commence par `P` suivi d''une autre lettre (convention Delphi du pr' +
@@ -5773,7 +5786,7 @@ const
       Name     : 'Utilisation d''un algorithme cryptographique faible ou obsol' + #$00E8 + 'te';
       ShortDesc: 'Nom d''algorithme (''MD5'', ''SHA1'', ''DES'', ''RC4'', ''TLS1.0'', ''SSLv3'') ou classe d''encapsulation (THashMD5, TIdHashSHA1, ...) r' +
         #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 + 'e - vuln' + #$00E9 +
-        'rable aux collisions et aux attaques a texte clair connu';
+        'rable aux collisions et aux attaques ' + #$00E0 + ' texte clair connu';
       FullDesc : 'MD5 pr' + #$00E9 +
         'sente des collisions praticables depuis 2004 (Wang et al.), SHA1 depuis 2017 (SHAttered, pr' +
         #$00E9 + 'fixe identique ; pr' + #$00E9 +
@@ -5818,7 +5831,7 @@ const
       RuleID   : 'SCA164';
       Name     : 'Routine de premier niveau jamais appel' + #$00E9 + 'e';
       ShortDesc: 'Une proc' + #$00E9 + 'dure ou fonction autonome de la section implementation n''est appel' +
-        #$00E9 + 'e nulle part dans l''unit et n''est pas export' + #$00E9 +
+        #$00E9 + 'e nulle part dans l''unit' + #$00E9 + ' et n''est pas export' + #$00E9 +
         'e par la section interface - code mort';
       FullDesc : 'Comble le vide entre SCA147 (UnusedPrivateMethod - seulement les m' + #$00E9 +
         'thodes priv' + #$00E9 + 'es de classe) et la famille de contr' + #$00F4 +
@@ -5848,7 +5861,7 @@ const
     (
       RuleID   : 'SCA165';
       Name     : 'Marqueur noinspection inutilis' + #$00E9;
-      ShortDesc: 'Un `// noinspection X` ne supprime aucun r' + #$00E9 +
+      ShortDesc: 'Un `// noinspection X` ne masque aucun r' + #$00E9 +
         'sultat sur sa ligne cible - soit le d' + #$00E9 + 'tecteur s''est am' + #$00E9 + 'lior' +
         #$00E9 + ', soit la cible ' + #$00E9 + 'tait mauvaise';
       FullDesc : 'Le filtre de suppression (uSuppression) enregistre chaque commentaire `// noinspection KindName` et la ligne de code suivante qu''il vise. Une fois tous les d' +
@@ -5899,9 +5912,9 @@ const
     // SCA167
     (
       RuleID   : 'SCA167';
-      Name     : 'Appel a Random sans Randomize pr' + #$00E9 + 'alable';
-      ShortDesc: 'Random / RandomRange / RandomFrom sans Randomize - un germe a 0 produit la m' + #$00EA +
-        'me suite ' + #$00E0 + ' chaque ex' + #$00E9 + 'cution';
+      Name     : 'Appel ' + #$00E0 + ' Random sans Randomize pr' + #$00E9 + 'alable';
+      ShortDesc: 'Random / RandomRange / RandomFrom sans Randomize - un germe ' + #$00E0 + ' 0 produit la m' +
+        #$00EA + 'me suite ' + #$00E0 + ' chaque ex' + #$00E9 + 'cution';
       FullDesc : 'La fonction Random de Delphi utilise un germe interne qui vaut 0 au d' + #$00E9 +
         'marrage du programme. Tant que Randomize n''a pas ' + #$00E9 + 't' + #$00E9 + ' appel' +
         #$00E9 + ' une fois (g' + #$00E9 + 'n' + #$00E9 + 'ralement au d' + #$00E9 + 'but de l''ex' +
@@ -5944,7 +5957,7 @@ const
     // SCA169
     (
       RuleID   : 'SCA169';
-      Name     : 'L''argument d''Assert contient un appel a effet de bord';
+      Name     : 'L''argument d''Assert contient un appel ' + #$00E0 + ' effet de bord';
       ShortDesc: 'Assert(SomeCall) - l''appel dispara' + #$00EE +
         't en build Release et son effet de bord est perdu silencieusement';
       FullDesc : 'Le compilateur Delphi supprime enti' + #$00E8 + 'rement les appels ' + #$00E0 +
@@ -5980,9 +5993,9 @@ const
     // SCA171
     (
       RuleID   : 'SCA171';
-      Name     : 'Directive de compilation OFF sans ON correspondant dans le fichier';
+      Name     : 'Aiguillage de compilation OFF sans ON correspondant dans le fichier';
       ShortDesc: '{$WARNINGS OFF} (ou HINTS/RANGECHECKS/...) sans ON de fermeture - d' + #$00E9 +
-        'borde sur les units suivantes';
+        'borde sur les unit' + #$00E9 + 's suivantes';
       FullDesc : 'Les directives d''' + #$00E9 +
         'tat du compilateur Delphi comme {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} modifient l''' +
         #$00E9 + 'tat du compilateur pour tout ce qui est compil' + #$00E9 + ' apr' + #$00E8 +
@@ -6033,8 +6046,8 @@ const
     // SCA174
     (
       RuleID   : 'SCA174';
-      Name     : 'TList<T> rempli de T.Create - les ' + #$00E9 + 'l' + #$00E9 + 'ments fuient a la lib' +
-        #$00E9 + 'ration';
+      Name     : 'TList<T> rempli de T.Create - les ' + #$00E9 + 'l' + #$00E9 + 'ments fuient ' + #$00E0 +
+        ' la lib' + #$00E9 + 'ration';
       ShortDesc: 'TList<TFoo>.Create plus Add(TFoo.Create) - la liste ne poss' + #$00E8 + 'de pas ses ' +
         #$00E9 + 'l' + #$00E9 + 'ments, chaque instance TFoo fuit';
       FullDesc : 'TList<T> est un conteneur typ' + #$00E9 + ' qui ne poss' + #$00E8 + 'de PAS ses ' + #$00E9 +
@@ -6078,8 +6091,8 @@ const
     // SCA176
     (
       RuleID   : 'SCA176';
-      Name     : 'M' + #$00E9 + 'thode a forte complexit' + #$00E9 + ' cognitive (flot de contr' + #$00F4 +
-        'le imbriqu' + #$00E9 + ')';
+      Name     : 'M' + #$00E9 + 'thode ' + #$00E0 + ' forte complexit' + #$00E9 + ' cognitive (flot de contr' +
+        #$00F4 + 'le imbriqu' + #$00E9 + ')';
       ShortDesc: 'La complexit' + #$00E9 + ' cognitive (style Sonar) d' + #$00E9 +
         'passe 15 - les if/for/while/case imbriqu' + #$00E9 + 's sont difficiles ' + #$00E0 +
         ' suivre mentalement';
@@ -6102,10 +6115,10 @@ const
     // SCA177
     (
       RuleID   : 'SCA177';
-      Name     : 'Variable de thread utilisee apr' + #$00E8 + 's FreeOnTerminate := True';
+      Name     : 'Variable de thread utilis' + #$00E9 + 'e apr' + #$00E8 + 's FreeOnTerminate := True';
       ShortDesc: 'Apr' + #$00E8 + 's T.FreeOnTerminate := True, tout acc' + #$00E8 + 's ult' + #$00E9 +
-        'rieur ' + #$00E0 + ' T.Field/T.Method risque une Access Violation si le thread s''est d' +
-        #$00E9 + 'j' + #$00E0 + ' auto-d' + #$00E9 + 'truit';
+        'rieur ' + #$00E0 + ' T.Field/T.Method risque une violation d''acc' + #$00E8 +
+        's si le thread s''est d' + #$00E9 + 'j' + #$00E0 + ' auto-d' + #$00E9 + 'truit';
       FullDesc : 'TThread.FreeOnTerminate := True transf' + #$00E8 +
         're la possession de l''instance de thread au thread lui-m' + #$00EA + 'me - le thread lib' +
         #$00E8 + 're sa propre m' + #$00E9 +
@@ -6149,7 +6162,7 @@ const
     (
       RuleID   : 'SCA179';
       Name     : 'Attribut DUnitX [Ignore] sans argument de justification';
-      ShortDesc: '[Ignore] sans argument cha' + #$00EE +
+      ShortDesc: '[Ignore] sans argument de type cha' + #$00EE +
         'ne ignore le test silencieusement - ajouter un message expliquant pourquoi il est d' +
         #$00E9 + 'sactiv' + #$00E9;
       FullDesc : 'DUnitX accepte [Ignore] ' + #$00E0 +
@@ -6163,7 +6176,7 @@ const
     // SCA180
     (
       RuleID   : 'SCA180';
-      Name     : 'Le m' + #$00EA + 'me attribut applique deux fois au m' + #$00EA + 'me membre';
+      Name     : 'Le m' + #$00EA + 'me attribut appliqu' + #$00E9 + ' deux fois au m' + #$00EA + 'me membre';
       ShortDesc: 'Deux attributs [X] identiques sur le m' + #$00EA +
         'me membre - reste de copier-coller, sans effet';
       FullDesc : 'Le mod' + #$00E8 + 'le d''attributs de Delphi accepte les attributs r' + #$00E9 + 'p' +
@@ -6233,7 +6246,7 @@ const
       RuleID   : 'SCA184';
       Name     : 'Composant DFM inutilis' + #$00E9;
       ShortDesc: 'Le composant DFM n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 +
-        ' ni dans le code, ni dans d''autres units, ni dans le DFM lui-m' + #$00EA +
+        ' ni dans le code, ni dans d''autres unit' + #$00E9 + 's, ni dans le DFM lui-m' + #$00EA +
         'me - probablement un reste de refactoring';
       FullDesc : 'Un composant d' + #$00E9 + 'clar' + #$00E9 + ' dans le .dfm n''a aucune liaison d''' +
         #$00E9 + 'v' + #$00E9 + 'nement, n''est r' + #$00E9 + 'f' + #$00E9 + 'renc' + #$00E9 +
@@ -6280,7 +6293,7 @@ const
     (
       RuleID   : 'SCA186';
       Name     : 'S' + #$00E9 + 'quence UTF-8 invalide dans le fichier source';
-      ShortDesc: 'UTF-8 mal forme (surlong, substitut ou hors plage) sous un BOM UTF-8';
+      ShortDesc: 'UTF-8 mal form' + #$00E9 + ' (surlong, substitut ou hors plage) sous un BOM UTF-8';
       FullDesc : 'Le fichier porte un BOM UTF-8 mais contient des s' + #$00E9 +
         'quences d''octets qui ne sont pas de l''UTF-8 valide au sens de la RFC 3629 (encodages surlongs, substituts isol' +
         #$00E9 + 's ou points de code au-del' + #$00E0 +
@@ -6367,9 +6380,9 @@ const
     // SCA193
     (
       RuleID   : 'SCA193';
-      Name     : 'Caract' + #$00E8 + 're non-ASCII dans un identifiant';
-      ShortDesc: 'L''identifiant contient une lettre non-ASCII - risque d''homoglyphes et de caract' + #$00E8 +
-        'res confondables';
+      Name     : 'Caract' + #$00E8 + 're non-ASCII dans un identificateur';
+      ShortDesc: 'L''identificateur contient une lettre non-ASCII - risque d''homoglyphes et de caract' +
+        #$00E8 + 'res confondables';
       FullDesc : 'Un identificateur (variable, type, routine, ...) contient un caract' + #$00E8 +
         're non-ASCII. C''est le vecteur des homoglyphes / identificateurs confondables de la famille Trojan Source (CVE-2021-42694, CWE-1007) : une lettre comme le cyrillique U+043E ressemble au ''o'' latin mais forme un identificateur diff' +
         #$00E9 + 'rent, si bien que deux identificateurs peuvent sembler identiques et pourtant d' +
@@ -6410,10 +6423,11 @@ const
     // SCA195
     (
       RuleID   : 'SCA195';
-      Name     : 'Unit utilisee par le projet mais non incluse dedans';
-      ShortDesc: 'Un fichier .pas est tir' + #$00E9 + ' par les units du projet via uses (il compile gr' +
-        #$00E2 +
-        'ce au chemin de recherche) mais n''est pas liste dans le fichier projet (.dproj/.groupproj) - l''ajouter au projet';
+      Name     : 'Unit' + #$00E9 + ' utilis' + #$00E9 + 'e par le projet mais non incluse dedans';
+      ShortDesc: 'Un fichier .pas est tir' + #$00E9 + ' par les unit' + #$00E9 +
+        's du projet via uses (il compile gr' + #$00E2 +
+        'ce au chemin de recherche) mais n''est pas list' + #$00E9 +
+        ' dans le fichier projet (.dproj/.groupproj) - l''ajouter au projet';
       FullDesc : 'S''ex' + #$00E9 +
         'cute uniquement pour les analyses de projet et de groupe de projets (--project / --project-group, ou choix d''un .dproj/.groupproj via le dialogue ''...''). S' +
         #$00E9 + 'par' + #$00E9 + 'e de SCA194 (qui signale les fichiers r' + #$00E9 +
@@ -6433,7 +6447,7 @@ const
     // SCA196
     (
       RuleID   : 'SCA196';
-      Name     : 'Result de type manag' + #$00E9 + ' est lu avant d''avoir ' + #$00E9 + 't' + #$00E9 +
+      Name     : 'Le Result d''un type manag' + #$00E9 + ' est lu avant d''avoir ' + #$00E9 + 't' + #$00E9 +
         ' affect' + #$00E9;
       ShortDesc: 'Le Result d''un type de retour manag' + #$00E9 + ' est lu avant la premi' + #$00E8 +
         're affectation - il est un alias de la variable cible de l''appelant et porte son ANCIENNE valeur. L''initialiser d''abord (nil / [] / '''')';

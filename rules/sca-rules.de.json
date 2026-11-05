@@ -10,12 +10,12 @@
     },
     "SCA002": {
       "name": "Leerer except-Block",
-      "shortDescription": "Leerer except-Block schluckt jede Exception ohne Reaktion",
+      "shortDescription": "Leerer except-Block schluckt jede Ausnahme ohne Reaktion",
       "fullDescription": "Ein except-Block ohne Anweisungen fängt jede Ausnahme ab, auch unerwartete (EAccessViolation, EOutOfMemory). Bugs werden unsichtbar. Die Ausnahme mindestens protokollieren oder erneut auslösen."
     },
     "SCA003": {
       "name": "SQL-String per Verkettung gebaut",
-      "shortDescription": "SQL-String mit '+' aus beeinflussbarer Eingabe zusammengesetzt (Injection-Risiko)",
+      "shortDescription": "SQL-String per '+'-Verkettung mit einem nicht-literalen Operanden gebaut (Injection-Risiko, wenn dieser Operand nicht vertrauenswürdig ist)",
       "fullDescription": "SQL per 'WHERE x=' + operand zu bauen ermöglicht SQL-Injection, wenn dieser Operand nicht vertrauenswürdig ist. Der Detektor meldet die VERKETTUNG - er verfolgt nicht, woher der Operand stammt, daher ist ein Fund ein Prüfhinweis, kein Beweis für eine Schwachstelle. Verkettungen nur aus Literalen, Integer-Formatmasken und bekannte Sanitizer sind bereits ausgenommen. Stattdessen parametrisierte Abfragen verwenden (Params.ParamByName(...).Value := ...)."
     },
     "SCA004": {
@@ -85,12 +85,12 @@
     },
     "SCA017": {
       "name": "WriteLn/ShowMessage im Produktivcode",
-      "shortDescription": "Debug-Ausgabe in einer Produktiv-Unit gefunden",
+      "shortDescription": "Unqualifizierter Aufruf von WriteLn, ShowMessage(Pos) oder OutputDebugString in einer Nicht-Test-Unit",
       "fullDescription": "WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA in Nicht-Test-Code ist fast immer übrig gebliebenes Debugging: besonders ShowMessage blockiert den UI-Thread und taugt für keinen Produktiv-Codepfad. Durch einen strukturierten Logger ersetzen (TLogger, mORMot TSynLog, log4d), damit die Aufrufstelle Schweregrad, Kategorie und Quellposition erfasst und der Betrieb die Ausführlichkeit zur Laufzeit regeln kann. Der Detektor überspringt Units in Test-/Sample-/Demo-Verzeichnissegmenten (die projektweite Fixture-Pfad-Definition: `test`, `tests`, `unittest`, `unittests`, `samples`, `demos`, verankert unterhalb der Scan-Wurzel) und Konsolen-/Test-Runner-Units (`*Console*`, `*TestProject*` im Unit-Dateinamen) - Ausgaben dort sind beabsichtigt, kein übrig gebliebenes Debugging. Umgesetzt am 2026-09-05, nachdem das Audit vom 2026-09-04 ergeben hatte, dass das ursprünglich versprochene Überspringen nie gebaut worden war. Ein Marker `// noinspection DebugOutput` unterdrückt einzelne Zeilen (z. B. interaktive CLI-Banner)."
     },
     "SCA018": {
       "name": "Blockverschachtelung überschreitet die Grenze",
-      "shortDescription": "Verschachtelungstiefe von if/for/while höher als konfiguriert (Vorgabe 4)",
+      "shortDescription": "Verschachtelungstiefe von if/for/while höher als konfiguriert (Vorgabe 4); eine else-if-Kette zählt wie ein case als EINE Ebene",
       "fullDescription": "Tiefe Verschachtelung schadet der Lesbarkeit und zeigt, dass die Methode zu viel tut. Guard-Clauses (frühes Exit) verwenden oder innere Blöcke in Hilfsmethoden herausziehen. Ein Block wird gemeldet, wenn seine Tiefe die Grenze überschreitet - bei der Vorgabe 4 wird die fünfte Verschachtelungsebene gemeldet."
     },
     "SCA019": {
@@ -150,7 +150,7 @@
     },
     "SCA030": {
       "name": "Leerer gebundener Ereignisbehandler",
-      "shortDescription": "Ereignis ist im DFM verdrahtet, die Methode existiert, der Rumpf ist leer",
+      "shortDescription": "Ereignis ist im DFM gebunden, die Methode existiert, der Rumpf ist leer",
       "fullDescription": "Ein leerer Ereignisbehandler mit aktiver DFM-Bindung ist fast immer ein Stub, der vergessen wurde, nachdem der Designer ihn angelegt hat. Entweder die Bindung entfernen oder den Ereignisbehandler implementieren."
     },
     "SCA031": {
@@ -259,7 +259,7 @@
       "fullDescription": "Analyse einer einzelnen Datei: jeder sichtbare Aufrufer des public-Members ist selbst eine Methode einer Klasse, die von der deklarierenden Klasse abgeleitet ist. `protected` ist die minimale Sichtbarkeit, die alle aktuellen Aufrufstellen bedient, und signalisiert die Entwurfsabsicht (\"das ist ein Erweiterungs-Hook, kein Teil der Konsumenten-API\"). Derselbe Einzeldatei-Vorbehalt wie bei CanBeUnitPrivate / CanBeStrictPrivate: Unit-übergreifende Konsumenten sind für den Detektor unsichtbar; der Compiler prüft das Refactoring über E2361, falls ein fremder Aufrufer existiert. Übersprungen: published-/RTTI-exponierte Member, virtual-/override-Wurzeln, die Teil der dokumentierten Hierarchie sind. Innerhalb des deklarierenden Projekts unbesorgt verschärfen; bei ausgelieferten Bibliotheks-APIs externe Aufrufer zuerst manuell prüfen."
     },
     "SCA052": {
-      "name": "Ungenutzter Public-Member (tote API)",
+      "name": "Ungenutztes Public-Member (tote API)",
       "shortDescription": "Public-Member wird von keiner Ableitung und über keine Unit-Grenze referenziert",
       "fullDescription": "Keine interne Verwendung UND keine externe Verwendung gefunden - tote API-Oberfläche. Entweder entfernen oder als absichtlich exportiert dokumentieren (z. B. für Binärkompatibilität)."
     },
@@ -324,8 +324,8 @@
       "fullDescription": "Der Object-Pascal-Styleguide (Embarcadero DocWiki, Marco Cantu, SonarDelphi) ist eindeutig: Schlüsselwörter werden klein geschrieben. Varianten in gemischter Schreibweise wie `Begin`/`End`/`Procedure` sind Überbleibsel aus der Turbo-Pascal/Delphi-1-Ära und erzeugen Uneinheitlichkeit in modernen Codebasen. SonarDelphi erfasst dasselbe als communitydelphi:LowercaseKeyword."
     },
     "SCA065": {
-      "name": "NOSONAR-Unterdrückungsmarker",
-      "shortDescription": "`// NOSONAR` sollte keine Befunde stillstellen - Verwendung prüfen",
+      "name": "NOSONAR-Unterdrückungs-Marker",
+      "shortDescription": "`// NOSONAR` sollte keine Funde unterdrücken - Verwendung prüfen",
       "fullDescription": "NOSONAR-Marker sind technische Schulden: jeder stellt einen Fund still, ohne das eigentliche Problem zu beheben. SCA meldet jedes NOSONAR, damit Reviewer die Unterdrückungen im Code-Review prüfen können. SCA nutzt für die native Unterdrückung einen eigenen Marker `// noinspection` - mit NOSONAR versehener Code aus SonarDelphi sollte migriert werden. Entspricht SonarDelphi communitydelphi:NoSonar."
     },
     "SCA066": {
@@ -354,7 +354,7 @@
       "fullDescription": "Heuristik: Kommentarinhalt mit 2+ Code-Merkmalen (abschließendes `;`, `:=`, Schlüsselwörter `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) ist fast sicher auskommentierter Code. Solcher Code verrottet unbemerkt: niemand traut sich, ihn zu löschen, niemand aktualisiert ihn. Entweder entfernen oder durch ein TODO ersetzen, das die Absicht erklärt. Eine `//`-Zeile wird nur gemeldet, wenn keine der beiden Nachbarzeilen ebenfalls ein `//`-Kommentar ist - ein mehrzeiliger `//`-Block gilt als Dokumentation mit Codebeispielen -, und ein nachgestellter Kommentar hinter Code wird ebenfalls nicht gemeldet. Benachbarte gemeldete Zeilen (z. B. aufeinanderfolgende `{ ... }`-Kommentare) werden als EIN Fund gemeldet, der den Block umspannt (endLine markiert die Spanne); eine einzelne gemeldete Zeile behält die Meldung je Zeile. Entspricht SonarDelphi communitydelphi:CommentedOutCode."
     },
     "SCA071": {
-      "name": "Unit-Section-Keyword nicht in Spalte 1",
+      "name": "Schlüsselwort auf Unit-Ebene nicht in Spalte 1",
       "shortDescription": "`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen",
       "fullDescription": "Nach Object-Pascal-Konvention stehen die strukturellen Abschnitts-Schlüsselwörter einer Unit bündig links in Spalte 1. Eingerückte Abschnitts-Schlüsselwörter verschleiern beim Überfliegen die Struktur der Unit und können auf falsch gezählte begin/end-Verschachtelung hindeuten. Entspricht SonarDelphi communitydelphi:UnitLevelKeywordIndentation."
     },
@@ -394,7 +394,7 @@
       "fullDescription": "Das Abfangen der Wurzelklasse `Exception` fängt jeden Fehler ab, auch nicht behebbare (EAccessViolation, EOutOfMemory, EStackOverflow). Besser einen spezifischen Ausnahmetyp abfangen (EDatabaseError, EFOpenError, EConvertError, ...), damit fremde Fehler nicht verdeckt werden. Mit `// noinspection` unterdrücken, wenn das Catch-all beabsichtigt ist (z. B. an einer Logger-Grenze)."
     },
     "SCA079": {
-      "name": "Aufeinanderfolgende const/type/var-Sektion",
+      "name": "Aufeinanderfolgende const/type/var-Abschnitte",
       "shortDescription": "Zwei `const`-, `type`- oder `var`-Blöcke hintereinander gehören zusammengefasst",
       "fullDescription": "`const A = 1; const B = 2;` sollte `const A = 1; B = 2;` heißen - ein Abschnitts-Schlüsselwort kann alle deklarieren. Dasselbe gilt für `type` und `var`. Fasst SonarDelphi communitydelphi:ConsecutiveConstSection / :ConsecutiveTypeSection / :ConsecutiveVarSection zu einer Regel zusammen. Die Art des Abschnitts steht in der Meldung."
     },
@@ -434,8 +434,8 @@
       "fullDescription": "`out`-Parameter leeren gemanagte Typen (string/Interface/dynamische Arrays) beim Eintritt in die Methode - der Wert des Aufrufers wird verworfen, bevor die Methode läuft. Record- und einfache Typen bleiben uninitialisiert, daher ist das Lesen des eingehenden Werts undefiniertes Verhalten. Beides ist selten beabsichtigt. `var` ist die sicherere Vorgabe, sofern nicht die Semantik für COM-Interop benötigt wird. Entspricht SonarDelphi communitydelphi:AvoidOut."
     },
     "SCA087": {
-      "name": "Leere Sichtbarkeitssektion in der Klasse",
-      "shortDescription": "Sektionskopf `public`/`private`/... ohne Member darunter",
+      "name": "Leerer Sichtbarkeitsabschnitt in der Klasse",
+      "shortDescription": "Abschnittskopf `public`/`private`/... ohne Member darunter",
       "fullDescription": "Eine Klasse mit einem Sichtbarkeits-Schlüsselwort, auf das unmittelbar ein weiteres Sichtbarkeits-Schlüsselwort (oder `end`) folgt, ist meist ein Refactoring-Rest - alle Member dieses Abschnitts wurden anderswohin verschoben. Den leeren Abschnittskopf löschen. Entspricht SonarDelphi communitydelphi:EmptyVisibilitySection."
     },
     "SCA088": {
@@ -474,8 +474,8 @@
       "fullDescription": "Doppelte Klammern um einen einzelnen Bezeichner, ein Literal oder einen einfachen Ausdruck bringen nichts - ein einzelnes Paar genügt (oft gar keines). Entspricht SonarDelphi communitydelphi:RedundantParentheses. Nur der Fall des einfachen Ausdrucks wird gemeldet; ein komplexes `((A + B))` kann weiterhin von inneren Klammern für die Rangfolge profitieren und wird nicht gemeldet."
     },
     "SCA095": {
-      "name": "Wiederholte Sichtbarkeitssektion",
-      "shortDescription": "Dieselbe Sektion `public`/`private`/... kommt in einer Klasse zweimal vor",
+      "name": "Wiederholter Sichtbarkeitsabschnitt",
+      "shortDescription": "Derselbe Abschnitt `public`/`private`/... kommt in einer Klasse zweimal vor",
       "fullDescription": "Zwei `private`-Abschnitte (oder `public`/`protected`/`published`) in derselben Klasse mit Membern dazwischen sollten zu einem zusammengefasst werden. Das hilft Reviewern, die Form der Klasse auf einen Blick zu erfassen. Entspricht SonarDelphi communitydelphi:ConsecutiveVisibilitySection. Hinweis: ein leerer Abschnittskopf, auf den ein weiterer Kopf folgt, ist die verwandte, aber eigenständige Regel `EmptyVisibilitySection` (SCA087)."
     },
     "SCA096": {
@@ -544,7 +544,7 @@
       "fullDescription": "TThread.Synchronize() in einem Destruktor-Rumpf ist fragil. Läuft der Destruktor im Hauptthread, ruft Synchronize die Methode einfach direkt auf. Läuft er im Worker-Thread selbst - der übliche Fall bei FreeOnTerminate := True, wo sich der Thread nach Execute selbst freigibt -, blockiert Synchronize den Worker, bis der Hauptthread den Aufruf ausführt. Bearbeitet der Hauptthread in diesem Moment keine Synchronize-Anfragen (etwa weil er mit WaitForSingleObject statt TThread.WaitFor auf den Thread wartet oder weil die Anwendung gerade beendet wird), warten beide Threads aufeinander und der Prozess hängt. Beim Beenden können die Objekte, die der Aufruf berührt, zudem schon weg sein. Die Benachrichtigung in einen OnTerminate-Handler verlegen (er läuft im Hauptthread, bevor das Thread-Objekt freigegeben wird) oder ans Ende von Execute. AST-basiert: durchläuft jede nkMethod, deren Name auf '.Destroy' endet (oder deren TypeRef den Marker 'destructor' trägt), und meldet nkCall auf 'Synchronize' / '<obj>.Synchronize'."
     },
     "SCA109": {
-      "name": "Sperre ohne try/finally freigegeben",
+      "name": "Sperre ohne Freigabe per try/finally genommen",
       "shortDescription": "TCriticalSection, Monitor oder WinAPI-Sperre ohne umschließendes try..finally genommen - eine Ausnahme lässt sie gesperrt",
       "fullDescription": "Eine Sperre anzufordern (TCriticalSection.Enter / .Acquire, TMonitor.Enter, TMultiReadExclusiveWriteSynchronizer.BeginWrite, WinAPI EnterCriticalSection), ohne unmittelbar ein try..finally mit dem passenden Leave / Release / EndWrite folgen zu lassen, ist einer der häufigsten Threading-Fehler in Delphi: Jede Ausnahme zwischen Anfordern und Freigeben lässt die Sperre dauerhaft gehalten und blockiert jeden späteren Aufrufer (Deadlock). Lexikalische Erkennung: findet die Anforderungsmuster und prüft, ob die nächste Anweisung nach dem `;` ein `try` ist. Für absichtlich ungeschützte Abfolgen mit `// noinspection LockWithoutTryFinally` unterdrücken (selten; bedeutet meist, dass der nächste Aufruf selbst nie eine Ausnahme auslöst)."
     },
@@ -585,7 +585,7 @@
     },
     "SCA117": {
       "name": "Public-Member ohne Doku-Kommentar",
-      "shortDescription": "Public-Methode oder -Property in der `interface`-Sektion ohne Doku-Kommentar direkt darüber",
+      "shortDescription": "Public-Methode oder -Property im `interface`-Abschnitt ohne Doku-Kommentar direkt darüber",
       "fullDescription": "Ein Public-Member im `interface`-Abschnitt einer Unit gehört zur dokumentierten API-Oberfläche, die andere Units verwenden. Fehlende Doku-Kommentare erschweren die Nutzung der Unit, ohne die Implementierung zu lesen. Der Detektor akzeptiert jede dieser Formen direkt über der Deklaration: `///` XMLDoc, einen `{ ... }`-Block, einen `(* ... *)`-Block oder einen oder mehrere einzeilige `//`-Kommentare. Übersprungen: Konstruktoren `Create` / Destruktoren `Destroy` (per Konvention selbsterklärend), Member, die mit `_` beginnen (Private-Markierung in Public-Abschnitten), `published`-Member (DFM/RTTI-getrieben, Doku wäre Rauschen). Unterdrückung: `// noinspection PublicMemberWithoutDoc` je Deklaration."
     },
     "SCA118": {
@@ -599,7 +599,7 @@
       "fullDescription": "Lokale numerische/Integer-Konstanten in einem Methodenrumpf profitieren von UPPER_SNAKE_CASE (`MAX_RETRIES`, `BUFFER_SIZE`, `DEFAULT_TIMEOUT`) - der Leser sieht sofort, dass der Bezeichner eine Konstante und keine Variable ist, und die Konvention entspricht der von C / Java / Python, sodass Leser aus anderen Sprachen nicht stolpern. Der Detektor überspringt: sehr kurze Namen (<=2 Zeichen, typischerweise Schleifenzähler oder Temporäre), String-/Char-typisierte Konstanten (oft UI-Beschriftungen, bei denen PascalCase in Ordnung ist). Für legitime lokale Konstanten in PascalCase mit `// noinspection LocalConstantName` unterdrücken."
     },
     "SCA120": {
-      "name": "Exception erzeugt, aber nie ausgelöst",
+      "name": "Ausnahme erzeugt, aber nie ausgelöst",
       "shortDescription": "`EFoo.Create('msg');` legt ein Exception-Objekt an, ohne es zu `raise`n - der Fehlerpfad wird stillschweigend übersprungen",
       "fullDescription": "Das Muster `EConvertError.Create('bad input');` ohne vorangehendes `raise` erzeugt eine Exception-Instanz, löst sie nicht aus, und der aufrufende Code läuft weiter, als wäre nichts geschehen. Das allokierte Objekt leckt (klassisches TObject) oder wird sofort eingesammelt (ARC), und der beabsichtigte Fehlerzweig ist verloren. Fast immer eine Copy-Paste-Regression aus `raise EConvertError.Create(...)`, bei der das Schlüsselwort `raise` gelöscht wurde. Heuristik des Detektors: jeder `nkCall` namens `<Ident>.Create(...)`, bei dem `<Ident>` `Exception` ist oder der Delphi-Konvention mit `E`-Präfix folgt (`E` + Großbuchstabe, z. B. `EConvertError`, `EMyDomainError`). `raise X.Create(...)` wird vom Parser der raise-Anweisung als String übernommen und erzeugt nie einen `nkCall`, daher sind tatsächlich ausgelöste Ausnahmen keine Fehlalarme. Entspricht Sonar-Delphi `MissingRaiseCheck`."
     },
@@ -609,13 +609,13 @@
       "fullDescription": "Eine Funktion, die ihr `end;` ohne irgendein `Result := ...` oder Pascal-artiges `<FunctionName> := ...` erreicht, liefert den Register-/Stack-Müll, der zufällig im Ergebnis-Slot steht. In Release-Builds erhält der Aufrufer daher den Wert des letzten Aufrufs gleicher Größe - ein klassischer Heisenbug, der mit der Optimierungsstufe umschlägt. Der Detektor ist absichtlich konservativ: Er überspringt Funktionen, die ein `Exit` (könnte `Exit(value)` sein) oder ein `raise` (die Funktion löst womöglich immer aus) enthalten. Anmerkung: Der Parser erfasst das Argument von `Exit(value)` durchaus, dieses Überspringen ist also gröber als unbedingt nötig - eine Verengung würde Funde hinzufügen und wartet deshalb auf einen gemessenen Korpuslauf. Prozeduren, abstract/forward/external-Deklarationen und reine DispatchID-Deklarationen werden ebenfalls übersprungen. Teilweise Abdeckung (Result nur in einem Zweig gesetzt) ist derzeit ein übersehener Fund, bis eine CFG-Analyse vorliegt. Entspricht Sonar-Delphi `RoutineResultAssignedCheck`."
     },
     "SCA122": {
-      "name": "Erneutes raise der gebundenen Exception-Variablen",
-      "shortDescription": "`on E: T do ... raise E;` verwirft den ursprünglichen Stack Trace - das blanke `raise;` erhält ihn",
+      "name": "Erneutes raise der gebundenen Ausnahme-Variablen",
+      "shortDescription": "`on E: T do ... raise E;` verwirft den ursprünglichen Stack-Trace - das blanke `raise;` erhält ihn",
       "fullDescription": "`raise E` in einem Handler `on E: SomeException do ...` startet eine neue Ausnahme-Weitergabe, deren Ursprung die Stelle des erneuten Auslösens ist. Der ursprüngliche Stack-Trace - der Weg von der Stelle, an der die Ausnahme zuerst ausgelöst wurde, durch jede aufgerufene Routine bis zu diesem `except`-Block - ist verloren. Absturzberichte und Debugger-Ansichten zeigen dann auf den Handler, nicht auf die eigentliche Fehlerstelle, was die Triage drastisch erschwert. Gemeint war fast sicher `raise;` (ohne Argument), das das *aktuelle* Exception-Objekt mit intaktem Stack-Trace weiterreicht. Der Detektor durchläuft jeden `nkOnHandler` mit nicht leerem gebundenem Variablennamen und meldet jedes `nkRaise` in diesem Teilbaum, dessen Argument genau diese Variable ist (ohne Beachtung der Groß-/Kleinschreibung). `raise;` (ohne Argument) ist korrekt und wird nicht gemeldet; `raise EWrapper.Create(...)` wird ebenfalls akzeptiert (bewusstes Einpacken). Entspricht Sonar-Delphi `ReRaiseExceptionCheck`."
     },
     "SCA123": {
-      "name": "Typumwandlung direkt vor Free / Destroy",
-      "shortDescription": "`TFoo(x).Free` - die Typumwandlung beeinflusst nicht, welches Destroy läuft (Destroy ist virtuell)",
+      "name": "Typecast direkt vor Free / Destroy",
+      "shortDescription": "`TFoo(x).Free` - der Typecast beeinflusst nicht, welches Destroy läuft (Destroy ist virtuell)",
       "fullDescription": "`TStringList(L).Free` oder `TObject(L).Destroy` zu schreiben ist ein Verwirrungs-Smell. `TObject.Free` ist ein nicht virtueller Wrapper um das *virtuelle* `Destroy`, daher erfolgt der virtuelle Dispatch über den Laufzeittyp von `L`, nicht über den statischen Zieltyp des Typecasts. Ob `L.Free` oder `T(L).Free` geschrieben wird - es läuft dieselbe Destruktorkette. Der Typecast ist daher entweder überflüssig (Typecast auf den eigenen Typ der Variablen) oder irreführend (Typecast auf eine fremde Klasse, der nahelegt, Destroy wähle ein anderes Override - das tut es nicht). Ist das Ziel des Typecasts falsch, kann sich der umgebende Code auf diese falsche Annahme stützen und bei Refactorings brechen. Der Detektor gleicht `nkCall.Name` mit den Mustern `<Ident>(<expr>).Free[()][;]` und `<Ident>(<expr>).Destroy[()][;]` ab, wobei `<Ident>` der Delphi-Namenskonvention für Klassen/Interfaces folgt (`T` oder `I` plus Großbuchstabe). Einfaches `L.Free` und qualifiziertes `Owner.Bar(x).Free` (vermutlich Free auf einem Funktionsergebnis) werden nicht gemeldet. Entspricht Sonar-Delphi `CastAndFreeCheck`."
     },
     "SCA124": {
@@ -644,13 +644,13 @@
       "fullDescription": "Die gebietsschemaabhängigen Konvertierungsfunktionen von Pascal (`StrToDate`, `StrToTime`, `StrToDateTime`, `DateToStr`, `TimeToStr`, `DateTimeToStr`, `StrToFloat`, `StrToCurr`, `FloatToStr`, `CurrToStr`, `FormatDateTime`, `FormatFloat`, `FormatCurr`) verwenden standardmäßig den globalen Record `SysUtils.FormatSettings`, der aus den Regionaleinstellungen des Betriebssystems initialisiert wird. Derselbe Code verhält sich daher auf einem Entwicklerrechner mit DE-Gebietsschema (`DateSeparator` = '.', `DecimalSeparator` = ',') anders als auf einem Produktionsserver mit EN-Gebietsschema ('/' und '.'). Daten, die über Dateien, APIs, Datenbanken oder CSV ausgetauscht werden, müssen immer über explizite `TFormatSettings` laufen (typischerweise ein lokales `LFormatSettings := TFormatSettings.Invariant` für maschinenlesbare Ausgabe oder ein Schnappschuss des Benutzer-Gebietsschemas für die UI). Der Detektor durchläuft jeden `nkCall`, dessen Funktionsname einer bekannten gebietsschemaabhängigen RTL-Routine entspricht, und meldet den Aufruf, wenn seine Argumentliste keinen Bezeichner erwähnt, der `FormatSettings` oder `FmtSettings` enthält (Teilstring, ohne Beachtung der Groß-/Kleinschreibung) - die Settings-Variable also entsprechend benennen (`LFormatSettings`, `FFmtSettings`). `StrToInt` / `IntToStr` und die Boolean-Varianten sind ausdrücklich **nicht** gebietsschemaabhängig und werden nicht gemeldet. Entspricht Sonar-Delphi `DateFormatSettingsCheck`."
     },
     "SCA129": {
-      "name": "String-Umwandlung in einen 8-Bit-Typ ohne explizite Kodierung",
+      "name": "Typecast von string in einen 8-Bit-String-Typ ohne explizite Kodierung",
       "shortDescription": "`AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` verwirft stillschweigend alle Zeichen außerhalb der aktiven Codepage",
       "fullDescription": "Ein UnicodeString (oder jeder String-typisierte Ausdruck - der Delphi-string ist seit XE UnicodeString) per Typecast in eine der verlustbehafteten 8-Bit-String-Familien (AnsiString, RawByteString, ShortString) umzuwandeln, läuft über die implizite DefaultSystemCodePage-Konvertierung. Jeder Codepoint außerhalb der aktiven Codepage wird stillschweigend durch ? ersetzt. Emoji, nichtlateinische Schriften und sogar einige westliche Buchstaben mit Akzent verschwinden, doch die Zuweisung kompiliert sauber und läuft ohne Ausnahme - der Fehler zeigt sich daher erst, wenn die Daten über einen Unicode-fähigen Verwender zurücklaufen (eine andere DB, eine HTTP-API, ein Excel-Export). Stattdessen einen bewussten Kodierungs-Helfer verwenden (UTF8Encode, TEncoding.UTF8.GetBytes, WideStringToUTF8 ...). Der Detektor durchläuft nkCall-Knoten, deren Name (ohne Beachtung der Groß-/Kleinschreibung) mit AnsiString(, RawByteString( oder ShortString( beginnt, d. h. eine Anweisung oder Zuweisung, die mit dem Typecast beginnt; ein Typecast, der in einem anderen Aufruf oder mitten in einem Ausdruck steckt (`SaveToFile(AnsiString(u))`, `'x' + AnsiString(u)`), wird nicht gesehen. UTF8String(...) wird bewusst NICHT gemeldet: UTF8String ist type AnsiString(CP_UTF8), daher erzeugt der Typecast genau denselben Code wie das empfohlene UTF8Encode und ist unabhängig von der System-Codepage verlustfrei. Der einzige verbleibende verlustbehaftete Unterfall, UTF8String(<bereits 8-Bit>), ist ein akzeptierter übersehener Fund (null Vorkommen im Referenzkorpus). Leere String-Literal-Argumente (AnsiString('')) werden nicht gemeldet. Typecasts nach string (= UnicodeString in modernem Delphi) werden ebenfalls nicht gemeldet. Akzeptiert wird der Fehlalarm, dass die Eingabe bereits derselbe 8-Bit-Typ sein könnte (überflüssiger Typecast, als Smell trotzdem verdächtig). Entspricht Sonar-Delphi UnicodeToAnsiCastCheck. FPC/Lazarus-Dialekt: Diese Regel wird übersprungen, wenn der Scan mit --dialect=fpc läuft - unter FPC IST der Standard-String-Typ 8-Bit (nach Lazarus-Konvention UTF-8), daher ist der Typecast dort keine verlustbehaftete Unicode-Verengung."
     },
     "SCA130": {
-      "name": "Char-Wert nach PChar umgewandelt - Codepoint wird zur Adresse",
-      "shortDescription": "`PChar('A')` ist nicht `PChar(\"A\")` - die Umwandlung deutet den 16-Bit-Codepoint als rohe Speicheradresse",
+      "name": "Typecast eines Char-Werts nach PChar - Codepoint wird zur Adresse",
+      "shortDescription": "`PChar('A')` ist nicht `PChar(\"A\")` - der Typecast deutet den 16-Bit-Codepoint als rohe Speicheradresse",
       "fullDescription": "Delphi kompiliert anstandslos `PChar(c)`, wenn `c` vom Typ `Char`, `WideChar` oder `AnsiChar` ist. Das Ergebnis ist **kein** nullterminierter 1-Zeichen-String - der Typecast deutet den 16-Bit-/8-Bit-Codepoint einfach als Zeiger. `PChar('A')` liefert also den Zeigerwert `$00000041`, der in den unteren Prozessspeicher zeigt; jede Dereferenzierung ist undefiniertes Verhalten und endet typischerweise in einer Access Violation, liest auf manchen Plattformen aber stattdessen veraltete Daten. Gemeint ist fast immer das Muster `PChar(stringExpr)`, das einen Zeiger in den tatsächlichen String-Puffer liefert. Der Detektor durchläuft `nkCall`-Knoten, deren Name mit `PChar(`, `PWideChar(` oder `PAnsiChar(` beginnt, und meldet den Aufruf, wenn das Argument erkennbar ein Char-Wert ist: ein in Anführungszeichen gesetztes Literal aus einem Zeichen (`'A'`), ein Zeichen-Ordinal-Literal (`#65`, `#$41`) oder ein Aufruf `Chr(...)`. Bezeichner als Argumente werden nicht gemeldet, da der Detektor keinen Typ-Resolver hat, um zu bestimmen, ob die Variable ein `Char` oder ein `string` ist. Entspricht Sonar-Delphi `CharacterToCharacterPointerCastCheck`."
     },
     "SCA131": {
@@ -665,7 +665,7 @@
     },
     "SCA133": {
       "name": "Blankes raise außerhalb eines except/on-Handlers",
-      "shortDescription": "`raise;` ohne Exception-Ausdruck ist nur INNERHALB eines except-Handlers gültig (erneutes Auslösen) - überall sonst lehnen Delphi (E2145) und FPC es ab",
+      "shortDescription": "`raise;` ohne Ausnahme-Ausdruck ist nur INNERHALB eines except-Handlers gültig (erneutes Auslösen) - überall sonst lehnen Delphi (E2145) und FPC es ab",
       "fullDescription": "Ein blankes `raise;` löst die gerade behandelte Ausnahme erneut aus und ist daher nur innerhalb von `except` / `on E: T do` gültig. Delphi lehnt diese Form überall sonst mit dem Compilerfehler E2145 'Re-raising an exception only allowed in exception handler' ab, FPC mit `parser_e_no_reraise_possible` ('Re-raise isn't possible there'). Der Detektor durchläuft den Methoden-AST rekursiv und führt dabei ein Flag `InHandler` mit. Das Flag wird gesetzt, wenn der Durchlauf in `nkExceptBlock` oder `nkOnHandler` absteigt. Ein `nkRaise`-Knoten mit `Name = 'raise'` (blanke Form), der angetroffen wird, während das Flag False ist, erzeugt einen Fund. Blankes `raise;` in `finally`-Blöcken, die selbst außerhalb eines except-Handlers liegen, wird ebenfalls gemeldet. Entspricht Sonar-50-Regel #15 (`RaiseWithoutClass`)."
     },
     "SCA134": {
@@ -794,22 +794,22 @@
       "fullDescription": "Lexikalischer Scan nach `PChar|PAnsiChar|PWideChar(<id>) [+-] <offset>`. Ein Rückwärtsfenster von 200 Zeichen sucht nach Schutzmustern: `<id> <> ''`, `<id> = ''`, `Length(<id>) ...` oder `Assigned(<id>)`. Wird kein Schutz gefunden, wird die Arithmetik gemeldet. Für einen leeren String liefert `PChar(s)` einen Zeiger auf ein statisches #0-Zeichen (nicht nil), daher zeigt `PChar(s) + 5` fünf Zeichen hinter diesen Terminator; dasselbe passiert bei jedem String, der kürzer als der Offset ist. Lesen über einen solchen Zeiger liefert Datenmüll oder löst eine Access Violation aus. mORMot-Interna schützen konsequent mit expliziten Leerprüfungen; Anwendercode, der das PChar-Arithmetik-Idiom kopiert, lässt den Schutz oft weg. Einschränkungen: Das Rückwärtsfenster umfasst 200 Zeichen (weiter entfernte Prüfungen werden übersehen); Arithmetik über `Inc(p, ...)` auf einer zuvor zugewiesenen PChar-Variablen wird NICHT erkannt (dafür wäre eine Flussanalyse nötig)."
     },
     "SCA159": {
-      "name": "Typisierter Exception-Handler mit leerem Rumpf",
+      "name": "Typisierter Ausnahme-Handler mit leerem Rumpf",
       "shortDescription": "`on E: SomeException do ;` schluckt eine bestimmte Exception-Klasse stillschweigend - schlimmer als ein blankes `except end`, weil die Typangabe absichtsvoll aussieht",
       "fullDescription": "Lexikalischer Scan nach `on [E:] <ExceptionType> do (;|begin end)`. Die typisierte Form `on E:` erweckt den Eindruck einer durchdachten Behandlung - ein Leser nimmt an, dass sich der Entwickler mit genau dieser Ausnahme befasst hat. Ein leerer Rumpf bedeutet, dass der Fehler in Produktion unsichtbar ist: kein Log, keine Rückmeldung in der Oberfläche, keine Telemetrie. Häufiger Fund in mORMot-Reviews in Aufräumcode, in dem \"das kann ignoriert werden\" nicht dokumentiert ist. Die blanke Form `except end` erfasst bereits SCA-001 (EmptyExcept); diese Regel deckt die Variante mit typisiertem Handler ab."
     },
     "SCA160": {
-      "name": "String-Cast aus Raw-Pointer",
+      "name": "String-Typecast aus einem rohen Zeiger",
       "shortDescription": "`string(P)` und Verwandte aus einem P-präfixierten Zeiger setzen einen Nullterminator voraus, den es nicht geben muss - Überlesen des Heaps",
       "fullDescription": "Lexikalischer Scan nach `(string|RawByteString|AnsiString|UTF8String|WideString)(<id>)`, wobei `<id>` mit `P` gefolgt von einem weiteren Buchstaben beginnt (Delphi-P-Präfix-Konvention für Zeigertypen: PByte, PChar, PSomeRecord, ...). Der Abgleich ignoriert Groß-/Kleinschreibung, daher trifft auch `pText`; ein Operand, der in derselben Datei mit einem String-Typ deklariert ist, wird übersprungen. Delphi behandelt den Typecast als nullterminiert und liest Speicher bis zum nächsten #0 - bei einem Puffer ohne Terminator läuft das über die Grenze des Heap-Blocks hinaus und führt zu stillem Überlesen und gelegentlicher AV. mORMot-Interna nutzen dieses Muster mit kontrollierter Nullterminierung; Anwendercode, der das Idiom kopiert, lässt die Terminator-Garantie oft weg. Stattdessen `SetString(s, PChar(Buf), Len)` mit expliziter Länge verwenden. Fehlalarm-Filter: Nur Bezeichner, die mit P beginnen, lösen aus - `string(IntegerVar)` (Integer-zu-String) wird nicht gemeldet; ein doppelter Typecast wie `string(PChar(x))` ebenfalls nicht."
     },
     "SCA161": {
-      "name": "Zeigersubtraktion über eine 32-Bit-Umwandlung",
+      "name": "Zeigersubtraktion über einen 32-Bit-Typecast",
       "shortDescription": "`Cardinal(P1) - Cardinal(P2)` (auch Integer/LongWord/LongInt) schneidet unter Win64 die oberen 32 Bit ab - die Differenz ist zeitweise falsch",
       "fullDescription": "Lexikalischer Scan nach `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...)(<id>)` - zwei 32-Bit-Typecasts, durch Minus verbunden. Unter Win64 ist ein Pointer 64 Bit breit, Cardinal/Integer/LongWord/LongInt dagegen 32 Bit, daher verwirft der Typecast die oberen vier Bytes der Adresse. Die resultierende Differenz ist falsch, sobald der Allokator hohe Adressen vergibt - der Code funktioniert unter Win32 und bricht unter Win64 zeitweise. Häufiger Portierungsfehler aus Delphi-7-/Delphi-2007-Beispielen, die älter als Win64 sind. Behebung: `NativeUInt(P1) - NativeUInt(P2)` oder `NativeInt(P1) - NativeInt(P2)` verwenden - Integer-Typen in Zeigerbreite, die der Zeigergröße der Plattform entsprechen (`PtrUInt`/`PtrInt` sind die Namen in FPC und mORMot; die Delphi-RTL deklariert sie nicht)."
     },
     "SCA162": {
-      "name": "Schwaches oder veraltetes Kryptoverfahren verwendet",
+      "name": "Schwacher oder veralteter Kryptoalgorithmus verwendet",
       "shortDescription": "Algorithmusname ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') oder Wrapper-Klasse (THashMD5, TIdHashSHA1, ...) referenziert - anfällig für Kollisions- und Known-Plaintext-Angriffe",
       "fullDescription": "MD5 hat seit 2004 praktische Kollisionen (Wang et al.), SHA1 seit 2017 (SHAttered, Identical-Prefix; Chosen-Prefix seit 2020). DES hat 56 Bit und ist per Brute Force zu brechen, 3DES hat die Sweet32-CBC-Kollision (CVE-2016-2183). RC4 hat dokumentierte statistische Verzerrungen und ist durch RFC 7465 verboten. TLS 1.0 / 1.1 sind laut RFC 8996 veraltet (BEAST, POODLE, Lucky13). SSLv3 wurde durch POODLE erledigt (CVE-2014-3566). Der Detektor erkennt Algorithmusnamen mit Wortgrenzen in String-Literalen/Bezeichnern UND eine Menge bekannter Wrapper-Klassennamen (Teilstring-Abgleich). Behebung: für Hashing auf SHA-256/SHA-3 umsteigen, für symmetrische Verschlüsselung auf AES-GCM / AES-CCM, mindestens TLS 1.2 (1.3 bevorzugt)."
     },
@@ -820,12 +820,12 @@
     },
     "SCA164": {
       "name": "Routine auf oberster Ebene wird nie gerufen",
-      "shortDescription": "Eine eigenständige Prozedur oder Funktion in der implementation-Sektion wird nirgends in der Unit gerufen und ist nicht über die interface-Sektion exportiert - toter Code",
+      "shortDescription": "Eine eigenständige Prozedur oder Funktion im implementation-Abschnitt wird nirgends in der Unit gerufen und ist nicht über den interface-Abschnitt exportiert - toter Code",
       "fullDescription": "Schließt die Lücke zwischen SCA147 (UnusedPrivateMethod - nur private Klassenmethoden) und der Familie der Sichtbarkeitsprüfungen SCA148+ (nur public Klassen-Member). Erkennt Routinen auf oberster Ebene (keine Klassenmethoden), deren Name nirgends in derselben Unit als Aufruf vorkommt, Selbstreferenzen ausgenommen (eine rekursive Routine, die nur sich selbst aufruft, wird trotzdem gemeldet - entspricht dem Verhalten von SonarDelphi UnusedRoutineCheck). Schutz vor Fehlalarmen: Konstruktoren und Destruktoren (nicht direkt als Prozedur aufrufbar), die Direktiven `override`/`virtual; abstract`/`message`/`dynamic` (Dispatch über Klassengrenzen oder durch das System), die IDE-Bootstrap-Prozedur `Register`, das Enumerator-Trio (`MoveNext`/`GetEnumerator`/`Current` - implizit von `for-in` aufgerufen) sowie jede Routine, die im interface-Abschnitt der Unit vorwärtsdeklariert ist (möglicher Nutzer in einer anderen Unit). Der Umfang ist eine einzelne Datei - Aufrufer von Routinen des interface-Abschnitts in anderen Units werden in diesem MVP nicht verfolgt, daher werden diese bewusst übersprungen. Mit `// noinspection UnusedRoutine` unterdrücken, wenn die Routine absichtlich erhalten bleibt (Aufruf über RTTI, von Attributen genutzt, per Plugin geladen). Entspricht SonarDelphi UnusedRoutineCheck."
     },
     "SCA165": {
       "name": "Ungenutzter noinspection-Marker",
-      "shortDescription": "Ein `// noinspection X` unterdrückt an seiner Zielzeile keinen Befund - entweder ist der Detektor besser geworden oder das Ziel war falsch",
+      "shortDescription": "Ein `// noinspection X` unterdrückt an seiner Zielzeile keinen Fund - entweder ist der Detektor besser geworden oder das Ziel war falsch",
       "fullDescription": "Der Unterdrückungsfilter (uSuppression) erfasst jeden Kommentar `// noinspection KindName` und die nächste Codezeile, auf die er zielt. Nachdem alle Detektoren fertig sind, prüft der Filter, welche Marker tatsächlich einen Fund unterdrückt haben. Marker, die nie gegriffen haben, werden als fkUnusedSuppression an der Marker-Zeile gemeldet - der Marker ist zu entfernen (die Weiterentwicklung des Detektors hat ihn überflüssig gemacht) oder es ist zu prüfen, ob der Kind-Name des Ziels falsch war. Robust gegen übersehene Funde: Nur Marker mit einer eindeutigen Zielzeile, die kein Kommentar ist, werden berücksichtigt (Marker am Dateiende oder in reinen Doc-Kommentarblöcken werden ignoriert). Profilabhängig: Im default-Profil erscheint dieser Hinweis; Meldungen zur Unterdrückungs-Hygiene ohne Detektor-Rauschen liefert ein Lauf mit --profile selftest-quiet."
     },
     "SCA166": {
@@ -850,11 +850,11 @@
     },
     "SCA170": {
       "name": "string-Parameter ohne const",
-      "shortDescription": "string-Parameter ohne const deklariert - erzwingt bei jedem Aufruf eine Refcount-Erhöhung",
+      "shortDescription": "string-Parameter ohne const deklariert - erzwingt bei jedem Aufruf eine Erhöhung des Referenzzählers",
       "fullDescription": "Delphi erhöht bei jedem Aufruf den Referenzzähler des Strings, wenn der Parameter ohne `const` deklariert ist. Mit `const` übergibt der Compiler eine reine Referenz und spart sich das Hoch- und Herunterzählen des Referenzzählers. Der Compiler verbietet außerdem Zuweisungen an einen `const`-Parameter, was den Vertrag, nichts zu verändern, explizit macht. Für String-Parameter, die nicht verändert werden (die überwältigende Mehrheit), `const` bevorzugen. Der Detektor meldet Parameter vom Typ `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` ohne `const`/`var`/`out`."
     },
     "SCA171": {
-      "name": "Compilerschalter OFF ohne passendes ON in derselben Datei",
+      "name": "Compiler-Schalter OFF ohne passendes ON in derselben Datei",
       "shortDescription": "{$WARNINGS OFF} (oder HINTS/RANGECHECKS/...) ohne schließendes ON - wirkt in die folgenden Units hinein",
       "fullDescription": "Delphi-Direktiven für den Compiler-Zustand wie {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} ändern den Compiler-Zustand für alles, was danach kompiliert wird. Steht dem OFF kein schließendes ON in derselben Datei gegenüber, wirkt der Compiler-Schalter in alle nachfolgenden Übersetzungseinheiten desselben Builds hinein und unterdrückt Warnungen/Hinweise/Prüfungen weit außerhalb des beabsichtigten Bereichs. Der Detektor zählt OFF und ON je Direktivenname in der Datei und meldet jede Direktive, bei der am Dateiende mehr OFF als ON stehen."
     },
@@ -880,17 +880,17 @@
     },
     "SCA176": {
       "name": "Methode mit hoher kognitiver Komplexität (verschachtelter Kontrollfluss)",
-      "shortDescription": "Kognitive Komplexität über 15 (Sonar-Stil) - verschachtelte if/for/while/case sind mental schwer zu folgen",
+      "shortDescription": "Kognitive Komplexität über 15 (Sonar-Stil) - verschachtelten if/for/while/case ist gedanklich schwer zu folgen",
       "fullDescription": "Die zyklomatische Komplexität (SCA022) zählt unabhängige Pfade linear - zehn flache if-Anweisungen wiegen so viel wie ein dreifach verschachteltes if. Die kognitive Komplexität, 2017 von Sonar eingeführt, vervielfacht die Kosten von Verschachtelung: Jedes Kontrollfluss-Konstrukt addiert 1 + Verschachtelungstiefe. Drei verschachtelte Schleifen ergeben damit 1+2+3=6 statt 3. Der Detektor durchläuft jede Methode mit einem expliziten Stack statt mit Rekursion (sodass tief verschachtelter Code den Aufrufstack nicht zum Überlaufen bringen kann) und verfolgt die aktuelle Tiefe und die laufende Summe. Boolesche Operatoren (and/or/xor) in if-Bedingungen addieren jeweils +1. Schwelle: 15 (Sonar-Standard), konfigurierbar über INI [Detectors] CognitiveLimit."
     },
     "SCA177": {
       "name": "Thread-Variable nach FreeOnTerminate := True verwendet",
-      "shortDescription": "Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access-Violation, wenn der Thread bereits beendet ist",
+      "shortDescription": "Nach T.FreeOnTerminate := True riskiert jeder weitere T.-Zugriff eine Access Violation, wenn der Thread bereits beendet ist",
       "fullDescription": "TThread.FreeOnTerminate := True überträgt den Besitz der Thread-Instanz an diese selbst - der Thread gibt seinen eigenen Speicher in seinem Lebenszyklus Execute-dann-Destroy frei. Der Aufrufer MUSS alle Referenzen darauf sofort aufgeben (typischerweise, indem er die lokale Variable auf nil setzt), weil es keine Synchronisation zwischen der nächsten Anweisung des Aufrufers und der Selbstzerstörung des Threads gibt. Der Detektor durchläuft jede Methode, sammelt jede Zuweisung `<var>.FreeOnTerminate := True`, dann das erste `<var>.Start` oder `<var>.Resume` - ab diesem Moment läuft der Thread und kann sich selbst freigeben - und meldet jeden späteren Zugriff `<var>.<member>` (Aufruf ODER Zuweisung) in derselben Methode, ausgenommen die Lebenszyklus-Aufrufe Start, Resume und Execute. Ohne Start oder Resume in der Methode wird nichts gemeldet. Umfang je Methode: Referenzen über Methodengrenzen hinweg (Thread in einem Feld, Zugriff in einer anderen Methode) werden nicht verfolgt."
     },
     "SCA178": {
       "name": "Datei-Open-API bekommt verkettete Benutzereingabe",
-      "shortDescription": "Datei-Open mit Pfad aus Benutzereingabe zusammengesetzt - Path-Traversal-Risiko; Eingabe validieren/normalisieren",
+      "shortDescription": "Datei-Open-Aufruf (TFileStream.Create, AssignFile, ...) mit einem Pfadausdruck, der Benutzereingaben (Edit.Text, Request.Params, ...) verkettet - Path-Traversal-Risiko",
       "fullDescription": "Klassische Path-Traversal-Schwachstelle: Vom Benutzer kontrollierte Eingabe fließt in eine Dateisystem-API. Ein Angreifer kann `../../../etc/passwd` oder Ähnliches übergeben, um das vorgesehene Verzeichnis zu verlassen und beliebige Dateien zu lesen/zu schreiben. Der Detektor meldet Ausdrücke, die sowohl ein Token einer Datei-Open-API (TFileStream.Create, TFile.OpenRead/WriteText, AssignFile, FileOpen, FileCreate) ALS AUCH ein Token einer Benutzereingabe-Quelle (.Text, .Lines.Text, .Caption, .Value, Request.Params, Sender.Text, ParamStr) UND einen `+`-Operator (String-Verkettung) enthalten. Der Detektor ist heuristisch - kein Taint-Tracking -, daher lösen umhüllende Bereinigungsfunktionen (z. B. `Sanitize(edPath.Text)`) Fehlalarme aus; per Marker unterdrücken, wenn die Bereinigungsfunktion vertrauenswürdig ist."
     },
     "SCA179": {
@@ -1000,7 +1000,7 @@
     },
     "SCA200": {
       "name": "IP-Adresse als String-Literal",
-      "shortDescription": "Hartcodierte IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) in einem String-Literal - in die Konfiguration auslagern oder einen Hostnamen verwenden",
+      "shortDescription": "Hartkodierte IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) in einem String-Literal - in die Konfiguration auslagern oder einen Hostnamen verwenden",
       "fullDescription": "Eine in den Quelltext geschriebene IP-Adresse bindet das Programm an ein Netz: Jeder Umzug auf einen anderen Server, in eine andere Umgebung (Entwicklung, Test, Produktion) oder zu einem anderen Kunden erfordert eine Codeänderung und einen neuen Build, und die Adresse verrät jedem, der das Binary liest, die interne Topologie. Die Adresse aus der Konfiguration, der Kommandozeile oder der Umgebung lesen oder einen Hostnamen verwenden, den DNS je Umgebung auflöst. Die Regel liest nur String-Literale - nie Kommentare - und erkennt IPv4 in strikter Dotted-Decimal-Form (vier Oktette 0-255, keine führenden Nullen) und IPv6 in jeder Form nach RFC 4291, einschließlich Zone (%eth0), eckiger Klammern mit Port ([...]:443) und eingebetteter IPv4 (::ffff:10.1.2.3). Gemeldet werden private Adressen (RFC 1918, Unique Local fc00::/7), geteilte Adressen (100.64.0.0/10) und öffentliche Adressen. Nicht gemeldet werden Loopback, unspezifizierte Adressen (0.0.0.0, ::), Broadcast, Netzmasken, Link-Local, die Dokumentationsbereiche (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32, 3fff::/20), IETF-Protokollblöcke, Benchmarking (198.18.0.0/15), Multicast und reservierte Bereiche. Test-Units (Benennung und Verzeichnisse test/spec) werden übersprungen. Eine Adresse in einer http://-URL wird auch von SCA115 gemeldet: Die beiden Regeln beschreiben verschiedene Probleme, Klartext-Transport und eine feste Adresse."
     },
     "SCA201": {

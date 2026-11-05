@@ -108,7 +108,7 @@ auf *low* senken.
 | 39 | SCA070 | **CommentedOutCode: Auskommentierter Code** | Block von auskommentiertem Pascal-Code (`//` oder `{ }`) ohne Erklärung (Sonar-Slot CommentedCode) | ✅ | `uCommentedOutCode` |
 | 40 | SCA019 | **TodoComment: TODO/FIXME ohne Ticket** | Kommentar enthält `TODO`, `FIXME`, `HACK`, `XXX` ohne zugehörige Issue-Nummer | ✅ | `uTodoComment` |
 | 41 | SCA020 | **EmptyMethod: Leere Methode** | Methode enthält ausschließlich `inherited` oder ist komplett leer — ein Rumpf mit erklärendem Kommentar ist bereits konform und wird nicht gemeldet | ✅ | `uEmptyMethod` |
-| 42 | — | **UnnecessaryCast: Überflüssige Typumwandlung** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
+| 42 | — | **UnnecessaryCast: Überflüssiger Typecast** | Cast auf denselben Typ oder auf direkten Vorfahren ohne Erweiterung | 🔲 | |
 | 43 | SCA151 | **ConstantReturn: Methode gibt immer gleichen Wert zurück** | Alle Pfade einer Funktion liefern dasselbe Literal – sollte Konstante sein | ✅ | `uConstantReturn` |
 | 44 | SCA062 | **TooLongLine: Zeile zu lang** | Zeile überschreitet 120 Zeichen (konfigurierbar via `[Detectors] MaxLineLength`; Sonar-Slot LongLine) | ✅ | `uTooLongLine` |
 | 45 | SCA061 | **TabulationCharacter: Tabulator im Quelltext** | Zeile enthält ein Tabulatorzeichen (Sonar-Slot MixedIndent) | ✅ | `uTabulationCharacter` |
@@ -366,7 +366,7 @@ Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; je
 | SCA092 | **EmptyFile** | Unit ohne type/const/var/procedure/function - löschen oder füllen | Hint | Code Smell | ✅ | `uEmptyFile` |
 | SCA093 | **TwiceInheritedCalls** | Zwei oder mehr `inherited;` in derselben Methode - Parent-Seiteneffekte laufen doppelt | Warning | Bug | ✅ | `uTwiceInheritedCalls` |
 | SCA094 | **RedundantParentheses** | `((Ident))` - die äußeren Klammern streichen | Hint | Code Smell | ✅ | `uRedundantParentheses` |
-| SCA095 | **ConsecutiveVisibility** | Gleiche `public`/`private`/...-Sektion kommt zweimal in einer Klasse vor | Hint | Code Smell | ✅ | `uConsecutiveVisibility` |
+| SCA095 | **ConsecutiveVisibility** | Gleicher `public`/`private`/...-Abschnitt kommt zweimal in einer Klasse vor | Hint | Code Smell | ✅ | `uConsecutiveVisibility` |
 | SCA096 | **ConstructorWithoutInherited** | Konstruktor ohne `inherited Create` - der Parent bleibt uninitialisiert | Warning | Bug | ✅ | `uConstructorWithoutInherited` |
 | SCA097 | **DestructorWithoutInherited** | Destruktor ohne `inherited Destroy` - Parent-Cleanup entfällt (Leak-Risiko) | Error | Bug | ✅ | `uDestructorWithoutInherited` |
 | SCA098 | **RedundantConditional** | `if Cond then X := True else X := False` sollte `X := Cond` sein | Hint | Code Smell | ✅ | `uRedundantConditional` |

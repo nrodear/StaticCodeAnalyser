@@ -15,12 +15,12 @@
     },
     "SCA003": {
       "name": "Chaîne SQL construite par concaténation",
-      "shortDescription": "Chaîne SQL concaténée avec '+' à partir d'une saisie contrôlable (risque d'injection)",
+      "shortDescription": "Chaîne SQL concaténée avec '+' et un opérande non littéral (risque d'injection si cet opérande n'est pas fiable)",
       "fullDescription": "Construire du SQL via 'WHERE x=' + opérande permet une injection SQL lorsque cet opérande n'est pas fiable. Le détecteur signale la CONCATÉNATION - il ne suit pas l'origine de l'opérande, un résultat est donc une piste de revue, pas la preuve d'une vulnérabilité. Les concaténations de littéraux uniquement, les masques de format entiers et les fonctions d'assainissement connues sont déjà exclus. Utiliser plutôt des requêtes paramétrées (Params.ParamByName(...).Value := ...)."
     },
     "SCA004": {
       "name": "Identifiant / jeton d'API en dur",
-      "shortDescription": "Mot de passe, clé d'API ou jeton sous forme de littéral chaîne dans le code source",
+      "shortDescription": "Mot de passe, clé d'API ou jeton sous forme de littéral de chaîne dans le code source",
       "fullDescription": "Les identifiants présents dans le code source finissent dans le contrôle de version, les artefacts de build, les décompilateurs et les traces de pile. Déplacer les secrets vers des variables d'environnement, le magasin d'identifiants du système d'exploitation ou une configuration chiffrée."
     },
     "SCA005": {
@@ -34,13 +34,13 @@
       "fullDescription": "Résultat particulier (pas un défaut de code) : le fichier n'a pas pu être chargé ou l'analyseur lexical/syntaxique a échoué. Indique souvent des problèmes d'encodage, des includes qui ne se résolvent pas ou de véritables erreurs de syntaxe."
     },
     "SCA007": {
-      "name": "Unit inutilisée dans la clause uses",
-      "shortDescription": "Entrée uses probablement inutilisée (aucun identifiant qui en provienne n'est référencé)",
+      "name": "Unité inutilisée dans la clause uses",
+      "shortDescription": "Entrée uses probablement inutilisée (aucun identificateur qui en provienne n'est référencé)",
       "fullDescription": "Heuristique : recherche n'importe quel identificateur de l'unité utilisée. Faux positifs possibles pour les unités qui se contentent d'enregistrer des classes / d'initialiser un état global via des sections initialization."
     },
     "SCA008": {
       "name": "Déréférencement nil possible",
-      "shortDescription": "Accès a une variable qui peut valoir nil a cet endroit",
+      "shortDescription": "Accès à une variable qui peut valoir nil à cet endroit",
       "fullDescription": "Une variable locale est explicitement mise à nil puis déréférencée (appel de méthode ou accès à une propriété) sans réaffectation ni test de nil entre les deux. Provoque un plantage avec EAccessViolation à l'exécution. Le détecteur ne suit que les affectations explicites `obj := nil` ; une valeur renvoyée par une fonction qui peut renvoyer nil (p. ex. une méthode Find...) n'est pas suivie. Gardes reconnues : une réaffectation, `Assigned(obj)` ou `obj <> nil` dans une condition if, un `if obj = nil then Exit` anticipé, le passage de `obj` comme argument (affectation var/out possible) et les appels sûrs vis-à-vis de nil comme `obj.Free`."
     },
     "SCA009": {
@@ -74,28 +74,28 @@
       "fullDescription": "Les littéraux numériques intégrés directement dans la logique métier ne portent aucun sens : `if RetryCount > 3` oblige chaque lecteur à deviner ce que représente 3 et chaque modification de maintenance à retrouver chaque occurrence à la main. Extraire une constante nommée pour que la valeur ait un objectif documenté et exactement une source de vérité. Le détecteur ignore les valeurs triviales (0, 1, 2, -1, tailles courantes en puissance de 2, indexation dans des collections connues pour être minuscules) - voir [Detectors] MagicNumberTrivials pour la liste active. Les bornes de boucle par rapport à `Length(arr)` et l'index de tableau 0 sont également ignorés. Utiliser la configuration globale pour ajouter des valeurs triviales propres au projet (p. ex. un PageSize fixe)."
     },
     "SCA015": {
-      "name": "Littéral chaîne répété a plusieurs endroits",
-      "shortDescription": "Le même littéral chaîne apparaît au moins 3 fois dans un fichier - extraire vers une constante",
+      "name": "Littéral de chaîne répété à plusieurs endroits",
+      "shortDescription": "Le même littéral de chaîne apparaît au moins 3 fois dans un fichier - extraire vers une constante",
       "fullDescription": "Les chaînes répétées créent un risque de couplage au changement (une faute de frappe à un endroit diverge silencieusement des autres). Les extraire dans une const, en particulier pour les messages destinés à l'utilisateur. Le détecteur compte les littéraux de chaîne d'au moins 4 caractères dans les affectations et les appels d'un fichier et signale un littéral à partir de sa troisième occurrence ; les littéraux situés ailleurs (par exemple dans les instructions raise) ne sont pas comptés, pas plus que 'true', 'false' et 'null'."
     },
     "SCA016": {
-      "name": "Chemin de fichier en littéral chaîne",
+      "name": "Chemin de fichier en littéral de chaîne",
       "shortDescription": "Chemin C:\\, UNC ou Linux écrit en dur dans le source",
       "fullDescription": "Les chemins écrits en dur nuisent à la portabilité et au déploiement CI. Utiliser des fichiers de configuration, des variables d'environnement ou des helpers de chemin adaptés à la plateforme (TPath.Combine, etc.)."
     },
     "SCA017": {
       "name": "WriteLn/ShowMessage en code de production",
-      "shortDescription": "Instruction de sortie de débogage trouvée dans une unit de production",
+      "shortDescription": "Appel non qualifié à WriteLn, ShowMessage(Pos) ou OutputDebugString dans une unité hors test",
       "fullDescription": "WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA dans du code hors test est presque toujours un reste de débogage : ShowMessage en particulier bloque le thread d'interface et ne convient à aucun chemin de code de production. Remplacer par un logger structuré (TLogger, mORMot TSynLog, log4d) afin que le point d'appel capture la sévérité, la catégorie et l'emplacement dans le source, et que l'exploitation puisse régler la verbosité à l'exécution. Le détecteur ignore les unités situées dans des segments de répertoire test/sample/demo (la définition des chemins de fixtures valable pour tout le projet : `test`, `tests`, `unittest`, `unittests`, `samples`, `demos`, ancrés sous la racine de l'analyse) ainsi que les unités console/test-runner (`*Console*`, `*TestProject*` dans le nom de fichier de l'unité) - la sortie y est voulue, ce n'est pas un reste de débogage. Implémenté le 2026-09-05, après que l'audit du 2026-09-04 a constaté que l'exclusion promise à l'origine n'avait jamais été construite. Un marqueur `// noinspection DebugOutput` masque des lignes individuelles (p. ex. des bannières CLI interactives)."
     },
     "SCA018": {
       "name": "L'imbrication de blocs dépasse le seuil",
-      "shortDescription": "Profondeur d'imbrication if/for/while supérieure au maximum configuré (4 par défaut)",
+      "shortDescription": "Profondeur d'imbrication if/for/while supérieure au maximum configuré (4 par défaut) ; une chaîne else-if compte pour UN seul niveau, comme un case",
       "fullDescription": "Une imbrication profonde nuit à la lisibilité et indique que la méthode en fait trop. Utiliser des clauses de garde (Exit anticipé) ou extraire les blocs internes dans des méthodes auxiliaires. Un bloc est signalé lorsque sa profondeur dépasse la limite - avec la valeur par défaut 4, le cinquième niveau d'imbrication est signalé."
     },
     "SCA019": {
       "name": "Marqueur TODO/FIXME en commentaire",
-      "shortDescription": "Marqueur TODO, FIXME, HACK ou XXX ouvert - a traiter avant la livraison",
+      "shortDescription": "Marqueur TODO, FIXME, HACK ou XXX ouvert - à traiter avant la livraison",
       "fullDescription": "Les marqueurs de travail ouverts (TODO, FIXME, HACK, XXX) forment un suivi de tâches parallèle à l'intérieur du source. Ce schéma échoue par accumulation : des marqueurs ajoutés à des années d'intervalle ne sont jamais triés ensemble, l'auteur d'origine s'en va, et le lecteur suivant ne peut pas savoir si le TODO est encore pertinent ou s'il a été livré en silence. SCA fait remonter chacun de ces marqueurs pour que les gates CI puissent imposer une branche de livraison sans TODO ou un tri au moment de la PR. Formes reconnues : commentaires `// TODO` et `{ TODO ... }`, le marqueur en tant que mot entier, avec suffixe d'ID jira facultatif (`// TODO PROJ-123: ...`). TODO, FIXME et HACK sont reconnus sans tenir compte de la casse, XXX uniquement en majuscules (un `xxx` en minuscules est presque toujours un espace réservé). Les commentaires `(* ... *)` ne sont pas analysés, et l'ensemble des marqueurs est fixe. Un marqueur qui doit rester peut être masqué avec `// noinspection TodoComment`."
     },
     "SCA020": {
@@ -140,7 +140,7 @@
     },
     "SCA028": {
       "name": "Le gestionnaire d'événement DFM pointe vers une méthode absente",
-      "shortDescription": "OnClick / On... renvoie a une méthode qui n'existe pas dans la classe de la fiche",
+      "shortDescription": "OnClick / On... renvoie à une méthode qui n'existe pas dans la classe de la fiche",
       "fullDescription": "Le streaming DFM plante au chargement de la fiche avec *\"class TForm has no published method X\"*. Généralement causé par un renommage manuel dans le .pas sans mise à jour du .dfm."
     },
     "SCA029": {
@@ -150,7 +150,7 @@
     },
     "SCA030": {
       "name": "Gestionnaire d'événement lié mais vide",
-      "shortDescription": "L'événement est câblé dans le DFM, la méthode existe, le corps est vide",
+      "shortDescription": "L'événement est lié dans le DFM, la méthode existe, le corps est vide",
       "fullDescription": "Un gestionnaire vide avec une liaison DFM active est presque toujours un stub oublié après son ajout par le concepteur de fiches. Supprimer la liaison ou implémenter le gestionnaire."
     },
     "SCA031": {
@@ -159,7 +159,7 @@
       "fullDescription": "Un composant DFM nommé sans champ published correspondant est un écart de schéma, pas une erreur d'exécution : le streamer résout le champ via FieldAddress, obtient nil et ignore silencieusement l'affectation (pas d'EReadError). Le composant est tout de même créé mais inaccessible depuis le code - une entrée DFM périmée/morte qu'il vaut la peine de nettoyer."
     },
     "SCA032": {
-      "name": "Boucle DataSource / maître-detail circulaire",
+      "name": "Boucle DataSource / maître-détail circulaire",
       "shortDescription": "Cycle dans les arêtes DataSource.DataSet / DataSet.MasterSource",
       "fullDescription": "Un cycle dans le graphe maître-détail provoque une récursion infinie pendant BeforeOpen ou tout rafraîchissement et fait déborder la pile du processus. Rompre le cycle en supprimant l'un des liens."
     },
@@ -174,13 +174,13 @@
       "fullDescription": "Un champ obligatoire que l'utilisateur ne peut pas atteindre fait échouer chaque insertion avec 'Field X must have a value'. Lier un contrôle ou retirer le Required=True."
     },
     "SCA035": {
-      "name": "Champ obligatoire lié uniquement a des contrôles cachés",
-      "shortDescription": "Un TField avec Required=True n'est lié qu'a des contrôles ayant Visible=False",
+      "name": "Champ obligatoire lié uniquement à des contrôles cachés",
+      "shortDescription": "Un TField avec Required=True n'est lié qu'à des contrôles ayant Visible=False",
       "fullDescription": "Le contrôle existe mais l'utilisateur ne peut ni le voir ni interagir avec lui - les insertions échouent à chaque fois. Rendre visible au moins un contrôle lié ou retirer le Required=True."
     },
     "SCA036": {
       "name": "Type de contrôle incompatible avec le TField",
-      "shortDescription": "La classe du contrôle de données ne correspond pas a TField.DataType (TDBEdit pour un TBooleanField)",
+      "shortDescription": "La classe du contrôle de données ne correspond pas à TField.DataType (TDBEdit pour un TBooleanField)",
       "fullDescription": "L'utilisateur voit la valeur brute et peut corrompre le type. Choisir un contrôle compatible avec le type du champ (TDBCheckBox pour les booléens, TDBLookupComboBox pour les clés étrangères)."
     },
     "SCA037": {
@@ -199,7 +199,7 @@
       "fullDescription": "Une infrastructure de base de données sur une fiche d'interface couple la persistance à la présentation - difficile à réutiliser, difficile à tester. La déplacer dans un TDataModule et la référencer depuis la fiche."
     },
     "SCA040": {
-      "name": "Accès a un champ d'une autre fiche",
+      "name": "Accès à un champ d'une autre fiche",
       "shortDescription": "Du code dans Form1 lit ou écrit directement Form2.<champ_published>",
       "fullDescription": "Aller chercher un contrôle enfant dans une autre fiche casse l'encapsulation - tout renommage dans Form2 casse silencieusement Form1. Exposer plutôt une propriété ou une méthode sur Form2."
     },
@@ -209,8 +209,8 @@
       "fullDescription": "Une mise en page en couches (Form > Panel > Group > Controls) facilite nettement le redimensionnement, la mise à l'échelle DPI et l'application de thèmes. Envelopper les contrôles dans un conteneur de mise en page. Dialecte FPC/Lazarus : cette règle est ignorée lorsque l'analyse s'exécute avec --dialect=fpc (ou un projet .lpi/.lpk/.lpg) - le modèle de couches VCL qu'elle vérifie ne s'applique pas aux fiches LCL."
     },
     "SCA042": {
-      "name": "Gestionnaire d'événement surcharge",
-      "shortDescription": "Une seule méthode est câblée sur N événements de composants ou plus (N=5 par défaut)",
+      "name": "Gestionnaire d'événement lié à trop d'événements",
+      "shortDescription": "Une seule méthode est liée à N événements de composants ou plus (N=5 par défaut)",
       "fullDescription": "Indicateur de code spaghetti : un gestionnaire unique qui répartit de nombreux événements sans rapport entre eux est difficile à lire, difficile à modifier et a presque toujours des problèmes de cohésion. Le scinder par responsabilité. Signalé lorsqu'une méthode est liée à 5 événements de composants ou plus dans un DFM et que les liaisons sont hétérogènes - classes de composants différentes ou événements différents. Un gestionnaire partagé par des composants d'une même classe sur le même événement (douze boutons de couleur avec un seul OnClick) est un regroupement paramétré et n'est pas signalé."
     },
     "SCA043": {
@@ -220,7 +220,7 @@
     },
     "SCA044": {
       "name": "Longue concaténation - préférer Format()",
-      "shortDescription": "Concaténation de chaîne en plusieurs segments - a transformer en appel a Format()",
+      "shortDescription": "Concaténation de chaîne en plusieurs segments - à transformer en appel à Format()",
       "fullDescription": "Les enchaînements comme `'a' + Var + 'b' + IntToStr(N)` (trois concaténations ou plus impliquant des segments non littéraux) sont plus difficiles à parcourir et à traduire que `Format('a%sb%d', [Var, N])` : chaque IntToStr / FloatToStr / FormatDateTime au milieu d'une chaîne est un endroit de plus où une `resourcestring` ne peut pas capturer le modèle du message. Le détecteur examine les affectations dont le membre droit comporte au moins trois opérateurs `+` (quatre termes ou plus) avec au moins un terme non littéral, de sorte que les cas triviaux (`'<' + Name + '>'`) restent muets ; une concaténation passée directement comme argument d'appel n'est pas vérifiée. Il ignore les membres droits qui appellent déjà Format, les affectations à des propriétés SQL (SCA003 les couvre) et les lignes sous un `// noinspection ConcatToFormat` actif. La forme signalée peut être voulue dans des boucles internes critiques pour les performances, où les varargs de Format provoquent du boxing ; le marqueur de suppression est prévu pour ce cas."
     },
     "SCA045": {
@@ -249,8 +249,8 @@
       "fullDescription": "`Length` et `.Count` renvoient un Integer signé, donc `Length(s) - 4` sur une chaîne de moins de quatre caractères est simplement un nombre négatif - et ce nombre va généralement tout droit dans un index, une position de Move ou un compteur : `s[Length(s) - 3]` lit avant le premier caractère (une erreur d'intervalle avec $R+, des données parasites ou une violation d'accès sans), `Move(s[Length(s) - 4], Buf, 4)` copie depuis l'extérieur de la chaîne. Le détecteur signale `Length(...)` et `.Count` suivis de `- K` où K est un littéral entier valant 2 ou plus. `- 1` est ignoré : `for I := 0 to Length(s) - 1` s'exécute simplement zéro fois sur une chaîne vide. Il s'agit d'une indication lexicale - une garde `if Length(s) >= K` qui précède n'est pas vue. Préférer les helpers RTL qui gèrent les entrées courtes (ExtractFileExt, RightStr, EndsText) ou protéger l'accès."
     },
     "SCA050": {
-      "name": "Le membre public pourrait être privé a l'unit",
-      "shortDescription": "Ce membre public n'est référencé que dans l'unit courante - le `private` classique de Delphi (portée unit) suffit",
+      "name": "Le membre public pourrait être privé à l'unité",
+      "shortDescription": "Ce membre public n'est référencé que dans l'unité courante - le `private` classique de Delphi (portée unité) suffit",
       "fullDescription": "Analyse d'un seul fichier : le membre `public` est référencé depuis un endroit de la même unité (autres classes, procédures de premier niveau, ...), mais PAS exclusivement depuis la classe déclarante elle-même. Le restreindre au `private` classique de Delphi (dont la portée est l'unité, pas la classe) est sûr : chaque appelant légal dans l'unité continue de fonctionner. Ce détecteur s'exécute volontairement UNIQUEMENT sur un seul fichier - l'ancienne analyse inter-unités/inter-projets produisait trop de faux positifs (streaming RTTI/DFM, consommateurs .dpk/.dproj voisins, instanciations génériques, API de plugins). Ce conseil est une recommandation ; si une unité étrangère consomme le membre, le compilateur détectera la visibilité cassée avec E2361 une fois la modification appliquée. Exclus : published, virtual/abstract/override/dynamic, constructeurs/destructeurs de classe, classes de base pilotées par RTTI (TForm/TFrame/TDataModule/TComponent), classes utilitaires composées uniquement de méthodes de classe. Masquer ligne par ligne avec `// noinspection CanBeUnitPrivate` pour une surface publique voulue (API de bibliothèque, point d'entrée de plugin)."
     },
     "SCA051": {
@@ -260,7 +260,7 @@
     },
     "SCA052": {
       "name": "Membre public inutilisé (API morte)",
-      "shortDescription": "Le membre public n'est référencé par aucune classe dérivée ni par aucun chemin inter-unit",
+      "shortDescription": "Le membre public n'est référencé par aucune classe dérivée ni par aucun chemin inter-unités",
       "fullDescription": "Aucune utilisation interne ET aucune utilisation externe trouvée - surface d'API morte. La supprimer ou la documenter comme exportée volontairement (p. ex. pour la compatibilité binaire)."
     },
     "SCA053": {
@@ -270,7 +270,7 @@
     },
     "SCA054": {
       "name": "Paramètre de méthode inutilisé",
-      "shortDescription": "Le paramètre de la méthode n'est jamais utilise dans le corps",
+      "shortDescription": "Le paramètre de la méthode n'est jamais utilisé dans le corps",
       "fullDescription": "Un paramètre formel est déclaré mais jamais lu dans le corps de la méthode. Le paramètre encombre le site d'appel (chaque appelant passe une valeur sans effet) et occulte les véritables dépendances de la méthode. Refactoring : supprimer le paramètre, ou faire passer le site d'appel par une autre surcharge qui ne le prend pas. Le détecteur ignore volontairement les signatures imposées de l'extérieur : `override` (la signature du parent est fixée), les corps de remplacement `; virtual; abstract`, les implémentations d'interface (signature dictée par l'interface), les gestionnaires d'événement (`Sender: TObject` et le reste du tuple d'événement) et les méthodes enregistrées comme gestionnaires d'événement DFM. Masquer par méthode avec `// noinspection UnusedParameter` pour les callbacks à forme stable (RTTI/streaming)."
     },
     "SCA055": {
@@ -279,7 +279,7 @@
       "fullDescription": "Un opérateur binaire a le même opérande textuel des deux côtés : `x = x`, `a and a`, `(p <> p)`. L'expression s'évalue à une constante (True ou False) à la compilation et indique presque toujours une faute de frappe - l'opérande devait être un identificateur au nom proche (`a = b`, `p1 <> p2`). Le détecteur suit : égalité / inégalité / ordre (`=`, `<>`, `<`, `>`, `<=`, `>=`) et opérateurs booléens (`and`, `or`, `xor`). Les opérateurs arithmétiques (`+`, `-`, `*`) sont volontairement exclus : `x + x` et `a * a` sont des idiomes légitimes. La normalisation des opérandes passe en minuscules et supprime les espaces superflus, mais conserve le contenu des littéraux de chaîne, de sorte que `'foo' = 'foo'` est correctement signalé. Le détecteur exige l'égalité des identificateurs de part et d'autre de l'opérateur - un appel de fonction avec effets de bord (`Next = Next`) est aussi signalé, car deux appels produisent le bug dans tous les cas."
     },
     "SCA056": {
-      "name": "Maître-detail sans MasterFields",
+      "name": "Maître-détail sans MasterFields",
       "shortDescription": "Le TDataSet a MasterSource mais ni MasterFields ni IndexFieldNames",
       "fullDescription": "La VCL effectue silencieusement un produit cartésien au lieu de la jointure maître-détail prévue - chaque ligne parente ramène toutes les lignes de détail à l'exécution. Corriger en renseignant MasterFields (et IndexFieldNames pour IB/FB)."
     },
@@ -300,7 +300,7 @@
     },
     "SCA060": {
       "name": "Instruction goto",
-      "shortDescription": "`goto` affaiblit le flot de contrôle structure",
+      "shortDescription": "`goto` affaiblit le flot de contrôle structuré",
       "fullDescription": "`goto` et les étiquettes rendent le flot de contrôle non structuré : les boucles, l'imbrication et try/finally deviennent difficiles à suivre. SonarDelphi suit la même chose sous communitydelphi:GotoStatement. Le code Delphi moderne justifie rarement goto - même un break sur plusieurs niveaux est plus propre sous forme de procédure extraite avec Exit."
     },
     "SCA061": {
@@ -350,11 +350,11 @@
     },
     "SCA070": {
       "name": "Code en commentaire",
-      "shortDescription": "Le commentaire ressemble a du code Pascal - supprimer ou justifier",
+      "shortDescription": "Le commentaire ressemble à du code Pascal - supprimer ou justifier",
       "fullDescription": "Heuristique : un contenu de commentaire avec 2 marqueurs de style code ou plus (`;` final, `:=`, mots-clés `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) est presque certainement du code mis en commentaire. Ce code pourrit en silence : personne n'ose le supprimer, personne ne le met à jour. Soit le supprimer, soit le remplacer par un TODO qui explique l'intention. Une ligne `//` n'est signalée que si aucune des lignes voisines n'est elle aussi un commentaire `//` - un bloc `//` de plusieurs lignes est traité comme de la documentation avec des exemples de code - et un commentaire en fin de ligne après du code n'est pas signalé non plus. Les lignes signalées adjacentes (p. ex. des commentaires `{ ... }` consécutifs) sont signalées comme UN SEUL résultat couvrant le bloc (endLine marque l'étendue) ; une ligne signalée isolée conserve le message par ligne. Correspond à SonarDelphi communitydelphi:CommentedOutCode."
     },
     "SCA071": {
-      "name": "Mot-clé de section d'unit qui n'est pas en colonne 1",
+      "name": "Mot-clé de section d'unité qui n'est pas en colonne 1",
       "shortDescription": "`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1",
       "fullDescription": "La convention Object Pascal veut que les mots-clés de section structurels d'une unité soient alignés à gauche en colonne 1. Des mots-clés de section indentés brouillent la structure de l'unité à la lecture rapide et peuvent indiquer une imbrication begin/end mal comptée. Correspond à SonarDelphi communitydelphi:UnitLevelKeywordIndentation."
     },
@@ -405,7 +405,7 @@
     },
     "SCA081": {
       "name": "Plusieurs déclarations de classe dans un fichier",
-      "shortDescription": "Une classe par unit facilite le remaniement",
+      "shortDescription": "Une classe par unité facilite le refactoring",
       "fullDescription": "Lorsqu'une unité déclare deux classes publiques ou plus, les retrouver et les déplacer entre unités est plus difficile que nécessaire. SonarDelphi communitydelphi:ClassPerFile suggère la même chose. Les déclarations anticipées (`TFoo = class;`) et les types référence de classe (`TFooClass = class of TFoo`) sont exclus."
     },
     "SCA082": {
@@ -415,7 +415,7 @@
     },
     "SCA083": {
       "name": "Bloc finally vide",
-      "shortDescription": "`try ... finally end;` ne libéré rien - compléter ou supprimer le finally",
+      "shortDescription": "`try ... finally end;` ne libère rien - compléter ou supprimer le finally",
       "fullDescription": "Un bloc `finally` vide est presque toujours un nettoyage oublié. S'il n'y a vraiment rien à nettoyer, supprimer l'enveloppe `try..finally`. Correspond à SonarDelphi communitydelphi:EmptyFinallyBlock."
     },
     "SCA084": {
@@ -430,7 +430,7 @@
     },
     "SCA086": {
       "name": "Éviter le modificateur out",
-      "shortDescription": "Préférer `var` a `out` (out a une sémantique surprenante)",
+      "shortDescription": "Préférer `var` à `out` (out a une sémantique surprenante)",
       "fullDescription": "Les paramètres `out` vident les types managés (string/Interface/tableaux dynamiques) à l'entrée de la méthode - la valeur de l'appelant est abandonnée avant l'exécution de la méthode. Les types record/simples restent non initialisés, si bien que lire la valeur entrante est un comportement indéfini. Ces deux effets sont rarement voulus. `var` est le choix par défaut le plus sûr, sauf si la sémantique d'interopérabilité COM est nécessaire. Correspond à SonarDelphi communitydelphi:AvoidOut."
     },
     "SCA087": {
@@ -439,7 +439,7 @@
       "fullDescription": "Une classe dont un mot-clé de visibilité est immédiatement suivi d'un autre mot-clé de visibilité (ou de `end`) est généralement un reste de refactoring - tous les membres de cette section ont été déplacés ailleurs. Supprimer l'en-tête vide. Correspond à SonarDelphi communitydelphi:EmptyVisibilitySection."
     },
     "SCA088": {
-      "name": "Initialisation d'unit à l'ancienne begin..end.",
+      "name": "Initialisation d'unité à l'ancienne begin..end.",
       "shortDescription": "Utiliser `initialization..end.` plutôt que l'ancien `begin..end.`",
       "fullDescription": "Avant Delphi 2, les unités marquaient leur bloc d'initialisation avec `begin..end.`. Depuis Delphi 2, la forme idiomatique est `initialization..end.`, qui peut être associée à un bloc `finalization` facultatif pour un nettoyage symétrique. Correspond à SonarDelphi communitydelphi:LegacyInitializationSection."
     },
@@ -459,8 +459,8 @@
       "fullDescription": "Un `case` avec de nombreuses branches cache généralement un polymorphisme ou un pattern stratégie. Le code serait plus ouvert/fermé (nouveau comportement = nouvelle classe, pas nouvelle branche) et le fichier plus court si chaque branche devenait sa propre méthode de classe ou une entrée `TDictionary<Key, TProc>`. Correspond à SonarDelphi communitydelphi:CaseStatementSize. Le seuil est configurable via `[Detectors] MaxCaseBranches` et vaut 10 par défaut. Chaque `case` est mesuré séparément : seules les étiquettes à la profondeur de bloc 1 de ce `case` comptent, de sorte que les étiquettes d'un `case` imbriqué ne gonflent plus celui qui l'englobe. Une construction imbriquée peut donc produire plus d'un résultat - un `case` externe et un interne sont signalés séparément dès que chacun dépasse le seuil à lui seul."
     },
     "SCA092": {
-      "name": "Unit sans aucune déclaration",
-      "shortDescription": "L'unit n'a ni type, ni const, ni var, ni procédure/function - supprimer ou compléter",
+      "name": "Unité sans aucune déclaration",
+      "shortDescription": "L'unité n'a ni type, ni const, ni var, ni procedure/function - supprimer ou compléter",
       "fullDescription": "Un fichier `.pas` avec un en-tête d'unité mais sans aucune déclaration est un poids mort. Soit supprimer le fichier, soit compléter l'emplacement réservé. Correspond à SonarDelphi communitydelphi:EmptyFile."
     },
     "SCA093": {
@@ -479,12 +479,12 @@
       "fullDescription": "Deux sections `private` (ou `public`/`protected`/`published`) dans la même classe, avec des membres entre elles, devraient être fusionnées en une seule. Cela aide les relecteurs à saisir d'un coup d'œil la forme de la classe. Correspond à SonarDelphi communitydelphi:ConsecutiveVisibilitySection. Remarque : un en-tête vide suivi d'un autre en-tête relève de la règle voisine mais distincte `EmptyVisibilitySection` (SCA087)."
     },
     "SCA096": {
-      "name": "Constructeur sans appel a inherited",
+      "name": "Constructeur sans appel à inherited",
       "shortDescription": "Il manque `inherited Create` au constructeur - le parent reste non initialisé",
       "fullDescription": "Un constructeur qui n'appelle pas `inherited Create(...)` (ni `inherited;`) saute l'initialisation de la classe parente. Les champs et enregistrements du parent restent à l'état par défaut/nil, ce qui entraîne des plantages en aval lorsque des méthodes s'attendent à ce que le parent soit prêt. Correspond à SonarDelphi communitydelphi:ConstructorWithoutInherited."
     },
     "SCA097": {
-      "name": "Destructeur sans appel a inherited",
+      "name": "Destructeur sans appel à inherited",
       "shortDescription": "Il manque `inherited Destroy` au destructeur - le nettoyage du parent est sauté (risque de fuite)",
       "fullDescription": "Un destructeur sans `inherited Destroy` (ni `inherited;`) empêche la classe parente de libérer ses propres champs, de désinscrire des gestionnaires et de mettre à jour les compteurs de références. Presque toujours une fuite. Correspond à SonarDelphi communitydelphi:DestructorWithoutInherited."
     },
@@ -510,7 +510,7 @@
     },
     "SCA102": {
       "name": "Routine imbriquée dans une méthode",
-      "shortDescription": "Procédure ou fonction locale imbriquée - a extraire au niveau de l'unit",
+      "shortDescription": "Procédure ou fonction locale imbriquée - à extraire au niveau de l'unité",
       "fullDescription": "Les routines imbriquées (une `procedure`/`function` déclarée dans la section de déclarations locales d'une autre routine) sont syntaxiquement autorisées mais nuisent aux tests et à la réutilisation : la routine interne ne peut être ni testée unitairement ni réutilisée ailleurs. Le Delphi moderne préfère les méthodes anonymes (lambdas) pour les rares cas où l'imbrication était réellement nécessaire. Les méthodes anonymes ne sont PAS signalées (elles n'ont pas de nom dans l'AST). Correspond à SonarDelphi communitydelphi:NestedRoutines."
     },
     "SCA103": {
@@ -575,7 +575,7 @@
     },
     "SCA115": {
       "name": "URL HTTP en clair",
-      "shortDescription": "Littéral `'http://...'` pour un point d'accès distant - vulnérable a l'interception",
+      "shortDescription": "Littéral `'http://...'` pour un point d'accès distant - vulnérable à l'interception",
       "fullDescription": "Un littéral de chaîne commençant par `http://` pour tout point d'accès autre que localhost transmet sa charge utile sans chiffrement. Identifiants de connexion, jetons de session et données personnelles circulent en clair et peuvent être interceptés ou modifiés par tout acteur réseau actif. La correction ne coûte pratiquement rien : passer le schéma à `https://` (presque tous les services modernes prennent en charge les deux). Le détecteur extrait l'hôte du littéral (userinfo, port et crochets IPv6 retirés) et reste muet quand cet hôte ne peut pas être un point d'accès joignable : bouclage et IPC locale (`localhost`, `127.x.x.x`, `[::1]`, `0.0.0.0`, `host.docker.internal`, la forme de socket `http://unix:` de mORMot) ainsi que les plages réservées à la documentation et aux tests (RFC 2606 `example.com/.net/.org`, `.example`, `.test`, `.invalid` ; RFC 5737 `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` ; RFC 3849 `2001:db8::/32` ; et les plages lien-local `169.254.0.0/16` et `fe80::/10`, qui ne sont pas des plages de documentation mais n'apparaissent dans les littéraux du code source que comme fixtures de parseur ou exemples de diagnostic - un vrai déploiement sur `fe80::` exige un index de zone, et `169.254.x` n'apparaît que lorsque DHCP a échoué). Les plages LAN privées (RFC 1918) ne sont délibérément PAS ignorées - un appel REST `http://192.168.x.y` est un vrai point d'accès en clair. Les URI d'espaces de noms XML (`xmlns=`, `schemas`, `w3.org`, ...) sont des identités, pas des cibles réseau, et sont également ignorées."
     },
     "SCA116": {
@@ -609,7 +609,7 @@
       "fullDescription": "Une fonction qui atteint son `end;` sans aucun `Result := ...` ni `<FunctionName> := ...` à la manière Pascal renvoie les résidus de registre/pile qui occupent par hasard l'emplacement du résultat. Dans les builds Release, l'appelant reçoit donc la valeur du dernier appel de même taille - un Heisenbug classique qui change selon le niveau d'optimisation. Le détecteur est volontairement prudent : il ignore les fonctions qui contiennent un `Exit` quelconque (peut être `Exit(value)`) ou un `raise` (la fonction lève peut-être systématiquement). Remarque : le parseur enregistre bien l'argument de `Exit(value)`, cette exclusion est donc plus grossière que strictement nécessaire - la resserrer ajouterait des résultats et attend donc une analyse mesurée du corpus. Les procédures, les déclarations abstract/forward/external et les déclarations uniquement DispatchID sont aussi ignorées. Une couverture partielle (Result affecté dans une seule branche) est actuellement un faux négatif en attendant l'analyse CFG. Correspond à `RoutineResultAssignedCheck` de Sonar-Delphi."
     },
     "SCA122": {
-      "name": "Relevée de la variable d'exception liée",
+      "name": "Relance de la variable d'exception liée",
       "shortDescription": "`on E: T do ... raise E;` perd la pile d'appels d'origine - le `raise;` nu la conserve",
       "fullDescription": "`raise E` dans un gestionnaire `on E: SomeException do ...` démarre une nouvelle propagation d'exception enracinée au site de la relance. La pile d'appels d'origine - le chemin depuis l'endroit où l'exception a été levée la première fois, à travers chaque routine appelée, jusqu'à ce bloc `except` - est perdue. Les rapports de plantage et les vues du débogueur pointent alors vers le gestionnaire, et non vers l'emplacement réel de la faute, ce qui rend le tri considérablement plus difficile. L'intention du développeur était presque certainement `raise;` (sans argument), qui continue de propager l'objet exception *courant* avec sa trace intacte. Le détecteur parcourt chaque `nkOnHandler` ayant un nom de variable liée non vide et signale chaque `nkRaise` de ce sous-arbre dont l'argument est exactement cette variable (insensible à la casse). `raise;` (sans argument) est correct et n'est pas signalé ; `raise EWrapper.Create(...)` est également accepté (encapsulation délibérée). Correspond à `ReRaiseExceptionCheck` de Sonar-Delphi."
     },
@@ -624,7 +624,7 @@
       "fullDescription": "Delphi permet d'appeler un constructeur sur une instance, p. ex. `obj.Create;`, mais le résultat n'est presque jamais celui voulu. Appelé comme méthode de classe (`TFoo.Create`), le runtime alloue d'abord un nouveau bloc mémoire via `TObject.NewInstance`, initialise le pointeur de VMT, puis exécute le corps du constructeur. Appelé sur une instance existante, le chemin d'allocation est entièrement sauté - seul le corps du constructeur s'exécute, ce qui réinitialise les champs (`FList := TList.Create;` écrase le `FList` précédent sans le libérer, les références de types managés sont écrasées, les valeurs par défaut effacent ce que l'appelant avait positionné). Le résultat est au mieux un bug de logique, au pire une corruption mémoire. Heuristique du détecteur (aucun résolveur de types disponible) : compare `nkCall.Name` à `<Ident>.Create[(<args>)][;]` où `<Ident>` commence par une lettre minuscule (clairement une variable selon la convention Delphi, puisque les types utilisent le préfixe `T<Upper>` / `I<Upper>`). Ignore `Self`, `Result`, `Inherited`, les chemins à plusieurs points (`A.B.Create` - ambigu), les formes de transtypage (`T(x).Create`), les noms de classes et les receveurs qui suivent la convention de nommage des métaclasses (suffixe d'identificateur `Class`, p. ex. `itemClass: TFooClass`). Accepte un faible risque connu de faux positif pour les variables en minuscules de type `TClass` nommées autrement (rare en pratique). Rétrogradation provisoire de la sévérité Erreur -> Avertissement (2026-07-25) : un audit sur le corpus complet a mesuré 100 % de faux positifs au niveau Erreur ; reste Avertissement jusqu'à l'arrivée de gardes structurelles de résolution de types. Correspond à `InstanceInvokedConstructorCheck` de Sonar-Delphi."
     },
     "SCA125": {
-      "name": "Redéfinition dont le corps se réduit a `inherited;`",
+      "name": "Redéfinition dont le corps se réduit à `inherited;`",
       "shortDescription": "Une redéfinition qui ne fait que transmettre au parent ne sert à rien - la supprimer",
       "fullDescription": "Une méthode déclarée avec `override` dont l'implémentation ne fait qu'appeler l'ancêtre avec les mêmes arguments n'ajoute rien au comportement de la classe parente : la répartition virtuelle atteint déjà l'ancêtre quand la sous-classe ne redéfinit pas la méthode. La redéfinition vide est du bruit qui ralentit les revues de code et doit être revue chaque fois que la signature de l'ancêtre change. Le détecteur parcourt chaque implémentation de méthode `TClass.Name` dont le corps est exactement une instruction - `inherited;` (procédures, constructeurs, destructeurs), `inherited Name;` (sans paramètres), `inherited Name(p1, .., pn)` avec les paramètres transmis inchangés et dans l'ordre, ou `Result := inherited [Name(..)]` dans les fonctions - et lit la DÉCLARATION dans la classe de la même unité (les en-têtes d'implémentation ne répètent jamais `override`). La déclaration doit être unique (pas de surcharges, pas de jumeaux {$IFDEF}) et porter `override` sans autre directive (message, final, reintroduce, deprecated, convention d'appel, ...), sans attribut ni paramètre par défaut ; aucune directive de compilation ne doit se trouver entre l'en-tête d'implémentation et `end`. Les méthodes de classe sont ignorées. Visibilité : quand la méthode de l'ancêtre est déclarée dans la même unité avec une visibilité moindre, la redéfinition élargit sa visibilité et n'est pas signalée. Quand l'ancêtre se trouve hors de l'unité, les redéfinitions private/protected et les redéfinitions public de méthodes racines publiques bien connues (Destroy, Create, AfterConstruction, BeforeDestruction, Assign, ToString, Equals, GetHashCode) sont signalées avec une confiance élevée, les autres redéfinitions public/published avec une confiance faible (masquées par défaut). Le fichier source doit être lisible. Correspond à `InheritedMethodWithNoCodeCheck` de Sonar-Delphi."
     },
@@ -669,7 +669,7 @@
       "fullDescription": "Un `raise;` nu relance l'exception en cours de traitement ; il n'est donc valide qu'à l'intérieur de `except` / `on E: T do`. Delphi refuse cette forme partout ailleurs avec l'erreur de compilation E2145 'Re-raising an exception only allowed in exception handler', FPC avec `parser_e_no_reraise_possible` ('Re-raise isn't possible there'). Le détecteur parcourt récursivement l'AST de la méthode en suivant un indicateur `InHandler`. L'indicateur est positionné quand le parcours descend dans `nkExceptBlock` ou `nkOnHandler`. Un nœud `nkRaise` avec `Name = 'raise'` (forme nue) rencontré alors que l'indicateur vaut False produit un résultat. Un `raise;` nu dans un bloc `finally` lui-même situé hors d'un gestionnaire except est également signalé. Correspond à la règle Sonar-50 #15 (`RaiseWithoutClass`)."
     },
     "SCA134": {
-      "name": "Variable utilisee après Free / FreeAndNil",
+      "name": "Variable utilisée après Free / FreeAndNil",
       "shortDescription": "Déréférencer une variable après `Free` ou `FreeAndNil` lit un pointeur pendant et provoque une violation d'accès",
       "fullDescription": "Après `obj.Free` ou `FreeAndNil(obj)`, la variable pointe vers de la mémoire libérée (ou vaut NIL). Tout accès ultérieur à un membre, à un indexeur ou tout appel utilisant la variable comme receveur est un comportement indéfini - typiquement une violation d'accès, parfois une corruption silencieuse si la mémoire a été réutilisée. Le détecteur retire chaînes + commentaires du fichier, trouve chaque occurrence de `FreeAndNil(<id>)` et `<id>.Free`, puis parcourt vers l'avant le reste du corps de la méthode à la recherche du même identificateur. Un `<id>.<member>`, `<id>(<args>)` ou `<id>[<idx>]` ultérieur produit un résultat. Les réaffectations `<id> := ...` ou les débuts de section var `<id> :` terminent la fenêtre d'analyse. Les apparitions nues sans accesseur ne sont volontairement pas signalées, pour éviter les faux positifs sur des comparaisons comme `if x = oldL then`. Correspond à la règle Sonar-50 #7. Limite : pas d'analyse de flot de contrôle ; `if Cond then Free else Use` peut produire un faux positif, car l'utilisation se trouve sur un autre chemin."
     },
@@ -704,8 +704,8 @@
       "fullDescription": "Plusieurs retours anticipés sont utiles pour les clauses de garde, mais au-delà d'un petit nombre ils fragmentent tant le flot de contrôle que les futurs mainteneurs manquent des conditions. Le détecteur compte les descendants `nkExit` de chaque `nkMethod` et signale une méthode qui en a plus de 6 : 6 instructions Exit restent silencieuses, 7 sont signalées. Le seuil est fixé dans le détecteur (`MAX_EXITS`). Les instructions Exit des routines imbriquées et des méthodes anonymes ne comptent pas. Options de refactorisation : regrouper les gardes en un seul `if (... or ... or ...) then Exit;`, passer des retours anticipés à une variable de retour unique, ou extraire la logique interne dans une méthode auxiliaire. Correspond à la règle Sonar-50 #34."
     },
     "SCA141": {
-      "name": "L'implementation de la classe dépasse 500 lignes",
-      "shortDescription": "Une classe dont la déclaration et les méthodes d'implementation totalisent plus de 500 lignes a trop de responsabilités",
+      "name": "L'implémentation de la classe dépasse 500 lignes",
+      "shortDescription": "Une classe dont la déclaration et les méthodes d'implémentation totalisent plus de 500 lignes a trop de responsabilités",
       "fullDescription": "Comme GodClass (SCA138), mais mesuré en étendue de lignes plutôt qu'en nombre de méthodes/champs. Repère les classes qui paraissent petites d'après le nombre de membres mais ont d'énormes corps d'implémentation - typique des classes de logique héritées qui ont grandi pendant des années. Le détecteur parcourt les nœuds `nkClass` ; pour chaque classe, il détermine une étendue via min(class-decl-line, first-method-with-prefix-line) .. max(class-decl-children-line, last-method-with-prefix-line). Seuil 500 lignes. Les records, interfaces, helpers et déclarations forward sont ignorés. Correspond à la règle Sonar-50 #35."
     },
     "SCA142": {
@@ -714,13 +714,13 @@
       "fullDescription": "L'ordre alphabétique rend les conflits de fusion déterministes et élimine toute une catégorie de débats stériles en revue de code. Le détecteur parcourt les nœuds `nkUses`, collecte les enfants `nkUsesItem` et compare l'ordre réel à un tri insensible à la casse. Toute différence produit un résultat sur la ligne `uses`. Les clauses à une seule entrée sont ignorées. La sévérité est Conseil, car de nombreux projets regroupent délibérément les entrées par couche (RTL / VCL / tiers / propre) plutôt qu'alphabétiquement - un style à activer volontairement, pas une règle stricte. Correspond à la règle Sonar-50 #47."
     },
     "SCA143": {
-      "name": "L'unit n'a pas de commentaire d'en-tête descriptif",
-      "shortDescription": "L'unit commence directement par `interface`, sans bloc de commentaire explicatif entre `unit ...;` et `interface`",
+      "name": "L'unité n'a pas de commentaire d'en-tête descriptif",
+      "shortDescription": "L'unité commence directement par `interface`, sans bloc de commentaire explicatif entre `unit ...;` et `interface`",
       "fullDescription": "Un court commentaire d'en-tête entre la déclaration `unit ...;` et le mot-clé `interface` indique aux futurs mainteneurs à quoi sert l'unité - objectif, périmètre, invariants importants, appartenance. Le détecteur lit les premières lignes du fichier, trouve les marqueurs `unit` et `interface` et vérifie qu'au moins une ligne de commentaire (`//`, `{...}` ou `(* ... *)`) se trouve entre eux. La sévérité est Conseil, car de nombreuses unités héritées omettent l'en-tête sans conséquence fonctionnelle. Correspond à la règle Sonar-50 #48."
     },
     "SCA144": {
       "name": "Comparaison d'égalité ou d'inégalité entre flottants",
-      "shortDescription": "`a = b` ou `a <> b` entre Single/Double/Extended n'est pas fiable a cause de l'arrondi IEEE-754 - utiliser SameValue ou Math.IsZero",
+      "shortDescription": "`a = b` ou `a <> b` entre Single/Double/Extended n'est pas fiable à cause de l'arrondi IEEE-754 - utiliser SameValue ou Math.IsZero",
       "fullDescription": "L'arithmétique flottante IEEE-754 ne garantit pas l'égalité exacte, même pour des résultats qui semblent identiques au développeur (`0.1 + 0.2 = 0.3` vaut False). Les tests d'égalité sur des flottants sont une source classique de bugs silencieux - ils semblent corrects dans les tests mais se déclenchent parfois à tort. Le détecteur retire chaînes et commentaires, puis procède en deux phases : (1) collecte les déclarations de variables locales dont le type est `Single`, `Double`, `Extended`, `Real` ou `Currency` ; (2) recherche `<ident> = <expr>` ou `<ident> <> <expr>` où au moins un côté référence une variable flottante connue. Les affectations `:=` sont exclues par un lookbehind. Limites : pas d'inférence de type pour les retours de fonction ni les paramètres non locaux ; les expressions complexes comme `a + b = c + d` ne se déclenchent que si au moins un opérande est une variable flottante connue. Correspond à la règle Sonar-50 #19. Correction : utiliser `System.Math.SameValue(a, b, Eps)` ou `IsZero(a - b)`."
     },
     "SCA145": {
@@ -734,12 +734,12 @@
       "fullDescription": "Quand la valeur d'un paramètre booléen fait basculer la fonction entre deux comportements sans rapport (`SendMsg(s, True)` vs `SendMsg(s, False)`), le site d'appel est opaque : le lecteur doit soit se souvenir de l'API de la méthode, soit la consulter pour savoir ce que signifie `True`. Deux méthodes aux noms parlants (`SendErrorMessage` / `SendInfoMessage`) rendent l'intention évidente au site d'appel sans commentaires. Le détecteur parcourt les nœuds `nkMethod`, examine les enfants `nkParam` de type Boolean (ainsi que LongBool/WordBool/ByteBool) et signale dès qu'au moins un `nkIfStmt` du corps utilise le paramètre comme condition. Exclus : setters de propriété (noms de méthode commençant par `Set`), noms de paramètres bien connus de gestionnaires d'événements VCL (`Handled`, `CanShow`). Le simple relais (booléen seulement transmis, sans branchement interne) n'est pas signalé. Correspond à la règle Sonar-50 #33. Sévérité Conseil - il s'agit d'une suggestion de refactorisation, pas d'un bug."
     },
     "SCA147": {
-      "name": "Méthode privée sans appelant dans l'unit",
-      "shortDescription": "Une méthode privée que nulle autre méthode de la même unit ne référence est du code mort - la supprimer ou la brancher",
+      "name": "Méthode privée sans appelant dans l'unité",
+      "shortDescription": "Une méthode privée que nulle autre méthode de la même unité ne référence est du code mort - la supprimer ou la brancher",
       "fullDescription": "Les méthodes privées ne peuvent être appelées que depuis la même unité (Delphi classique) ou la même classe (strict private). Si aucune autre méthode ne les référence, elles ne peuvent pas être appelées du tout - c'est du code mort, souvent le reste d'une refactorisation inachevée. Le détecteur parcourt les nœuds `nkClass`, trouve les enfants `nkVisibilitySection` nommés `private` ou `strict private`, collecte leurs noms de `nkMethod`, puis recherche textuellement dans le corps du fichier (débarrassé des chaînes et commentaires) des correspondances en limite de mot. Deux correspondances par méthode sont tolérées (ligne de déclaration + en-tête d'implémentation) ; davantage indique au moins un appel. Comme cette recherche ne voit que les appels *par nom*, tout mécanisme de répartition qui atteint une méthode sans la nommer est écarté avant le signalement - gestionnaires de messages, clauses de résolution de méthode, constructeurs/destructeurs de classe, `override` et implémentations d'interface. Les gestionnaires d'événements DFM sont résolus via le `.dfm` apparié. Angle mort restant : l'invocation uniquement via RTTI (`TypeInfo`, registres pilotés par attributs) - y utiliser `// noinspection UnusedPrivateMethod`. Correspond à la règle Sonar-50 #37."
     },
     "SCA148": {
-      "name": "Méthode d'instance n'accédant jamais a Self - pourrait être de classe",
+      "name": "Méthode d'instance n'accédant jamais à Self - pourrait être de classe",
       "shortDescription": "Une méthode qui n'utilise que ses paramètres (ni Self, ni champs d'instance, ni chaîne virtuelle) est fonctionnellement une méthode de classe - la déclarer comme telle",
       "fullDescription": "Quand une méthode d'instance ne touche jamais `Self`, un champ d'instance ou `inherited`, le paramètre implicite `Self` est gaspillé - la méthode est en fait sans état. La déclarer `class function ... static` économise le passage d'un pointeur, rend explicite l'intention sans état et permet aux appelants de l'invoquer sans instance (`TMath.Add(1, 2)` au lieu de `MyMath.Add(1, 2)`). Le détecteur parcourt les nœuds `nkMethod` qui appartiennent à une classe (nom qualifié comme `TFoo.Bar`), ignore les méthodes déjà de classe (`;class` dans le TypeRef), les polymorphes (`;virtual`/`;override`/`;dynamic`/`;abstract`), les constructeurs et destructeurs, puis recherche récursivement tout identificateur nommé `self`, tout `inherited` ou toute référence de champ `F<UppercaseLetter>`. Rien de tout cela -> résultat. Limites : l'accès implicite à une propriété sans préfixe `Self.` n'est pas détecté comme accès à l'instance, de sorte que des appels comme `Bar := ...` pour une propriété peuvent produire un faux positif. Correspond à la règle Sonar-50 #50."
     },
@@ -755,12 +755,12 @@
     },
     "SCA151": {
       "name": "La fonction renvoie toujours le même littéral",
-      "shortDescription": "Tous les chemins de la fonction affectent le même littéral a Result - la logique conditionnelle ne change rien au comportement, remplacer la fonction par une constante",
+      "shortDescription": "Tous les chemins de la fonction affectent le même littéral à Result - la logique conditionnelle ne change rien au comportement, remplacer la fonction par une constante",
       "fullDescription": "Quand chaque affectation à `Result` (ou au nom de la fonction dans le style Pascal classique) est le même littéral, la fonction renvoie ce littéral quelles que soient les entrées. La structure conditionnelle est morte - soit une refactorisation inachevée (une branche n'a jamais été mise à jour), soit des branches qui auraient dû produire des valeurs différentes ne le font pas. Le détecteur parcourt les `nkMethod` dont le `TypeRef` déclare un type de retour, collecte les nœuds `nkAssign` dont la partie gauche vaut `result` ou le nom non qualifié de la fonction, extrait le littéral de droite (nombre, littéral de chaîne, True/False/nil) et signale quand au moins deux de ces affectations partagent exactement le même littéral et qu'aucune affectation non littérale n'existe. Correspond à la règle Sonar-50 #43."
     },
     "SCA152": {
       "name": "Texte visible par l'utilisateur affecté en littéral",
-      "shortDescription": "Les affectations a Caption/Hint/Text et les appels a ShowMessage/MessageDlg avec du texte littéral contournent resourcestring et i18n - la chaîne n'est pas traduisible",
+      "shortDescription": "Les affectations à Caption/Hint/Text et les appels à ShowMessage/MessageDlg avec du texte littéral contournent resourcestring et i18n - la chaîne n'est pas traduisible",
       "fullDescription": "Un texte visible par l'utilisateur codé en dur rend l'application intraduisible sans modifier le code source. Le détecteur analyse lexicalement chaque ligne source à la recherche de deux motifs étroits : `<ident>.Caption|Hint|Text := '<text>'` et `ShowMessage|MessageDlg('<text>'`. Le texte capturé n'est signalé que s'il (a) fait au moins 2 caractères, (b) contient au moins une lettre (ce qui écarte les séparateurs d'un caractère comme `'-'`, `'.'`, `':'` et les littéraux numériques), et (c) ne ressemble pas à une clé de ressource (uniquement majuscules + soulignés, ou commence par `$`). Les commentaires de ligne (`//`) sont ignorés. Limites : les correspondances sur des classes non graphiques ayant une propriété Caption/Hint/Text (p. ex. des auxiliaires internes) peuvent produire des faux positifs - dans ce cas, utiliser le marqueur de suppression de ligne `// noinspection HardcodedString`. Correspond à la règle Sonar-50 #46 (forme étroite, UI uniquement)."
     },
     "SCA153": {
@@ -770,12 +770,12 @@
     },
     "SCA154": {
       "name": "Move/FillChar avec SizeOf d'un type pointeur",
-      "shortDescription": "Move, FillChar, CopyMemory ou ZeroMemory appelé avec SizeOf(PXxx) ou PXxx est un type pointeur - ne copie que 4 ou 8 octets (la taille du pointeur) au lieu du tampon visé",
+      "shortDescription": "Move, FillChar, CopyMemory ou ZeroMemory appelé avec SizeOf(PXxx) où PXxx est un type pointeur - ne copie que 4 ou 8 octets (la taille du pointeur) au lieu du tampon visé",
       "fullDescription": "Analyse lexicale à la recherche de `Move|FillChar|CopyMemory|ZeroMemory(...SizeOf(<Name>)...)` où <Name> commence par `P` suivi d'une majuscule (convention Delphi du préfixe P pour les types pointeur : PByte, PInteger, PCardinal, PChar, PSomeRecord, ...). En 64 bits, SizeOf(PXxx) renvoie 8 quel que soit le type pointé ; en 32 bits, il renvoie 4. L'auteur voulait presque toujours SizeOf(Xxx) ou Length(Buf) - la copie tronquée laisse silencieusement le reste du tampon intact (FillChar) ou ne copie que partiellement la source (Move). Piège courant dans mORMot : SizeOf(PByte) au lieu d'un nombre d'octets explicite lors d'une copie dans un tableau fixe. La liste blanche exclut SizeOf(TXxx) / SizeOf(Integer) / SizeOf(Variable) - seul le préfixe P suivi d'une majuscule déclenche."
     },
     "SCA155": {
       "name": "Instruction with sur plusieurs cibles",
-      "shortDescription": "`with A, B do` (deux receveurs ou plus séparés par des virgules) rend la resolution des membres ambiguë - ajouter une méthode à A ou à B change silencieusement le sens du corps",
+      "shortDescription": "`with A, B do` (deux receveurs ou plus séparés par des virgules) rend la résolution des membres ambiguë - ajouter une méthode à A ou à B change silencieusement le sens du corps",
       "fullDescription": "Correspondance regex \\bwith\\s+<id>,\\s*<id>\\s*do\\b sur tout le fichier (multiligne / commentaires retirés), suivie d'une passe d'équilibrage des parenthèses sur la tête du with. Une seule cible est déjà un code smell (couvert par fkWithStatement) ; deux ou plus transforment le corps en piège de maintenance : une nouvelle méthode ajoutée à A ou à B peut silencieusement supplanter ce qui était auparavant résolu vers l'autre. Le compilateur choisit la correspondance la plus proche et n'avertit jamais. Les renommages via la refactorisation de l'IDE omettent ces références, car le receveur n'est pas nommé au site d'appel. Ajusté pour mORMot : accepte jusqu'à 200 caractères par nom de cible pour tolérer des noms entièrement qualifiés comme Owner.SubObject.Component. Correction : séparer en blocs with distincts ou - mieux - abandonner with entièrement et qualifier explicitement chaque membre. Non signalé : une cible unique dont les virgules se trouvent dans une liste d'arguments, d'indices ou d'arguments de type. Seule une virgule à la profondeur de parenthèses 0 sépare des cibles ; la passe d'équilibrage compte les parenthèses et les crochets et ignore les arguments de type génériques (TDict<K,V>), et les littéraux de chaîne sont vidés au préalable. Si la tête ne peut pas être tranchée (aucun do à la profondeur 0 dans la fenêtre, parenthèses déséquilibrées), le résultat est conservé - le filtre ne peut que retirer, jamais ajouter."
     },
     "SCA156": {
@@ -800,7 +800,7 @@
     },
     "SCA160": {
       "name": "Transtypage en chaîne depuis un pointeur brut",
-      "shortDescription": "`string(P)` et variantes depuis un pointeur préfixe P supposent un terminateur nul qui peut ne pas exister - lecture au-delà du tas",
+      "shortDescription": "`string(P)` et variantes depuis un pointeur préfixé par P supposent un terminateur nul qui peut ne pas exister - lecture au-delà du tas",
       "fullDescription": "Analyse lexicale de `(string|RawByteString|AnsiString|UTF8String|WideString)(<id>)` où `<id>` commence par `P` suivi d'une autre lettre (convention Delphi du préfixe P pour les types pointeur : PByte, PChar, PSomeRecord, ...). La correspondance ignore la casse, donc `pText` correspond aussi ; un opérande déclaré avec un type chaîne dans le même fichier est ignoré. Delphi traite le transtypage comme terminé par un nul et lit la mémoire jusqu'au prochain #0 - sur un tampon sans terminateur, la lecture dépasse la limite du bloc de tas, ce qui provoque une lecture hors limites silencieuse et parfois une AV. Le code interne de mORMot utilise ce motif avec une terminaison nulle maîtrisée ; le code utilisateur qui copie l'idiome omet souvent la garantie du terminateur. Utiliser plutôt `SetString(s, PChar(Buf), Len)` avec une longueur explicite. Filtre anti-faux positifs : seuls les identificateurs commençant par P déclenchent - `string(IntegerVar)` (Integer vers String) n'est pas signalé ; un double transtypage comme `string(PChar(x))` ne l'est pas non plus."
     },
     "SCA161": {
@@ -810,7 +810,7 @@
     },
     "SCA162": {
       "name": "Utilisation d'un algorithme cryptographique faible ou obsolète",
-      "shortDescription": "Nom d'algorithme ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') ou classe d'encapsulation (THashMD5, TIdHashSHA1, ...) référencée - vulnérable aux collisions et aux attaques a texte clair connu",
+      "shortDescription": "Nom d'algorithme ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') ou classe d'encapsulation (THashMD5, TIdHashSHA1, ...) référencée - vulnérable aux collisions et aux attaques à texte clair connu",
       "fullDescription": "MD5 présente des collisions praticables depuis 2004 (Wang et al.), SHA1 depuis 2017 (SHAttered, préfixe identique ; préfixe choisi depuis 2020). DES utilise 56 bits et peut être cassé par force brute, 3DES subit la collision CBC Sweet32 (CVE-2016-2183). RC4 présente des biais statistiques documentés et est interdit par la RFC 7465. TLS 1.0 / 1.1 sont déclarés obsolètes par la RFC 8996 (BEAST, POODLE, Lucky13). SSLv3 a été rendu caduc par POODLE (CVE-2014-3566). Le détecteur reconnaît les noms d'algorithmes, délimités comme mots, dans les littéraux de chaîne et les identificateurs, ET un ensemble de noms de classes d'encapsulation connues (correspondance de sous-chaîne). Correction : passer à SHA-256/SHA-3 pour le hachage, à AES-GCM / AES-CCM pour le chiffrement symétrique, et à TLS 1.2 au minimum (1.3 de préférence)."
     },
     "SCA163": {
@@ -820,12 +820,12 @@
     },
     "SCA164": {
       "name": "Routine de premier niveau jamais appelée",
-      "shortDescription": "Une procédure ou fonction autonome de la section implementation n'est appelée nulle part dans l'unit et n'est pas exportée par la section interface - code mort",
+      "shortDescription": "Une procédure ou fonction autonome de la section implementation n'est appelée nulle part dans l'unité et n'est pas exportée par la section interface - code mort",
       "fullDescription": "Comble le vide entre SCA147 (UnusedPrivateMethod - seulement les méthodes privées de classe) et la famille de contrôles de visibilité SCA148+ (seulement les membres publics de classe). Détecte les routines de premier niveau (hors classe) dont le nom n'apparaît nulle part comme appel dans la même unité, auto-références exclues (une routine récursive qui ne fait que s'appeler elle-même est tout de même signalée - comme le UnusedRoutineCheck de SonarDelphi). Gardes anti-faux positifs : constructeurs et destructeurs (non appelables directement comme procédure), les directives `override`/`virtual; abstract`/`message`/`dynamic` (dispatch inter-classes ou système), la procédure d'amorçage IDE `Register`, le trio de l'énumérateur (`MoveNext`/`GetEnumerator`/`Current` - invoqués implicitement par `for-in`) et toute routine déclarée par anticipation dans la section interface de l'unité (consommateur potentiel dans une autre unité). La portée est un seul fichier - les appelants d'autres unités des routines de la section interface ne sont pas suivis dans ce MVP, ces routines sont donc volontairement ignorées. Masquer avec `// noinspection UnusedRoutine` quand la routine est conservée volontairement (invocation via RTTI, consommée par un attribut, chargée par un plugin). Correspond au UnusedRoutineCheck de SonarDelphi."
     },
     "SCA165": {
       "name": "Marqueur noinspection inutilisé",
-      "shortDescription": "Un `// noinspection X` ne supprime aucun résultat sur sa ligne cible - soit le détecteur s'est amélioré, soit la cible était mauvaise",
+      "shortDescription": "Un `// noinspection X` ne masque aucun résultat sur sa ligne cible - soit le détecteur s'est amélioré, soit la cible était mauvaise",
       "fullDescription": "Le filtre de suppression (uSuppression) enregistre chaque commentaire `// noinspection KindName` et la ligne de code suivante qu'il vise. Une fois tous les détecteurs terminés, le filtre vérifie quels marqueurs ont effectivement masqué un résultat. Les marqueurs qui n'ont jamais agi sont signalés comme fkUnusedSuppression sur la ligne du marqueur - l'utilisateur doit supprimer le marqueur (l'évolution du détecteur l'a rendu obsolète) ou vérifier si le nom de type visé était erroné. Résistant aux faux négatifs : seuls les marqueurs ayant une ligne cible claire hors commentaire sont pris en compte (les marqueurs en fin de fichier ou dans des blocs de commentaires de documentation purs sont ignorés). Tient compte du profil : dans le profil default, ce conseil apparaît ; qui veut des rapports d'hygiène des suppressions sans le bruit des détecteurs peut lancer l'analyse avec --profile selftest-quiet."
     },
     "SCA166": {
@@ -834,8 +834,8 @@
       "fullDescription": "Les variables locales de types non managés (Integer, Boolean, Pointer, record, instance de classe) démarrent avec un contenu indéfini. Les lire avant affectation donne des valeurs parasites ou une violation d'accès - un bug de plantage classique. Le détecteur parcourt les instructions de chaque méthode dans l'ordre du source et suit la première écriture et la première lecture de chaque variable locale : une variable lue mais jamais écrite est signalée avec une confiance élevée, une lecture qui précède la première écriture dans l'ordre du source avec une confiance moyenne. Le contrôle n'est pas sensible aux chemins - une écriture dans une branche compte pour toutes les lignes situées en dessous, donc `if Cond then L := TStringList.Create; L.Add('x');` n'est pas signalé. Les écrivains connus de la RTL (Read, ReadLn, FillChar, Move, ZeroMemory, Initialize, New, GetMem) sont reconnus via une liste blanche ; les autres appels avec paramètres var/out sont traités de façon pessimiste comme des lectures (faux négatifs, mais pas de faux positifs). Les types managés initialisés automatiquement par Pascal (string, tableau dynamique, interface) sont ignorés, sauf activation via l'INI. Les méthodes qui dépassent des plafonds configurables (200 variables locales / 5000 instructions, par défaut) sont exclues de l'analyse pour éviter un coût pathologique dans le pire cas."
     },
     "SCA167": {
-      "name": "Appel a Random sans Randomize préalable",
-      "shortDescription": "Random / RandomRange / RandomFrom sans Randomize - un germe a 0 produit la même suite à chaque exécution",
+      "name": "Appel à Random sans Randomize préalable",
+      "shortDescription": "Random / RandomRange / RandomFrom sans Randomize - un germe à 0 produit la même suite à chaque exécution",
       "fullDescription": "La fonction Random de Delphi utilise un germe interne qui vaut 0 au démarrage du programme. Tant que Randomize n'a pas été appelé une fois (généralement au début de l'exécution du programme), Random renvoie la même suite de valeurs à chaque lancement du programme. Le détecteur parcourt l'AST à la recherche de tous les appels et ignore l'unité entière si un appel à Randomize s'y trouve n'importe où. Sinon, chaque appel à Random / RandomRange / RandomFrom est signalé. Remarque : les appels à Randomize dans d'autres unités (p. ex. dans le bloc initialization d'une unité utilisée) ne sont pas détectés ; masquer avec `// noinspection InsecureRandom` le cas échéant. Pour les usages cryptographiques (génération de jetons, sels, codes de réinitialisation de mot de passe), Random ne convient pas, avec ou sans Randomize - utiliser des TBytes issus d'un CSPRNG (p. ex. CryptGenRandom sous Windows, /dev/urandom sous POSIX)."
     },
     "SCA168": {
@@ -844,7 +844,7 @@
       "fullDescription": "Une instruction case sans branche else ignore silencieusement toutes les valeurs qui ne sont pas listées explicitement. Quand l'expression du case prend l'une de ces valeurs non traitées, aucune action n'a lieu et aucune erreur n'est levée, ce qui peut masquer des bugs de logique (surtout quand de nouvelles valeurs d'énumération sont ajoutées plus tard sans que les instructions case soient mises à jour). Ajouter `else ;` pour un no-op voulu (qui documente la décision) ou un traitement par défaut qui lève une exception / journalise / fait une assertion. Remarque pour la comparaison avec une version antérieure : jusqu'en 2026-08, le parseur rattachait un else suivant un if dans le dernier bras (`3: if C then Foo; else Bar;`) à ce if plutôt qu'au case, si bien que la règle signalait une branche else manquante sur des instructions case qui en avaient manifestement une. Ces faux positifs ont disparu - 148 sur le corpus de référence - et rien n'a changé dans ce que la règle compte comme violation."
     },
     "SCA169": {
-      "name": "L'argument d'Assert contient un appel a effet de bord",
+      "name": "L'argument d'Assert contient un appel à effet de bord",
       "shortDescription": "Assert(SomeCall) - l'appel disparaît en build Release et son effet de bord est perdu silencieusement",
       "fullDescription": "Le compilateur Delphi supprime entièrement les appels à Assert des builds Release (sauf si DCC_Assertions est activé). Si l'expression vérifiée contient un appel de fonction à effet de bord (allocation, modification d'état, E/S, incrémentation de compteur), l'effet de bord disparaît aussi - le comportement en Release diverge de celui en Debug. Le détecteur signale les appels à Assert dont l'argument contient un motif d'appel de fonction, après exclusion d'une liste blanche de fonctions RTL connues comme pures (Length, Assigned, SizeOf, IntToStr, ...). Sortir l'appel de l'Assert et vérifier plutôt son résultat."
     },
@@ -854,8 +854,8 @@
       "fullDescription": "Delphi incrémente le compteur de références de la chaîne à chaque appel quand le paramètre est déclaré sans `const`. Avec `const`, le compilateur passe une référence pure et évite l'aller-retour du compteur de références. Le compilateur interdit aussi l'affectation à un paramètre `const`, ce qui rend explicite le contrat de non-modification. Pour les paramètres string non modifiés (l'écrasante majorité), préférer `const`. Le détecteur signale les paramètres dont le type est `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` sans `const`/`var`/`out`."
     },
     "SCA171": {
-      "name": "Directive de compilation OFF sans ON correspondant dans le fichier",
-      "shortDescription": "{$WARNINGS OFF} (ou HINTS/RANGECHECKS/...) sans ON de fermeture - déborde sur les units suivantes",
+      "name": "Aiguillage de compilation OFF sans ON correspondant dans le fichier",
+      "shortDescription": "{$WARNINGS OFF} (ou HINTS/RANGECHECKS/...) sans ON de fermeture - déborde sur les unités suivantes",
       "fullDescription": "Les directives d'état du compilateur Delphi comme {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} modifient l'état du compilateur pour tout ce qui est compilé après elles. Si le OFF n'est pas suivi d'un ON de fermeture dans le même fichier, l'aiguillage déborde sur toutes les unités de compilation suivantes du même build et supprime avertissements/conseils/contrôles bien au-delà de la portée voulue. Le détecteur compte les OFF et les ON par nom de directive dans le fichier et signale toute directive dont les OFF sont plus nombreux que les ON en fin de fichier."
     },
     "SCA172": {
@@ -869,7 +869,7 @@
       "fullDescription": "Les opérations sur Variant passent par le répartiteur COM VarType (VarAdd, VarCmp, VarCast, ...), ce qui ajoute un aller-retour par le système de types à chaque lecture, écriture, comparaison et conversion. Dans une boucle critique, ce coût est multiplié par le nombre d'itérations et peut dominer le temps d'exécution de la méthode. Le détecteur signale chaque variable locale et chaque paramètre Variant / OleVariant dans les méthodes qui contiennent au moins une boucle for/while/repeat. Les cas d'usage acceptés (ponts COM/OLE, adaptateurs JSON-Variant, automatisation Excel) se traitent via le marqueur de suppression `// noinspection VariantTypeMisuse`."
     },
     "SCA174": {
-      "name": "TList<T> rempli de T.Create - les éléments fuient a la libération",
+      "name": "TList<T> rempli de T.Create - les éléments fuient à la libération",
       "shortDescription": "TList<TFoo>.Create plus Add(TFoo.Create) - la liste ne possède pas ses éléments, chaque instance TFoo fuit",
       "fullDescription": "TList<T> est un conteneur typé qui ne possède PAS ses éléments - libérer la liste ne libère pas les éléments qu'elle contient. Quand les éléments sont des instances de classe allouées avec .Create, ils fuient à chaque libération de la liste, sauf si l'appelant parcourt et libère manuellement chacun d'eux. Le bon conteneur est TObjectList<T> de Generics.Collections, qui a OwnsObjects=True par défaut et libère ses éléments à sa destruction. Le détecteur parcourt chaque méthode, collecte toutes les affectations `TList<T>.Create` (où T est un identificateur qui ressemble à une classe), puis recherche des motifs `<varname>.Add(<T>.Create)` dans la même méthode. La possession entre méthodes (Add dans une autre méthode que Create) n'est pas suivie."
     },
@@ -879,13 +879,13 @@
       "fullDescription": "Delphi capture les variables par référence dans les méthodes anonymes. Quand la méthode anonyme est créée dans une boucle for et référence la variable de boucle, toutes les closures partagent la même référence - au moment où les closures s'exécutent, la variable de boucle a atteint sa valeur terminale et toutes observent cette valeur finale. Le symptôme classique : N threads parallèles créés dans une boucle journalisent tous le numéro de la dernière itération au lieu de 0..N-1. Le détecteur parcourt les instructions for, extrait le nom de la variable de boucle (`for i :=` classique ou `for var i :=` inline) et examine les descendants nkCall / nkAssign à la recherche de la combinaison d'un mot-clé `procedure` (début de méthode anonyme) et d'une référence à la variable de boucle. Correction : copier la variable de boucle dans une variable locale juste avant le corps de la méthode anonyme."
     },
     "SCA176": {
-      "name": "Méthode a forte complexité cognitive (flot de contrôle imbriqué)",
+      "name": "Méthode à forte complexité cognitive (flot de contrôle imbriqué)",
       "shortDescription": "La complexité cognitive (style Sonar) dépasse 15 - les if/for/while/case imbriqués sont difficiles à suivre mentalement",
       "fullDescription": "La complexité cyclomatique (SCA022) compte les chemins indépendants de façon linéaire - dix instructions if à plat pèsent autant qu'un if imbriqué sur trois niveaux. La complexité cognitive, introduite par Sonar en 2017, multiplie le coût de l'imbrication : chaque construction de flux de contrôle ajoute 1 + profondeur d'imbrication. Trois boucles imbriquées valent donc 1+2+3=6 au lieu de 3. Le détecteur parcourt chaque méthode avec une pile explicite plutôt que par récursion (ainsi, un code profondément imbriqué ne peut pas faire déborder la pile d'appels), en suivant la profondeur courante et la somme cumulée. Les opérateurs booléens (and/or/xor) dans les conditions if ajoutent +1 chacun. Seuil : 15 (valeur par défaut de Sonar), configurable via l'INI [Detectors] CognitiveLimit."
     },
     "SCA177": {
-      "name": "Variable de thread utilisee après FreeOnTerminate := True",
-      "shortDescription": "Après T.FreeOnTerminate := True, tout accès ultérieur à T.Field/T.Method risque une Access Violation si le thread s'est déjà auto-détruit",
+      "name": "Variable de thread utilisée après FreeOnTerminate := True",
+      "shortDescription": "Après T.FreeOnTerminate := True, tout accès ultérieur à T.Field/T.Method risque une violation d'accès si le thread s'est déjà auto-détruit",
       "fullDescription": "TThread.FreeOnTerminate := True transfère la possession de l'instance de thread au thread lui-même - le thread libère sa propre mémoire dans son cycle de vie Execute-puis-Destroy. L'appelant DOIT abandonner immédiatement toutes ses références au thread (en général en mettant la variable locale à nil), car il n'existe aucune synchronisation entre l'instruction suivante de l'appelant et l'autodestruction du thread. Le détecteur parcourt chaque méthode, collecte chaque affectation `<var>.FreeOnTerminate := True`, puis le premier `<var>.Start` ou `<var>.Resume` - à partir de ce moment, le thread tourne et peut se libérer lui-même - et signale chaque accès `<var>.<member>` ultérieur (appel OU affectation) dans la même méthode, à l'exception des appels de cycle de vie Start, Resume et Execute. Sans Start ni Resume dans la méthode, rien n'est signalé. Portée par méthode : les références entre méthodes (thread détenu dans un champ et utilisé dans une autre méthode) ne sont pas suivies."
     },
     "SCA178": {
@@ -895,11 +895,11 @@
     },
     "SCA179": {
       "name": "Attribut DUnitX [Ignore] sans argument de justification",
-      "shortDescription": "[Ignore] sans argument chaîne ignore le test silencieusement - ajouter un message expliquant pourquoi il est désactivé",
+      "shortDescription": "[Ignore] sans argument de type chaîne ignore le test silencieusement - ajouter un message expliquant pourquoi il est désactivé",
       "fullDescription": "DUnitX accepte [Ignore] à la fois comme attribut marqueur et sous la forme [Ignore('reason')]. La forme marqueur ignore le test sans indiquer POURQUOI il a été désactivé - le test dérive alors sans maintenance, souvent oublié. Toujours ajouter une chaîne de justification qui renvoie à un ticket / une dépendance externe / une limitation connue, afin que la désactivation puisse être triée."
     },
     "SCA180": {
-      "name": "Le même attribut applique deux fois au même membre",
+      "name": "Le même attribut appliqué deux fois au même membre",
       "shortDescription": "Deux attributs [X] identiques sur le même membre - reste de copier-coller, sans effet",
       "fullDescription": "Le modèle d'attributs de Delphi accepte les attributs répétés (certains, comme [TestCase], sont volontairement appliqués plusieurs fois avec des arguments différents). Les doublons avec des arguments IDENTIQUES ne le sont pas — ce sont généralement des restes de copier-coller issus d'un refactoring. Le détecteur compare les paires (nom d'attribut, texte des arguments) et signale les occurrences identiques dans le même groupe d'attributs (lignes distantes de 2 au maximum). Les attributs appliqués plusieurs fois avec des arguments différents ([TestCase('A','1')] / [TestCase('B','2')] différents) ne sont, à juste titre, PAS signalés."
     },
@@ -920,7 +920,7 @@
     },
     "SCA184": {
       "name": "Composant DFM inutilisé",
-      "shortDescription": "Le composant DFM n'est référencé ni dans le code, ni dans d'autres units, ni dans le DFM lui-même - probablement un reste de refactoring",
+      "shortDescription": "Le composant DFM n'est référencé ni dans le code, ni dans d'autres unités, ni dans le DFM lui-même - probablement un reste de refactoring",
       "fullDescription": "Un composant déclaré dans le .dfm n'a aucune liaison d'événement, n'est référencé par les propriétés d'aucun autre composant (DataSource, Action, ActiveControl, ...), n'est jamais utilisé dans le code Pascal de la fiche elle-même et n'est accédé depuis aucune autre unité via la variable globale de la fiche. Il s'agit très probablement d'un reste de refactoring qui est toujours alloué à l'exécution. Comme la preuve d'utilisation repose sur les noms (pas de liaison exacte), cette règle est émise avec une confiance faible et reste hors du profil de confiance par défaut jusqu'à sa validation sur du code réel. Les composants de champ persistants (T*Field) ainsi que les frames incorporées / composants hérités sont ignorés par prudence ; le détecteur reste muet sans index inter-unités à l'échelle du dépôt."
     },
     "SCA185": {
@@ -930,7 +930,7 @@
     },
     "SCA186": {
       "name": "Séquence UTF-8 invalide dans le fichier source",
-      "shortDescription": "UTF-8 mal forme (surlong, substitut ou hors plage) sous un BOM UTF-8",
+      "shortDescription": "UTF-8 mal formé (surlong, substitut ou hors plage) sous un BOM UTF-8",
       "fullDescription": "Le fichier porte un BOM UTF-8 mais contient des séquences d'octets qui ne sont pas de l'UTF-8 valide au sens de la RFC 3629 (encodages surlongs, substituts isolés ou points de code au-delà de U+10FFFF). Le compilateur Delphi les remplace silencieusement par U+FFFD, ce qui corrompt les caractères concernés. Réencoder le fichier en UTF-8 propre."
     },
     "SCA187": {
@@ -964,8 +964,8 @@
       "fullDescription": "Le fichier contient un caractère Unicode invisible ou de largeur nulle (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 word-joiner, ou un U+FEFF ZWNBSP en milieu de fichier). De tels caractères ne sont presque jamais légitimes dans du source et peuvent masquer ou altérer des identificateurs et du texte - ils font partie de la famille Trojan Source / caractères invisibles (CWE-1007). Remarque : U+200D peut apparaître légitimement dans des littéraux de chaîne contenant des emoji."
     },
     "SCA193": {
-      "name": "Caractère non-ASCII dans un identifiant",
-      "shortDescription": "L'identifiant contient une lettre non-ASCII - risque d'homoglyphes et de caractères confondables",
+      "name": "Caractère non-ASCII dans un identificateur",
+      "shortDescription": "L'identificateur contient une lettre non-ASCII - risque d'homoglyphes et de caractères confondables",
       "fullDescription": "Un identificateur (variable, type, routine, ...) contient un caractère non-ASCII. C'est le vecteur des homoglyphes / identificateurs confondables de la famille Trojan Source (CVE-2021-42694, CWE-1007) : une lettre comme le cyrillique U+043E ressemble au 'o' latin mais forme un identificateur différent, si bien que deux identificateurs peuvent sembler identiques et pourtant désigner des choses différentes. Un identificateur Unicode légitime est aussi possible, donc examiner avant de modifier ; préférer des identificateurs ASCII pour la portabilité et pour éviter la confusion."
     },
     "SCA194": {
@@ -974,12 +974,12 @@
       "fullDescription": "S'exécute uniquement pour les analyses de projet et de groupe de projets (--project / --project-group, ou choix d'un .dproj/.groupproj via le dialogue '...'), où la liste exacte des fichiers du projet (DCCReferences) est connue. Le détecteur parcourt récursivement le répertoire du fichier projet à la recherche de fichiers .pas et .dfm et signale chacun de ceux que le projet ne référence pas. Un .dfm compte comme inclus quand son .pas associé est référencé. Les fichiers qui SONT tirés via uses sont signalés comme SCA195 à la place (ils ne sont pas morts). Cas typiques : unités laissées après un refactoring, copies expérimentales, ou fichiers retirés du projet mais pas du disque. Limite v1 : seuls les fichiers DANS l'arborescence du dossier du projet sont contrôlés - les unités référencées depuis l'extérieur via des DCCReferences relatives en '..' et les unités du chemin de recherche ne sont ni parcourues ni signalées. Les analyses récursives de répertoire et les analyses d'un seul fichier n'exécutent pas ce contrôle (pas de notion d'appartenance au projet). Correction : supprimer le fichier, ou le sortir du dossier du projet (s'il est réellement utilisé, SCA195 indique au contraire de l'ajouter)."
     },
     "SCA195": {
-      "name": "Unit utilisee par le projet mais non incluse dedans",
-      "shortDescription": "Un fichier .pas est tiré par les units du projet via uses (il compile grâce au chemin de recherche) mais n'est pas liste dans le fichier projet (.dproj/.groupproj) - l'ajouter au projet",
+      "name": "Unité utilisée par le projet mais non incluse dedans",
+      "shortDescription": "Un fichier .pas est tiré par les unités du projet via uses (il compile grâce au chemin de recherche) mais n'est pas listé dans le fichier projet (.dproj/.groupproj) - l'ajouter au projet",
       "fullDescription": "S'exécute uniquement pour les analyses de projet et de groupe de projets (--project / --project-group, ou choix d'un .dproj/.groupproj via le dialogue '...'). Séparée de SCA194 (qui signale les fichiers réellement orphelins) : un fichier qui EST tiré via uses - directement ou transitivement par d'autres unités de ce type - n'est pas du code mort. Il compile grâce au chemin de recherche, mais reste invisible pour la gestion de projet : pas de navigation de projet dans l'IDE, facile à manquer lors des revues, des déploiements et du verrouillage de versions, et un renommage/déplacement ne casse le build qu'à la prochaine compilation complète. La correction consiste à ajouter le fichier au projet. Les commentaires et les littéraux de chaîne ne comptent jamais comme référence uses ; la correspondance compare le nom de fichier sans extension aux noms d'unités (éventuellement pointés) des clauses uses."
     },
     "SCA196": {
-      "name": "Result de type managé est lu avant d'avoir été affecté",
+      "name": "Le Result d'un type managé est lu avant d'avoir été affecté",
       "shortDescription": "Le Result d'un type de retour managé est lu avant la première affectation - il est un alias de la variable cible de l'appelant et porte son ANCIENNE valeur. L'initialiser d'abord (nil / [] / '')",
       "fullDescription": "Pour les types de retour managés, le compilateur passe Result comme paramètre var caché, alias de la variable cible de l'appelant, Y COMPRIS son contenu précédent (System.Rtti UseResultPointer ; la RTL elle-même s'en protège, p. ex. TStringBuilder.ToString commence par Result := '' 'to prevent copying of existing data'). Result n'est donc PAS initialisé à ''/nil/vide à l'entrée. Le lire avant la première affectation - Result := Result + [x], Result[i] := ... sans SetLength préalable, Result.Add(...), Exit(Result + ...) - traite des données périmées de l'appelant : le symptôme classique est une fonction collectrice dont le second appel ajoute aux résultats du premier. Le conseil du compilateur W1035 (valeur de retour indéfinie) reste MUET précisément pour ces types, donc rien d'autre n'avertit ici. La détection suit purement l'ordre du source (variante 2, sans analyse de chemins) : le premier accès à Result dans le corps décide ; tout ce qui écrit ou peut écrire Result (affectation directe, Exit(value), Result ou @Result passé comme argument d'appel, comme SetLength(Result, n) ou TryGetValue(key, Result)) compte comme affectation et termine l'examen. Les fonctions avec un alias 'absolute Result', les routines assembleur et les déclarations sans corps sont ignorées ; les littéraux de chaîne contenant le mot 'result' ne comptent jamais. Aveugle aux chemins par conception : une écriture dans une branche suivie d'une lecture après la branche n'est PAS signalée (faux négatif, pas faux positif) - une analyse sensible aux chemins est une suite prévue. L'alias de résultat par le nom de la fonction compte UNIQUEMENT comme cible d'affectation : dans un contexte d'expression, un nom de fonction nu est toujours un APPEL (récursif/sans paramètre) - 'Result := Put;' invoque la surcharge sans paramètre et ne lit jamais Result ; 'Obj.Result' est un champ étranger. Les affectations jumelles sous IFDEF, les méthodes anonymes incorporées (dont le Result appartient à la fonction anonyme) et les idiomes de remplissage de tampon 'Result[0] := Char(Api(@Result[1], N))' sont traités comme des écritures, pas comme des lectures. Pour les résultats ShortString, 'Result[0] := #len' est l'idiome d'initialisation de l'octet de longueur et compte comme première écriture. Là où cette règle se déclenche, SCA121 reste muette pour la même fonction."
     },
