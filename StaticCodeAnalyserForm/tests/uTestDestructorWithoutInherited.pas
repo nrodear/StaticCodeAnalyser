@@ -34,6 +34,10 @@ type
     // Posten 296: der Besitzertyp statt des ersten Segments
     [Test] procedure NestedClassFromTObject_Demoted;
     [Test] procedure NestedClassFromComponent_StaysError;
+    // ---- Meldung: Fund englisch, Anzeige uebersetzt (Nico 2026-11-05) -----
+    [Test] procedure Message_StaysEnglish_EvenWithGermanUi;
+    [Test] procedure DisplayMessage_GermanAndFrench_Translated;
+    [Test] procedure DisplayMessage_EnglishOrUnknownSentence_Unchanged;
   end;
 
 implementation
@@ -41,6 +45,7 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uLocalization,     // SetLanguage/CurrentLanguage - Meldungs-Tests
   uTestFindingHelper;
 
 { --- Posten 296: nested Klassen am richtigen Typ beurteilen ------ }
@@ -603,6 +608,145 @@ begin
     TFindingHelper.Count(F, fkDestructorWithoutInherited),
     'unter 70 % greift das Gate nicht, auch bei fuenf leeren Rumpfen');
   finally F.Free; end;
+end;
+
+{ --- Meldung: Fund englisch, Anzeige in der UI-Sprache (2026-11-05) --- }
+//
+// Ausloeser: SCA097 zeigte im IDE-Plugin bei deutscher Oberflaeche den
+// englischen Satz. Entscheid: MissingVar bleibt englisch (Baseline-
+// Fingerprint Datei|Kind|Methode|Detail, SARIF-Hash RuleID|Pfad|Zeile|Msg),
+// die ANZEIGE uebersetzt ueber TLeakFinding.DisplayMessage. Die festen
+// Saetze stehen im Detektor in N_('...') - der Extraktor sammelt sie als
+// msgid, der Wert bleibt byte-gleich.
+
+const
+  SRC_DTOR_NO_INHERITED =
+    'unit t; implementation'#13#10 +
+    'destructor TFoo.Destroy;'#13#10 +
+    'begin'#13#10 +
+    '  FreeAndNil(FBar);'#13#10 +
+    'end;';
+  // Der englische Satz, wie er in Baseline und SARIF steht. Aendert er
+  // sich, verlieren bestehende Baselines ihre SCA097-Eintraege.
+  MSG_SCA097_EN =
+    'Destructor has no `inherited` call - parent class cleanup is ' +
+    'skipped, likely leak. Add `inherited Destroy;` or `inherited;` ' +
+    'at the end of the body.';
+  // Erwartete Uebersetzungen aus i18n/de.po und i18n/fr.po - Umlaute und
+  // Akzente als Zeichencodes, damit die Testdatei reines ASCII bleibt.
+  MSG_SCA097_DE =
+    'Destruktor ohne `inherited`-Aufruf - das Aufr'#$00E4'umen der ' +
+    'Elternklasse entf'#$00E4'llt, vermutlich ein Leck. ' +
+    '`inherited Destroy;` oder `inherited;` am Ende des Rumpfs ' +
+    'erg'#$00E4'nzen.';
+  MSG_SCA097_FR =
+    'Le destructeur n''appelle pas `inherited` - le nettoyage de la ' +
+    'classe parente est saut'#$00E9', fuite probable. Ajouter ' +
+    '`inherited Destroy;` ou `inherited;` '#$00E0' la fin du corps.';
+
+// Sucht den SCA097-Fund der Liste; False, wenn keiner da ist.
+function FindSca097(AFindings: TObjectList<TLeakFinding>;
+  out AFinding: TLeakFinding): Boolean;
+var
+  Fnd : TLeakFinding;
+begin
+  AFinding := nil;
+  for Fnd in AFindings do
+    if Fnd.Kind = fkDestructorWithoutInherited then
+    begin
+      AFinding := Fnd;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TTestDestructorWithoutInherited.Message_StaysEnglish_EvenWithGermanUi;
+// Fingerprint-Schutz: das IDE-Plugin setzt die Sprache VOR dem Scan. Auch
+// dann muss der Fund den englischen Satz tragen - wuerde der Detektor
+// uebersetzen (_() statt N_()), waere jede Baseline sprachabhaengig.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Old      : string;
+begin
+  Old := CurrentLanguage;
+  Findings := nil;
+  try
+    SetLanguage('de');
+    Findings := TFindingHelper.FindingsOfFile(SRC_DTOR_NO_INHERITED);
+    Assert.IsTrue(FindSca097(Findings, Fnd), 'SCA097-Fund fehlt');
+    Assert.AreEqual(MSG_SCA097_EN, Fnd.MissingVar,
+      'MissingVar muss der englische Satz bleiben (Baseline/SARIF)');
+  finally
+    Findings.Free;
+    SetLanguage(Old);
+  end;
+end;
+
+procedure TTestDestructorWithoutInherited.DisplayMessage_GermanAndFrench_Translated;
+// Der Ausloeser: dieselbe Meldung in der Anzeige deutsch bzw. franzoesisch,
+// das Rohfeld bleibt dabei englisch.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Old      : string;
+begin
+  Old := CurrentLanguage;
+  Findings := TFindingHelper.FindingsOfFile(SRC_DTOR_NO_INHERITED);
+  try
+    Assert.IsTrue(FindSca097(Findings, Fnd), 'SCA097-Fund fehlt');
+    SetLanguage('de');
+    Assert.AreEqual(MSG_SCA097_DE, Fnd.DisplayMessage,
+      'deutsche Oberflaeche zeigt die de.po-Fassung');
+    SetLanguage('fr');
+    Assert.AreEqual(MSG_SCA097_FR, Fnd.DisplayMessage,
+      'franzoesische Oberflaeche zeigt die fr.po-Fassung');
+    Assert.AreEqual(MSG_SCA097_EN, Fnd.MissingVar,
+      'die Anzeige darf das Rohfeld nicht veraendern');
+  finally
+    Findings.Free;
+    SetLanguage(Old);
+  end;
+end;
+
+procedure TTestDestructorWithoutInherited.DisplayMessage_EnglishOrUnknownSentence_Unchanged;
+// Identity: englische Oberflaeche liefert den Satz unveraendert, und ein
+// Satz ohne msgid (Format-Meldung mit Bezeichner, eigene Regel) bleibt
+// auch bei deutscher Oberflaeche, wie er ist.
+const
+  UNKNOWN = 'FList is created but never freed (no msgid for this sentence)';
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Other    : TLeakFinding;
+  Old      : string;
+begin
+  Old := CurrentLanguage;
+  Other := TLeakFinding.Create;
+  Findings := TFindingHelper.FindingsOfFile(SRC_DTOR_NO_INHERITED);
+  try
+    Assert.IsTrue(FindSca097(Findings, Fnd), 'SCA097-Fund fehlt');
+    SetLanguage('en');
+    Assert.AreEqual(MSG_SCA097_EN, Fnd.DisplayMessage,
+      'englische Oberflaeche zeigt den Ausgangstext');
+    SetLanguage('');
+    Assert.AreEqual(MSG_SCA097_EN, Fnd.DisplayMessage,
+      'ohne Sprache (CLI-Fall) bleibt der Ausgangstext');
+    Other.MissingVar := UNKNOWN;
+    SetLanguage('de');
+    Assert.AreEqual(UNKNOWN, Other.DisplayMessage,
+      'ein Satz ohne msgid bleibt unveraendert');
+    // 'Errors' ist eine Oberflaechen-msgid (de 'Fehler') - als Bezeichner
+    // im Fund darf sie nicht uebersetzt werden. Rot ohne die Leerzeichen-
+    // Grenze in DisplayMessage.
+    Other.MissingVar := 'Errors';
+    Assert.AreEqual('Errors', Other.DisplayMessage, False,
+      'ein Bezeichner bleibt, auch wenn er einer msgid gleicht');
+  finally
+    Findings.Free;
+    Other.Free;
+    SetLanguage(Old);
+  end;
 end;
 
 initialization

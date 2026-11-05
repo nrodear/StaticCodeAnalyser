@@ -55,7 +55,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA049](SCA049.md) | Length(s) - N ohne Absicherung | Hint | Bug | `uLengthUnderflow.pas` |
 | [SCA050](SCA050.md) | Public-Member könnte unit-private sein | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA051](SCA051.md) | Public-Member könnte protected sein | Hint | Code Smell | `uVisibilityCheck.pas` |
-| [SCA052](SCA052.md) | Ungenutzter Public-Member (tote API) | Hint | Code Smell | `uVisibilityCheck.pas` |
+| [SCA052](SCA052.md) | Ungenutztes Public-Member (tote API) | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA053](SCA053.md) | Ungenutzte lokale Variable | Hint | Code Smell | `uUnusedLocal.pas` |
 | [SCA054](SCA054.md) | Ungenutzter Methodenparameter | Hint | Code Smell | `uUnusedParameter.pas` |
 | [SCA055](SCA055.md) | Tautologischer boolescher Ausdruck | Error | Bug | `uTautologicalExpr.pas` |
@@ -68,13 +68,13 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA062](SCA062.md) | Quelltextzeile zu lang | Hint | Code Smell | `uTooLongLine.pas` |
 | [SCA063](SCA063.md) | Leerraum am Zeilenende | Hint | Code Smell | `uTrailingWhitespace.pas` |
 | [SCA064](SCA064.md) | Pascal-Schlüsselwort nicht klein geschrieben | Hint | Code Smell | `uLowercaseKeyword.pas` |
-| [SCA065](SCA065.md) | NOSONAR-Unterdrückungsmarker | Hint | Code Smell | `uNoSonarMarker.pas` |
+| [SCA065](SCA065.md) | NOSONAR-Unterdrückungs-Marker | Hint | Code Smell | `uNoSonarMarker.pas` |
 | [SCA066](SCA066.md) | Leere Argumentliste | Hint | Code Smell | `uEmptyArgumentList.pas` |
 | [SCA067](SCA067.md) | Inline-Assembler-Block | Warning | Code Smell | `uInlineAssembly.pas` |
 | [SCA068](SCA068.md) | Trailing-Komma in der Argument-Liste | Hint | Code Smell | `uTrailingCommaArgList.pas` |
 | [SCA069](SCA069.md) | Ganzzahlliteral ohne Ziffergruppierung | Hint | Code Smell | `uDigitGrouping.pas` |
 | [SCA070](SCA070.md) | Auskommentierter Code | Hint | Code Smell | `uCommentedOutCode.pas` |
-| [SCA071](SCA071.md) | Unit-Section-Keyword nicht in Spalte 1 | Hint | Code Smell | `uUnitLevelKeywordIndent.pas` |
+| [SCA071](SCA071.md) | Schlüsselwort auf Unit-Ebene nicht in Spalte 1 | Hint | Code Smell | `uUnitLevelKeywordIndent.pas` |
 | [SCA072](SCA072.md) | Überflüssiger Boolean-Vergleich | Hint | Code Smell | `uRedundantBoolean.pas` |
 | [SCA073](SCA073.md) | Leere Interface-Deklaration | Hint | Code Smell | `uEmptyInterface.pas` |
 | [SCA074](SCA074.md) | Assert ohne Meldung | Hint | Code Smell | `uAssertMessage.pas` |
@@ -82,7 +82,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA076](SCA076.md) | Gruppierte Variablen-, Feld- oder Parameterdeklaration | Hint | Code Smell | `uGroupedDeclaration.pas` |
 | [SCA077](SCA077.md) | Leerer begin..end-Block | Hint | Code Smell | `uEmptyBlock.pas` |
 | [SCA078](SCA078.md) | Catch-all auf der Wurzelklasse Exception | Warning | Bug | `uExceptOnException.pas` |
-| [SCA079](SCA079.md) | Aufeinanderfolgende const/type/var-Sektion | Hint | Code Smell | `uConsecutiveSection.pas` |
+| [SCA079](SCA079.md) | Aufeinanderfolgende const/type/var-Abschnitte | Hint | Code Smell | `uConsecutiveSection.pas` |
 | [SCA080](SCA080.md) | Überflüssiges Exit/Continue vor end | Hint | Code Smell | `uRedundantJump.pas` |
 | [SCA081](SCA081.md) | Mehrere Klassendeklarationen in einer Datei | Hint | Code Smell | `uClassPerFile.pas` |
 | [SCA082](SCA082.md) | Doppeltes Semikolon | Hint | Code Smell | `uSuperfluousSemicolon.pas` |
@@ -90,7 +90,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA084](SCA084.md) | Überflüssige Assigned- plus nil-Prüfung | Hint | Code Smell | `uAssignedAndAssignedNil.pas` |
 | [SCA085](SCA085.md) | X.Free; X := nil; sollte FreeAndNil(X) sein | Hint | Code Smell | `uFreeAndNilHint.pas` |
 | [SCA086](SCA086.md) | out-Parameter vermeiden | Hint | Code Smell | `uAvoidOut.pas` |
-| [SCA087](SCA087.md) | Leere Sichtbarkeitssektion in der Klasse | Hint | Code Smell | `uEmptyVisibilitySection.pas` |
+| [SCA087](SCA087.md) | Leerer Sichtbarkeitsabschnitt in der Klasse | Hint | Code Smell | `uEmptyVisibilitySection.pas` |
 | [SCA088](SCA088.md) | Alte Unit-Initialisierung begin..end. | Hint | Code Smell | `uLegacyInitializationSection.pas` |
 | [SCA089](SCA089.md) | Public-Feld in der Klasse | Hint | Code Smell | `uPublicField.pas` |
 | [SCA090](SCA090.md) | Verschachtelter try-Block | Hint | Code Smell | `uNestedTry.pas` |
@@ -98,7 +98,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA092](SCA092.md) | Unit ohne Deklarationen | Hint | Code Smell | `uEmptyFile.pas` |
 | [SCA093](SCA093.md) | Mehrere inherited-Aufrufe in einer Methode | Warning | Bug | `uTwiceInheritedCalls.pas` |
 | [SCA094](SCA094.md) | Überflüssige doppelte Klammern | Hint | Code Smell | `uRedundantParentheses.pas` |
-| [SCA095](SCA095.md) | Wiederholte Sichtbarkeitssektion | Hint | Code Smell | `uConsecutiveVisibility.pas` |
+| [SCA095](SCA095.md) | Wiederholter Sichtbarkeitsabschnitt | Hint | Code Smell | `uConsecutiveVisibility.pas` |
 | [SCA096](SCA096.md) | Konstruktor ohne inherited-Aufruf | Warning | Bug | `uConstructorWithoutInherited.pas` |
 | [SCA097](SCA097.md) | Destruktor ohne inherited-Aufruf | Error | Bug | `uDestructorWithoutInherited.pas` |
 | [SCA098](SCA098.md) | Überflüssige bedingte Zuweisung | Hint | Code Smell | `uRedundantConditional.pas` |
@@ -112,7 +112,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA106](SCA106.md) | Methode nicht in PascalCase | Hint | Code Smell | `uMethodName.pas` |
 | [SCA107](SCA107.md) | Public-Member könnte strict private sein | Hint | Code Smell | `uVisibilityCheck.pas` |
 | [SCA108](SCA108.md) | TThread.Synchronize aus dem Destruktor | Warning | Bug | `uSynchronizeInDestructor.pas` |
-| [SCA109](SCA109.md) | Sperre ohne try/finally freigegeben | Error | Bug | `uLockWithoutTryFinally.pas` |
+| [SCA109](SCA109.md) | Sperre ohne Freigabe per try/finally genommen | Error | Bug | `uLockWithoutTryFinally.pas` |
 | [SCA110](SCA110.md) | String-Verkettung in der Schleife | Warning | Code Smell | `uPerfHotspots.pas` |
 | [SCA111](SCA111.md) | ParamByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
 | [SCA112](SCA112.md) | FieldByName(...) in der Schleife gerufen | Hint | Code Smell | `uPerfHotspots.pas` |
@@ -123,17 +123,17 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA117](SCA117.md) | Public-Member ohne Doku-Kommentar | Hint | Code Smell | `uPublicMemberWithoutDoc.pas` |
 | [SCA118](SCA118.md) | Exception-Klasse ohne `E`-Präfix | Hint | Code Smell | `uNamingExt.pas` |
 | [SCA119](SCA119.md) | Lokale Konstante nicht in UPPER_SNAKE_CASE | Hint | Code Smell | `uNamingExt.pas` |
-| [SCA120](SCA120.md) | Exception erzeugt, aber nie ausgelöst | Error | Bug | `uMissingRaise.pas` |
+| [SCA120](SCA120.md) | Ausnahme erzeugt, aber nie ausgelöst | Error | Bug | `uMissingRaise.pas` |
 | [SCA121](SCA121.md) | Funktion weist Result nie zu | Error | Bug | `uRoutineResultAssigned.pas` |
-| [SCA122](SCA122.md) | Erneutes raise der gebundenen Exception-Variablen | Warning | Bug | `uReRaiseException.pas` |
-| [SCA123](SCA123.md) | Typumwandlung direkt vor Free / Destroy | Hint | Code Smell | `uCastAndFree.pas` |
+| [SCA122](SCA122.md) | Erneutes raise der gebundenen Ausnahme-Variablen | Warning | Bug | `uReRaiseException.pas` |
+| [SCA123](SCA123.md) | Typecast direkt vor Free / Destroy | Hint | Code Smell | `uCastAndFree.pas` |
 | [SCA124](SCA124.md) | Konstruktor auf einer Instanz statt der Klasse aufgerufen | Warning | Bug | `uInstanceInvokedConstructor.pas` |
 | [SCA125](SCA125.md) | Override, dessen Rumpf nur aus `inherited;` besteht | Hint | Code Smell | `uInheritedMethodEmpty.pas` |
 | [SCA126](SCA126.md) | Assigned() statt `= nil` / `<> nil` verwenden | Hint | Code Smell | `uNilComparison.pas` |
 | [SCA127](SCA127.md) | Basisklasse `Exception` statt einer eigenen Ableitung ausgelöst | Warning | Code Smell | `uRaisingRawException.pas` |
 | [SCA128](SCA128.md) | Gebietsschema-abhängiger Formataufruf ohne TFormatSettings | Warning | Bug | `uDateFormatSettings.pas` |
-| [SCA129](SCA129.md) | String-Umwandlung in einen 8-Bit-Typ ohne explizite Kodierung | Warning | Bug | `uUnicodeToAnsiCast.pas` |
-| [SCA130](SCA130.md) | Char-Wert nach PChar umgewandelt - Codepoint wird zur Adresse | Error | Bug | `uCharToCharPointerCast.pas` |
+| [SCA129](SCA129.md) | Typecast von string in einen 8-Bit-String-Typ ohne explizite Kodierung | Warning | Bug | `uUnicodeToAnsiCast.pas` |
+| [SCA130](SCA130.md) | Typecast eines Char-Werts nach PChar - Codepoint wird zur Adresse | Error | Bug | `uCharToCharPointerCast.pas` |
 | [SCA131](SCA131.md) | IfThen() wertet beide Zweige aus - keine Kurzschlussauswertung | Warning | Bug | `uIfThenShortCircuit.pas` |
 | [SCA132](SCA132.md) | except on E: Exception fängt jeden Fehler | Warning | Code Smell | `uExceptionTooGeneral.pas` |
 | [SCA133](SCA133.md) | Blankes raise außerhalb eines except/on-Handlers | Error | Bug | `uRaiseOutsideExcept.pas` |
@@ -162,10 +162,10 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA156](SCA156.md) | GetMem / AllocMem ohne try/finally | Warning | Bug | `uGetMemWithoutFreeMem.pas` |
 | [SCA157](SCA157.md) | SetLength(arr, Length(arr) + N) in der Schleife | Warning | Code Smell | `uSetLengthAppendInLoop.pas` |
 | [SCA158](SCA158.md) | PChar(s) +/- Offset ohne Leerprüfung | Warning | Bug | `uPointerArithmeticOnString.pas` |
-| [SCA159](SCA159.md) | Typisierter Exception-Handler mit leerem Rumpf | Warning | Bug | `uEmptyOnHandler.pas` |
-| [SCA160](SCA160.md) | String-Cast aus Raw-Pointer | Warning | Bug | `uStringFromPointer.pas` |
-| [SCA161](SCA161.md) | Zeigersubtraktion über eine 32-Bit-Umwandlung | Warning | Bug | `uPointerSubtraction.pas` |
-| [SCA162](SCA162.md) | Schwaches oder veraltetes Kryptoverfahren verwendet | Warning | Vulnerability | `uInsecureCryptoAlgorithm.pas` |
+| [SCA159](SCA159.md) | Typisierter Ausnahme-Handler mit leerem Rumpf | Warning | Bug | `uEmptyOnHandler.pas` |
+| [SCA160](SCA160.md) | String-Typecast aus einem rohen Zeiger | Warning | Bug | `uStringFromPointer.pas` |
+| [SCA161](SCA161.md) | Zeigersubtraktion über einen 32-Bit-Typecast | Warning | Bug | `uPointerSubtraction.pas` |
+| [SCA162](SCA162.md) | Schwacher oder veralteter Kryptoalgorithmus verwendet | Warning | Vulnerability | `uInsecureCryptoAlgorithm.pas` |
 | [SCA163](SCA163.md) | Shell-API mit String-Verkettung im Argument gerufen | Error | Vulnerability | `uCommandInjection.pas` |
 | [SCA164](SCA164.md) | Routine auf oberster Ebene wird nie gerufen | Hint | Code Smell | `uUnusedRoutine.pas` |
 | [SCA165](SCA165.md) | Ungenutzter noinspection-Marker | Hint | Code Smell | `uSuppression.pas` |
@@ -174,7 +174,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA168](SCA168.md) | case-Anweisung ohne else-Zweig | Hint | Code Smell | `uDefaultCaseInCaseStatement.pas` |
 | [SCA169](SCA169.md) | Assert-Argument enthält einen Aufruf mit Seiteneffekt | Warning | Bug | `uAssertWithSideEffect.pas` |
 | [SCA170](SCA170.md) | string-Parameter ohne const | Hint | Code Smell | `uConstStringParameter.pas` |
-| [SCA171](SCA171.md) | Compilerschalter OFF ohne passendes ON in derselben Datei | Warning | Code Smell | `uCompilerDirectiveScope.pas` |
+| [SCA171](SCA171.md) | Compiler-Schalter OFF ohne passendes ON in derselben Datei | Warning | Code Smell | `uCompilerDirectiveScope.pas` |
 | [SCA172](SCA172.md) | Boolean-Property ohne Is-/Has-/Can-/Should-Präfix | Hint | Code Smell | `uBooleanPropertyNaming.pas` |
 | [SCA173](SCA173.md) | Variant in einer leistungskritischen Methode (enthält Schleife) | Hint | Code Smell | `uVariantTypeMisuse.pas` |
 | [SCA174](SCA174.md) | TList<T> mit T.Create gefüllt - Elemente lecken beim Freigeben | Warning | Bug | `uTObjectListWithoutOwnership.pas` |

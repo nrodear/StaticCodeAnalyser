@@ -687,11 +687,17 @@ begin
     // damit zwangslaeufig auch den Volltext-Check auf F.FileName.
     // KindSearchKeywords liefert lowercase String-Literale (keine
     // Allokation) - dort bleibt das originale Pos.
+    // Meldetext ZWEIMAL (2026-11-05): das englische Original (Suchbegriffe
+    // aus SARIF/CLI treffen weiter) und die angezeigte Fassung
+    // (DisplayMessage - feste Meldungen in der UI-Sprache; was der Nutzer
+    // sieht, muss das Suchfeld finden). Ohne Uebersetzung ist es derselbe
+    // String, der zweite Vergleich kostet dann nur einen Lauf mehr.
     if not ContainsLoweredNoAlloc(C.SearchLow, F.FileName)     and
        not ContainsLoweredNoAlloc(C.SearchLow, F.MethodName)   and
        not ContainsLoweredNoAlloc(C.SearchLow, F.LineNumber)   and
        not ContainsLoweredNoAlloc(C.SearchLow, F.TypeText)     and
        not ContainsLoweredNoAlloc(C.SearchLow, F.MissingVar)   and
+       not ContainsLoweredNoAlloc(C.SearchLow, F.DisplayMessage) and
        not ContainsLoweredNoAlloc(C.SearchLow, F.SeverityText) and
        (Pos(C.SearchLow, KindSearchKeywords(F.Kind)) = 0) then
       Exit(False);
@@ -770,7 +776,10 @@ begin
           2: Result := StrToIntDef(A.LineNumber, 0)
                      - StrToIntDef(B.LineNumber, 0);
           3: Result := CompareText(A.TypeText, B.TypeText);
-          4: Result := CompareText(A.MissingVar, B.MissingVar);
+          // Sortiert nach dem, was die Spalte ZEIGT (DisplayMessage,
+          // feste Meldungen in der UI-Sprache) - sonst stuende eine
+          // uebersetzte Zeile an ihrer englischen Position.
+          4: Result := CompareText(A.DisplayMessage, B.DisplayMessage);
           5: Result := SeverityRank(A.SeverityText)
                      - SeverityRank(B.SeverityText);
         else

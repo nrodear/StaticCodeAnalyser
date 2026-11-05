@@ -51,7 +51,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uDetectorUtils;
+  uDetectorUtils,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   // Whitelist pure-Funktion-Namen die KEINEN Side-Effect haben.
@@ -170,10 +171,10 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(N.Line);
-      F.MissingVar := 'Assert argument contains a function call - the call ' +
+      F.MissingVar := N_('Assert argument contains a function call - the call ' +
                       'has a side effect that disappears in Release builds ' +
                       '(Assert is compiled out without DCC_Assertions). ' +
-                      'Move the call outside Assert.';
+                      'Move the call outside Assert.');
       F.SetKind(fkAssertWithSideEffect);
       Results.Add(F);
     end;

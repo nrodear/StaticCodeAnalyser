@@ -37,7 +37,8 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache;
+  uFileTextCache,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 function IsIdent(C: Char): Boolean; inline;
 begin
@@ -125,9 +126,9 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNumber + 1);
-      F.MissingVar := 'Asymmetric if/else: then-branch uses `begin..end` ' +
+      F.MissingVar := N_('Asymmetric if/else: then-branch uses `begin..end` ' +
         'but else-branch uses a single statement. Make both branches ' +
-        'consistent (both with or both without `begin..end`).';
+        'consistent (both with or both without `begin..end`).');
       F.SetKind(fkIfElseBegin);
       Results.Add(F);
       Inc(p, 3);

@@ -1080,7 +1080,9 @@ begin
             end;
           1: Result := f.MethodName;
           2: Result := f.LineNumber;
-          3: Result := f.MissingVar;
+          // Anzeige: feste Meldungen in der UI-Sprache (DisplayMessage,
+          // Nico-Entscheid 2026-11-05); Exporte nehmen weiter MissingVar.
+          3: Result := f.DisplayMessage;
           4: Result := f.SeverityText;
         else
           Result := '';

@@ -50,7 +50,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   TESTFIXTURE_RE = '\[TestFixture\b';
@@ -196,9 +197,9 @@ begin
             F.FileName   := FileName;
             F.MethodName := '';
             F.LineNumber := IntToStr(FixtureLine);
-            F.MissingVar := '[TestFixture] class has no [Test] method ' +
+            F.MissingVar := N_('[TestFixture] class has no [Test] method ' +
                             '(zombie fixture). TestInsight sees the class ' +
-                            'but executes nothing.';
+                            'but executes nothing.');
             F.SetKind(fkAttributeTestFixtureWithoutTests);
             Results.Add(F);
           end;

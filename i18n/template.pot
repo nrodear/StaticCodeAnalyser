@@ -35,13 +35,13 @@ msgstr ""
 msgid "   ... %d more matches - refine the search"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2600
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2603
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:687
 msgid " - no changed .pas files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4317
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4904
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4321
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4908
 msgid " · "
 msgstr ""
 
@@ -144,11 +144,11 @@ msgstr ""
 msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2010
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2015
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2050
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -304,10 +304,10 @@ msgstr ""
 msgid "\"raise Exception\" without a constructor call (Create, CreateFmt ...) - there is no object whose class could change"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1952
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1958
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1977
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1967
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1955
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1961
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1980
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1971
 msgid "%d / %d findings"
 msgstr ""
 
@@ -341,8 +341,8 @@ msgstr ""
 msgid "%d classes named %s in this file"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1869
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1958
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1872
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1962
 msgid "%d context hashes"
 msgstr ""
 
@@ -384,8 +384,8 @@ msgstr ""
 msgid "%d headers of a free routine \"%s\" - overload or conditional twin?"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1859
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1948
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1862
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1952
 msgid "%d hidden by baseline"
 msgstr ""
 
@@ -788,7 +788,7 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1802
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1807
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -1036,15 +1036,15 @@ msgstr ""
 msgid "- own"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:1024
+#: SCA.SharedUI/sources/uFindingFilter.pas:1033
 msgid "--- Errors (A-Z) ---"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:1024
+#: SCA.SharedUI/sources/uFindingFilter.pas:1033
 msgid "--- Hints (A-Z) ---"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:1024
+#: SCA.SharedUI/sources/uFindingFilter.pas:1033
 msgid "--- Warnings (A-Z) ---"
 msgstr ""
 
@@ -1054,6 +1054,14 @@ msgstr ""
 
 #: reDelphix/source/uRdxSqlTemplate.pas:2162
 msgid "// bind parameters: "
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uBoolAlwaysTrue.pas:121
+msgid "0 <= Length(...) is always True (Length is never negative)"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uBoolAlwaysTrue.pas:123
+msgid "0 > Length(...) is always False (Length is never negative)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:402
@@ -1076,7 +1084,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2006
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1085,9 +1093,9 @@ msgstr ""
 msgid "A single method handles too many component events - split it up"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2397
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3285
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3016
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2400
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3288
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3020
 msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
@@ -1095,11 +1103,11 @@ msgstr ""
 msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1228
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1232
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:676
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:677
 msgid "Actions menu: Cancel, Export, Settings, Ignore"
 msgstr ""
 
@@ -1157,15 +1165,15 @@ msgstr ""
 msgid "After (solution)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:449
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:543
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:454
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:548
 msgid "After:"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:534
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:572
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1459
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1502
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:573
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1463
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1506
 msgid "All"
 msgstr ""
 
@@ -1174,11 +1182,11 @@ msgstr ""
 msgid "All files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3495
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3499
 msgid "All findings reset."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3424
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3428
 msgid "All markers cleared."
 msgstr ""
 
@@ -1190,7 +1198,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1996
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1203,31 +1211,31 @@ msgstr ""
 msgid "An analysis is already running."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3719
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3723
 msgid "Analyse Branch-Changes"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5676
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5680
 msgid "Analyse current file (silent)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1283
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1286
 msgid "Analyse directory"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1281
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1284
 msgid "Analyse group"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1280
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1283
 msgid "Analyse project"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2604
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2607
 msgid "Analysing %d changed file(s). %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1409
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1412
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:658
 msgid "Analysing: "
 msgstr ""
@@ -1240,13 +1248,13 @@ msgstr ""
 msgid "Analysis cancelled - no new findings loaded"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1362
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1365
 msgid "Analysis cancelled."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1369
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1438
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2633
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1372
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1441
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2636
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:599
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:618
 msgid "Analysis error: "
@@ -1260,7 +1268,7 @@ msgstr ""
 msgid "Anti-pattern"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2746
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2749
 msgid "Appearance"
 msgstr ""
 
@@ -1272,12 +1280,16 @@ msgstr ""
 msgid "Apply De Morgan to \"%s\""
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:328
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:333
 msgid "As of: "
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1145
 msgid "Assert already has a message"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uAssertWithSideEffect.pas:174
+msgid "Assert argument contains a function call - the call has a side effect that disappears in Release builds (Assert is compiled out without DCC_Assertions). Move the call outside Assert."
 msgstr ""
 
 #: reDelphix/source/uRdxSimpleFixes.pas:1148
@@ -1325,8 +1337,16 @@ msgstr ""
 msgid "Asymmetric begin/end in if/else - format consistently"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uIfElseBegin.pas:129
+msgid "Asymmetric if/else: then-branch uses `begin..end` but else-branch uses a single statement. Make both branches consistent (both with or both without `begin..end`)."
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:385
 msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uRaiseOutsideExcept.pas:124
+msgid "Bare `raise;` outside an except/on handler - Delphi (E2145) and FPC reject this form"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3624
@@ -1337,12 +1357,12 @@ msgstr ""
 msgid "Baseline (show only new findings)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4067
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4071
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:657
 msgid "Baseline JSON"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3081
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3084
 msgid "Baseline JSON (*.json)|*.json"
 msgstr ""
 
@@ -1350,15 +1370,15 @@ msgstr ""
 msgid "Baseline file:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2989
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3949
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2992
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3953
 msgid "Baseline is enabled but no baseline file was found."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3014
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3104
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3974
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4094
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3017
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3107
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3978
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4098
 msgid "Baseline written: %s (%d findings)"
 msgstr ""
 
@@ -1370,8 +1390,8 @@ msgstr ""
 msgid "Before (problem)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:442
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:538
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:447
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:543
 msgid "Before:"
 msgstr ""
 
@@ -1399,7 +1419,7 @@ msgstr ""
 msgid "Branch body without begin..end - add explicit block"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3378
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3382
 msgid "Branch changes: please provide a valid project path (for repo detection)."
 msgstr ""
 
@@ -1407,16 +1427,16 @@ msgstr ""
 msgid "Branch-Changes"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:488
+#: SCA.Engine/sources/Common/uMethodd12.pas:500
 #: SCA.SharedUI/sources/uRuleListBox.pas:140
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:573
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1503
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:574
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1507
 msgid "Bug"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:462
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3351
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1757
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3354
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1761
 msgid "Bugs"
 msgstr ""
 
@@ -1463,16 +1483,16 @@ msgid "Call inherited last in the destructor"
 msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:245
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:647
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:648
 msgid "Cancel"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2724
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3729
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2727
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3733
 msgid "Cancel Analysis"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3406
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3410
 msgid "Cancelling analysis..."
 msgstr ""
 
@@ -1486,7 +1506,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1794
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1799
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -1502,7 +1522,7 @@ msgstr ""
 msgid "Cause"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1300
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1303
 msgid "Checking all classes..."
 msgstr ""
 
@@ -1531,57 +1551,57 @@ msgid "Clean - minor smells only"
 msgstr ""
 
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:404
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1198
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1202
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3735
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3739
 msgid "Clear all markers"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3354
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1760
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3357
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1764
 msgid "Click: filter grid to Bug type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3347
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1752
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3350
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1756
 msgid "Click: filter grid to Cyclomatic"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3362
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1770
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3365
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1774
 msgid "Click: filter grid to Duplicate type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3327
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1724
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3330
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1728
 msgid "Click: filter grid to Errors"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3335
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1734
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3338
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1738
 msgid "Click: filter grid to Hints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3358
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1765
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3361
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1769
 msgid "Click: filter grid to Vulnerability type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3331
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1729
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3334
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1733
 msgid "Click: filter grid to Warnings"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3342
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1744
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3345
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1748
 msgid "Click: filter grid to read errors"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:514
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3371
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1778
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3374
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1782
 msgid "Click: reset filters (show everything)"
 msgstr ""
 
@@ -1589,8 +1609,8 @@ msgstr ""
 msgid "Clipboard copy failed: "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3281
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3308
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3284
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3311
 msgid "Clipboard is locked by another program."
 msgstr ""
 
@@ -1606,10 +1626,10 @@ msgstr ""
 msgid "Code (>>> marks the line that triggered the rule)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:492
+#: SCA.Engine/sources/Common/uMethodd12.pas:504
 #: SCA.SharedUI/sources/uRuleListBox.pas:144
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:577
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1507
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:578
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1511
 msgid "Code Duplication"
 msgstr ""
 
@@ -1617,18 +1637,18 @@ msgstr ""
 msgid "Code Quality"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:489
+#: SCA.Engine/sources/Common/uMethodd12.pas:501
 #: SCA.SharedUI/sources/uRuleListBox.pas:141
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:574
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1504
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:575
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1508
 msgid "Code Smell"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5761
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5765
 msgid "Code actions"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:498
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:503
 msgid "Code analysis: "
 msgstr ""
 
@@ -1640,8 +1660,8 @@ msgstr ""
 msgid "Code review request - Delphi static analysis finding"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3334
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1733
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3337
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1737
 msgid "Code smells / style. Refactoring candidates."
 msgstr ""
 
@@ -1665,11 +1685,11 @@ msgstr ""
 msgid "Component uses the IDE default name - rename for clarity"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3526
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3529
 msgid "Configure external editor..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2047
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2050
 msgid "Configured editor cannot be started: %s"
 msgstr ""
 
@@ -1677,26 +1697,34 @@ msgstr ""
 msgid "Constructor allocates fields and raises - the fields leak unless the destructor frees them"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uLeakInConstructor.pas:623
+msgid "Constructor allocates fields and raises without try/except - the fields leak unless the destructor frees them; no destructor of the class in this unit visibly frees all of them safely"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2823
 msgid "Constructor does not call inherited - parent state uninitialized"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uConstructorWithoutInherited.pas:300
+msgid "Constructor has no `inherited` call - parent class is not initialized. Add `inherited Create(...)` or `inherited;` (use // noinspection if intentional)."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3432
 msgid "Constructor invoked on instance - no allocation, fields re-initialised over live data"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3361
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1769
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3364
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1773
 msgid "Copied code (strings, blocks). Extract Method/Constant candidates."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3156
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1671
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3159
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1675
 msgid "Copy AI prompt"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3161
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1675
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3164
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1679
 msgid "Copy Jira issue"
 msgstr ""
 
@@ -1716,25 +1744,25 @@ msgstr ""
 msgid "Copy..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2142
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2145
 msgid "Could not open %s: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3820
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3903
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3547
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3574
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3823
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3906
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3551
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3578
 msgid "Could not open editor. File: "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3617
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3620
 msgid "Could not save the choice - analyser.ini is not writable: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3022
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3112
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3982
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4098
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3025
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3115
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3986
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4102
 msgid "Could not write baseline: %s"
 msgstr ""
 
@@ -1750,12 +1778,12 @@ msgstr ""
 msgid "CreateGUID returned no GUID"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3353
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1759
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3356
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1763
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3351
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3355
 msgid "Current file is not a Pascal file."
 msgstr ""
 
@@ -1767,8 +1795,8 @@ msgstr ""
 msgid "Cyclomatic"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3344
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1749
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3347
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1753
 msgid "Cyclomatic Complexity"
 msgstr ""
 
@@ -1788,7 +1816,7 @@ msgstr ""
 msgid "DFM Viewer"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4264
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4268
 msgid "DFM as text: %s  Line: %d"
 msgstr ""
 
@@ -1796,22 +1824,22 @@ msgstr ""
 msgid "DFM declares a component but the form class has no published field for it"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2822
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3515
 msgid "DFM findings: Delphi IDE"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2822
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3515
 msgid "DFM findings: built-in viewer"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2149
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2152
 msgid "DFM viewer: %s  Line: %d"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2822
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3515
 msgid "Dark"
 msgstr ""
 
@@ -1887,14 +1915,18 @@ msgstr ""
 msgid "Destructor does not call inherited - resource leak"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uDestructorWithoutInherited.pas:360
+msgid "Destructor has no `inherited` call - parent class cleanup is skipped, likely leak. Add `inherited Destroy;` or `inherited;` at the end of the body."
+msgstr ""
+
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:339
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:338
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2676
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:343
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2679
 msgid "Detail"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:545
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1467
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:546
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1471
 msgid "Detector Review (1 per detector, random)"
 msgstr ""
 
@@ -1918,15 +1950,15 @@ msgstr ""
 msgid "Detectors (analyser.ini [Detectors])"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3240
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3243
 msgid "Dialect set to %s - applies to the next analysis run."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3192
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3195
 msgid "Dialect: Delphi (default)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3202
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3205
 msgid "Dialect: FPC/Lazarus"
 msgstr ""
 
@@ -1942,7 +1974,7 @@ msgstr ""
 msgid "Division by zero: EDivByZero possible"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1953
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1956
 msgid "Done. No findings."
 msgstr ""
 
@@ -1955,8 +1987,8 @@ msgid "Doubled parentheses around a simple expression"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:464
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3360
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1768
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3363
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1772
 msgid "Duplicates"
 msgstr ""
 
@@ -1964,7 +1996,7 @@ msgstr ""
 msgid "EAbort is swallowed on purpose - \"raise;\" would show the abort"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:510
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:515
 #: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1728
 msgid "ERROR"
 msgstr ""
@@ -2019,23 +2051,23 @@ msgstr ""
 msgid "Enable silent analysis (editor right-click menu)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:466
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:350
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:406
+#: SCA.Engine/sources/Common/uMethodd12.pas:478
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:355
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:411
 #: SCA.SharedUI/sources/uRuleListBox.pas:129
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:56
 msgid "Error"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:378
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:383
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:458
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3325
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1722
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3328
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1726
 msgid "Errors"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:552
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1469
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:553
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1473
 msgid "Errors (all)"
 msgstr ""
 
@@ -2087,13 +2119,13 @@ msgstr ""
 msgid "Exit/Continue directly before end - redundant"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:628
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2729
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3754
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:629
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2732
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3758
 msgid "Export"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:629
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:630
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
 msgstr ""
 
@@ -2118,23 +2150,23 @@ msgid "FieldByName in loop - cache the TField reference outside"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:332
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:265
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2673
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1643
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:270
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2676
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1647
 msgid "File"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:864
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:865
 msgid "File %d"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:861
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:862
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:584
 msgid "File %d / %d (%d%%)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3341
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1743
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3344
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1747
 msgid "File could not be read / parsed. Check path/encoding."
 msgstr ""
 
@@ -2143,23 +2175,23 @@ msgid "File could not be read or parsed"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uDfmTextViewer.pas:42
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1394
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2236
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3357
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4229
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1397
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2239
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3361
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4233
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1777
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1782
 msgid "File not found: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2670
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1262
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2673
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1266
 msgid "Filter file / method / finding..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1969
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1973
 msgid "Filter: %s%s"
 msgstr ""
 
@@ -2167,23 +2199,23 @@ msgstr ""
 msgid "Finding"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2952
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5796
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2956
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5800
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:825
 msgid "Finding action failed: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2918
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3074
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2922
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3078
 msgid "Finding actions: provider failed - %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:388
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:393
 msgid "Findings in detail"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3352
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1758
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3355
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1762
 msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
 msgstr ""
 
@@ -2192,7 +2224,7 @@ msgid "Fix"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:352
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:274
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:279
 msgid "Fix hint"
 msgstr ""
 
@@ -2282,7 +2314,7 @@ msgstr ""
 msgid "Grouped variable/field declaration - one per line"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:512
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:517
 #: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1730
 msgid "HINT"
 msgstr ""
@@ -2304,8 +2336,8 @@ msgstr ""
 msgid "HTML report saved: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3346
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1751
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3349
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1755
 msgid "Hard to test - refactor into smaller methods."
 msgstr ""
 
@@ -2313,27 +2345,27 @@ msgstr ""
 msgid "Hardcoded path - load it from configuration instead"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:468
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:358
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:408
+#: SCA.Engine/sources/Common/uMethodd12.pas:480
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:363
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:413
 #: SCA.SharedUI/sources/uRuleListBox.pas:131
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:58
 msgid "Hint"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:533
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:538
 msgid "Hint: "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:381
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:386
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:460
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3333
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1732
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3336
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1736
 msgid "Hints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:554
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1471
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:555
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1475
 msgid "Hints (all)"
 msgstr ""
 
@@ -2345,7 +2377,7 @@ msgstr ""
 msgid "IDE Profile:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3347
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3351
 msgid "IDE editor service not available."
 msgstr ""
 
@@ -2366,6 +2398,10 @@ msgstr ""
 msgid "IfThen with two arguments - the default of the third depends on the overload (0 or an empty string)"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uIfThenShortCircuit.pas:268
+msgid "IfThen() always evaluates both branches - use if/then/else for side-effecting calls"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3583
 msgid "IfThen() evaluates both branches - no short-circuit semantics"
 msgstr ""
@@ -2379,16 +2415,16 @@ msgstr ""
 msgid "IfThen(..) is not the whole right-hand side of the assignment"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3907
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3910
 msgid "Ignore list opened: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3555
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3559
 msgid "Ignore list reloaded (%d patterns). Path: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2740
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3781
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2743
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3785
 msgid "Ignore list..."
 msgstr ""
 
@@ -2436,7 +2472,7 @@ msgstr ""
 msgid "Insert a new GUID"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3172
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3175
 msgid "Insert suppression marker"
 msgstr ""
 
@@ -2500,9 +2536,9 @@ msgstr ""
 msgid "Jira markup -> Clipboard"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2393
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3312
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2992
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2396
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3315
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2996
 msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
@@ -2514,11 +2550,11 @@ msgstr ""
 msgid "Kind (profile token)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:518
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:523
 msgid "L. "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2752
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2755
 msgid "Language"
 msgstr ""
 
@@ -2570,32 +2606,40 @@ msgstr ""
 msgid "Length()/.Count minus a constant can underflow on empty input"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uBoolAlwaysTrue.pas:103
+msgid "Length(...) < 0 is always False (Length is never negative)"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uBoolAlwaysTrue.pas:101
+msgid "Length(...) >= 0 is always True (Length is never negative)"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:3202
 msgid "Let the loop run %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2822
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3515
 msgid "Light"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2822
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3515
 msgid "Like Windows"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3330
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1728
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3333
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1732
 msgid "Likely bugs / risky patterns. Review before merge."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:333
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:338
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:419
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:343
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:424
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:458
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:950
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2675
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1645
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2678
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1649
 msgid "Line"
 msgstr ""
 
@@ -2639,8 +2683,8 @@ msgstr ""
 msgid "Long string concatenation - prefer Format() for readability"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2990
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3950
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2993
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3954
 msgid "Looked for:"
 msgstr ""
 
@@ -2676,17 +2720,17 @@ msgstr ""
 msgid "Merge with the previous %s section"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:271
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:276
 msgid "Message"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:335
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:268
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:338
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:273
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:343
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:949
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2674
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1644
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2677
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1648
 msgid "Method"
 msgstr ""
 
@@ -2718,8 +2762,8 @@ msgstr ""
 msgid "Method too long - splitting it improves readability and testability"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3345
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1750
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3348
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1754
 msgid "Methods with McCabe complexity > threshold (default 10)."
 msgstr ""
 
@@ -2727,11 +2771,11 @@ msgstr ""
 msgid "Min-Severity:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2661
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2664
 msgid "Min:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2518
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2521
 msgid "MinSeverity \"%s\" - active on next analysis run"
 msgstr ""
 
@@ -2739,7 +2783,7 @@ msgstr ""
 msgid "More than %d files found - scan cancelled."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:835
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:836
 msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
 msgstr ""
 
@@ -2807,11 +2851,11 @@ msgstr ""
 msgid "No actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1923
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1927
 msgid "No entries for this filter."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3349
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3353
 msgid "No file opened."
 msgstr ""
 
@@ -2819,14 +2863,14 @@ msgstr ""
 msgid "No findings - clean baseline"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2997
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3075
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3956
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4057
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3000
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3078
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3960
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4061
 msgid "No findings to write. Run an analysis first."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1951
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1954
 msgid "No findings."
 msgstr ""
 
@@ -2834,7 +2878,7 @@ msgstr ""
 msgid "No fix hint available."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1957
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1960
 msgid "No matches."
 msgstr ""
 
@@ -2846,8 +2890,8 @@ msgstr ""
 msgid "No rule catalogue found - profiles unavailable."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3004
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3964
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3007
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3968
 msgid "No scan target selected - pick a path or project first."
 msgstr ""
 
@@ -2876,11 +2920,11 @@ msgstr ""
 msgid "One line below (default)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3150
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3153
 msgid "Open finding"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2749
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2752
 msgid "Open findings with"
 msgstr ""
 
@@ -2888,16 +2932,16 @@ msgstr ""
 msgid "Open marker (TODO / FIXME / HACK / XXX) - resolve before release"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2134
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2137
 msgid "Opened in Delphi IDE: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2116
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2119
 msgid "Opened in external editor: %s  Line: %d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4245
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4267
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4249
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4271
 msgid "Opened: %s  Line: %d"
 msgstr ""
 
@@ -2921,7 +2965,7 @@ msgstr ""
 msgid "Parameter never read in method body"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1167
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1170
 msgid "Pascal file (*.pas)|*.pas|All files|*.*"
 msgstr ""
 
@@ -2941,8 +2985,8 @@ msgstr ""
 msgid "Password / token literal in source code"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2668
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1108
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2671
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1112
 msgid "Path:"
 msgstr ""
 
@@ -2954,8 +2998,8 @@ msgstr ""
 msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1142
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3291
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1145
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3295
 msgid "Please provide a valid project path."
 msgstr ""
 
@@ -2963,7 +3007,7 @@ msgstr ""
 msgid "Please respond with three sections"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6280
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6284
 #: StaticCodeAnalyserIDE/uIDEFindingsPropertiesForm.pas:1009
 msgid "Plugin Open Error"
 msgstr ""
@@ -2988,8 +3032,8 @@ msgstr ""
 msgid "Private method has no caller in the unit - dead code"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2495
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1883
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2498
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1887
 msgid "Profile \"%s\" - active on next analysis run"
 msgstr ""
 
@@ -3013,12 +3057,12 @@ msgstr ""
 msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2662
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1207
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2665
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1211
 msgid "Profile:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2578
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2581
 msgid "Project path is empty."
 msgstr ""
 
@@ -3059,21 +3103,21 @@ msgid "Put the debug output in {$IFDEF DEBUG}"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:474
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3368
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1775
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3371
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1779
 msgid "Quality"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3118
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3122
 msgid "Quick-Fix applied: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3119
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3129
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3123
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3133
 msgid "Quick-Fix not available: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3117
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3121
 msgid "Quick-Fix: the reDelphix package is not loaded"
 msgstr ""
 
@@ -3125,24 +3169,24 @@ msgstr ""
 msgid "Re-run analysis for current file"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:463
-#: SCA.Engine/sources/Common/uMethodd12.pas:493
+#: SCA.Engine/sources/Common/uMethodd12.pas:475
+#: SCA.Engine/sources/Common/uMethodd12.pas:505
 #: SCA.SharedUI/sources/uRuleListBox.pas:145
 msgid "Read Error"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:461
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3340
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1742
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3343
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1746
 msgid "Read errors"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1067
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1071
 msgid "Ready."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3326
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1723
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3329
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1727
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
@@ -3329,7 +3373,7 @@ msgstr ""
 msgid "Required field is bound only to invisible controls"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3744
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3748
 msgid "Reset all findings (clear panels + markers)"
 msgstr ""
 
@@ -3366,12 +3410,12 @@ msgid "Resume stands in a conditional compilation block - an older compiler may 
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:338
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:262
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:338
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:267
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:343
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:460
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:952
 #: SCA.SharedUI/sources/uRuleListBox.pas:215
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1647
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1651
 msgid "Rule"
 msgstr ""
 
@@ -3383,7 +3427,7 @@ msgstr ""
 msgid "Rule-Set (analyser.ini [Rules])"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1209
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1213
 msgid "Rule-set profile (ide-fast / default / strict). Takes effect at the next analysis run."
 msgstr ""
 
@@ -3395,12 +3439,12 @@ msgstr ""
 msgid "Rule-set profiles"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2741
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3789
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2744
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3793
 msgid "Rule-set profiles..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1228
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1231
 msgid "Rule-set: Profile=%s, MinSeverity=%s"
 msgstr ""
 
@@ -3464,7 +3508,7 @@ msgstr ""
 msgid "Scan this folder"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:845
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:846
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:572
 msgid "Scanning... %d found"
 msgstr ""
@@ -3477,29 +3521,29 @@ msgstr ""
 msgid "Search ID, kind, rule text, severity or type..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1971
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1975
 msgid "Search: "
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:463
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3356
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1763
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3359
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1767
 msgid "Security"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:491
+#: SCA.Engine/sources/Common/uMethodd12.pas:503
 #: SCA.SharedUI/sources/uRuleListBox.pas:143
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:576
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1506
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:577
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1510
 msgid "Security Hotspot"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3357
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1764
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3360
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1768
 msgid "Security holes (SQL injection, hardcoded secrets ...)."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1166
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1169
 msgid "Select Pascal file to analyse"
 msgstr ""
 
@@ -3528,39 +3572,39 @@ msgstr ""
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4039
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4043
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2484
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2509
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3039
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3730
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2487
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2512
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3042
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3733
 msgid "Settings could not be reloaded - nothing was saved."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2739
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3776
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2742
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3780
 msgid "Settings..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3823
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3578
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3826
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3582
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:336
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:338
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:343
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:461
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:953
 #: SCA.SharedUI/sources/uRuleListBox.pas:216
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2677
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1648
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2680
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1652
 msgid "Severity"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2659
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1147
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2662
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1151
 msgid "Severity:"
 msgstr ""
 
@@ -3581,13 +3625,13 @@ msgstr ""
 msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2731
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3766
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2734
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3770
 msgid "Show only new findings (baseline)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1973
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1963
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1976
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1967
 msgid "Showing first %d of %d findings - refine the filter to see more"
 msgstr ""
 
@@ -3665,12 +3709,12 @@ msgstr ""
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5677
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5681
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4698
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6145
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4702
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:6149
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -3680,7 +3724,7 @@ msgstr ""
 msgid "Static Code Analysis - File"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2658
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2661
 msgid "Static Code Analysis Tool for Delphi"
 msgstr ""
 
@@ -3700,11 +3744,11 @@ msgstr ""
 msgid "Subtle (muted colors)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:377
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:382
 msgid "Summary"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uFindingActionMenu.pas:559
+#: SCA.Engine/sources/Common/uFindingActionMenu.pas:561
 msgid "Suppress"
 msgstr ""
 
@@ -3716,36 +3760,36 @@ msgstr ""
 msgid "Suppress in this file"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2312
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3197
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2315
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3201
 msgid "Suppress inserted in %s: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2309
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3162
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3194
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2312
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3166
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3198
 msgid "Suppress inserted: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3163
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3167
 msgid "Suppress not available: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2292
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3174
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2295
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3178
 msgid "Suppress: cannot locate source line"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2298
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3182
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2301
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3186
 msgid "Suppress: cannot place the marker: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2317
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2320
 msgid "Suppress: could not write file: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3202
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3206
 msgid "Suppress: editor write failed (file not in IDE?)"
 msgstr ""
 
@@ -3813,11 +3857,11 @@ msgstr ""
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1987
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1992
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2060
 msgid "There is no profile \"%s\"."
 msgstr ""
 
@@ -3857,7 +3901,7 @@ msgstr ""
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:459
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:951
 #: SCA.SharedUI/sources/uRuleListBox.pas:217
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1646
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1650
 msgid "Type"
 msgstr ""
 
@@ -3865,8 +3909,8 @@ msgstr ""
 msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2660
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1164
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2663
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1168
 msgid "Type:"
 msgstr ""
 
@@ -3878,7 +3922,7 @@ msgstr ""
 msgid "UI language:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3745
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3748
 msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
 msgstr ""
 
@@ -3994,35 +4038,35 @@ msgstr ""
 msgid "Vulnerabilities: %d, Hotspots: %d, File errors: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:490
+#: SCA.Engine/sources/Common/uMethodd12.pas:502
 #: SCA.SharedUI/sources/uRuleListBox.pas:142
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:575
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1505
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:576
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1509
 msgid "Vulnerability"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:511
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:516
 #: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1729
 msgid "WARNING"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:467
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:354
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:407
+#: SCA.Engine/sources/Common/uMethodd12.pas:479
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:359
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:412
 #: SCA.SharedUI/sources/uRuleListBox.pas:130
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:57
 msgid "Warning"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:379
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:384
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:459
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3329
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1727
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3332
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1731
 msgid "Warnings"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:553
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1470
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:554
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1474
 msgid "Warnings (all)"
 msgstr ""
 
@@ -4038,8 +4082,8 @@ msgstr ""
 msgid "Weak/deprecated crypto algorithm in use"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3369
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1776
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3372
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1780
 msgid "Weighted quality score (lower = better)."
 msgstr ""
 
@@ -4047,8 +4091,8 @@ msgstr ""
 msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3370
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1777
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3373
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1781
 msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
 msgstr ""
 
@@ -4076,18 +4120,18 @@ msgstr ""
 msgid "Write Result instead of %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2991
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3951
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2994
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3955
 msgid "Write a new baseline with the current findings now?"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2993
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3080
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2996
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3083
 msgid "Write baseline"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2730
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3760
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2733
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3764
 msgid "Write baseline from current scan..."
 msgstr ""
 
@@ -4119,12 +4163,28 @@ msgstr ""
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2290
+#: SCA.Engine/sources/Detectors/uAttributeCategoryWithoutString.pas:73
+msgid "[Category] without category-name string - DUnitX requires [Category('Name')] with explicit name."
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uAttributeIgnoreWithoutReason.pas:96
+msgid "[Ignore] without reason message - add a string arg explaining WHY the test is skipped, e.g. [Ignore('TBD ticket #1234')]."
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uAttributeTestFixtureWithoutTests.pas:200
+msgid "[TestFixture] class has no [Test] method (zombie fixture). TestInsight sees the class but executes nothing."
+msgstr ""
+
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2294
 msgid "[watch] %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2356
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2360
 msgid "[watch] updated %s (%d findings)"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uWithMultipleTargets.pas:215
+msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"
 msgstr ""
 
 #: reDelphix/source/uRdxNoSonarFix.pas:193
@@ -4372,7 +4432,7 @@ msgstr ""
 msgid "analyse only files changed in current branch"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3243
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3246
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr ""
 
@@ -4511,6 +4571,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2718
 msgid "case statement has many branches - consider dispatch table"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uDefaultCaseInCaseStatement.pas:75
+msgid "case statement without else - unhandled values fall through silently. Add `else ;` (intentional no-op) or a default handler."
 msgstr ""
 
 #: reDelphix/source/uRdxPlacesRunner.pas:410
@@ -4962,9 +5026,9 @@ msgstr ""
 msgid "declaration: neither \";\" nor \":\" follows ()"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3842
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3852
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1533
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3845
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3855
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1537
 msgid "default"
 msgstr ""
 
@@ -5196,7 +5260,7 @@ msgstr ""
 msgid "goto weakens structured control flow"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:326
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:331
 msgid "h2. Code analysis: "
 msgstr ""
 
@@ -5223,7 +5287,7 @@ msgstr ""
 msgid "implementation: %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:522
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:527
 msgid "in"
 msgstr ""
 
@@ -5902,7 +5966,7 @@ msgstr ""
 msgid "no finding line"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFindingCopyText.pas:372
+#: SCA.Engine/sources/Output/uFindingCopyText.pas:377
 msgid "no findings"
 msgstr ""
 
@@ -6383,7 +6447,7 @@ msgstr ""
 msgid "only for ParamByName with a name the SQL does not have - a placeholder that is never set needs a value"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3031
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3035
 msgid "only from the menu or the light bulb"
 msgstr ""
 
@@ -9137,6 +9201,7 @@ msgstr ""
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uUnsortedUses.pas:88
 #: SCA.Engine/sources/Output/uFixHint.pas:3806
 msgid "uses clause is not in alphabetical order"
 msgstr ""
@@ -9275,12 +9340,12 @@ msgstr ""
 msgid "{$mode objfpc/fpc} in line %d, and from %s on the inherited method is not visible in this unit - if it is abstract, FPC does not compile the inherited; not provable, %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1276
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1185
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1279
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1189
 msgid "▶ Analyse"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2669
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1189
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2672
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1193
 msgid "📄 File"
 msgstr ""

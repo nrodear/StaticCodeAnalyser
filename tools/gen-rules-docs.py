@@ -211,13 +211,15 @@ def load_overlay(lang: str, rules_json: Path) -> dict[str, dict[str, str]]:
 
 
 def render_rule(rule: dict[str, Any], lang: str = "en",
-                depth: str = "../..") -> str:
+                depth: str = "../..", full_translated: bool = False) -> str:
     """Render a single rule as a Markdown page.
 
     lang steuert nur Ueberschriften und feste Saetze; die Regeltexte
     selbst kommen bereits uebersetzt herein (der Aufrufer legt das Overlay
     darueber). depth ist der relative Weg zur Repo-Wurzel - eine
     Sprachfassung liegt eine Ebene tiefer als die englische.
+    full_translated sagt, ob die fullDescription aus dem Overlay stammt -
+    nur dann entfaellt der Hinweis "nur auf Englisch".
     """
     L = LABELS.get(lang, LABELS["en"])
     parts: list[str] = []
@@ -273,10 +275,11 @@ def render_rule(rule: dict[str, Any], lang: str = "en",
     if rule.get("fullDescription"):
         parts.append(f"## {L['desc']}")
         parts.append("")
-        # Volltexte sind bewusst nicht uebersetzt (Umfang, Alterung).
+        # Fuehrt das Overlay keinen Langtext, steht hier der englische.
         # Das steht sichtbar da, statt den Leser raten zu lassen,
-        # warum mitten in seiner Sprache Englisch beginnt.
-        if L["untranslated"]:
+        # warum mitten in seiner Sprache Englisch beginnt. Mit
+        # uebersetztem Langtext (2026-11-05) waere der Satz falsch.
+        if L["untranslated"] and not full_translated:
             parts.append(L["untranslated"])
             parts.append("")
         parts.append(rule["fullDescription"])
@@ -441,12 +444,19 @@ def main() -> int:
         ziel.mkdir(parents=True, exist_ok=True)
 
         # Overlay ueber die kanonische Regel legen. Was das Overlay nicht
-        # fuehrt, bleibt englisch - der dokumentierte Rueckfall.
-        lokal = [{**r, **overlay.get(r["id"], {})} for r in rules]
+        # fuehrt, bleibt englisch - der dokumentierte Rueckfall. Ein
+        # LEERES Feld zaehlt wie ein fehlendes, wie im Delphi-Leser
+        # (TRuleCatalog.ApplyOverlayTo); sonst verschwaende z.B. mit
+        # "fullDescription": "" der ganze Beschreibungsabschnitt.
+        lokal = [{**r, **{k: v for k, v in overlay.get(r["id"], {}).items()
+                          if v}}
+                 for r in rules]
 
         for r in lokal:
             out_file = ziel / f"{r['id']}.md"
-            new_content = render_rule(r, lang, depth)
+            voll_uebersetzt = bool(
+                overlay.get(r["id"], {}).get("fullDescription"))
+            new_content = render_rule(r, lang, depth, voll_uebersetzt)
             if args.check:
                 existing = (out_file.read_text(encoding="utf-8-sig")
                             if out_file.exists() else "")

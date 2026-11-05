@@ -45,7 +45,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Generics.Defaults;
+  System.Generics.Defaults,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 class procedure TUnsortedUsesDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
@@ -84,7 +85,7 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(U.Line);
-      F.MissingVar := 'uses clause is not in alphabetical order';
+      F.MissingVar := N_('uses clause is not in alphabetical order');
       F.SetKind(fkUnsortedUses);
       Results.Add(F);
     end;

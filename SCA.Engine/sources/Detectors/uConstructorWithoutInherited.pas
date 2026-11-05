@@ -46,7 +46,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
+  uAstSpans,   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 function IsConstructor(MethodNode: TAstNode): Boolean; inline;
 var
@@ -296,9 +297,9 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := 'Constructor has no `inherited` call - parent ' +
+      F.MissingVar := N_('Constructor has no `inherited` call - parent ' +
         'class is not initialized. Add `inherited Create(...)` or ' +
-        '`inherited;` (use // noinspection if intentional).';
+        '`inherited;` (use // noinspection if intentional).');
       F.SetKind(fkConstructorWithoutInherited);
       Results.Add(F);
     end;

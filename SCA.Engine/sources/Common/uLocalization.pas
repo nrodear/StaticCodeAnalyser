@@ -59,6 +59,18 @@ function _(const S: string): string; overload;
 // Format-Variante: erst uebersetzen, dann formatieren.
 function _(const FormatStr: string; const Args: array of const): string; overload;
 
+// Markiert einen Text als msgid, OHNE ihn zu uebersetzen: liefert S
+// unveraendert zurueck (gettext-Konvention N_ = "noop").
+// WOZU (Nico-Entscheid 2026-11-05): feste Fundmeldungen der Detektoren
+// bleiben im Fund englisch - TLeakFinding.MissingVar geht in den
+// Baseline-Fingerprint und in den SARIF-Hash, eine Uebersetzung beim
+// Entstehen braeche beide je nach Oberflaechensprache. Uebersetzt wird
+// erst bei der ANZEIGE (TLeakFinding.DisplayMessage). Damit
+// tools/i18n_extract.py den Satz trotzdem als msgid in template.pot
+// sammelt, steht er am Entstehungsort in N_('...') - der Extraktor liest
+// N_(...) wie _(...), der Wert bleibt byte-gleich.
+function N_(const S: string): string;
+
 // Setzt die aktive Sprache, z.B. 'de', 'fr', 'en', '' (Default = Englisch).
 // Beliebige Kuerzel sind erlaubt; ohne passende .po bleibt es bei Englisch.
 // Regionale Varianten werden auf die Basissprache verkuerzt ('de-DE' -> 'de').
@@ -559,6 +571,11 @@ end;
 function _(const FormatStr: string; const Args: array of const): string;
 begin
   Result := Format(_(FormatStr), Args);
+end;
+
+function N_(const S: string): string;
+begin
+  Result := S;                         // nur Markierung fuer den Extraktor
 end;
 
 // Die Tabelle zu einem (noch nicht normalisierten) Kuerzel aus dem Cache,

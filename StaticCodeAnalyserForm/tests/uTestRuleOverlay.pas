@@ -11,11 +11,16 @@
 //      geht in partialFingerprints, ein uebersetzter Text liesse GitHub
 //      Code Scanning jeden Alert als neu melden.
 //   3. Das Overlay faellt FELDWEISE zurueck: Name/ShortDescription
-//      uebersetzt, FullDescription (im Overlay nicht gepflegt) englisch.
+//      uebersetzt, FullDescription aus dem Overlay, wenn es sie fuehrt,
+//      sonst englisch.
 //   4. Unbekannte, leere und feindliche Sprachcodes liefern kanonisch.
 //   5. Das Overlay greift auch UEBER dem Fallback-Katalog (kaputte JSON)
 //      - die Rule-IDs entstehen dort unabhaengig von der JSON, deshalb
 //      braucht der Code keinen Sonderfall, aber der Test haelt es fest.
+//   6. (2026-11-05) Die einkompilierte Tabelle uRuleCatalogOverlay.inc
+//      liefert fuer JEDE Regel und beide Sprachen dieselben Texte wie
+//      die losen Overlays - Langtext eingeschlossen. Prueft die Kette
+//      Overlay-JSON -> gen-rules-inc.py -> .inc -> EmbeddedOverlay.
 
 interface
 
@@ -32,13 +37,59 @@ type
     [Test] procedure OverlayFallsBackPerField;
     [Test] procedure OverlayUnknownLanguageIsEnglish;
     [Test] procedure OverlayAppliesOnFallbackCatalog;
+    [Test] procedure EmbeddedOverlayMatchesJsonOverlay;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Generics.Collections,
+  System.SysUtils, System.IOUtils, System.Generics.Collections, System.JSON,
   uSCAConsts, uMethodd12, uRuleCatalog, uLocalization, uExportSARIF;
+
+function OverlayJsonLaden(const APfad: string): TJSONObject;
+// Ein Overlay als JSON-Baum, nil ohne Datei oder bei kaputtem Inhalt.
+// Der Test liest die Datei SELBST statt ueber TRuleCatalog: er soll den
+// Katalog-Leser pruefen, nicht ihm glauben.
+var
+  V : TJSONValue;
+begin
+  Result := nil;
+  if not TFile.Exists(APfad) then Exit;
+  V := TJSONObject.ParseJSONValue(TFile.ReadAllText(APfad, TEncoding.UTF8));
+  if V is TJSONObject then
+    Result := TJSONObject(V)
+  else
+    V.Free;
+end;
+
+function OverlayFeld(ARoot: TJSONObject; const AID, AFeld: string): string;
+// Ein Textfeld einer Regel aus dem Overlay-Baum; '' ohne Regel oder Feld.
+var
+  V : TJSONValue;
+begin
+  Result := '';
+  if not Assigned(ARoot) then Exit;
+  V := ARoot.FindValue('rules.' + AID + '.' + AFeld);
+  if V is TJSONString then
+    Result := TJSONString(V).Value;
+end;
+
+function Erwartet(const AOverlay, AKanonisch: string): string;
+// Der Vertrag des Overlays: ein leeres oder fehlendes Feld heisst Englisch.
+begin
+  if AOverlay <> '' then
+    Result := AOverlay
+  else
+    Result := AKanonisch;
+end;
+
+function OhneCR(const S: string): string;
+// Der Generator schreibt Zeilenumbrueche als #13#10 (wie die Beispiele in
+// uRuleCatalogData.inc), der JSON-Leser liefert #10. Fuer den Vergleich
+// zaehlt der Text, nicht die Umbruchform.
+begin
+  Result := S.Replace(#13#10, #10);
+end;
 
 procedure TTestRuleOverlay.Setup;
 begin
@@ -101,11 +152,15 @@ end;
 
 procedure TTestRuleOverlay.OverlayFallsBackPerField;
 // Zusage 3: uebersetzt ist, was das Overlay fuehrt (Name,
-// ShortDescription); FullDescription bleibt englisch - der dokumentierte
-// feldweise Rueckfall, kein Fehler.
+// ShortDescription); FullDescription kommt aus dem Overlay, wenn es sie
+// fuehrt, sonst englisch - der dokumentierte feldweise Rueckfall.
+// Bis 2026-11-05 verlangte der Test FullDescription = Englisch fest;
+// mit den uebersetzten Langtexten waere er rot geworden, obwohl der
+// Leser richtig arbeitet. Die Erwartung liest jetzt die Overlay-Datei.
 var
-  Loc : TRuleMeta;
-  Can : TRuleMeta;
+  Loc    : TRuleMeta;
+  Can    : TRuleMeta;
+  Wurzel : TJSONObject;
 begin
   Can := TRuleCatalog.GetRuleCanonical(fkMemoryLeak);
   Loc := TRuleCatalog.GetRule(fkMemoryLeak, 'de');
@@ -113,8 +168,17 @@ begin
     'SCA001-Name blieb englisch - Overlay nicht gefunden?');
   Assert.AreNotEqual(Can.ShortDescription, Loc.ShortDescription,
     'SCA001-Kurzbeschreibung blieb englisch');
-  Assert.AreEqual(Can.FullDescription, Loc.FullDescription,
-    'FullDescription muss englisch bleiben (im Overlay nicht gepflegt)');
+  Wurzel := OverlayJsonLaden(ExtractFilePath(TRuleCatalog.ResolvedJsonPath)
+    + 'sca-rules.de.json');
+  try
+    Assert.AreEqual(
+      OhneCR(Erwartet(OverlayFeld(Wurzel, Can.ID, 'fullDescription'),
+        Can.FullDescription)),
+      OhneCR(Loc.FullDescription),
+      'FullDescription: Overlay-Text, wenn vorhanden, sonst englisch');
+  finally
+    Wurzel.Free;
+  end;
   Assert.AreEqual(Can.ID, Loc.ID, 'die Rule-ID ist ein Token');
 end;
 
@@ -171,6 +235,99 @@ begin
     TRuleCatalog.JsonFilePath := OldPath;
     TRuleCatalog.Reload;
     TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestRuleOverlay.EmbeddedOverlayMatchesJsonOverlay;
+// Zusage 6, Vertrag der Generator-Kette: die einkompilierte Tabelle
+// (uRuleCatalogOverlay.inc) traegt fuer jede Regel und beide Sprachen
+// dieselben Texte wie rules/sca-rules.<lang>.json - Name,
+// ShortDescription UND FullDescription.
+//
+// Rueckfall erzwingen: Katalog-KOPIE in einem Temp-Ordner, daneben
+// KAPUTTE sca-rules.de/fr.json. FindOverlayFile sucht zuerst neben dem
+// gefundenen Katalog, findet die kaputte Datei, LoadOverlayFile liefert
+// nil - also greift EmbeddedOverlay. Der englische Unterbau ist in
+// beiden Faellen derselbe Katalog, die Erwartung ergibt sich je Feld
+// aus der Overlay-Datei (leer/fehlend = englisch).
+//
+// Ehrlich: solange die Overlays keinen Langtext fuehren, ist der
+// Langtext-Teil leer = leer und der Test gruen auch OHNE den
+// FullDesc-Ausbau. Rot wird er, sobald ein Overlay fullDescription
+// traegt und die .inc sie nicht mitfuehrt (Generator ohne FullDesc,
+// MapAus mit '' oder .inc nicht regeneriert).
+const
+  SPRACHEN : array[0..1] of string = ('de', 'fr');
+var
+  OldPath : string;
+  Src     : string;
+  TmpDir  : string;
+  Kopie   : string;
+  Wurzeln : array[0..1] of TJSONObject;
+  i       : Integer;
+  K       : TFindingKind;
+  Can     : TRuleMeta;
+  Emb     : TRuleMeta;
+  Wo      : string;
+begin
+  OldPath := TRuleCatalog.JsonFilePath;
+  Src := TRuleCatalog.ResolvedJsonPath;
+  Assert.IsNotEmpty(Src,
+    'rules\sca-rules.json nicht gefunden - Vertrag nicht pruefbar');
+  TmpDir := TPath.Combine(TPath.GetTempPath,
+    'sca_emb_overlay_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', ''));
+  Kopie := TPath.Combine(TmpDir, 'sca-rules.json');
+  Wurzeln[0] := nil;
+  Wurzeln[1] := nil;
+  try
+    for i := 0 to High(SPRACHEN) do
+    begin
+      Wurzeln[i] := OverlayJsonLaden(ExtractFilePath(Src)
+        + 'sca-rules.' + SPRACHEN[i] + '.json');
+      Assert.IsNotNull(Wurzeln[i],
+        'Overlay ' + SPRACHEN[i] + ' neben dem Katalog fehlt oder ist kaputt');
+    end;
+
+    TDirectory.CreateDirectory(TmpDir);
+    TFile.Copy(Src, Kopie);
+    for i := 0 to High(SPRACHEN) do
+      TFile.WriteAllText(TPath.Combine(TmpDir,
+        'sca-rules.' + SPRACHEN[i] + '.json'), '{ kaputt, erzwingt die .inc');
+    TRuleCatalog.JsonFilePath := Kopie;
+    TRuleCatalog.Reload;
+    Assert.AreEqual(Kopie, TRuleCatalog.ResolvedJsonPath,
+      'Katalog-Kopie nicht geladen - der Rueckfall waere nicht erzwungen');
+
+    for i := 0 to High(SPRACHEN) do
+      for K := Low(TFindingKind) to High(TFindingKind) do
+      begin
+        Can := TRuleCatalog.GetRuleCanonical(K);
+        Emb := TRuleCatalog.GetRule(K, SPRACHEN[i]);
+        Wo  := SPRACHEN[i] + '/' + Can.ID + ': ';
+        Assert.AreEqual(
+          OhneCR(Erwartet(OverlayFeld(Wurzeln[i], Can.ID, 'name'), Can.Name)),
+          OhneCR(Emb.Name), Wo + 'Name weicht von der Overlay-Datei ab');
+        Assert.AreEqual(
+          OhneCR(Erwartet(OverlayFeld(Wurzeln[i], Can.ID, 'shortDescription'),
+            Can.ShortDescription)),
+          OhneCR(Emb.ShortDescription),
+          Wo + 'ShortDescription weicht von der Overlay-Datei ab');
+        Assert.AreEqual(
+          OhneCR(Erwartet(OverlayFeld(Wurzeln[i], Can.ID, 'fullDescription'),
+            Can.FullDescription)),
+          OhneCR(Emb.FullDescription),
+          Wo + 'FullDescription weicht von der Overlay-Datei ab - '
+          + 'uRuleCatalogOverlay.inc ohne Langtext oder nicht regeneriert '
+          + '(python tools/gen-rules-inc.py)');
+      end;
+  finally
+    TRuleCatalog.JsonFilePath := OldPath;
+    TRuleCatalog.Reload;
+    for i := 0 to High(Wurzeln) do
+      Wurzeln[i].Free;
+    if TDirectory.Exists(TmpDir) then
+      TDirectory.Delete(TmpDir, True);
   end;
 end;
 

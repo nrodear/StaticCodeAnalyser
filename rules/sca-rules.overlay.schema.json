@@ -40,7 +40,7 @@
             "maxLength": 200
           },
           "fullDescription": {
-            "description": "Full prose. Deliberately NOT translated in the first pass: it is roughly ten times the volume of name+shortDescription and ages fastest. English fallback is the documented behaviour.",
+            "description": "Full prose. Optional like every field: absent means the English text is shown. tools/gen-rules-inc.py also compiles it into uRuleCatalogOverlay.inc, so the translation reaches builds that cannot find this file.",
             "type": "string",
             "minLength": 1
           }

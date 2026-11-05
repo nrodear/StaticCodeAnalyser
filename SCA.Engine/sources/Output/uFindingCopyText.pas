@@ -12,7 +12,12 @@
 // fertigen Modus. Die Consumer (uMainForm, uIDEAnalyserForm) lesen den
 // ini-Wert und mappen ihn ueber FindingCopyModeFromInt. Beschriftungen
 // laufen ueber uLocalization (englische msgids, Uebersetzung via .po);
-// die Befund-INHALTE (Regel-ID, Meldetext, Pfade) bleiben wie geliefert.
+// die Befund-INHALTE (Regel-ID, Pfade) bleiben wie geliefert. Der
+// Meldetext kommt seit 2026-11-05 ueber TLeakFinding.DisplayMessage
+// (Nico-Entscheid): diese Texte sind fuer MENSCHEN (Jira, Zwischenablage)
+// und stehen neben uebersetzten Beschriftungen und Fix-Hints - feste
+// Meldungen erscheinen deshalb in der UI-Sprache, alle anderen wie
+// geliefert. Kein Fingerprint liest diese Texte.
 
 interface
 
@@ -252,9 +257,9 @@ begin
     SB.Append(KindName(F.Kind));
     SB.Append(' - ').Append(ExtractFileName(F.FileName));
     SB.Append(':').Append(LineSpanText(F));
-    if OneLine(F.MissingVar) <> '' then
+    if OneLine(F.DisplayMessage) <> '' then
     begin
-      SB.Append(' - ').Append(Crop(F.MissingVar, MAX_HEAD_LEN));
+      SB.Append(' - ').Append(Crop(F.DisplayMessage, MAX_HEAD_LEN));
     end;
     SB.AppendLine;
     SB.AppendLine;
@@ -269,7 +274,7 @@ begin
       .Append(FactOrDash(F.MethodName))
       .AppendLine;
     SB.Append('* ').Append(_('Message')).Append(': ')
-      .Append(FactOrDash(F.MissingVar))
+      .Append(FactOrDash(F.DisplayMessage))
       .AppendLine;
     SB.Append('* ').Append(_('Fix hint')).Append(': ')
       .Append(FactOrDash(AHint.Description))
@@ -362,7 +367,7 @@ begin
         SB.Append(' | ');     SB.Append(JiraEscape(F.LineNumber));
         SB.Append(' | ');     SB.Append(JiraEscape(F.MethodName));
         SB.Append(' | ');     SB.Append(JiraEscape(KindName(F.Kind)));
-        SB.Append(' | ');     SB.Append(JiraEscape(F.MissingVar));
+        SB.Append(' | ');     SB.Append(JiraEscape(F.DisplayMessage));
         SB.AppendLine(' |');
         Inc(rowCount);
       end;
@@ -427,7 +432,7 @@ begin
         SB.Append(' - ');
         SB.Append(JiraEscape(KindName(F.Kind)));
         SB.Append(' - ');
-        SB.AppendLine(JiraEscape(F.MissingVar));
+        SB.AppendLine(JiraEscape(F.DisplayMessage));
 
         Hint := TFixHintResolver.FixHint(F);
         if Hint.Description <> '' then
@@ -525,7 +530,7 @@ begin
         SB.Append('  ');
         SB.Append(KindName(F.Kind));
         SB.Append(': ');
-        SB.AppendLine(F.MissingVar);
+        SB.AppendLine(F.DisplayMessage);
 
         Hint := TFixHintResolver.FixHint(F);
         if Hint.Description <> '' then

@@ -33,7 +33,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   // `[Ignore]` oder `[Ignore()]` (optional leere Klammern). Ein echtes
@@ -92,9 +93,9 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := '[Ignore] without reason message - add a string ' +
+      F.MissingVar := N_('[Ignore] without reason message - add a string ' +
                       'arg explaining WHY the test is skipped, e.g. ' +
-                      '[Ignore(''TBD ticket #1234'')].';
+                      '[Ignore(''TBD ticket #1234'')].');
       F.SetKind(fkAttributeIgnoreWithoutReason);
       Results.Add(F);
     end;
