@@ -10,7 +10,7 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [v0.9.19] - TBD - Fixes at the finding, Lazarus in the scan, and a baseline that counts
+## [v0.9.19] - 2026-11-05 - Fixes at the finding, Lazarus in the scan, and a baseline that counts
 
 ### Upgrade notes
 
