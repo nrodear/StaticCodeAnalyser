@@ -37,6 +37,11 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   et la CLI, la GUI et l'IDE marquent les mêmes résultats comme nouveaux.
   **Rupture pour les portes CI :** les résultats qu'une entrée masquait
   apparaissent comme nouveaux.
+- **Un profil mal saisi arrête l'analyse.** Un nom inconnu dans
+  `--profile` ou `[Rules] Profile` termine la CLI avec le code 99 au lieu
+  d'exécuter en silence toutes les règles. Un profil personnalisé doit
+  exister dans le `profiles.json` du compte qui exécute la CLI, y compris
+  sur un agent de build.
 - **Sept nouvelles règles, 205 au total :** noms `ParamByName` erronés,
   adresses IP en dur dans le code et les fichiers `.ini`, `not` et `and`
   avant une comparaison, boucle `for` qui dépasse d'un indice, et nom de
@@ -44,8 +49,17 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   signaler Error.
 - **Des règles qui lisent plus et affirment moins.** SCA001 reçoit le
   niveau `proven-leak` comme seul Error, SCA007 s'exécute réellement dans
-  la CLI, SCA125 signale pour la première fois, et les formulaires avec
-  `PopupMenu = dm.Pop` ne sont plus ignorés.
+  la CLI, SCA125 signale pour la première fois, SCA005 et SCA059
+  vérifient chaque appel à `Format`, et les formulaires avec
+  `PopupMenu = dm.Pop` ne sont plus ignorés. SCA108 passe à Warning, et
+  SCA108 et SCA136 n'affirment plus davantage que ce que le code peut
+  provoquer.
+- **L'allemand et le français partout.** Les descriptions longues des
+  205 règles existent en allemand et en français, l'interface a été
+  relue dans les deux langues, les messages de résultat fixes s'affichent
+  dans la langue de l'interface (SARIF, rapports et références gardent le
+  texte anglais), et les rapports HTML sont libellés dans la langue dans
+  laquelle ils ont été générés.
 - **Des rapports fiables.** Les URI SARIF sont des URI valides, les champs
   CSV sont protégés contre l'injection de formules, les fichiers de
   rapport sont écrits de façon atomique, et `--diff`/`--branch` écrivent
@@ -58,9 +72,14 @@ Notes de version complètes : [docs/releases/v0.9.19.md](docs/releases/v0.9.19.m
   ligne du résultat (un `analyser.ini` existant issu du modèle indique
   encore `OverlayPosition=sameline` ; remplacez-le par `below`), et le menu
   d'actions est deux fois moins large, sans rien perdre.
+- **CLI et règles personnalisées :** un `--path` relatif fonctionne avec
+  `--branch`/`--diff`, une sortie redirigée depuis cmd.exe arrive à
+  destination, et les règles personnalisées affichent leur `fix-hint`.
 - **La documentation suit le code.** Le README et les manuels sont
   débarrassés des chemins morts, des raccourcis disparus et des chiffres
-  dépassés.
+  dépassés, et les exemples des pages de règles signalent ce qu'ils
+  montrent. Le hook pre-commit et l'exemple MSBuild laissaient passer les
+  analyses en échec : remplacez les versions copiées.
 
 ---
 

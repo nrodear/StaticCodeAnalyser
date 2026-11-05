@@ -32,14 +32,25 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
 - **Baselines count.** Each entry covers at most one finding, and the
   CLI, GUI and IDE mark the same findings as new. **Breaking for CI
   gates:** findings that one entry used to hide show up as new.
+- **A mistyped profile stops the run.** An unknown name in `--profile`
+  or `[Rules] Profile` ends the CLI with exit 99 instead of silently
+  running all rules. A custom profile must exist in the `profiles.json`
+  of the account that runs the CLI, also on a build agent.
 - **Seven new rules, 205 in total:** wrong `ParamByName` names, hardcoded
   IP addresses in code and `.ini` files, `not` and `and` before a
   comparison, a `for` loop one index too far, and a function name used
   in place of `Result`. SCA202, SCA203 and SCA205 can report Error.
 - **Rules read more and claim less.** SCA001 gets the `proven-leak` level
   as its only Error, SCA007 really runs in the CLI, SCA125 reports for
-  the first time, and forms with `PopupMenu = dm.Pop` are no longer
-  skipped.
+  the first time, SCA005 and SCA059 check every `Format` call, and forms
+  with `PopupMenu = dm.Pop` are no longer skipped. SCA108 drops to
+  Warning, and SCA108 and SCA136 no longer claim more than the code can
+  cause.
+- **German and French throughout.** The long descriptions of all 205
+  rules exist in German and French, the user interface was reviewed in
+  both languages, fixed finding messages appear in the UI language (SARIF,
+  reports and baselines keep the English text), and HTML reports are
+  labelled in the language they were generated in.
 - **Reports you can rely on.** SARIF URIs are valid URIs, CSV fields are
   safe against formula injection, report files are written atomically,
   and `--diff`/`--branch` always write the requested report.
@@ -51,8 +62,14 @@ Full release notes: [docs/releases/v0.9.19.md](docs/releases/v0.9.19.md)
   line (an existing `analyser.ini` from the template still says
   `OverlayPosition=sameline`; change it to `below`), and the action menu
   is half as wide with nothing lost.
+- **CLI and custom rules:** a relative `--path` works with
+  `--branch`/`--diff`, output redirected from cmd.exe reaches its
+  target, and custom rules show their `fix-hint`.
 - **Documentation follows the code.** README and manuals lost dead paths,
-  keyboard shortcuts that no longer exist and outdated numbers.
+  keyboard shortcuts that no longer exist and outdated numbers, and the
+  examples on the rule pages report what they show. The pre-commit hook
+  and the MSBuild example let failing scans through: replace copied
+  versions.
 
 ---
 

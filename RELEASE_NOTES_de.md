@@ -34,6 +34,11 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
 - **Baselines zählen.** Jeder Eintrag deckt höchstens einen Fund, und
   CLI, GUI und IDE markieren dieselben Funde als neu. **Breaking für
   CI-Gates:** Funde, die ein Eintrag bisher versteckte, erscheinen als neu.
+- **Ein vertipptes Profil stoppt den Lauf.** Ein unbekannter Name in
+  `--profile` oder `[Rules] Profile` beendet die CLI mit Exit 99, statt
+  still alle Regeln zu fahren. Ein eigenes Profil muss in der
+  `profiles.json` des Kontos stehen, unter dem die CLI läuft, auch auf
+  einem Build-Agent.
 - **Sieben neue Regeln, 205 insgesamt:** falsche `ParamByName`-Namen,
   feste IP-Adressen in Code und `.ini`-Dateien, `not` und `and` vor einem
   Vergleich, eine `for`-Schleife einen Index zu weit und ein
@@ -41,8 +46,16 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   Error melden.
 - **Regeln lesen mehr und behaupten weniger.** SCA001 bekommt die Stufe
   `proven-leak` als einzigen Error, SCA007 läuft in der CLI wirklich,
-  SCA125 meldet zum ersten Mal, und Formulare mit `PopupMenu = dm.Pop`
-  werden nicht mehr übersprungen.
+  SCA125 meldet zum ersten Mal, SCA005 und SCA059 prüfen jeden
+  `Format`-Aufruf, und Formulare mit `PopupMenu = dm.Pop` werden nicht
+  mehr übersprungen. SCA108 sinkt auf Warning, und SCA108 und SCA136
+  behaupten nicht mehr, als der Code verursachen kann.
+- **Durchgehend Deutsch und Französisch.** Die Langbeschreibungen aller
+  205 Regeln gibt es auf Deutsch und Französisch, die Oberfläche wurde in
+  beiden Sprachen geprüft, feste Fundmeldungen erscheinen in der Sprache
+  der Oberfläche (SARIF, Berichte und Baselines behalten den englischen
+  Text), und HTML-Berichte sind in der Sprache beschriftet, in der sie
+  erzeugt wurden.
 - **Berichte, auf die man sich verlassen kann.** SARIF-URIs sind gültige
   URIs, CSV-Felder sind gegen Formel-Injektion geschützt, Berichtsdateien
   werden atomar geschrieben, und `--diff`/`--branch` schreiben den
@@ -55,8 +68,14 @@ Vollständige Release-Notes: [docs/releases/v0.9.19_de.md](docs/releases/v0.9.19
   Fundzeile (eine bestehende `analyser.ini` aus der Vorlage sagt weiter
   `OverlayPosition=sameline`; dort auf `below` ändern), und das Aktionsmenü
   ist halb so breit, ohne dass etwas verloren geht.
+- **CLI und eigene Regeln:** Ein relativer `--path` funktioniert mit
+  `--branch`/`--diff`, aus cmd.exe umgeleitete Ausgabe kommt an, und
+  eigene Regeln zeigen ihren `fix-hint`.
 - **Die Doku folgt dem Code.** README und Handbücher sind von toten
-  Pfaden, entfallenen Tastenkürzeln und überholten Zahlen befreit.
+  Pfaden, entfallenen Tastenkürzeln und überholten Zahlen befreit, und
+  die Beispiele auf den Regelseiten melden, was sie zeigen. Pre-Commit-Hook
+  und MSBuild-Beispiel ließen fehlschlagende Scans durch: kopierte
+  Fassungen ersetzen.
 
 ---
 
