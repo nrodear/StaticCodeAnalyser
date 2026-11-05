@@ -48,7 +48,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils, uRegExMatches;
+  uFileTextCache, uDetectorUtils, uRegExMatches,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
@@ -97,9 +98,9 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNo);
       if AlwaysTrue then
-        F.MissingVar := 'Length(...) >= 0 is always True (Length is never negative)'
+        F.MissingVar := N_('Length(...) >= 0 is always True (Length is never negative)')
       else
-        F.MissingVar := 'Length(...) < 0 is always False (Length is never negative)';
+        F.MissingVar := N_('Length(...) < 0 is always False (Length is never negative)');
       F.SetKind(fkBoolAlwaysTrue);
       Results.Add(F);
     end;
@@ -117,9 +118,9 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNo);
       if AlwaysTrue then
-        F.MissingVar := '0 <= Length(...) is always True (Length is never negative)'
+        F.MissingVar := N_('0 <= Length(...) is always True (Length is never negative)')
       else
-        F.MissingVar := '0 > Length(...) is always False (Length is never negative)';
+        F.MissingVar := N_('0 > Length(...) is always False (Length is never negative)');
       F.SetKind(fkBoolAlwaysTrue);
       Results.Add(F);
     end;

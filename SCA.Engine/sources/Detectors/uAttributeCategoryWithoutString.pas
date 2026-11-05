@@ -31,7 +31,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   CATEGORY_NO_ARG_RE = '\[Category\s*\]';
@@ -69,8 +70,8 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(i + 1);
-      F.MissingVar := '[Category] without category-name string - DUnitX ' +
-                      'requires [Category(''Name'')] with explicit name.';
+      F.MissingVar := N_('[Category] without category-name string - DUnitX ' +
+                      'requires [Category(''Name'')] with explicit name.');
       F.SetKind(fkAttributeCategoryWithoutString);
       Results.Add(F);
     end;

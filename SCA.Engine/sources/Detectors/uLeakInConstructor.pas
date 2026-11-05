@@ -103,7 +103,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils, uDetectorUtils;
+  System.StrUtils, uDetectorUtils,
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 const
   // [G2] Kuratierte RTL-Value-Type-Records mit 'Create'-Factory. Spiegelt die
@@ -619,10 +620,10 @@ begin
         // wenn der die Felder nicht freigibt [G1]. Geht in Baseline-
         // Fingerprint und SARIF-Line-Hash ein - Aenderung = neue Identitaet.
         F.MissingVar :=
-          'Constructor allocates fields and raises without try/except - ' +
+          N_('Constructor allocates fields and raises without try/except - ' +
           'the fields leak unless the destructor frees them; no ' +
           'destructor of the class in this unit visibly frees all of ' +
-          'them safely';
+          'them safely');
         F.SetKind(fkLeakInConstructor);
         Results.Add(F);
       end;

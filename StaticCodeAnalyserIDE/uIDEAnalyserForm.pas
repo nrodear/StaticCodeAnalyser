@@ -657,7 +657,8 @@ function UiElementEnabledFromIni(const AName: string): TUiElementEnabledFunc;
 
 // Konsistente Titel-Konstruktion fuer alle UI-Stellen (Hover-Overlay,
 // Plugin-Frame-Grid, Properties-Panel, IDE-Messages-View): kombiniert
-// F.MissingVar (oft nur ein Identifier wie "test") mit der Rule-
+// F.MissingVar (oft nur ein Identifier wie "test"; feste Saetze in der
+// UI-Sprache, F.DisplayMessage) mit der Rule-
 // Beschreibung zu einer selbst-erklaerenden Zeile. Heuristik:
 //   * MissingVar leer -> nur DescText
 //   * MissingVar ist ausgeschriebener Satz (mit Whitespace) -> unveraendert
@@ -920,7 +921,10 @@ begin
       ADescText := KindName(F.Kind);
   end;
 
-  TitleS := Trim(F.MissingVar);
+  // Anzeige-Publikum -> DisplayMessage: feste Meldungen in der UI-Sprache
+  // (Nico-Entscheid 2026-11-05), sonst unveraendert. Das Rohfeld bleibt
+  // englisch, weil es in Baseline-Fingerprint und SARIF-Hash steht.
+  TitleS := Trim(F.DisplayMessage);
   if TitleS = '' then
   begin
     Result := ADescText;

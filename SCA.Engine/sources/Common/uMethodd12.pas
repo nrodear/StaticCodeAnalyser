@@ -199,6 +199,18 @@ type
     //
     // 'Message' = die Befund-/Detailmeldung (Legacy-Feld 'MissingVar').
     property Message: string read MissingVar write MissingVar;
+    // Die Meldung in der aktiven UI-Sprache - NUR fuer die ANZEIGE
+    // (Nico-Entscheid 2026-11-05). MissingVar selbst bleibt englisch: es
+    // geht in den Baseline-Fingerprint (Datei|Kind|Methode|Detail) und in
+    // den SARIF-Hash (RuleID|Pfad|Zeile|Msg); eine Uebersetzung dort
+    // machte jeden Fund je nach Oberflaechensprache zu einem anderen.
+    // Uebersetzt werden die festen Meldungen, die ein Detektor mit
+    // N_('...') als msgid markiert; jede andere Meldung (Format-Meldung
+    // mit Bezeichnern, eigene Regel, unbekannter Satz) und jede Sprache
+    // ohne Eintrag liefert MissingVar unveraendert (Identity von _()).
+    // NICHT verwenden fuer SARIF, JSON, CSV, Sonar, Baseline, LSP, CLI
+    // und Fingerprints - die sprechen das englische Original.
+    function DisplayMessage: string;
     // 'LineInt' = LineNumber als Integer (das Legacy-Feld ist ein String).
     function LineInt: Integer;
     // Letzte Zeile des Bereichs, GEKLEMMT: nie kleiner als die Startzeile.
@@ -494,6 +506,15 @@ begin
   else
     Result := '';
   end;
+end;
+
+function TLeakFinding.DisplayMessage: string;
+// Ein Dictionary-Lookup wie bei TypeText (Hot-Path-tauglich: die Grids
+// rufen das je sichtbarer Zelle). Der Schluessel ist der GANZE Meldetext -
+// eine Format-Meldung mit Bezeichner trifft keine msgid und bleibt
+// englisch, bis die Format-Meldungen eigene msgids bekommen.
+begin
+  Result := _(MissingVar);
 end;
 
 function TLeakFinding.LineInt: Integer;

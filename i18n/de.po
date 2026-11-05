@@ -7045,3 +7045,56 @@ msgstr "[Beobachtung] %s"
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2356
 msgid "[watch] updated %s (%d findings)"
 msgstr "[Beobachtung] %s aktualisiert (%d Funde)"
+
+# --- 2026-11-05: feste Fundmeldungen der Detektoren (N_ im Detektor) ---
+# Uebersetzt NUR in der Anzeige (TLeakFinding.DisplayMessage); im Fund,
+# in SARIF, Baseline und Exporten bleibt der englische Satz stehen.
+# 'uses clause is not in alphabetical order' steht schon oben (uFixHint).
+
+msgid "Assert argument contains a function call - the call has a side effect that disappears in Release builds (Assert is compiled out without DCC_Assertions). Move the call outside Assert."
+msgstr "Assert-Argument enthält einen Funktionsaufruf - dessen Seiteneffekt entfällt in Release-Builds (ohne DCC_Assertions wird Assert nicht kompiliert). Den Aufruf aus dem Assert herausziehen."
+
+msgid "[Category] without category-name string - DUnitX requires [Category('Name')] with explicit name."
+msgstr "[Category] ohne Kategorienamen - DUnitX verlangt [Category('Name')] mit ausdrücklichem Namen."
+
+msgid "[Ignore] without reason message - add a string arg explaining WHY the test is skipped, e.g. [Ignore('TBD ticket #1234')]."
+msgstr "[Ignore] ohne Begründung - ein String-Argument ergänzen, das erklärt, WARUM der Test übersprungen wird, z. B. [Ignore('TBD ticket #1234')]."
+
+msgid "[TestFixture] class has no [Test] method (zombie fixture). TestInsight sees the class but executes nothing."
+msgstr "[TestFixture]-Klasse ohne [Test]-Methode (Zombie-Fixture). TestInsight sieht die Klasse, führt aber nichts aus."
+
+msgid "Length(...) >= 0 is always True (Length is never negative)"
+msgstr "Length(...) >= 0 ist immer True (Length ist nie negativ)"
+
+msgid "Length(...) < 0 is always False (Length is never negative)"
+msgstr "Length(...) < 0 ist immer False (Length ist nie negativ)"
+
+msgid "0 <= Length(...) is always True (Length is never negative)"
+msgstr "0 <= Length(...) ist immer True (Length ist nie negativ)"
+
+msgid "0 > Length(...) is always False (Length is never negative)"
+msgstr "0 > Length(...) ist immer False (Length ist nie negativ)"
+
+msgid "Constructor has no `inherited` call - parent class is not initialized. Add `inherited Create(...)` or `inherited;` (use // noinspection if intentional)."
+msgstr "Konstruktor ohne `inherited`-Aufruf - die Elternklasse wird nicht initialisiert. `inherited Create(...)` oder `inherited;` ergänzen (bei Absicht // noinspection verwenden)."
+
+msgid "case statement without else - unhandled values fall through silently. Add `else ;` (intentional no-op) or a default handler."
+msgstr "case-Anweisung ohne else - nicht behandelte Werte fallen still durch. `else ;` (bewusst leer) oder einen Standardzweig ergänzen."
+
+msgid "Destructor has no `inherited` call - parent class cleanup is skipped, likely leak. Add `inherited Destroy;` or `inherited;` at the end of the body."
+msgstr "Destruktor ohne `inherited`-Aufruf - das Aufräumen der Elternklasse entfällt, vermutlich ein Leck. `inherited Destroy;` oder `inherited;` am Ende des Rumpfs ergänzen."
+
+msgid "Asymmetric if/else: then-branch uses `begin..end` but else-branch uses a single statement. Make both branches consistent (both with or both without `begin..end`)."
+msgstr "Asymmetrisches if/else: der then-Zweig nutzt `begin..end`, der else-Zweig eine einzelne Anweisung. Beide Zweige einheitlich gestalten (beide mit oder beide ohne `begin..end`)."
+
+msgid "IfThen() always evaluates both branches - use if/then/else for side-effecting calls"
+msgstr "IfThen() wertet immer beide Zweige aus - für Aufrufe mit Seiteneffekten if/then/else verwenden"
+
+msgid "Constructor allocates fields and raises without try/except - the fields leak unless the destructor frees them; no destructor of the class in this unit visibly frees all of them safely"
+msgstr "Konstruktor legt Felder an und löst ohne try/except eine Ausnahme aus - die Felder lecken, wenn der Destruktor sie nicht freigibt; kein Destruktor der Klasse in dieser Unit gibt sichtbar alle sicher frei"
+
+msgid "Bare `raise;` outside an except/on handler - Delphi (E2145) and FPC reject this form"
+msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"
+
+msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"
+msgstr "`with A, B do` löst Bezeichner von rechts nach links auf - die Verdeckung ändert sich still, sobald einer der Typen ein Member ergänzt"

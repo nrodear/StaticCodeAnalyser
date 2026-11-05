@@ -389,7 +389,9 @@ var
 begin
   Result := AAction.Hint;
   if not Assigned(AFinding) then Exit;
-  Msg := Trim(AFinding.MissingVar);
+  // Menue-Hint = Anzeige: feste Meldungen in der UI-Sprache
+  // (DisplayMessage, Nico-Entscheid 2026-11-05).
+  Msg := Trim(AFinding.DisplayMessage);
   if Msg = '' then Exit;
   Msg := AFinding.ResolvedRuleId + ': ' + Msg;
   if Result = '' then
@@ -409,7 +411,7 @@ begin
   if AFinding.RuleID = '' then
     Title := TRuleCatalog.GetRule(AFinding.Kind, CurrentLanguage).Name;
   if Trim(Title) = '' then
-    Title := AFinding.MissingVar;
+    Title := AFinding.DisplayMessage;   // Anzeige, s. FindingActionHint
   Result := Format('%s  %s', [AFinding.ResolvedRuleId,
     ShortMenuText(Title, MENU_HEADER_TITLE_CHARS)]);
 end;

@@ -15,7 +15,11 @@ Erfasst werden beide Overloads:
 inklusive mehrzeiliger Pascal-Konkatenation:
     _('erste Haelfte ' +
       'zweite Haelfte')
-sowie eingebetteter Zeichencodes (#13#10, #$0D). Dynamische Argumente
+sowie eingebetteter Zeichencodes (#13#10, #$0D). Ebenso die Markierung
+    N_('Text')
+(uLocalization.N_ gibt den Text unveraendert zurueck - feste
+Fundmeldungen bleiben im Fund englisch und werden erst bei der Anzeige
+uebersetzt, siehe TLeakFinding.DisplayMessage). Dynamische Argumente
 (Variablen, Funktionsaufrufe) werden bewusst uebersprungen - sie sind zur
 Compile-Zeit kein uebersetzbarer Text.
 
@@ -453,15 +457,35 @@ def scan_source(text: str, consts: dict[str, str] | None = None,
             _, i = sc.read_string(i)
             continue
 
+        # Markierung N_('...') (gettext-Konvention "noop", 2026-11-05):
+        # uLocalization.N_ liefert den Text UNVERAENDERT zurueck. Damit
+        # stehen feste Fundmeldungen der Detektoren englisch im Fund
+        # (Baseline-Fingerprint, SARIF-Hash) und werden erst bei der
+        # Anzeige uebersetzt (TLeakFinding.DisplayMessage) - als msgid
+        # muessen sie trotzdem in template.pot. Ein eigenstaendiges 'N_'
+        # vor '(' wird deshalb wie '_' gelesen; Deklaration und
+        # Implementierung von N_ selbst ('function N_(') sind kein Aufruf.
+        marker = False
+        if ch == "N" and i + 1 < n and s[i + 1] == "_":
+            prev = s[i - 1] if i > 0 else ""
+            if not (_is_ident_char(prev) or prev == "."):
+                if _preceded_by_routine_keyword(s, i):
+                    i += 2
+                    continue
+                marker = True
+                i += 1
+                ch = "_"
+
         # Aufruf-Kandidat: '_' als eigenstaendiger Bezeichner, gefolgt von '('.
         if ch == "_":
             prev = s[i - 1] if i > 0 else ""
-            if _preceded_by_routine_keyword(s, i):
+            if not marker and _preceded_by_routine_keyword(s, i):
                 # Die Deklaration/Implementierung von _ selbst
                 # (uLocalization.pas) ist kein Aufruf.
                 i += 1
                 continue
-            if not (_is_ident_char(prev) or prev == ".") or _is_own_qualified(s, i):
+            if (marker or not (_is_ident_char(prev) or prev == ".")
+                    or _is_own_qualified(s, i)):
                 j = sc.skip_trivia(i + 1)
                 if j < n and s[j] == "(":
                     call_line = sc.line_of(i)

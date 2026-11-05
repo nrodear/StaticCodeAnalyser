@@ -43,6 +43,9 @@ type
 
 implementation
 
+uses
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+
 class procedure TDefaultCaseInCaseStatementDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
@@ -69,9 +72,9 @@ begin
       F.FileName   := FileName;
       F.MethodName := '';
       F.LineNumber := IntToStr(C.Line);
-      F.MissingVar := 'case statement without else - unhandled values fall ' +
+      F.MissingVar := N_('case statement without else - unhandled values fall ' +
                       'through silently. Add `else ;` (intentional no-op) or ' +
-                      'a default handler.';
+                      'a default handler.');
       F.SetKind(fkDefaultCaseInCaseStatement);
       Results.Add(F);
     end;

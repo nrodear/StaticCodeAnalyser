@@ -75,7 +75,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
+  uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 function IsWordCh(C: Char): Boolean; inline;
 begin
@@ -211,7 +212,7 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNo);
       F.MissingVar :=
-        '`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member';
+        N_('`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member');
       F.SetKind(fkWithMultipleTargets);
       Results.Add(F);
     end;

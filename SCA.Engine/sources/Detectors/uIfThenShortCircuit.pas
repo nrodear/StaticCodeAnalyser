@@ -76,7 +76,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+  uAstSpans,   // CollectWithMethodScope (Voll-Review 2026-09-12)
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 // True wenn S rueckwaerts ab AEnd auf das Namens-Segment ASegLow endet
 // und davor eine Segmentgrenze steht - 'math' trifft 'Math.' und
@@ -264,7 +265,7 @@ begin
   F.MethodName := MethName;
   F.LineNumber := IntToStr(Node.Line);
   F.MissingVar :=
-    'IfThen() always evaluates both branches - use if/then/else for side-effecting calls';
+    N_('IfThen() always evaluates both branches - use if/then/else for side-effecting calls');
   F.SetKind(fkIfThenShortCircuit);
   Results.Add(F);
 end;

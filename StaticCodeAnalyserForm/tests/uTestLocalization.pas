@@ -40,6 +40,9 @@ type
     [Test] procedure TranslateTo_EnglishEmptyUnknown_IsIdentity;
     [Test] procedure TranslateTo_RegionalCode_UsesBaseLanguage;
     [Test] procedure TranslateTo_Format_TranslatesThenFormats;
+    // N_ (2026-11-05): markiert eine msgid fuer den Extraktor, uebersetzt
+    // aber NIE - feste Fundmeldungen bleiben im Fund englisch.
+    [Test] procedure NoopMarker_ReturnsTextUnchanged_EvenWithGermanUi;
   end;
 
 implementation
@@ -347,6 +350,24 @@ procedure TTestLocalization.TranslateTo_Format_TranslatesThenFormats;
 begin
   Assert.AreEqual('3 Funde', TranslateTo('de', '%d findings', [3]));
   Assert.AreEqual('3 findings', TranslateTo('xx', '%d findings', [3]));
+end;
+
+procedure TTestLocalization.NoopMarker_ReturnsTextUnchanged_EvenWithGermanUi;
+// 'Errors' hat in de.po eine Uebersetzung ('Fehler') - _() liefert sie,
+// N_() darf es nicht: sonst stuende in MissingVar je nach Oberflaeche ein
+// anderer Text, und Baseline-Fingerprint und SARIF-Hash wanderten mit.
+var
+  Old : string;
+begin
+  Old := CurrentLanguage;
+  try
+    SetLanguage('de');
+    Assert.AreEqual('Fehler', _('Errors'), 'Gegenprobe: _() uebersetzt');
+    Assert.AreEqual('Errors', N_('Errors'),
+      'N_ muss den Text unveraendert liefern');
+  finally
+    SetLanguage(Old);
+  end;
 end;
 
 initialization

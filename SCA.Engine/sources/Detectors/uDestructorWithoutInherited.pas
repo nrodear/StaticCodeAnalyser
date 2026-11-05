@@ -43,7 +43,8 @@ uses
                      // (uAnalyzeContext steht bereits im interface-uses)
   uFileTextCache,
   uAstSpans,   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
-  uDetectorUtils;  // OwnerTypeNameLower (nested-type, Posten 296)
+  uDetectorUtils,  // OwnerTypeNameLower (nested-type, Posten 296)
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 function ErbtDirektVonTObject(const AMethodName: string;
   AContext: TAnalyzeContext): Boolean;
@@ -356,9 +357,9 @@ begin
       F.FileName   := FileName;
       F.MethodName := M.Name;
       F.LineNumber := IntToStr(M.Line);
-      F.MissingVar := 'Destructor has no `inherited` call - parent ' +
+      F.MissingVar := N_('Destructor has no `inherited` call - parent ' +
         'class cleanup is skipped, likely leak. Add `inherited Destroy;` ' +
-        'or `inherited;` at the end of the body.';
+        'or `inherited;` at the end of the body.');
       if ErbtDirektVonTObject(M.Name, AContext) then
         // TObject.Destroy ist leer - Konventionsbruch, kein Leck.
         F.SetKind(fkDestructorWithoutInherited, fcMedium)

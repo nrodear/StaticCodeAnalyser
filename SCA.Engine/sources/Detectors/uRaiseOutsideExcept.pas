@@ -72,7 +72,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Generics.Defaults;  // Perf Charge R3: einmal geholter Default-Comparer
+  System.Generics.Defaults,  // Perf Charge R3: einmal geholter Default-Comparer
+  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
 
 type
   // Perf Charge R3: frueher lokal in WalkForBareRaise - der Comparer unten
@@ -120,7 +121,7 @@ begin
         F.MethodName := MethodName;
         F.LineNumber := IntToStr(Cur.Nd.Line);
         F.MissingVar :=
-          'Bare `raise;` outside an except/on handler - Delphi (E2145) and FPC reject this form';
+          N_('Bare `raise;` outside an except/on handler - Delphi (E2145) and FPC reject this form');
         F.SetKind(fkRaiseOutsideExcept);
         Results.Add(F);
       end;
