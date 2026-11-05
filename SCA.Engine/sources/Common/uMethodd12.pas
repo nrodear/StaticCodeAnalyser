@@ -513,7 +513,13 @@ function TLeakFinding.DisplayMessage: string;
 // rufen das je sichtbarer Zelle). Der Schluessel ist der GANZE Meldetext -
 // eine Format-Meldung mit Bezeichner trifft keine msgid und bleibt
 // englisch, bis die Format-Meldungen eigene msgids bekommen.
+// Nur SAETZE (mit Leerzeichen): viele Detektoren liefern als MissingVar
+// einen blossen Bezeichner ('Count', 'Errors', 'Name'), und fuer solche
+// Woerter gibt es Oberflaechen-msgids - ohne die Grenze zeigte die
+// deutsche Oberflaeche 'Fehler' statt der Variablen 'Errors'.
 begin
+  if Pos(' ', MissingVar) = 0 then
+    Exit(MissingVar);
   Result := _(MissingVar);
 end;
 

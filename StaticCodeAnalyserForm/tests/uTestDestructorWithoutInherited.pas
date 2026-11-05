@@ -736,6 +736,12 @@ begin
     SetLanguage('de');
     Assert.AreEqual(UNKNOWN, Other.DisplayMessage,
       'ein Satz ohne msgid bleibt unveraendert');
+    // 'Errors' ist eine Oberflaechen-msgid (de 'Fehler') - als Bezeichner
+    // im Fund darf sie nicht uebersetzt werden. Rot ohne die Leerzeichen-
+    // Grenze in DisplayMessage.
+    Other.MissingVar := 'Errors';
+    Assert.AreEqual('Errors', Other.DisplayMessage, False,
+      'ein Bezeichner bleibt, auch wenn er einer msgid gleicht');
   finally
     Findings.Free;
     Other.Free;
