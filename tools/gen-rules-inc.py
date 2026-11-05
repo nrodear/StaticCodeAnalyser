@@ -36,6 +36,16 @@ DST = os.path.join(ROOT, 'SCA.Engine', 'sources', 'Common', 'uRuleCatalogData.in
 DST_OV = os.path.join(ROOT, 'SCA.Engine', 'sources', 'Common', 'uRuleCatalogOverlay.inc')
 OVERLAY_LANGS = ('de', 'fr')
 Q = "'"
+# Hoechstzahl Zeichen je Pascal-Literal. Die klassische Delphi-Grenze
+# sind 255 Elemente je Literal (E2056), dazu 1023 Zeichen je Quellzeile -
+# wir verlassen uns nicht darauf, dass eine neuere Compilerversion das
+# lockert. Bis 2026-11 brauchte es keine Stueckelung: das laengste
+# Literal (Beispielcode, an jedem Zeilenumbruch und Nicht-ASCII-Zeichen
+# ohnehin getrennt) hatte 236 Zeichen. Die Langtexte (fullDescription)
+# sind Fliesstext ohne Umbrueche - englisch bis 2097 Zeichen am Stueck.
+# 250 liegt ueber dem bisherigen Maximum, die bestehenden Tabellen
+# bleiben dadurch byte-gleich.
+MAX_LIT = 250
 
 
 def pas_parts(s: str) -> list:
@@ -48,6 +58,9 @@ def pas_parts(s: str) -> list:
       * Non-ASCII als #$XXXX, damit die .inc reines ASCII bleibt; jenseits
         von U+FFFF als UTF-16-Surrogatpaar (#$D83D#$DE00).
       * leerer String -> ''
+      * hoechstens MAX_LIT Zeichen je Literal, laengere Laeufe werden
+        in mehrere Literale gestueckelt (ein verdoppeltes '' zaehlt als
+        ein Zeichen und wird nie zerteilt).
     """
     if s is None:
         s = ''
@@ -61,6 +74,8 @@ def pas_parts(s: str) -> list:
             buf.clear()
 
     for ch in s:
+        if len(buf) >= MAX_LIT:
+            flush()
         if ch == '\n':
             flush()
             parts.append('#13#10')
@@ -197,10 +212,10 @@ def build_overlay() -> str:
     L.append('// GENERIERT von tools/gen-rules-inc.py - NICHT VON HAND EDITIEREN.')
     L.append('// Quelle: rules/sca-rules.<lang>.json (dort aendern, Generator laufen lassen)')
     L.append('//')
-    L.append('// Einkompilierte Sprach-Overlays (Name + ShortDescription je Regel).')
+    L.append('// Einkompilierte Sprach-Overlays (Name, ShortDescription und')
+    L.append('// FullDescription je Regel; leer = englischer Rueckfall).')
     L.append('// Rangfolge im Leser (TRuleCatalog.EnsureOverlay): lose Datei schlaegt')
-    L.append('// diese Tabelle; die Tabelle schlaegt Englisch. FullDescription wird')
-    L.append('// bewusst nicht eingebettet - die Overlays uebersetzen sie nicht.')
+    L.append('// diese Tabelle; die Tabelle schlaegt Englisch.')
     L.append('// ==========================================================================')
     L.append('')
     L.append('const')
@@ -218,6 +233,11 @@ def build_overlay() -> str:
                 ('RuleID',    rid),
                 ('Name',      e.get('name', '')),
                 ('ShortDesc', e.get('shortDescription', '')),
+                # Langtext (2026-11-05): ohne ihn bliebe die Langbeschreibung
+                # in jeder EXE/BPL, die die losen Overlays nicht findet,
+                # unuebersetzt, obwohl das Overlay sie fuehrt. Fliesstext
+                # bis ~2100 Zeichen - pas_parts stueckelt ihn (MAX_LIT).
+                ('FullDesc',  e.get('fullDescription', '')),
             ]
             L.append('    // %s' % (rid or '?'))
             L.append('    (')

@@ -462,6 +462,11 @@ type
     RuleID    : string;
     Name      : string;
     ShortDesc : string;
+    // Langtext (2026-11-05). Leer, solange das Overlay ihn nicht
+    // uebersetzt - ApplyOverlayTo nimmt dann den englischen. Ohne das
+    // Feld blieb die Langbeschreibung ueberall dort unuebersetzt, wo
+    // die losen Overlays nicht gefunden werden (IDE-Plugin ohne Setup).
+    FullDesc  : string;
   end;
 
 {$I uRuleCatalogOverlay.inc}
@@ -1611,7 +1616,7 @@ class function TRuleCatalog.EmbeddedOverlay(const ANorm: string): TOverlayMap;
       begin
         Txt.Name             := Tbl[Idx].Name;
         Txt.ShortDescription := Tbl[Idx].ShortDesc;
-        Txt.FullDescription  := '';
+        Txt.FullDescription  := Tbl[Idx].FullDesc;
         Result.AddOrSetValue(Tbl[Idx].RuleID, Txt);
       end;
   end;
