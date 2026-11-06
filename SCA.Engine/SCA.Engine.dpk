@@ -206,6 +206,7 @@ contains
   uLoopPastHighBound in 'sources\Detectors\uLoopPastHighBound.pas',
   uFuncNameResultScan in 'sources\Detectors\uFuncNameResultScan.pas',
   uFunctionNameResult in 'sources\Detectors\uFunctionNameResult.pas',
+  uFormatterMarker in 'sources\Detectors\uFormatterMarker.pas',
   uHardcodedSecret in 'sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in 'sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in 'sources\Detectors\uIfElseBegin.pas',

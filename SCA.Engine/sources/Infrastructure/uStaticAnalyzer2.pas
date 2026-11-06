@@ -173,6 +173,7 @@ uses
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
   uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uFunctionNameResult,   // SCA204/SCA205 - Funktionsname statt Result
+  uFormatterMarker,      // SCA206 - Formatter-Marker {(*} / {*)} kaputt oder ohne Partner
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -762,6 +763,11 @@ begin
   AddD('FunctionNameResult', fkFunctionNameAsResult,
        TFunctionNameResultDetector.AnalyzeUnit, ['function']);
   gDetectors[Count - 1].ExtraKinds := [fkFunctionNameRecursion];
+  // SCA206 (2026-11-06): beide Marker und jede Leerraum-Form enthalten '(*'
+  // bzw. '*)' - NOTWENDIGE Bedingung. Bewusst nicht '(*}': dann fiele
+  // '{(* }' durch den Vorfilter (Entscheid E4).
+  AddD('FormatterMarker', fkFormatterMarker,
+       TFormatterMarkerDetector.AnalyzeUnit, ['(*', '*)']);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
