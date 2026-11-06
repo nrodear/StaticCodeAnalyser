@@ -60,7 +60,9 @@ type
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_TwoNames_OneByOne;
     [Test] procedure Detector_GreekMy_RoundTrip;
-    [Test] procedure Detector_Umlaut_NoHelp;
+    [Test] procedure Detector_Umlaut_NoFinding;
+    [Test] procedure Detector_UmlautBeforeHomoglyph_NoHelp;
+    [Test] procedure Detector_TableParity;
   end;
 {$ENDIF}
 
@@ -591,16 +593,62 @@ begin
       '  ' + M + ' := 0;', 'end;'])));
 end;
 
-procedure TTestRdxHomoglyphDetector.Detector_Umlaut_NoHelp;
+procedure TTestRdxHomoglyphDetector.Detector_Umlaut_NoFinding;
 var
-  O : TRdxFixOutcome;
+  Line : Integer;
+  Msg  : string;
 begin
-  // Der Detektor meldet jeden Nicht-ASCII-Buchstaben - auch einen gewollten
-  // Umlaut; die Hilfe lehnt ab.
-  O := PlanFirst(LocalSrc('Gr' + UML_O + 'sse'));
+  // Entscheid Nico 2026-11-06: der Detektor meldet nur noch bekannte
+  // Homoglyphen. Ein Umlaut-Name (hier mit BOM, WriteUtf8) ist kein SCA193-
+  // Fund mehr - bis dahin meldete er ihn, und die Hilfe lehnte ab
+  // (Bestandstest Detector_Umlaut_NoHelp). Die Ablehnung selbst pinnt
+  // UnknownLetter_NoHelp am Planer; Detector_UmlautBeforeHomoglyph_NoHelp
+  // zeigt sie am Fund.
+  Assert.AreEqual<Integer>(0, Detect(LocalSrc('Gr' + UML_O + 'sse'), Line, Msg));
+  // Wache: derselbe Aufbau mit Homoglyph meldet.
+  Assert.AreEqual<Integer>(1, Detect(LocalSrc(LOGIN_H), Line, Msg));
+end;
+
+procedure TTestRdxHomoglyphDetector.Detector_UmlautBeforeHomoglyph_NoHelp;
+var
+  O    : TRdxFixOutcome;
+  Line : Integer;
+  Msg  : string;
+  Src  : string;
+begin
+  // Ein Umlaut-Name und ein Homoglyph-Name auf DERSELBEN Zeile: der Fund
+  // steht dort (Homoglyph), die Hilfe nimmt den ersten Nicht-ASCII-Namen der
+  // Zeile - den Umlaut - und lehnt ab, statt den falschen umzubenennen.
+  Src := UnitSrc(['procedure Foo;', 'var',
+    '  Gr' + UML_O + 'sse, ' + LOGIN_H + ': string;', 'begin', 'end;']);
+  Assert.AreEqual<Integer>(1, Detect(Src, Line, Msg));
+  Assert.AreEqual<Integer>(6, Line);
+  O := PlanFirst(Src);
   Assert.IsFalse(O.Enabled);
   Assert.AreEqual(_(R_HG_UNKNOWN, ['U+00F6']), O.Reason);
   Assert.AreEqual<Integer>(0, Length(O.Edits), 'keine Ersetzung');
+end;
+
+procedure TTestRdxHomoglyphDetector.Detector_TableParity;
+var
+  Code  : Integer;
+  Count : Integer;
+  C     : Char;
+begin
+  // Detektor (uSourceEncoding.HOMOGLYPH_CODES) und Hilfe (HOMOGLYPHS)
+  // fuehren dieselbe Liste: meldet der Detektor ein Zeichen, kennt die
+  // Hilfe seinen ASCII-Partner - und umgekehrt.
+  Count := 0;
+  for Code := $80 to $FFFF do
+  begin
+    C := Char(Code);
+    if (TRdxHomoglyphFix.AsciiOf(C) <> #0)
+       <> TSourceEncodingDetector.IsKnownHomoglyph(C) then
+      Assert.Fail('Tabellen weichen ab bei U+' + IntToHex(Code, 4));
+    if TSourceEncodingDetector.IsKnownHomoglyph(C) then
+      Inc(Count);
+  end;
+  Assert.AreEqual<Integer>(47, Count, 'Wache: die Tabelle ist nicht leer');
 end;
 
 {$ENDIF}

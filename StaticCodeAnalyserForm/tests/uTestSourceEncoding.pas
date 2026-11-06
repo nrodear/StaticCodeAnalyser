@@ -1,7 +1,7 @@
 unit uTestSourceEncoding;
 
-// Tests fuer die Encoding-/Unicode-Sicherheit-Detektor-Familie (SCA185-192,
-// uSourceEncoding + ComputeFileEncodingInfo in uFileTextCache).
+// Tests fuer die Encoding-/Unicode-Sicherheit-Detektor-Familie (SCA185-193
+// und SCA207, uSourceEncoding + ComputeFileEncodingInfo in uFileTextCache).
 //
 // Zwei Ebenen:
 //   * ComputeFileEncodingInfo(TBytes) - die reine Byte-Analyse (BOM-Sniff,
@@ -80,16 +80,19 @@ type
     // ---- SCA190-dlFpc-Severity (G2, 2026-09-19) ---------------------------
     [Test] procedure Detect_Utf16_FpcDialekt_ErrorStattHint;
     [Test] procedure Detect_Utf16_DelphiDialekt_BleibtHint;
-    // ---- S3 Homoglyph / Non-ASCII-Identifier ------------------------------
-    [Test] procedure Ident_NonAscii_True;
+    // ---- S3 Homoglyph-Identifier (seit 2026-11-06 nur bekannte Homoglyphen)
+    [Test] procedure Ident_AccentNotHomoglyph_False;
     [Test] procedure Ident_InString_False;
     [Test] procedure Ident_InComment_False;
     [Test] procedure Ident_PureAscii_False;
-    [Test] procedure Detect_NonAsciiIdentifier_S3;
-    [Test] procedure Detect_Utf8Bom_NonAsciiIdent_S3_NoEncodingFinding;
+    [Test] procedure Detect_AccentIdentifier_NoS3_ButSca207;
+    [Test] procedure Detect_Utf8Bom_HomoglyphIdent_S3_NoEncodingFinding;
+    [Test] procedure Detect_Utf8Bom_UmlautIdent_NoS3;
+    [Test] procedure Detect_S3_AnchorIsFirstHomoglyphLine;
     // ---- S3 Letter-only-Guard (Doku-Quickwins 2026-07-25) -----------------
     [Test] procedure Ident_NonLetterEllipsis_False;
-    [Test] procedure Ident_HomoglyphGreekMu_True;
+    [Test] procedure Ident_HomoglyphGreekCapitalMu_True;
+    [Test] procedure Ident_GreekSmallMuNotInTable_False;
     [Test] procedure Ident_HomoglyphCyrillic_True;
     [Test] procedure Detect_NonLetterSymbol_NoS3_ButE1;
     // ---- S3 Dekodier-Vertrauens-Gate (Vollzaehlung 2026-08-27) ------------
@@ -99,6 +102,23 @@ type
     // Posten 304: S1/S2 nur wo die UTF-8-Lesart begruendet ist
     [Test] procedure Detect_Bidi_NotInAnsiFile;
     [Test] procedure Detect_Bidi_StillFiresInUtf8WithoutBom;
+    // ---- S4 SCA207 FragileNonAsciiIdentifier (2026-11-06) ----------------
+    [Test] procedure Sca207_Utf8NoBom_Delphi_NameAndLine;
+    [Test] procedure Sca207_Utf8Bom_Delphi_NoFinding;
+    [Test] procedure Sca207_Ansi_Delphi_NoFinding;
+    [Test] procedure Sca207_UmlautOnlyInCommentAndString_NoFinding;
+    [Test] procedure Sca207_SameNameTwice_OneFinding;
+    [Test] procedure Sca207_TwoNames_TwoFindings;
+    [Test] procedure Sca207_Fpc_Utf8Bom_Error;
+    [Test] procedure Sca207_Fpc_Ansi_ErrorWithoutName;
+    [Test] procedure Sca207_PureAscii_NoFinding;
+    [Test] procedure Sca207_NonCodeForms_OnlyRealIdentifier;
+    [Test] procedure Sca207_MultiLineString_NotCode;
+    [Test] procedure Sca207_AmpersandName_WithoutAmpersand;
+    [Test] procedure Sca207_SymbolInCode_NoFinding;
+    [Test] procedure Sca207_IfdefBranch_Reported;
+    [Test] procedure Sca207_CyrillicHomoglyph_Sca207AndSca193;
+    [Test] procedure Sca207_SupplementaryLetter_Silent;
   end;
 
 implementation
@@ -722,49 +742,66 @@ end;
 
 { ---- S3 Homoglyph / Non-ASCII-Identifier -------------------------------- }
 
-procedure TTestSourceEncoding.Ident_NonAscii_True;
+procedure TTestSourceEncoding.Ident_AccentNotHomoglyph_False;
 begin
-  // 'var <e-acute>x: Integer;' -> Nicht-ASCII in Identifier-/Code-Position
-  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
-    'var ' + Chr($E9) + 'x: Integer;'));
+  // Entscheid Nico 2026-11-06: S3 meldet nur noch bekannte Homoglyphen.
+  // 'var <e-acute>x' und 'Gr<o-Umlaut>sse' sind Nicht-ASCII im Identifier,
+  // aber kein Zeichen sieht wie ein anderer ASCII-Buchstabe aus. Bis dahin
+  // war das hier True (Bestandstest Ident_NonAscii_True).
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
+    'var ' + Chr($E9) + 'x: Integer;'), 'e-acute ist kein Homoglyph');
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
+    'var Gr' + Chr($F6) + 'sse: Integer;'), 'o-Umlaut ist kein Homoglyph');
+  // Wache: derselbe Satz mit kyrillischem o IST einer.
+  Assert.IsTrue(TSourceEncodingDetector.HasHomoglyphIdentifier(
+    'var Gr' + Chr($043E) + 'sse: Integer;'));
 end;
 
 procedure TTestSourceEncoding.Ident_InString_False;
 begin
   // Nicht-ASCII nur im String-Literal -> KEIN Identifier-Treffer
-  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
     'S := ' + Chr(39) + Chr($E9) + Chr(39) + ';'));
 end;
 
 procedure TTestSourceEncoding.Ident_InComment_False;
 begin
-  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier('// ' + Chr($E9)));
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier('// ' + Chr($E9)));
 end;
 
 procedure TTestSourceEncoding.Ident_PureAscii_False;
 begin
-  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
     'var Login: string;'));
 end;
 
-procedure TTestSourceEncoding.Detect_NonAsciiIdentifier_S3;
+procedure TTestSourceEncoding.Detect_AccentIdentifier_NoS3_ButSca207;
 var F: TObjectList<TLeakFinding>;
 begin
-  // 'var <e-acute>x: Integer;' als UTF-8 ohne BOM -> S3 feuert (Identifier).
+  // 'var <e-acute>x: Integer;' als UTF-8 ohne BOM. Bis 2026-11-06 feuerte
+  // hier S3 (Bestandstest Detect_NonAsciiIdentifier_S3, 1 Fund). Nach dem
+  // Entscheid ist e-acute kein Homoglyph -> kein SCA193; den belegten
+  // Schaden (Formatter zerlegt den Namen in UTF-8 ohne BOM) meldet SCA207.
   F := DetectBytes(Cat(Ascii('var '),
                        Cat(TBytes.Create($C3, $A9), Ascii('x: Integer;'))));
-  try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceNonAsciiIdentifier),
+      'e-acute ist kein Homoglyph');
+    Assert.AreEqual<Integer>(1, CountKind(F, fkFragileNonAsciiIdentifier),
+      'SCA207 meldet den Namen');
   finally F.Free; end;
 end;
 
-procedure TTestSourceEncoding.Detect_Utf8Bom_NonAsciiIdent_S3_NoEncodingFinding;
+procedure TTestSourceEncoding.Detect_Utf8Bom_HomoglyphIdent_S3_NoEncodingFinding;
 var F: TObjectList<TLeakFinding>;
 begin
   // Korrektes UTF-8+BOM, aber Identifier mit Homoglyph -> S3 feuert, KEIN
-  // Encoding-Fund (die Datei-Encoding ist korrekt).
+  // Encoding-Fund (die Datei-Encoding ist korrekt). Bis 2026-11-06 stand
+  // hier e-acute (C3 A9) - seit dem Entscheid kein Homoglyph mehr; jetzt das
+  // kyrillische a (U+0430, D0 B0), das wirklich wie 'a' aussieht.
   F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF),
                        Cat(Ascii('var '),
-                           Cat(TBytes.Create($C3, $A9), Ascii('x: Integer;')))));
+                           Cat(TBytes.Create($D0, $B0), Ascii('x: Integer;')))));
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier), 'S3 feuert auch in UTF-8+BOM');
     Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom), 'kein E1 (hat BOM)');
@@ -781,24 +818,37 @@ end;
 procedure TTestSourceEncoding.Ident_NonLetterEllipsis_False;
 begin
   // Fix-Test: Ellipsis U+2026 (Kategorie Po) in Code-Position -> KEIN S3.
-  Assert.IsFalse(TSourceEncodingDetector.HasNonAsciiIdentifier(
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
     'X := A ' + Chr($2026) + ' B;'),
     'U+2026 (Punktuation) darf nicht als Identifier-Homoglyph zaehlen');
 end;
 
-procedure TTestSourceEncoding.Ident_HomoglyphGreekMu_True;
+procedure TTestSourceEncoding.Ident_HomoglyphGreekCapitalMu_True;
 begin
-  // TP-Gegenprobe: griechisches My U+03BC (Kategorie Ll) im Identifier.
-  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
-    'var ' + Chr($03BC) + 'Sec: Integer;'),
-    'griechisches My ist ein Letter -> Homoglyph-TP muss erhalten bleiben');
+  // TP-Gegenprobe: griechisches grosses My U+039C - genau das Zeichen des
+  // Korpus-TPs (pyscripter dlgAboutPyScripter.pas:180). Bis 2026-11-06
+  // stand hier das kleine My U+03BC; das sieht nicht wie ein ASCII-
+  // Buchstabe aus und steht nicht in der Tabelle (s. naechster Test).
+  Assert.IsTrue(TSourceEncodingDetector.HasHomoglyphIdentifier(
+    'var ' + Chr($039C) + 'ask: Integer;'),
+    'griechisches M ist ein Homoglyph -> der Korpus-TP muss erhalten bleiben');
+end;
+
+procedure TTestSourceEncoding.Ident_GreekSmallMuNotInTable_False;
+begin
+  // Kleines My U+03BC ist ein Buchstabe, aber kein Doppelgaenger eines
+  // ASCII-Buchstabens (die reDelphix-Hilfe kennt es auch nicht).
+  Assert.IsFalse(TSourceEncodingDetector.HasHomoglyphIdentifier(
+    'var ' + Chr($03BC) + 'Sec: Integer;'));
+  Assert.IsFalse(TSourceEncodingDetector.IsKnownHomoglyph(Chr($03BC)));
+  Assert.IsTrue(TSourceEncodingDetector.IsKnownHomoglyph(Chr($039C)), 'Wache');
 end;
 
 procedure TTestSourceEncoding.Ident_HomoglyphCyrillic_True;
 begin
   // TP-Gegenprobe: kyrillisches o U+043E (Kategorie Ll) im Identifier -
   // der klassische Confusable zu lateinischem "o".
-  Assert.IsTrue(TSourceEncodingDetector.HasNonAsciiIdentifier(
+  Assert.IsTrue(TSourceEncodingDetector.HasHomoglyphIdentifier(
     'var L' + Chr($043E) + 'gin: string;'),
     'kyrillisches o ist ein Letter -> Homoglyph-TP muss erhalten bleiben');
 end;
@@ -892,6 +942,418 @@ begin
       'UTF-8+BOM ist vertrauenswuerdig -> S3 bleibt');
     Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom), 'kein E1');
     Assert.AreEqual<Integer>(0, CountKind(F, fkSourceAnsiNonAscii), 'kein E3');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf8Bom_UmlautIdent_NoS3;
+var F: TObjectList<TLeakFinding>;
+begin
+  // UTF-8 MIT BOM, Bezeichner 'Gr<o-Umlaut>sse' (C3 B6): bis 2026-11-06 ein
+  // SCA193-Fund, seit dem Entscheid keiner - ein Umlaut taeuscht keinen
+  // ASCII-Buchstaben vor. Mit BOM bleibt der Name auch beim Formatieren heil
+  // (kein SCA207), die Datei ist korrekt kodiert: gar kein Fund.
+  F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF),
+                       Cat(Ascii('var Gr'),
+                           Cat(TBytes.Create($C3, $B6), Ascii('sse: Integer;')))));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceNonAsciiIdentifier),
+      'Umlaut-Name ist kein Homoglyph');
+    Assert.AreEqual<Integer>(0, F.Count, 'BOM-Datei mit Umlaut-Name: kein Fund');
+  finally F.Free; end;
+  // Wache: dieselbe Zeile mit kyrillischem o (D0 BE) meldet S3.
+  F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF),
+                       Cat(Ascii('var Gr'),
+                           Cat(TBytes.Create($D0, $BE), Ascii('sse: Integer;')))));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier));
+  finally F.Free; end;
+end;
+
+{ ---- S4 SCA207 FragileNonAsciiIdentifier (2026-11-06) --------------------- }
+// Nico-Entscheide 2026-11-06: Delphi meldet Bezeichner mit Nicht-ASCII-
+// Buchstaben nur in UTF-8 OHNE BOM (die IDE und der Formatter lesen ANSI und
+// zerlegen den Namen), Warning/fcMedium; FPC jede Datei, Error/fcHigh, bei
+// ANSI ohne Namen. Ein Fund je verschiedenem Namen an der ersten Zeile.
+// Die Testquelle bleibt ASCII: Nicht-ASCII entsteht ueber #$nnnn.
+
+const
+  Q = '''';
+  UML_A = #$00E4;
+  UML_O = #$00F6;
+  UML_CAP_O = #$00D6;
+  SHARP_S = #$00DF;
+  CYR_SMALL_O = #$043E;
+  GROESSE = 'Gr' + UML_O + SHARP_S + 'e';
+  GROESSE_UP = 'GR' + UML_CAP_O + SHARP_S + 'E';
+  LAENGE = 'L' + UML_A + 'nge';
+  MSG_207_ANSI = 'Identifier with a non-ASCII character in a file that is ' +
+    'not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) ' +
+    'and stops with "illegal character". Use an ASCII name.';
+
+function Msg207Delphi(const AName: string): string;
+begin
+  Result := Format('Identifier ''%s'' contains non-ASCII letters in a UTF-8 ' +
+    'file without BOM - the Delphi IDE and code formatter read such a file ' +
+    'as ANSI and split the identifier, so the unit no longer compiles ' +
+    'after formatting. Save the file as UTF-8 with BOM, or use an ASCII name.',
+    [AName]);
+end;
+
+function Msg207Fpc(const AName: string): string;
+begin
+  Result := Format('Identifier ''%s'' contains non-ASCII letters - Free ' +
+    'Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with ' +
+    '"illegal character". Use an ASCII name.', [AName]);
+end;
+
+// Unit-Kopf (Zeilen 1-3) + ABody ab Zeile 4, CRLF.
+function UnitText(const ABody: array of string): string;
+var
+  i : Integer;
+begin
+  Result := 'unit uF;'#13#10'interface'#13#10'implementation';
+  for i := 0 to High(ABody) do
+    Result := Result + #13#10 + ABody[i];
+  Result := Result + #13#10'end.'#13#10;
+end;
+
+// Die Basis-Fixture des Konzepts: Deklaration Zeile 7, Nutzungen 10/11
+// (AUpper = derselbe Name in Grossbuchstaben), Umlaut im Kommentar (Zeile 4)
+// und im String (Zeile 12).
+function FixtureF(const AName, AUpper: string): string;
+begin
+  Result := UnitText(['// ' + GROESSE + ' im Kommentar', 'procedure P;', 'var',
+    '  ' + AName + ': Integer;', '  S: string;', 'begin',
+    '  ' + AName + ' := 1;', '  ' + AUpper + ' := ' + AName + ' + 1;',
+    '  S := ' + Q + 'Fl' + UML_A + 'che' + Q + ';', 'end;']);
+end;
+
+function Utf8Of(const S: string): TBytes;
+begin
+  Result := TEncoding.UTF8.GetBytes(S);
+end;
+
+function Utf8BomOf(const S: string): TBytes;
+begin
+  Result := Cat(TBytes.Create($EF, $BB, $BF), Utf8Of(S));
+end;
+
+function Cp1252Of(const S: string): TBytes;
+var
+  E : TEncoding;
+begin
+  E := TEncoding.GetEncoding(1252);
+  try
+    Result := E.GetBytes(S);
+  finally
+    E.Free;
+  end;
+end;
+
+// DetectBytes unter dlFpc (globaler Zustand, im finally zurueck).
+function DetectBytesFpc(const Bytes: TBytes): TObjectList<TLeakFinding>;
+var
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    Result := DetectBytes(Bytes);
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+// Die SCA207-Funde in Meldereihenfolge.
+function Sca207Of(Findings: TObjectList<TLeakFinding>): TArray<TLeakFinding>;
+var
+  X : TLeakFinding;
+begin
+  Result := nil;
+  for X in Findings do
+    if X.Kind = fkFragileNonAsciiIdentifier then
+      Result := Result + [X];
+end;
+
+procedure TTestSourceEncoding.Sca207_Utf8NoBom_Delphi_NameAndLine;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // T1: UTF-8 ohne BOM, Delphi. 'GROESSE' in Zeile 11 ist derselbe Name in
+  // anderer Schreibweise - ein Fund, an der Deklaration (Zeile 7).
+  F := DetectBytes(Utf8Of(FixtureF(GROESSE, GROESSE_UP)));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S), 'ein Name, ein Fund');
+    Assert.AreEqual('7', S[0].LineNumber, 'erste Stelle = Deklaration');
+    Assert.AreEqual(Msg207Delphi(GROESSE), S[0].MissingVar);
+    Assert.IsTrue(S[0].Severity = lsWarning, 'Delphi-Zweig: Warning');
+    Assert.IsTrue(S[0].Confidence = fcMedium, 'Delphi-Zweig: fcMedium');
+    // Ueberschneidung: SCA185 meldet die Datei (Strings/Datei-Encoding)
+    // weiter; SCA193 schweigt (Umlaut ist kein Homoglyph).
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom), 'SCA185 bleibt');
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceNonAsciiIdentifier),
+      'kein SCA193 fuer einen Umlaut-Namen');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_Utf8Bom_Delphi_NoFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // T2: dieselbe Datei MIT BOM - IDE und Formatter lesen sie richtig. Bis
+  // 2026-11-06 meldete hier SCA193 (Umlaut im Identifier); jetzt kein Fund.
+  F := DetectBytes(Utf8BomOf(FixtureF(GROESSE, GROESSE_UP)));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkFragileNonAsciiIdentifier));
+    Assert.AreEqual<Integer>(0, F.Count, 'BOM-Datei ohne Homoglyph: kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_Ansi_Delphi_NoFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // T3: echte ANSI-Datei (CP-1252) - der Formatter liest sie so, wie sie
+  // geschrieben ist; der Name bleibt heil. SCA189 meldet das Encoding.
+  F := DetectBytes(Cp1252Of(FixtureF(GROESSE, GROESSE_UP)));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkFragileNonAsciiIdentifier));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceAnsiNonAscii), 'Wache: SCA189');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_UmlautOnlyInCommentAndString_NoFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // T4: Umlaut nur im Kommentar (Zeile 4) und im String (Zeile 12), ohne
+  // BOM. Der Formatter laesst beide byte-gleich - kein SCA207, SCA185 bleibt.
+  F := DetectBytes(Utf8Of(FixtureF('Groesse', 'GROESSE')));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkFragileNonAsciiIdentifier));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom), 'Wache: SCA185');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_SameNameTwice_OneFinding;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  F := DetectBytes(Utf8Of(UnitText(['procedure P;', 'var',
+    '  ' + LAENGE + ': Integer;', 'begin', '  ' + LAENGE + ' := 1;',
+    '  ' + LAENGE + ' := ' + LAENGE + ' + 1;', 'end;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S), 'vier Vorkommen, ein Name, ein Fund');
+    Assert.AreEqual('6', S[0].LineNumber);
+    Assert.AreEqual(Msg207Delphi(LAENGE), S[0].MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_TwoNames_TwoFindings;
+var
+  F     : TObjectList<TLeakFinding>;
+  S     : TArray<TLeakFinding>;
+  Breit : string;
+begin
+  Breit := 'Breite_' + UML_A;
+  F := DetectBytes(Utf8Of(UnitText(['procedure P;', 'var',
+    '  ' + LAENGE + ': Integer;', '  ' + Breit + ': Integer;', 'begin',
+    '  ' + Breit + ' := ' + LAENGE + ';', 'end;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(2, Length(S), 'zwei Namen, zwei Funde');
+    Assert.AreEqual('6', S[0].LineNumber);
+    Assert.AreEqual(Msg207Delphi(LAENGE), S[0].MissingVar);
+    Assert.AreEqual('7', S[1].LineNumber);
+    Assert.AreEqual(Msg207Delphi(Breit), S[1].MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_Fpc_Utf8Bom_Error;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // T9: unter FPC bricht der Bau in JEDEM Encoding ('illegal character') -
+  // auch mit BOM. Error, fcHigh, Name in der Meldung.
+  F := DetectBytesFpc(Utf8BomOf(FixtureF(GROESSE, GROESSE_UP)));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S));
+    Assert.AreEqual('7', S[0].LineNumber);
+    Assert.AreEqual(Msg207Fpc(GROESSE), S[0].MissingVar);
+    Assert.IsTrue(S[0].Severity = lsError, 'FPC-Zweig: Error');
+    Assert.IsTrue(S[0].Confidence = fcHigh, 'FPC-Zweig: fcHigh');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_Fpc_Ansi_ErrorWithoutName;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // T11: ANSI unter FPC - der Name ist geraten (Systemcodepage), DASS ein
+  // Byte >= $80 im Code steht, ist sicher. Meldung ohne Namen.
+  F := DetectBytesFpc(Cp1252Of(FixtureF(GROESSE, GROESSE_UP)));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S), 'Kommentar und String zaehlen nicht');
+    Assert.AreEqual('7', S[0].LineNumber);
+    Assert.AreEqual(MSG_207_ANSI, S[0].MissingVar);
+    Assert.IsTrue(S[0].Severity = lsError);
+    Assert.IsTrue(S[0].Confidence = fcHigh);
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceAnsiNonAscii),
+      'SCA189 bleibt unter FPC');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_PureAscii_NoFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // T16: reines ASCII in beiden Dialekten - kein Fund.
+  F := DetectBytes(Utf8Of(UnitText(['procedure P;', 'var', '  Groesse: Integer;',
+    'begin', '  Groesse := 1;', 'end;'])));
+  try Assert.AreEqual<Integer>(0, F.Count, 'reines ASCII: kein Fund (Delphi)');
+  finally F.Free; end;
+  F := DetectBytesFpc(Utf8Of(UnitText(['procedure P;', 'var', '  Groesse: Integer;',
+    'begin', '  Groesse := 1;', 'end;'])));
+  try Assert.AreEqual<Integer>(0, F.Count, 'reines ASCII: kein Fund (FPC)');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_NonCodeForms_OnlyRealIdentifier;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // Direktive, { }, (* *), mehrzeiliger { }-Kommentar, String: kein Name.
+  // Nur der echte Bezeichner in Zeile 11 zaehlt.
+  F := DetectBytes(Utf8Of(UnitText(['{$DEFINE ' + GROESSE + '}',
+    '{ ' + GROESSE + ' }', '(* ' + GROESSE + ' *)', '{ mehrzeilig',
+    '  ' + GROESSE + ' }', 'const C = ' + Q + GROESSE + Q + ';',
+    'const D = #$00F6;', 'var ' + LAENGE + ': Integer;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S));
+    Assert.AreEqual('11', S[0].LineNumber);
+    Assert.AreEqual(Msg207Delphi(LAENGE), S[0].MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_MultiLineString_NotCode;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // Delphi-12-Mehrzeilenstring: die Textzeile 6 ist kein Code (ScanCodeLine
+  // kennt die Form nicht - mit ihm kaeme hier ein Schein-Fund 'Groesse').
+  // Hinter dem Abschluss (Zeile 7) ist wieder Code; Zeile 8 ist der Fund.
+  F := DetectBytes(Utf8Of(UnitText(['const', '  T = ' + Q + Q + Q,
+    '    ' + GROESSE + ' im Text', '    ' + Q + Q + Q + ';',
+    'var ' + LAENGE + ': Integer;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S), 'nur der Bezeichner nach dem String');
+    Assert.AreEqual('8', S[0].LineNumber);
+    Assert.AreEqual(Msg207Delphi(LAENGE), S[0].MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_AmpersandName_WithoutAmpersand;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  F := DetectBytes(Utf8Of(UnitText(['var &' + GROESSE + ': Integer;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S));
+    Assert.AreEqual('4', S[0].LineNumber);
+    Assert.AreEqual(Msg207Delphi(GROESSE), S[0].MissingVar, 'Name ohne &');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_SymbolInCode_NoFinding;
+var F: TObjectList<TLeakFinding>;
+begin
+  // Ellipsis U+2026 im Code ist kein Buchstabe - kein Bezeichner.
+  F := DetectBytes(Utf8Of(UnitText(['procedure P;', 'begin',
+    '  X := Y' + #$2026 + ';', 'end;'])));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkFragileNonAsciiIdentifier));
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom), 'Wache: SCA185');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_IfdefBranch_Reported;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // Der Formatter formatiert auch inaktive Zweige - sie zaehlen (Grenze:
+  // unter FPC meldet die Regel so auch Zweige, die FPC nie liest).
+  F := DetectBytes(Utf8Of(UnitText(['{$IFDEF NIE}',
+    'var ' + GROESSE + ': Integer;', '{$ENDIF}'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S));
+    Assert.AreEqual('5', S[0].LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_CyrillicHomoglyph_Sca207AndSca193;
+var
+  F     : TObjectList<TLeakFinding>;
+  S     : TArray<TLeakFinding>;
+  Login : string;
+begin
+  // T7: 'Login' mit kyrillischem o ohne BOM - beides ist wahr: der Formatter
+  // zerlegt den Namen (SCA207), und das o taeuscht ein lateinisches vor
+  // (SCA193).
+  Login := 'L' + CYR_SMALL_O + 'gin';
+  F := DetectBytes(Utf8Of(UnitText(['var ' + Login + ': string;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S));
+    Assert.AreEqual(Msg207Delphi(Login), S[0].MissingVar);
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier));
+    Assert.AreEqual('4', FirstKind(F, fkSourceNonAsciiIdentifier).LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Sca207_SupplementaryLetter_Silent;
+var
+  F : TObjectList<TLeakFinding>;
+  S : TArray<TLeakFinding>;
+begin
+  // GRENZE (festgehalten): ein Zeichen jenseits U+FFFF (hier U+1D400, als
+  // Surrogatpaar) ist fuer den Lauf kein Buchstabe - der Name 'X<U+1D400>Y'
+  // zerfaellt in 'X' und 'Y' (ASCII), kein Fund. Wache: Zeile 5.
+  F := DetectBytes(Utf8Of(UnitText(['var X' + #$D835#$DC00 + 'Y: Integer;',
+    'var ' + LAENGE + ': Integer;'])));
+  try
+    S := Sca207Of(F);
+    Assert.AreEqual<Integer>(1, Length(S), 'nur die Wache');
+    Assert.AreEqual('5', S[0].LineNumber);
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_S3_AnchorIsFirstHomoglyphLine;
+var
+  F : TObjectList<TLeakFinding>;
+  X : TLeakFinding;
+begin
+  // UTF-8 mit BOM: Zeile 4 traegt einen Umlaut-Namen, Zeile 5 einen
+  // Homoglyph. Bis 2026-11-06 stand der S3-Anker auf Zeile 4 (erster
+  // Nicht-ASCII-Buchstabe), jetzt auf Zeile 5 (erster Homoglyph) - dort
+  // setzt auch die reDelphix-Hilfe an.
+  F := DetectBytes(Utf8BomOf(UnitText(['var ' + GROESSE + ': Integer;',
+    'var L' + CYR_SMALL_O + 'gin: string;'])));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier));
+    X := FirstKind(F, fkSourceNonAsciiIdentifier);
+    Assert.AreEqual('5', X.LineNumber);
   finally F.Free; end;
 end;
 
