@@ -250,7 +250,7 @@ rule catalogue; they differ only in how you drive them.
 
 **reDelphix** is the SCA feature that adds code actions to the IDE plugin,
 as a design-time package of its own.
-At a finding it offers quick fixes — for 96 of the 206
+At a finding it offers quick fixes — for 97 of the 206
 rules, for example `FreeAndNil(X)`, `try/finally` around a release or
 `Format()` instead of a concatenation — through a light bulb at the caret
 line, the context menu of the finding (editor and findings grid) and

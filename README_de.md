@@ -252,7 +252,7 @@ Regelkatalog; sie unterscheiden sich nur in der Bedienung.
 
 **reDelphix** ist das Feature des SCA, das dem IDE-Plugin Code-Aktionen
 hinzufügt, als eigenes Entwurfszeitpaket.
-An einem Fund bietet es Quick-Fixes an — für 96
+An einem Fund bietet es Quick-Fixes an — für 97
 der 206 Regeln, etwa `FreeAndNil(X)`, `try/finally` um eine Freigabe oder
 `Format()` statt einer Verkettung — über eine Glühbirne an der
 Caret-Zeile, das Kontextmenü des Funds (Editor und Fund-Grid) und

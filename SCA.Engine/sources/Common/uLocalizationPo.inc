@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7116 Zeilen, 342651 Bytes
-  CPoLines_de: array[0..7115] of string = (
+  // i18n\de.po - 7133 Zeilen, 343562 Bytes
+  CPoLines_de: array[0..7132] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6738,6 +6738,23 @@ const
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
     'msgstr "die Unit wird auch mit Free Pascal '#$00FC'bersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, h'#$00E4'ngt am Modus des Projekts"',
     '',
+    '# reDelphix SCA206 (uRdxFormatterMarkerFix): Formatter-Marker exakt schreiben',
+    '',
+    'msgid "Write the formatter marker exactly"',
+    'msgstr "Formatter-Marker exakt schreiben"',
+    '',
+    'msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"',
+    'msgstr "gleiche Bedeutung f'#$00FC'r den Compiler - nur ein Kommentar '#$00E4'ndert sich; GExperts, CnWizards und JCF erkennen den Marker jetzt"',
+    '',
+    'msgid "no formatter marker with this text at the reported place"',
+    'msgstr "kein Formatter-Marker mit diesem Text an der gemeldeten Stelle"',
+    '',
+    'msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"',
+    'msgstr "nur ein Marker mit Leerzeichen darin l'#$00E4'sst sich korrigieren - wohin ein fehlendes {(*} oder {*)} geh'#$00F6'rt, wei'#$00DF' nur der Autor"',
+    '',
+    'msgid "the line holds this marker more than once"',
+    'msgstr "die Zeile tr'#$00E4'gt diesen Marker mehrmals"',
+    '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',
     'msgid "compiler directive in the if statement - conditional code could change its branches"',
@@ -7405,8 +7422,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7112 Zeilen, 356510 Bytes
-  CPoLines_fr: array[0..7111] of string = (
+  // i18n\fr.po - 7129 Zeilen, 357432 Bytes
+  CPoLines_fr: array[0..7128] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14125,6 +14142,23 @@ const
     '',
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
     'msgstr "l''unit'#$00E9' est aussi compil'#$00E9'e avec Free Pascal ({$IFDEF FPC} '#$00E0' la ligne %d) et ne fixe aucun {$mode} - l''existence de Result d'#$00E9'pend du mode du projet"',
+    '',
+    '# reDelphix SCA206 (uRdxFormatterMarkerFix): Formatter-Marker exakt schreiben',
+    '',
+    'msgid "Write the formatter marker exactly"',
+    'msgstr "'#$00C9'crire exactement le marqueur de formateur"',
+    '',
+    'msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"',
+    'msgstr "m'#$00EA'me sens pour le compilateur - seul un commentaire change ; GExperts, CnWizards et JCF reconnaissent d'#$00E9'sormais le marqueur"',
+    '',
+    'msgid "no formatter marker with this text at the reported place"',
+    'msgstr "aucun marqueur de formateur avec ce texte '#$00E0' l''endroit signal'#$00E9'"',
+    '',
+    'msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"',
+    'msgstr "seul un marqueur contenant des espaces peut '#$00EA'tre corrig'#$00E9' - o'#$00F9' va un {(*} ou un {*)} manquant, seul l''auteur le sait"',
+    '',
+    'msgid "the line holds this marker more than once"',
+    'msgstr "la ligne contient ce marqueur plusieurs fois"',
     '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',

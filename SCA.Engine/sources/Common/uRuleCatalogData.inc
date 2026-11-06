@@ -2853,8 +2853,8 @@ const
         '  3, 4);' + #13#10 + '{*)}';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA206:same:write-formatter-marker-exactly'
     )
   );
 

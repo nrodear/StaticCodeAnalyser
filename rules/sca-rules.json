@@ -4798,6 +4798,10 @@
       "type": "Code Smell",
       "tags": ["formatting", "formatter", "tooling"],
       "detectorUnit": "uFormatterMarker.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA206", "effect": "same", "slug": "write-formatter-marker-exactly" }
+      ],
       "examples": {
         "bad": "{ (*}\nconst Table: array[0..3] of Integer = (\n  1, 2,\n  3, 4);\n{*)}",
         "good": "{(*}\nconst Table: array[0..3] of Integer = (\n  1, 2,\n  3, 4);\n{*)}"

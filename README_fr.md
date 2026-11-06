@@ -260,7 +260,7 @@ catalogue de règles ; seule la façon de les piloter diffère.
 **reDelphix** est la fonction de SCA qui ajoute des actions de code au
 plugin IDE, sous forme de paquet de conception distinct.
 Sur un résultat, il propose des quick-fixes — pour
-96 des 206 règles, par exemple `FreeAndNil(X)`, `try/finally` autour d'une
+97 des 206 règles, par exemple `FreeAndNil(X)`, `try/finally` autour d'une
 libération ou `Format()` à la place d'une concaténation — via une ampoule
 sur la ligne du curseur, le menu contextuel du résultat (éditeur et grille
 des résultats) et `Ctrl+Alt+F` dans la grille. Sans résultat, le menu

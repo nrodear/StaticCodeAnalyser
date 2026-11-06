@@ -144,6 +144,7 @@ contains
   uRdxInheritedEmptyFix in 'source\uRdxInheritedEmptyFix.pas',
   uRdxPlacesRunner in 'source\uRdxPlacesRunner.pas',
   uRdxFuncNameFix in 'source\uRdxFuncNameFix.pas',
+  uRdxFormatterMarkerFix in 'source\uRdxFormatterMarkerFix.pas',
   uRdxCondExpr in 'source\uRdxCondExpr.pas',
   uRdxIfFixes in 'source\uRdxIfFixes.pas',
   uRdxCondFixes in 'source\uRdxCondFixes.pas',

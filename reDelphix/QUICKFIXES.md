@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -43,7 +43,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Qui
 | SCA068 TrailingCommaArgList | `Überzähliges Komma entfernen` | Quick-Fix | nein | [SCA068](#sca068) |
 | SCA069 DigitGrouping | `Ziffern mit "_" gruppieren` | Quick-Fix | nein | [SCA069](#sca069) |
 | SCA070 CommentedOutCode | `Auskommentierten Code löschen` | Quick-Fix | nein | [SCA070](#sca070) |
-| SCA071 UnitLevelKeywordIndent | `Schlüsselwort an Spalte 1 setzen` | Quick-Fix | nein | [SCA071](#sca071) |
+| SCA071 UnitLevelKeywordIndent | `Schlüsselwort in Spalte 1 verschieben` | Quick-Fix | nein | [SCA071](#sca071) |
 | SCA072 RedundantBoolean | `Überflüssigen Vergleich mit True/False entfernen` | Quick-Fix | nein | [SCA072](#sca072) |
 | SCA074 AssertMessage | `Bedingung als Assert-Meldung verwenden` | Quick-Fix | nein | [SCA074](#sca074) |
 | SCA075 ExplicitTObjectInheritance | `(TObject) aus der Klassendeklaration entfernen` | Quick-Fix | nein | [SCA075](#sca075) |
@@ -72,9 +72,9 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Qui
 | SCA113 ThreadResumeDeprecated | `%s.Start statt Resume verwenden` | Quick-Fix | nein | [SCA113](#sca113) |
 | SCA115 HttpInsteadOfHttps | `https:// statt http:// verwenden` | Quick-Fix | ja | [SCA115](#sca115) |
 | SCA117 PublicMemberWithoutDoc | `Dokumentationsgerüst einfügen` | Quick-Fix | nein | [SCA117](#sca117) |
-| SCA118 ExceptionName | `Exception-Klasse in %s umbenennen` | Quick-Fix | nein | [SCA118](#sca118) |
+| SCA118 ExceptionName | `Ausnahmeklasse in %s umbenennen` | Quick-Fix | nein | [SCA118](#sca118) |
 | SCA119 LocalConstantName | `Konstante in %s umbenennen` | Quick-Fix | nein | [SCA119](#sca119) |
-| SCA120 MissingRaise | `Exception auslösen` | Quick-Fix | ja | [SCA120](#sca120) |
+| SCA120 MissingRaise | `Ausnahme auslösen` | Quick-Fix | ja | [SCA120](#sca120) |
 | SCA121 RoutineResultUnassigned | `Result mit %s initialisieren` | Quick-Fix | ja | [SCA121](#sca121) |
 | SCA122 ReRaiseException | `raise; verwenden (Original-Stack-Trace bleibt)` | Quick-Fix | nein | [SCA122](#sca122) |
 | SCA123 CastAndFree | `Cast nach %s vor Free entfernen` | Quick-Fix | nein | [SCA123](#sca123) |
@@ -97,7 +97,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Qui
 | SCA161 PointerSubtraction | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | Quick-Fix | ja | [SCA161](#sca161) |
 | SCA164 UnusedRoutine | `Ungenutzte Routine %s löschen` | Quick-Fix | nein | [SCA164](#sca164) |
 | SCA167 InsecureRandom | `Randomize im initialization-Abschnitt aufrufen` | Quick-Fix | ja | [SCA167](#sca167) |
-| SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig mit Exception ergänzen` | Quick-Fix | nein / ja | [SCA168](#sca168) |
+| SCA168 DefaultCaseInCaseStatement | `Leeren else-Zweig ergänzen` / `else-Zweig ergänzen, der eine Ausnahme auslöst` | Quick-Fix | nein / ja | [SCA168](#sca168) |
 | SCA169 AssertWithSideEffect | `Bedingung außerhalb von Assert auswerten` | Quick-Fix | ja | [SCA169](#sca169) |
 | SCA170 ConstStringParameter | `Parameter %s als const deklarieren` | Quick-Fix | nein | [SCA170](#sca170) |
 | SCA174 TObjectListWithoutOwnership | `TObjectList<%s> verwenden, damit die Liste ihre Elemente freigibt` | Quick-Fix | ja | [SCA174](#sca174) |
@@ -113,11 +113,12 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 93 Qui
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
 | SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
 | SCA204 FunctionNameAsResult | `Result statt %s schreiben` | Quick-Fix | nein | [SCA204](#sca204) |
+| SCA206 FormatterMarker | `Formatter-Marker exakt schreiben` | Quick-Fix | nein | [SCA206](#sca206) |
 | jede Regel mit Anker im Regelkatalog (Feld `anchor`), wenn sich die Anweisung des Funds beschreiben lässt | `Stelle zeigen` | Navigation | nein | [Details](#rezept-showspan) |
 | SCA044 ConcatToFormat | `Format() aus Verkettung bilden` | Quick-Fix | nein | [Details](#rezept-formatcall) |
-| SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
+| SCA003 SQLInjection | `Parametrisierte Vorlage in die Zwischenablage kopieren` | Quick-Fix | nein | [Details](#rezept-sqltemplate) |
 | jeder Fund auf einer Zeile einer uses-Klausel (auch der Programm-Klausel einer .dpr/.lpr), etwa SCA142 UnsortedUses oder SCA007 UnusedUses | `uses: %s -> %s` *(fester Text)* / `uses: alle %d Einträge qualifizieren` | Refactoring | nein | [Details](#rezept-usesactions) |
-| SCA165 UnusedSuppression | `Wirkungslosen Unterdrück-Marker entfernen` | Quick-Fix | nein | [Details](#rezept-removemarker) |
+| SCA165 UnusedSuppression | `Wirkungslosen Unterdrückungs-Marker entfernen` | Quick-Fix | nein | [Details](#rezept-removemarker) |
 | alle außer SCA165 | `Hier unterdrücken` / `In dieser Datei unterdrücken` | Unterdrücken | nein | [Details](#rezept-suppress) |
 
 ## Quick-Fixes je Regel
@@ -243,7 +244,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Remove unit %s from uses` | `Unit %s aus uses entfernen` | `Retirer l'unité %s de uses` |
+| `Remove unit %s from uses` | `Unit %s aus uses entfernen` | `Supprimer l'unité %s de uses` |
 
 **Platzhalter:** `%s` = die Unit aus der Meldung.
 
@@ -599,7 +600,7 @@ end;
 
 | Eintrag | en | de | fr |
 |---|---|---|---|
-| 1 | `Replace "to" with "downto"` | `"to" durch "downto" ersetzen` | `Remplacer "to" par "downto"` |
+| 1 | `Replace "to" with "downto"` | `"to" durch "downto" ersetzen` | `Remplacer « to » par « downto »` |
 | 2 | `Swap the loop bounds` | `Schleifengrenzen vertauschen` | `Échanger les bornes de la boucle` |
 
 **Wirkung (Eintrag 1):** Macht aus `for I := 10 to 1 do` ein `for I := 10 downto 1 do`. Der Detektor meldet nur Ganzzahl-Literale, die Meldung nennt keine Spalte: die Hilfe sucht den Kopf selbst und prüft die Werte gegen die Meldung.
@@ -1014,7 +1015,7 @@ end;
 
 | en | de | fr |
 |---|---|---|
-| `Replace NOSONAR with a "noinspection All" marker` | `NOSONAR durch einen Marker "noinspection All" ersetzen` | `Remplacer NOSONAR par un marqueur "noinspection All"` |
+| `Replace NOSONAR with a "noinspection All" marker` | `NOSONAR durch einen Marker "noinspection All" ersetzen` | `Remplacer NOSONAR par un marqueur « noinspection All »` |
 
 **Wirkung:** Aus `X; // NOSONAR - Grund` wird eine eigene Zeile `// noinspection All` (mit dem Einzug der Zeile) über dem Code; der Rest des Kommentars bleibt hinter dem Code (`X; // Grund`). Ein führender `:` oder `-` hinter NOSONAR fällt weg, ohne Rest entfällt der Kommentar. Der Marker steht bewusst darüber: ein `noinspection` gilt für die folgende Zeile, und `All` zählt nur als ganze Artenliste – ein Grund dahinter machte ihn wirkungslos.
 
@@ -1051,7 +1052,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Remove the empty parentheses` | `Leere Klammern entfernen` | `Retirer les parenthèses vides` |
+| `Remove the empty parentheses` | `Leere Klammern entfernen` | `Supprimer les parenthèses vides` |
 
 **Wirkung:** `Foo()` → `Foo` an der Spalte aus der Meldung, auch in Deklarationen (`procedure Foo();`) – nur, wo Delphi den Namen ohne Klammern genauso aufruft: als ganze Anweisung, als ganze Bedingung von if/while/until oder als ganze rechte Seite einer Zuweisung an eine einfache Variable mit bekanntem, nicht prozeduralem Typ.
 
@@ -1243,7 +1244,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Move the keyword to column 1` | `Schlüsselwort an Spalte 1 setzen` | `Placer le mot-clé en colonne 1` |
+| `Move the keyword to column 1` | `Schlüsselwort in Spalte 1 verschieben` | `Placer le mot-clé en colonne 1` |
 
 **Wirkung:** Löscht die Einrückung vor dem Unit-Schlüsselwort aus der Meldung (`interface`, `implementation` …). Bedeutungsgleich – nur Leerraum.
 
@@ -1283,7 +1284,7 @@ end.
 
 | en | de | fr |
 |---|---|---|
-| `Remove the redundant comparison with True/False` | `Überflüssigen Vergleich mit True/False entfernen` | `Retirer la comparaison superflue avec True/False` |
+| `Remove the redundant comparison with True/False` | `Überflüssigen Vergleich mit True/False entfernen` | `Supprimer la comparaison superflue avec True/False` |
 
 **Wirkung:** `X = True` / `X <> False` → `X`, `X = False` / `X <> True` → `not X` – für einen bloßen Bezeichner, der in der Unit als `Boolean` deklariert ist.
 
@@ -1351,7 +1352,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Remove (TObject) from the class declaration` | `(TObject) aus der Klassendeklaration entfernen` | `Retirer (TObject) de la déclaration de classe` |
+| `Remove (TObject) from the class declaration` | `(TObject) aus der Klassendeklaration entfernen` | `Supprimer (TObject) de la déclaration de classe` |
 
 **Wirkung:** `class(TObject)` → `class` an der Spalte aus der Meldung, nur auf den Zeilen, ohne Parser. Bedeutungsgleich – TObject ist ohnehin der Vorfahr. Aus `class(TObject);` wird `class end;` (ein bloßes `class;` wäre eine Vorwärtsdeklaration).
 
@@ -1640,7 +1641,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Remove the redundant comparison with nil` | `Überflüssigen Vergleich mit nil entfernen` | `Retirer la comparaison superflue avec nil` |
+| `Remove the redundant comparison with nil` | `Überflüssigen Vergleich mit nil entfernen` | `Supprimer la comparaison superflue avec nil` |
 
 **Wirkung:** `Assigned(X) and (X <> nil)` bzw. `(X <> nil) and Assigned(X)` → `Assigned(X)` – alles auf einer Zeile, der Vergleich geklammert.
 
@@ -1769,7 +1770,7 @@ procedure TFoo.Get(var S: string);
 
 | en | de | fr |
 |---|---|---|
-| `Remove the empty visibility section` | `Leeren Sichtbarkeitsabschnitt entfernen` | `Retirer la section de visibilité vide` |
+| `Remove the empty visibility section` | `Leeren Sichtbarkeitsabschnitt entfernen` | `Supprimer la section de visibilité vide` |
 
 **Wirkung:** Löscht die Zeile des leeren Abschnitts (`public`, `strict private` …). Bedeutungsgleich.
 
@@ -1910,7 +1911,7 @@ end;
 
 | en | de | fr |
 |---|---|---|
-| `Remove the redundant inner parentheses` | `Das überflüssige innere Klammerpaar entfernen` | `Retirer la paire de parenthèses interne superflue` |
+| `Remove the redundant inner parentheses` | `Das überflüssige innere Klammerpaar entfernen` | `Supprimer la paire de parenthèses interne superflue` |
 
 **Wirkung:** Macht aus `((X))` ein `(X)`: das innere Paar fällt, das äußere bleibt. Bedeutung und Rangfolge bleiben gleich.
 
@@ -2574,7 +2575,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Rename the exception class to %s` | `Exception-Klasse in %s umbenennen` | `Renommer la classe d'exception en %s` |
+| `Rename the exception class to %s` | `Ausnahmeklasse in %s umbenennen` | `Renommer la classe d'exception en %s` |
 
 **Platzhalter:** `%s` = der neue Name.
 
@@ -2690,7 +2691,7 @@ end;
 
 | en | de | fr |
 |---|---|---|
-| `Raise the exception` | `Exception auslösen` | `Lever l'exception` |
+| `Raise the exception` | `Ausnahme auslösen` | `Lever l'exception` |
 
 **Wirkung:** Setzt `raise ` vor `EFoo.Create(..)` (auch `CreateFmt` & Co., Argumente über Zeilen) – nur, wenn der Ausdruck eine ganze Anweisung ist.
 
@@ -3637,7 +3638,7 @@ end;
 
 | en | de | fr |
 |---|---|---|
-| `Add "raise;" to the empty exception handler` | `Dem leeren Ausnahme-Handler "raise;" hinzufügen` | `Ajouter "raise;" au gestionnaire d'exception vide` |
+| `Add "raise;" to the empty exception handler` | `Dem leeren Ausnahme-Handler "raise;" hinzufügen` | `Ajouter « raise; » au gestionnaire d'exception vide` |
 
 **Wirkung:** Ersetzt den leeren Rumpf eines `on E: T do`-Handlers durch `raise;`, die Ausnahme läuft dann weiter statt still verschluckt zu werden. Zwei Formen: `do ;` wird `do raise;`, `do begin end` wird `do begin raise; end` (begin und end auf eigenen Zeilen: `raise;` als eigene Zeile eine Stufe tiefer). Der Detektor bleibt unverändert und meldet auch Handler mit Kommentar; die Hilfe nicht.
 
@@ -3682,7 +3683,7 @@ end;
 
 | en | de | fr |
 |---|---|---|
-| `Replace the 32-bit casts with NativeInt/NativeUInt` | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | `Remplacer les casts 32 bits par NativeInt/NativeUInt` |
+| `Replace the 32-bit casts with NativeInt/NativeUInt` | `Die 32-Bit-Casts durch NativeInt/NativeUInt ersetzen` | `Remplacer les transtypages 32 bits par NativeInt/NativeUInt` |
 
 **Wirkung:** Im Zeigerabzug `Cast(a) - Cast(b)` werden beide Cast-Wörter ersetzt: `Integer`/`LongInt` durch `NativeInt`, `Cardinal`/`LongWord` durch `NativeUInt`. Eine Ersetzung vom ersten Cast-Wort bis hinter den zweiten Cast; die Operanden bleiben. Die Meldung nennt keine Spalte: die Hilfe sucht das Muster auf den Code-Spalten der Zeile und hilft nur bei genau einem Treffer.
 
@@ -3858,7 +3859,7 @@ end.
 | Eintrag | en | de | fr |
 |---|---|---|---|
 | 1 | `Add an empty else branch` | `Leeren else-Zweig ergänzen` | `Ajouter une branche else vide` |
-| 2 | `Add an else branch that raises an exception` | `else-Zweig mit Exception ergänzen` | `Ajouter une branche else qui lève une exception` |
+| 2 | `Add an else branch that raises an exception` | `else-Zweig ergänzen, der eine Ausnahme auslöst` | `Ajouter une branche else qui lève une exception` |
 
 **Wirkung (Eintrag 1):** Setzt ein leeres `else` vor das `end` des case – bedeutungsgleich (alle anderen Werte: nichts tun, wie bisher). Steht das `end` allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrückung; endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit.
 
@@ -3917,7 +3918,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Evaluate the condition outside Assert` | `Bedingung außerhalb von Assert auswerten` | `Évaluer la condition hors de Assert` |
+| `Evaluate the condition outside Assert` | `Bedingung außerhalb von Assert auswerten` | `Évaluer la condition hors d'Assert` |
 
 **Wirkung:** Macht aus `Assert(C, M);` ein `if not (C) then Assert(False, M);` auf derselben Zeile. Ohne Assertions (`$C-`, der übliche Release-Bau) übersetzt Delphi `Assert(..)` samt Argument nicht – die Nebenwirkung des Aufrufs fiel dort weg. Danach läuft die Bedingung immer; ohne Assertions entfällt nur die Prüfung, mit Assertions bleibt alles wie vorher (auch Datei und Zeile der Meldung). Ohne Meldung wird die Bedingung zum Meldungstext wie bei SCA074. Ein Klammerpaar um die ganze Bedingung wird nicht verdoppelt.
 
@@ -4594,6 +4595,51 @@ end;
 
 **Hinweis.** Die Regel SCA204 steht nur in den Profilen strict und style (Stil entscheidet das Team-Profil); das Lesen des Namens (SCA205) bekommt keine Hilfe – ob der Wert (`Result`) oder die Rekursion (`Name()`) gemeint war, weiß nur der Autor.
 
+<a id="sca206"></a>
+
+### SCA206 – Formatter-Marker exakt schreiben
+
+- **Regel:** SCA206 `FormatterMarker` – Formatter off/on marker malformed or unpaired
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Write the formatter marker exactly` | `Formatter-Marker exakt schreiben` | `Écrire exactement le marqueur de formateur` |
+
+**Wirkung:** Ersetzt einen Formatter-Marker mit Leerraum (`{ (*}`, `{(* }`, `{*) }`, Tab statt Blank) durch die exakte Form `{(*}` bzw. `{*)}` – nur der gemeldete Kommentar ändert sich. Der Compiler sieht vorher wie nachher einen `{ }`-Kommentar: bedeutungsgleich. GExperts, CnWizards und JEDI Code Format erkennen den Marker danach und lassen den Bereich unformatiert, wie der Autor es wollte.
+
+**Nicht angeboten**
+
+- die Meldung nennt keinen falsch geschriebenen Marker, sondern einen Start ohne Ende, ein Ende ohne Start oder einen zweiten Start im offenen Bereich – wohin der Partner gehört, weiß nur der Autor
+- die Zeile beginnt in einem mehrzeiligen Kommentar oder String
+- auf der Zeile steht kein `{ }`-Kommentar mit dem gemeldeten Text im Code (Zeile verschoben, schon korrigiert; Marker in `//`, `(* *)` oder einem String)
+- derselbe falsch geschriebene Marker steht zweimal auf der Zeile
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+{ (*}
+const Table: array[0..3] of Integer = (
+  1, 2,
+  3, 4);
+{*)}
+```
+
+Nachher:
+
+```pascal
+{(*}
+const Table: array[0..3] of Integer = (
+  1, 2,
+  3, 4);
+{*)}
+```
+
+**Hinweis.** Die Regel SCA206 meldet auch Marker ohne Partner (Start ohne Ende, Ende ohne Start, zweiter Start); dort lehnt die Hilfe mit Grund ab. Ein absichtlich bis zum Dateiende offener Bereich lässt sich mit `// noinspection FormatterMarker` in der Zeile davor stilllegen.
+
 ## Weitere Code-Aktionen
 
 Rezepte des Anbieters (Kern `uRdxActionCore`), in der Reihenfolge des Menüs.
@@ -4668,7 +4714,7 @@ Nachher:
 
 | en | de | fr |
 |---|---|---|
-| `Copy parameterized template to clipboard` | `Parametrisierte Vorlage in die Zwischenablage` | `Copier le modèle paramétré dans le presse-papiers` |
+| `Copy parameterized template to clipboard` | `Parametrisierte Vorlage in die Zwischenablage kopieren` | `Copier le modèle paramétré dans le presse-papiers` |
 
 **Wirkung:** Baut aus der SQL-Verkettung eine Vorlage mit Parametern und legt sie in die Zwischenablage – schreibt nie in den Editor. Parameter wird ein Operand nur dort, wo SQL einen Wert erwartet (hinter `=`, `<>`, `<`, `>`, `LIKE`, `BETWEEN`/`AND`, in `IN (..)`/`VALUES (..)`); die Namen kommen aus dem Operanden (`FId` → `:Id`), Konstanten behalten ihren Namen. `QuotedStr(x)`, `AnsiQuotedStr(x, '''')` und das Verdoppeln der Apostrophe in einem SQL-String (`StringReplace(x, '''', '''''', [rfReplaceAll])`, auch `Trim(x).Replace('''', '''''')`) binden `x`; ein SQL-Text über 255 Zeichen wird mit ` + ` geteilt. Ziel Query-Objekt: `ParamByName`-Zeilen (bei ADO `Parameters.ParamByName`); `ExecSQL` einer FireDAC-Verbindung: die Überladung mit Werten.
 
@@ -4764,7 +4810,7 @@ uses Winapi.Windows, System.Classes, Foo;
 
 | en | de | fr |
 |---|---|---|
-| `Remove ineffective suppression marker` | `Wirkungslosen Unterdrück-Marker entfernen` | `Retirer le marqueur de suppression sans effet` |
+| `Remove ineffective suppression marker` | `Wirkungslosen Unterdrückungs-Marker entfernen` | `Supprimer le marqueur de suppression sans effet` |
 
 **Wirkung:** Entfernt einen `// noinspection`-Marker, der nichts unterdrückt: steht er allein auf der Zeile, die ganze Zeile; hinter Code nur den Kommentar.
 

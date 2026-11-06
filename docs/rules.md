@@ -5697,6 +5697,7 @@ Function name 'Total' read in its own body is a recursive call, not the current 
 | Severity | Hint | Type | Code Smell |
 | Tags | `formatting`, `formatter`, `tooling` |
 | Detector | `uFormatterMarker.pas` |
+| Editor help | `SCA206:same:write-formatter-marker-exactly` |
 
 The comments `{(*}` and `{*)}` switch the code formatter off and on again for the region between them. They come from DelForExp and are honoured by the GExperts formatter, the CnWizards formatter and JEDI Code Format (also inside Lazarus); the Delphi IDE formatter (Ctrl+D, up to Delphi 12) ignores them, and Delphi 13 no longer ships a formatter. The formatters accept only the exact four characters - `{ (*}` or `{*) }` is an ordinary comment to them - and the region does not nest: one switch, no counter. Reported are: a marker with blanks or tabs inside (it is ignored, the region is formatted); an opening `{(*}` that is never closed (nothing after it is formatted again); a closing `{*)}` without an open region (it closes nothing); and a second `{(*}` inside an open region (the first `{*)}` already ends it). A region left open to the end of the file on purpose is reported as well - suppress it with `// noinspection FormatterMarker` on the line above the `{(*}`. The compiler sees both markers as plain `{ }` comments, so none of this changes the compiled program. The balance is counted per file; `{$IFDEF}` branches are read as they stand, without evaluating them.
 

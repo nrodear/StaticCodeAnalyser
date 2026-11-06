@@ -216,6 +216,7 @@ program reDelphix.Test;
 //   * uTestRdxInheritedEmptyFix - SCA125 leeres Override loeschen
 //                                 (Deklaration und Implementierung)
 //   * uTestRdxFuncNameFix       - SCA204 Result statt Funktionsname
+//   * uTestRdxFormatterMarkerFix - SCA206 Formatter-Marker exakt schreiben
 //   * uTestRdxContextRunner     - Code-Aktionen ohne Fund am Caret
 //                                 (Charge B): Konstrukt unter dem Caret,
 //                                 Lokale Konstante, try/finally um Create
@@ -348,6 +349,7 @@ uses
   uRdxInheritedEmptyFix in '..\source\uRdxInheritedEmptyFix.pas',
   uRdxPlacesRunner in '..\source\uRdxPlacesRunner.pas',
   uRdxFuncNameFix in '..\source\uRdxFuncNameFix.pas',
+  uRdxFormatterMarkerFix in '..\source\uRdxFormatterMarkerFix.pas',
   uRdxCondExpr in '..\source\uRdxCondExpr.pas',
   uRdxIfFixes in '..\source\uRdxIfFixes.pas',
   uRdxCondFixes in '..\source\uRdxCondFixes.pas',
@@ -442,6 +444,7 @@ uses
   uTestRdxLoopBoundFix in 'uTestRdxLoopBoundFix.pas',
   uTestRdxInheritedEmptyFix in 'uTestRdxInheritedEmptyFix.pas',
   uTestRdxFuncNameFix in 'uTestRdxFuncNameFix.pas',
+  uTestRdxFormatterMarkerFix in 'uTestRdxFormatterMarkerFix.pas',
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
   uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
   uTestRdxContextIf in 'uTestRdxContextIf.pas',
