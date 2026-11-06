@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 205 detector rules. Click an ID for full details.
+All 206 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -209,6 +209,7 @@ All 205 detector rules. Click an ID for full details.
 | [SCA203](SCA203.md) | for loop runs one index past the end | Error | Bug | `uLoopPastHighBound.pas` |
 | [SCA204](SCA204.md) | Result assigned through the function name | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](SCA205.md) | Function name read in its own body is a recursive call | Error | Bug | `uFunctionNameResult.pas` |
+| [SCA206](SCA206.md) | Formatter off/on marker malformed or unpaired | Hint | Code Smell | `uFormatterMarker.pas` |
 
 ---
 

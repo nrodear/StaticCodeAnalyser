@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 206 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -209,6 +209,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA203](SCA203.md) | for-Schleife läuft einen Index über das Ende | Error | Bug | `uLoopPastHighBound.pas` |
 | [SCA204](SCA204.md) | Ergebnis über den Funktionsnamen zugewiesen | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](SCA205.md) | Funktionsname im eigenen Rumpf gelesen ist ein rekursiver Aufruf | Error | Bug | `uFunctionNameResult.pas` |
+| [SCA206](SCA206.md) | Formatter-Marker zum Aus- und Einschalten falsch geschrieben oder ohne Partner | Hint | Code Smell | `uFormatterMarker.pas` |
 
 ---
 

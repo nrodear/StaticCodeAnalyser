@@ -144,11 +144,11 @@ msgstr ""
 msgid "\"%s\" is \"%s\" - a linker, a library or C code binds the routine by its exact name"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2015
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2018
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2055
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2058
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -788,7 +788,7 @@ msgstr ""
 msgid "%s is not a pointer type of the RTL with one target type"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1807
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1810
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -1084,7 +1084,7 @@ msgstr ""
 msgid "@%s in line %d - the pointer can change"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2006
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2009
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -1198,7 +1198,7 @@ msgstr ""
 msgid "AllocMem without assignment - the buffer cannot be tracked"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2001
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2004
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -1506,7 +1506,7 @@ msgstr ""
 msgid "Cannot open or find the file in the editor"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1799
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1802
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -2182,7 +2182,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1782
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1785
 msgid "File not found: %s"
 msgstr ""
 
@@ -2238,6 +2238,18 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:552
 msgid "Format() placeholder count does not match argument count"
+msgstr ""
+
+#: SCA.Engine/sources/Output/uFixHint.pas:4703
+msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uFormatterMarker.pas:381
+msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"
+msgstr ""
+
+#: SCA.Engine/sources/Detectors/uFormatterMarker.pas:384
+msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:3202
@@ -3525,6 +3537,10 @@ msgstr ""
 msgid "Search: "
 msgstr ""
 
+#: SCA.Engine/sources/Detectors/uFormatterMarker.pas:387
+msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"
+msgstr ""
+
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:463
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3359
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1767
@@ -3857,11 +3873,11 @@ msgstr ""
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1992
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1995
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:2060
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:2063
 msgid "There is no profile \"%s\"."
 msgstr ""
 

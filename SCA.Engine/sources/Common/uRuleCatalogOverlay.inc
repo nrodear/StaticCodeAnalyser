@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..204] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..205] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2897,12 +2897,32 @@ const
         'es Aufrufargument ist; andernfalls eine Warnung (nur Default-Parameter, gewollte Rekursion daneben, blo' +
         #$00DF +
         'es Argument). Nur im Delphi-Modus: Delphi oder Free Pascal mit {$mode delphi} / {$mode delphiunicode}. Behebung: Result (oder Name(), wenn die Rekursion gewollt ist).'
+    ),
+    // SCA206
+    (
+      RuleID   : 'SCA206';
+      Name     : 'Formatter-Marker zum Aus- und Einschalten falsch geschrieben oder ohne Partner';
+      ShortDesc: 'Formatter-Marker `{(*}` / `{*)}` falsch geschrieben oder ohne Partner - GExperts, CnWizards und JCF formatieren den Bereich dann doch oder den Rest der Datei gar nicht mehr';
+      FullDesc : 'Die Kommentare `{(*}` und `{*)}` schalten den Code-Formatter f' + #$00FC +
+        'r den Bereich dazwischen aus und danach wieder ein. Sie stammen aus DelForExp und wirken im Formatter von GExperts, im Formatter von CnWizards und in JEDI Code Format (auch in Lazarus); der Formatter der Delphi-IDE (Strg+D, bis Delphi 12) kennt sie n' +
+        'icht, und Delphi 13 liefert keinen Formatter mehr aus. Die Formatter erkennen nur genau diese vier Zeichen - `{ (*}` oder `{*) }` ist f' +
+        #$00FC + 'r sie ein gew' + #$00F6 +
+        'hnlicher Kommentar -, und die Bereiche schachteln nicht: ein Schalter, kein Z' + #$00E4 +
+        'hler. Gemeldet werden: ein Marker mit Leerzeichen oder Tabs darin (er wird ignoriert, der Bereich wird formatiert); ein ' +
+        #$00F6 + 'ffnendes `{(*}` ohne schlie' + #$00DF +
+        'endes (danach wird nichts mehr formatiert); ein schlie' + #$00DF +
+        'endes `{*)}` ohne offenen Bereich (es schlie' + #$00DF +
+        't nichts); und ein zweites `{(*}` in einem offenen Bereich (das erste `{*)}` beendet ihn schon). Ein absichtlich bis zum Dateiende offener Bereich wird ebenfalls gemeldet - mit `// noinspection FormatterMarker` in der Zeile ' +
+        #$00FC + 'ber dem `{(*}` unterdr' + #$00FC + 'cken. Der Compiler sieht beide Marker als gew' +
+        #$00F6 + 'hnliche `{ }`-Kommentare, nichts davon ' + #$00E4 +
+        'ndert das kompilierte Programm. Die Bilanz z' + #$00E4 +
+        'hlt je Datei; `{$IFDEF}`-Zweige werden gelesen, wie sie dastehen, ohne sie auszuwerten.'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..204] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..205] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -6748,6 +6768,32 @@ const
         'r' + #$00E9 + 'e ' + #$00E0 + ' c' + #$00F4 + 't' + #$00E9 +
         ', argument nu). Uniquement en mode Delphi : Delphi, ou Free Pascal avec {$mode delphi} / {$mode delphiunicode}. Correction : Result (ou Name() quand la r' +
         #$00E9 + 'cursion est voulue).'
+    ),
+    // SCA206
+    (
+      RuleID   : 'SCA206';
+      Name     : 'Marqueur de d' + #$00E9 + 'sactivation du formateur mal ' + #$00E9 +
+        'crit ou sans partenaire';
+      ShortDesc: 'Marqueur de formateur `{(*}` / `{*)}` mal ' + #$00E9 +
+        'crit ou sans partenaire - GExperts, CnWizards et JCF formatent alors quand m' + #$00EA +
+        'me la zone ou plus du tout le reste du fichier';
+      FullDesc : 'Les commentaires `{(*}` et `{*)}` d' + #$00E9 +
+        'sactivent le formateur de code pour la zone qui les s' + #$00E9 + 'pare, puis le r' +
+        #$00E9 +
+        'activent. Ils viennent de DelForExp et sont reconnus par le formateur de GExperts, celui de CnWizards et JEDI Code Format (aussi dans Lazarus) ; le formateur de l''IDE Delphi (Ctrl+D, jusqu''' +
+        #$00E0 + ' Delphi 12) les ignore, et Delphi 13 n''est plus livr' + #$00E9 +
+        ' avec un formateur. Les formateurs n''acceptent que ces quatre caract' + #$00E8 +
+        'res exacts - `{ (*}` ou `{*) }` est pour eux un commentaire ordinaire - et les zones ne s''imbriquent pas : un interrupteur, pas un compteur. Sont signal' +
+        #$00E9 + 's : un marqueur contenant des espaces ou des tabulations (il est ignor' + #$00E9 +
+        ', la zone est format' + #$00E9 + 'e) ; un `{(*}` ouvrant jamais referm' + #$00E9 +
+        ' (plus rien n''est format' + #$00E9 +
+        ' ensuite) ; un `{*)}` fermant sans zone ouverte (il ne ferme rien) ; et un second `{(*}` dans une zone ouverte (le premier `{*)}` la termine d' +
+        #$00E9 + 'j' + #$00E0 + '). Une zone laiss' + #$00E9 + 'e ouverte volontairement jusqu''' +
+        #$00E0 + ' la fin du fichier est signal' + #$00E9 +
+        'e aussi - la masquer avec `// noinspection FormatterMarker` sur la ligne au-dessus du `{(*}`. Le compilateur voit les deux marqueurs comme de simples commentaires `{ }` ; rien de tout cela ne modifie le programme compil' +
+        #$00E9 +
+        '. Le bilan se fait par fichier ; les branches `{$IFDEF}` sont lues telles quelles, sans ' +
+        #$00EA + 'tre ' + #$00E9 + 'valu' + #$00E9 + 'es.'
     )
   );
 

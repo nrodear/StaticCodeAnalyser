@@ -1359,7 +1359,10 @@ begin
      // NotIncludedInProject schon, der Fallback keines von beiden; seit
      // dem 194/195-Split verschwand ein per uses gezogener Orphan unter
      // diesem Profil sonst ersatzlos (Emit195=False frisst den Fund).
-     fkNotIncludedInProject, fkUsedButNotInProject]);
+     fkNotIncludedInProject, fkUsedButNotInProject,
+     // SCA206 FormatterMarker (Nico-Entscheid E7, 2026-11-06): Pflege des
+     // Formatter-Bereichs, kein Bug - code-quality, nicht ide-fast/bugs-only.
+     fkFormatterMarker]);
   FProfiles.AddOrSetValue('dfm-only',
     [fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmHardcodedDbCreds,
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmOrphanHandler,

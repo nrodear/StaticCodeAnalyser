@@ -17,7 +17,7 @@ Anwendung gibt es als 32- und als 64-Bit-Build. **Lazarus-/Free-Pascal**-Projekt
 scannen die eigenständige Anwendung und das CLI nativ — dieselbe Engine, dieselben
 Regeln, dialektbewusst: `.lpi`/`.lpk`-Projekte, `.pp`/`.lpr`-Units und
 `.lfm`-Formulare ([Details](#lazarus--free-pascal-fpc)).
-AST-basierte Analyse mit **205 Regeln**: 181 Pascal-Checks für
+AST-basierte Analyse mit **206 Regeln**: 182 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken,
 Datei-Encoding & Unicode-Sicherheit (Trojan Source) und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
@@ -45,7 +45,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 181 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) und eine Regel für `.ini`-Dateien — **insgesamt 205**, ausgeliefert von 162 Pipeline-Registrierungen |
+| 🐛 **Bugs finden** | 182 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) und eine Regel für `.ini`-Dateien — **insgesamt 205**, ausgeliefert von 162 Pipeline-Registrierungen |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath, HardcodedIpAddress (auch in .ini-Dateien); **Unicode-Sicherheit** — Trojan Source / Bidirectional Override (CVE-2021-42574), unsichtbare / Zero-Width-Zeichen, BOM- / UTF-8-Encoding-Integrität |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -62,7 +62,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (205 Regeln — 181 Pascal + 23 DFM + 1 INI, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (206 Regeln — 182 Pascal + 23 DFM + 1 INI, Sonar-Taxonomie)
 
 **Pascal-AST-Checks (~160)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -253,7 +253,7 @@ Regelkatalog; sie unterscheiden sich nur in der Bedienung.
 **reDelphix** ist das Feature des SCA, das dem IDE-Plugin Code-Aktionen
 hinzufügt, als eigenes Entwurfszeitpaket.
 An einem Fund bietet es Quick-Fixes an — für 96
-der 205 Regeln, etwa `FreeAndNil(X)`, `try/finally` um eine Freigabe oder
+der 206 Regeln, etwa `FreeAndNil(X)`, `try/finally` um eine Freigabe oder
 `Format()` statt einer Verkettung — über eine Glühbirne an der
 Caret-Zeile, das Kontextmenü des Funds (Editor und Fund-Grid) und
 `Strg+Alt+F` im Grid. Ohne Fund bietet das Editor-Kontextmenü Refactorings
@@ -310,7 +310,7 @@ Server, Scanner und Token beschreibt die offizielle Sonar-Dokumentation.
 
 ---
 
-## Was wird erkannt (205 Regeln — 181 Pascal + 23 DFM + 1 INI)
+## Was wird erkannt (206 Regeln — 182 Pascal + 23 DFM + 1 INI)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 

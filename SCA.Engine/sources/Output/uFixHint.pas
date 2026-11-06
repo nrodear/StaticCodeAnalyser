@@ -4698,6 +4698,23 @@ begin
         'end;';
     end;
 
+    fkFormatterMarker:
+    begin
+      Result.Description := _('Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region');
+      Result.Before :=
+        '{ (*}   // blank inside - GExperts, CnWizards and JCF ignore it'#13#10 +
+        'const Table: array[0..3] of Integer = ('#13#10 +
+        '  1, 2,'#13#10 +
+        '  3, 4);'#13#10 +
+        '{*)}';
+      Result.After :=
+        '{(*}'#13#10 +
+        'const Table: array[0..3] of Integer = ('#13#10 +
+        '  1, 2,'#13#10 +
+        '  3, 4);'#13#10 +
+        '{*)}';
+    end;
+
   end;
 
   // Checklist-Drift-Fix 2026-07-24 (Audit SCA175-194: 11 Kinds ohne Branch):

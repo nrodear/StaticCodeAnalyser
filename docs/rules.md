@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 206 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -209,6 +209,7 @@ All 205 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA203](#sca203) | for loop runs one index past the end | **Error** | Bug | `uLoopPastHighBound.pas` |
 | [SCA204](#sca204) | Result assigned through the function name | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](#sca205) | Function name read in its own body is a recursive call | **Error** | Bug | `uFunctionNameResult.pas` |
+| [SCA206](#sca206) | Formatter off/on marker malformed or unpaired | Hint | Code Smell | `uFormatterMarker.pas` |
 
 ---
 
@@ -5686,4 +5687,46 @@ Function name 'Total' read in its own body is a recursive call, not the current 
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA205.md`._
+## SCA206
+**Formatter off/on marker malformed or unpaired**
+
+> `{(*}` / `{*)}` formatter marker is malformed or unpaired - GExperts, CnWizards and JCF then format the region anyway or stop formatting for the rest of the file
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Code Smell |
+| Tags | `formatting`, `formatter`, `tooling` |
+| Detector | `uFormatterMarker.pas` |
+
+The comments `{(*}` and `{*)}` switch the code formatter off and on again for the region between them. They come from DelForExp and are honoured by the GExperts formatter, the CnWizards formatter and JEDI Code Format (also inside Lazarus); the Delphi IDE formatter (Ctrl+D, up to Delphi 12) ignores them, and Delphi 13 no longer ships a formatter. The formatters accept only the exact four characters - `{ (*}` or `{*) }` is an ordinary comment to them - and the region does not nest: one switch, no counter. Reported are: a marker with blanks or tabs inside (it is ignored, the region is formatted); an opening `{(*}` that is never closed (nothing after it is formatted again); a closing `{*)}` without an open region (it closes nothing); and a second `{(*}` inside an open region (the first `{*)}` already ends it). A region left open to the end of the file on purpose is reported as well - suppress it with `// noinspection FormatterMarker` on the line above the `{(*}`. The compiler sees both markers as plain `{ }` comments, so none of this changes the compiled program. The balance is counted per file; `{$IFDEF}` branches are read as they stand, without evaluating them.
+
+```pascal
+// BAD
+{ (*}
+const Table: array[0..3] of Integer = (
+  1, 2,
+  3, 4);
+{*)}
+
+// GOOD
+{(*}
+const Table: array[0..3] of Integer = (
+  1, 2,
+  3, 4);
+{*)}
+```
+
+**Not reported:** markers inside string literals, `//` comments and `(* *)` comments; comments that only look like markers (the footnote column `{ (*) }`, commented-out code `{(* Old := 1; *)}` - that is SCA070); custom GExperts keywords and the JCF directives `//jcf:format=off` / `//jcf:format=on`; a pair whose halves stand in different `{$IFDEF}` branches (counted as it stands, like CnWizards).
+
+What the messages look like:
+
+```
+Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted
+Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted
+Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on
+Malformed formatter marker '{ (*}' - formatters recognise only the exact '{(*}' without blanks, so this marker is ignored
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA206.md`._

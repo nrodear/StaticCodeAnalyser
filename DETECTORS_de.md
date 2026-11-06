@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung:** Alle **205 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **162 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry; **SCA201** kommt aus dem Konfigurations-Durchlauf über .ini-Dateien). 45 / 50 Sonar-Regel-Slots vollständig, #16 teilweise; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
+**Zusammenfassung:** Alle **206 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **163 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry; **SCA201** kommt aus dem Konfigurations-Durchlauf über .ini-Dateien). 45 / 50 Sonar-Regel-Slots vollständig, #16 teilweise; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
@@ -161,7 +161,7 @@ Sonar-50-Katalog
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  60 (SCA060-119, Sektion unten)
 
-🎯 Gesamt: 205 Detektor-Kinds (190 Detektor-Units).
+🎯 Gesamt: 206 Detektor-Kinds (191 Detektor-Units).
 ```
 
 ---
@@ -453,7 +453,7 @@ Kein AST-/per-Datei-Detektor: läuft nur bei `.dproj`/`.groupproj`-Scans (CLI `-
 | SCA194 | **NotIncludedInProject** | .pas/.dfm im Projektordner, aber nicht im Projekt (.dproj/.groupproj) referenziert - verwaiste / tote Quelldatei | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), fehlt aber im .dproj - ins Projekt aufnehmen | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
-## 🧪 Result-Initialisierung und spätere Ergänzungen (SCA196–SCA205) — 10 Regeln
+## 🧪 Result-Initialisierung und spätere Ergänzungen (SCA196–SCA206) — 11 Regeln
 
 Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interfaces) geben ihr Ergebnis über einen versteckten **var**-Parameter zurück, der auf die Zielvariable des Aufrufers zeigt — inklusive deren ALTEM Inhalt. Result ist beim Eintritt also NICHT `''`/`nil`, und der Compiler-Hinweis W1035 schweigt für genau diese Typen. Wo SCA196 feuert, bleibt SCA121 für dieselbe Function stumm.
 
@@ -469,6 +469,7 @@ Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interface
 | SCA203 | **LoopPastHighBound** | for-Schleife läuft einen Index über das Ende (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1`; Strings `0 to Length(S)` und `1 to Length(S) + 1`) und indiziert dieselbe Sammlung mit der unverschobenen Schleifenvariablen - Error mit Typbeweis (Liste, Array, String), sonst Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
 | SCA204 | **FunctionNameAsResult** | Ergebnis durch Zuweisung an den Funktionsnamen gesetzt (`GetCount := ..`) - die alte Pascal-Form, Delphi schreibt `Result :=`; nur wo Result existiert (Delphi, FPC delphi/objfpc oder `{$modeswitch result}`); Profile strict und style, nicht default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
 | SCA205 | **FunctionNameRecursion** | Funktionsname im eigenen Rumpf gelesen (`Total := Total + X`) - im Delphi-Modus ein rekursiver Aufruf, nicht das bisherige Ergebnis; nur Funktionen, die ihrem Namen selbst zuweisen und keinen Pflichtparameter haben - Error parameterlos ohne bewusste Rekursion, sonst Warning | Error | Bug | ✅ | `uFunctionNameResult` |
+| SCA206 | **FormatterMarker** | Formatter-Marker `{(*}` / `{*)}` mit Leerzeichen oder Tabs darin (`{ (*}`) oder ohne Partner: Start ohne Ende, Ende ohne Start, zweiter Start im offenen Bereich - GExperts, CnWizards und JCF formatieren den Bereich dann doch oder gar nicht mehr; Marker in Strings und Kommentaren werden nicht gemeldet | Hint | Code Smell | ✅ | `uFormatterMarker` |
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 

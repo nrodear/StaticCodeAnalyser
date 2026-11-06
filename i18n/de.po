@@ -1559,6 +1559,9 @@ msgstr "Ergebnis über den Funktionsnamen gesetzt - stattdessen Result := schrei
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"
 
+msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"
+msgstr "Formatter-Marker falsch geschrieben oder ohne Partner - {(*} und {*)} genau so, ohne Leerzeichen, schreiben und jeden Bereich schließen"
+
 msgid "File not found:"
 msgstr "Datei nicht gefunden:"
 
@@ -7098,3 +7101,16 @@ msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers - Delphi (E2145) un
 
 msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"
 msgstr "`with A, B do` löst Bezeichner von rechts nach links auf - die Verdeckung ändert sich still, sobald einer der Typen ein Member ergänzt"
+
+# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---
+# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und
+# bleibt englisch (Format-Meldungen kommen spaeter).
+
+msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"
+msgstr "Formatter-Marker {(*} wird nie durch {*)} geschlossen - GExperts, CnWizards und JCF formatieren den Rest der Datei nicht mehr"
+
+msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"
+msgstr "Formatter-Marker {*)} ohne öffnendes {(*} - er schließt nichts, der Code darüber wird formatiert"
+
+msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"
+msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"

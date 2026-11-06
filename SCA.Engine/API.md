@@ -11,7 +11,7 @@ knowing the internal units.
 
 - **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` reads `.dproj`/`.groupproj` for the project scopes; no VCL/FMX dependency)
 - **Version:** 0.9.19 (`uSCAConsts.SCA_VERSION`)
-- **Scope:** 205 rules (rule IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
+- **Scope:** 206 rules (rule IDs `SCA001`–`SCA206`, `rules/sca-rules.json`)
 
 ---
 

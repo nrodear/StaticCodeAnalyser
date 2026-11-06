@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7100 Zeilen, 341434 Bytes
-  CPoLines_de: array[0..7099] of string = (
+  // i18n\de.po - 7116 Zeilen, 342651 Bytes
+  CPoLines_de: array[0..7115] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1575,6 +1575,9 @@ const
     '',
     'msgid "The function name on the right side is a recursive call, not the current result"',
     'msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"',
+    '',
+    'msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"',
+    'msgstr "Formatter-Marker falsch geschrieben oder ohne Partner - {(*} und {*)} genau so, ohne Leerzeichen, schreiben und jeden Bereich schlie'#$00DF'en"',
     '',
     'msgid "File not found:"',
     'msgstr "Datei nicht gefunden:"',
@@ -7114,7 +7117,20 @@ const
     'msgstr "Nacktes `raise;` au'#$00DF'erhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"',
     '',
     'msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"',
-    'msgstr "`with A, B do` l'#$00F6'st Bezeichner von rechts nach links auf - die Verdeckung '#$00E4'ndert sich still, sobald einer der Typen ein Member erg'#$00E4'nzt"'
+    'msgstr "`with A, B do` l'#$00F6'st Bezeichner von rechts nach links auf - die Verdeckung '#$00E4'ndert sich still, sobald einer der Typen ein Member erg'#$00E4'nzt"',
+    '',
+    '# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---',
+    '# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und',
+    '# bleibt englisch (Format-Meldungen kommen spaeter).',
+    '',
+    'msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"',
+    'msgstr "Formatter-Marker {(*} wird nie durch {*)} geschlossen - GExperts, CnWizards und JCF formatieren den Rest der Datei nicht mehr"',
+    '',
+    'msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"',
+    'msgstr "Formatter-Marker {*)} ohne '#$00F6'ffnendes {(*} - er schlie'#$00DF't nichts, der Code dar'#$00FC'ber wird formatiert"',
+    '',
+    'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
+    'msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7389,8 +7405,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7096 Zeilen, 355303 Bytes
-  CPoLines_fr: array[0..7095] of string = (
+  // i18n\fr.po - 7112 Zeilen, 356510 Bytes
+  CPoLines_fr: array[0..7111] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -8963,6 +8979,9 @@ const
     '',
     'msgid "The function name on the right side is a recursive call, not the current result"',
     'msgstr "Le nom de la fonction '#$00E0' droite est un appel r'#$00E9'cursif, pas le r'#$00E9'sultat courant"',
+    '',
+    'msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"',
+    'msgstr "Marqueur de formateur mal '#$00E9'crit ou sans partenaire - '#$00E9'crire {(*} et {*)} exactement ainsi, sans espace, et fermer chaque zone"',
     '',
     'msgid "File not found:"',
     'msgstr "Fichier introuvable :"',
@@ -14486,7 +14505,20 @@ const
     'msgstr "Un `raise;` nu en dehors d''un gestionnaire except/on - Delphi (E2145) et FPC refusent cette forme"',
     '',
     'msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"',
-    'msgstr "`with A, B do` r'#$00E9'sout les identificateurs de droite '#$00E0' gauche - le masquage change silencieusement si l''un des types ajoute un membre"'
+    'msgstr "`with A, B do` r'#$00E9'sout les identificateurs de droite '#$00E0' gauche - le masquage change silencieusement si l''un des types ajoute un membre"',
+    '',
+    '# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---',
+    '# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und',
+    '# bleibt englisch (Format-Meldungen kommen spaeter).',
+    '',
+    'msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"',
+    'msgstr "Le marqueur de formateur {(*} n''est jamais ferm'#$00E9' par {*)} - GExperts, CnWizards et JCF ne formatent plus le reste du fichier"',
+    '',
+    'msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"',
+    'msgstr "Le marqueur de formateur {*)} n''a pas de {(*} ouvrant - il ne ferme rien, le code au-dessus est format'#$00E9'"',
+    '',
+    'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
+    'msgstr "Second {(*} dans une zone sans formatage encore ouverte - les marqueurs ne s''imbriquent pas, le premier {*)} r'#$00E9'active d'#$00E9'j'#$00E0' le formatage"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

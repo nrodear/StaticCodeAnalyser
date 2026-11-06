@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 205 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 206 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -209,6 +209,7 @@ Les 205 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA203](SCA203.md) | La boucle for dépasse le dernier indice | Error | Bug | `uLoopPastHighBound.pas` |
 | [SCA204](SCA204.md) | Résultat affecté via le nom de la fonction | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](SCA205.md) | Le nom de la fonction lu dans son propre corps est un appel récursif | Error | Bug | `uFunctionNameResult.pas` |
+| [SCA206](SCA206.md) | Marqueur de désactivation du formateur mal écrit ou sans partenaire | Hint | Code Smell | `uFormatterMarker.pas` |
 
 ---
 

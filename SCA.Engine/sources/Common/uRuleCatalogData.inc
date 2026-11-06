@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..204] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..205] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2837,6 +2837,20 @@ const
       GoodEx   : 'function Total: Integer;' + #13#10 + 'var' + #13#10 + '  I: Integer;' + #13#10 + 'begin' +
         #13#10 + '  Result := 0;' + #13#10 + '  for I := 1 to 3 do' + #13#10 +
         '    Result := Result + I;' + #13#10 + 'end;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False;
+      EditorHelps: ''
+    ),
+    // SCA206
+    (
+      RuleID   : 'SCA206';
+      Name     : 'Formatter off/on marker malformed or unpaired';
+      ShortDesc: '`{(*}` / `{*)}` formatter marker is malformed or unpaired - GExperts, CnWizards and JCF then format the region anyway or stop formatting for the rest of the file';
+      BadEx    : '{ (*}' + #13#10 + 'const Table: array[0..3] of Integer = (' + #13#10 + '  1, 2,' + #13#10 +
+        '  3, 4);' + #13#10 + '{*)}';
+      GoodEx   : '{(*}' + #13#10 + 'const Table: array[0..3] of Integer = (' + #13#10 + '  1, 2,' + #13#10 +
+        '  3, 4);' + #13#10 + '{*)}';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;

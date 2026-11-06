@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** All **205 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **162 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 45 / 50 Sonar-rule slots complete, #16 partial; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary:** All **206 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **163 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 45 / 50 Sonar-rule slots complete, #16 partial; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -160,7 +160,7 @@ Sonar-50 catalogue
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  60 (SCA060-119, section below)
 
-🎯 Grand total: 205 detector kinds (190 detector units).
+🎯 Grand total: 206 detector kinds (191 detector units).
 ```
 
 ---
@@ -452,7 +452,7 @@ Not an AST/per-file detector: runs only for `.dproj`/`.groupproj` scans (CLI `--
 | SCA194 | **NotIncludedInProject** | .pas/.dfm in the project folder but not referenced by the project (.dproj/.groupproj) - orphaned / dead source | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas referenced via uses by project units (compiles through the search path) but missing from the .dproj - add it to the project | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
-## 🧪 Result initialization and later additions (SCA196–SCA205) — 10 rules
+## 🧪 Result initialization and later additions (SCA196–SCA206) — 11 rules
 
 Managed return types (string family, dynamic arrays, `Variant`, interfaces) return through a hidden **var** parameter aliasing the caller's target variable including its OLD content — Result is NOT `''`/`nil` on entry, and the compiler hint W1035 stays silent for exactly these types. Where SCA196 fires, SCA121 stays silent for the same function.
 
@@ -468,6 +468,7 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 | SCA203 | **LoopPastHighBound** | for loop runs one index past the end (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1`; strings `0 to Length(S)` and `1 to Length(S) + 1`) and indexes the same collection with the plain loop variable - Error with a proven type (list, array, string), otherwise Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
 | SCA204 | **FunctionNameAsResult** | result set by assigning to the function name (`GetCount := ..`) - the old Pascal form, Delphi writes `Result :=`; only where Result exists (Delphi, FPC delphi/objfpc or `{$modeswitch result}`); profiles strict and style, not default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
 | SCA205 | **FunctionNameRecursion** | function name read in its own body (`Total := Total + X`) - in Delphi mode a recursive call, not the current result; only functions that assign to their own name and have no mandatory parameter - Error when parameterless without deliberate recursion, otherwise Warning | Error | Bug | ✅ | `uFunctionNameResult` |
+| SCA206 | **FormatterMarker** | formatter marker `{(*}` / `{*)}` with blanks or tabs inside (`{ (*}`), or unpaired: a start never closed, an end without a start, a second start in an open region - GExperts, CnWizards and JCF then format the region anyway or stop formatting; markers in strings and comments are not reported | Hint | Code Smell | ✅ | `uFormatterMarker` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
 
