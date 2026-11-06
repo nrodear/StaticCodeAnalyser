@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..205] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..206] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2653,8 +2653,8 @@ const
     // SCA193
     (
       RuleID   : 'SCA193';
-      Name     : 'Non-ASCII character in identifier';
-      ShortDesc: 'Identifier contains a non-ASCII letter - homoglyph / confusable risk';
+      Name     : 'Look-alike (homoglyph) letter in identifier';
+      ShortDesc: 'Identifier contains a Cyrillic or Greek letter that looks like a Latin one - homoglyph / confusable risk';
       BadEx    : 'var Login: string;  // one letter is a Cyrillic homoglyph (U+043E), not Latin ''o''';
       GoodEx   : 'var Login: string;  // all-ASCII identifier';
       Anchor   : '';
@@ -2855,6 +2855,20 @@ const
       FixMode  : '';
       EditorHelp: True;
       EditorHelps: 'SCA206:same:write-formatter-marker-exactly'
+    ),
+    // SCA207
+    (
+      RuleID   : 'SCA207';
+      Name     : 'Non-ASCII identifier that tools break';
+      ShortDesc: 'Identifier with non-ASCII letters in a UTF-8 file without BOM (the Delphi formatter splits it) or under Free Pascal (does not compile)';
+      BadEx    : '// file saved as UTF-8 WITHOUT BOM' + #13#10 + 'var' + #13#10 +
+        '  Groesse: Integer;  // written with o-umlaut and sharp s - the formatter inserts blanks into the name';
+      GoodEx   : '// the same file saved as UTF-8 WITH BOM - or an ASCII name' + #13#10 + 'var' + #13#10 +
+        '  Groesse: Integer;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False;
+      EditorHelps: ''
     )
   );
 

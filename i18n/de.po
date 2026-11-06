@@ -7131,3 +7131,14 @@ msgstr "Formatter-Marker {*)} ohne öffnendes {(*} - er schließt nichts, der Co
 
 msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"
 msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"
+
+# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---
+# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien
+# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind
+# Format-Meldungen und bleiben englisch.
+
+msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"
+msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Datei als UTF-8 mit BOM speichern oder einen ASCII-Namen verwenden"
+
+msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."
+msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."

@@ -1,7 +1,7 @@
 ﻿# Scan-Profile
 
 Ein **Profil** ist eine benannte Regelmenge. Es beantwortet eine einzige
-Frage: *welche der 206 Detektoren laufen in diesem Scan?* Alles andere -
+Frage: *welche der 207 Detektoren laufen in diesem Scan?* Alles andere -
 Severity-Schwelle, Konfidenz-Schwelle, Unterdrückungen, Baseline -
 filtert hinterher. Das Profil entscheidet, wonach überhaupt gesucht wird.
 
@@ -9,13 +9,13 @@ filtert hinterher. Das Profil entscheidet, wonach überhaupt gesucht wird.
 
 | Profil | Regeln | Wofür es da ist |
 |---|---|---|
-| `strict` | 206 | Alles; in der CLI schaltet es zusätzlich SCA007 (unbenutzte Uses) ein, in EXE und IDE-Plugin nicht (siehe unten). An diesem Profil hängt die Vollständigkeitszusage - Regeln mit Konfidenz low brauchen trotzdem `[Rules] MinConfidence=low`, siehe unten. |
-| `default` | 198 | Alles außer den acht reinen Konventionsregeln aus `style`. Diese acht machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
-| `selftest-quiet` | 195 | Alles außer elf Regeln, die für den Selbstscan abgeschaltet sind (darunter `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Keine Teilmenge von `default`: Es behält fünf der `style`-Regeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
+| `strict` | 207 | Alles; in der CLI schaltet es zusätzlich SCA007 (unbenutzte Uses) ein, in EXE und IDE-Plugin nicht (siehe unten). An diesem Profil hängt die Vollständigkeitszusage - Regeln mit Konfidenz low brauchen trotzdem `[Rules] MinConfidence=low`, siehe unten. |
+| `default` | 199 | Alles außer den acht reinen Konventionsregeln aus `style`. Diese acht machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
+| `selftest-quiet` | 196 | Alles außer elf Regeln, die für den Selbstscan abgeschaltet sind (darunter `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Keine Teilmenge von `default`: Es behält fünf der `style`-Regeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
 | `code-quality` | 27 | Wartbarkeit: toter Code, lange Methoden, Komplexität, unbenutzte Uses (SCA007 nur mit `[Detectors] UsesCheck=1`). |
 | `ide-fast` | 21 | Klein genug, um bei jeder geöffneten Datei in der IDE zu laufen. Bugs und Sicherheit, kein Stil. |
 | `dfm-only` | 20 | Nur die Form-Datei-Prüfungen. |
-| `bugs-only` | 20 | Nur Defekte - keine Smells, keine Konventionen. |
+| `bugs-only` | 21 | Nur Defekte - keine Smells, keine Konventionen. |
 | `security` | 9 | Nur Verwundbarkeiten und Hotspots. |
 | `style` | 8 | Die reinen Konventionsregeln, die `default` weglässt. |
 
@@ -71,7 +71,7 @@ rechts**:
 
 | Token | Wirkung |
 |---|---|
-| `*` | alle 206 Kinds |
+| `*` | alle 207 Kinds |
 | `Kind` | dieses Kind aufnehmen |
 | `!Kind` bzw. `-Kind` | dieses Kind entfernen |
 

@@ -17,7 +17,7 @@ autonome existe en version 32 bits et 64 bits. Les projets **Lazarus / Free Pasc
 sont analysés nativement par l'application autonome et la CLI — même moteur, mêmes
 règles, selon le dialecte : projets `.lpi`/`.lpk`, unités `.pp`/`.lpr` et fiches
 `.lfm` ([détails](#lazarus--free-pascal-fpc)).
-Analyse basée sur l'AST avec **206 règles** : 182 contrôles
+Analyse basée sur l'AST avec **207 règles** : 183 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -48,7 +48,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 | Capacité | Détails |
 |----------|---------|
-| 🐛 **Détection de bugs** | 182 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) et une règle pour les fichiers `.ini` — **205 au total**, portées par 162 enregistrements de pipeline |
+| 🐛 **Détection de bugs** | 183 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) et une règle pour les fichiers `.ini` — **207 au total**, portées par 163 enregistrements de pipeline |
 | 🔐 **Contrôles de sécurité** | SQLInjection (basé sur un score), HardcodedSecret, HardcodedPath, HardcodedIpAddress (aussi dans les fichiers .ini) ; **sûreté Unicode** — Trojan Source / bidirectional override (CVE-2021-42574), caractères invisibles / à chasse nulle, intégrité BOM / encodage UTF-8 |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Analyse incrémentale** | Bouton « Branch-Changes » : uniquement les fichiers modifiés dans la branche Git/SVN — 200 ms au lieu de 60 s |
@@ -65,7 +65,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 ## Fonctions principales
 
-### 1. Analyse statique de code (206 règles — 182 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
+### 1. Analyse statique de code (207 règles — 183 Pascal + 23 DFM + 1 INI, taxonomie Sonar)
 
 **Contrôles AST Pascal (~160)** : **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -260,7 +260,7 @@ catalogue de règles ; seule la façon de les piloter diffère.
 **reDelphix** est la fonction de SCA qui ajoute des actions de code au
 plugin IDE, sous forme de paquet de conception distinct.
 Sur un résultat, il propose des quick-fixes — pour
-97 des 206 règles, par exemple `FreeAndNil(X)`, `try/finally` autour d'une
+97 des 207 règles, par exemple `FreeAndNil(X)`, `try/finally` autour d'une
 libération ou `Format()` à la place d'une concaténation — via une ampoule
 sur la ligne du curseur, le menu contextuel du résultat (éditeur et grille
 des résultats) et `Ctrl+Alt+F` dans la grille. Sans résultat, le menu
@@ -320,7 +320,7 @@ le serveur, le scanner et les jetons relèvent de la documentation officielle de
 
 ---
 
-## Ce qui est détecté (206 règles — 182 Pascal + 23 DFM + 1 INI)
+## Ce qui est détecté (207 règles — 183 Pascal + 23 DFM + 1 INI)
 
 Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 

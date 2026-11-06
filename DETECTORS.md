@@ -7,7 +7,7 @@ specific to this tool.
 
 Status legend: ✅ implemented · 🟡 partial · 🔲 open
 
-**Summary:** All **206 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **163 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 45 / 50 Sonar-rule slots complete, #16 partial; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
+**Summary:** All **207 rule kinds** from the canonical roster [`rules/sca-rules.json`](rules/sca-rules.json) are implemented and enumerated in this file (delivered by **163 pipeline registrations**; several classes emit multiple kinds — e.g. `uVisibilityCheck` → 3 visibility kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193 and SCA207, `uDfmAnalysisRunner` → 23 DFM kinds; **SCA194/SCA195 are project-scope, not AST-based** — emitted from the project/group scan dispatch, not the per-file detector registry; **SCA201** comes from the configuration pass over .ini files). 45 / 50 Sonar-rule slots complete, #16 partial; the 4 open slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) need type-inference / cross-unit resolution and have no SCA-ID yet.
 
 Remaining 4 open slots all need type-inference / flow-analysis / cross-unit symbol resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** has a conservative MVP (`SCA166`) — full path-sensitivity remains open for Phase 3.
 
@@ -160,7 +160,7 @@ Sonar-50 catalogue
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
 🧩 SonarDelphi naming/formatting:  60 (SCA060-119, section below)
 
-🎯 Grand total: 206 detector kinds (191 detector units).
+🎯 Grand total: 207 detector kinds (191 detector units).
 ```
 
 ---
@@ -439,7 +439,7 @@ Byte-level file-encoding verdicts (computed from the raw file bytes at load time
 | SCA190 | **SourceUtf16** | UTF-16 source - compiles, but unusual and text-tool-unfriendly | Hint | Code Smell | ✅ | `uSourceEncoding` |
 | SCA191 | **SourceUtf32** | UTF-32 source - Delphi compiler rejects it with fatal error F2438 | Error | File Error | ✅ | `uSourceEncoding` |
 | SCA192 | **SourceInvisibleChar** | Zero-width/invisible Unicode char - hidden-text / homoglyph abuse vector | Warning | Vulnerability | ✅ | `uSourceEncoding` |
-| SCA193 | **SourceNonAsciiIdentifier** | Identifier contains a non-ASCII letter - homoglyph / confusable risk | Warning | Vulnerability | ✅ | `uSourceEncoding` |
+| SCA193 | **SourceNonAsciiIdentifier** | Identifier contains a Cyrillic or Greek letter that looks like a Latin one (known homoglyph table) - confusable risk; umlauts and accents are not reported | Warning | Vulnerability | ✅ | `uSourceEncoding` |
 
 ---
 
@@ -452,7 +452,7 @@ Not an AST/per-file detector: runs only for `.dproj`/`.groupproj` scans (CLI `--
 | SCA194 | **NotIncludedInProject** | .pas/.dfm in the project folder but not referenced by the project (.dproj/.groupproj) - orphaned / dead source | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas referenced via uses by project units (compiles through the search path) but missing from the .dproj - add it to the project | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
-## 🧪 Result initialization and later additions (SCA196–SCA206) — 11 rules
+## 🧪 Result initialization and later additions (SCA196–SCA207) — 12 rules
 
 Managed return types (string family, dynamic arrays, `Variant`, interfaces) return through a hidden **var** parameter aliasing the caller's target variable including its OLD content — Result is NOT `''`/`nil` on entry, and the compiler hint W1035 stays silent for exactly these types. Where SCA196 fires, SCA121 stays silent for the same function.
 
@@ -469,6 +469,7 @@ Managed return types (string family, dynamic arrays, `Variant`, interfaces) retu
 | SCA204 | **FunctionNameAsResult** | result set by assigning to the function name (`GetCount := ..`) - the old Pascal form, Delphi writes `Result :=`; only where Result exists (Delphi, FPC delphi/objfpc or `{$modeswitch result}`); profiles strict and style, not default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
 | SCA205 | **FunctionNameRecursion** | function name read in its own body (`Total := Total + X`) - in Delphi mode a recursive call, not the current result; only functions that assign to their own name and have no mandatory parameter - Error when parameterless without deliberate recursion, otherwise Warning | Error | Bug | ✅ | `uFunctionNameResult` |
 | SCA206 | **FormatterMarker** | formatter marker `{(*}` / `{*)}` with blanks or tabs inside (`{ (*}`), or unpaired: a start never closed, an end without a start, a second start in an open region - GExperts, CnWizards and JCF then format the region anyway or stop formatting; markers in strings and comments are not reported | Hint | Code Smell | ✅ | `uFormatterMarker` |
+| SCA207 | **FragileNonAsciiIdentifier** | identifier with non-ASCII letters (umlaut, accent, Cyrillic, Greek) that tools break: in a UTF-8 file without BOM the Delphi IDE and formatter read ANSI and split the name (Warning); under `--dialect=fpc` in every encoding, because Free Pascal accepts only ASCII identifiers (Error, without the name in an ANSI file); one finding per distinct name and file; comments and strings are not reported | Warning | Bug | ✅ | `uSourceEncoding` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (memory-leak whitelist)
 

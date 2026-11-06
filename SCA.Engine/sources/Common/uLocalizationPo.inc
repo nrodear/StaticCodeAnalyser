@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7133 Zeilen, 343562 Bytes
-  CPoLines_de: array[0..7132] of string = (
+  // i18n\de.po - 7144 Zeilen, 344465 Bytes
+  CPoLines_de: array[0..7143] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7147,7 +7147,18 @@ const
     'msgstr "Formatter-Marker {*)} ohne '#$00F6'ffnendes {(*} - er schlie'#$00DF't nichts, der Code dar'#$00FC'ber wird formatiert"',
     '',
     'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
-    'msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"'
+    'msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"',
+    '',
+    '# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---',
+    '# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien',
+    '# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind',
+    '# Format-Meldungen und bleiben englisch.',
+    '',
+    'msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"',
+    'msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Datei als UTF-8 mit BOM speichern oder einen ASCII-Namen verwenden"',
+    '',
+    'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
+    'msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7422,8 +7433,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7129 Zeilen, 357432 Bytes
-  CPoLines_fr: array[0..7128] of string = (
+  // i18n\fr.po - 7140 Zeilen, 358342 Bytes
+  CPoLines_fr: array[0..7139] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14552,7 +14563,18 @@ const
     'msgstr "Le marqueur de formateur {*)} n''a pas de {(*} ouvrant - il ne ferme rien, le code au-dessus est format'#$00E9'"',
     '',
     'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
-    'msgstr "Second {(*} dans une zone sans formatage encore ouverte - les marqueurs ne s''imbriquent pas, le premier {*)} r'#$00E9'active d'#$00E9'j'#$00E0' le formatage"'
+    'msgstr "Second {(*} dans une zone sans formatage encore ouverte - les marqueurs ne s''imbriquent pas, le premier {*)} r'#$00E9'active d'#$00E9'j'#$00E0' le formatage"',
+    '',
+    '# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---',
+    '# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien',
+    '# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind',
+    '# Format-Meldungen und bleiben englisch.',
+    '',
+    'msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"',
+    'msgstr "Identificateur avec des lettres non-ASCII que les outils cassent - enregistrer le fichier en UTF-8 avec BOM ou utiliser un nom ASCII"',
+    '',
+    'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
+    'msgstr "Identificateur avec un caract'#$00E8're non-ASCII dans un fichier qui n''est pas en UTF-8 - Free Pascal n''accepte que des identificateurs ASCII (A-Z, 0-9, _) et s''arr'#$00EA'te avec \"illegal character\". Utiliser un nom ASCII."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

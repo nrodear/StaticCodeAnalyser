@@ -31,7 +31,7 @@
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
       "DfmActionMismatch", "DuplicateInterfaceGuid",
       "ParamNameMismatch", "ComparisonPrecedence", "LoopPastHighBound",
-      "FunctionNameRecursion"
+      "FunctionNameRecursion", "FragileNonAsciiIdentifier"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -4255,9 +4255,9 @@
     {
       "id": "SCA193",
       "kind": "SourceNonAsciiIdentifier",
-      "name": "Non-ASCII character in identifier",
-      "shortDescription": "Identifier contains a non-ASCII letter - homoglyph / confusable risk",
-      "fullDescription": "An identifier (variable, type, routine, ...) contains a non-ASCII character. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): a letter such as Cyrillic U+043E looks like Latin 'o' but is a different identifier, so two identifiers can look identical yet bind differently. A legitimate Unicode identifier is also possible, so review before changing; prefer ASCII identifiers for portability and to avoid confusion.",
+      "name": "Look-alike (homoglyph) letter in identifier",
+      "shortDescription": "Identifier contains a Cyrillic or Greek letter that looks like a Latin one - homoglyph / confusable risk",
+      "fullDescription": "An identifier (variable, type, routine, ...) contains a Cyrillic or Greek letter that looks exactly like a Latin one - for example Cyrillic U+043E instead of Latin 'o', or Greek capital Mu U+039C instead of 'M'. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): two identifiers can look identical yet bind differently. Only a fixed table of known look-alikes counts: the Cyrillic and Greek capitals that look Latin, the Cyrillic small letters a, e, o, p, c, y, x, s, i, j, h, l, d, q, w and the Greek small omicron. Umlauts, accented letters and letters without a Latin twin are not reported - they deceive nobody; where tools break such a name (UTF-8 without BOM, Free Pascal), SCA207 reports it. A name written entirely in another script can still contain table letters and is reported, so review before changing. One finding per file, at the line of the first look-alike letter in code; only files whose encoding is certain (BOM or valid UTF-8). Prefer ASCII identifiers.",
       "defaultSeverity": "Warning",
       "type": "Vulnerability",
       "tags": ["security", "unicode", "trojan-source"],
@@ -4831,6 +4831,42 @@
       "cleanCodeAttribute": "FORMATTED",
       "impacts": [
         { "softwareQuality": "MAINTAINABILITY", "severity": "LOW" }
+      ]
+    },
+    {
+      "id": "SCA207",
+      "kind": "FragileNonAsciiIdentifier",
+      "name": "Non-ASCII identifier that tools break",
+      "shortDescription": "Identifier with non-ASCII letters in a UTF-8 file without BOM (the Delphi formatter splits it) or under Free Pascal (does not compile)",
+      "fullDescription": "An identifier contains a non-ASCII letter - an umlaut, an accented letter, a Cyrillic or Greek letter. Delphi accepts this, but in a source file saved as UTF-8 WITHOUT a byte-order mark the Delphi IDE and the Delphi code formatter (Formatter.exe, Ctrl+D up to Delphi 12) read the file as ANSI: every non-ASCII letter becomes two characters, the formatter takes the second one for punctuation and inserts blanks into the identifier - after formatting the unit no longer compiles and the file is no longer valid UTF-8. Comments, string literals and compiler directives are copied unchanged and are not reported. Which letters break depends on the ANSI code page of the machine that formats (on Windows-1252 most umlauts and accented letters break, capital U-umlaut and sharp s happen to survive), so every non-ASCII letter is reported. Files with a BOM, UTF-16 and ANSI files are read correctly and are not reported in a Delphi scan. Free Pascal accepts only ASCII identifiers (A-Z, 0-9, underscore) and stops with 'illegal character' in every encoding: with --dialect=fpc each such identifier is reported as an error with high confidence, in an ANSI file without the name (its letters cannot be decoded reliably). Each distinct identifier is reported once per file, at its first occurrence; inactive {$IFDEF} branches count, because the formatter formats them too. Fix: save the file as UTF-8 with BOM (Delphi), or rename the identifier to ASCII (ae, oe, ue, ss) - for Free Pascal only the ASCII name helps. SCA185 reports the same missing BOM for the file as a whole; look-alike letters are SCA193.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": ["encoding", "unicode", "formatter", "portability", "fpc-port"],
+      "detectorUnit": "uSourceEncoding.pas",
+      "examples": {
+        "bad": "// file saved as UTF-8 WITHOUT BOM\nvar\n  Groesse: Integer;  // written with o-umlaut and sharp s - the formatter inserts blanks into the name",
+        "good": "// the same file saved as UTF-8 WITH BOM - or an ASCII name\nvar\n  Groesse: Integer;"
+      },
+      "exceptions": [
+        {
+          "case": "Files with a BOM, UTF-16 and ANSI files (Delphi scan)",
+          "why": "The IDE and the formatter read these files correctly, the name stays intact. Look-alike letters in such a name are SCA193, an ANSI file as such is SCA189. With --dialect=fpc these files are reported, because Free Pascal rejects the name in every encoding.",
+          "example": "// UTF-8 WITH BOM\nvar Groesse: Integer;  // with o-umlaut - not reported in a Delphi scan"
+        },
+        {
+          "case": "Comments, string literals and compiler directives",
+          "why": "The formatter copies them unchanged, and Free Pascal accepts non-ASCII there. Delphi-12 multi-line strings count as strings. A missing BOM for string literals is SCA185.",
+          "example": "// o-umlaut in a comment\nS := 'o-umlaut in a string';  // not reported"
+        },
+        {
+          "case": "Characters beyond U+FFFF",
+          "why": "A letter outside the Basic Multilingual Plane (stored as a surrogate pair) is not read as part of a name - a deliberate false negative; such identifiers do not occur in practice.",
+          "example": "var XY: Integer;  // with a mathematical letter U+1D400 between X and Y - not reported"
+        }
+      ],
+      "cleanCodeAttribute": "TRUSTWORTHY",
+      "impacts": [
+        { "softwareQuality": "RELIABILITY", "severity": "MEDIUM" }
       ]
     }
   ]

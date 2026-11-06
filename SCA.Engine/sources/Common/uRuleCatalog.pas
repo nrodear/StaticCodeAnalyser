@@ -1345,7 +1345,10 @@ begin
      fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
      fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
      fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch, fkComparisonPrecedence, fkLoopPastHighBound,
-     fkFunctionNameRecursion]);
+     fkFunctionNameRecursion,
+     // SCA207 FragileNonAsciiIdentifier (Nico-Entscheid 2026-11-06): ein
+     // latenter Baubruch (Formatter zerlegt den Namen, FPC lehnt ihn ab).
+     fkFragileNonAsciiIdentifier]);
   FProfiles.AddOrSetValue('code-quality',
     [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
      fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,

@@ -4303,7 +4303,7 @@ Nachher:
 
 ### SCA193 – Doppelgänger-Buchstaben im Namen durch ASCII ersetzen
 
-- **Regel:** SCA193 `SourceNonAsciiIdentifier` – Non-ASCII character in identifier
+- **Regel:** SCA193 `SourceNonAsciiIdentifier` – Look-alike (homoglyph) letter in identifier
 - **Art:** Quick-Fix
 - **Ändert Verhalten:** nein
 

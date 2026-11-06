@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 206 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 207 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -196,7 +196,7 @@ All 206 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA190](#sca190) | UTF-16 source file | Hint | Code Smell | `uSourceEncoding.pas` |
 | [SCA191](#sca191) | UTF-32 / UCS-4 source file | **Error** | File Error | `uSourceEncoding.pas` |
 | [SCA192](#sca192) | Invisible / zero-width character in source | Warning | Vulnerability | `uSourceEncoding.pas` |
-| [SCA193](#sca193) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
+| [SCA193](#sca193) | Look-alike (homoglyph) letter in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](#sca194) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](#sca195) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](#sca196) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
@@ -210,6 +210,7 @@ All 206 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA204](#sca204) | Result assigned through the function name | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](#sca205) | Function name read in its own body is a recursive call | **Error** | Bug | `uFunctionNameResult.pas` |
 | [SCA206](#sca206) | Formatter off/on marker malformed or unpaired | Hint | Code Smell | `uFormatterMarker.pas` |
+| [SCA207](#sca207) | Non-ASCII identifier that tools break | Warning | Bug | `uSourceEncoding.pas` |
 
 ---
 
@@ -5235,9 +5236,9 @@ The file contains an invisible or zero-width Unicode character (U+200B ZWSP, U+2
 ---
 
 ## SCA193
-**Non-ASCII character in identifier**
+**Look-alike (homoglyph) letter in identifier**
 
-> Identifier contains a non-ASCII letter - homoglyph / confusable risk
+> Identifier contains a Cyrillic or Greek letter that looks like a Latin one - homoglyph / confusable risk
 
 | Field | Value |
 |---|---|
@@ -5247,7 +5248,7 @@ The file contains an invisible or zero-width Unicode character (U+200B ZWSP, U+2
 | Detector | `uSourceEncoding.pas` |
 | Editor help | `SCA193:same:write-name-in-ascii-letters` |
 
-An identifier (variable, type, routine, ...) contains a non-ASCII character. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): a letter such as Cyrillic U+043E looks like Latin 'o' but is a different identifier, so two identifiers can look identical yet bind differently. A legitimate Unicode identifier is also possible, so review before changing; prefer ASCII identifiers for portability and to avoid confusion.
+An identifier (variable, type, routine, ...) contains a Cyrillic or Greek letter that looks exactly like a Latin one - for example Cyrillic U+043E instead of Latin 'o', or Greek capital Mu U+039C instead of 'M'. This is the homoglyph / confusable-identifier vector of the Trojan Source family (CVE-2021-42694, CWE-1007): two identifiers can look identical yet bind differently. Only a fixed table of known look-alikes counts: the Cyrillic and Greek capitals that look Latin, the Cyrillic small letters a, e, o, p, c, y, x, s, i, j, h, l, d, q, w and the Greek small omicron. Umlauts, accented letters and letters without a Latin twin are not reported - they deceive nobody; where tools break such a name (UTF-8 without BOM, Free Pascal), SCA207 reports it. A name written entirely in another script can still contain table letters and is reported, so review before changing. One finding per file, at the line of the first look-alike letter in code; only files whose encoding is certain (BOM or valid UTF-8). Prefer ASCII identifiers.
 
 ```pascal
 // BAD
@@ -5730,4 +5731,43 @@ Malformed formatter marker '{ (*}' - formatters recognise only the exact '{(*}' 
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA206.md`._
+## SCA207
+**Non-ASCII identifier that tools break**
+
+> Identifier with non-ASCII letters in a UTF-8 file without BOM (the Delphi formatter splits it) or under Free Pascal (does not compile)
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Bug |
+| Tags | `encoding`, `unicode`, `formatter`, `portability`, `fpc-port` |
+| Detector | `uSourceEncoding.pas` |
+
+An identifier contains a non-ASCII letter - an umlaut, an accented letter, a Cyrillic or Greek letter. Delphi accepts this, but in a source file saved as UTF-8 WITHOUT a byte-order mark the Delphi IDE and the Delphi code formatter (Formatter.exe, Ctrl+D up to Delphi 12) read the file as ANSI: every non-ASCII letter becomes two characters, the formatter takes the second one for punctuation and inserts blanks into the identifier - after formatting the unit no longer compiles and the file is no longer valid UTF-8. Comments, string literals and compiler directives are copied unchanged and are not reported. Which letters break depends on the ANSI code page of the machine that formats (on Windows-1252 most umlauts and accented letters break, capital U-umlaut and sharp s happen to survive), so every non-ASCII letter is reported. Files with a BOM, UTF-16 and ANSI files are read correctly and are not reported in a Delphi scan. Free Pascal accepts only ASCII identifiers (A-Z, 0-9, underscore) and stops with 'illegal character' in every encoding: with `--dialect=fpc` each such identifier is reported as an error with high confidence, in an ANSI file without the name (its letters cannot be decoded reliably). Each distinct identifier is reported once per file, at its first occurrence; inactive `{$IFDEF}` branches count, because the formatter formats them too. Fix: save the file as UTF-8 with BOM (Delphi), or rename the identifier to ASCII (ae, oe, ue, ss) - for Free Pascal only the ASCII name helps. SCA185 reports the same missing BOM for the file as a whole; look-alike letters are SCA193.
+
+```pascal
+// BAD
+// file saved as UTF-8 WITHOUT BOM
+var
+  Groesse: Integer;  // written with o-umlaut and sharp s - the formatter inserts blanks into the name
+
+// GOOD
+// the same file saved as UTF-8 WITH BOM - or an ASCII name
+var
+  Groesse: Integer;
+```
+
+**Not reported:** files with a BOM, UTF-16 and ANSI files in a Delphi scan (read correctly; look-alike letters are SCA193, ANSI files SCA189); non-ASCII in comments, string literals (also Delphi-12 multi-line strings) and compiler directives; symbols that are no letters (`…` in code); letters beyond U+FFFF (surrogate pairs - deliberate false negative).
+
+What the messages look like:
+
+```
+Identifier 'Größe' contains non-ASCII letters in a UTF-8 file without BOM - the Delphi IDE and code formatter read such a file as ANSI and split the identifier, so the unit no longer compiles after formatting. Save the file as UTF-8 with BOM, or use an ASCII name.
+Identifier 'Größe' contains non-ASCII letters - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with "illegal character". Use an ASCII name.
+Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with "illegal character". Use an ASCII name.
+```
+
+The first message is the Delphi scan (Warning); the other two are `--dialect=fpc` (Error), the last one for an ANSI file.
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA207.md`._

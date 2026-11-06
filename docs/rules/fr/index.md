@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 206 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 207 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -196,7 +196,7 @@ Les 206 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA190](SCA190.md) | Fichier source UTF-16 | Hint | Code Smell | `uSourceEncoding.pas` |
 | [SCA191](SCA191.md) | Fichier source UTF-32 / UCS-4 | Error | File Error | `uSourceEncoding.pas` |
 | [SCA192](SCA192.md) | Caractère invisible ou de largeur nulle dans le source | Warning | Vulnerability | `uSourceEncoding.pas` |
-| [SCA193](SCA193.md) | Caractère non-ASCII dans un identificateur | Warning | Vulnerability | `uSourceEncoding.pas` |
+| [SCA193](SCA193.md) | Lettre sosie (homoglyphe) dans un identificateur | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](SCA194.md) | Fichier source hors du projet | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unité utilisée par le projet mais non incluse dedans | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](SCA196.md) | Le Result d'un type managé est lu avant d'avoir été affecté | Warning | Bug | `uManagedResultUninit.pas` |
@@ -210,6 +210,7 @@ Les 206 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA204](SCA204.md) | Résultat affecté via le nom de la fonction | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](SCA205.md) | Le nom de la fonction lu dans son propre corps est un appel récursif | Error | Bug | `uFunctionNameResult.pas` |
 | [SCA206](SCA206.md) | Marqueur de désactivation du formateur mal écrit ou sans partenaire | Hint | Code Smell | `uFormatterMarker.pas` |
+| [SCA207](SCA207.md) | Identificateur non-ASCII que les outils cassent | Warning | Bug | `uSourceEncoding.pas` |
 
 ---
 
