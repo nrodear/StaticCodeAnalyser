@@ -11,7 +11,7 @@ komplette Analyse aufruft, ohne die internen Einheiten zu kennen.
 
 - **Package:** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` liest `.dproj`/`.groupproj` für die Projekt-Scopes; keine VCL/FMX-Abhängigkeit)
 - **Version:** 0.9.19 (`uSCAConsts.SCA_VERSION`)
-- **Umfang:** 205 Regeln (Regel-IDs `SCA001`–`SCA205`, `rules/sca-rules.json`)
+- **Umfang:** 207 Regeln (Regel-IDs `SCA001`–`SCA207`, `rules/sca-rules.json`)
 
 ---
 

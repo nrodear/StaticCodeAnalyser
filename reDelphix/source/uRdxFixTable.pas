@@ -218,7 +218,8 @@ uses
   uRdxLookupHoistFix,   // SCA111, SCA112
   uRdxLoopBoundFix,     // SCA203
   uRdxInheritedEmptyFix, // SCA125
-  uRdxFuncNameFix;      // SCA204
+  uRdxFuncNameFix,      // SCA204
+  uRdxFormatterMarkerFix; // SCA206
 
 type
   // Was die Hilfe auf einem Netzpfad nicht liest (NetworkPathReason): je
@@ -2240,6 +2241,17 @@ begin
   Result.Name := TRdxFuncNameFix.NameOf(AFinding.Message);
 end;
 
+// SCA206 (2026-11-06): Leerraum im Formatter-Marker -> exakte Form '{(*}'
+// bzw. '{*)}', bedeutungsgleich (nur ein Kommentar). Die Bilanzmeldungen
+// derselben Regel (Start ohne Ende, Ende ohne Start, zweiter Start) lehnt
+// der Planer mit Grund ab - wohin der Partner gehoert, weiss nur der Autor.
+function PlanFormatterMarker(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxFormatterMarkerFix.ExactMarker);
+end;
+
 { ---- Die Tabelle ---- }
 
 type
@@ -2250,7 +2262,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 92;
+  FIX_ROW_HIGH = 93;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2516,6 +2528,10 @@ const
     // Charge N / FN (2026-10-25). SCA204: Result statt Funktionsname -
     // bedeutungsgleich (links vom ':=' dieselbe Variable).
     (Kind: fkFunctionNameAsResult; Plan: PlanFuncNameResult;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA206 (2026-11-06): exakte Marker-Form - bedeutungsgleich, nur ein
+    // Kommentar aendert sich.
+    (Kind: fkFormatterMarker; Plan: PlanFormatterMarker;
      HintByPlanner: False; Changes: False; Alt: nil)
   );
 
@@ -2848,7 +2864,11 @@ const
     // FunctionNameAsResult
     'same meaning - on the left of ":=" Result and the function name are '
       + 'the same variable; the name in an expression stays (a recursive '
-      + 'call, SCA205)'
+      + 'call, SCA205)',
+    // SCA206: bedeutungsgleich fuer den Compiler.
+    // FormatterMarker
+    'same meaning for the compiler - only a comment changes; GExperts, '
+      + 'CnWizards and JCF now recognise the marker'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -2959,7 +2979,8 @@ const
     'Move %s before the loop',
     'Let the loop run %s',
     'Remove the empty override %s',
-    'Write Result instead of %s'
+    'Write Result instead of %s',
+    'Write the formatter marker exactly'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -2983,7 +3004,7 @@ const
     '', '', '',
     '', '', '', '', '', '', '',
     'Raise EInvalidOpException instead (invalid state)',
-    '', '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '', '', ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
@@ -2992,7 +3013,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..98] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..99] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -3091,7 +3112,8 @@ const
     (Name: 'PlanFieldByNameLoop'; Plan: PlanFieldByNameLoop),
     (Name: 'PlanLoopBound'; Plan: PlanLoopBound),
     (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty),
-    (Name: 'PlanFuncNameResult'; Plan: PlanFuncNameResult)
+    (Name: 'PlanFuncNameResult'; Plan: PlanFuncNameResult),
+    (Name: 'PlanFormatterMarker'; Plan: PlanFormatterMarker)
   );
 
 var

@@ -202,6 +202,7 @@
         <DCCReference Include="source\uRdxInheritedEmptyFix.pas"/>
         <DCCReference Include="source\uRdxPlacesRunner.pas"/>
         <DCCReference Include="source\uRdxFuncNameFix.pas"/>
+        <DCCReference Include="source\uRdxFormatterMarkerFix.pas"/>
         <DCCReference Include="source\uRdxCondExpr.pas"/>
         <DCCReference Include="source\uRdxIfFixes.pas"/>
         <DCCReference Include="source\uRdxCondFixes.pas"/>

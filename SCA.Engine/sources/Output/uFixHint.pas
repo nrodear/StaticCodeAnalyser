@@ -4628,10 +4628,12 @@ begin
     begin
       Result.Description := _('Non-ASCII character in identifier - homoglyph / confusable risk');
       Result.Before :=
-        '// An identifier contains a non-ASCII letter. A homoglyph such as'#13#10 +
-        '// Cyrillic U+043E looks exactly like Latin "o", so two identifiers'#13#10 +
-        '// can look identical to a reviewer yet bind to different symbols'#13#10 +
-        '// (Trojan Source homoglyph attack, CVE-2021-42694, CWE-1007).';
+        '// An identifier contains a Cyrillic or Greek letter that looks'#13#10 +
+        '// Latin (homoglyph). Cyrillic U+043E looks exactly like Latin "o",'#13#10 +
+        '// so two identifiers can look identical to a reviewer yet bind to'#13#10 +
+        '// different symbols (Trojan Source homoglyph attack,'#13#10 +
+        '// CVE-2021-42694, CWE-1007). Umlauts and accented letters are no'#13#10 +
+        '// homoglyphs and are not reported here (see SCA207).';
       Result.After :=
         '// Use ASCII identifiers. If a Unicode identifier is intentional,'#13#10 +
         '// confirm every letter is from the expected script (no mixed'#13#10 +
@@ -4696,6 +4698,39 @@ begin
         '  for I := 1 to 3 do'#13#10 +
         '    Result := Result + I;'#13#10 +
         'end;';
+    end;
+
+    fkFormatterMarker:
+    begin
+      Result.Description := _('Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region');
+      Result.Before :=
+        '{ (*}   // blank inside - GExperts, CnWizards and JCF ignore it'#13#10 +
+        'const Table: array[0..3] of Integer = ('#13#10 +
+        '  1, 2,'#13#10 +
+        '  3, 4);'#13#10 +
+        '{*)}';
+      Result.After :=
+        '{(*}'#13#10 +
+        'const Table: array[0..3] of Integer = ('#13#10 +
+        '  1, 2,'#13#10 +
+        '  3, 4);'#13#10 +
+        '{*)}';
+    end;
+
+    fkFragileNonAsciiIdentifier:
+    begin
+      Result.Description := _('Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name');
+      Result.Before :=
+        '// file saved as UTF-8 WITHOUT BOM - the Delphi IDE and the'#13#10 +
+        '// formatter (Ctrl+D, Formatter.exe) read it as ANSI and insert'#13#10 +
+        '// blanks into the name; Free Pascal rejects the name anyway'#13#10 +
+        'var'#13#10 +
+        '  Gr'#$00F6#$00DF'e: Integer;';
+      Result.After :=
+        '// Delphi: save the file as UTF-8 WITH BOM (EF BB BF) - the name'#13#10 +
+        '// stays. Free Pascal (and the safest choice): an ASCII name.'#13#10 +
+        'var'#13#10 +
+        '  Groesse: Integer;';
     end;
 
   end;

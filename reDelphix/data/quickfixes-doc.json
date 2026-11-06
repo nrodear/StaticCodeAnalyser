@@ -2721,6 +2721,31 @@
         "end;"
       ],
       "hinweis": "Die Regel SCA204 steht nur in den Profilen strict und style (Stil entscheidet das Team-Profil); das Lesen des Namens (SCA205) bekommt keine Hilfe – ob der Wert (`Result`) oder die Rekursion (`Name()`) gemeint war, weiß nur der Autor."
+    },
+    "FormatterMarker": {
+      "titel": "Formatter-Marker exakt schreiben",
+      "was": "Ersetzt einen Formatter-Marker mit Leerraum (`{ (*}`, `{(* }`, `{*) }`, Tab statt Blank) durch die exakte Form `{(*}` bzw. `{*)}` – nur der gemeldete Kommentar ändert sich. Der Compiler sieht vorher wie nachher einen `{ }`-Kommentar: bedeutungsgleich. GExperts, CnWizards und JEDI Code Format erkennen den Marker danach und lassen den Bereich unformatiert, wie der Autor es wollte.",
+      "nichtAngeboten": [
+        "die Meldung nennt keinen falsch geschriebenen Marker, sondern einen Start ohne Ende, ein Ende ohne Start oder einen zweiten Start im offenen Bereich – wohin der Partner gehört, weiß nur der Autor",
+        "die Zeile beginnt in einem mehrzeiligen Kommentar oder String",
+        "auf der Zeile steht kein `{ }`-Kommentar mit dem gemeldeten Text im Code (Zeile verschoben, schon korrigiert; Marker in `//`, `(* *)` oder einem String)",
+        "derselbe falsch geschriebene Marker steht zweimal auf der Zeile"
+      ],
+      "beispielVorher": [
+        "{ (*}",
+        "const Table: array[0..3] of Integer = (",
+        "  1, 2,",
+        "  3, 4);",
+        "{*)}"
+      ],
+      "beispielNachher": [
+        "{(*}",
+        "const Table: array[0..3] of Integer = (",
+        "  1, 2,",
+        "  3, 4);",
+        "{*)}"
+      ],
+      "hinweis": "Die Regel SCA206 meldet auch Marker ohne Partner (Start ohne Ende, Ende ohne Start, zweiter Start); dort lehnt die Hilfe mit Grund ab. Ein absichtlich bis zum Dateiende offener Bereich lässt sich mit `// noinspection FormatterMarker` in der Zeile davor stilllegen."
     }
   }
 }

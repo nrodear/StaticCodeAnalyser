@@ -7,7 +7,7 @@ poignée de détecteurs bonus propres à cet outil.
 
 Légende des statuts : ✅ implémenté · 🟡 partiel · 🔲 ouvert
 
-**Résumé :** Les **205 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **162 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 45 / 50 slots de règles Sonar complets, #16 partiel ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
+**Résumé :** Les **207 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **163 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193 et SCA207, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 45 / 50 slots de règles Sonar complets, #16 partiel ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
 
 Les 4 slots encore ouverts exigent tous inférence de types / analyse de flux / résolution de symboles inter-unités : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** dispose d'un MVP conservateur (`SCA166`) — la sensibilité complète aux chemins reste ouverte pour la phase 3.
 
@@ -162,7 +162,7 @@ Catalogue Sonar-50
 🏛 Cluster mORMot :                  9 (SCA153-161, tous complets)
 🧩 Nommage/formatage SonarDelphi : 60 (SCA060-119, section ci-dessous)
 
-🎯 Total général : 205 kinds de détecteurs (190 unités de détecteur).
+🎯 Total général : 207 kinds de détecteurs (191 unités de détecteur).
 ```
 
 ---
@@ -444,7 +444,7 @@ Verdicts d'encodage de fichier au niveau octet (calculés depuis les octets brut
 | SCA190 | **SourceUtf16** | Source UTF-16 - compile, mais inhabituel et hostile aux outils texte | Hint | Code Smell | ✅ | `uSourceEncoding` |
 | SCA191 | **SourceUtf32** | Source UTF-32 - le compilateur Delphi la rejette avec l'erreur fatale F2438 | Error | File Error | ✅ | `uSourceEncoding` |
 | SCA192 | **SourceInvisibleChar** | Caractère Unicode invisible/de largeur nulle - vecteur d'abus texte caché / homoglyphes | Warning | Vulnerability | ✅ | `uSourceEncoding` |
-| SCA193 | **SourceNonAsciiIdentifier** | Un identificateur contient une lettre non ASCII - risque d'homoglyphes / de caractères confondables | Warning | Vulnerability | ✅ | `uSourceEncoding` |
+| SCA193 | **SourceNonAsciiIdentifier** | Un identificateur contient une lettre cyrillique ou grecque qui ressemble à une lettre latine (table fixe d'homoglyphes) - risque de caractères confondables ; umlauts et accents ne sont pas signalés | Warning | Vulnerability | ✅ | `uSourceEncoding` |
 
 ---
 
@@ -457,7 +457,7 @@ Pas un détecteur AST/par fichier : ne s'exécute que pour les scans `.dproj`/`.
 | SCA194 | **NotIncludedInProject** | .pas/.dfm dans le dossier du projet mais non référencé par le projet (.dproj/.groupproj) - source orpheline / morte | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas référencé via uses par des unités du projet (compile grâce au chemin de recherche) mais absent du .dproj - à ajouter au projet | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 
-## 🧪 Initialisation de Result et ajouts ultérieurs (SCA196–SCA205) — 10 règles
+## 🧪 Initialisation de Result et ajouts ultérieurs (SCA196–SCA207) — 12 règles
 
 Les types de retour managés (famille string, tableaux dynamiques, `Variant`, interfaces) sont renvoyés via un paramètre **var** caché qui aliase la variable cible de l'appelant, y compris son ANCIEN contenu — Result n'est PAS `''`/`nil` à l'entrée, et le conseil du compilateur W1035 reste muet précisément pour ces types. Là où SCA196 se déclenche, SCA121 reste muet pour la même fonction.
 
@@ -473,6 +473,8 @@ Les types de retour managés (famille string, tableaux dynamiques, `Variant`, in
 | SCA203 | **LoopPastHighBound** | La boucle for dépasse le dernier indice (`0 to X.Count`, `0 to Length(A)`, `High(A) + 1` ; chaînes `0 to Length(S)` et `1 to Length(S) + 1`) et indexe la même collection avec la variable de boucle non décalée - Error avec type prouvé (liste, tableau, chaîne), sinon Warning | Error | Bug | ✅ | `uLoopPastHighBound` |
 | SCA204 | **FunctionNameAsResult** | résultat défini par affectation au nom de la fonction (`GetCount := ..`) - l'ancienne forme Pascal, Delphi écrit `Result :=` ; seulement là où Result existe (Delphi, FPC delphi/objfpc ou `{$modeswitch result}`) ; profils strict et style, pas default | Hint | Code Smell | ✅ | `uFunctionNameResult` |
 | SCA205 | **FunctionNameRecursion** | nom de la fonction lu dans son propre corps (`Total := Total + X`) - en mode Delphi un appel récursif, pas le résultat courant ; seulement les fonctions qui affectent leur propre nom et sans paramètre obligatoire - Error sans paramètre et sans récursion voulue, sinon Warning | Error | Bug | ✅ | `uFunctionNameResult` |
+| SCA206 | **FormatterMarker** | marqueur de formateur `{(*}` / `{*)}` contenant des espaces ou des tabulations (`{ (*}`) ou sans partenaire : début jamais fermé, fin sans début, second début dans une zone ouverte - GExperts, CnWizards et JCF formatent alors quand même la zone ou plus du tout ; les marqueurs dans les chaînes et les commentaires ne sont pas signalés | Hint | Code Smell | ✅ | `uFormatterMarker` |
+| SCA207 | **FragileNonAsciiIdentifier** | identificateur avec des lettres non-ASCII (umlaut, accent, cyrillique, grec) que les outils cassent : dans un fichier UTF-8 sans BOM, l'IDE Delphi et le formateur lisent de l'ANSI et coupent le nom (Warning) ; avec `--dialect=fpc` dans tout encodage, car Free Pascal n'accepte que des identificateurs ASCII (Error, sans le nom dans un fichier ANSI) ; un résultat par nom distinct et par fichier ; commentaires et chaînes ne sont pas signalés | Warning | Bug | ✅ | `uSourceEncoding` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (liste blanche des fuites mémoire)
 

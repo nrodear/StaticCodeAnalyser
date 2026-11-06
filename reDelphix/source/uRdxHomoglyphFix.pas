@@ -9,11 +9,15 @@ unit uRdxHomoglyphFix;
 // Unit gilt und der neue Name dort noch frei ist (Changes: False).
 //
 // DER FUND (uSourceEncoding, S3 - ScanNonAsciiTokens): EIN Fund je DATEI,
-// auf der Zeile des ERSTEN Nicht-ASCII-Buchstabens im Code (der TLexer
+// auf der Zeile des ERSTEN bekannten Homoglyphs im Code (der TLexer
 // verwirft Kommentare, Strings zaehlen nicht), ohne Spalte und ohne Namen;
 // nur in Dateien mit verlaesslicher Dekodierung (BOM bzw. striktes UTF-8).
+// Seit 2026-11-06 meldet der Detektor nur Zeichen seiner Tabelle
+// HOMOGLYPH_CODES - dieselben Codes wie HOMOGLYPHS unten; ein Umlaut-Name
+// ist dort kein Fund mehr (SCA207 meldet ihn, wo Werkzeuge ihn zerlegen).
 // Die Hilfe nimmt auf der gemeldeten Zeile den ersten Bezeichner mit einem
-// Nicht-ASCII-Zeichen; danach meldet der Detektor den naechsten.
+// Nicht-ASCII-Zeichen; danach meldet der Detektor den naechsten. Steht
+// davor auf derselben Zeile ein Umlaut-Name, lehnt sie ab (R_HG_UNKNOWN).
 //
 // DIE TABELLE: nur feste, bekannte Paare (HOMOGLYPHS) - kyrillische und
 // griechische Grossbuchstaben, die wie lateinische aussehen, und die
@@ -145,7 +149,8 @@ const
   CODE_PREFIX = 'U+';
   // Die bekannten Paare (Unicode confusables, nur Buchstaben, die in den
   // ueblichen Editor-Schriften nicht vom lateinischen zu unterscheiden
-  // sind).
+  // sind). Dieselben Codes fuehrt der Detektor (uSourceEncoding.
+  // HOMOGLYPH_CODES) - wer eine Liste aendert, aendert beide.
   HOMOGLYPHS: array[0..46] of THomoglyph = (
     // kyrillisch klein
     (Code: $0430; Ascii: 'a'), (Code: $0435; Ascii: 'e'),

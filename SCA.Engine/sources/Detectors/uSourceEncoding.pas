@@ -20,19 +20,31 @@
 //                             Source, CVE-2021-42574 / CWE-1007). Error.
 //   S2 fkSourceInvisibleChar- unsichtbares/Zero-Width-Zeichen (U+200B-200D/2060/
 //                             mid-FEFF; Unicode-Abuse, CWE-1007). Warning.
-//   S3 fkSourceNonAsciiIdentifier - Nicht-ASCII in einem Identifier (Homoglyph/
-//                             Confusable, Trojan Source, CWE-1007). Warning.
+//   S3 fkSourceNonAsciiIdentifier - bekannter Homoglyph in einem Identifier
+//                             (Confusable, Trojan Source, CWE-1007). Warning.
 //                             Nur bei vertrauenswuerdiger Dekodierung
-//                             (IsDecodingTrustworthy) - S3 ist der einzige
-//                             Check hier, der ueber dekodierten TEXT urteilt.
+//                             (IsDecodingTrustworthy). Seit 2026-11-06 nur
+//                             noch Zeichen der Tabelle HOMOGLYPH_CODES (sehen
+//                             aus wie ein ASCII-Buchstabe); ein Umlaut oder
+//                             ein anderer Buchstabe ohne lateinischen
+//                             Doppelgaenger ist kein Homoglyph - seinen
+//                             Werkzeugbruch meldet S4.
+//   S4 fkFragileNonAsciiIdentifier - Bezeichner mit Nicht-ASCII-Buchstaben, den
+//                             Werkzeuge zerlegen (SCA207, 2026-11-06). Delphi:
+//                             nur in UTF-8 OHNE BOM (IDE und Formatter lesen
+//                             ANSI und reissen den Namen auf), Warning. FPC:
+//                             jede Datei (FPC nimmt nur ASCII-Bezeichner),
+//                             Error. Ein Fund je verschiedenem Namen.
 //
 // Gruppe A (Encoding) ist gegenseitig ausschliessend: genau EIN Fund pro Datei.
 // UTF-32/UTF-16 (E7/E4) sind BOM-bestimmte Ganzdatei-Verdikte (emittieren + RAUS,
 // kein Bidi-Scan auf UTF-16-Bytes). Fuer den Rest: Praezedenz E5 > E2 > E1 > E3.
-// Gruppe B (S1/S2/S3) ist orthogonal und kann ZUSAETZLICH feuern - Bidi/Zero-Width/
+// Gruppe B (S1-S4) ist orthogonal und kann ZUSAETZLICH feuern - Bidi/Zero-Width/
 // Homoglyph-Identifier sind auch in korrektem UTF-8+BOM gefaehrlich. S3 wird per
-// TLexer erkannt (nur wenn die Datei ueberhaupt Nicht-ASCII hat -> kein Lex-
-// Aufwand fuer reine ASCII-Dateien).
+// TLexer erkannt, S4 auf einer eigenen Code-Sicht (TCodeViewWalker) - beide nur
+// wenn die Datei ueberhaupt Nicht-ASCII hat (kein Aufwand fuer reine ASCII-
+// Dateien).
+// S4 steht VOR Gruppe A: E1 verlaesst AnalyzeUnit unter dlFpc per Exit.
 //
 // Scope: nur Pascal-Quelltext (.pas/.dpr/.dpk/.inc). Kommentare zaehlen hier
 // BEWUSST mit - Encoding/Bidi ist datei-global, nicht code-lokal.
@@ -44,7 +56,7 @@
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
@@ -58,11 +70,24 @@ type
     // die E1-Confidence (String/Code = echtes Mojibake-Risiko = fcMedium; nur
     // Kommentar = vom Compiler verworfen = fcLow). Public fuer Tests.
     class function HasNonAsciiOutsideComments(const Source: string): Boolean; static;
-    // True wenn ein Nicht-ASCII-BUCHSTABE (Unicode-Kategorie L*, Letter-only-
-    // Guard, Doku-Quickwins 2026-07-25) in einem Identifier/Code-Token
-    // (tkIdent/tkUnknown) steht = Homoglyph-/Confusable-Vektor (S3). Symbole/
-    // Punktuation (Ellipsis, Dreiecke) zaehlen NICHT. Public fuer Tests.
-    class function HasNonAsciiIdentifier(const Source: string): Boolean; static;
+    // True wenn ein BEKANNTER HOMOGLYPH (HOMOGLYPH_CODES: kyrillische und
+    // griechische Buchstaben, die wie ein ASCII-Buchstabe aussehen) in einem
+    // Identifier/Code-Token (tkIdent/tkUnknown) steht = Confusable-Vektor
+    // (S3). Umlaute, Akzente, andere Schriften ohne Doppelgaenger und
+    // Symbole (Ellipsis, Dreiecke) zaehlen NICHT. Public fuer Tests.
+    class function HasHomoglyphIdentifier(const Source: string): Boolean; static;
+    // True wenn C ein Zeichen der Tabelle HOMOGLYPH_CODES ist. Public fuer
+    // Tests (Paritaet zu uRdxHomoglyphFix.HOMOGLYPHS).
+    class function IsKnownHomoglyph(C: Char): Boolean; static;
+    // S4 (SCA207): die verschiedenen Bezeichner mit Nicht-ASCII-Zeichen im
+    // Code von ALines, je Name die erste Zeile (1-basiert) in ANameLines -
+    // Reihenfolge des ersten Auftretens, Vergleich ohne Gross-/
+    // Kleinschreibung. ARaw: jedes Zeichen >= #$80 zaehlt als Bezeichner-
+    // zeichen (ANSI-Datei unter dlFpc - die Buchstaben sind geraten);
+    // sonst nur Unicode-Buchstaben (L*) und im Namen Ziffern/Mn/Mc.
+    // Public fuer Tests.
+    class function FragileNames(ALines: TStrings; ARaw: Boolean;
+      out ANameLines: TArray<Integer>): TArray<string>; static;
   end;
 
 implementation
@@ -70,8 +95,45 @@ implementation
 // noinspection-file MultipleExit, TooLongLine, UnsortedUses, UnusedParameter
 
 uses
-  System.Classes, System.Character, System.IOUtils, uFileTextCache, uLexer,
-  uStaticFiles;   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
+  System.Character, System.IOUtils, System.StrUtils, uFileTextCache, uLexer,
+  uStaticFiles,   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
+  uLocalization;  // N_ - feste S4-Meldung (ANSI unter dlFpc) als msgid
+
+const
+  // S3: die bekannten Homoglyphen - Buchstaben, die in den ueblichen
+  // Editor-Schriften nicht von einem lateinischen zu unterscheiden sind
+  // (Unicode confusables). DIESELBE Liste wie uRdxHomoglyphFix.HOMOGLYPHS
+  // (reDelphix, dort mit dem ASCII-Partner) - wer eine aendert, aendert
+  // beide; reDelphix uTestRdxHomoglyphFix.Detector_TableParity vergleicht
+  // die beiden Listen Zeichen fuer Zeichen.
+  // Die Engine darf reDelphix nicht kennen, daher die Kopie.
+  HOMOGLYPH_CODES: array[0..46] of Word = (
+    // kyrillisch klein: a e o p c y x s i j h l d q w
+    $0430, $0435, $043E, $0440, $0441, $0443, $0445, $0455, $0456, $0458,
+    $04BB, $04CF, $0501, $051B, $051D,
+    // kyrillisch gross: S I J A B E K M H O P C T X Y Q W
+    $0405, $0406, $0408, $0410, $0412, $0415, $041A, $041C, $041D, $041E,
+    $0420, $0421, $0422, $0425, $04AE, $051A, $051C,
+    // griechisch gross: A B E Z H I K M N O P T Y X
+    $0391, $0392, $0395, $0396, $0397, $0399, $039A, $039C, $039D, $039F,
+    $03A1, $03A4, $03A5, $03A7,
+    // griechisch klein: o
+    $03BF);
+
+  // Mindestlaenge der Apostroph-Folge, die einen Delphi-12-Mehrzeilen-
+  // string oeffnet (''' am Zeilenende) - wie uFormatterMarker.
+  MIN_MULTI_QUOTES = 3;
+
+  // S4-Meldungen (englisch: Fingerprint). Mit Namen = Format-Meldung (der
+  // Name ist Teil der Fund-Identitaet, bleibt unuebersetzt); ohne Namen
+  // (ANSI unter dlFpc) ein fester Satz in N_.
+  MSG_207_DELPHI = 'Identifier ''%s'' contains non-ASCII letters in a UTF-8 ' +
+    'file without BOM - the Delphi IDE and code formatter read such a file ' +
+    'as ANSI and split the identifier, so the unit no longer compiles ' +
+    'after formatting. Save the file as UTF-8 with BOM, or use an ASCII name.';
+  MSG_207_FPC = 'Identifier ''%s'' contains non-ASCII letters - Free Pascal ' +
+    'accepts only ASCII identifiers (A-Z, 0-9, _) and stops with "illegal ' +
+    'character". Use an ASCII name.';
 
 function IsLegacyDosEofOnly(const FileName: string): Boolean;
 // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'legacy-dos-eof-marker'):
@@ -188,22 +250,34 @@ begin
             or ((Info.BomKind = sbkNone) and Info.StrictUtf8);
 end;
 
+class function TSourceEncodingDetector.IsKnownHomoglyph(C: Char): Boolean;
+var
+  Code : Word;
+begin
+  for Code in HOMOGLYPH_CODES do
+    if Ord(C) = Code then Exit(True);
+  Result := False;
+end;
+
 procedure ScanNonAsciiTokens(const Source: string;
-  out AnyOutside, InIdentifier: Boolean; out IdentLine: Integer);
+  out AnyOutside, HomoglyphInIdent: Boolean; out IdentLine: Integer);
 // EIN Lex-Durchgang. Der TLexer verwirft Kommentare (//, { }, (* *), {$..}) und
 // liefert nur Code-/String-/Unknown-Tokens - ein Nicht-ASCII-Zeichen im Token-
 // Value steht also NICHT in einem Kommentar.
-//   AnyOutside   = Nicht-ASCII in irgendeinem Token (String ODER Code) -> E1-
-//                  Confidence (fcMedium statt fcLow).
-//   InIdentifier = Nicht-ASCII-BUCHSTABE in einem Identifier/Code-Token
-//                  (tkIdent/tkUnknown) -> Homoglyph-/Confusable-Vektor (S3);
-//                  IdentLine = dessen Zeile. Letter-only-Guard (Doku-Quickwins
-//                  2026-07-25): nur Unicode-Kategorie L* (TCharacter.IsLetter)
-//                  zaehlt - Symbole/Punktuation in Code-Nachbarschaft (U+2026
-//                  Ellipsis, U+25B2/25B3 Dreiecke) sind keine Homoglyphen-
-//                  Vektoren (FPs); echte Homoglyphen (griech. My, Kyrillisch)
-//                  SIND Letter und bleiben erhalten. AnyOutside bleibt bewusst
-//                  ungefiltert (E1-Mojibake-Risiko gilt fuer JEDES Nicht-ASCII).
+//   AnyOutside       = Nicht-ASCII in irgendeinem Token (String ODER Code) ->
+//                      E1-Confidence (fcMedium statt fcLow).
+//   HomoglyphInIdent = BEKANNTER HOMOGLYPH (HOMOGLYPH_CODES) in einem
+//                      Identifier/Code-Token (tkIdent/tkUnknown) -> Confusable-
+//                      Vektor (S3); IdentLine = dessen Zeile.
+//                      Entscheid Nico 2026-11-06: bis dahin zaehlte jeder
+//                      Nicht-ASCII-BUCHSTABE (Letter-only-Guard 2026-07-25) -
+//                      auch ein Umlaut, der nichts vortaeuscht. Ein Umlaut-
+//                      Bezeichner ist kein Homoglyph; wo er wirklich bricht,
+//                      meldet ihn S4 (SCA207) mit Namen. Die Tabelle enthaelt
+//                      nur Buchstaben, Symbole (U+2026, Dreiecke) bleiben
+//                      draussen wie beim Letter-only-Guard.
+//                      AnyOutside bleibt bewusst ungefiltert (E1-Mojibake-
+//                      Risiko gilt fuer JEDES Nicht-ASCII).
 // (Randfall: der Lexer dekodiert #$nnnn-Char-Literale zu echten Zeichen - fuer
 // die Detektor-Nutzung irrelevant, weil beide Aufrufer rohes Nicht-ASCII per
 // AnalyzeFileEncoding.HasNonAscii voraussetzen.)
@@ -212,38 +286,42 @@ var
   Tok        : TToken;
   ch         : Char;
   TokHasNA   : Boolean;
-  TokHasNALt : Boolean;   // Nicht-ASCII-Zeichen ist ein Unicode-LETTER (L*)
+  TokHasHG   : Boolean;   // Nicht-ASCII-Zeichen ist ein bekannter Homoglyph
 begin
-  AnyOutside   := False;
-  InIdentifier := False;
-  IdentLine    := 0;
+  AnyOutside       := False;
+  HomoglyphInIdent := False;
+  IdentLine        := 0;
   if Source = '' then Exit;
   Lex := TLexer.Create(Source);
   try
     Tok := Lex.Next;
     while Tok.Kind <> tkEof do
     begin
-      TokHasNA   := False;
-      TokHasNALt := False;
+      TokHasNA := False;
+      TokHasHG := False;
       for ch in Tok.Value do
         if Ord(ch) >= $80 then
         begin
           TokHasNA := True;
-          // Letter-only-Guard fuer S3 (Doku-Quickwins 2026-07-25): weiter-
-          // suchen bis ein Nicht-ASCII-LETTER gefunden ist - erst der macht
-          // das Token zum Homoglyphen-Kandidaten.
-          if ch.IsLetter then begin TokHasNALt := True; Break; end;
+          // Weitersuchen bis ein bekannter Homoglyph gefunden ist - erst
+          // der macht das Token zum S3-Kandidaten.
+          if TSourceEncodingDetector.IsKnownHomoglyph(ch) then
+          begin
+            TokHasHG := True;
+            Break;
+          end;
         end;
       if TokHasNA then
       begin
         AnyOutside := True;
-        if TokHasNALt and (Tok.Kind in [tkIdent, tkUnknown]) and not InIdentifier then
+        if TokHasHG and (Tok.Kind in [tkIdent, tkUnknown])
+           and not HomoglyphInIdent then
         begin
-          InIdentifier := True;
-          IdentLine    := Tok.Line;
+          HomoglyphInIdent := True;
+          IdentLine        := Tok.Line;
         end;
       end;
-      if AnyOutside and InIdentifier then Break;   // beide Fakten gefunden
+      if AnyOutside and HomoglyphInIdent then Break;   // beide Fakten gefunden
       Tok := Lex.Next;
     end;
   finally
@@ -258,11 +336,275 @@ begin
   ScanNonAsciiTokens(Source, Result, Ident, Ln);
 end;
 
-class function TSourceEncodingDetector.HasNonAsciiIdentifier(
+class function TSourceEncodingDetector.HasHomoglyphIdentifier(
   const Source: string): Boolean;
 var Outside: Boolean; Ln: Integer;
 begin
   ScanNonAsciiTokens(Source, Outside, Result, Ln);
+end;
+
+// ---- S4: Code-Sicht und Bezeichner-Laeufe (SCA207) ------------------------
+//
+// WARUM EINE EIGENE CODE-SICHT: der TLexer (ReadIdent) und uParser2 lesen
+// nur ASCII-Bezeichner - 'Groesse' mit oe-Umlaut kommt dort als 'Gr' +
+// tkUnknown + tkUnknown + 'e' an, ein Name entsteht nie. S4 braucht den
+// ganzen Namen. TDetectorUtils.StripStringsAndCommentsCached liefert zwar
+// die Code-Sicht, kennt aber (wie ScanCodeLine) keine Delphi-12-
+// Mehrzeilenstrings: deren Textzeilen gingen als Code durch, ein Satz mit
+// Umlaut im Mehrzeilenstring waere ein Schein-Bezeichner. Der Lauf unten
+// folgt daher den Regeln von ScanCodeLine ('..' mit '', { } bis zum ersten
+// }, (* *) bis zum ersten *), // bis Zeilenende, {$..} ist Kommentar) plus
+// den Mehrzeilenstrings wie uFormatterMarker (ungerade Folge von
+// mindestens drei Apostrophen, nur Leerraum dahinter; Ende an der Zeile,
+// die nach Leerraum mit derselben Folge beginnt). Spaltentreu: alles, was
+// nicht Code ist, wird Leerzeichen.
+
+type
+  TCodeViewWalker = record
+    InBrace  : Boolean;   // { } ueber das Zeilenende offen
+    InParen  : Boolean;   // (* *) ueber das Zeilenende offen
+    MultiRun : Integer;   // > 0: offener Mehrzeilenstring, Laenge der Folge
+    function ViewOf(const ALine: string): string;
+  end;
+
+// Laenge der Apostroph-Folge ab ALine[AIdx].
+function QuoteRun(const ALine: string; AIdx: Integer): Integer;
+begin
+  Result := 0;
+  while (AIdx + Result <= Length(ALine)) and (ALine[AIdx + Result] = '''') do
+    Inc(Result);
+end;
+
+procedure BlankRange(var AView: string; AFrom, ATo: Integer);
+var
+  k : Integer;
+begin
+  if ATo > Length(AView) then ATo := Length(AView);
+  for k := AFrom to ATo do
+    AView[k] := ' ';
+end;
+
+// Ende des '..'-Strings, der bei AStart oeffnet ('' bleibt im String); ohne
+// schliessendes Apostroph das Zeilenende.
+function StringEnd(const ALine: string; AStart: Integer): Integer;
+begin
+  Result := AStart + 1;
+  while Result <= Length(ALine) do
+  begin
+    if ALine[Result] = '''' then
+    begin
+      if (Result < Length(ALine)) and (ALine[Result + 1] = '''') then
+        Inc(Result, 2)
+      else
+        Exit;
+    end
+    else
+      Inc(Result);
+  end;
+end;
+
+function TCodeViewWalker.ViewOf(const ALine: string): string;
+var
+  j, p, n, Run : Integer;
+begin
+  Result := ALine;
+  n := Length(ALine);
+  j := 1;
+  if MultiRun > 0 then
+  begin
+    while (j <= n) and (ALine[j] <= ' ') do Inc(j);
+    if QuoteRun(ALine, j) <> MultiRun then
+      Exit(StringOfChar(' ', n));            // Zeile im Mehrzeilenstring
+    BlankRange(Result, 1, j + MultiRun - 1);
+    Inc(j, MultiRun);
+    MultiRun := 0;
+  end;
+  while j <= n do
+  begin
+    if InBrace or InParen then
+    begin
+      if InBrace then p := PosEx('}', ALine, j) else p := PosEx('*)', ALine, j);
+      if p = 0 then
+      begin
+        BlankRange(Result, j, n);
+        Exit;
+      end;
+      if InParen then Inc(p);                // '*)' ist zwei Zeichen lang
+      BlankRange(Result, j, p);
+      InBrace := False;
+      InParen := False;
+      j := p + 1;
+    end
+    else if ALine[j] = '''' then
+    begin
+      Run := QuoteRun(ALine, j);
+      if (Run >= MIN_MULTI_QUOTES) and Odd(Run)
+         and (Trim(Copy(ALine, j + Run, MaxInt)) = '') then
+      begin
+        MultiRun := Run;
+        BlankRange(Result, j, n);
+        Exit;
+      end;
+      p := StringEnd(ALine, j);
+      BlankRange(Result, j, p);
+      j := p + 1;
+    end
+    else if (ALine[j] = '/') and (j < n) and (ALine[j + 1] = '/') then
+    begin
+      BlankRange(Result, j, n);
+      Exit;
+    end
+    else if ALine[j] = '{' then
+    begin
+      InBrace := True;                       // '}' wird ab j + 1 gesucht
+      BlankRange(Result, j, j);
+      Inc(j);
+    end
+    else if (ALine[j] = '(') and (j < n) and (ALine[j + 1] = '*') then
+    begin
+      InParen := True;                       // '(*)' oeffnet nur
+      BlankRange(Result, j, j + 1);
+      Inc(j, 2);
+    end
+    else
+      Inc(j);
+  end;
+end;
+
+// Anfang eines Bezeichners: ASCII-Buchstabe, '_' oder ein Nicht-ASCII-
+// Buchstabe (L*). ARaw: jedes Zeichen >= #$80 (ANSI unter dlFpc).
+// Surrogate (Zeichen jenseits U+FFFF) sind keine Buchstaben - Grenze, im
+// Test festgehalten.
+function IsIdentStart(C: Char; ARaw: Boolean): Boolean;
+begin
+  if CharInSet(C, ['A'..'Z', 'a'..'z', '_']) then Exit(True);
+  if Ord(C) < $80 then Exit(False);
+  Result := ARaw or C.IsLetter;
+end;
+
+// Fortsetzung eines Bezeichners: Anfangszeichen, ASCII-Ziffer, sonst (nicht
+// ARaw) Nicht-ASCII-Ziffer (Nd) oder kombinierendes Zeichen (Mn/Mc).
+function IsIdentPart(C: Char; ARaw: Boolean): Boolean;
+begin
+  if IsIdentStart(C, ARaw) or CharInSet(C, ['0'..'9']) then Exit(True);
+  if (Ord(C) < $80) or ARaw then Exit(False);
+  Result := C.GetUnicodeCategory in [TUnicodeCategory.ucDecimalNumber,
+    TUnicodeCategory.ucNonSpacingMark, TUnicodeCategory.ucCombiningMark];
+end;
+
+function HasNonAsciiChar(const S: string): Boolean;
+var
+  C : Char;
+begin
+  for C in S do
+    if Ord(C) >= $80 then Exit(True);
+  Result := False;
+end;
+
+class function TSourceEncodingDetector.FragileNames(ALines: TStrings;
+  ARaw: Boolean; out ANameLines: TArray<Integer>): TArray<string>;
+var
+  Walker : TCodeViewWalker;
+  Seen   : TDictionary<string, Boolean>;
+  View   : string;
+  Name   : string;
+  i, k   : Integer;
+  Start  : Integer;
+begin
+  Result := nil;
+  ANameLines := nil;
+  Walker := Default(TCodeViewWalker);
+  Seen := TDictionary<string, Boolean>.Create;
+  try
+    for i := 0 to ALines.Count - 1 do
+    begin
+      // Zeilen ohne Nicht-ASCII tragen keinen Namen, aber Zustand (offener
+      // Kommentar bzw. Mehrzeilenstring) - der Lauf geht trotzdem darueber.
+      View := Walker.ViewOf(ALines[i]);
+      if not HasNonAsciiChar(View) then Continue;
+      k := 1;
+      while k <= Length(View) do
+      begin
+        if not IsIdentStart(View[k], ARaw) then
+        begin
+          Inc(k);
+          Continue;
+        end;
+        Start := k;
+        while (k <= Length(View)) and IsIdentPart(View[k], ARaw) do Inc(k);
+        Name := Copy(View, Start, k - Start);
+        // Ein '&' davor (Escape eines reservierten Worts) steht nicht im
+        // Lauf - der Name kommt ohne.
+        if HasNonAsciiChar(Name) and not Seen.ContainsKey(AnsiLowerCase(Name)) then
+        begin
+          Seen.Add(AnsiLowerCase(Name), True);
+          Result := Result + [Name];
+          ANameLines := ANameLines + [i + 1];
+        end;
+      end;
+    end;
+  finally
+    Seen.Free;
+  end;
+end;
+
+procedure AddFragileIdentifiers(const FileName: string;
+  const Info: TFileEncodingInfo; Lines: TStrings;
+  Results: TObjectList<TLeakFinding>);
+// S4 fkFragileNonAsciiIdentifier (SCA207, Nico-Entscheide 2026-11-06). Nur
+// belegte Faelle:
+//   dlDelphi - nur UTF-8 OHNE BOM (sbkNone + StrictUtf8): genau die Dateien,
+//     die die Delphi-IDE und der Formatter (Formatter.exe, Strg+D bis
+//     Delphi 12) als ANSI lesen; der Formatter haelt das zweite UTF-8-Byte
+//     fuer ein Satzzeichen und setzt Leerzeichen in den Namen (Probe
+//     2026-11-06). Mit BOM, UTF-16 und echtem ANSI bleibt der Name heil -
+//     kein Fund. Warning, fcMedium (Kind-Default): welche Buchstaben
+//     brechen, haengt an der Codepage des formatierenden Rechners.
+//   dlFpc - jede Datei: FPC nimmt nur ASCII-Bezeichner ('illegal
+//     character', in jedem Encoding belegt). Error, fcHigh (Baubruch, wie
+//     SCA190 unter dlFpc). Ist die Dekodierung geraten (ANSI), ist der Name
+//     es auch - dann zaehlt jedes Zeichen >= #$80 im Code und die Meldung
+//     nennt keinen Namen.
+// Ein Fund je verschiedenem Namen, an seiner ersten Zeile, ohne Deckel.
+// Kommentare, Direktiven und Strings zaehlen nicht (TCodeViewWalker).
+// UTF-16/UTF-32 kommen hier nie an (AnalyzeUnit verlaesst die Datei vorher).
+var
+  Names     : TArray<string>;
+  NameLines : TArray<Integer>;
+  Fpc, Raw  : Boolean;
+  i         : Integer;
+  F         : TLeakFinding;
+begin
+  Fpc := TStaticFiles.ScanDialect = dlFpc;
+  if Fpc then
+    Raw := not IsDecodingTrustworthy(Info)
+  else
+  begin
+    if not ((Info.BomKind = sbkNone) and Info.StrictUtf8) then Exit;
+    Raw := False;
+  end;
+  Names := TSourceEncodingDetector.FragileNames(Lines, Raw, NameLines);
+  for i := 0 to High(Names) do
+  begin
+    if not Fpc then
+      F := TLeakFinding.New(FileName, '', NameLines[i],
+        Format(MSG_207_DELPHI, [Names[i]]), fkFragileNonAsciiIdentifier)
+    else
+    begin
+      if Raw then
+        F := TLeakFinding.New(FileName, '', NameLines[i],
+          N_('Identifier with a non-ASCII character in a file that is not ' +
+            'UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) ' +
+            'and stops with "illegal character". Use an ASCII name.'),
+          fkFragileNonAsciiIdentifier)
+      else
+        F := TLeakFinding.New(FileName, '', NameLines[i],
+          Format(MSG_207_FPC, [Names[i]]), fkFragileNonAsciiIdentifier);
+      F.Severity := lsError;
+      F.Confidence := fcHigh;
+    end;
+    Results.Add(F);
+  end;
 end;
 
 class procedure TSourceEncodingDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -366,8 +708,8 @@ begin
 
   // Token-basierte Analyse: EIN Lex-Durchgang, aber nur wenn die Datei ueberhaupt
   // Nicht-ASCII enthaelt (reine ASCII-Dateien = kein Lex-Aufwand). Liefert Outside
-  // (Nicht-ASCII in String/Code -> E1-Confidence) und Ident (Nicht-ASCII in einem
-  // Identifier -> S3).
+  // (Nicht-ASCII in String/Code -> E1-Confidence) und Ident (bekannter Homoglyph
+  // in einem Identifier -> S3). Auf denselben Zeilen laeuft S4 (SCA207).
   Outside := False; Ident := False; IdentLine := 0;
   if Info.HasNonAscii then
   begin
@@ -375,6 +717,7 @@ begin
     if Lines <> nil then
       try
         ScanNonAsciiTokens(Lines.Text, Outside, Ident, IdentLine);
+        AddFragileIdentifiers(FileName, Info, Lines, Results);
       finally
         ReleaseLines(Lines, Cached);
       end;
@@ -389,6 +732,9 @@ begin
   // Der Lex-Durchgang oben bleibt ungegatet - er liefert zusaetzlich Outside
   // fuer die E1-Confidence, und E1 feuert nur im vertrauenswuerdigen Fall
   // (sbkNone + StrictUtf8), ist von diesem Gate also unberuehrt.
+  // Seit 2026-11-06 nur bekannte Homoglyphen (ScanNonAsciiTokens). Der
+  // Meldetext bleibt WORTGLEICH: er ist Teil der Fund-Identitaet (SARIF-
+  // Fingerprint, Baseline), und er stimmt fuer einen Homoglyph weiterhin.
   if Ident and IsDecodingTrustworthy(Info) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(IdentLine),
       'Non-ASCII character in an identifier - homoglyph / confusable risk ' +

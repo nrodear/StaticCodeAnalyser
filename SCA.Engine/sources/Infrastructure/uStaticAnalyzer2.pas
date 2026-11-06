@@ -173,6 +173,7 @@ uses
   uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
   uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uFunctionNameResult,   // SCA204/SCA205 - Funktionsname statt Result
+  uFormatterMarker,      // SCA206 - Formatter-Marker {(*} / {*)} kaputt oder ohne Partner
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -319,10 +320,11 @@ begin
   // Kind (fkDfmDefaultName) nur Repraesentant ist.
   if D.Name = 'DfmAnalysis' then Exit(True);
 
-  // SourceEncoding-Adapter: EIN Detektor emittiert 9 Encoding-/Unicode-Sicherheit-
+  // SourceEncoding-Adapter: EIN Detektor emittiert 10 Encoding-/Unicode-Sicherheit-
   // Kinds (SCA185-193: Utf8NoBom/InvalidUtf8/ControlChar/BidiOverride/AnsiNonAscii/
-  // Utf16/Utf32/InvisibleChar/NonAsciiIdentifier). Der Read (eigener ReadAllBytes,
-  // + optional EIN Lex-Durchgang) wird nur getriggert wenn mind. EIN Kind aktiv
+  // Utf16/Utf32/InvisibleChar/NonAsciiIdentifier; SCA207 FragileNonAsciiIdentifier).
+  // Der Read (eigener ReadAllBytes, + optional EIN Lex-Durchgang und die S4-Code-
+  // Sicht) wird nur getriggert wenn mind. EIN Kind aktiv
   // ist (Perf-Gate); die Post-Filter-Schleife dropt einzeln deaktivierte Kinds auf
   // Finding-Ebene. Kind (fkSourceUtf8NoBom) ist nur Repraesentant fuer AddD.
   if D.Name = 'SourceEncoding' then
@@ -337,7 +339,10 @@ begin
           or (fkSourceUtf16 in EnKinds)
           or (fkSourceUtf32 in EnKinds)
           or (fkSourceInvisibleChar in EnKinds)
-          or (fkSourceNonAsciiIdentifier in EnKinds) );
+          or (fkSourceNonAsciiIdentifier in EnKinds)
+          // SCA207 (2026-11-06): ohne diese Zeile liefe die Familie bei
+          // einem Profil, das nur SCA207 fuehrt, gar nicht.
+          or (fkFragileNonAsciiIdentifier in EnKinds) );
   end;
 
   // Profile-Whitelist: leere Menge = kein Filter, sonst muss Kind drin sein.
@@ -503,8 +508,11 @@ begin
   AddD('NestedTry',       fkNestedTry,       TNestedTryDetector.AnalyzeUnit);
   AddD('CaseStatementSize',fkCaseStatementSize,TCaseStatementSizeDetector.AnalyzeUnit);
   AddD('EmptyFile',       fkEmptyFile,       TEmptyFileDetector.AnalyzeUnit);
-  // SourceEncoding: EIN Eintrag, 4 Kinds (siehe IsDetectorEnabled-Sonderfall).
+  // SourceEncoding: EIN Eintrag, 10 Kinds (siehe IsDetectorEnabled-Sonderfall).
   // KEIN RequiredTokensLow - muss immer laufen (kein Token signalisiert Encoding).
+  // Auch SCA207 (S4) braucht keinen: der Vorfilter vergleicht kleingeschriebene
+  // ASCII-Token, ein Nicht-ASCII-Byte ist so nicht zu fassen; den Kurzschluss
+  // macht Info.HasNonAscii (reine ASCII-Dateien kosten keine Code-Sicht).
   AddD('SourceEncoding',  fkSourceUtf8NoBom, TSourceEncodingDetector.AnalyzeUnit);
   AddD3('TwiceInheritedCalls',fkTwiceInheritedCalls,TTwiceInheritedCallsDetector.AnalyzeUnit);
   AddD('RedundantParentheses',fkRedundantParentheses,TRedundantParenthesesDetector.AnalyzeUnit);
@@ -762,6 +770,11 @@ begin
   AddD('FunctionNameResult', fkFunctionNameAsResult,
        TFunctionNameResultDetector.AnalyzeUnit, ['function']);
   gDetectors[Count - 1].ExtraKinds := [fkFunctionNameRecursion];
+  // SCA206 (2026-11-06): beide Marker und jede Leerraum-Form enthalten '(*'
+  // bzw. '*)' - NOTWENDIGE Bedingung. Bewusst nicht '(*}': dann fiele
+  // '{(* }' durch den Vorfilter (Entscheid E4).
+  AddD('FormatterMarker', fkFormatterMarker,
+       TFormatterMarkerDetector.AnalyzeUnit, ['(*', '*)']);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);

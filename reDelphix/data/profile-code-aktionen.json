@@ -99,6 +99,7 @@
       "LoopPastHighBound",
       "InheritedMethodEmpty",
       "FunctionNameAsResult",
+      "FormatterMarker",
       "FileReadError"
     ]
   }

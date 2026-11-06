@@ -203,6 +203,7 @@ contains
   uLoopPastHighBound in '..\SCA.Engine\sources\Detectors\uLoopPastHighBound.pas',
   uFuncNameResultScan in '..\SCA.Engine\sources\Detectors\uFuncNameResultScan.pas',
   uFunctionNameResult in '..\SCA.Engine\sources\Detectors\uFunctionNameResult.pas',
+  uFormatterMarker in '..\SCA.Engine\sources\Detectors\uFormatterMarker.pas',
   uHardcodedSecret in '..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in '..\SCA.Engine\sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in '..\SCA.Engine\sources\Detectors\uIfElseBegin.pas',

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7100 Zeilen, 341434 Bytes
-  CPoLines_de: array[0..7099] of string = (
+  // i18n\de.po - 7144 Zeilen, 344465 Bytes
+  CPoLines_de: array[0..7143] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1575,6 +1575,9 @@ const
     '',
     'msgid "The function name on the right side is a recursive call, not the current result"',
     'msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"',
+    '',
+    'msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"',
+    'msgstr "Formatter-Marker falsch geschrieben oder ohne Partner - {(*} und {*)} genau so, ohne Leerzeichen, schreiben und jeden Bereich schlie'#$00DF'en"',
     '',
     'msgid "File not found:"',
     'msgstr "Datei nicht gefunden:"',
@@ -6735,6 +6738,23 @@ const
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
     'msgstr "die Unit wird auch mit Free Pascal '#$00FC'bersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, h'#$00E4'ngt am Modus des Projekts"',
     '',
+    '# reDelphix SCA206 (uRdxFormatterMarkerFix): Formatter-Marker exakt schreiben',
+    '',
+    'msgid "Write the formatter marker exactly"',
+    'msgstr "Formatter-Marker exakt schreiben"',
+    '',
+    'msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"',
+    'msgstr "gleiche Bedeutung f'#$00FC'r den Compiler - nur ein Kommentar '#$00E4'ndert sich; GExperts, CnWizards und JCF erkennen den Marker jetzt"',
+    '',
+    'msgid "no formatter marker with this text at the reported place"',
+    'msgstr "kein Formatter-Marker mit diesem Text an der gemeldeten Stelle"',
+    '',
+    'msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"',
+    'msgstr "nur ein Marker mit Leerzeichen darin l'#$00E4'sst sich korrigieren - wohin ein fehlendes {(*} oder {*)} geh'#$00F6'rt, wei'#$00DF' nur der Autor"',
+    '',
+    'msgid "the line holds this marker more than once"',
+    'msgstr "die Zeile tr'#$00E4'gt diesen Marker mehrmals"',
+    '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',
     'msgid "compiler directive in the if statement - conditional code could change its branches"',
@@ -7114,7 +7134,31 @@ const
     'msgstr "Nacktes `raise;` au'#$00DF'erhalb eines except/on-Handlers - Delphi (E2145) und FPC lehnen diese Form ab"',
     '',
     'msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"',
-    'msgstr "`with A, B do` l'#$00F6'st Bezeichner von rechts nach links auf - die Verdeckung '#$00E4'ndert sich still, sobald einer der Typen ein Member erg'#$00E4'nzt"'
+    'msgstr "`with A, B do` l'#$00F6'st Bezeichner von rechts nach links auf - die Verdeckung '#$00E4'ndert sich still, sobald einer der Typen ein Member erg'#$00E4'nzt"',
+    '',
+    '# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---',
+    '# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und',
+    '# bleibt englisch (Format-Meldungen kommen spaeter).',
+    '',
+    'msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"',
+    'msgstr "Formatter-Marker {(*} wird nie durch {*)} geschlossen - GExperts, CnWizards und JCF formatieren den Rest der Datei nicht mehr"',
+    '',
+    'msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"',
+    'msgstr "Formatter-Marker {*)} ohne '#$00F6'ffnendes {(*} - er schlie'#$00DF't nichts, der Code dar'#$00FC'ber wird formatiert"',
+    '',
+    'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
+    'msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"',
+    '',
+    '# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---',
+    '# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien',
+    '# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind',
+    '# Format-Meldungen und bleiben englisch.',
+    '',
+    'msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"',
+    'msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Datei als UTF-8 mit BOM speichern oder einen ASCII-Namen verwenden"',
+    '',
+    'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
+    'msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -7389,8 +7433,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7096 Zeilen, 355303 Bytes
-  CPoLines_fr: array[0..7095] of string = (
+  // i18n\fr.po - 7140 Zeilen, 358342 Bytes
+  CPoLines_fr: array[0..7139] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -8963,6 +9007,9 @@ const
     '',
     'msgid "The function name on the right side is a recursive call, not the current result"',
     'msgstr "Le nom de la fonction '#$00E0' droite est un appel r'#$00E9'cursif, pas le r'#$00E9'sultat courant"',
+    '',
+    'msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"',
+    'msgstr "Marqueur de formateur mal '#$00E9'crit ou sans partenaire - '#$00E9'crire {(*} et {*)} exactement ainsi, sans espace, et fermer chaque zone"',
     '',
     'msgid "File not found:"',
     'msgstr "Fichier introuvable :"',
@@ -14107,6 +14154,23 @@ const
     'msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"',
     'msgstr "l''unit'#$00E9' est aussi compil'#$00E9'e avec Free Pascal ({$IFDEF FPC} '#$00E0' la ligne %d) et ne fixe aucun {$mode} - l''existence de Result d'#$00E9'pend du mode du projet"',
     '',
+    '# reDelphix SCA206 (uRdxFormatterMarkerFix): Formatter-Marker exakt schreiben',
+    '',
+    'msgid "Write the formatter marker exactly"',
+    'msgstr "'#$00C9'crire exactement le marqueur de formateur"',
+    '',
+    'msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"',
+    'msgstr "m'#$00EA'me sens pour le compilateur - seul un commentaire change ; GExperts, CnWizards et JCF reconnaissent d'#$00E9'sormais le marqueur"',
+    '',
+    'msgid "no formatter marker with this text at the reported place"',
+    'msgstr "aucun marqueur de formateur avec ce texte '#$00E0' l''endroit signal'#$00E9'"',
+    '',
+    'msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"',
+    'msgstr "seul un marqueur contenant des espaces peut '#$00EA'tre corrig'#$00E9' - o'#$00F9' va un {(*} ou un {*)} manquant, seul l''auteur le sait"',
+    '',
+    'msgid "the line holds this marker more than once"',
+    'msgstr "la ligne contient ce marqueur plusieurs fois"',
+    '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',
     'msgid "compiler directive in the if statement - conditional code could change its branches"',
@@ -14486,7 +14550,31 @@ const
     'msgstr "Un `raise;` nu en dehors d''un gestionnaire except/on - Delphi (E2145) et FPC refusent cette forme"',
     '',
     'msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"',
-    'msgstr "`with A, B do` r'#$00E9'sout les identificateurs de droite '#$00E0' gauche - le masquage change silencieusement si l''un des types ajoute un membre"'
+    'msgstr "`with A, B do` r'#$00E9'sout les identificateurs de droite '#$00E0' gauche - le masquage change silencieusement si l''un des types ajoute un membre"',
+    '',
+    '# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---',
+    '# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und',
+    '# bleibt englisch (Format-Meldungen kommen spaeter).',
+    '',
+    'msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"',
+    'msgstr "Le marqueur de formateur {(*} n''est jamais ferm'#$00E9' par {*)} - GExperts, CnWizards et JCF ne formatent plus le reste du fichier"',
+    '',
+    'msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"',
+    'msgstr "Le marqueur de formateur {*)} n''a pas de {(*} ouvrant - il ne ferme rien, le code au-dessus est format'#$00E9'"',
+    '',
+    'msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"',
+    'msgstr "Second {(*} dans une zone sans formatage encore ouverte - les marqueurs ne s''imbriquent pas, le premier {*)} r'#$00E9'active d'#$00E9'j'#$00E0' le formatage"',
+    '',
+    '# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---',
+    '# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien',
+    '# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind',
+    '# Format-Meldungen und bleiben englisch.',
+    '',
+    'msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"',
+    'msgstr "Identificateur avec des lettres non-ASCII que les outils cassent - enregistrer le fichier en UTF-8 avec BOM ou utiliser un nom ASCII"',
+    '',
+    'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
+    'msgstr "Identificateur avec un caract'#$00E8're non-ASCII dans un fichier qui n''est pas en UTF-8 - Free Pascal n''accepte que des identificateurs ASCII (A-Z, 0-9, _) et s''arr'#$00EA'te avec \"illegal character\". Utiliser un nom ASCII."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

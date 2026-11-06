@@ -1345,7 +1345,10 @@ begin
      fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
      fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
      fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch, fkComparisonPrecedence, fkLoopPastHighBound,
-     fkFunctionNameRecursion]);
+     fkFunctionNameRecursion,
+     // SCA207 FragileNonAsciiIdentifier (Nico-Entscheid 2026-11-06): ein
+     // latenter Baubruch (Formatter zerlegt den Namen, FPC lehnt ihn ab).
+     fkFragileNonAsciiIdentifier]);
   FProfiles.AddOrSetValue('code-quality',
     [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
      fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,
@@ -1359,7 +1362,10 @@ begin
      // NotIncludedInProject schon, der Fallback keines von beiden; seit
      // dem 194/195-Split verschwand ein per uses gezogener Orphan unter
      // diesem Profil sonst ersatzlos (Emit195=False frisst den Fund).
-     fkNotIncludedInProject, fkUsedButNotInProject]);
+     fkNotIncludedInProject, fkUsedButNotInProject,
+     // SCA206 FormatterMarker (Nico-Entscheid E7, 2026-11-06): Pflege des
+     // Formatter-Bereichs, kein Bug - code-quality, nicht ide-fast/bugs-only.
+     fkFormatterMarker]);
   FProfiles.AddOrSetValue('dfm-only',
     [fkDfmDefaultName, fkDfmHardcodedCaption, fkDfmHardcodedDbCreds,
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmOrphanHandler,

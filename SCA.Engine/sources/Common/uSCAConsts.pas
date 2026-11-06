@@ -783,15 +783,27 @@ type
                                  //          Hint/Stil, nicht im default-Profil; nur wo
                                  //          Result existiert ({$mode}-Lage). Fix in
                                  //          reDelphix. Charge N / FN 2026-10-25.
-    fkFunctionNameRecursion      // SCA205 - Funktionsname im eigenen Rumpf GELESEN
+    fkFunctionNameRecursion,     // SCA205 - Funktionsname im eigenen Rumpf GELESEN
                                  //          ('Total := Total + X'): im Delphi-Modus ein
                                  //          rekursiver Aufruf, nicht das Ergebnis.
                                  //          Error nur bewiesen, sonst Warning
                                  //          (uFuncNameResultScan). Charge N / FN.
+    fkFormatterMarker,           // SCA206 - Formatter-Marker {(*} / {*)} falsch
+                                 //          geschrieben (Leerraum) oder ohne Partner
+                                 //          (Start ohne Ende, Ende ohne Start, zweiter
+                                 //          Start im offenen Bereich). Hint, nur
+                                 //          Formatierung (GExperts/CnWizards/JCF), nie
+                                 //          das Kompilat. Nico-Entscheide 2026-11-06.
+    fkFragileNonAsciiIdentifier  // SCA207 - Bezeichner mit Nicht-ASCII-Buchstaben, den
+                                 //          Werkzeuge zerlegen: Delphi nur in UTF-8
+                                 //          OHNE BOM (IDE/Formatter lesen ANSI),
+                                 //          Warning; FPC jede Datei (nur ASCII-
+                                 //          Bezeichner), Error. uSourceEncoding S4.
+                                 //          Nico-Entscheide 2026-11-06.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 205 belegt (SCA205),
+  // tragen hoechstens 256 Elemente - aktuell sind 207 belegt (SCA207),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1079,7 +1091,9 @@ const
     (Name: 'ComparisonPrecedence';       FindingType: ftBug;          DefaultSeverity: lsError),   // fkComparisonPrecedence
     (Name: 'LoopPastHighBound';          FindingType: ftBug;          DefaultSeverity: lsError),   // fkLoopPastHighBound
     (Name: 'FunctionNameAsResult';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFunctionNameAsResult
-    (Name: 'FunctionNameRecursion';      FindingType: ftBug;          DefaultSeverity: lsError)    // fkFunctionNameRecursion
+    (Name: 'FunctionNameRecursion';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkFunctionNameRecursion
+    (Name: 'FormatterMarker';            FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFormatterMarker
+    (Name: 'FragileNonAsciiIdentifier';  FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkFragileNonAsciiIdentifier
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1344,10 +1358,11 @@ begin
     // Delphi-Quelltext fast nie legitim; ZWJ (U+200D) kann aber in Emoji-String-
     // Literalen vorkommen -> nicht fcHigh. 0 Self-Scan-Treffer.
     fkSourceInvisibleChar: Result := fcMedium;
-    // SCA193 SourceNonAsciiIdentifier: fcMedium. Nicht-ASCII in einem Identifier
-    // ist der Homoglyph-/Confusable-Vektor (Trojan Source) - aber ein legitimer
-    // Unicode-Identifier (z.B. deutsche Umlaute) ist ebenfalls moeglich, daher
-    // nicht fcHigh. 0 Self-Scan-Treffer.
+    // SCA193 SourceNonAsciiIdentifier: fcMedium. Ein bekannter Homoglyph in
+    // einem Identifier ist der Confusable-Vektor (Trojan Source) - ein ganz in
+    // einer anderen Schrift geschriebener Name (kyrillisch) traegt aber auch
+    // Tabellenzeichen und kann gewollt sein, daher nicht fcHigh. Umlaute
+    // meldet die Regel seit 2026-11-06 nicht mehr (Werkzeugbruch: SCA207).
     fkSourceNonAsciiIdentifier: Result := fcMedium;
 
     // --- Welle 4: reine FORMATIERUNGS-/Style-Regeln (2026-06-29) ---
@@ -1450,6 +1465,20 @@ begin
     // sichtbar, aus dem Error-Tier; Anhebung erst nach dem Delphi-Korpuslauf.
     fkHardcodedIpAddress: Result := fcMedium;
     fkHardcodedIpInConfig: Result := fcMedium;
+
+    // SCA206 FormatterMarker (neu 2026-11-06, Nico-Entscheid E2): die
+    // Bilanz ist deterministisch, aber ein bis Dateiende offener Bereich
+    // ({(*} ohne {*)}) kann Absicht sein. fcMedium haelt die Regel im
+    // Default sichtbar; Absicht per noinspection stilllegen. EIGENER
+    // Case-Zweig (SCA040-Lehre: nie in eine Aufzaehlung haengen).
+    fkFormatterMarker: Result := fcMedium;
+
+    // SCA207 FragileNonAsciiIdentifier (neu 2026-11-06): Fallback fuer den
+    // Delphi-Zweig (UTF-8 ohne BOM) - ob der Formatter den Namen zerlegt,
+    // haengt an der Codepage des formatierenden Rechners (auf CP-1252
+    // bleiben U-Umlaut und sz heil). Der FPC-Zweig setzt fcHigh am Fund
+    // (Baubruch). EIGENER Case-Zweig (SCA040-Lehre).
+    fkFragileNonAsciiIdentifier: Result := fcMedium;
 
     // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
     // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die

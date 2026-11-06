@@ -17,6 +17,7 @@ uses
   uHardcodedIpAddress,   // SCA200 - liest den Quelltext (FindingsOfFile)
   uLoopPastHighBound,    // SCA203 - liest die Code-Sicht (FindingsOfFile)
   uFunctionNameResult,   // SCA204/SCA205 - liest den Quelltext (FindingsOfFile)
+  uFormatterMarker,      // SCA206 - liest den Dateitext (FindingsOfFile)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
@@ -305,6 +306,9 @@ begin
         TLoopPastHighBoundDetector.AnalyzeUnit(Root, TempPath, Result);
         // SCA204/SCA205: liest den Quelltext samt {$mode}-Direktiven.
         TFunctionNameResultDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA206: eigener Kommentar-Lauf ueber den Dateitext (AcquireLines),
+        // der AST bleibt ungenutzt.
+        TFormatterMarkerDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);

@@ -1,7 +1,7 @@
 ﻿# Profils d'analyse
 
 Un **profil** est un ensemble de règles nommé. Il répond à une seule
-question : *lesquels des 205 détecteurs s'exécutent dans cette analyse ?*
+question : *lesquels des 207 détecteurs s'exécutent dans cette analyse ?*
 Tout le reste - seuil de sévérité, seuil de confiance, suppressions,
 référence - filtre ensuite. Le profil décide de ce qui est cherché au départ.
 
@@ -9,13 +9,13 @@ référence - filtre ensuite. Le profil décide de ce qui est cherché au dépar
 
 | Profil | Règles | À quoi il sert |
 |---|---|---|
-| `strict` | 205 | Tout ; en ligne de commande, il active en plus SCA007 (uses inutilisés), pas dans l'EXE ni dans le plugin IDE (voir plus bas). C'est de ce profil que dépend la promesse d'exhaustivité - les règles de confiance low exigent tout de même `[Rules] MinConfidence=low`, voir ci-dessous. |
-| `default` | 197 | Tout sauf les huit règles de pure convention de `style`. Ces huit-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
-| `selftest-quiet` | 194 | Tout sauf onze règles désactivées pour l'auto-analyse (dont `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Pas un sous-ensemble de `default` : il garde cinq des règles de `style`. Utilisé quand ce dépôt s'analyse lui-même. |
-| `code-quality` | 26 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés (SCA007 seulement avec `[Detectors] UsesCheck=1`). |
+| `strict` | 207 | Tout ; en ligne de commande, il active en plus SCA007 (uses inutilisés), pas dans l'EXE ni dans le plugin IDE (voir plus bas). C'est de ce profil que dépend la promesse d'exhaustivité - les règles de confiance low exigent tout de même `[Rules] MinConfidence=low`, voir ci-dessous. |
+| `default` | 199 | Tout sauf les huit règles de pure convention de `style`. Ces huit-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
+| `selftest-quiet` | 196 | Tout sauf onze règles désactivées pour l'auto-analyse (dont `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Pas un sous-ensemble de `default` : il garde cinq des règles de `style`. Utilisé quand ce dépôt s'analyse lui-même. |
+| `code-quality` | 27 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés (SCA007 seulement avec `[Detectors] UsesCheck=1`). |
 | `ide-fast` | 21 | Assez léger pour tourner sur chaque fichier ouvert dans l'IDE. Bugs et sécurité, pas de style. |
 | `dfm-only` | 20 | Uniquement les contrôles sur les fichiers de fiche. |
-| `bugs-only` | 20 | Uniquement les défauts - ni smells, ni conventions. |
+| `bugs-only` | 21 | Uniquement les défauts - ni smells, ni conventions. |
 | `security` | 9 | Uniquement vulnérabilités et points chauds. |
 | `style` | 8 | Les règles de pure convention que `default` laisse de côté. |
 
@@ -70,7 +70,7 @@ Chaque entrée est une liste de jetons, appliqués **de gauche à droite** :
 
 | Jeton | Effet |
 |---|---|
-| `*` | les 205 types de règles |
+| `*` | les 207 types de règles |
 | `Kind` | ajouter ce type |
 | `!Kind` ou `-Kind` | retirer ce type |
 

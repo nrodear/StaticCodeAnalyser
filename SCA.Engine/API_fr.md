@@ -10,7 +10,7 @@ lance l'analyse complète sans connaître les unités internes.
 
 - **Package :** `SCA.Engine` (`requires rtl, xmlrtl;` — `xmlrtl` lit `.dproj`/`.groupproj` pour les scopes de projet ; aucune dépendance VCL/FMX)
 - **Version :** 0.9.19 (`uSCAConsts.SCA_VERSION`)
-- **Périmètre :** 205 règles (IDs de règle `SCA001`–`SCA205`, `rules/sca-rules.json`)
+- **Périmètre :** 207 règles (IDs de règle `SCA001`–`SCA207`, `rules/sca-rules.json`)
 
 ---
 

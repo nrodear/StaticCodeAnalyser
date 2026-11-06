@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 207 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -196,7 +196,7 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA190](SCA190.md) | UTF-16-Quelldatei | Hint | Code Smell | `uSourceEncoding.pas` |
 | [SCA191](SCA191.md) | UTF-32-/UCS-4-Quelldatei | Error | File Error | `uSourceEncoding.pas` |
 | [SCA192](SCA192.md) | Unsichtbares Zeichen ohne Breite im Quelltext | Warning | Vulnerability | `uSourceEncoding.pas` |
-| [SCA193](SCA193.md) | Nicht-ASCII-Zeichen im Bezeichner | Warning | Vulnerability | `uSourceEncoding.pas` |
+| [SCA193](SCA193.md) | Doppelgänger-Buchstabe (Homoglyph) im Bezeichner | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](SCA194.md) | Quelldatei gehört nicht zum Projekt | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unit wird vom Projekt genutzt, ist aber nicht darin enthalten | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](SCA196.md) | Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde | Warning | Bug | `uManagedResultUninit.pas` |
@@ -209,6 +209,8 @@ Alle 205 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA203](SCA203.md) | for-Schleife läuft einen Index über das Ende | Error | Bug | `uLoopPastHighBound.pas` |
 | [SCA204](SCA204.md) | Ergebnis über den Funktionsnamen zugewiesen | Hint | Code Smell | `uFunctionNameResult.pas` |
 | [SCA205](SCA205.md) | Funktionsname im eigenen Rumpf gelesen ist ein rekursiver Aufruf | Error | Bug | `uFunctionNameResult.pas` |
+| [SCA206](SCA206.md) | Formatter-Marker zum Aus- und Einschalten falsch geschrieben oder ohne Partner | Hint | Code Smell | `uFormatterMarker.pas` |
+| [SCA207](SCA207.md) | Nicht-ASCII-Bezeichner, den Werkzeuge zerlegen | Warning | Bug | `uSourceEncoding.pas` |
 
 ---
 

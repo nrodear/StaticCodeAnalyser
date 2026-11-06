@@ -1559,6 +1559,9 @@ msgstr "Ergebnis über den Funktionsnamen gesetzt - stattdessen Result := schrei
 msgid "The function name on the right side is a recursive call, not the current result"
 msgstr "Der Funktionsname auf der rechten Seite ist ein rekursiver Aufruf, nicht das bisherige Ergebnis"
 
+msgid "Formatter marker malformed or unpaired - write {(*} and {*)} exactly, without blanks, and close every region"
+msgstr "Formatter-Marker falsch geschrieben oder ohne Partner - {(*} und {*)} genau so, ohne Leerzeichen, schreiben und jeden Bereich schließen"
+
 msgid "File not found:"
 msgstr "Datei nicht gefunden:"
 
@@ -6718,6 +6721,23 @@ msgstr "die Meldung nennt keine Funktion (\"Name :=\")"
 msgid "the unit is also compiled with Free Pascal ({$IFDEF FPC} in line %d) and sets no {$mode} - whether Result exists depends on the mode of the project"
 msgstr "die Unit wird auch mit Free Pascal übersetzt ({$IFDEF FPC} in Zeile %d) und setzt kein {$mode} - ob es Result gibt, hängt am Modus des Projekts"
 
+# reDelphix SCA206 (uRdxFormatterMarkerFix): Formatter-Marker exakt schreiben
+
+msgid "Write the formatter marker exactly"
+msgstr "Formatter-Marker exakt schreiben"
+
+msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"
+msgstr "gleiche Bedeutung für den Compiler - nur ein Kommentar ändert sich; GExperts, CnWizards und JCF erkennen den Marker jetzt"
+
+msgid "no formatter marker with this text at the reported place"
+msgstr "kein Formatter-Marker mit diesem Text an der gemeldeten Stelle"
+
+msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"
+msgstr "nur ein Marker mit Leerzeichen darin lässt sich korrigieren - wohin ein fehlendes {(*} oder {*)} gehört, weiß nur der Autor"
+
+msgid "the line holds this marker more than once"
+msgstr "die Zeile trägt diesen Marker mehrmals"
+
 # reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen
 
 msgid "compiler directive in the if statement - conditional code could change its branches"
@@ -7098,3 +7118,27 @@ msgstr "Nacktes `raise;` außerhalb eines except/on-Handlers - Delphi (E2145) un
 
 msgid "`with A, B do` resolves identifiers right-to-left - shadowing changes silently if either type adds a member"
 msgstr "`with A, B do` löst Bezeichner von rechts nach links auf - die Verdeckung ändert sich still, sobald einer der Typen ein Member ergänzt"
+
+# --- 2026-11-06: SCA206 FormatterMarker, feste Fundmeldungen (N_) ---
+# Die vierte Meldung (Leerraum im Marker) traegt den Markertext und
+# bleibt englisch (Format-Meldungen kommen spaeter).
+
+msgid "Formatter marker {(*} is never closed by {*)} - GExperts, CnWizards and JCF leave the rest of the file unformatted"
+msgstr "Formatter-Marker {(*} wird nie durch {*)} geschlossen - GExperts, CnWizards und JCF formatieren den Rest der Datei nicht mehr"
+
+msgid "Formatter marker {*)} has no opening {(*} - it closes nothing, the code above it is formatted"
+msgstr "Formatter-Marker {*)} ohne öffnendes {(*} - er schließt nichts, der Code darüber wird formatiert"
+
+msgid "Second {(*} inside an open formatter-off region - the markers do not nest, the first {*)} already switches formatting back on"
+msgstr "Zweites {(*} in einem offenen Bereich ohne Formatierung - die Marker schachteln nicht, schon das erste {*)} schaltet die Formatierung wieder ein"
+
+# --- 2026-11-06: SCA207 FragileNonAsciiIdentifier ---
+# Loesungshinweis (uFixHint) und die feste Fundmeldung fuer ANSI-Dateien
+# unter --dialect=fpc (N_). Meldungen mit dem Bezeichnernamen sind
+# Format-Meldungen und bleiben englisch.
+
+msgid "Identifier with non-ASCII letters that tools break - save the file as UTF-8 with BOM, or use an ASCII name"
+msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Datei als UTF-8 mit BOM speichern oder einen ASCII-Namen verwenden"
+
+msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."
+msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."

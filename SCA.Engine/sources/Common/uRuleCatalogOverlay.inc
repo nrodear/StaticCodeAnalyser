@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..204] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..206] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2647,16 +2647,22 @@ const
     // SCA193
     (
       RuleID   : 'SCA193';
-      Name     : 'Nicht-ASCII-Zeichen im Bezeichner';
+      Name     : 'Doppelg' + #$00E4 + 'nger-Buchstabe (Homoglyph) im Bezeichner';
       ShortDesc: 'Der Bezeichner enth' + #$00E4 +
-        'lt einen Nicht-ASCII-Buchstaben - Risiko durch Homoglyphen und verwechselbare Zeichen';
+        'lt einen kyrillischen oder griechischen Buchstaben, der wie ein lateinischer aussieht - Risiko durch Homoglyphen und verwechselbare Zeichen';
       FullDesc : 'Ein Bezeichner (Variable, Typ, Routine, ...) enth' + #$00E4 +
-        'lt ein Nicht-ASCII-Zeichen. Das ist der Homoglyphen- bzw. Confusable-Identifier-Vektor der Trojan-Source-Familie (CVE-2021-42694, CWE-1007): Ein Buchstabe wie das kyrillische U+043E sieht aus wie das lateinische ''o'', ist aber ein anderer Bezeichner, ' +
-        'sodass zwei Bezeichner identisch aussehen und dennoch unterschiedlich gebunden werden k' +
-        #$00F6 + 'nnen. Ein legitimer Unicode-Bezeichner ist ebenfalls m' + #$00F6 +
-        'glich, daher vor einer ' + #$00C4 + 'nderung pr' + #$00FC +
-        'fen; ASCII-Bezeichner bevorzugen, wegen der Portabilit' + #$00E4 +
-        't und um Verwechslungen zu vermeiden.'
+        'lt einen kyrillischen oder griechischen Buchstaben, der genau wie ein lateinischer aussieht - etwa das kyrillische U+043E statt des lateinischen ''o'' oder das griechische gro' +
+        #$00DF +
+        'e My U+039C statt ''M''. Das ist der Homoglyphen- bzw. Confusable-Identifier-Vektor der Trojan-Source-Familie (CVE-2021-42694, CWE-1007): Zwei Bezeichner k' +
+        #$00F6 + 'nnen identisch aussehen und dennoch unterschiedlich gebunden werden. Es z' +
+        #$00E4 + 'hlt nur eine feste Tabelle bekannter Doppelg' + #$00E4 +
+        'nger: die kyrillischen und griechischen Gro' + #$00DF +
+        'buchstaben, die lateinisch aussehen, die kyrillischen Kleinbuchstaben a, e, o, p, c, y, x, s, i, j, h, l, d, q, w und das griechische kleine Omikron. Umlaute, Buchstaben mit Akzent und Buchstaben ohne lateinischen Doppelg' +
+        #$00E4 + 'nger werden nicht gemeldet - sie t' + #$00E4 +
+        'uschen niemanden; wo Werkzeuge einen solchen Namen zerlegen (UTF-8 ohne BOM, Free Pascal), meldet ihn SCA207. Ein ganz in einer anderen Schrift geschriebener Name kann trotzdem Tabellenbuchstaben enthalten und wird gemeldet, daher vor einer ' +
+        #$00C4 + 'nderung pr' + #$00FC + 'fen. Ein Fund je Datei, auf der Zeile des ersten Doppelg' +
+        #$00E4 + 'nger-Buchstabens im Code; nur Dateien, deren Kodierung feststeht (BOM oder g' +
+        #$00FC + 'ltiges UTF-8). ASCII-Bezeichner bevorzugen.'
     ),
     // SCA194
     (
@@ -2897,12 +2903,54 @@ const
         'es Aufrufargument ist; andernfalls eine Warnung (nur Default-Parameter, gewollte Rekursion daneben, blo' +
         #$00DF +
         'es Argument). Nur im Delphi-Modus: Delphi oder Free Pascal mit {$mode delphi} / {$mode delphiunicode}. Behebung: Result (oder Name(), wenn die Rekursion gewollt ist).'
+    ),
+    // SCA206
+    (
+      RuleID   : 'SCA206';
+      Name     : 'Formatter-Marker zum Aus- und Einschalten falsch geschrieben oder ohne Partner';
+      ShortDesc: 'Formatter-Marker `{(*}` / `{*)}` falsch geschrieben oder ohne Partner - GExperts, CnWizards und JCF formatieren den Bereich dann doch oder den Rest der Datei gar nicht mehr';
+      FullDesc : 'Die Kommentare `{(*}` und `{*)}` schalten den Code-Formatter f' + #$00FC +
+        'r den Bereich dazwischen aus und danach wieder ein. Sie stammen aus DelForExp und wirken im Formatter von GExperts, im Formatter von CnWizards und in JEDI Code Format (auch in Lazarus); der Formatter der Delphi-IDE (Strg+D, bis Delphi 12) kennt sie n' +
+        'icht, und Delphi 13 liefert keinen Formatter mehr aus. Die Formatter erkennen nur genau diese vier Zeichen - `{ (*}` oder `{*) }` ist f' +
+        #$00FC + 'r sie ein gew' + #$00F6 +
+        'hnlicher Kommentar -, und die Bereiche schachteln nicht: ein Schalter, kein Z' + #$00E4 +
+        'hler. Gemeldet werden: ein Marker mit Leerzeichen oder Tabs darin (er wird ignoriert, der Bereich wird formatiert); ein ' +
+        #$00F6 + 'ffnendes `{(*}` ohne schlie' + #$00DF +
+        'endes (danach wird nichts mehr formatiert); ein schlie' + #$00DF +
+        'endes `{*)}` ohne offenen Bereich (es schlie' + #$00DF +
+        't nichts); und ein zweites `{(*}` in einem offenen Bereich (das erste `{*)}` beendet ihn schon). Ein absichtlich bis zum Dateiende offener Bereich wird ebenfalls gemeldet - mit `// noinspection FormatterMarker` in der Zeile ' +
+        #$00FC + 'ber dem `{(*}` unterdr' + #$00FC + 'cken. Der Compiler sieht beide Marker als gew' +
+        #$00F6 + 'hnliche `{ }`-Kommentare, nichts davon ' + #$00E4 +
+        'ndert das kompilierte Programm. Die Bilanz z' + #$00E4 +
+        'hlt je Datei; `{$IFDEF}`-Zweige werden gelesen, wie sie dastehen, ohne sie auszuwerten.'
+    ),
+    // SCA207
+    (
+      RuleID   : 'SCA207';
+      Name     : 'Nicht-ASCII-Bezeichner, den Werkzeuge zerlegen';
+      ShortDesc: 'Bezeichner mit Nicht-ASCII-Buchstaben in einer UTF-8-Datei ohne BOM (der Delphi-Formatter zerlegt ihn) oder unter Free Pascal (kompiliert nicht)';
+      FullDesc : 'Ein Bezeichner enth' + #$00E4 +
+        'lt einen Nicht-ASCII-Buchstaben - einen Umlaut, einen Buchstaben mit Akzent, einen kyrillischen oder griechischen Buchstaben. Delphi erlaubt das, doch eine Quelldatei, die als UTF-8 OHNE Byte-Order-Mark gespeichert ist, lesen die Delphi-IDE und der D' +
+        'elphi-Code-Formatter (Formatter.exe, Strg+D bis Delphi 12) als ANSI: Jeder Nicht-ASCII-Buchstabe wird zu zwei Zeichen, der Formatter h' +
+        #$00E4 + 'lt das zweite f' + #$00FC +
+        'r ein Satzzeichen und setzt Leerzeichen in den Bezeichner - nach dem Formatieren kompiliert die Unit nicht mehr, und die Datei ist kein g' +
+        #$00FC + 'ltiges UTF-8 mehr. Kommentare, String-Literale und Compiler-Direktiven ' + #$00FC +
+        'bernimmt er unver' + #$00E4 +
+        'ndert; sie werden nicht gemeldet. Welche Buchstaben brechen, h' + #$00E4 +
+        'ngt von der ANSI-Codepage des Rechners ab, der formatiert (unter Windows-1252 brechen die meisten Umlaute und Buchstaben mit Akzent, das gro' +
+        #$00DF + 'e ' + #$00DC + ' und das ' + #$00DF + ' ' + #$00FC + 'berstehen es zuf' + #$00E4 +
+        'llig), deshalb wird jeder Nicht-ASCII-Buchstabe gemeldet. Dateien mit BOM, UTF-16- und ANSI-Dateien werden richtig gelesen und im Delphi-Scan nicht gemeldet. Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, Unterstrich) und bricht in jeder Kodi' +
+        'erung mit ''illegal character'' ab: Mit --dialect=fpc wird jeder solche Bezeichner als Fehler mit hoher Konfidenz gemeldet, in einer ANSI-Datei ohne den Namen (seine Buchstaben lassen sich nicht sicher dekodieren). Jeder verschiedene Bezeichner wird je' +
+        ' Datei einmal gemeldet, an seiner ersten Stelle; inaktive {$IFDEF}-Zweige z' + #$00E4 +
+        'hlen mit, weil der Formatter auch sie formatiert. Behebung: die Datei als UTF-8 mit BOM speichern (Delphi) oder den Bezeichner in ASCII umbenennen (ae, oe, ue, ss) - f' +
+        #$00FC + 'r Free Pascal hilft nur der ASCII-Name. SCA185 meldet dasselbe fehlende BOM f' +
+        #$00FC + 'r die Datei als Ganzes; Doppelg' + #$00E4 + 'nger-Buchstaben meldet SCA193.'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..204] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..206] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -6380,16 +6428,23 @@ const
     // SCA193
     (
       RuleID   : 'SCA193';
-      Name     : 'Caract' + #$00E8 + 're non-ASCII dans un identificateur';
-      ShortDesc: 'L''identificateur contient une lettre non-ASCII - risque d''homoglyphes et de caract' +
-        #$00E8 + 'res confondables';
-      FullDesc : 'Un identificateur (variable, type, routine, ...) contient un caract' + #$00E8 +
-        're non-ASCII. C''est le vecteur des homoglyphes / identificateurs confondables de la famille Trojan Source (CVE-2021-42694, CWE-1007) : une lettre comme le cyrillique U+043E ressemble au ''o'' latin mais forme un identificateur diff' +
-        #$00E9 + 'rent, si bien que deux identificateurs peuvent sembler identiques et pourtant d' +
-        #$00E9 + 'signer des choses diff' + #$00E9 + 'rentes. Un identificateur Unicode l' + #$00E9 +
-        'gitime est aussi possible, donc examiner avant de modifier ; pr' + #$00E9 + 'f' + #$00E9 +
-        'rer des identificateurs ASCII pour la portabilit' + #$00E9 + ' et pour ' + #$00E9 +
-        'viter la confusion.'
+      Name     : 'Lettre sosie (homoglyphe) dans un identificateur';
+      ShortDesc: 'L''identificateur contient une lettre cyrillique ou grecque qui ressemble ' + #$00E0 +
+        ' une lettre latine - risque d''homoglyphes et de caract' + #$00E8 + 'res confondables';
+      FullDesc : 'Un identificateur (variable, type, routine, ...) contient une lettre cyrillique ou grecque qui ressemble exactement ' +
+        #$00E0 +
+        ' une lettre latine - par exemple le U+043E cyrillique au lieu du ''o'' latin, ou le Mu majuscule grec U+039C au lieu de ''M''. C''est le vecteur des homoglyphes / identificateurs confondables de la famille Trojan Source (CVE-2021-42694, CWE-1007) : deux i' +
+        'dentificateurs peuvent sembler identiques et pourtant se lier diff' + #$00E9 +
+        'remment. Seule compte une table fixe de sosies connus : les majuscules cyrilliques et grecques d''aspect latin, les minuscules cyrilliques a, e, o, p, c, y, x, s, i, j, h, l, d, q, w et l''omicron minuscule grec. Les umlauts, les lettres accentu' +
+        #$00E9 + 'es et les lettres sans jumelle latine ne sont pas signal' + #$00E9 +
+        's - ils ne trompent personne ; l' + #$00E0 + ' o' + #$00F9 +
+        ' des outils cassent un tel nom (UTF-8 sans BOM, Free Pascal), SCA207 le signale. Un nom ' +
+        #$00E9 + 'crit enti' + #$00E8 + 'rement dans une autre ' + #$00E9 + 'criture peut tout de m' +
+        #$00EA + 'me contenir des lettres de la table et il est signal' + #$00E9 + ' ; v' + #$00E9 +
+        'rifier avant de modifier. Un r' + #$00E9 + 'sultat par fichier, ' + #$00E0 +
+        ' la ligne de la premi' + #$00E8 +
+        're lettre sosie dans le code ; uniquement les fichiers dont l''encodage est certain (BOM ou UTF-8 valide). Pr' +
+        #$00E9 + 'f' + #$00E9 + 'rer des identificateurs ASCII.'
     ),
     // SCA194
     (
@@ -6748,6 +6803,64 @@ const
         'r' + #$00E9 + 'e ' + #$00E0 + ' c' + #$00F4 + 't' + #$00E9 +
         ', argument nu). Uniquement en mode Delphi : Delphi, ou Free Pascal avec {$mode delphi} / {$mode delphiunicode}. Correction : Result (ou Name() quand la r' +
         #$00E9 + 'cursion est voulue).'
+    ),
+    // SCA206
+    (
+      RuleID   : 'SCA206';
+      Name     : 'Marqueur de d' + #$00E9 + 'sactivation du formateur mal ' + #$00E9 +
+        'crit ou sans partenaire';
+      ShortDesc: 'Marqueur de formateur `{(*}` / `{*)}` mal ' + #$00E9 +
+        'crit ou sans partenaire - GExperts, CnWizards et JCF formatent alors quand m' + #$00EA +
+        'me la zone ou plus du tout le reste du fichier';
+      FullDesc : 'Les commentaires `{(*}` et `{*)}` d' + #$00E9 +
+        'sactivent le formateur de code pour la zone qui les s' + #$00E9 + 'pare, puis le r' +
+        #$00E9 +
+        'activent. Ils viennent de DelForExp et sont reconnus par le formateur de GExperts, celui de CnWizards et JEDI Code Format (aussi dans Lazarus) ; le formateur de l''IDE Delphi (Ctrl+D, jusqu''' +
+        #$00E0 + ' Delphi 12) les ignore, et Delphi 13 n''est plus livr' + #$00E9 +
+        ' avec un formateur. Les formateurs n''acceptent que ces quatre caract' + #$00E8 +
+        'res exacts - `{ (*}` ou `{*) }` est pour eux un commentaire ordinaire - et les zones ne s''imbriquent pas : un interrupteur, pas un compteur. Sont signal' +
+        #$00E9 + 's : un marqueur contenant des espaces ou des tabulations (il est ignor' + #$00E9 +
+        ', la zone est format' + #$00E9 + 'e) ; un `{(*}` ouvrant jamais referm' + #$00E9 +
+        ' (plus rien n''est format' + #$00E9 +
+        ' ensuite) ; un `{*)}` fermant sans zone ouverte (il ne ferme rien) ; et un second `{(*}` dans une zone ouverte (le premier `{*)}` la termine d' +
+        #$00E9 + 'j' + #$00E0 + '). Une zone laiss' + #$00E9 + 'e ouverte volontairement jusqu''' +
+        #$00E0 + ' la fin du fichier est signal' + #$00E9 +
+        'e aussi - la masquer avec `// noinspection FormatterMarker` sur la ligne au-dessus du `{(*}`. Le compilateur voit les deux marqueurs comme de simples commentaires `{ }` ; rien de tout cela ne modifie le programme compil' +
+        #$00E9 +
+        '. Le bilan se fait par fichier ; les branches `{$IFDEF}` sont lues telles quelles, sans ' +
+        #$00EA + 'tre ' + #$00E9 + 'valu' + #$00E9 + 'es.'
+    ),
+    // SCA207
+    (
+      RuleID   : 'SCA207';
+      Name     : 'Identificateur non-ASCII que les outils cassent';
+      ShortDesc: 'Identificateur avec des lettres non-ASCII dans un fichier UTF-8 sans BOM (le formateur Delphi le coupe) ou sous Free Pascal (ne compile pas)';
+      FullDesc : 'Un identificateur contient une lettre non-ASCII - un umlaut, une lettre accentu' + #$00E9 +
+        'e, une lettre cyrillique ou grecque. Delphi l''accepte, mais un fichier source enregistr' +
+        #$00E9 +
+        ' en UTF-8 SANS marque d''ordre des octets (BOM) est lu comme de l''ANSI par l''IDE Delphi et par le formateur de code Delphi (Formatter.exe, Ctrl+D jusqu''' +
+        #$00E0 + ' Delphi 12) : chaque lettre non-ASCII devient deux caract' + #$00E8 +
+        'res, le formateur prend le second pour un signe de ponctuation et ins' + #$00E8 +
+        're des espaces dans l''identificateur - apr' + #$00E8 + 's le formatage, l''unit' + #$00E9 +
+        ' ne compile plus et le fichier n''est plus de l''UTF-8 valide. Les commentaires, les litt' +
+        #$00E9 + 'raux de cha' + #$00EE + 'ne et les directives de compilation sont recopi' + #$00E9 +
+        's tels quels et ne sont pas signal' + #$00E9 + 's. Les lettres qui cassent d' + #$00E9 +
+        'pendent de la page de codes ANSI de la machine qui formate (en Windows-1252, la plupart des umlauts et des lettres accentu' +
+        #$00E9 + 'es cassent, le ' + #$00DC + ' majuscule et le ' + #$00DF +
+        ' survivent par hasard) ; c''est pourquoi toute lettre non-ASCII est signal' + #$00E9 +
+        'e. Les fichiers avec BOM, les fichiers UTF-16 et ANSI sont lus correctement et ne sont pas signal' +
+        #$00E9 +
+        's dans une analyse Delphi. Free Pascal n''accepte que des identificateurs ASCII (A-Z, 0-9, soulign' +
+        #$00E9 + ') et s''arr' + #$00EA +
+        'te avec ''illegal character'' dans tout encodage : avec --dialect=fpc, chaque identificateur de ce type est signal' +
+        #$00E9 + ' comme erreur avec une confiance ' + #$00E9 + 'lev' + #$00E9 +
+        'e, dans un fichier ANSI sans le nom (ses lettres ne se d' + #$00E9 + 'codent pas de fa' +
+        #$00E7 + 'on s' + #$00FB + 're). Chaque identificateur distinct est signal' + #$00E9 +
+        ' une fois par fichier, ' + #$00E0 + ' sa premi' + #$00E8 +
+        're occurrence ; les branches {$IFDEF} inactives comptent, car le formateur les formate aussi. Correction : enregistrer le fichier en UTF-8 avec BOM (Delphi) ou renommer l''identificateur en ASCII (ae, oe, ue, ss) - pour Free Pascal, seul le nom ASCII ' +
+        'aide. SCA185 signale le m' + #$00EA +
+        'me BOM manquant pour le fichier dans son ensemble ; les lettres sosies rel' + #$00E8 +
+        'vent de SCA193.'
     )
   );
 
