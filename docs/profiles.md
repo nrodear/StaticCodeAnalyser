@@ -46,7 +46,9 @@ IDE plugin treat `strict` like any other profile - there SCA007 needs
 A name the catalogue does not know is an error in the CLI: whether it came
 from `--profile` or from `[Rules] Profile`, the run stops before the scan
 with exit 99 and lists the known profiles. Case and surrounding blanks do
-not matter. (Up to 0.9.18 an unknown name silently ran all rules.)
+not matter. (Up to 0.9.18 an unknown name silently ran all rules.) A
+profile the project brings along counts as known, see
+[Profiles that come with the project](#profiles-that-come-with-the-project).
 
 Both surfaces can also show you what is *inside* a profile:
 **burger menu -> Rule-set profiles...**, in the standalone app and in the
@@ -157,6 +159,59 @@ The repository carries one such file: `reDelphix/data/profile-code-aktionen.json
 holds the profile `code-aktionen`, the rules with a code action of
 reDelphix plus `FileReadError`. It is not one of the
 built-in profiles and has to be imported.
+
+## Profiles that come with the project
+
+A project can bring its own profiles: put a `profiles.json` into the
+folder `.sca` at the project root - the folder that also holds the local
+baseline. The format is the same as for your own `profiles.json`:
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "showcase": ["MemoryLeak", "SQLInjection", "EmptyExcept"]
+  }
+}
+```
+
+SCA reads `<project root>\.sca\profiles.json` on every scan, in addition
+to the built-in profiles and your own. The profile therefore works on
+every machine and on a build agent, without importing anything. The
+project root is:
+
+| Where | Project root |
+|---|---|
+| CLI `--path <dir>` | that folder |
+| CLI `--project`, `--project-group`, `--file` | the folder of the `.dproj`, `.groupproj` or file |
+| Standalone app | the scan path (the folder, or the folder of the `.dproj`/`.groupproj`) |
+| IDE plugin | the folder of the active project, without one the folder of the project group |
+
+Only the root itself is searched, not the folders above it.
+
+* **A built-in name stays reserved.** Such an entry is ignored, with a
+  warning.
+* **The project wins over your own profile of the same name**, with a
+  note. Yours is kept in your `profiles.json` and applies again in
+  every other project.
+* **Unknown kind names are ignored without a word**, as in your own
+  file. A profile that names no rule this version knows would run all
+  rules - SCA warns about that.
+* **A file that cannot be parsed** costs only the project profiles: the
+  scan runs without them and says so.
+* **Without the file nothing changes.**
+
+The CLI prints these notes as `WARNING:` lines on stderr (also with
+`--quiet`) and, without `--quiet`, a line `Project profiles: ...` with
+the names it found. The standalone app and the IDE plugin write the
+notes to the debug output (`OutputDebugString`, readable with
+DebugView).
+
+Project profiles are read, never written. The profile window lists them
+with "- project" and read-only - **Copy...** makes your own from one. They
+appear in the profile combo as soon as the scan path (standalone app) or
+the active project (IDE plugin) points to the project; the options page
+of the IDE plugin lists them after the first scan of such a project.
 
 ## Finding a rule in the list
 

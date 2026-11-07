@@ -47,7 +47,9 @@ Un nom que le catalogue ne connaît pas est une erreur dans la CLI : qu'il
 vienne de `--profile` ou de `[Rules] Profile`, l'exécution s'arrête avant
 le scan avec le code 99 et liste les profils connus. La casse et les
 espaces autour ne comptent pas. (Jusqu'à 0.9.18, un nom inconnu lançait
-silencieusement toutes les règles.)
+silencieusement toutes les règles.) Un profil fourni par le projet compte
+comme connu, voir
+[Les profils fournis par le projet](#les-profils-fournis-par-le-projet).
 
 Les deux interfaces montrent aussi ce qu'il y a *dans* un profil :
 **menu burger -> Profils de jeu de règles ...** liste, dans l'application
@@ -166,6 +168,61 @@ Le dépôt fournit un tel fichier : `reDelphix/data/profile-code-aktionen.json`
 contient le profil `code-aktionen`, les règles dotées d'une action de code
 de reDelphix plus `FileReadError`. Il ne fait pas partie
 des profils intégrés et doit être importé.
+
+## Les profils fournis par le projet
+
+Un projet peut fournir ses propres profils : un `profiles.json` dans le
+dossier `.sca` de la racine du projet - le dossier qui contient aussi la
+baseline locale. Le format est le même que celui de votre propre
+`profiles.json` :
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "showcase": ["MemoryLeak", "SQLInjection", "EmptyExcept"]
+  }
+}
+```
+
+SCA lit `<racine du projet>\.sca\profiles.json` à chaque scan, en plus des
+profils intégrés et des vôtres. Le profil fonctionne donc sur chaque
+machine et sur un agent de build, sans rien importer. La racine du
+projet est :
+
+| Où | Racine du projet |
+|---|---|
+| CLI `--path <dossier>` | ce dossier |
+| CLI `--project`, `--project-group`, `--file` | le dossier du `.dproj`, du `.groupproj` ou du fichier |
+| Application autonome | le chemin analysé (le dossier, ou le dossier du `.dproj`/`.groupproj`) |
+| Plugin IDE | le dossier du projet actif, à défaut celui du groupe de projets |
+
+Seule la racine elle-même est examinée, pas les dossiers au-dessus.
+
+* **Un nom intégré reste réservé.** Une telle entrée est ignorée, avec
+  un avertissement.
+* **Le projet l'emporte sur votre profil du même nom**, avec une
+  remarque. Le vôtre reste dans votre `profiles.json` et s'applique de
+  nouveau dans tous les autres projets.
+* **Les noms de type inconnus sont ignorés sans un mot**, comme dans
+  votre propre fichier. Un profil qui ne nomme aucune règle connue de
+  cette version lancerait toutes les règles - SCA en avertit.
+* **Un fichier illisible** ne coûte que les profils du projet : le scan
+  s'exécute sans eux et le signale.
+* **Sans le fichier, rien ne change.**
+
+La CLI affiche ces remarques sous forme de lignes `WARNING:` sur stderr
+(aussi avec `--quiet`) et, sans `--quiet`, une ligne
+`Project profiles: ...` avec les noms trouvés. L'application autonome et le plugin IDE
+écrivent les remarques dans la sortie de débogage (`OutputDebugString`,
+lisible avec DebugView).
+
+Les profils du projet sont lus, jamais écrits. La fenêtre des profils
+les liste avec « - projet » et en lecture seule - **Copier...** en fait
+un profil à vous. Ils apparaissent dans la liste déroulante de profil dès
+que le chemin analysé (application autonome) ou le projet actif (plugin
+IDE) désigne le projet ; la page d'options du plugin IDE les liste après
+le premier scan d'un tel projet.
 
 ## Trouver une règle dans la liste
 

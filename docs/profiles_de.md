@@ -47,7 +47,9 @@ Ein Name, den der Katalog nicht kennt, ist in der CLI ein Fehler: ob er aus
 `--profile` oder aus `[Rules] Profile` kommt, der Lauf endet vor dem Scan
 mit Exit 99 und nennt die bekannten Profile. Groß-/Kleinschreibung und
 Leerzeichen außen spielen keine Rolle. (Bis 0.9.18 lief ein unbekannter
-Name still mit allen Regeln.)
+Name still mit allen Regeln.) Ein Profil, das das Projekt mitbringt,
+gilt als bekannt, siehe
+[Profile, die das Projekt mitbringt](#profile-die-das-projekt-mitbringt).
 
 Beide Oberflächen zeigen auch, was *in* einem Profil steckt:
 **Burger-Menü -> Regelsatz-Profile ...** listet in der Standalone wie im
@@ -166,6 +168,61 @@ Das Repository bringt eine solche Datei mit:
 `code-aktionen`, die Regeln mit einer Code-Aktion von
 reDelphix plus `FileReadError`. Es gehört nicht zu den eingebauten
 Profilen und muss importiert werden.
+
+## Profile, die das Projekt mitbringt
+
+Ein Projekt kann eigene Profile mitbringen: eine `profiles.json` im
+Ordner `.sca` der Projektwurzel - dem Ordner, in dem auch die lokale
+Baseline liegt. Das Format ist dasselbe wie bei der eigenen
+`profiles.json`:
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "showcase": ["MemoryLeak", "SQLInjection", "EmptyExcept"]
+  }
+}
+```
+
+SCA liest `<Projektwurzel>\.sca\profiles.json` bei jedem Scan, zusätzlich
+zu den eingebauten und den eigenen Profilen. Das Profil funktioniert
+damit auf jedem Rechner und auf einem Build-Agenten, ohne dass jemand
+etwas importiert. Die Projektwurzel ist:
+
+| Wo | Projektwurzel |
+|---|---|
+| CLI `--path <Ordner>` | dieser Ordner |
+| CLI `--project`, `--project-group`, `--file` | der Ordner der `.dproj`, `.groupproj` bzw. Datei |
+| Standalone-Anwendung | der Scanpfad (der Ordner bzw. der Ordner der `.dproj`/`.groupproj`) |
+| IDE-Plugin | der Ordner des aktiven Projekts, ohne eines der Ordner der Projektgruppe |
+
+Gesucht wird nur in der Wurzel selbst, nicht in den Ordnern darüber.
+
+* **Ein eingebauter Name bleibt reserviert.** Ein solcher Eintrag wird
+  ignoriert, mit Warnung.
+* **Das Projekt gewinnt gegen ein gleichnamiges eigenes Profil**, mit
+  Hinweis. Das eigene bleibt in der eigenen `profiles.json` und gilt in
+  jedem anderen Projekt wieder.
+* **Unbekannte Kind-Namen werden wortlos übergangen**, wie in der
+  eigenen Datei. Ein Profil, das keine Regel dieser Version nennt,
+  führte alle Regeln aus - davor warnt SCA.
+* **Eine Datei, die sich nicht lesen lässt**, kostet nur die
+  Projekt-Profile: der Scan läuft ohne sie und sagt das.
+* **Ohne die Datei ändert sich nichts.**
+
+Die CLI gibt diese Hinweise als `WARNING:`-Zeilen auf stderr aus (auch
+mit `--quiet`) und ohne `--quiet` eine Zeile `Project profiles: ...` mit
+den gefundenen Namen. Die Standalone-Anwendung und das IDE-Plugin
+schreiben die Hinweise in die Debug-Ausgabe (`OutputDebugString`, lesbar
+mit DebugView).
+
+Projekt-Profile werden gelesen, nie geschrieben. Das Profil-Fenster
+listet sie mit "- Projekt" und schreibgeschützt - **Kopieren ...** macht
+daraus ein eigenes. Im Profil-Combo stehen sie, sobald der Scanpfad
+(Standalone-Anwendung) bzw. das aktive Projekt (IDE-Plugin) auf das
+Projekt zeigt; die Optionsseite des IDE-Plugins listet sie nach dem
+ersten Scan eines solchen Projekts.
 
 ## Eine Regel in der Liste finden
 

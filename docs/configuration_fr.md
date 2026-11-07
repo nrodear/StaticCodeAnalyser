@@ -47,7 +47,7 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
-| `Profile` | String | _(vide)_ | Profil de règles pour la ligne de commande et l'exécutable autonome. Vide = `default` (197 règles) ; le modèle écrit `Profile=default`. |
+| `Profile` | String | _(vide)_ | Profil de règles pour la ligne de commande et l'exécutable autonome. Vide = `default` (197 règles) ; le modèle écrit `Profile=default`. Outre les profils intégrés et les vôtres, un profil de `<racine du projet>\.sca\profiles.json` est un nom valide, voir [profiles_fr.md](profiles_fr.md#les-profils-fournis-par-le-projet). |
 | `MinSeverity` | String | `hint` | Sévérité la plus basse signalée : `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Seuil de confiance : `low` désactive le filtre, `medium` est la valeur livrée. |
 | `EvidenceTiering` | Bool | `1` | Politique d'évidence « error = prouvé » : la sévérité de chaque résultat est plafonnée par la confiance du détecteur (high → `error` autorisé, medium → `warning` au plus, low → `hint` au plus). Mettre `0` pour retrouver le comportement d'avant 0.9.18, p. ex. pour des portes CI basées sur les anciens totaux d'erreurs. |
