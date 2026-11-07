@@ -201,6 +201,18 @@ function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
 // testbar ohne Run-Seiteneffekt.
 function FixtureFilterAnker(const Args: TCliArgs): string;
 
+// Projektwurzel fuer die Projekt-Profile (<Wurzel>\.sca\profiles.json,
+// Nico-Entscheid 2026-11-07): --path, sonst der Ordner von --project,
+// --project-group bzw. --file - dieselbe Kaskade wie FixtureFilterAnker
+// (--diff und --branch verlangen --path, ParseArgs). Ohne Scan-Ziel ''
+// = keine Projekt-Profile. Run
+// reicht das Ergebnis vor der ProfilPruefung an TRuleCatalog.
+// UseProjectRoot weiter - ein Projekt-Profil muss bekannt sein, bevor
+// die Pruefung einen unbekannten Namen mit Exit 99 abweist. In der
+// interface-Sektion aus demselben Grund wie ApplyFailOnPolicy: testbar
+// ohne Run.
+function ProjektProfilWurzel(const Args: TCliArgs): string;
+
 // Verzeichnis, gegen das [Baseline] File= aufgeloest wird (Vertrag an der
 // Implementierung). AProjOrGroup ist die Gruppe, sonst das Projekt des
 // Laufs. In der interface-Sektion aus demselben Grund wie
@@ -254,10 +266,12 @@ function AktiveRegelAnzahl(const AProfil: string): Integer;
 //   AQuelle  - woher der Name kam, fuer die Meldung ('--profile' bzw. die
 //              analyser.ini mit Pfad)
 //   AMeldung - '' bei bekanntem Profil, sonst die Zeilen fuer stderr
-//              (Name, Quelle, bekannte Profile, Ablage von profiles.json)
+//              (Name, Quelle, bekannte Profile, Ablage von profiles.json,
+//              mit gesetzter Projektwurzel auch die der Projektdatei)
 // Liefert 0 (weiter) oder 99 (cecToolError, Abbruch). Bekannt heisst:
 // IsKnownProfile der Facade - eingebaute UND eigene Profile aus
-// profiles.json, Gross-/Kleinschreibung und aeusserer Leerraum egal, ''
+// profiles.json UND die Projekt-Profile der Wurzel, die Run vorher an
+// TRuleCatalog.UseProjectRoot gibt; Gross-/Kleinschreibung und aeusserer Leerraum egal, ''
 // bekannt (leer heisst 'default', TRepoSettings.EffectiveProfileName).
 // In der interface-Sektion aus demselben Grund wie ApplyFailOnPolicy:
 // testbar ohne Run, der die echte analyser.ini unter %APPDATA% laedt.
@@ -862,7 +876,10 @@ begin
   WriteLn('                        Neither this nor [Rules] Profile: default.');
   WriteLn('                        An unknown name (here or in [Rules] Profile)');
   WriteLn('                        is a tool error (exit 99), the scan does not');
-  WriteLn('                        start. Custom profiles from profiles.json count.');
+  WriteLn('                        start. Custom profiles from profiles.json count,');
+  WriteLn('                        and so do project profiles from');
+  WriteLn('                        <root>\.sca\profiles.json (root: --path, or');
+  WriteLn('                        the folder of --project/--project-group/--file).');
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
@@ -1373,6 +1390,16 @@ begin
   Result := '';
 end;
 
+function ProjektProfilWurzel(const Args: TCliArgs): string;
+// Vertrag siehe interface. Eigener Name statt FixtureFilterAnker direkt:
+// die beiden Fragen ("wo ist die Projektwurzel", "wogegen prueft der
+// Fixture-Filter") haben heute dieselbe Antwort, aber nicht aus
+// demselben Grund - aendert sich eine, soll die andere nicht still
+// mitwandern.
+begin
+  Result := FixtureFilterAnker(Args);
+end;
+
 function CliDialekt(const Args: TCliArgs): TSourceDialect;
 var
   IniWert : string;
@@ -1636,6 +1663,28 @@ begin
     var ProfileFromIni : string := Settings.Profile;
     if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
     if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
+
+    // Projekt-Profile (<Wurzel>\.sca\profiles.json) VOR der Profilpruefung
+    // laden - sonst wiese sie ein Profil, das das Projekt mitbringt, als
+    // unbekannt ab. Der Katalog behaelt die Wurzel fuer den ganzen Lauf;
+    // die Engine (ApplyDetectorThresholds) loest das Profil spaeter aus
+    // demselben Stand auf. Ohne Datei bleibt alles wie vorher: keine
+    // Zeile, kein Hinweis. Hinweise (kaputte Datei, Namenskollision)
+    // gehen wie jede Warnung auf stderr, auch mit --quiet.
+    TRuleCatalog.UseProjectRoot(ProjektProfilWurzel(Args));
+    for var Hinweis in TRuleCatalog.ProjectProfileNotes do
+      WriteLn(ErrOutput, 'WARNING: ', Hinweis);
+    if not Args.Quiet then
+    begin
+      var ProjektNamen : TArray<string> := nil;
+      for var ProfName in KnownProfileNames do
+        if TRuleCatalog.IsProjectProfile(ProfName) then
+          ProjektNamen := ProjektNamen + [ProfName];
+      if Length(ProjektNamen) > 0 then
+        WriteLn(Format('Project profiles: %s (from %s)',
+          [string.Join(', ', ProjektNamen),
+           TRuleCatalog.ProjectProfilesFileFor(TRuleCatalog.ProjectRoot)]));
+    end;
 
     // Unbekanntes Profil = Aufruffehler (s. ProfilPruefung). HIER, direkt
     // nach dem Zusammenfuehren von Schalter und ini: weiter oben ist das
@@ -2656,17 +2705,27 @@ function ProfilPruefung(const AProfil, AQuelle: string;
 // Schreibweise dann eine Zeile tiefer steht. Die Zeile mit der Ablage von
 // profiles.json zielt auf CI: ein eigenes Profil liegt unter %APPDATA%
 // DES Kontos, das es angelegt hat - ein Build-Dienst mit eigenem Konto
-// kennt es nicht, und genau dort laeuft die Pipeline.
+// kennt es nicht, und genau dort laeuft die Pipeline. Die Zeile mit der
+// Projektdatei steht nur mit gesetzter Projektwurzel da (Run setzt sie
+// vorher): sie ist die Abhilfe fuer genau diesen Build-Dienst - ein
+// Profil in der Projektdatei kennt jedes Konto.
+var
+  Projektzeile : string;
 begin
   AMeldung := '';
   if IsKnownProfile(AProfil) then
     Exit(Integer(cecClean));
+  Projektzeile := '';
+  if TRuleCatalog.ProjectRoot <> '' then
+    Projektzeile := 'Project profiles are read from: ' +
+      TRuleCatalog.ProjectProfilesFileFor(TRuleCatalog.ProjectRoot) +
+      sLineBreak;
   AMeldung :=
     Format('Error: unknown profile "%s" (from %s).', [AProfil, AQuelle]) +
     sLineBreak +
     'Known profiles: ' + string.Join(', ', KnownProfileNames) + sLineBreak +
     'Custom profiles are read from: ' + TRuleCatalog.UserProfilesFilePath +
-    sLineBreak +
+    sLineBreak + Projektzeile +
     'The scan was not started (an unknown profile used to run all rules).';
   Result := Integer(cecToolError);
 end;

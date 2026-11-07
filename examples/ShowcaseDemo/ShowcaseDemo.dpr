@@ -6,6 +6,8 @@ uses
   uPriceCalculator in 'uPriceCalculator.pas',
   uOrderRepository in 'uOrderRepository.pas',
   uLegacyImport in 'uLegacyImport.pas',
+  uOrderStatus in 'uOrderStatus.pas',
+  uOrderEvents in 'uOrderEvents.pas',
   uOrderForm in 'uOrderForm.pas' {frmOrders};
 
 {$R *.res}

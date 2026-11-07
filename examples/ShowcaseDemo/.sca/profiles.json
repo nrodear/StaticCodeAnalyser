@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "profiles": {
+    "showcase": [
+      "FormatMismatch",
+      "DeepNesting",
+      "DfmCircularDataSource",
+      "DfmSqlFromUserInput",
+      "DfmRequiredFieldUnbound",
+      "DfmActionMismatch",
+      "ReversedForRange",
+      "UnusedLocalVar",
+      "NoSonarMarker",
+      "CommentedOutCode",
+      "FieldByNameInLoop",
+      "MissingRaise",
+      "ReRaiseException",
+      "UseAfterFree",
+      "AbstractNotImpl",
+      "UnusedPrivateMethod",
+      "BoolAlwaysTrue",
+      "CommandInjection",
+      "UnusedSuppression",
+      "AssertWithSideEffect",
+      "TObjectListWithoutOwnership",
+      "AnonMethodCaptureLoopVar",
+      "PathTraversal",
+      "SourceBidiOverride",
+      "SourceNonAsciiIdentifier",
+      "ManagedResultUninit",
+      "ParamNameMismatch",
+      "HardcodedIpInConfig",
+      "ComparisonPrecedence",
+      "LoopPastHighBound"
+    ]
+  }
+}

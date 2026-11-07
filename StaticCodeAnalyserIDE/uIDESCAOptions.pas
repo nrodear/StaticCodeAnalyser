@@ -723,6 +723,11 @@ begin
   cboIdeProfile.Items.Add(SCA_DEFAULT_DISPLAY);
   for N in Names do
   begin
+    // Projekt-Profile (<Projekt>\.sca\profiles.json) gehoeren nicht in
+    // die globale analyser.ini: dort waere der Name in jedem anderen
+    // Projekt unbekannt - die CLI bricht dann mit Exit 99 ab. Die
+    // Options-Seite stellt globale Werte ein, also nur globale Namen.
+    if TRuleCatalog.IsProjectProfile(N) then Continue;
     cboProfile.Items.Add(N);
     cboIdeProfile.Items.Add(N);
   end;

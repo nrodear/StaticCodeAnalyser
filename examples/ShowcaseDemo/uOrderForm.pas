@@ -5,7 +5,7 @@ unit uOrderForm;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  Winapi.Windows, Winapi.Messages, Winapi.ShellAPI, System.SysUtils, System.Variants,
   System.Classes, System.Actions, System.Generics.Collections, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls,
   Vcl.ActnList, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error,
@@ -48,6 +48,8 @@ type
     FOrders: TObjectList<TOrder>;
     procedure ShowOrders;
     procedure AddSeparatorRow;
+    procedure OpenSearchFile;
+    procedure SaveSearch;
   end;
 
 var
@@ -119,6 +121,7 @@ end;
 procedure TfrmOrders.btnExportClick(Sender: TObject);
 begin
   StartCustomerExport(FRepository, EXPORT_FILE);
+  SaveSearch;
   sbStatus.SimpleText := 'Open invoices: ' + CurrToStr(FRepository.SumOpenAmounts);
 end;
 
@@ -138,6 +141,10 @@ begin
   begin
     FRepository.DeleteOrder(lvOrders.Selected.Caption);
     lvOrders.Selected.Delete;
+  end;
+  if Key = VK_F3 then
+  begin
+    OpenSearchFile;
   end;
 end;
 
@@ -174,6 +181,29 @@ begin
     lvOrders.Items.EndUpdate;
   end;
   sbStatus.SimpleText := 'Orders: ' + IntToStr(Count) + ' - total ' + CurrToStr(Total) + ' - average ' + CurrToStr(FCalculator.AveragePrice(Total, Count));
+end;
+
+// Opens the file named in the search field in Notepad. The text goes into a
+// command line unchecked: "orders.csv & del /q *.*" runs a second command
+// (SCA163).
+procedure TfrmOrders.OpenSearchFile;
+begin
+  ShellExecute(Handle, 'open', 'cmd.exe', PChar('/c notepad ' + Edit1.Text), nil, SW_HIDE);
+end;
+
+// Saves the search text next to the export file. The file name comes from
+// the search field: "..\..\Windows\win.ini" writes outside the export folder
+// (SCA178).
+procedure TfrmOrders.SaveSearch;
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(ExtractFilePath(EXPORT_FILE) + Edit1.Text, fmCreate);
+  try
+    Stream.WriteBuffer(PChar(Edit1.Text)^, Length(Edit1.Text) * SizeOf(Char));
+  finally
+    Stream.Free;
+  end;
 end;
 
 end.

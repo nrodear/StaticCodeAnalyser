@@ -13,6 +13,8 @@ uses
   System.Classes,
   System.SyncObjs,
   System.Generics.Collections,
+  System.Hash,
+  System.Net.HttpClient,
   Data.DB,
   FireDAC.Comp.Client,
   uOrderModel;
@@ -27,8 +29,15 @@ type
     FStatsLock: TCriticalSection;
     FCache: TObjectDictionary<Integer, TCustomer>;
     FLoadCount: Integer;
+    FStatistics: TOrderStatistics;
     function ReadCustomer(AId: Integer): TCustomer;
     procedure IncLoadCount;
+    function TryLoadCustomer(AId: Integer): TCustomer;
+    procedure ClearSyncLog;
+    function OpenOrderNumbers: TArray<Integer>;
+    function MaxOrderNo: Integer;
+    function CountCities(const AFileName: string): Integer;
+    function SyncStatus(AOrderNo: Integer): Integer;
   public
     /// <summary>Creates the repository on an open connection.</summary>
     constructor Create(AConnection: TFDConnection);
@@ -52,6 +61,9 @@ type
     procedure DeleteOrder(const AOrderRef: string);
     /// <summary>Writes all cached customers to a CSV file.</summary>
     procedure ExportCustomers(const AFileName: string);
+    /// <summary>Night job: syncs the open orders with the order service and
+    /// clears the sync log.</summary>
+    procedure NightlyJob(const ACityFile: string);
     /// <summary>Number of customers read from the database.</summary>
     property LoadCount: Integer read FLoadCount;
   end;
@@ -61,9 +73,15 @@ type
   private
     FRepository: TOrderRepository;
     FFileName: string;
+    FOnFinished: TNotifyEvent;
+    procedure DoFinished;
   protected
     procedure Execute; override;
   public
+    /// <summary>Reports the end of the export to the main window.</summary>
+    destructor Destroy; override;
+    /// <summary>Called in the main thread when the export has ended.</summary>
+    property OnFinished: TNotifyEvent read FOnFinished write FOnFinished;
     /// <summary>The repository to export from (not owned).</summary>
     property Repository: TOrderRepository read FRepository write FRepository;
     /// <summary>Target file.</summary>
@@ -72,6 +90,8 @@ type
 
 /// <summary>Starts the customer export in the background.</summary>
 procedure StartCustomerExport(ARepository: TOrderRepository; const AFileName: string);
+/// <summary>Runs the customer export and waits until it has ended.</summary>
+procedure RunExportAndWait(ARepository: TOrderRepository; const AFileName: string);
 
 implementation
 
@@ -80,6 +100,9 @@ const
   SQL_READ_CUSTOMER = 'SELECT name, city, vip FROM customers WHERE id = :id';
   SQL_INSERT_ITEM = 'INSERT INTO order_items (order_no, sku, quantity) VALUES (:order_no, :sku, :quantity)';
   SQL_OPEN_AMOUNTS = 'SELECT amount FROM invoices WHERE paid = 0';
+  SQL_UNPAID_ORDERS = 'SELECT order_no FROM orders WHERE paid = 0';
+  SQL_ORDER_NUMBERS = 'SELECT order_no FROM orders';
+  HTTP_OK = 200;
 
 // Simple checksum of the export file (the old import tool checks it).
 function ExportChecksum(const AData: TBytes): Cardinal;
@@ -106,10 +129,12 @@ begin
   FCacheLock := TCriticalSection.Create;
   FStatsLock := TCriticalSection.Create;
   FCache := TObjectDictionary<Integer, TCustomer>.Create([doOwnsValues]);
+  FStatistics := TOrderStatistics.Create;
 end;
 
 destructor TOrderRepository.Destroy;
 begin
+  FStatistics.Free;
   FCache.Free;
   FStatsLock.Free;
   FCacheLock.Free;
@@ -127,6 +152,7 @@ begin
   FConnection.Params.Add('Server=192.168.20.15');
   // FConnection.Params.Add('Pooled=True');
   FConnection.Connected := True;
+  FStatistics.StartPeriod;
 end;
 
 procedure TOrderRepository.Disconnect;
@@ -138,7 +164,12 @@ end;
 function TOrderRepository.CustomerIdsInCity(const ACity: string): TList<Integer>;
 begin
   Result := TList<Integer>.Create;
+  // The SQL was wrapped by hand, one part per line, and the region is
+  // marked for the formatter - the Delphi formatter (Ctrl+D) does not know
+  // the markers and pulled it into one line.
+  {(*}
   FQuery.SQL.Text := 'SELECT id FROM customers WHERE city = ' + ACity + ' ORDER BY name';
+  {*)}
   FQuery.Open;
   while not FQuery.Eof do
   begin
@@ -193,6 +224,7 @@ begin
     FQuery.ParamByName('quantity').AsInteger := AOrder.Items[I].Quantity;
     FQuery.ExecSQL;
   end;
+  FStatistics.AddOrder(AOrder.OrderNo, AOrder.Items.Count);
 end;
 
 function TOrderRepository.SumOpenAmounts: Currency;
@@ -249,11 +281,135 @@ begin
   Csv.Free;
 end;
 
+// Swallows every exception, an access violation or EOutOfMemory as well,
+// and reports "no customer" instead (SCA078, SCA132).
+function TOrderRepository.TryLoadCustomer(AId: Integer): TCustomer;
+begin
+  try
+    Result := ReadCustomer(AId);
+  except
+    on E: Exception do
+      Result := nil;
+  end;
+end;
+
+// Meant for the old entries only - without a WHERE it deletes the whole
+// sync log (SCA058).
+procedure TOrderRepository.ClearSyncLog;
+begin
+  FQuery.SQL.Text := 'DELETE FROM sync_log';
+  FQuery.ExecSQL;
+end;
+
+// Grows the array by one element per row: every SetLength copies the whole
+// array again (SCA157).
+function TOrderRepository.OpenOrderNumbers: TArray<Integer>;
+begin
+  Result := nil;
+  FQuery.SQL.Text := SQL_UNPAID_ORDERS;
+  FQuery.Open;
+  while not FQuery.Eof do
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := FQuery.Fields[0].AsInteger;
+    FQuery.Next;
+  end;
+  FQuery.Close;
+end;
+
+// A Variant in the loop: every comparison and assignment goes through the
+// Variant runtime (SCA173).
+function TOrderRepository.MaxOrderNo: Integer;
+var
+  Value: Variant;
+begin
+  Result := 0;
+  FQuery.SQL.Text := SQL_ORDER_NUMBERS;
+  FQuery.Open;
+  while not FQuery.Eof do
+  begin
+    Value := FQuery.Fields[0].Value;
+    if Value > Result then
+      Result := Value;
+    FQuery.Next;
+  end;
+  FQuery.Close;
+end;
+
+// The list is freed early "to keep the memory low" - and counted
+// afterwards: Cities is nil there, an access violation (SCA134).
+function TOrderRepository.CountCities(const AFileName: string): Integer;
+var
+  Cities: TStringList;
+begin
+  Cities := TStringList.Create;
+  try
+    Cities.Sorted := True;
+    Cities.Duplicates := dupIgnore;
+    Cities.LoadFromFile(AFileName);
+    FreeAndNil(Cities);
+    Result := Cities.Count;
+  finally
+    Cities.Free;
+  end;
+end;
+
+// The old order server speaks only an outdated TLS version, so the
+// protocols were emptied - and with them the protection (SCA116). The
+// signature is an MD5 hash (SCA162).
+function TOrderRepository.SyncStatus(AOrderNo: Integer): Integer;
+var
+  Client: THTTPClient;
+  Ref: string;
+begin
+  Ref := IntToStr(AOrderNo);
+  Client := THTTPClient.Create;
+  try
+    Client.SecureProtocols := [];
+    Client.CustomHeaders['X-Signature'] := THashMD5.GetHashString(Ref);
+    Result := Client.Get(ORDER_SERVICE_URL + '?order=' + Ref).StatusCode;
+  finally
+    Client.Free;
+  end;
+end;
+
+procedure TOrderRepository.NightlyJob(const ACityFile: string);
+var
+  OrderNo: Integer;
+  Customer: TCustomer;
+begin
+  for OrderNo in OpenOrderNumbers do
+    if SyncStatus(OrderNo) <> HTTP_OK then
+      Exit;
+  ClearSyncLog;
+  if (MaxOrderNo > 0) and (CountCities(ACityFile) > 0) then
+  begin
+    Customer := TryLoadCustomer(1);
+    if Assigned(Customer) then
+      FCache.AddOrSetValue(Customer.Id, Customer);
+  end;
+end;
+
 { TExportThread }
 
 procedure TExportThread.Execute;
 begin
   FRepository.ExportCustomers(FFileName);
+end;
+
+// With FreeOnTerminate the destructor runs in the worker thread: Synchronize
+// blocks it until the main thread takes the call - and both hang when the
+// main thread is waiting for this thread (SCA108).
+destructor TExportThread.Destroy;
+begin
+  Synchronize(DoFinished);
+  inherited;
+end;
+
+procedure TExportThread.DoFinished;
+begin
+  if Assigned(FOnFinished) then
+    FOnFinished(Self);
 end;
 
 procedure StartCustomerExport(ARepository: TOrderRepository; const AFileName: string);
@@ -265,6 +421,24 @@ begin
   Worker.Repository := ARepository;
   Worker.FileName := AFileName;
   Worker.Resume;
+  // The thread may have finished and freed itself already (SCA177).
+  Worker.Priority := tpLower;
+end;
+
+// FreeAndNil waits until the export has ended - nothing asks the thread to
+// stop, and Execute never looks at Terminated (SCA114).
+procedure RunExportAndWait(ARepository: TOrderRepository; const AFileName: string);
+var
+  Worker: TExportThread;
+begin
+  Worker := TExportThread.Create(True);
+  try
+    Worker.Repository := ARepository;
+    Worker.FileName := AFileName;
+    Worker.Start;
+  finally
+    FreeAndNil(Worker);
+  end;
 end;
 
 end.

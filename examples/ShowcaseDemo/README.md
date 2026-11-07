@@ -1,12 +1,15 @@
 # ShowcaseDemo - SCA findings and reDelphix code actions
 
 A small VCL order manager (Delphi 12/13, Win32/Win64) that is written to be
-**scanned, not shipped**: five units with about 160-220 findings of the
-Static Code Analyser (SCA). For 92 of the 93 reDelphix quick fixes of the
-fix table, their 8 second entries and the 6 provider actions it holds at
-least one finding where the action is offered; only SCA204 has no such
-spot. It is the material for the demo video; the German script is
-[DREHBUCH.md](DREHBUCH.md).
+**scanned, not shipped**: seven units with about 190-290 findings of the
+Static Code Analyser (SCA). Every rule that Delphi code in a project can
+show has at least one finding (all but SCA175, see the German script,
+appendix B); DFM, project, configuration and encoding rules are shown only
+where the form or the files already give a finding. For each of the 94
+reDelphix quick fixes of the fix table, their 8 second entries and the 6
+provider actions there is at least one finding where the action is offered,
+and each of the 10 code actions without a finding has a spot. It is the
+material for the demo video; the German script is [DREHBUCH.md](DREHBUCH.md).
 
 The code compiles (warnings and hints are expected and part of the show),
 but the bugs are real: the application is not meant to run against a
@@ -17,11 +20,13 @@ database.
 | File | Content |
 |---|---|
 | `ShowcaseDemo.dpr` / `.dproj` | VCL application (Win32 + Win64) |
-| `uOrderModel.pas` | customers, orders, items, export attributes |
-| `uPriceCalculator.pas` | prices, discounts, taxes, vouchers, summary |
-| `uOrderRepository.pas` | FireDAC data access, cache, export thread |
-| `uLegacyImport.pas` | "old" CSV import (2006 style, UTF-8 with BOM: tabs, keyword case, Trojan Source characters) |
+| `uOrderModel.pas` | customers, orders, items, export attributes, exporters, statistics |
+| `uPriceCalculator.pas` | prices, discounts, taxes, vouchers, invoice and delivery note |
+| `uOrderRepository.pas` | FireDAC data access, cache, export thread, night job, order service sync |
+| `uLegacyImport.pas` | "old" CSV import (2006 style, UTF-8 with BOM: tabs, keyword case, Trojan Source characters, inline assembler, DOS records) |
 | `uOrderForm.pas` / `.dfm` | main window (the DFM rules) |
+| `uOrderStatus.pas` | order status texts - a unit without a header comment (SCA143) |
+| `uOrderEvents.pas` | a placeholder unit that was never filled (SCA092) |
 
 ## Open and scan
 
@@ -36,8 +41,8 @@ database.
    rules SCA061/063/064/069/076/079, which the engine reports with low
    confidence. The unused-uses check SCA007 is opt-in: the IDE plugin
    reports it only with `UsesCheck=1`, in every profile including
-   `strict` (without it the IDE shows the 9 SCA007 findings less, 205
-   instead of 214, and the SCA007 code actions have nothing to offer).
+   `strict` (without it the IDE shows the 9 SCA007 findings less, 276
+   instead of 285, and the SCA007 code actions have nothing to offer).
    The CLI switches it on by itself with `--profile strict`.
 3. Scan the project or the folder. CLI equivalent (the CLI reads
    `MinConfidence` from the same ini):
@@ -51,9 +56,40 @@ IDE plugin shows the same with `UsesCheck=1`):
 
 | Profile / MinConfidence | medium | low |
 |---|---:|---:|
-| `default` | 138 | 188 |
-| `default` with `UsesCheck=1` | 147 | 197 |
-| `strict` (for the video) | 164 | 214 |
+| `default` | 193 | 255 |
+| `default` with `UsesCheck=1` | 202 | 264 |
+| `strict` (for the video) | 223 | 285 |
+
+## Profile `showcase` - the rules a developer fixes
+
+`strict` shows everything the engine can find, which is right for the
+video but not for a first look at your own code. The project therefore
+carries its own profile in `.sca\profiles.json`: **`showcase`, 30 rules**
+that hold up on foreign code. They were picked by a measurement in
+November 2026: up to 15 findings per rule, drawn from scans of about
+24,000 open-source Delphi and Lazarus files, judged by the question
+"would a developer change this?". A rule is in the profile when at most
+30 % of its findings were false alarms, or when it fired so rarely that
+the sample held no false alarm at all. Security and leak rules with many
+false alarms on foreign code (SQL injection, memory leaks, empty
+`except`, weak hashes) are left out on purpose - in the demo they are
+real, on other code most of their findings are not.
+
+The profile is read from the scan root, so it is there without any
+setup when the scan starts at this folder or project:
+
+```powershell
+StaticCodeAnalyser.d12.exe --path examples\ShowcaseDemo --full --profile showcase --min-severity hint
+```
+
+In the IDE plugin it appears for the active project `ShowcaseDemo`.
+With the factory settings (`MinConfidence=medium`, no `UsesCheck`) it
+reports **24 findings** (7 errors, 10 warnings, 7 hints) from 22 of the
+30 rules. The other eight stay silent here: SCA032/034 (DFM) and
+SCA201 (`.ini`) have no spot in the demo, SCA134/135/163 report here
+only with `MinConfidence=low`, SCA165 only checks suppressions of rules
+that are active, and SCA175 has no example that compiles. To run the same selection on another project,
+copy `.sca\profiles.json` next to that project.
 
 ## Reset
 

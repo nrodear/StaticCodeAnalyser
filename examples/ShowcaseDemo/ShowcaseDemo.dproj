@@ -80,6 +80,8 @@
         <DCCReference Include="uPriceCalculator.pas"/>
         <DCCReference Include="uOrderRepository.pas"/>
         <DCCReference Include="uLegacyImport.pas"/>
+        <DCCReference Include="uOrderStatus.pas"/>
+        <DCCReference Include="uOrderEvents.pas"/>
         <DCCReference Include="uOrderForm.pas">
             <Form>frmOrders</Form>
         </DCCReference>

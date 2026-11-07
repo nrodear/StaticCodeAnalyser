@@ -46,7 +46,7 @@ sie angegeben werden.
 
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
-| `Profile` | String | _(leer)_ | Regelprofil fuer CLI und Standalone. Leer = `default` (197 Regeln); die Vorlage schreibt `Profile=default`. |
+| `Profile` | String | _(leer)_ | Regelprofil fuer CLI und Standalone. Leer = `default` (197 Regeln); die Vorlage schreibt `Profile=default`. Neben den eingebauten und den eigenen Profilen ist auch ein Profil aus `<Projektwurzel>\.sca\profiles.json` ein gueltiger Name, siehe [profiles_de.md](profiles_de.md#profile-die-das-projekt-mitbringt). |
 | `MinSeverity` | String | `hint` | Niedrigste gemeldete Schwere: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Konfidenz-Untergrenze: `low` schaltet den Filter aus, `medium` ist Auslieferungsstand. |
 | `EvidenceTiering` | Bool | `1` | Evidenz-Politik "Error = bewiesen": die Severity jedes Funds wird auf seine Konfidenz gedeckelt (high → `error` erlaubt, medium → höchstens `warning`, low → höchstens `hint`). `0` stellt das Verhalten vor 0.9.18 wieder her, z. B. für CI-Gates, die auf den alten Error-Zahlen stehen. |
