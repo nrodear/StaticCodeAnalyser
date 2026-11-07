@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7193 Zeilen, 347148 Bytes
-  CPoLines_de: array[0..7192] of string = (
+  // i18n\de.po - 7196 Zeilen, 347422 Bytes
+  CPoLines_de: array[0..7195] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2165,8 +2165,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Profildateien (*.json)|*.json|Alle Dateien (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Nichts zu importieren: %s enth'#$00E4'lt nur Namen eingebauter Profile (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Nichts zu importieren: %s enth'#$00E4'lt nur Namen eingebauter oder Projekt-Profile (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s enth'#$00E4'lt keine Profile."',
@@ -2177,8 +2177,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Wird '#$00FC'berschrieben: %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "'#$00DC'bersprungen (Name eines eingebauten Profils): %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "'#$00DC'bersprungen (Name eines eingebauten oder Projekt-Profils): %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Jetzt importieren?"',
@@ -7207,10 +7207,13 @@ const
     'msgstr "- Projekt"',
     '',
     'msgid "Profile \"%s\": %d of %d rules. From the project file %s, read-only - use \"Copy...\" for your own."',
-    'msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgesch'#$00FC'tzt - mit \"Kopieren...\" ein eigenes anlegen."'
+    'msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgesch'#$00FC'tzt - mit \"Kopieren...\" ein eigenes anlegen."',
+    '',
+    'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
+    'msgstr "Projekt-Profil \"%s\" - aktiv beim n'#$00E4'chsten Analyselauf, nicht gespeichert (es geh'#$00F6'rt zu diesem Projekt)"'
   );
 
-  // i18n\en.po - 268 Zeilen, 7136 Bytes
+  // i18n\en.po - 268 Zeilen, 7196 Bytes
   CPoLines_en: array[0..267] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
@@ -7460,8 +7463,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Nothing to import: %s only contains names of built-in profiles (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s contains no profiles."',
@@ -7472,8 +7475,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Will be overwritten: %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "Skipped (built-in name): %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "Skipped (built-in or project profile name): %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Import now?"',
@@ -7482,8 +7485,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7189 Zeilen, 361098 Bytes
-  CPoLines_fr: array[0..7188] of string = (
+  // i18n\fr.po - 7192 Zeilen, 361369 Bytes
+  CPoLines_fr: array[0..7191] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -9630,8 +9633,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Fichiers de profils (*.json)|*.json|Tous les fichiers (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Rien '#$00E0' importer : %s ne contient que des noms de profils int'#$00E9'gr'#$00E9's (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Rien '#$00E0' importer : %s ne contient que des noms de profils int'#$00E9'gr'#$00E9's ou de projet (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s ne contient aucun profil."',
@@ -9642,8 +9645,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Seront remplac'#$00E9's : %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "Ignor'#$00E9's (nom d''un profil int'#$00E9'gr'#$00E9') : %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "Ignor'#$00E9's (nom d''un profil int'#$00E9'gr'#$00E9' ou de projet) : %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Importer maintenant ?"',
@@ -14672,7 +14675,10 @@ const
     'msgstr "- projet"',
     '',
     'msgid "Profile \"%s\": %d of %d rules. From the project file %s, read-only - use \"Copy...\" for your own."',
-    'msgstr "Profil '#$00AB' %s '#$00BB' : %d r'#$00E8'gles sur %d. Du fichier de projet %s, en lecture seule - utilisez '#$00AB' Copier... '#$00BB' pour le v'#$00F4'tre."'
+    'msgstr "Profil '#$00AB' %s '#$00BB' : %d r'#$00E8'gles sur %d. Du fichier de projet %s, en lecture seule - utilisez '#$00AB' Copier... '#$00BB' pour le v'#$00F4'tre."',
+    '',
+    'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
+    'msgstr "Profil de projet '#$00AB' %s '#$00BB' - actif '#$00E0' la prochaine analyse, non enregistr'#$00E9' (il appartient '#$00E0' ce projet)"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

@@ -214,15 +214,21 @@ Gesucht wird nur in der Wurzel selbst, nicht in den Ordnern darüber.
 Die CLI gibt diese Hinweise als `WARNING:`-Zeilen auf stderr aus (auch
 mit `--quiet`) und ohne `--quiet` eine Zeile `Project profiles: ...` mit
 den gefundenen Namen. Die Standalone-Anwendung und das IDE-Plugin
-schreiben die Hinweise in die Debug-Ausgabe (`OutputDebugString`, lesbar
-mit DebugView).
+zeigen den ersten Hinweis in der Statuszeile und schreiben alle in die
+Debug-Ausgabe (`OutputDebugString`, lesbar mit DebugView).
 
 Projekt-Profile werden gelesen, nie geschrieben. Das Profil-Fenster
 listet sie mit "- Projekt" und schreibgeschützt - **Kopieren ...** macht
-daraus ein eigenes. Im Profil-Combo stehen sie, sobald der Scanpfad
-(Standalone-Anwendung) bzw. das aktive Projekt (IDE-Plugin) auf das
-Projekt zeigt; die Optionsseite des IDE-Plugins listet sie nach dem
-ersten Scan eines solchen Projekts.
+daraus ein eigenes. Im Profil-Combo der Standalone-Anwendung stehen
+sie, sobald der Scanpfad auf das Projekt zeigt, im Dock des IDE-Plugins
+nach dem ersten Scan mit diesem Projekt als aktivem. Die Wahl eines
+Projekt-Profils dort gilt nur für die Sitzung: sie wird nicht in die
+`analyser.ini` geschrieben, wo der Name in jedem anderen Projekt
+unbekannt wäre (und ein CLI-Lauf ohne `--profile` dort mit Exit 99
+endete). Die Optionsseite des IDE-Plugins listet nur eingebaute und
+eigene Profile. Nennt `[Rules] IdeProfile` ein Profil, das im aktuellen
+Projekt unbekannt ist, läuft das Plugin mit `ide-fast` statt mit allen
+Regeln.
 
 ## Eine Regel in der Liste finden
 

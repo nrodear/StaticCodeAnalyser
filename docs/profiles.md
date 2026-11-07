@@ -203,15 +203,21 @@ Only the root itself is searched, not the folders above it.
 
 The CLI prints these notes as `WARNING:` lines on stderr (also with
 `--quiet`) and, without `--quiet`, a line `Project profiles: ...` with
-the names it found. The standalone app and the IDE plugin write the
-notes to the debug output (`OutputDebugString`, readable with
-DebugView).
+the names it found. The standalone app and the IDE plugin show the
+first note in the status bar and write all of them to the debug output
+(`OutputDebugString`, readable with DebugView).
 
 Project profiles are read, never written. The profile window lists them
 with "- project" and read-only - **Copy...** makes your own from one. They
-appear in the profile combo as soon as the scan path (standalone app) or
-the active project (IDE plugin) points to the project; the options page
-of the IDE plugin lists them after the first scan of such a project.
+appear in the profile combo of the standalone app as soon as the scan
+path points to the project, and in the IDE plugin's dock after the first
+scan with that project active. A project profile chosen there applies for
+the session only: it is not saved to `analyser.ini`, where the name would
+be unknown in every other project (and a CLI run without `--profile`
+would stop there with exit 99). The options page of the IDE plugin lists
+only built-in and your own profiles. If the plugin's `[Rules] IdeProfile`
+names a profile that is unknown in the current project, the plugin runs
+`ide-fast` instead of all rules.
 
 ## Finding a rule in the list
 

@@ -578,7 +578,12 @@ procedure TTestProfilPruefung.ProjektProfilImScanPfad_Exit0Statt99;
 // jedem Rechner laufen - auch auf einem Build-Dienst ohne eigene
 // profiles.json. Vor der Aenderung endete genau das mit Exit 99. Der
 // Weg ist der von Run: ParseArgs -> ProjektProfilWurzel ->
-// UseProjectRoot -> ProfilPruefung.
+// UseProjectRoot -> ProfilPruefung. LUECKE: der Test spielt diese
+// Reihenfolge selbst nach - dass Run den UseProjectRoot-Aufruf VOR der
+// Pruefung macht und die Hinweise auf stderr schreibt, pinnt er nicht;
+// Run laedt die echte analyser.ini unter %APPDATA% (s. Fixture-Kopf).
+// Pruefung von Hand: ein CLI-Lauf mit --path auf ein Projekt mit
+// .sca\profiles.json.
 var
   Wurzel  : string;
   Args    : TCliArgs;

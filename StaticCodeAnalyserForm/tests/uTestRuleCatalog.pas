@@ -220,6 +220,12 @@ type
     // Wurzelwechsel nimmt die Projekt-Profile weg; das Ergebnis meldet,
     // ob sich die Namensmenge geaendert hat.
     [Test] procedure RootChange_DropsProjectProfiles;
+    // Zwei Schreibweisen desselben Namens: ordinal die letzte gewinnt
+    // ('myteam' nach 'MyTeam'), mit Hinweis - deterministisch.
+    [Test] procedure TwoSpellings_OrdinalLastWins_WithNote;
+    // Ein Profil aus lauter unbekannten Kind-Namen wird geladen wie bei
+    // profiles.json (leer = alle Regeln), aber mit Hinweis.
+    [Test] procedure UnknownKindsOnly_LoadedEmpty_WithNote;
   end;
 
 
@@ -2101,6 +2107,44 @@ begin
   Assert.IsFalse(Pos(sLineBreak + PROJEKT_PROBE + sLineBreak,
     sLineBreak + NamenText) > 0, 'nicht mehr in ProfileNames');
   Assert.IsTrue(TRuleCatalog.ProjectRoot = '', 'keine Wurzel mehr');
+end;
+
+procedure TTestRuleCatalogProjectProfiles.TwoSpellings_OrdinalLastWins_WithNote;
+// Der Hinweis verspricht "die alphabetisch letzte gewinnt". Mit dem
+// Vorgabe-Vergleich der TStringList (AnsiCompareText) waren 'MyTeam' und
+// 'myteam' gleich, und den Gewinner bestimmten Hash- und Sortier-
+// Reihenfolge. Ordinal steht 'MyTeam' (M = $4D) vor 'myteam' (m = $6D) -
+// es gewinnt also 'myteam', in seiner Schreibweise und mit seinem Inhalt.
+begin
+  SchreibeProjektDatei(
+    '{"profiles":{"MyTeam":["MemoryLeak"],"myteam":["EmptyExcept"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.GetProfile('MYTEAM') = [fkEmptyExcept],
+    'der Inhalt der ordinal letzten Schreibweise');
+  Assert.IsTrue(Pos(sLineBreak + 'myteam' + sLineBreak,
+    sLineBreak + NamenText) > 0, 'ihre Schreibweise steht im Katalog');
+  Assert.IsFalse(Pos(sLineBreak + 'MyTeam' + sLineBreak,
+    sLineBreak + NamenText) > 0, 'die andere nicht');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis auf die doppelte Schreibweise: ' + HinweiseText);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.UnknownKindsOnly_LoadedEmpty_WithNote;
+// Unbekannte Kind-Namen uebergeht der Leser still (eine neuere SCA-Version
+// darf Regeln nennen, die dieses Binary nicht kennt). Bleibt dabei NICHTS
+// uebrig, heisst das fuer die Engine "kein Filter" - alle Regeln. Das
+// Verhalten bleibt wie bei profiles.json, aber es wird gesagt.
+begin
+  SchreibeProjektDatei('{"profiles":{"leer-probe":["GibtEsNicht","!AuchNicht"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile('leer-probe'),
+    'geladen wie jedes andere Profil');
+  Assert.IsTrue(TRuleCatalog.GetProfile('leer-probe') = [],
+    'leere Menge - unbekannte Namen zaehlen nicht');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis: ' + HinweiseText);
+  Assert.IsTrue(Pos('"leer-probe"', HinweiseText) > 0,
+    'der Hinweis nennt das Profil: ' + HinweiseText);
 end;
 
 initialization

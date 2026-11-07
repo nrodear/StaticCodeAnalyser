@@ -1559,22 +1559,22 @@ procedure TAnalyserFrame.SyncProjectProfiles;
 // .sca-Baseline) - nicht der Scanpfad im Dock und nicht der Ordner der
 // gespeicherten Datei, mit dem der Silent-Lauf SetupForRun ruft.
 // Neu befuellt wird nur bei geaenderter Namensmenge, ohne Projektdatei
-// also nie. Danach gewinnt die gespeicherte Wahl ([Rules] IdeProfile,
-// ProfileChange schreibt jede Auswahl dorthin) vor der bisherigen
-// Combo-Zeile: beim Frame-Start war die Wurzel noch unbekannt, ein dort
-// gespeichertes Projekt-Profil stand nicht im Combo, und die bisherige
-// Zeile ist dann nur der Rueckfall ide-fast. Projekt-Profile werden hier
-// nur gelesen, nie geschrieben.
+// also nie; PopulateProfileCombo behaelt dabei die bisherige Wahl, wenn
+// es sie noch gibt, sonst gilt [Rules] IdeProfile. Eine Projekt-Profil-
+// Wahl wird nie gespeichert (ProfileChange), sie haelt nur, solange das
+// Projekt aktiv ist. Den ersten Hinweis des Katalogs (kaputte Datei,
+// Namenskollision) zeigt die Statuszeile - sonst saehe man eine kaputte
+// Projektdatei nur daran, dass ihr Profil im Combo fehlt.
 var
-  Idx : Integer;
+  Geaendert : Boolean;
+  Hinweise  : TArray<string>;
 begin
-  if not TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile) then Exit;
-  if not Assigned(FProfileCombo) then Exit;
-  PopulateProfileCombo;
-  if not Assigned(FRepoSettings) then Exit;
-  Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
-  if Idx >= 0 then
-    FProfileCombo.ItemIndex := Idx;
+  Geaendert := TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile);
+  Hinweise  := TRuleCatalog.ProjectProfileNotes;
+  if Length(Hinweise) > 0 then
+    StatusMode(Hinweise[0]);
+  if Geaendert and Assigned(FProfileCombo) then
+    PopulateProfileCombo;
 end;
 
 procedure TAnalyserFrame.ApplyToolbarSizing(AUnifCtrlH: Integer);
@@ -1914,6 +1914,16 @@ var
 begin
   if not Assigned(FProfileCombo) or (FProfileCombo.ItemIndex < 0) then Exit;
   Selected := FProfileCombo.Items[FProfileCombo.ItemIndex];
+  // Ein Projekt-Profil gilt nur in seinem Projekt: in [Rules] IdeProfile
+  // der globalen analyser.ini waere der Name in jedem anderen Projekt
+  // unbekannt. Die Wahl wirkt deshalb nur fuer diese Sitzung.
+  if TRuleCatalog.IsProjectProfile(Selected) then
+  begin
+    StatusMode(Format(
+      _('Project profile "%s" - active on next analysis run, not saved (it belongs to this project)'),
+      [Selected]));
+    Exit;
+  end;
   StatusMode(Format(_('Profile "%s" - active on next analysis run'),
     [Selected]));
 

@@ -246,8 +246,8 @@ msgstr "Import profiles"
 msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
 msgstr "Profile files (*.json)|*.json|All files (*.*)|*.*"
 
-msgid "Nothing to import: %s only contains names of built-in profiles (%s)."
-msgstr "Nothing to import: %s only contains names of built-in profiles (%s)."
+msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."
+msgstr "Nothing to import: %s only contains names of built-in or project profiles (%s)."
 
 msgid "%s contains no profiles."
 msgstr "%s contains no profiles."
@@ -258,8 +258,8 @@ msgstr "New: %s"
 msgid "Will be overwritten: %s"
 msgstr "Will be overwritten: %s"
 
-msgid "Skipped (built-in name): %s"
-msgstr "Skipped (built-in name): %s"
+msgid "Skipped (built-in or project profile name): %s"
+msgstr "Skipped (built-in or project profile name): %s"
 
 msgid "Import now?"
 msgstr "Import now?"

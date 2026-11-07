@@ -652,8 +652,12 @@ begin
   // AENDERT kommentarlos - ohne diese Frage war ein Tippfehler im
   // Namen das stille Ende eines gepflegten Profils (G5-3). Eingebaute
   // Namen lehnt SaveUserProfile selbst ab.
+  // Projekt-Profile ebenso nicht: sie sind schreibgeschuetzt, die
+  // Frage "Ueberschreiben?" kuendigte etwas an, das SaveUserProfile dann
+  // abweist (Review p/projekt-profil).
   if (FNames.IndexOf(Trim(NewName)) >= 0) and
-     not TRuleCatalog.IsBuiltInProfile(Trim(NewName)) then
+     not TRuleCatalog.IsBuiltInProfile(Trim(NewName)) and
+     not TRuleCatalog.IsProjectProfile(Trim(NewName)) then
     if Application.MessageBox(PChar(Format(
          _('"%s" already exists. Overwrite it?'), [Trim(NewName)])),
          PChar(_('Copy profile')), MB_YESNO or MB_ICONQUESTION) <> IDYES then
@@ -764,7 +768,7 @@ end;
 procedure SplitImportNames(ANames, AVorhanden, ANew, AReplaced,
   AFixed: TStringList);
 // Teilt die gelesenen Profilnamen in "neu", "wird ueberschrieben" und
-// "uebersprungen, Name eines eingebauten Profils". AVorhanden sind die
+// "uebersprungen, Name eines eingebauten oder Projekt-Profils". AVorhanden sind die
 // heute bekannten Profile.
 //
 // Vergleichsschaerfe: TStringList.IndexOf ist case-INSENSITIV - und der
@@ -774,9 +778,12 @@ var
   Name : string;
 begin
   for Name in ANames do
-    if TRuleCatalog.IsBuiltInProfile(Name) then
+    if TRuleCatalog.IsBuiltInProfile(Name) or
+       TRuleCatalog.IsProjectProfile(Name) then
       // Ein eingebauter Name ist unantastbar: derselbe Name haette sonst
-      // je nach Rechner eine andere Bedeutung.
+      // je nach Rechner eine andere Bedeutung. Ein Projekt-Profil gehoert
+      // der Projektdatei - SaveUserProfile wiese es ab, die Vorschau
+      // darf es also nicht als "wird ueberschrieben" ankuendigen.
       AFixed.Add(Name)
     else if AVorhanden.IndexOf(Name) >= 0 then
       AReplaced.Add(Name)
@@ -796,7 +803,7 @@ begin
     Result := Result + Format(_('Will be overwritten: %s'),
                               [AReplaced.CommaText]) + sLineBreak;
   if AFixed.Count > 0 then
-    Result := Result + Format(_('Skipped (built-in name): %s'),
+    Result := Result + Format(_('Skipped (built-in or project profile name): %s'),
                               [AFixed.CommaText]) + sLineBreak;
   Result := Result + sLineBreak + _('Import now?');
 end;
@@ -817,7 +824,8 @@ begin
   Fehlgeschlagen := 0;
   for Name in ANames do
   begin
-    if TRuleCatalog.IsBuiltInProfile(Name) then Continue;
+    if TRuleCatalog.IsBuiltInProfile(Name) or
+       TRuleCatalog.IsProjectProfile(Name) then Continue;
     if TRuleCatalog.SaveUserProfile(Name, AMap[Name], Fehler) then
       Result := Name
     else
@@ -890,7 +898,7 @@ begin
     begin
       if Fest.Count > 0 then
         Text := Format(
-          _('Nothing to import: %s only contains names of built-in profiles (%s).'),
+          _('Nothing to import: %s only contains names of built-in or project profiles (%s).'),
           [ExtractFileName(Dlg.FileName), Fest.CommaText])
       else
         Text := Format(_('%s contains no profiles.'),

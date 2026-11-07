@@ -214,15 +214,21 @@ Seule la racine elle-même est examinée, pas les dossiers au-dessus.
 La CLI affiche ces remarques sous forme de lignes `WARNING:` sur stderr
 (aussi avec `--quiet`) et, sans `--quiet`, une ligne
 `Project profiles: ...` avec les noms trouvés. L'application autonome et le plugin IDE
-écrivent les remarques dans la sortie de débogage (`OutputDebugString`,
-lisible avec DebugView).
+affichent la première remarque dans la barre d'état et les écrivent
+toutes dans la sortie de débogage (`OutputDebugString`, lisible avec
+DebugView).
 
 Les profils du projet sont lus, jamais écrits. La fenêtre des profils
 les liste avec « - projet » et en lecture seule - **Copier...** en fait
-un profil à vous. Ils apparaissent dans la liste déroulante de profil dès
-que le chemin analysé (application autonome) ou le projet actif (plugin
-IDE) désigne le projet ; la page d'options du plugin IDE les liste après
-le premier scan d'un tel projet.
+un profil à vous. Ils apparaissent dans la liste déroulante de profil de
+l'application autonome dès que le chemin analysé désigne le projet, et
+dans le panneau du plugin IDE après le premier scan avec ce projet actif.
+Un profil de projet choisi là ne vaut que pour la session : il n'est pas
+écrit dans `analyser.ini`, où le nom serait inconnu dans tout autre projet
+(et une exécution CLI sans `--profile` s'y arrêterait avec le code 99).
+La page d'options du plugin IDE ne liste que les profils intégrés et les
+vôtres. Si `[Rules] IdeProfile` nomme un profil inconnu dans le projet
+courant, le plugin exécute `ide-fast` au lieu de toutes les règles.
 
 ## Trouver une règle dans la liste
 

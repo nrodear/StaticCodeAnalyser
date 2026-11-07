@@ -319,12 +319,15 @@ type
       ADest: TDictionary<string, TFindingKinds>;
       out AError: string): Boolean; static;
     // Legt an oder ueberschreibt ein EIGENES Profil. Verweigert jeden
-    // Namen, den der ausgelieferte Katalog schon fuehrt. False + AError
-    // bei ungueltigem Namen oder Schreibfehler.
+    // Namen, den der ausgelieferte Katalog schon fuehrt, und jeden Namen
+    // eines Projekt-Profils der aktuellen Wurzel (die gehoeren der
+    // Projektdatei). False + AError bei ungueltigem oder so belegtem
+    // Namen und bei Schreibfehler.
     class function SaveUserProfile(const AName: string;
       const AKinds: TFindingKinds; out AError: string): Boolean; static;
     // Loescht ein EIGENES Profil aus Speicher und profiles.json. False +
-    // AError bei eingebautem oder unbekanntem Namen und bei Schreibfehler
+    // AError bei eingebautem, unbekanntem oder Projekt-Profil-Namen und
+    // bei Schreibfehler
     // (dann bleibt das Profil im Speicher - die Datei ist die Wahrheit).
     class function DeleteUserProfile(const AName: string;
       out AError: string): Boolean; static;
@@ -1927,6 +1930,18 @@ begin
   end;
 end;
 
+procedure SortiereOrdinal(AListe: TStringList);
+// Stellt AListe auf ordinalen, gross/klein-scharfen Vergleich. Noetig fuer
+// die Lader der Profildateien: TStringList vergleicht sonst per
+// AnsiCompareText, und dort sind 'MyTeam' und 'myteam' GLEICH - welche
+// Schreibweise "die alphabetisch letzte" ist, entschieden dann
+// Dictionary-Reihenfolge und QuickSort-Pivot statt des Alphabets
+// (Review p/projekt-profil). Ordinal steht 'MyTeam' fest vor 'myteam'.
+begin
+  AListe.CaseSensitive := True;
+  AListe.UseLocale     := False;
+end;
+
 class procedure TRuleCatalog.LoadUserProfiles;
 // Liest profiles.json, falls vorhanden. Fehler sind hier NIE fatal: eine
 // kaputte oder halb geschriebene Datei darf das Werkzeug nicht am Start
@@ -1956,6 +1971,7 @@ begin
     // der alphabetisch letzte, und jede Kollision wird gemeldet.
     var Namen := TStringList.Create;
     try
+      SortiereOrdinal(Namen);
       for Eintrag in Gelesen do
         Namen.Add(Eintrag.Key);
       Namen.Sort;
@@ -2152,6 +2168,7 @@ begin
         [Fehler]));
       Exit;
     end;
+    SortiereOrdinal(Namen);
     for Eintrag in Gelesen do
       Namen.Add(Eintrag.Key);
     Namen.Sort;
