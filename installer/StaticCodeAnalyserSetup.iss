@@ -34,10 +34,11 @@
 ; Der frueher hier vermerkte Drift ist behoben: seit 0.9.10 stimmen die
 ; numerischen VerInfo-Felder mit dem Keys-String ueberein (sie standen
 ; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete).
-; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
+; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 bzw. x.y.z.w (vierteilig,
+; z.B. 0.9.19.1) - package-release.ps1 setzt
 ; die Version zentral, der Default hier dient nur dem Hand-Compile.
 #ifndef SCAVersion
-  #define SCAVersion    "0.9.19.0"
+  #define SCAVersion    "0.9.19.1"
 #endif
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
