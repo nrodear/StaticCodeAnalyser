@@ -6,7 +6,7 @@ oder via CLI-Flag `--custom-rules <file>` aktiviert.
 
 ## Demo-Projekt
 
-[`ShowcaseDemo/`](ShowcaseDemo/README.md) - VCL-Demo für das Video: rund 160-220 Funde, jede reDelphix-Code-Aktion mindestens einmal angeboten; Drehbuch: [`ShowcaseDemo/DREHBUCH.md`](ShowcaseDemo/DREHBUCH.md).
+[`ShowcaseDemo/`](ShowcaseDemo/README.md) - VCL-Demo für das Video: rund 190-290 Funde, jede mit Delphi-Code zeigbare Regel mit mindestens einem Fund (außer SCA175), jede reDelphix-Code-Aktion mindestens einmal angeboten; Drehbuch: [`ShowcaseDemo/DREHBUCH.md`](ShowcaseDemo/DREHBUCH.md).
 
 ## Verfügbare Profile
 
