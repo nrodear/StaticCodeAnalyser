@@ -1276,7 +1276,7 @@ msgstr ""
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:585
+#: reDelphix/source/uRdxContextRunner.pas:630
 msgid "Apply De Morgan to \"%s\""
 msgstr ""
 
@@ -1425,6 +1425,10 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:495
 msgid "Branch-Changes"
+msgstr ""
+
+#: reDelphix/source/uRdxContextRunner.pas:634
+msgid "Break the concatenations of the formatter-off region after each \"+\""
 msgstr ""
 
 #: SCA.Engine/sources/Common/uMethodd12.pas:500
@@ -2260,7 +2264,7 @@ msgstr ""
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:272
+#: reDelphix/source/uRdxContextRunner.pas:290
 #: reDelphix/source/uRdxFixTable.pas:3191
 msgid "Free now also runs on an exception and on Exit - the lines in between move into the try part"
 msgstr ""
@@ -2516,7 +2520,7 @@ msgstr ""
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:584
+#: reDelphix/source/uRdxContextRunner.pas:629
 msgid "Invert the if (swap then and else)"
 msgstr ""
 
@@ -2732,7 +2736,7 @@ msgstr ""
 msgid "MasterSource set without MasterFields/IndexFieldNames - silent cross-join"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:588
+#: reDelphix/source/uRdxContextRunner.pas:633
 msgid "Merge with the inner if (and)"
 msgstr ""
 
@@ -3725,7 +3729,7 @@ msgstr ""
 msgid "Split the grouped declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:587
+#: reDelphix/source/uRdxContextRunner.pas:632
 msgid "Split the if at \"and\""
 msgstr ""
 
@@ -3825,7 +3829,7 @@ msgstr ""
 msgid "Swap the loop bounds"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:586
+#: reDelphix/source/uRdxContextRunner.pas:631
 msgid "Swap the sides of \"%s\""
 msgstr ""
 
@@ -4251,6 +4255,10 @@ msgstr ""
 msgid "a comment or a directive stands between the two calls"
 msgstr ""
 
+#: reDelphix/source/uRdxConcatWrap.pas:709
+msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"
+msgstr ""
+
 #: reDelphix/source/uRdxFuncNameFix.pas:270
 msgid "a comment or directive stands between \"%s\" and \":=\""
 msgstr ""
@@ -4342,6 +4350,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxRaiseFixes.pas:520
 msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
+msgstr ""
+
+#: reDelphix/source/uRdxConcatWrap.pas:707
+msgid "a multi-line string in the statement"
 msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:3191
@@ -6002,8 +6014,8 @@ msgstr ""
 msgid "no for, while or repeat loop around the call"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:207
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:239
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:236
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:268
 msgid "no formatter marker with this text at the reported place"
 msgstr ""
 
@@ -6467,7 +6479,7 @@ msgstr ""
 msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:202
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:231
 msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"
 msgstr ""
 
@@ -6932,6 +6944,10 @@ msgstr ""
 msgid "same meaning - only a comment is removed; version control still knows it"
 msgstr ""
 
+#: reDelphix/source/uRdxContextRunner.pas:618
+msgid "same meaning - only line breaks and indentation between the operands change, string contents stay; statements: %d, skipped: %d"
+msgstr ""
+
 #: reDelphix/source/uRdxFixTable.pas:3191
 msgid "same meaning - only the form; a further statement then visibly belongs to the branch"
 msgstr ""
@@ -6952,7 +6968,7 @@ msgstr ""
 msgid "same meaning - the code never ran; parked code then only lives in version control"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:567
+#: reDelphix/source/uRdxContextRunner.pas:585
 msgid "same meaning - the comparison is mirrored; neither side calls a routine"
 msgstr ""
 
@@ -6960,12 +6976,12 @@ msgstr ""
 msgid "same meaning - the compiler does not read \"_\" in numbers; digit separators exist only from Delphi 11 on, FPC does not know them"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:557
+#: reDelphix/source/uRdxContextRunner.pas:575
 #: reDelphix/source/uRdxFixTable.pas:3191
 msgid "same meaning - the condition is evaluated once as before; if it is false, the routine ends as before; the body moves out one level"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:552
+#: reDelphix/source/uRdxContextRunner.pas:570
 msgid "same meaning - the condition is negated once, then and else swap places"
 msgstr ""
 
@@ -6973,7 +6989,7 @@ msgstr ""
 msgid "same meaning - the condition was always true (Length is never negative): the then branch runs as before, an else branch never ran and goes away; if another comparison was meant (e.g. > 0), it is still missing"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:246
+#: reDelphix/source/uRdxContextRunner.pas:264
 #: reDelphix/source/uRdxFixTable.pas:1378
 msgid "same meaning - the constant %s holds the literal; rename it by hand or with Refactor > Rename (Ctrl+Shift+E)"
 msgstr ""
@@ -6994,7 +7010,7 @@ msgstr ""
 msgid "same meaning - the name appears nowhere else in the code of the file; documentation and a comment above it that names the routine go with it"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:562
+#: reDelphix/source/uRdxContextRunner.pas:580
 msgid "same meaning - the same terms in the same order, each negated; the evaluation stops at the same term"
 msgstr ""
 
@@ -7026,8 +7042,8 @@ msgstr ""
 msgid "same meaning for the compiler - only a comment changes; GExperts, CnWizards and JCF now recognise the marker"
 msgstr ""
 
-#: reDelphix/source/uRdxContextRunner.pas:572
-#: reDelphix/source/uRdxContextRunner.pas:577
+#: reDelphix/source/uRdxContextRunner.pas:590
+#: reDelphix/source/uRdxContextRunner.pas:595
 msgid "same meaning with short-circuit evaluation ({$B-}): the second condition is evaluated only if the first one is true, as before"
 msgstr ""
 
@@ -7512,6 +7528,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxTrailingCommaFix.pas:100
 msgid "the comma ends a list inside \"[...]\" (set or array literal)"
+msgstr ""
+
+#: reDelphix/source/uRdxConcatWrap.pas:715
+msgid "the comment at the end of the line suppresses a finding - it would move to another line"
 msgstr ""
 
 #: reDelphix/source/uRdxFixRunner.pas:580
@@ -8223,11 +8243,15 @@ msgstr ""
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
 
+#: reDelphix/source/uRdxConcatWrap.pas:713
+msgid "the line holds more than one statement"
+msgstr ""
+
 #: reDelphix/source/uRdxIntroPlan.pas:1103
 msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:244
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:273
 msgid "the line holds this marker more than once"
 msgstr ""
 
@@ -8936,6 +8960,10 @@ msgstr ""
 
 #: reDelphix/source/uRdxFixTable.pas:3191
 msgid "the skeleton is empty - fill in summary, param and returns"
+msgstr ""
+
+#: reDelphix/source/uRdxConcatWrap.pas:711
+msgid "the statement already puts \"+\" at the start of its lines"
 msgstr ""
 
 #: reDelphix/source/uRdxFormatSettingsFix.pas:2699

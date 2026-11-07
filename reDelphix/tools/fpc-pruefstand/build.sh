@@ -199,6 +199,8 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # und die uses-Fragen von SCA044, aus uRdxRecipeRunner umgezogen); seit
 # Charge C78 (C7/C8) auch ueber uRdxIfFixes/uRdxCondFixes (Ausdrucks-Leser
 # uRdxCondExpr) und uRdxDeepNestingFix (Waechter-Klausel, Kette von SCA018).
+# Seit 2026-11-07 (ckWrapConcat, Verkettungen im Formatter-Bereich umbrechen)
+# auch ueber uRdxConcatWrap; den Bereich liefert uRdxFormatterMarkerFix.
 # Seit HilfeFix I (rwE30) uRdxHttpsFix (SCA115, Textfaelle und die
 # Testcode-Frage TestPathReason).
 # Seit HilfeFix I (rwE30) auch uRdxFloatEqualityFix (SCA144, Planer und
@@ -209,7 +211,7 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # eine FPC-sichtbare Text-Fixture (Adapter und Detektor nur unter Delphi).
 # uRdxEmptyOnHandlerFix nicht - uTestRdxEmptyOnHandlerFix bindet uSCAConsts
 # und uRdxFixTable auch im FPC-sichtbaren Teil.
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix; do
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxConcatWrap uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

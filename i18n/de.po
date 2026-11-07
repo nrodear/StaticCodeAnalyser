@@ -6738,6 +6738,29 @@ msgstr "nur ein Marker mit Leerzeichen darin lässt sich korrigieren - wohin ein
 msgid "the line holds this marker more than once"
 msgstr "die Zeile trägt diesen Marker mehrmals"
 
+# reDelphix Formatter-Bereich (uRdxContextRunner, uRdxConcatWrap): Verkettungen nach jedem "+" umbrechen
+
+msgid "Break the concatenations of the formatter-off region after each \"+\""
+msgstr "Verkettungen im Formatter-Bereich nach jedem \"+\" umbrechen"
+
+msgid "same meaning - only line breaks and indentation between the operands change, string contents stay; statements: %d, skipped: %d"
+msgstr "gleiche Bedeutung - nur Zeilenumbrüche und Einrückung zwischen den Operanden ändern sich, String-Inhalte bleiben; Anweisungen: %d, ausgelassen: %d"
+
+msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"
+msgstr "Kommentar oder Direktive in der Verkettung - wohin er nach dem Umbruch gehört, weiß nur der Autor"
+
+msgid "the line holds more than one statement"
+msgstr "die Zeile trägt mehr als eine Anweisung"
+
+msgid "the statement already puts \"+\" at the start of its lines"
+msgstr "die Anweisung setzt \"+\" schon an den Anfang ihrer Zeilen"
+
+msgid "a multi-line string in the statement"
+msgstr "mehrzeiliger String in der Anweisung"
+
+msgid "the comment at the end of the line suppresses a finding - it would move to another line"
+msgstr "der Kommentar am Zeilenende unterdrückt einen Fund - er wanderte auf eine andere Zeile"
+
 # reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen
 
 msgid "compiler directive in the if statement - conditional code could change its branches"

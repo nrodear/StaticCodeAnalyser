@@ -31,6 +31,12 @@ unit uRdxFormatterMarkerFix;
 //   - die Zeile in einem Kommentar oder String beginnt,
 //   - auf der Zeile kein solcher Kommentar mit dem gemeldeten Text steht
 //     (Zeile verschoben, schon korrigiert), oder er dort mehrfach steht.
+//
+// DER BEREICH AM CARET (MarkerRegionAt, seit 2026-11-07): derselbe
+// Zeilenlauf und die Bilanz des Detektors liefern der Code-Aktion ohne Fund
+// "Verkettungen im Formatter-Bereich umbrechen" (uRdxContextRunner,
+// ckWrapConcat) den intakten Bereich - hier, damit die Marker-Regeln nur
+// einmal in reDelphix stehen.
 
 interface
 
@@ -59,6 +65,29 @@ type
     class function ExactMarker(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
+
+    // Der INTAKTE Formatter-Bereich, in dem Zeile ALine liegt (die Zeilen
+    // beider Marker eingeschlossen) - fuer die Code-Aktion "Verkettungen im
+    // Formatter-Bereich umbrechen" (uRdxContextRunner, ckWrapConcat).
+    // AStartLine/AStartCol: die erste Spalte HINTER '{(*}'; AEndLine/
+    // AEndCol: die Spalte des '{' von '{*)}' - das Innere ist [Start, End).
+    // Die Marker findet derselbe Zeilenlauf wie ExactMarker (BraceColumns,
+    // Gegenprobe ClassAt = 'k'), die Bilanz ist die des Detektors
+    // (uFormatterMarker.Judge): ein Schalter ohne Schachtelung - ein zweiter
+    // Start im offenen Bereich oeffnet nichts (F3), ein Ende ohne Start
+    // schliesst nichts (F2), ein Start ohne Ende ist KEIN Bereich (F1, sonst
+    // liefe die Aktion bis zum Dateiende). Ein falsch geschriebener Marker
+    // (F4) schaltet wie im Detektor als gemeinter Start bzw. gemeintes Ende,
+    // sein Bereich ist aber nicht intakt (Nico-Entscheid E6: erst die Hilfe
+    // "Marker exakt schreiben", dann der Umbruch). So gibt es einen Bereich
+    // genau dann, wenn der Detektor an keinem der beiden Marker etwas meldet.
+    // False ohne Bereich - auch, wenn eine Zeile, die in einem
+    // Block-Kommentar oder String beginnt, hinter einem '{' noch '(*' oder
+    // '*)' traegt: der Zeilenlauf beginnt dort nicht im Code, ein Marker
+    // dahinter bliebe ungezaehlt, und die Bilanz waere unsicher.
+    class function MarkerRegionAt(AMap: TRdxCodeMap; ALine: Integer;
+      out AStartLine, AStartCol, AEndLine, AEndCol: Integer): Boolean;
+      static;
   end;
 
 implementation
@@ -249,6 +278,125 @@ begin
   AEdit.Expected := Tok;
   AEdit.NewText := Exact;
   Result := True;
+end;
+
+{ ---- Bereich am Caret (MarkerRegionAt) ---- }
+
+type
+  // Ein Marker der Datei fuer die Bilanz: Stelle des '{', Start oder Ende,
+  // falsch geschrieben (F4) oder exakt.
+  TMarkerHit = record
+    Line      : Integer;
+    Col       : Integer;
+    IsStart   : Boolean;
+    Malformed : Boolean;
+  end;
+
+// Eine Zeile, die in einem Block-Kommentar oder String beginnt, und hinter
+// einem '{' noch '(*' oder '*)' traegt: ob dort ein Marker steht, sagt der
+// Zeilenlauf nicht (er beginnt im Code) - s. MarkerRegionAt.
+function MayHideMarker(const ALine: string): Boolean;
+var
+  p : Integer;
+begin
+  p := Pos('{', ALine);
+  Result := (p > 0)
+    and ((Pos('(*', ALine, p) > 0) or (Pos('*)', ALine, p) > 0));
+end;
+
+// Haengt die Marker der Zeile ALine (Zeilenanfang im Code) in Spaltenfolge
+// an AHits an: exakte und falsch geschriebene Starts und Enden, wie der
+// Detektor sie zaehlt.
+procedure AddLineMarkers(AMap: TRdxCodeMap; ALine: Integer;
+  var AHits: TArray<TMarkerHit>);
+var
+  L, T : string;
+  Cols : TArray<Integer>;
+  i    : Integer;
+  Hit  : TMarkerHit;
+begin
+  L := AMap.Raw(ALine);
+  // Vorfilter wie der Detektor: jeder Marker und jede F4-Form traegt '(*'
+  // oder '*)'.
+  if (Pos('(*', L) = 0) and (Pos('*)', L) = 0) then Exit;
+  Cols := BraceColumns(L);
+  for i := 0 to High(Cols) do
+  begin
+    if AMap.ClassAt(ALine, Cols[i]) <> 'k' then Continue;
+    T := Copy(L, Cols[i], Pos('}', L, Cols[i] + 1) - Cols[i] + 1);
+    Hit.Line := ALine;
+    Hit.Col := Cols[i];
+    Hit.IsStart := (T = MARKER_START) or IsMalformedOf(T, MARKER_START);
+    Hit.Malformed := (T <> MARKER_START) and (T <> MARKER_END);
+    if Hit.IsStart or (T = MARKER_END) or IsMalformedOf(T, MARKER_END) then
+    begin
+      SetLength(AHits, Length(AHits) + 1);
+      AHits[High(AHits)] := Hit;
+    end;
+  end;
+end;
+
+// Die Marker der Datei bis zum ersten Ende hinter ALine (danach beginnt
+// kein Bereich mehr, der ALine enthaelt). False, wenn eine Zeile einen
+// Marker verbergen koennte (MayHideMarker).
+function CollectMarkers(AMap: TRdxCodeMap; ALine: Integer;
+  out AHits: TArray<TMarkerHit>): Boolean;
+var
+  L : Integer;
+begin
+  Result := False;
+  AHits := nil;
+  for L := 1 to AMap.LineCount do
+  begin
+    if AMap.StartsInside(L) then
+    begin
+      if MayHideMarker(AMap.Raw(L)) then Exit;
+      Continue;
+    end;
+    AddLineMarkers(AMap, L, AHits);
+    if (L > ALine) and (Length(AHits) > 0)
+       and not AHits[High(AHits)].IsStart then
+      Break;
+  end;
+  Result := True;
+end;
+
+class function TRdxFormatterMarkerFix.MarkerRegionAt(AMap: TRdxCodeMap;
+  ALine: Integer; out AStartLine, AStartCol, AEndLine,
+  AEndCol: Integer): Boolean;
+var
+  Hits    : TArray<TMarkerHit>;
+  k, Open : Integer;
+begin
+  Result := False;
+  AStartLine := 0;
+  AStartCol := 0;
+  AEndLine := 0;
+  AEndCol := 0;
+  if (ALine < 1) or (ALine > AMap.LineCount)
+     or not CollectMarkers(AMap, ALine, Hits) then
+    Exit;
+  // Die Bilanz von uFormatterMarker.Judge: ein Schalter.
+  Open := -1;
+  for k := 0 to High(Hits) do
+    if Hits[k].IsStart then
+    begin
+      if Open < 0 then
+        Open := k;
+    end
+    else if Open >= 0 then
+    begin
+      if not Hits[Open].Malformed and not Hits[k].Malformed
+         and (ALine >= Hits[Open].Line) and (ALine <= Hits[k].Line) then
+      begin
+        AStartLine := Hits[Open].Line;
+        AStartCol := Hits[Open].Col + Length(MARKER_START);
+        AEndLine := Hits[k].Line;
+        AEndCol := Hits[k].Col;
+        Exit(True);
+      end;
+      Open := -1;
+    end;
 end;
 
 end.

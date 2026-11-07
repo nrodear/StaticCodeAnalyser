@@ -6734,6 +6734,29 @@ msgstr "seul un marqueur contenant des espaces peut être corrigé - où va un {
 msgid "the line holds this marker more than once"
 msgstr "la ligne contient ce marqueur plusieurs fois"
 
+# reDelphix Formatter-Bereich (uRdxContextRunner, uRdxConcatWrap): Verkettungen nach jedem "+" umbrechen
+
+msgid "Break the concatenations of the formatter-off region after each \"+\""
+msgstr "Couper les concaténations de la zone sans formatage après chaque « + »"
+
+msgid "same meaning - only line breaks and indentation between the operands change, string contents stay; statements: %d, skipped: %d"
+msgstr "même sens - seuls les sauts de ligne et l'indentation entre les opérandes changent, le contenu des chaînes reste ; instructions : %d, ignorées : %d"
+
+msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"
+msgstr "commentaire ou directive dans la concaténation - où il va après le saut de ligne, seul l'auteur le sait"
+
+msgid "the line holds more than one statement"
+msgstr "la ligne contient plus d'une instruction"
+
+msgid "the statement already puts \"+\" at the start of its lines"
+msgstr "l'instruction place déjà « + » en début de ligne"
+
+msgid "a multi-line string in the statement"
+msgstr "chaîne multiligne dans l'instruction"
+
+msgid "the comment at the end of the line suppresses a finding - it would move to another line"
+msgstr "le commentaire en fin de ligne supprime un résultat - il passerait sur une autre ligne"
+
 # reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen
 
 msgid "compiler directive in the if statement - conditional code could change its branches"

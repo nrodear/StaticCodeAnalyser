@@ -206,6 +206,7 @@
         <DCCReference Include="source\uRdxCondExpr.pas"/>
         <DCCReference Include="source\uRdxIfFixes.pas"/>
         <DCCReference Include="source\uRdxCondFixes.pas"/>
+        <DCCReference Include="source\uRdxConcatWrap.pas"/>
         <DCCReference Include="source\uRdxContextRunner.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>
