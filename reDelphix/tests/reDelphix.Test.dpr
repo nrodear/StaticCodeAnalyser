@@ -353,6 +353,7 @@ uses
   uRdxCondExpr in '..\source\uRdxCondExpr.pas',
   uRdxIfFixes in '..\source\uRdxIfFixes.pas',
   uRdxCondFixes in '..\source\uRdxCondFixes.pas',
+  uRdxConcatWrap in '..\source\uRdxConcatWrap.pas',
   uRdxContextRunner in '..\source\uRdxContextRunner.pas',
   uRdxLog in '..\source\uRdxLog.pas',
   uRdxActionCore in '..\source\uRdxActionCore.pas',

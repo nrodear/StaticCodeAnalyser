@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7144 Zeilen, 344465 Bytes
-  CPoLines_de: array[0..7143] of string = (
+  // i18n\de.po - 7167 Zeilen, 345764 Bytes
+  CPoLines_de: array[0..7166] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -6755,6 +6755,29 @@ const
     'msgid "the line holds this marker more than once"',
     'msgstr "die Zeile tr'#$00E4'gt diesen Marker mehrmals"',
     '',
+    '# reDelphix Formatter-Bereich (uRdxContextRunner, uRdxConcatWrap): Verkettungen nach jedem "+" umbrechen',
+    '',
+    'msgid "Break the concatenations of the formatter-off region after each \"+\""',
+    'msgstr "Verkettungen im Formatter-Bereich nach jedem \"+\" umbrechen"',
+    '',
+    'msgid "same meaning - only line breaks and indentation between the operands change, string contents stay; statements: %d, skipped: %d"',
+    'msgstr "gleiche Bedeutung - nur Zeilenumbr'#$00FC'che und Einr'#$00FC'ckung zwischen den Operanden '#$00E4'ndern sich, String-Inhalte bleiben; Anweisungen: %d, ausgelassen: %d"',
+    '',
+    'msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"',
+    'msgstr "Kommentar oder Direktive in der Verkettung - wohin er nach dem Umbruch geh'#$00F6'rt, wei'#$00DF' nur der Autor"',
+    '',
+    'msgid "the line holds more than one statement"',
+    'msgstr "die Zeile tr'#$00E4'gt mehr als eine Anweisung"',
+    '',
+    'msgid "the statement already puts \"+\" at the start of its lines"',
+    'msgstr "die Anweisung setzt \"+\" schon an den Anfang ihrer Zeilen"',
+    '',
+    'msgid "a multi-line string in the statement"',
+    'msgstr "mehrzeiliger String in der Anweisung"',
+    '',
+    'msgid "the comment at the end of the line suppresses a finding - it would move to another line"',
+    'msgstr "der Kommentar am Zeilenende unterdr'#$00FC'ckt einen Fund - er wanderte auf eine andere Zeile"',
+    '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',
     'msgid "compiler directive in the if statement - conditional code could change its branches"',
@@ -7433,8 +7456,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7140 Zeilen, 358342 Bytes
-  CPoLines_fr: array[0..7139] of string = (
+  // i18n\fr.po - 7163 Zeilen, 359660 Bytes
+  CPoLines_fr: array[0..7162] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14170,6 +14193,29 @@ const
     '',
     'msgid "the line holds this marker more than once"',
     'msgstr "la ligne contient ce marqueur plusieurs fois"',
+    '',
+    '# reDelphix Formatter-Bereich (uRdxContextRunner, uRdxConcatWrap): Verkettungen nach jedem "+" umbrechen',
+    '',
+    'msgid "Break the concatenations of the formatter-off region after each \"+\""',
+    'msgstr "Couper les concat'#$00E9'nations de la zone sans formatage apr'#$00E8's chaque '#$00AB' + '#$00BB'"',
+    '',
+    'msgid "same meaning - only line breaks and indentation between the operands change, string contents stay; statements: %d, skipped: %d"',
+    'msgstr "m'#$00EA'me sens - seuls les sauts de ligne et l''indentation entre les op'#$00E9'randes changent, le contenu des cha'#$00EE'nes reste ; instructions : %d, ignor'#$00E9'es : %d"',
+    '',
+    'msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"',
+    'msgstr "commentaire ou directive dans la concat'#$00E9'nation - o'#$00F9' il va apr'#$00E8's le saut de ligne, seul l''auteur le sait"',
+    '',
+    'msgid "the line holds more than one statement"',
+    'msgstr "la ligne contient plus d''une instruction"',
+    '',
+    'msgid "the statement already puts \"+\" at the start of its lines"',
+    'msgstr "l''instruction place d'#$00E9'j'#$00E0' '#$00AB' + '#$00BB' en d'#$00E9'but de ligne"',
+    '',
+    'msgid "a multi-line string in the statement"',
+    'msgstr "cha'#$00EE'ne multiligne dans l''instruction"',
+    '',
+    'msgid "the comment at the end of the line suppresses a finding - it would move to another line"',
+    'msgstr "le commentaire en fin de ligne supprime un r'#$00E9'sultat - il passerait sur une autre ligne"',
     '',
     '# reDelphix C7/C8 (uRdxIfFixes, uRdxCondFixes, uRdxContextRunner): if umkehren, De Morgan, Vergleich drehen, if teilen/zusammenfuegen',
     '',

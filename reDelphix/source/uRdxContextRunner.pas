@@ -58,6 +58,15 @@ unit uRdxContextRunner;
 //                      'not' logisch, {$B-} fuer Teilen/Zusammenfuegen);
 //                      ein Kandidat entsteht nur am ausloesenden Token,
 //                      nicht auf der ganzen Bedingung (wenig Rauschen).
+//   ckWrapConcat       "Verkettungen im Formatter-Bereich nach jedem '+'
+//                      umbrechen" (Nico-Entscheide 2026-11-07): Caret in
+//                      einem intakten Bereich '{(*}' .. '{*)}'
+//                      (uRdxFormatterMarkerFix.MarkerRegionAt, auch auf
+//                      einer Markerzeile); ALLE Kandidaten des Bereichs in
+//                      einem Eintrag, ein Undo-Schritt (uRdxConcatWrap).
+//                      Kein Bereich oder kein Kandidat darin: kein Eintrag;
+//                      alle gesperrt: ausgegraut mit dem Grund des
+//                      Caret-naechsten. Bedeutungsgleich (nur Leerraum).
 //
 // WANN EIN EINTRAG ENTSTEHT (F4): nur, wenn am Caret ein Kandidat steht -
 // ein Zahl-Literal bzw. eine Zeile 'X := ..Create..', die noch nicht
@@ -106,7 +115,7 @@ uses
 type
   TRdxContextKind = (ckIntroduceConst, ckTryFinallyCreate, ckConcatToFormat,
     ckInvertIf, ckGuardClause, ckDeMorgan, ckFlipCompare, ckSplitIf,
-    ckMergeIf);
+    ckMergeIf, ckWrapConcat);
 
   // Ein Eintrag am Caret.
   //   Kind     die Aktion
@@ -115,7 +124,7 @@ type
   //            - auch, wenn gesperrt ist, soweit schon bekannt; bei
   //            ckConcatToFormat das Ziel bzw. der Aufrufkopf (der Menuetext
   //            hat kein '%s'); ckDeMorgan 'and'/'or', ckFlipCompare der
-  //            Operator; die anderen C7/C8-Arten ''
+  //            Operator; die anderen C7/C8-Arten und ckWrapConcat ''
   //   Hint     freigegeben: was passiert (uebersetzt, uRdxText)
   //   Reason   gesperrt: warum nicht (uebersetzt)
   //   Edits    die Ersetzungen (ein Undo-Schritt, uRdxEditor.ReplaceSpans)
@@ -147,8 +156,8 @@ type
     // Run selbst; der Anbieter oeffnet den Dienst nur dann.
     class function WantsPlaces(ALines: TStrings;
       const AContext: TEditorContext): Boolean; static;
-    // Menuetext der Arten ohne Fund-Hilfe (C7/C8 ausser ckGuardClause),
-    // uebersetzt; '' fuer die anderen - deren Text baut
+    // Menuetext der Arten ohne Fund-Hilfe (C7/C8 ausser ckGuardClause,
+    // ckWrapConcat), uebersetzt; '' fuer die anderen - deren Text baut
     // uRdxFixTable.ContextCaption aus der Fund-Hilfe (F2).
     class function CaptionOf(const AOutcome: TRdxContextOutcome): string;
       static;
@@ -176,6 +185,8 @@ uses
   uRdxIfFixes,       // InvertIf, SplitIf, MergeIf (C7/C8)
   uRdxCondFixes,     // DeMorgan, FlipCompare (C8)
   uRdxDeepNestingFix, // GuardAt (C7, Kette von SCA018)
+  uRdxFormatterMarkerFix, // MarkerRegionAt (ckWrapConcat)
+  uRdxConcatWrap,    // PlanRange (ckWrapConcat)
   uRdxText;          // _ (Texte in der Sprache der SCA, E29)
 
 const
@@ -207,6 +218,13 @@ const
   R_ANDIF_HINT = 'same meaning with short-circuit evaluation ({$B-}): the '
     + 'second condition is evaluated only if the first one is true, as '
     + 'before';
+  // ckWrapConcat (Formatter-Bereich): Menuetext und Hinweis; %d = umbrochene
+  // bzw. gesperrte Anweisungen des Bereichs.
+  CAP_WRAP_CONCAT = 'Break the concatenations of the formatter-off region '
+    + 'after each "+"';
+  R_WRAP_HINT = 'same meaning - only line breaks and indentation between '
+    + 'the operands change, string contents stay; statements: %d, '
+    + 'skipped: %d';
 
 // Haengt AOutcome an AList an.
 procedure AddOutcome(var AList: TArray<TRdxContextOutcome>;
@@ -577,6 +595,33 @@ begin
   AddPlanned(AList, ckMergeIf, Ok, Why, '', _(R_ANDIF_HINT), Edits);
 end;
 
+// "Verkettungen im Formatter-Bereich umbrechen" fuer den intakten Bereich,
+// in dem ALine liegt: ein Eintrag fuer alle Kandidaten des Bereichs.
+procedure AddWrapConcat(var AList: TArray<TRdxContextOutcome>;
+  AMap: TRdxCodeMap; ALine: Integer);
+var
+  SL, SC, EL, EC : Integer;
+  Plan           : TRdxWrapPlan;
+  O              : TRdxContextOutcome;
+begin
+  // Kein Bereich am Caret (E7: ausserhalb nie; E6: nur intakte Paare) bzw.
+  // kein Kandidat darin: kein Eintrag.
+  if not TRdxFormatterMarkerFix.MarkerRegionAt(AMap, ALine, SL, SC, EL, EC)
+     or not TRdxConcatWrap.PlanRange(AMap, SL, SC, EL, EC, ALine, Plan) then
+    Exit;
+  O := Default(TRdxContextOutcome);
+  O.Kind := ckWrapConcat;
+  O.Enabled := Plan.Wrapped > 0;
+  if O.Enabled then
+  begin
+    O.Edits := Plan.Edits;
+    O.Hint := _(R_WRAP_HINT, [Plan.Wrapped, Plan.Skipped]);
+  end
+  else
+    O.Reason := Plan.Reason;
+  AddOutcome(AList, O);
+end;
+
 class function TRdxContextRunner.CaptionOf(
   const AOutcome: TRdxContextOutcome): string;
 begin
@@ -586,6 +631,7 @@ begin
     ckFlipCompare: Result := _(CAP_FLIP, [AOutcome.Name]);
     ckSplitIf:     Result := _(CAP_SPLIT_IF);
     ckMergeIf:     Result := _(CAP_MERGE_IF);
+    ckWrapConcat:  Result := _(CAP_WRAP_CONCAT);
   else
     Result := '';
   end;
@@ -629,6 +675,7 @@ begin
     AddTryFinallyCreate(Result, Map, AContext.Line, Col);
     AddConcatToFormat(Result, Map, APlaces, AContext.Line, Col);
     AddIfActions(Result, Map, AContext.Line, Col);
+    AddWrapConcat(Result, Map, AContext.Line);
   finally
     TRdxCodeMap.Release(Map);
   end;
