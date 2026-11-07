@@ -225,6 +225,9 @@ program reDelphix.Test;
 //   * uTestRdxContextIf         - C7/C8 (Charge C78): if umkehren,
 //                                 Waechter-Klausel, De Morgan, Vergleich
 //                                 drehen, if teilen/zusammenfuegen am Caret
+//   * uTestRdxConcatWrap        - Verkettungen im Formatter-Bereich nach
+//                                 jedem '+' umbrechen: Bereich am Caret
+//                                 (Bilanz wie SCA206), Umbruch, Sperren
 //   * uTestRdxSharedMap         - Charge P5: geteilte Code-Sicht
 //                                 (TRdxMappedLines, Acquire/Release) gleich
 //                                 der frischen; Plattenblick-Cache von
@@ -449,6 +452,7 @@ uses
   uTestRdxContextRunner in 'uTestRdxContextRunner.pas',
   uTestRdxContextFormat in 'uTestRdxContextFormat.pas',
   uTestRdxContextIf in 'uTestRdxContextIf.pas',
+  uTestRdxConcatWrap in 'uTestRdxConcatWrap.pas',
   uTestRdxSharedMap in 'uTestRdxSharedMap.pas',
   uTestRdxMagicGuards in 'uTestRdxMagicGuards.pas',
   uTestRdxMagicFixDetector in 'uTestRdxMagicFixDetector.pas',
