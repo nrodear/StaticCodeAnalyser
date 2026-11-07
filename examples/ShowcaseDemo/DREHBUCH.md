@@ -305,23 +305,28 @@ Doppelklick öffnet die .dfm an der Stelle.
 Rechtsklick mit dem Caret auf der Stelle – im Editor-Kontextmenü stehen
 die Code-Aktionen am Caret, auch auf einer Zeile ohne Fund. Alle zehn Arten
 (`TRdxContextKind` in `reDelphix/source/uRdxContextRunner.pas`) haben im
-Demo eine Stelle. Status **Probe** = schon bisher im Drehbuch und mit der
-Angebotsprobe belegt, **gelesen** = gegen die Auslöseregeln im Code
-geprüft, aber noch nicht in Probe oder IDE angeboten gesehen – einmal in
-der IDE gegenprüfen.
+Demo eine Stelle. Status **Probe** = mit der Angebotsprobe belegt,
+**Probe (FPC)** = mit einem FPC-Prüfstand belegt, der denselben
+`TRdxContextRunner.Run` ruft und den Edit Byte für Byte anwendet (Menütext
+aus `i18n/de.po`); im IDE-Kontextmenü einmal gegenprüfen. Die Zeilen
+gelten für den unveränderten Stand: wer aus den Szenen 3–7 kommt, setzt
+vorher mit `git checkout examples/ShowcaseDemo` zurück oder steuert die
+Stellen über den Text an (`uPriceCalculator.pas:299` ist nach SCA144 schon
+`if SameValue(FDiscount, 0.5) then`, `uOrderModel.pas:457` nach SCA126
+`if Assigned(FCustomer) then` – beide Aktionen gibt es dann weiterhin).
 
 | # | Code-Aktion (Menütext) | Stelle | Caret | Erwartung danach | Status |
 |---:|---|---|---|---|---|
 | 1 | Lokale Konstante für 11 einführen (bzw. für 0.19, 5.90) | `uOrderModel.pas:495` `Result := (11 - Sum mod 11) mod 11;`, `uPriceCalculator.pas:202` `FTaxRate := 0.19;`, `uPriceCalculator.pas:302` `Result := 5.90;` | auf der Zahl (in `:495` auf der ersten `11`) | nur dieses Literal wird `MagicNr01`; in `:302` bekommt der `else`-Zweig `begin..end` | Probe |
 | 2 | Importer in einem try/finally-Block freigeben (ändert Verhalten) | `uOrderForm.pas:104` `Importer := TLegacyImporter.Create;` | in der Zeile | das `try` kommt erst nach `Order := TOrder.Create(..)`; wirft `LoadCustomer`, leckt der Importer – kein Fund meldet das | Probe |
 | 3 | Format() aus Verkettung bilden | `uOrderModel.pas:321` `Result := ClassName + ' #' + IntToStr(FId);`, `uPriceCalculator.pas:271` `Lines.Add('Printed: ' + DateToStr(Date));` | irgendwo in der Kette | `Format('%s #%d', [ClassName, FId])` (`FId` ist als `Integer` belegt) bzw. `Lines.Add(Format('Printed: %s', [DateToStr(Date)]))` | Probe |
-| 4 | if umkehren (then und else tauschen) | `uOrderModel.pas:468` `if Result then` (FindItem), `uPriceCalculator.pas:299` `if FDiscount = 0.5 then`, `uPriceCalculator.pas:648` `if AOrderCount >= 100 then` | auf `if` oder `then` | Bedingung verneint (`if not Result then`, `if not (FDiscount = 0.5) then`), Zweige getauscht | gelesen |
-| 5 | Letztes if in eine Wächter-Klausel mit Exit umwandeln | `uOrderModel.pas:333` `if FName <> AValue then` (SetName) | auf `if` oder `then` | `if not (FName <> AValue) then Exit;`, der Block eine Ebene flacher | gelesen |
-| 6 | De Morgan auf "or" anwenden | `uOrderModel.pas:411` `if (FDiscountPercent < 0) or (FDiscountPercent > 100) then` | auf `or` | die Kette wird `not (… and …)` mit verneinten Gliedern | gelesen |
-| 7 | Seiten von "<=" tauschen | `uOrderModel.pas:396` `if FQuantity <= 0 then` | auf `<=` | `if 0 >= FQuantity then` | gelesen |
-| 8 | if am "and" teilen | `uOrderForm.pas:140` `if (Key = VK_DELETE) and Assigned(lvOrders.Selected) then` | auf `and` | zwei geschachtelte `if` | gelesen |
-| 9 | Mit dem inneren if zusammenfügen (and) | `uOrderModel.pas:457` `if FCustomer <> nil then` / `if Assigned(FCustomer.Address) then` | auf dem äußeren `if` oder `then` | ein `if (FCustomer <> nil) and Assigned(FCustomer.Address) then` | gelesen |
-| 10 | Verkettungen im Formatter-Bereich nach jedem "+" umbrechen | `uOrderRepository.pas:170`–`172` (`{(*}` … `{*)}` um die SQL-Verkettung in `CustomerIdsInCity`) | irgendwo im Bereich, Markerzeilen eingeschlossen | ein Operand je Zeile, das `+` am Zeilenende, Einzug + 2 Leerzeichen; die Funde SCA003/SCA044/SCA152 der Zeile bleiben | gelesen |
+| 4 | if umkehren (then und else tauschen) | `uOrderModel.pas:468` `if Result then` (FindItem), `uPriceCalculator.pas:299` `if FDiscount = 0.5 then`, `uPriceCalculator.pas:648` `if AOrderCount >= 100 then` | auf `if` oder `then` | Bedingung verneint (`if not Result then`, `if not (FDiscount = 0.5) then`, `if not (AOrderCount >= 100) then`), Zweige getauscht | Probe (FPC) |
+| 5 | Letztes if in eine Wächter-Klausel mit Exit umwandeln | `uOrderModel.pas:333` `if FName <> AValue then` (SetName) | auf `if` oder `then` | `if not (FName <> AValue) then Exit;`, der Block eine Ebene flacher | Probe (FPC) |
+| 6 | De Morgan auf "or" anwenden | `uOrderModel.pas:411` `if (FDiscountPercent < 0) or (FDiscountPercent > 100) then` | auf `or` | die Kette wird `not (… and …)` mit verneinten Gliedern | Probe (FPC) |
+| 7 | Seiten von "<=" tauschen | `uOrderModel.pas:396` `if FQuantity <= 0 then` | auf `<=` | `if 0 >= FQuantity then` | Probe (FPC) |
+| 8 | if am "and" teilen | `uOrderForm.pas:140` `if (Key = VK_DELETE) and Assigned(lvOrders.Selected) then` | auf `and` – dort steht auch „De Morgan auf "and" anwenden“, den zweiten Eintrag wählen | zwei geschachtelte `if` | Probe (FPC) |
+| 9 | Mit dem inneren if zusammenfügen (and) | `uOrderModel.pas:457` `if FCustomer <> nil then` / `if Assigned(FCustomer.Address) then` | auf dem äußeren `if` oder `then` | ein `if (FCustomer <> nil) and Assigned(FCustomer.Address) then` | Probe (FPC) |
+| 10 | Verkettungen im Formatter-Bereich nach jedem "+" umbrechen | `uOrderRepository.pas:170`–`172` (`{(*}` … `{*)}` um die SQL-Verkettung in `CustomerIdsInCity`) | irgendwo im Bereich, Markerzeilen eingeschlossen | ein Operand je Zeile, das `+` am Zeilenende, Einzug + 2 Leerzeichen; die Funde SCA003/SCA152 der Zeile bleiben | Probe (FPC) |
 
 Hinweise:
 
@@ -342,7 +347,8 @@ Hinweise:
   Marker nicht und hat sie in eine Zeile gezogen. Danach Strg+D nicht mehr
   drücken – erst GExperts, CnWizards und JCF halten den Bereich ein. Der
   Bereich um `OLD_COLUMNS` in `uLegacyImport.pas` bietet die Aktion nicht
-  an, solange sein Marker `{ (*}` falsch geschrieben ist (Szene 3, #2a).
+  an: sein Marker `{ (*}` ist falsch geschrieben (Szene 3, #2a), und auch
+  nach der Korrektur steht dort kein `+`.
 
 ## Szene 9: Abschluss
 
@@ -361,8 +367,8 @@ FPC 3.2.2, SCA044 über `RdxCorpusProbe.exe`) auf dem SARIF des Laufs
 `--profile strict --min-severity hint`, `MinConfidence=low`. Stand der
 Probe: 106 von 107 angeboten. Seither haben auch SCA204 (`GrossTotal :=`)
 und SCA206 (Marker mit Leerraum; die Hilfe kam mit der Regel dazu) eine
-Stelle – **108 von 108**. Die beiden sind nur gegen die Planer gelesen
-(Status **gelesen**), noch nicht durch die Probe gelaufen. Die Zeilen der
+Stelle – **108 von 108**. Die beiden hat die Probe `RdxActionProbe.exe`
+(Win64) nachträglich angeboten (Status **ja**). Die Zeilen der
 Spalte „Stelle“ sind maschinell auf die heutige Fassung nachgezogen; die
 Zahlen „weitere / gesperrt“ stammen aus dem Probelauf, neue Funde einer
 Regel seither stehen in Klammern. Status **ja** = der echte
@@ -479,8 +485,8 @@ ohne neuen Fehler, außer Delphi-eigener Syntax (Inline-`var`/`const`,
 | 98 | SCA197 | 1 | Neue GUID einfügen | uOrderModel.pas:52 | ja | 0 / 0 |
 | 99 | SCA199 | 1 | Parameternamen "City" aus dem SQL verwenden (ä. V.) | uOrderRepository.pas:246 | ja | 0 / 0 |
 | 100 | SCA203 | 1 | Schleife 0 to AOrder.Items.Count - 1 laufen lassen (ä. V.) | uPriceCalculator.pas:262 | ja | 0 / 0 |
-| 101 | SCA204 | 1 | Result statt GrossTotal schreiben | uPriceCalculator.pas:550 | gelesen | 2 / 0 |
-| 102 | SCA206 | 1 | Formatter-Marker exakt schreiben | uLegacyImport.pas:128 | gelesen | 0 / 0 |
+| 101 | SCA204 | 1 | Result statt GrossTotal schreiben | uPriceCalculator.pas:550 | ja | 2 / 0 |
+| 102 | SCA206 | 1 | Formatter-Marker exakt schreiben | uLegacyImport.pas:128 | ja | 0 / 0 |
 | 103 | Anbieter | - | Format() aus Verkettung bilden | uOrderForm.pas:183 | ja | 1 / 0 |
 | 104 | Anbieter | - | Hier / In dieser Datei unterdrücken | uLegacyImport.pas:8 | ja | 386 / 1 (+71 Funde seither, ungeprüft) |
 | 105 | Anbieter | - | Parametrisierte Vorlage in die Zwischenablage | uOrderForm.pas:81 | ja* | 3 / 0 |
