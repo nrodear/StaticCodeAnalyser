@@ -14,6 +14,15 @@ uses
   System.SysUtils;
 
 type
+  /// <summary>Totals of one order for the statistics.</summary>
+  TOrderTotals = record
+    Net: Currency;
+    Tax: Currency;
+  end;
+
+  // Pointer type without the P prefix - POrderTotals (SCA100).
+  TOrderTotalsPtr = ^TOrderTotals;
+
   /// <summary>Skips a field in the CSV export.</summary>
   IgnoreAttribute = class(TCustomAttribute)
   private
@@ -42,6 +51,20 @@ type
   /// <summary>Receives a notification when an order changes.</summary>
   IOrderObserver = interface
     procedure OrderChanged(AOrderNo: Integer);
+  end;
+
+  /// <summary>Marker for objects the CSV export may write.</summary>
+  IExportable = interface
+    // No method, no contract - an attribute would say the same (SCA073).
+    ['{6A1F3C20-8B4D-4E71-9C2A-5D7E0F1B3A94}']
+  end;
+
+  /// <summary>Receives the progress of an export.</summary>
+  ExportProgress = interface
+    // Name without the I prefix (SCA105); the GUID was copied from
+    // IExportable and never regenerated (SCA198).
+    ['{6A1F3C20-8B4D-4E71-9C2A-5D7E0F1B3A94}']
+    procedure Progress(APercent: Integer);
   end;
 
   /// <summary>Postal address of a customer.</summary>
@@ -190,6 +213,73 @@ type
   public
     /// <summary>Copies the exported values of a customer.</summary>
     procedure Assign(ACustomer: TCustomer);
+  end;
+
+  /// <summary>Counters for the order dashboard.</summary>
+  TOrderStatistics = class
+  private
+    FOrders: Integer;
+    FItems: Integer;
+    FHistory: TList<Integer>;
+  public
+    // A public field: anyone can overwrite it, the class never notices
+    // (SCA089).
+    LastOrderNo: Integer;
+    /// <summary>Creates the statistics.</summary>
+    constructor Create;
+    /// <summary>Frees the history.</summary>
+    destructor Destroy; override;
+    /// <summary>Counts one order.</summary>
+    procedure AddOrder(AOrderNo, AItemCount: Integer);
+    /// <summary>Starts a new period.</summary>
+    procedure StartPeriod;
+  private
+    // A second private section (SCA095) with a field without the F prefix
+    // (SCA103).
+    Cancelled: Integer;
+  end;
+
+  /// <summary>Base class of the order exporters.</summary>
+  TOrderExporter = class
+  private
+    FFileName: string;
+    FLines: TStringList;
+    FErrors: TStringList;
+  protected
+    function FileExtension: string; virtual; abstract;
+    procedure WriteHeader; virtual;
+  public
+    /// <summary>Creates the exporter for the given file.</summary>
+    constructor Create(const AFileName: string);
+    /// <summary>Frees the buffers.</summary>
+    destructor Destroy; override;
+    /// <summary>Appends one line to the export.</summary>
+    procedure AddLine(const ALine: string);
+    /// <summary>Target file with the extension of the format.</summary>
+    property FileName: string read FFileName;
+  end;
+
+  /// <summary>Writes orders as CSV.</summary>
+  TCsvOrderExporter = class(TOrderExporter)
+  protected
+    // FileExtension is missing: every TCsvOrderExporter.Create ends in
+    // EAbstractError (SCA135).
+    procedure WriteHeader; override;
+  end;
+
+  /// <summary>Marks a class with checks for the test runner.</summary>
+  TestFixtureAttribute = class(TCustomAttribute);
+
+  /// <summary>Checks of the order model.</summary>
+  // The tests moved to the CI project, the fixture without a single [Test]
+  // stayed behind (SCA182).
+  [TestFixture]
+  TOrderModelChecks = class
+  private
+    FSample: TOrder;
+  public
+    /// <summary>Frees the sample order of the checks.</summary>
+    procedure TearDown;
   end;
 
 implementation
@@ -440,6 +530,100 @@ end;
 function FormatSku(const ASku: string): string;
 begin
   Result := UpperCase(StringReplace(ASku, ' ', '-', [rfReplaceAll]));
+end;
+
+{ TOrderStatistics }
+
+constructor TOrderStatistics.Create;
+begin
+  inherited Create;
+  FHistory := TList<Integer>.Create;
+end;
+
+destructor TOrderStatistics.Destroy;
+begin
+  FHistory.Free;
+  inherited;
+end;
+
+procedure TOrderStatistics.AddOrder(AOrderNo, AItemCount: Integer);
+begin
+  Inc(FOrders);
+  Inc(FItems, AItemCount);
+  LastOrderNo := AOrderNo;
+  FHistory.Add(AOrderNo);
+  if AItemCount = 0 then
+    Inc(Cancelled);
+end;
+
+// Calls the constructor on the existing list: no new object is created,
+// the order numbers of the old period stay in it (SCA124).
+procedure TOrderStatistics.StartPeriod;
+var
+  history: TList<Integer>;
+begin
+  FOrders := 0;
+  FItems := 0;
+  Cancelled := 0;
+  history := FHistory;
+  history.Create;
+end;
+
+{ TOrderExporter }
+
+// Creates both buffers, then raises for an empty file name: Delphi calls
+// the destructor, but that frees FLines only - FErrors leaks (SCA136).
+// FileExtension and WriteHeader are virtual: the subclass versions run
+// before the subclass constructor has done anything (SCA048).
+constructor TOrderExporter.Create(const AFileName: string);
+begin
+  inherited Create;
+  FLines := TStringList.Create;
+  FErrors := TStringList.Create;
+  if AFileName = '' then
+    raise EArgumentException.Create('No file name for the export');
+  FFileName := ChangeFileExt(AFileName, FileExtension);
+  WriteHeader;
+end;
+
+// Raises when errors were collected: FLines is never freed and the
+// inherited destructor never runs (SCA145).
+destructor TOrderExporter.Destroy;
+begin
+  if FErrors.Count > 0 then
+    raise EInvalidOpException.Create('Export finished with errors');
+  FLines.Free;
+  inherited;
+end;
+
+procedure TOrderExporter.WriteHeader;
+begin
+  FLines.Clear;
+end;
+
+procedure TOrderExporter.AddLine(const ALine: string);
+begin
+  if ALine = '' then
+    FErrors.Add('empty line')
+  else
+    FLines.Add(ALine);
+end;
+
+{ TCsvOrderExporter }
+
+// AddLine is public, but only this subclass calls it - protected would be
+// enough (SCA051).
+procedure TCsvOrderExporter.WriteHeader;
+begin
+  inherited;
+  AddLine('order;article;amount');
+end;
+
+{ TOrderModelChecks }
+
+procedure TOrderModelChecks.TearDown;
+begin
+  FreeAndNil(FSample);
 end;
 
 end.

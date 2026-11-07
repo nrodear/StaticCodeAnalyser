@@ -27,6 +27,7 @@ type
     FStatsLock: TCriticalSection;
     FCache: TObjectDictionary<Integer, TCustomer>;
     FLoadCount: Integer;
+    FStatistics: TOrderStatistics;
     function ReadCustomer(AId: Integer): TCustomer;
     procedure IncLoadCount;
   public
@@ -106,10 +107,12 @@ begin
   FCacheLock := TCriticalSection.Create;
   FStatsLock := TCriticalSection.Create;
   FCache := TObjectDictionary<Integer, TCustomer>.Create([doOwnsValues]);
+  FStatistics := TOrderStatistics.Create;
 end;
 
 destructor TOrderRepository.Destroy;
 begin
+  FStatistics.Free;
   FCache.Free;
   FStatsLock.Free;
   FCacheLock.Free;
@@ -127,6 +130,7 @@ begin
   FConnection.Params.Add('Server=192.168.20.15');
   // FConnection.Params.Add('Pooled=True');
   FConnection.Connected := True;
+  FStatistics.StartPeriod;
 end;
 
 procedure TOrderRepository.Disconnect;
@@ -193,6 +197,7 @@ begin
     FQuery.ParamByName('quantity').AsInteger := AOrder.Items[I].Quantity;
     FQuery.ExecSQL;
   end;
+  FStatistics.AddOrder(AOrder.OrderNo, AOrder.Items.Count);
 end;
 
 function TOrderRepository.SumOpenAmounts: Currency;
