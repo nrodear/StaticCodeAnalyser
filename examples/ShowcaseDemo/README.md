@@ -60,6 +60,37 @@ IDE plugin shows the same with `UsesCheck=1`):
 | `default` with `UsesCheck=1` | 202 | 264 |
 | `strict` (for the video) | 223 | 285 |
 
+## Profile `showcase` - the rules a developer fixes
+
+`strict` shows everything the engine can find, which is right for the
+video but not for a first look at your own code. The project therefore
+carries its own profile in `.sca\profiles.json`: **`showcase`, 30 rules**
+that hold up on foreign code. They were picked by a measurement in
+November 2026: up to 15 findings per rule, drawn from scans of about
+24,000 open-source Delphi and Lazarus files, judged by the question
+"would a developer change this?". A rule is in the profile when at most
+30 % of its findings were false alarms, or when it fired so rarely that
+the sample held no false alarm at all. Security and leak rules with many
+false alarms on foreign code (SQL injection, memory leaks, empty
+`except`, weak hashes) are left out on purpose - in the demo they are
+real, on other code most of their findings are not.
+
+The profile is read from the scan root, so it is there without any
+setup when the scan starts at this folder or project:
+
+```powershell
+StaticCodeAnalyser.d12.exe --path examples\ShowcaseDemo --full --profile showcase --min-severity hint
+```
+
+In the IDE plugin it appears for the active project `ShowcaseDemo`.
+With the factory settings (`MinConfidence=medium`, no `UsesCheck`) it
+reports **24 findings** (7 errors, 10 warnings, 7 hints) from 22 of the
+30 rules. The other eight stay silent here: SCA032/034 (DFM) and
+SCA201 (`.ini`) have no spot in the demo, SCA134/135/163 report here
+only with `MinConfidence=low`, SCA165 only checks suppressions of rules
+that are active, and SCA175 has no example that compiles. To run the same selection on another project,
+copy `.sca\profiles.json` next to that project.
+
 ## Reset
 
 Every code action edits the sources. To start over:
