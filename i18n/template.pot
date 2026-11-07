@@ -6002,8 +6002,8 @@ msgstr ""
 msgid "no for, while or repeat loop around the call"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:207
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:239
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:230
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:262
 msgid "no formatter marker with this text at the reported place"
 msgstr ""
 
@@ -6467,7 +6467,7 @@ msgstr ""
 msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:202
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:225
 msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"
 msgstr ""
 
@@ -8227,7 +8227,7 @@ msgstr ""
 msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:244
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:267
 msgid "the line holds this marker more than once"
 msgstr ""
 
