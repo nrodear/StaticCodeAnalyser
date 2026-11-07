@@ -98,6 +98,14 @@ type
     [Test] procedure BekanntesProfil_GrossKleinUndLeerraum_KeinFehler;
     [Test] procedure LeeresProfil_KeinFehler;
     [Test] procedure EigenesProfilAusProfilesJson_KeinFehler;
+    // Projekt-Profile (2026-11-07): ein Profil aus <--path>\.sca\
+    // profiles.json besteht die Pruefung (Exit 0 statt 99), sobald Run
+    // die Wurzel gesetzt hat; die Meldung fuer einen unbekannten Namen
+    // nennt dann auch die Projektdatei.
+    [Test] procedure ProjektProfilImScanPfad_Exit0Statt99;
+    // Die Wurzel folgt dem Scan-Ziel: --path, sonst der Ordner von
+    // --project, --project-group bzw. --file.
+    [Test] procedure ProjektProfilWurzel_FolgtDemScanZiel;
   end;
 
 implementation
@@ -562,6 +570,75 @@ begin
     TRuleCatalog.Reload;
     if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
   end;
+end;
+
+procedure TTestProfilPruefung.ProjektProfilImScanPfad_Exit0Statt99;
+// Der Anlass (Showcase-Demo): ein Projekt bringt sein Profil in
+// .sca\profiles.json mit, '--path <Projekt> --profile <name>' muss auf
+// jedem Rechner laufen - auch auf einem Build-Dienst ohne eigene
+// profiles.json. Vor der Aenderung endete genau das mit Exit 99. Der
+// Weg ist der von Run: ParseArgs -> ProjektProfilWurzel ->
+// UseProjectRoot -> ProfilPruefung. LUECKE: der Test spielt diese
+// Reihenfolge selbst nach - dass Run den UseProjectRoot-Aufruf VOR der
+// Pruefung macht und die Hinweise auf stderr schreibt, pinnt er nicht;
+// Run laedt die echte analyser.ini unter %APPDATA% (s. Fixture-Kopf).
+// Pruefung von Hand: ein CLI-Lauf mit --path auf ein Projekt mit
+// .sca\profiles.json.
+var
+  Wurzel  : string;
+  Args    : TCliArgs;
+  Meldung : string;
+begin
+  Wurzel := TPath.Combine(TPath.GetTempPath, 'sca_test_cli_projroot_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', ''));
+  try
+    TDirectory.CreateDirectory(TPath.Combine(Wurzel, '.sca'));
+    TFile.WriteAllText(TPath.Combine(TPath.Combine(Wurzel, '.sca'),
+      'profiles.json'),
+      '{"version":1,"profiles":{"cli-projekt-probe":["MemoryLeak"]}}');
+    TRuleCatalog.UseProjectRoot('');
+    Assert.AreEqual<Integer>(EXIT_TOOLERROR,
+      ProfilPruefung('cli-projekt-probe', QUELLE_SCHALTER, Meldung),
+      'Vorbedingung: ohne Wurzel ist das Profil unbekannt');
+
+    Args := TConsoleRunner.ParseArgs(
+      ['--path', Wurzel, '--profile', 'cli-projekt-probe']);
+    TRuleCatalog.UseProjectRoot(ProjektProfilWurzel(Args));
+    Assert.AreEqual<Integer>(EXIT_CLEAN,
+      ProfilPruefung(Args.Profile, QUELLE_SCHALTER, Meldung),
+      'Projekt-Profil ist bekannt: ' + Meldung);
+
+    // Gegenprobe im selben Stand: ein Name daneben faellt weiter durch,
+    // und die Meldung sagt, wo Projekt-Profile gesucht werden.
+    Assert.AreEqual<Integer>(EXIT_TOOLERROR,
+      ProfilPruefung('cli-projekt-probe2', QUELLE_SCHALTER, Meldung));
+    Assert.IsTrue(Pos('Project profiles are read from: ' +
+      TRuleCatalog.ProjectProfilesFileFor(Wurzel), Meldung) > 0,
+      'die Meldung nennt die Projektdatei: ' + Meldung);
+  finally
+    TRuleCatalog.UseProjectRoot('');
+    if TDirectory.Exists(Wurzel) then TDirectory.Delete(Wurzel, True);
+  end;
+end;
+
+procedure TTestProfilPruefung.ProjektProfilWurzel_FolgtDemScanZiel;
+// Die Projektwurzel je Scan-Ziel. '=' statt Assert.AreEqual: die
+// String-Fassung vergleicht ohne Gross/klein, hier zaehlt der Pfad, wie
+// ihn der Aufrufer schrieb.
+const
+  ORDNER = 'C:\ProbeRepo\Projekt';
+begin
+  Assert.IsTrue(ProjektProfilWurzel(TConsoleRunner.ParseArgs(
+    ['--path', ORDNER])) = ORDNER, '--path ist die Wurzel');
+  Assert.IsTrue(ProjektProfilWurzel(TConsoleRunner.ParseArgs(
+    ['--project', ORDNER + '\Demo.dproj'])) = ORDNER,
+    '--project: der Ordner der .dproj');
+  Assert.IsTrue(ProjektProfilWurzel(TConsoleRunner.ParseArgs(
+    ['--project-group', ORDNER + '\Demo.groupproj'])) = ORDNER,
+    '--project-group: der Ordner der .groupproj');
+  Assert.IsTrue(ProjektProfilWurzel(TConsoleRunner.ParseArgs(
+    ['--file', ORDNER + '\uDemo.pas'])) = ORDNER,
+    '--file: der Ordner der Datei');
 end;
 
 initialization

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7167 Zeilen, 345764 Bytes
-  CPoLines_de: array[0..7166] of string = (
+  // i18n\de.po - 7196 Zeilen, 347422 Bytes
+  CPoLines_de: array[0..7195] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2165,8 +2165,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Profildateien (*.json)|*.json|Alle Dateien (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Nichts zu importieren: %s enth'#$00E4'lt nur Namen eingebauter Profile (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Nichts zu importieren: %s enth'#$00E4'lt nur Namen eingebauter oder Projekt-Profile (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s enth'#$00E4'lt keine Profile."',
@@ -2177,8 +2177,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Wird '#$00FC'berschrieben: %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "'#$00DC'bersprungen (Name eines eingebauten Profils): %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "'#$00DC'bersprungen (Name eines eingebauten oder Projekt-Profils): %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Jetzt importieren?"',
@@ -7181,10 +7181,39 @@ const
     'msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Datei als UTF-8 mit BOM speichern oder einen ASCII-Namen verwenden"',
     '',
     'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
-    'msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."'
+    'msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."',
+    '',
+    '# --- 2026-11-07: Projekt-Profile (<Wurzel>\.sca\profiles.json) ---',
+    '',
+    'msgid "Project profiles not loaded, the scan runs without them: %s"',
+    'msgstr "Projekt-Profile nicht geladen, der Scan l'#$00E4'uft ohne sie: %s"',
+    '',
+    'msgid "Project profile \"%s\" in %s is ignored: the name belongs to a built-in profile."',
+    'msgstr "Projekt-Profil \"%s\" in %s wird ignoriert: der Name geh'#$00F6'rt einem eingebauten Profil."',
+    '',
+    'msgid "%s contains \"%s\" in several spellings - the alphabetically last one wins."',
+    'msgstr "%s enth'#$00E4'lt \"%s\" in mehreren Schreibweisen - die alphabetisch letzte gewinnt."',
+    '',
+    'msgid "Project profile \"%s\" from %s replaces your own profile of the same name for this project."',
+    'msgstr "Projekt-Profil \"%s\" aus %s ersetzt f'#$00FC'r dieses Projekt das eigene Profil gleichen Namens."',
+    '',
+    'msgid "Project profile \"%s\" in %s names no rule this version knows - it runs all rules."',
+    'msgstr "Projekt-Profil \"%s\" in %s nennt keine Regel, die diese Version kennt - es f'#$00FC'hrt alle Regeln aus."',
+    '',
+    'msgid "\"%s\" comes from the project file %s and is read-only."',
+    'msgstr "\"%s\" stammt aus der Projektdatei %s und ist schreibgesch'#$00FC'tzt."',
+    '',
+    'msgid "- project"',
+    'msgstr "- Projekt"',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules. From the project file %s, read-only - use \"Copy...\" for your own."',
+    'msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgesch'#$00FC'tzt - mit \"Kopieren...\" ein eigenes anlegen."',
+    '',
+    'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
+    'msgstr "Projekt-Profil \"%s\" - aktiv beim n'#$00E4'chsten Analyselauf, nicht gespeichert (es geh'#$00F6'rt zu diesem Projekt)"'
   );
 
-  // i18n\en.po - 268 Zeilen, 7136 Bytes
+  // i18n\en.po - 268 Zeilen, 7196 Bytes
   CPoLines_en: array[0..267] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
@@ -7434,8 +7463,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Nothing to import: %s only contains names of built-in profiles (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s contains no profiles."',
@@ -7446,8 +7475,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Will be overwritten: %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "Skipped (built-in name): %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "Skipped (built-in or project profile name): %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Import now?"',
@@ -7456,8 +7485,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7163 Zeilen, 359660 Bytes
-  CPoLines_fr: array[0..7162] of string = (
+  // i18n\fr.po - 7192 Zeilen, 361369 Bytes
+  CPoLines_fr: array[0..7191] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -9604,8 +9633,8 @@ const
     'msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"',
     'msgstr "Fichiers de profils (*.json)|*.json|Tous les fichiers (*.*)|*.*"',
     '',
-    'msgid "Nothing to import: %s only contains names of built-in profiles (%s)."',
-    'msgstr "Rien '#$00E0' importer : %s ne contient que des noms de profils int'#$00E9'gr'#$00E9's (%s)."',
+    'msgid "Nothing to import: %s only contains names of built-in or project profiles (%s)."',
+    'msgstr "Rien '#$00E0' importer : %s ne contient que des noms de profils int'#$00E9'gr'#$00E9's ou de projet (%s)."',
     '',
     'msgid "%s contains no profiles."',
     'msgstr "%s ne contient aucun profil."',
@@ -9616,8 +9645,8 @@ const
     'msgid "Will be overwritten: %s"',
     'msgstr "Seront remplac'#$00E9's : %s"',
     '',
-    'msgid "Skipped (built-in name): %s"',
-    'msgstr "Ignor'#$00E9's (nom d''un profil int'#$00E9'gr'#$00E9') : %s"',
+    'msgid "Skipped (built-in or project profile name): %s"',
+    'msgstr "Ignor'#$00E9's (nom d''un profil int'#$00E9'gr'#$00E9' ou de projet) : %s"',
     '',
     'msgid "Import now?"',
     'msgstr "Importer maintenant ?"',
@@ -14620,7 +14649,36 @@ const
     'msgstr "Identificateur avec des lettres non-ASCII que les outils cassent - enregistrer le fichier en UTF-8 avec BOM ou utiliser un nom ASCII"',
     '',
     'msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."',
-    'msgstr "Identificateur avec un caract'#$00E8're non-ASCII dans un fichier qui n''est pas en UTF-8 - Free Pascal n''accepte que des identificateurs ASCII (A-Z, 0-9, _) et s''arr'#$00EA'te avec \"illegal character\". Utiliser un nom ASCII."'
+    'msgstr "Identificateur avec un caract'#$00E8're non-ASCII dans un fichier qui n''est pas en UTF-8 - Free Pascal n''accepte que des identificateurs ASCII (A-Z, 0-9, _) et s''arr'#$00EA'te avec \"illegal character\". Utiliser un nom ASCII."',
+    '',
+    '# --- 2026-11-07: Projekt-Profile (<Wurzel>\.sca\profiles.json) ---',
+    '',
+    'msgid "Project profiles not loaded, the scan runs without them: %s"',
+    'msgstr "Profils du projet non charg'#$00E9's, l''analyse s''ex'#$00E9'cute sans eux : %s"',
+    '',
+    'msgid "Project profile \"%s\" in %s is ignored: the name belongs to a built-in profile."',
+    'msgstr "Le profil de projet '#$00AB' %s '#$00BB' dans %s est ignor'#$00E9' : le nom appartient '#$00E0' un profil int'#$00E9'gr'#$00E9'."',
+    '',
+    'msgid "%s contains \"%s\" in several spellings - the alphabetically last one wins."',
+    'msgstr "%s contient '#$00AB' %s '#$00BB' sous plusieurs graphies - la derni'#$00E8're dans l''ordre alphab'#$00E9'tique l''emporte."',
+    '',
+    'msgid "Project profile \"%s\" from %s replaces your own profile of the same name for this project."',
+    'msgstr "Le profil de projet '#$00AB' %s '#$00BB' de %s remplace pour ce projet votre propre profil du m'#$00EA'me nom."',
+    '',
+    'msgid "Project profile \"%s\" in %s names no rule this version knows - it runs all rules."',
+    'msgstr "Le profil de projet '#$00AB' %s '#$00BB' dans %s ne nomme aucune r'#$00E8'gle connue de cette version - il ex'#$00E9'cute toutes les r'#$00E8'gles."',
+    '',
+    'msgid "\"%s\" comes from the project file %s and is read-only."',
+    'msgstr "'#$00AB' %s '#$00BB' provient du fichier de projet %s et est en lecture seule."',
+    '',
+    'msgid "- project"',
+    'msgstr "- projet"',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules. From the project file %s, read-only - use \"Copy...\" for your own."',
+    'msgstr "Profil '#$00AB' %s '#$00BB' : %d r'#$00E8'gles sur %d. Du fichier de projet %s, en lecture seule - utilisez '#$00AB' Copier... '#$00BB' pour le v'#$00F4'tre."',
+    '',
+    'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
+    'msgstr "Profil de projet '#$00AB' %s '#$00BB' - actif '#$00E0' la prochaine analyse, non enregistr'#$00E9' (il appartient '#$00E0' ce projet)"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

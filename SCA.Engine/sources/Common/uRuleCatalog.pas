@@ -198,6 +198,21 @@ type
     // Programmierfehler wie der Zugriff auf ein freigegebenes Objekt;
     // keine Methode faengt das ab (vorher tat es nur Reload, still).
     class var FGuard            : TObject;
+    // Projekt-Profile (Nico-Entscheid 2026-11-07): <Wurzel>\.sca\
+    // profiles.json kommt zu Katalog und eigenen Profilen dazu.
+    // FProjectRoot ist die normalisierte Wurzel ('' = keine), sie
+    // ueberlebt Reload - das Profil-Fenster liest mit 'Neu laden' auch
+    // die Projektdatei neu. FProjectNames merkt, welche Eintraege in
+    // FProfiles aus der Projektdatei stammen (Projekt-Profile werden nie
+    // geschrieben). FShadowedUser haelt eigene Profile, die ein
+    // gleichnamiges Projekt-Profil verdeckt - sie muessen beim
+    // Schreiben von profiles.json erhalten bleiben und kehren zurueck,
+    // wenn die Wurzel wechselt. FProjectNotes sind die Hinweise des
+    // letzten Ladens (kaputte Datei, Namenskollision) fuer den Aufrufer.
+    class var FProjectRoot      : string;
+    class var FProjectNames     : TDictionary<string, Boolean>;
+    class var FShadowedUser     : TDictionary<string, TFindingKinds>;
+    class var FProjectNotes     : TArray<string>;
     class procedure EnsureLoaded; static;
     class procedure LoadFromJsonFile(const FileName: string); static;
     // Der Profile-Block der Katalogdatei samt 'default'-Garantie. Nimmt
@@ -212,6 +227,12 @@ type
     class function MakeFallbackMeta(K: TFindingKind): TRuleMeta; static;
     class function ParseProfileTokens(const ATokens: TArray<string>): TFindingKinds; static;
     class procedure LoadUserProfiles; static;
+    class procedure LoadProjectProfiles; static;
+    class procedure AdoptProjectProfile(const AName, AFile: string;
+      const AKinds: TFindingKinds); static;
+    class procedure DropProjectProfiles; static;
+    class procedure AddProjectNote(const ANote: string); static;
+    class function ProfileNamesKey: string; static;
     class function WriteUserProfiles(out AError: string): Boolean; static;
     class function FindRulesFile(const ARelName: string): string; static;
     class function FindOverlayFile(const ANorm: string): string; static;
@@ -271,8 +292,9 @@ type
     class function GetProfile(const Name: string): TFindingKinds; static;
 
     // Liste aller bekannten Profile-Namen (fuer UI-Dropdowns, Tests).
-    // Enthaelt eingebaute UND eigene Profile - ein selbst angelegtes
-    // Profil soll im Combo stehen und mit --profile funktionieren.
+    // Enthaelt eingebaute, eigene UND die Projekt-Profile der aktuellen
+    // Wurzel (UseProjectRoot) - ein selbst angelegtes Profil soll im
+    // Combo stehen und mit --profile funktionieren.
     class function ProfileNames: TArray<string>; static;
 
     // ---- Eigene Profile (2026-08-24) ------------------------------------
@@ -297,18 +319,73 @@ type
       ADest: TDictionary<string, TFindingKinds>;
       out AError: string): Boolean; static;
     // Legt an oder ueberschreibt ein EIGENES Profil. Verweigert jeden
-    // Namen, den der ausgelieferte Katalog schon fuehrt. False + AError
-    // bei ungueltigem Namen oder Schreibfehler.
+    // Namen, den der ausgelieferte Katalog schon fuehrt, und jeden Namen
+    // eines Projekt-Profils der aktuellen Wurzel (die gehoeren der
+    // Projektdatei). False + AError bei ungueltigem oder so belegtem
+    // Namen und bei Schreibfehler.
     class function SaveUserProfile(const AName: string;
       const AKinds: TFindingKinds; out AError: string): Boolean; static;
     // Loescht ein EIGENES Profil aus Speicher und profiles.json. False +
-    // AError bei eingebautem oder unbekanntem Namen und bei Schreibfehler
+    // AError bei eingebautem, unbekanntem oder Projekt-Profil-Namen und
+    // bei Schreibfehler
     // (dann bleibt das Profil im Speicher - die Datei ist die Wahrheit).
     class function DeleteUserProfile(const AName: string;
       out AError: string): Boolean; static;
     // Nur fuer Tests: Ablageort umbiegen. Vor dem ersten Zugriff setzen.
     class property UserProfilesPath: string
       read FUserProfPath write FUserProfPath;
+
+    // ---- Projekt-Profile (2026-11-07) -----------------------------------
+    // Ein Projekt bringt seine Profile in <Wurzel>\.sca\profiles.json mit
+    // (dasselbe Format wie die eigene profiles.json) - so laeuft z. B.
+    // ein Demo-Projekt auf jedem Rechner und im CI mit demselben Profil,
+    // ohne dass jemand etwas importiert. Die Konsumenten liefern nur die
+    // Wurzel; Laden, Kollisionen und Hinweise liegen hier.
+
+    /// <summary>Setzt die Projektwurzel und laedt deren
+    /// .sca\profiles.json zu den eingebauten und eigenen Profilen dazu.
+    /// Die Projekt-Profile der vorigen Wurzel fallen dabei weg.</summary>
+    /// <remarks>ARoot darf ein Ordner oder eine Datei sein (.dproj,
+    /// .groupproj, .pas - dann zaehlt ihr Ordner); '' heisst "kein
+    /// Projekt". Gesucht wird nur in der Wurzel selbst, nicht aufwaerts.
+    /// Eingebaute Namen bleiben reserviert (Hinweis, Eintrag ignoriert);
+    /// bei gleichem Namen gewinnt das Projekt-Profil gegen das eigene
+    /// (Hinweis) - das eigene geht dabei nicht verloren, es bleibt in
+    /// profiles.json und gilt wieder, sobald die Wurzel wechselt. Eine fehlende Datei
+    /// aendert nichts, eine kaputte kostet nur die Projekt-Profile
+    /// (Hinweis, keine Exception). Die Hinweise liefert
+    /// ProjectProfileNotes. Liest die Datei bei jedem Aufruf neu -
+    /// eine von Hand geaenderte Datei wirkt beim naechsten Lauf.
+    /// Result: True, wenn sich die Menge der Profilnamen geaendert hat
+    /// (ein Profil-Combo muss dann neu befuellt werden).</remarks>
+    class function UseProjectRoot(const ARoot: string): Boolean; static;
+
+    /// <summary>Die normalisierte Wurzel des letzten UseProjectRoot
+    /// (absolut, ohne abschliessenden Trenner); '' = kein
+    /// Projekt.</summary>
+    class function ProjectRoot: string; static;
+
+    /// <summary>Wo die Projekt-Profile zu ARoot liegen:
+    /// &lt;Wurzel&gt;\.sca\profiles.json. '' fuer eine leere
+    /// Wurzel.</summary>
+    /// <remarks>Fuer Meldungen ("gesucht in ...") - sagt nichts
+    /// darueber, ob die Datei existiert.</remarks>
+    class function ProjectProfilesFileFor(const ARoot: string): string; static;
+
+    /// <summary>True fuer einen Profilnamen, der aus der Projektdatei der
+    /// aktuellen Wurzel stammt - case-insensitiv und getrimmt wie alle
+    /// Profilnamen.</summary>
+    /// <remarks>Solche Profile sind schreibgeschuetzt:
+    /// SaveUserProfile/DeleteUserProfile weisen sie ab.</remarks>
+    class function IsProjectProfile(const AName: string): Boolean; static;
+
+    /// <summary>Die Hinweise des letzten Ladens der Projektdatei
+    /// (uebersetzt, je einer pro Zeile); leer, wenn alles glatt ging oder
+    /// keine Datei da ist.</summary>
+    /// <remarks>Dieselben Texte gehen beim Laden auch an
+    /// OutputDebugString - die CLI gibt sie zusaetzlich auf stderr
+    /// aus.</remarks>
+    class function ProjectProfileNotes: TArray<string>; static;
 
     // Die Katalogdatei, die der Lader gewaehlt hat; '' = keine gefunden,
     // alles kommt aus der einkompilierten Tabelle. Fuer Tests, die die
@@ -911,6 +988,12 @@ begin
                   TIStringComparer.Ordinal);
   FBuiltIn   := TDictionary<string, Boolean>.Create(
                   TIStringComparer.Ordinal);
+  // Dieselbe Vergleichsschaerfe wie FProfiles: die Merklisten muessen
+  // genau die Namen treffen, die FProfiles als gleich ansieht.
+  FProjectNames := TDictionary<string, Boolean>.Create(
+                     TIStringComparer.Ordinal);
+  FShadowedUser := TDictionary<string, TFindingKinds>.Create(
+                     TIStringComparer.Ordinal);
   FOverlays  := TObjectDictionary<string, TOverlayMap>.Create([doOwnsValues]);
   FGuard     := TObject.Create;
   FLoaded    := False;
@@ -922,6 +1005,8 @@ begin
   FreeAndNil(FRulesByID);
   FreeAndNil(FProfiles);
   FreeAndNil(FBuiltIn);
+  FreeAndNil(FProjectNames);
+  FreeAndNil(FShadowedUser);
   FreeAndNil(FOverlays);
   FreeAndNil(FGuard);
 end;
@@ -1094,6 +1179,10 @@ begin
   for var BuiltInName in FProfiles.Keys do
     FBuiltIn.AddOrSetValue(BuiltInName, True);
   LoadUserProfiles;
+  // Zuletzt das Projekt: es darf eigene Profile verdecken, also muessen
+  // die schon dastehen. Ohne gesetzte Wurzel (der Normalfall bis zum
+  // ersten UseProjectRoot) ist das ein leerer Schritt.
+  LoadProjectProfiles;
 
   FLoaded := True;
 end;
@@ -1841,6 +1930,18 @@ begin
   end;
 end;
 
+procedure SortiereOrdinal(AListe: TStringList);
+// Stellt AListe auf ordinalen, gross/klein-scharfen Vergleich. Noetig fuer
+// die Lader der Profildateien: TStringList vergleicht sonst per
+// AnsiCompareText, und dort sind 'MyTeam' und 'myteam' GLEICH - welche
+// Schreibweise "die alphabetisch letzte" ist, entschieden dann
+// Dictionary-Reihenfolge und QuickSort-Pivot statt des Alphabets
+// (Review p/projekt-profil). Ordinal steht 'MyTeam' fest vor 'myteam'.
+begin
+  AListe.CaseSensitive := True;
+  AListe.UseLocale     := False;
+end;
+
 class procedure TRuleCatalog.LoadUserProfiles;
 // Liest profiles.json, falls vorhanden. Fehler sind hier NIE fatal: eine
 // kaputte oder halb geschriebene Datei darf das Werkzeug nicht am Start
@@ -1870,6 +1971,7 @@ begin
     // der alphabetisch letzte, und jede Kollision wird gemeldet.
     var Namen := TStringList.Create;
     try
+      SortiereOrdinal(Namen);
       for Eintrag in Gelesen do
         Namen.Add(Eintrag.Key);
       Namen.Sort;
@@ -1904,6 +2006,264 @@ begin
   end;
 end;
 
+function ProjektWurzelVon(const ARoot: string): string;
+// Normalform der Projektwurzel: eine Datei (.dproj, .groupproj, .pas)
+// steht fuer ihren Ordner, der Pfad wird absolut und verliert den
+// abschliessenden Trenner - ausser an der Laufwerkswurzel, wo 'C:' ein
+// anderer Ort waere als 'C:\'. TFile.Exists ist fuer Ordner False, ein
+// Ordner bleibt also Ordner.
+begin
+  Result := Trim(ARoot);
+  if Result = '' then Exit;
+  if TFile.Exists(Result) then
+    Result := ExtractFileDir(Result);
+  Result := ExpandFileName(Result);
+  if Length(Result) > 3 then
+    Result := ExcludeTrailingPathDelimiter(Result);
+end;
+
+function ProfilSchluesselVon(ADict: TDictionary<string, TFindingKinds>;
+  const AName: string): string;
+// Der Schluessel in der Schreibweise, in der ihn ADict fuehrt. Das
+// Dictionary vergleicht case-insensitiv, TryGetValue liefert aber nur den
+// Wert - wer ein eigenes Profil beiseitelegt, muss es unter SEINEM Namen
+// zurueckschreiben ('MyTeam'), nicht unter dem der Projektdatei
+// ('myteam'), sonst aendert ein Speichern die Datei des Anwenders.
+var
+  Key : string;
+begin
+  for Key in ADict.Keys do
+    if SameText(Key, AName) then Exit(Key);
+  Result := AName;
+end;
+
+class function TRuleCatalog.ProjectProfilesFileFor(const ARoot: string): string;
+// Ordner '.sca' wie die lokale Baseline (uBaseline, SCA_DIR): die
+// Projektablage des Werkzeugs ist EIN Ordner, nicht eine Datei je
+// Zweck in der Wurzel.
+var
+  Wurzel : string;
+begin
+  Wurzel := ProjektWurzelVon(ARoot);
+  if Wurzel = '' then Exit('');
+  Result := IncludeTrailingPathDelimiter(Wurzel) + '.sca' + PathDelim +
+    'profiles.json';
+end;
+
+class procedure TRuleCatalog.AddProjectNote(const ANote: string);
+// Ein Hinweis geht an BEIDE Kanaele: an den Aufrufer (ProjectProfileNotes,
+// die CLI schreibt ihn auf stderr) und an OutputDebugString wie jede
+// andere Ladediagnose des Katalogs - EXE und IDE-Plugin haben keine
+// Konsole, dort ist das der Kanal (s. LoadUserProfiles).
+begin
+  FProjectNotes := FProjectNotes + [ANote];
+  // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
+  OutputDebugString(PChar('TRuleCatalog: ' + ANote));
+end;
+
+class procedure TRuleCatalog.DropProjectProfiles;
+// Nimmt die Projekt-Profile aus FProfiles und setzt die verdeckten
+// eigenen in ihrer Schreibweise zurueck. Danach sieht FProfiles aus wie
+// direkt nach LoadUserProfiles. Laeuft unter FGuard (UseProjectRoot).
+var
+  Name    : string;
+  Eintrag : TPair<string, TFindingKinds>;
+begin
+  for Name in FProjectNames.Keys do
+    FProfiles.Remove(Name);
+  for Eintrag in FShadowedUser do
+    FProfiles.AddOrSetValue(Eintrag.Key, Eintrag.Value);
+  FProjectNames.Clear;
+  FShadowedUser.Clear;
+  FProjectNotes := nil;
+end;
+
+class procedure TRuleCatalog.AdoptProjectProfile(const AName, AFile: string;
+  const AKinds: TFindingKinds);
+// Uebernimmt EIN Profil der Projektdatei nach FProfiles - samt der
+// Kollisionsregeln und ihrer Hinweise. Laeuft unter FGuard
+// (LoadProjectProfiles), Namen kommen sortiert herein.
+var
+  Key : string;
+begin
+  // Eingebaute Namen sind reserviert, aus demselben Grund wie bei den
+  // eigenen Profilen: derselbe Name haette sonst je Projekt eine andere
+  // Bedeutung, und ein SARIF-Vergleich waere wertlos.
+  if FBuiltIn.ContainsKey(AName) then
+  begin
+    AddProjectNote(Format(
+      _('Project profile "%s" in %s is ignored: the name belongs to a built-in profile.'),
+      [AName, AFile]));
+    Exit;
+  end;
+  if FProjectNames.ContainsKey(AName) then
+    AddProjectNote(Format(
+      _('%s contains "%s" in several spellings - the alphabetically last one wins.'),
+      [AFile, AName]))
+  else if FProfiles.ContainsKey(AName) then
+  begin
+    // Das Projekt gewinnt - das eigene Profil wird beiseitegelegt, nicht
+    // verworfen (WriteUserProfiles schreibt es weiter, DropProjectProfiles
+    // setzt es zurueck).
+    Key := ProfilSchluesselVon(FProfiles, AName);
+    FShadowedUser.AddOrSetValue(Key, FProfiles[Key]);
+    AddProjectNote(Format(
+      _('Project profile "%s" from %s replaces your own profile of the same name for this project.'),
+      [AName, AFile]));
+  end;
+  // Leer heisst fuer die Engine "kein Filter" (DetectorEnabledKinds = []):
+  // ein Profil aus lauter unbekannten Namen faehrt ALLE Regeln. Bei
+  // profiles.json ist das genauso; hier wird es wenigstens gesagt, weil
+  // eine Projektdatei durch viele Haende und SCA-Versionen geht.
+  if AKinds = [] then
+    AddProjectNote(Format(
+      _('Project profile "%s" in %s names no rule this version knows - it runs all rules.'),
+      [AName, AFile]));
+  // Remove vor Add: AddOrSetValue behielte die Schreibweise des eigenen
+  // Profils, im Combo soll aber die der Projektdatei stehen.
+  FProfiles.Remove(AName);
+  FProfiles.Add(AName, AKinds);
+  FProjectNames.Remove(AName);
+  FProjectNames.Add(AName, True);
+end;
+
+class procedure TRuleCatalog.LoadProjectProfiles;
+// Liest die Projektdatei der aktuellen Wurzel zu FProfiles dazu. Laeuft
+// unter FGuard, nach LoadUserProfiles (EnsureLoaded) bzw. nach
+// DropProjectProfiles (UseProjectRoot) - in beiden Faellen enthaelt
+// FProfiles kein Projekt-Profil mehr, die Merklisten werden deshalb nur
+// geleert, nicht zurueckgespielt.
+//
+// Derselbe Leser wie fuer profiles.json (ReadProfilesFile): dasselbe
+// Format, dieselbe Token-Semantik, unbekannte Kind-Namen werden wie dort
+// still uebergangen - eine Projektdatei, die mit einer neueren SCA-Version
+// geschrieben wurde, darf Regeln nennen, die dieses Binary noch nicht
+// kennt. SORTIERT uebernommen aus demselben Grund wie in LoadUserProfiles:
+// bei zwei Schreibweisen desselben Namens gewinnt deterministisch die
+// alphabetisch letzte.
+var
+  Datei   : string;
+  Gelesen : TDictionary<string, TFindingKinds>;
+  Namen   : TStringList;
+  Eintrag : TPair<string, TFindingKinds>;
+  Fehler  : string;
+  i       : Integer;
+begin
+  FProjectNames.Clear;
+  FShadowedUser.Clear;
+  FProjectNotes := nil;
+  if FProjectRoot = '' then Exit;
+  Datei := ProjectProfilesFileFor(FProjectRoot);
+  // Keine Datei ist der Normalfall jedes Projekts - kein Hinweis, und
+  // FProfiles bleibt, wie es ohne Projekt-Profile war.
+  if not TFile.Exists(Datei) then Exit;
+
+  Gelesen := TDictionary<string, TFindingKinds>.Create;
+  Namen   := TStringList.Create;
+  try
+    if not ReadProfilesFile(Datei, Gelesen, Fehler) then
+    begin
+      AddProjectNote(Format(
+        _('Project profiles not loaded, the scan runs without them: %s'),
+        [Fehler]));
+      Exit;
+    end;
+    SortiereOrdinal(Namen);
+    for Eintrag in Gelesen do
+      Namen.Add(Eintrag.Key);
+    Namen.Sort;
+    for i := 0 to Namen.Count - 1 do
+      AdoptProjectProfile(Namen[i], Datei, Gelesen[Namen[i]]);
+  finally
+    Namen.Free;
+    Gelesen.Free;
+  end;
+end;
+
+class function TRuleCatalog.ProfileNamesKey: string;
+// Alle Profilnamen sortiert in einem String - zum Vergleich vorher/nachher
+// in UseProjectRoot. Gross/klein zaehlt hier: eine andere Schreibweise
+// ist im Combo ein anderer Eintrag.
+var
+  L    : TStringList;
+  Name : string;
+begin
+  L := TStringList.Create;
+  try
+    L.CaseSensitive := True;
+    for Name in FProfiles.Keys do
+      L.Add(Name);
+    L.Sort;
+    Result := L.Text;
+  finally
+    L.Free;
+  end;
+end;
+
+class function TRuleCatalog.UseProjectRoot(const ARoot: string): Boolean;
+var
+  Vorher : string;
+begin
+  TMonitor.Enter(FGuard);
+  try
+    EnsureLoaded;
+    Vorher := ProfileNamesKey;
+    DropProjectProfiles;
+    FProjectRoot := ProjektWurzelVon(ARoot);
+    LoadProjectProfiles;
+    Result := ProfileNamesKey <> Vorher;
+  finally
+    TMonitor.Exit(FGuard);
+  end;
+end;
+
+class function TRuleCatalog.ProjectRoot: string;
+begin
+  TMonitor.Enter(FGuard);
+  try
+    Result := FProjectRoot;
+  finally
+    TMonitor.Exit(FGuard);
+  end;
+end;
+
+class function TRuleCatalog.IsProjectProfile(const AName: string): Boolean;
+begin
+  TMonitor.Enter(FGuard);
+  try
+    EnsureLoaded;
+    Result := FProjectNames.ContainsKey(Trim(AName));
+  finally
+    TMonitor.Exit(FGuard);
+  end;
+end;
+
+class function TRuleCatalog.ProjectProfileNotes: TArray<string>;
+begin
+  TMonitor.Enter(FGuard);
+  try
+    // Kopie: der Aufrufer liest ausserhalb des Monitors, ein paralleles
+    // UseProjectRoot ersetzt das Feld.
+    Result := Copy(FProjectNotes);
+  finally
+    TMonitor.Exit(FGuard);
+  end;
+end;
+
+function KindListeAlsJson(const AKinds: TFindingKinds): TJSONArray;
+// Ausgeschriebene Kind-Liste, kein '*' mit Ausnahmen: was die Oberflaeche
+// zeigt, steht dann Wort fuer Wort in der Datei. Der Aufrufer
+// (WriteUserProfiles) haengt das Array in sein Objekt und gibt es mit
+// diesem frei.
+var
+  K : TFindingKind;
+begin
+  Result := TJSONArray.Create;
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    if K in AKinds then
+      Result.Add(KindName(K));
+end;
+
 class function TRuleCatalog.WriteUserProfiles(out AError: string): Boolean;
 // Schreibt ALLE eigenen Profile neu - die Datei ist klein, und ein
 // Voll-Schreiben laesst keinen Teil-Update-Zustand zurueck. ATOMAR ueber
@@ -1918,9 +2278,6 @@ var
   TmpName  : string;
   Root     : TJSONObject;
   Profs    : TJSONObject;
-  Arr      : TJSONArray;
-  K        : TFindingKind;
-  Kinds    : TFindingKinds;
   Name     : string;
 begin
   Result   := False;
@@ -1934,15 +2291,16 @@ begin
     for Name in FProfiles.Keys do
     begin
       if FBuiltIn.ContainsKey(Name) then Continue;
-      Kinds := FProfiles[Name];
-      Arr := TJSONArray.Create;
-      // Ausgeschriebene Kind-Liste, kein '*' mit Ausnahmen: was die
-      // Oberflaeche zeigt, steht dann Wort fuer Wort in der Datei.
-      for K := Low(TFindingKind) to High(TFindingKind) do
-        if K in Kinds then
-          Arr.Add(KindName(K));
-      Profs.AddPair(Name, Arr);
+      // Projekt-Profile gehoeren der Projektdatei: in profiles.json
+      // stuenden sie sonst nach dem ersten Speichern auf jedem Projekt.
+      if FProjectNames.ContainsKey(Name) then Continue;
+      Profs.AddPair(Name, KindListeAlsJson(FProfiles[Name]));
     end;
+    // Eigene Profile, die ein gleichnamiges Projekt-Profil gerade
+    // verdeckt, stehen nicht in FProfiles - ohne diese Schleife fielen
+    // sie beim Speichern eines ANDEREN Profils still aus der Datei.
+    for Name in FShadowedUser.Keys do
+      Profs.AddPair(Name, KindListeAlsJson(FShadowedUser[Name]));
     try
       ForceDirectories(ExtractFilePath(FileName));
       // NICHT Root.Format(2): das escaped keine Steuerzeichen unter 0x20
@@ -2022,6 +2380,15 @@ begin
                        [Name]);
       Exit;
     end;
+    // Projekt-Profile werden nur gelesen: geaendert werden sie in der
+    // Projektdatei, die mit dem Projekt versioniert ist. Ein Speichern
+    // nach profiles.json stuende dort unsichtbar hinter dem Projekt.
+    if FProjectNames.ContainsKey(Name) then
+    begin
+      AError := Format(_('"%s" comes from the project file %s and is read-only.'),
+                       [Name, ProjectProfilesFileFor(FProjectRoot)]);
+      Exit;
+    end;
     // Vorstand merken: diese Funktion legt NEU AN und AENDERT. Beim
     // Aendern waere ein blindes Remove nach einem Schreibfehler schlimmer
     // als der Fehler - es haette das zuvor gespeicherte Profil aus dem
@@ -2059,6 +2426,13 @@ begin
     if FBuiltIn.ContainsKey(Name) then
     begin
       AError := Format(_('"%s" is a built-in profile.'), [Name]);
+      Exit;
+    end;
+    // Wie in SaveUserProfile: ein Projekt-Profil gehoert der Projektdatei.
+    if FProjectNames.ContainsKey(Name) then
+    begin
+      AError := Format(_('"%s" comes from the project file %s and is read-only.'),
+                       [Name, ProjectProfilesFileFor(FProjectRoot)]);
       Exit;
     end;
     if not FProfiles.TryGetValue(Name, Saved) then

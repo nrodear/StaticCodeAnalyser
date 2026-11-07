@@ -184,6 +184,50 @@ type
     [Test] procedure Loader_FileWins_MalformedFallsBack_FalseClears;
   end;
 
+  // Projekt-Profile (Nico-Entscheid 2026-11-07): <Wurzel>\.sca\
+  // profiles.json kommt zu Katalog und eigenen Profilen dazu. Eigene
+  // Fixture aus demselben Grund wie TTestRuleCatalogGuard. Setup biegt
+  // die eigene profiles.json auf eine TEMP-Datei um - die echte unter
+  // %APPDATA% bleibt unberuehrt und kann die Erwartungen nicht
+  // verfaelschen -, TearDown nimmt die Wurzel zurueck: der Katalog ist
+  // prozessweit, ein liegengebliebenes Projekt-Profil saehe jeder
+  // spaetere Test.
+  [TestFixture]
+  TTestRuleCatalogProjectProfiles = class
+  strict private
+    FAltUserPfad : string;
+    FUserPfad    : string;
+    FWurzel      : string;
+    procedure SchreibeProjektDatei(const AJson: string);
+  public
+    [Setup]    procedure Setup;
+    [TearDown] procedure TearDown;
+    // Laden aus dem Ordner und ueber eine Projektdatei (.dproj steht fuer
+    // ihren Ordner); Reload ('Neu laden') liest die Projektdatei mit.
+    [Test] procedure ProjectFile_LoadsProfiles_FromDirOrProjectFile;
+    // Ohne Datei bleibt alles wie heute; gesucht wird nur in der Wurzel,
+    // nicht aufwaerts.
+    [Test] procedure NoProjectFile_ProfilesUnchanged_NotSearchedUpwards;
+    // Kaputte JSON: keine Exception, ein Hinweis, keine Projekt-Profile.
+    [Test] procedure BrokenProjectFile_NoException_NoteAndNoProfiles;
+    // Ein eingebauter Name bleibt reserviert (Hinweis), der Rest gilt.
+    [Test] procedure BuiltInName_StaysReserved_WithNote;
+    // Gleicher Name wie ein eigenes Profil: das Projekt gewinnt (Hinweis),
+    // das eigene ueberlebt ein Speichern und gilt ohne Wurzel wieder.
+    [Test] procedure SameNameAsOwnProfile_ProjectWins_OwnSurvivesSave;
+    // Projekt-Profile werden nie geschrieben: Speichern/Loeschen abgewiesen.
+    [Test] procedure ProjectProfile_IsReadOnly;
+    // Wurzelwechsel nimmt die Projekt-Profile weg; das Ergebnis meldet,
+    // ob sich die Namensmenge geaendert hat.
+    [Test] procedure RootChange_DropsProjectProfiles;
+    // Zwei Schreibweisen desselben Namens: ordinal die letzte gewinnt
+    // ('myteam' nach 'MyTeam'), mit Hinweis - deterministisch.
+    [Test] procedure TwoSpellings_OrdinalLastWins_WithNote;
+    // Ein Profil aus lauter unbekannten Kind-Namen wird geladen wie bei
+    // profiles.json (leer = alle Regeln), aber mit Hinweis.
+    [Test] procedure UnknownKindsOnly_LoadedEmpty_WithNote;
+  end;
+
 
 implementation
 
@@ -1812,6 +1856,297 @@ begin
   end;
 end;
 
+{ TTestRuleCatalogProjectProfiles }
+
+const
+  PROJEKT_PROBE = 'projekt-probe';
+
+function NamenText: string;
+// Alle Profilnamen sortiert, Gross/klein scharf - vorher/nachher
+// vergleichbar mit '=' (Assert.AreEqual(string) ignoriert Gross/klein).
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.CaseSensitive := True;
+    L.AddStrings(TRuleCatalog.ProfileNames);
+    L.Sort;
+    Result := L.Text;
+  finally
+    L.Free;
+  end;
+end;
+
+function HinweiseText: string;
+begin
+  Result := string.Join(sLineBreak, TRuleCatalog.ProjectProfileNotes);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.Setup;
+var
+  G : string;
+begin
+  G := TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '');
+  FAltUserPfad := TRuleCatalog.UserProfilesPath;
+  FUserPfad := TPath.Combine(TPath.GetTempPath,
+    'sca_test_profiles_proj_' + G + '.json');
+  FWurzel := TPath.Combine(TPath.GetTempPath, 'sca_test_projroot_' + G);
+  TDirectory.CreateDirectory(FWurzel);
+  TRuleCatalog.UserProfilesPath := FUserPfad;
+  TRuleCatalog.UseProjectRoot('');
+  TRuleCatalog.Reload;
+end;
+
+procedure TTestRuleCatalogProjectProfiles.TearDown;
+begin
+  TRuleCatalog.UseProjectRoot('');
+  TRuleCatalog.UserProfilesPath := FAltUserPfad;
+  TRuleCatalog.Reload;
+  if TFile.Exists(FUserPfad) then TFile.Delete(FUserPfad);
+  LoescheNachbarDateien(FUserPfad);
+  if TDirectory.Exists(FWurzel) then TDirectory.Delete(FWurzel, True);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.SchreibeProjektDatei(
+  const AJson: string);
+var
+  Ordner : string;
+begin
+  Ordner := TPath.Combine(FWurzel, '.sca');
+  TDirectory.CreateDirectory(Ordner);
+  TFile.WriteAllText(TPath.Combine(Ordner, 'profiles.json'), AJson);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.ProjectFile_LoadsProfiles_FromDirOrProjectFile;
+// Der Kernfall: ein Profil der Projektdatei ist danach ein Profil wie
+// jedes andere - GetProfile, ProfileNames, case-insensitiv -, und als
+// Projekt-Profil erkennbar. Ohne die Aenderung kennt der Katalog die
+// Datei nicht, GetProfile faellt auf AllKinds zurueck.
+var
+  Dproj : string;
+begin
+  SchreibeProjektDatei(
+    '{"version":1,"profiles":{"projekt-probe":["MemoryLeak","EmptyExcept"]}}');
+  Assert.IsTrue(TRuleCatalog.UseProjectRoot(FWurzel),
+    'ein neuer Profilname meldet True - das Combo muss neu befuellt werden');
+  Assert.IsTrue(TRuleCatalog.GetProfile('Projekt-Probe') =
+    [fkMemoryLeak, fkEmptyExcept], 'die Kinds der Projektdatei');
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile(' projekt-probe '),
+    'getrimmt und case-insensitiv wie alle Profilnamen');
+  Assert.IsFalse(TRuleCatalog.IsBuiltInProfile(PROJEKT_PROBE));
+  Assert.IsTrue(Pos(sLineBreak + PROJEKT_PROBE + sLineBreak,
+    sLineBreak + NamenText) > 0, 'ProfileNames fuehrt das Projekt-Profil');
+  Assert.AreEqual<Integer>(0, Length(TRuleCatalog.ProjectProfileNotes),
+    'glatte Datei, kein Hinweis');
+
+  // 'Neu laden' im Profil-Fenster verwirft den Katalog - die Wurzel
+  // bleibt, die Projektdatei wird mitgelesen.
+  TRuleCatalog.Reload;
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE),
+    'Reload liest die Projektdatei mit');
+
+  // CLI --project, Plugin: die Wurzel kommt als .dproj.
+  TRuleCatalog.UseProjectRoot('');
+  Dproj := TPath.Combine(FWurzel, 'Probe.dproj');
+  TFile.WriteAllText(Dproj, '<Project/>');
+  TRuleCatalog.UseProjectRoot(Dproj);
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE),
+    'eine Projektdatei steht fuer ihren Ordner');
+  Assert.IsTrue(SameText(ExcludeTrailingPathDelimiter(FWurzel),
+    TRuleCatalog.ProjectRoot), 'ProjectRoot ist der Ordner: ' +
+    TRuleCatalog.ProjectRoot);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.NoProjectFile_ProfilesUnchanged_NotSearchedUpwards;
+// Der A/B-Vertrag: ohne .sca\profiles.json sieht der Katalog nach
+// UseProjectRoot genau so aus wie vorher - kein Name mehr, keiner
+// weniger, kein Hinweis. Und gesucht wird NUR in der Wurzel: ein Scan
+// eines Unterordners erbt die Datei des Elternordners nicht.
+var
+  Vorher : string;
+  Unter  : string;
+begin
+  Vorher := NamenText;
+  Assert.IsFalse(TRuleCatalog.UseProjectRoot(FWurzel),
+    'ohne Datei aendert sich die Namensmenge nicht');
+  Assert.IsTrue(NamenText = Vorher, 'dieselben Profilnamen wie vorher');
+  Assert.AreEqual<Integer>(0, Length(TRuleCatalog.ProjectProfileNotes),
+    'eine fehlende Datei ist der Normalfall und schweigt');
+
+  SchreibeProjektDatei('{"profiles":{"projekt-probe":["MemoryLeak"]}}');
+  Unter := TPath.Combine(FWurzel, 'src');
+  TDirectory.CreateDirectory(Unter);
+  Assert.IsFalse(TRuleCatalog.UseProjectRoot(Unter),
+    'die Datei des Elternordners zaehlt nicht');
+  Assert.IsFalse(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE));
+end;
+
+procedure TTestRuleCatalogProjectProfiles.BrokenProjectFile_NoException_NoteAndNoProfiles;
+// Kaputte JSON (abgeschnitten): der Scan muss weiterlaufen - keine
+// Exception aus UseProjectRoot, die Profilmenge wie ohne Datei, und EIN
+// Hinweis, der die Datei nennt. Ohne die Aenderung gibt es keinen
+// Hinweis, weil niemand die Datei liest.
+var
+  Vorher : string;
+begin
+  SchreibeProjektDatei('{"profiles": {"projekt-probe": ["MemoryLeak"]');
+  Vorher := NamenText;
+  Assert.IsFalse(TRuleCatalog.UseProjectRoot(FWurzel));
+  Assert.IsTrue(NamenText = Vorher, 'keine Projekt-Profile');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'genau ein Hinweis: ' + HinweiseText);
+  Assert.IsTrue(Pos('profiles.json', HinweiseText) > 0,
+    'der Hinweis nennt die Datei: ' + HinweiseText);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.BuiltInName_StaysReserved_WithNote;
+// Ein eingebauter Name ist reserviert - auch in anderer Schreibweise.
+// Sonst haette 'strict' je Projekt eine andere Bedeutung, und ein
+// SARIF-Vergleich zweier Repos waere wertlos. Der Rest der Datei gilt.
+var
+  StrictVorher : TFindingKinds;
+begin
+  StrictVorher := TRuleCatalog.GetProfile('strict');
+  SchreibeProjektDatei(
+    '{"profiles":{"Strict":["MemoryLeak"],"projekt-probe":["EmptyExcept"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.GetProfile('strict') = StrictVorher,
+    'das eingebaute Profil bleibt, wie es war');
+  Assert.IsFalse(TRuleCatalog.IsProjectProfile('strict'));
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE),
+    'der Rest der Datei gilt');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis fuer den reservierten Namen: ' + HinweiseText);
+  Assert.IsTrue(Pos('"Strict"', HinweiseText) > 0,
+    'der Hinweis nennt den Namen: ' + HinweiseText);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.SameNameAsOwnProfile_ProjectWins_OwnSurvivesSave;
+// Gleicher Name in profiles.json (eigenes Profil) und in der Projektdatei:
+// im Projekt gilt das Projekt (Hinweis). Das eigene darf dabei nicht
+// verloren gehen - auch nicht, wenn waehrenddessen ein ANDERES eigenes
+// Profil gespeichert wird (WriteUserProfiles schreibt die ganze Datei
+// neu). Ohne Wurzel gilt es wieder.
+var
+  Err  : string;
+  Ziel : TDictionary<string, TFindingKinds>;
+begin
+  TFile.WriteAllText(FUserPfad,
+    '{"version":1,"profiles":{"team-probe":["MemoryLeak"]}}');
+  TRuleCatalog.Reload;
+  Assert.IsTrue(TRuleCatalog.GetProfile('team-probe') = [fkMemoryLeak],
+    'Vorbedingung: das eigene Profil ist geladen');
+
+  SchreibeProjektDatei('{"profiles":{"Team-Probe":["EmptyExcept"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.GetProfile('team-probe') = [fkEmptyExcept],
+    'im Projekt gewinnt das Projekt-Profil');
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile('team-probe'));
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis auf die Verdeckung: ' + HinweiseText);
+
+  Assert.IsTrue(TRuleCatalog.SaveUserProfile('anderes-probe',
+    [fkSQLInjection], Err), 'ein anderes eigenes Profil speichern: ' + Err);
+  Ziel := TDictionary<string, TFindingKinds>.Create;
+  try
+    Assert.IsTrue(TRuleCatalog.ReadProfilesFile(FUserPfad, Ziel, Err),
+      'lesbar: ' + Err);
+    Assert.IsTrue(Ziel.ContainsKey('team-probe'),
+      'das verdeckte eigene Profil bleibt in der Datei, in seiner Schreibweise');
+    Assert.IsTrue(Ziel['team-probe'] = [fkMemoryLeak],
+      'mit seinem Inhalt, nicht dem des Projekts');
+    Assert.IsFalse(Ziel.ContainsKey('Team-Probe'),
+      'das Projekt-Profil wird nie nach profiles.json geschrieben');
+    Assert.IsTrue(Ziel.ContainsKey('anderes-probe'));
+  finally
+    Ziel.Free;
+  end;
+
+  TRuleCatalog.UseProjectRoot('');
+  Assert.IsTrue(TRuleCatalog.GetProfile('team-probe') = [fkMemoryLeak],
+    'ohne Projekt gilt das eigene Profil wieder');
+  Assert.IsFalse(TRuleCatalog.IsProjectProfile('team-probe'));
+end;
+
+procedure TTestRuleCatalogProjectProfiles.ProjectProfile_IsReadOnly;
+// Projekt-Profile werden nur gelesen. Ein Speichern unter ihrem Namen
+// landete sonst in profiles.json und stuende dort unsichtbar hinter dem
+// Projekt; ein Loeschen naehme dem Anwender ein eigenes Profil, das es
+// nicht gibt. Beides weist der Katalog mit Verweis auf die Datei ab.
+var
+  Err : string;
+begin
+  SchreibeProjektDatei('{"profiles":{"projekt-probe":["MemoryLeak"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsFalse(TRuleCatalog.SaveUserProfile(PROJEKT_PROBE,
+    [fkEmptyExcept], Err), 'Speichern abgewiesen');
+  Assert.IsTrue(Pos('profiles.json', Err) > 0,
+    'die Meldung nennt die Projektdatei: ' + Err);
+  Assert.IsFalse(TFile.Exists(FUserPfad),
+    'nichts nach profiles.json geschrieben');
+  Assert.IsTrue(TRuleCatalog.GetProfile(PROJEKT_PROBE) = [fkMemoryLeak],
+    'der Speicher bleibt beim Stand der Projektdatei');
+  Assert.IsFalse(TRuleCatalog.DeleteUserProfile(PROJEKT_PROBE, Err),
+    'Loeschen abgewiesen');
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE));
+end;
+
+procedure TTestRuleCatalogProjectProfiles.RootChange_DropsProjectProfiles;
+// Wechselt der Scanpfad (Form) oder das aktive Projekt (Plugin), fallen
+// die Profile der alten Wurzel weg. Das Ergebnis von UseProjectRoot ist
+// der Anlass fuer ein Neubefuellen des Combos - True nur bei geaenderter
+// Namensmenge.
+begin
+  SchreibeProjektDatei('{"profiles":{"projekt-probe":["MemoryLeak"]}}');
+  Assert.IsTrue(TRuleCatalog.UseProjectRoot(FWurzel), 'Name kommt dazu');
+  Assert.IsFalse(TRuleCatalog.UseProjectRoot(FWurzel),
+    'dieselbe Wurzel noch einmal: keine Aenderung');
+  Assert.IsTrue(TRuleCatalog.UseProjectRoot(''), 'Name faellt weg');
+  Assert.IsFalse(TRuleCatalog.IsProjectProfile(PROJEKT_PROBE));
+  Assert.IsFalse(Pos(sLineBreak + PROJEKT_PROBE + sLineBreak,
+    sLineBreak + NamenText) > 0, 'nicht mehr in ProfileNames');
+  Assert.IsTrue(TRuleCatalog.ProjectRoot = '', 'keine Wurzel mehr');
+end;
+
+procedure TTestRuleCatalogProjectProfiles.TwoSpellings_OrdinalLastWins_WithNote;
+// Der Hinweis verspricht "die alphabetisch letzte gewinnt". Mit dem
+// Vorgabe-Vergleich der TStringList (AnsiCompareText) waren 'MyTeam' und
+// 'myteam' gleich, und den Gewinner bestimmten Hash- und Sortier-
+// Reihenfolge. Ordinal steht 'MyTeam' (M = $4D) vor 'myteam' (m = $6D) -
+// es gewinnt also 'myteam', in seiner Schreibweise und mit seinem Inhalt.
+begin
+  SchreibeProjektDatei(
+    '{"profiles":{"MyTeam":["MemoryLeak"],"myteam":["EmptyExcept"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.GetProfile('MYTEAM') = [fkEmptyExcept],
+    'der Inhalt der ordinal letzten Schreibweise');
+  Assert.IsTrue(Pos(sLineBreak + 'myteam' + sLineBreak,
+    sLineBreak + NamenText) > 0, 'ihre Schreibweise steht im Katalog');
+  Assert.IsFalse(Pos(sLineBreak + 'MyTeam' + sLineBreak,
+    sLineBreak + NamenText) > 0, 'die andere nicht');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis auf die doppelte Schreibweise: ' + HinweiseText);
+end;
+
+procedure TTestRuleCatalogProjectProfiles.UnknownKindsOnly_LoadedEmpty_WithNote;
+// Unbekannte Kind-Namen uebergeht der Leser still (eine neuere SCA-Version
+// darf Regeln nennen, die dieses Binary nicht kennt). Bleibt dabei NICHTS
+// uebrig, heisst das fuer die Engine "kein Filter" - alle Regeln. Das
+// Verhalten bleibt wie bei profiles.json, aber es wird gesagt.
+begin
+  SchreibeProjektDatei('{"profiles":{"leer-probe":["GibtEsNicht","!AuchNicht"]}}');
+  TRuleCatalog.UseProjectRoot(FWurzel);
+  Assert.IsTrue(TRuleCatalog.IsProjectProfile('leer-probe'),
+    'geladen wie jedes andere Profil');
+  Assert.IsTrue(TRuleCatalog.GetProfile('leer-probe') = [],
+    'leere Menge - unbekannte Namen zaehlen nicht');
+  Assert.AreEqual<Integer>(1, Length(TRuleCatalog.ProjectProfileNotes),
+    'ein Hinweis: ' + HinweiseText);
+  Assert.IsTrue(Pos('"leer-probe"', HinweiseText) > 0,
+    'der Hinweis nennt das Profil: ' + HinweiseText);
+end;
+
 initialization
   // Anmeldung ausdruecklich, nicht nur ueber UseRTTI des Runners (Review
   // Woche G03-25): ein Runner ohne RTTI-Suche liesse die Waechter sonst
@@ -1819,5 +2154,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestRuleCatalog);
   TDUnitX.RegisterTestFixture(TTestRuleCatalogGuard);
   TDUnitX.RegisterTestFixture(TTestRuleCatalogEditorHelps);
+  TDUnitX.RegisterTestFixture(TTestRuleCatalogProjectProfiles);
 
 end.

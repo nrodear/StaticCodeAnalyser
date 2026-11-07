@@ -586,6 +586,12 @@ type
     // ruft das so dass eine im Dock geaenderte Profile-Wahl auch ohne
     // INI-Save fuer Silent-Runs gilt (analog Dock-PrepareAnalysis).
     function CurrentProfileOverride: string;
+    // Projekt-Profile (<Ordner>\.sca\profiles.json) des aktiven Projekts
+    // bzw. der aktiven Gruppe: gibt dem Katalog die Wurzel und befuellt
+    // das Profil-Combo neu, wenn dabei ein Profilname dazukommt oder
+    // wegfaellt. Public, weil auch der Silent-Lauf die Wurzel setzt und
+    // das Combo sonst den alten Stand zeigte.
+    procedure SyncProjectProfiles;
     // Leert das Hauptfenster-Grid samt Kacheln, Combos und Filter.
     // 2026-06-18 (User-Wunsch "die beide Liste sync werden").
     //
@@ -1547,6 +1553,30 @@ begin
   FProfileCombo.ItemIndex := Idx;
 end;
 
+procedure TAnalyserFrame.SyncProjectProfiles;
+// Die Projektwurzel des Plugins ist der Ordner des aktiven Projekts bzw.
+// der aktiven Gruppe (ActiveIdeProjOrGroupFile, dieselbe Quelle wie die
+// .sca-Baseline) - nicht der Scanpfad im Dock und nicht der Ordner der
+// gespeicherten Datei, mit dem der Silent-Lauf SetupForRun ruft.
+// Neu befuellt wird nur bei geaenderter Namensmenge, ohne Projektdatei
+// also nie; PopulateProfileCombo behaelt dabei die bisherige Wahl, wenn
+// es sie noch gibt, sonst gilt [Rules] IdeProfile. Eine Projekt-Profil-
+// Wahl wird nie gespeichert (ProfileChange), sie haelt nur, solange das
+// Projekt aktiv ist. Den ersten Hinweis des Katalogs (kaputte Datei,
+// Namenskollision) zeigt die Statuszeile - sonst saehe man eine kaputte
+// Projektdatei nur daran, dass ihr Profil im Combo fehlt.
+var
+  Geaendert : Boolean;
+  Hinweise  : TArray<string>;
+begin
+  Geaendert := TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile);
+  Hinweise  := TRuleCatalog.ProjectProfileNotes;
+  if Length(Hinweise) > 0 then
+    StatusMode(Hinweise[0]);
+  if Geaendert and Assigned(FProfileCombo) then
+    PopulateProfileCombo;
+end;
+
 procedure TAnalyserFrame.ApplyToolbarSizing(AUnifCtrlH: Integer);
 // Loest die VCL-Quirk dass TComboBox die Align.Height ignoriert. Buttons
 // und Edits respektieren Align von Hause aus, der Helper-Aufruf ist hier
@@ -1884,6 +1914,16 @@ var
 begin
   if not Assigned(FProfileCombo) or (FProfileCombo.ItemIndex < 0) then Exit;
   Selected := FProfileCombo.Items[FProfileCombo.ItemIndex];
+  // Ein Projekt-Profil gilt nur in seinem Projekt: in [Rules] IdeProfile
+  // der globalen analyser.ini waere der Name in jedem anderen Projekt
+  // unbekannt. Die Wahl wirkt deshalb nur fuer diese Sitzung.
+  if TRuleCatalog.IsProjectProfile(Selected) then
+  begin
+    StatusMode(Format(
+      _('Project profile "%s" - active on next analysis run, not saved (it belongs to this project)'),
+      [Selected]));
+    Exit;
+  end;
   StatusMode(Format(_('Profile "%s" - active on next analysis run'),
     [Selected]));
 
@@ -3253,6 +3293,9 @@ var
   ProfileOverride: string;
 begin
   if not Assigned(FRepoSettings) then Exit;
+  // VOR dem Lesen des Combos: ein Projekt-Profil muss darin stehen,
+  // bevor die Auswahl als Override gilt.
+  SyncProjectProfiles;
   // Profile-Override aus der UI-Combo extrahieren - leere String wenn nichts
   // gewaehlt (dann gilt der INI-Wert nach UseIdeRuleSet).
   ProfileOverride := '';
@@ -5076,6 +5119,14 @@ begin
     // Dock-Combo gewinnt ueber INI - so wirkt eine Profile-Auswahl im Dock
     // auch im Silent-Run. Wenn das Dock nie geoeffnet wurde: Override leer
     // -> INI-Wert aus UseIdeRuleSet greift.
+    // Projekt-Profile des aktiven Projekts VOR dem Override: mit Dock
+    // ueber den Frame, damit dessen Combo den neuen Stand zeigt (er
+    // setzt die Wurzel selbst und haette sonst keinen Anlass zum
+    // Neubefuellen), ohne Dock direkt im Katalog.
+    if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+      GDockableForm.Frame.SyncProjectProfiles
+    else
+      TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile);
     var DockOverride := '';
     if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
       DockOverride := GDockableForm.Frame.CurrentProfileOverride;

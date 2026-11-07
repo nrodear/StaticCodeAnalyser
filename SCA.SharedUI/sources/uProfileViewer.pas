@@ -442,22 +442,27 @@ var
   Names : TArray<string>;
   Std   : TStringList;
   Own   : TStringList;
+  Proj  : TStringList;
   Name  : string;
   Idx   : Integer;
 begin
   Names := TRuleCatalog.ProfileNames;
 
   // ProfileNames liefert Dictionary-Schluessel, also ohne verlaessliche
-  // Reihenfolge. Erst sortieren, dann eingebaute vor eigene - sonst
-  // steht die Liste bei jedem Oeffnen anders da.
-  Std := TStringList.Create;
-  Own := TStringList.Create;
+  // Reihenfolge. Erst sortieren, dann eingebaute vor eigene vor denen
+  // des Projekts - sonst steht die Liste bei jedem Oeffnen anders da.
+  Std  := TStringList.Create;
+  Own  := TStringList.Create;
+  Proj := TStringList.Create;
   try
-    Std.Sorted := True;
-    Own.Sorted := True;
+    Std.Sorted  := True;
+    Own.Sorted  := True;
+    Proj.Sorted := True;
     for Name in Names do
       if TRuleCatalog.IsBuiltInProfile(Name) then
         Std.Add(Name)
+      else if TRuleCatalog.IsProjectProfile(Name) then
+        Proj.Add(Name)
       else
         Own.Add(Name);
 
@@ -477,10 +482,20 @@ begin
         FLstProfiles.Items.Add(Format('%s  (%d)  %s',
           [Name, KindCount(TRuleCatalog.GetProfile(Name)), _('- own')]));
       end;
+      // Projekt-Profile (<Projekt>\.sca\profiles.json) stehen nur da,
+      // wenn der Wirt die Projektwurzel gesetzt hat - Form und Plugin tun
+      // das mit dem Scanpfad bzw. dem aktiven Projekt.
+      for Name in Proj do
+      begin
+        FNames.Add(Name);
+        FLstProfiles.Items.Add(Format('%s  (%d)  %s',
+          [Name, KindCount(TRuleCatalog.GetProfile(Name)), _('- project')]));
+      end;
     finally
       FLstProfiles.Items.EndUpdate;
     end;
   finally
+    Proj.Free;
     Own.Free;
     Std.Free;
   end;
@@ -507,7 +522,11 @@ procedure TProfileViewerForm.ShowRulesOf(const AProfile: string);
 begin
   FCurrent := AProfile;
   FKinds   := TRuleCatalog.GetProfile(AProfile);
-  FIsOwn   := not TRuleCatalog.IsBuiltInProfile(AProfile);
+  // Projekt-Profile sind schreibgeschuetzt wie die eingebauten: sie
+  // gehoeren der Projektdatei, SaveUserProfile wiese sie ohnehin ab.
+  // "Copy..." bleibt der Weg zu einer eigenen Fassung.
+  FIsOwn   := not TRuleCatalog.IsBuiltInProfile(AProfile) and
+              not TRuleCatalog.IsProjectProfile(AProfile);
   FDirty   := False;
   RefreshRuleList;
 end;
@@ -534,6 +553,11 @@ begin
       _('Profile "%s": %d of %d rules. Your own profile, stored in %s'),
       [FCurrent, FRules.Total, TRuleCatalog.Count,
        TRuleCatalog.UserProfilesFilePath])
+  else if TRuleCatalog.IsProjectProfile(FCurrent) then
+    FLblInfo.Caption := Format(
+      _('Profile "%s": %d of %d rules. From the project file %s, read-only - use "Copy..." for your own.'),
+      [FCurrent, FRules.Total, TRuleCatalog.Count,
+       TRuleCatalog.ProjectProfilesFileFor(TRuleCatalog.ProjectRoot)])
   else
     FLblInfo.Caption := Format(
       _('Profile "%s": %d of %d rules. Built-in and read-only - use "Copy..." for your own (stored in %s).'),
@@ -628,8 +652,12 @@ begin
   // AENDERT kommentarlos - ohne diese Frage war ein Tippfehler im
   // Namen das stille Ende eines gepflegten Profils (G5-3). Eingebaute
   // Namen lehnt SaveUserProfile selbst ab.
+  // Projekt-Profile ebenso nicht: sie sind schreibgeschuetzt, die
+  // Frage "Ueberschreiben?" kuendigte etwas an, das SaveUserProfile dann
+  // abweist (Review p/projekt-profil).
   if (FNames.IndexOf(Trim(NewName)) >= 0) and
-     not TRuleCatalog.IsBuiltInProfile(Trim(NewName)) then
+     not TRuleCatalog.IsBuiltInProfile(Trim(NewName)) and
+     not TRuleCatalog.IsProjectProfile(Trim(NewName)) then
     if Application.MessageBox(PChar(Format(
          _('"%s" already exists. Overwrite it?'), [Trim(NewName)])),
          PChar(_('Copy profile')), MB_YESNO or MB_ICONQUESTION) <> IDYES then
@@ -740,7 +768,7 @@ end;
 procedure SplitImportNames(ANames, AVorhanden, ANew, AReplaced,
   AFixed: TStringList);
 // Teilt die gelesenen Profilnamen in "neu", "wird ueberschrieben" und
-// "uebersprungen, Name eines eingebauten Profils". AVorhanden sind die
+// "uebersprungen, Name eines eingebauten oder Projekt-Profils". AVorhanden sind die
 // heute bekannten Profile.
 //
 // Vergleichsschaerfe: TStringList.IndexOf ist case-INSENSITIV - und der
@@ -750,9 +778,12 @@ var
   Name : string;
 begin
   for Name in ANames do
-    if TRuleCatalog.IsBuiltInProfile(Name) then
+    if TRuleCatalog.IsBuiltInProfile(Name) or
+       TRuleCatalog.IsProjectProfile(Name) then
       // Ein eingebauter Name ist unantastbar: derselbe Name haette sonst
-      // je nach Rechner eine andere Bedeutung.
+      // je nach Rechner eine andere Bedeutung. Ein Projekt-Profil gehoert
+      // der Projektdatei - SaveUserProfile wiese es ab, die Vorschau
+      // darf es also nicht als "wird ueberschrieben" ankuendigen.
       AFixed.Add(Name)
     else if AVorhanden.IndexOf(Name) >= 0 then
       AReplaced.Add(Name)
@@ -772,7 +803,7 @@ begin
     Result := Result + Format(_('Will be overwritten: %s'),
                               [AReplaced.CommaText]) + sLineBreak;
   if AFixed.Count > 0 then
-    Result := Result + Format(_('Skipped (built-in name): %s'),
+    Result := Result + Format(_('Skipped (built-in or project profile name): %s'),
                               [AFixed.CommaText]) + sLineBreak;
   Result := Result + sLineBreak + _('Import now?');
 end;
@@ -793,7 +824,8 @@ begin
   Fehlgeschlagen := 0;
   for Name in ANames do
   begin
-    if TRuleCatalog.IsBuiltInProfile(Name) then Continue;
+    if TRuleCatalog.IsBuiltInProfile(Name) or
+       TRuleCatalog.IsProjectProfile(Name) then Continue;
     if TRuleCatalog.SaveUserProfile(Name, AMap[Name], Fehler) then
       Result := Name
     else
@@ -866,7 +898,7 @@ begin
     begin
       if Fest.Count > 0 then
         Text := Format(
-          _('Nothing to import: %s only contains names of built-in profiles (%s).'),
+          _('Nothing to import: %s only contains names of built-in or project profiles (%s).'),
           [ExtractFileName(Dlg.FileName), Fest.CommaText])
       else
         Text := Format(_('%s contains no profiles.'),

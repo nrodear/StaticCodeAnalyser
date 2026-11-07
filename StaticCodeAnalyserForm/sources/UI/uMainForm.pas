@@ -285,6 +285,10 @@ type
     // Start und nachdem im Profil-Fenster eines angelegt oder geloescht
     // wurde - sonst kennt das Combo den Namen erst nach einem Neustart.
     procedure PopulateProfileCombo(const APreferred: string);
+    // Projekt-Profile des Scanpfads (<Pfad>\.sca\profiles.json): gibt dem
+    // Katalog die Wurzel und befuellt das Combo neu, wenn dabei ein
+    // Profilname dazukommt oder wegfaellt.
+    procedure SyncProjectProfiles;
     // Getter / Callback fuer den FExportMenu-Konstruktor.
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
@@ -1202,6 +1206,11 @@ procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
 begin
   try
     Settings.RegisterToLeakyClasses;
+    // VOR dem Lesen des Combos: ein Projekt-Profil muss darin stehen,
+    // bevor die Auswahl uebernommen wird. Doppelt mit
+    // ProjectpathChangedScope, weil nicht jede programmatische Aenderung
+    // des Pfads OnChange ausloest - hier ist der letzte Moment vor dem Lauf.
+    SyncProjectProfiles;
     // UI-Combos gewinnen ueber die INI (analog zum IDE-Plugin). Settings.Load
     // hat gerade die INI-Werte gesetzt - die Combos schreiben jetzt drueber.
     // Leerer Combo-Index lassen wir unangetastet (= INI-Wert bleibt aktiv).
@@ -1239,6 +1248,14 @@ begin
     if FormDialekt = dlFpc then
       StatusBar1.Panels[2].Text :=
         StatusBar1.Panels[2].Text + ', Dialect=fpc';
+    // Hinweis zur Projektdatei (kaputt, Namenskollision) sichtbar machen -
+    // die EXE hat keine Konsole, und eine kaputte Datei saehe man sonst
+    // nur daran, dass ihr Profil im Combo fehlt. Der erste genuegt; alle
+    // stehen in der Debug-Ausgabe. Ohne Projektdatei leer: keine Aenderung.
+    var Hinweise := TRuleCatalog.ProjectProfileNotes;
+    if Length(Hinweise) > 0 then
+      StatusBar1.Panels[2].Text :=
+        StatusBar1.Panels[2].Text + ' - ' + Hinweise[0];
   except
     // INI-Wert defekt darf den Lauf nicht abbrechen.
   end;
@@ -1285,6 +1302,27 @@ begin
   else
     Button6.Hint := _('Analyse directory');
   end;
+  // Neuer Pfad, ggf. neue Projekt-Profile: schon hier, damit sie im Combo
+  // waehlbar sind, bevor der Anwender auf Analyse drueckt.
+  SyncProjectProfiles;
+end;
+
+procedure TForm2.SyncProjectProfiles;
+// Die Projektwurzel der Form ist der Scanpfad (DirOfProjectPath: der
+// Ordner bzw. der Ordner der .dproj/.groupproj). Neu befuellt wird nur
+// bei geaenderter Namensmenge - ohne Projektdatei also nie, das Combo
+// bleibt wie heute. Bevorzugt wird [Rules] Profile der analyser.ini,
+// die letzte gespeicherte Wahl des Anwenders. Eine Projekt-Profil-Wahl
+// steht dort nie (ProfileComboChange speichert sie nicht); sie haelt nur,
+// solange der Pfad auf das Projekt zeigt. Projekt-Profile werden hier
+// nur gelesen, nie geschrieben.
+begin
+  // UseProjectRoot laeuft auch ohne Combo: der Katalog muss die Wurzel
+  // kennen, damit ApplyDetectorThresholds das Profil im Lauf aufloest.
+  if TRuleCatalog.UseProjectRoot(DirOfProjectPath(Projectpath.Text)) and
+     Assigned(ProfileCombo) then
+    PopulateProfileCombo(
+      Trim(TRepoSettings.QuickReadStr('Rules', 'Profile', '')));
 end;
 
 procedure TForm2.AnalyseAllClasses(Sender: TObject; const path: string);
@@ -2480,6 +2518,17 @@ var
   Settings: TRepoSettings;
 begin
   if (ProfileCombo = nil) or (ProfileCombo.ItemIndex < 0) then Exit;
+  // Ein Projekt-Profil gilt nur in seinem Projekt: in [Rules] Profile der
+  // globalen analyser.ini waere der Name in jedem anderen Projekt
+  // unbekannt, und jeder CLI-Lauf ohne --profile endete dort mit Exit 99.
+  // Die Wahl wirkt deshalb nur fuer diese Sitzung.
+  if TRuleCatalog.IsProjectProfile(ProfileCombo.Items[ProfileCombo.ItemIndex]) then
+  begin
+    StatusBar1.Panels[2].Text := Format(
+      _('Project profile "%s" - active on next analysis run, not saved (it belongs to this project)'),
+      [ProfileCombo.Items[ProfileCombo.ItemIndex]]);
+    Exit;
+  end;
   Settings := TRepoSettings.Create;
   try
     if not LoadBeforeWrite(Settings) then

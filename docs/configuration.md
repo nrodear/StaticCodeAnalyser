@@ -43,7 +43,7 @@ switches win over the file for the run they are given in.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `Profile` | String | _(empty)_ | Rule profile for CLI and standalone runs. Empty = `default` (197 rules); the template writes `Profile=default`. |
+| `Profile` | String | _(empty)_ | Rule profile for CLI and standalone runs. Empty = `default` (197 rules); the template writes `Profile=default`. Besides the built-in and your own profiles, a profile from `<project root>\.sca\profiles.json` is a valid name, see [profiles.md](profiles.md#profiles-that-come-with-the-project). |
 | `MinSeverity` | String | `hint` | Lowest severity that is reported: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Confidence floor: `low` disables the filter, `medium` is the shipped default. |
 | `EvidenceTiering` | Bool | `1` | Evidence policy "error = proven": finding severity is capped by the detector's confidence in that specific finding (high → `error` allowed, medium → `warning` at most, low → `hint` at most). Set `0` to restore the pre-0.9.18 behaviour, e.g. for CI gates that count on the old error totals. |

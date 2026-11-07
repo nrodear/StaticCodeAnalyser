@@ -74,8 +74,11 @@ type
 implementation
 
 uses
+  System.SysUtils,    // Format (Profil-Rueckfall, Schritt 4b)
+  Winapi.Windows,     // OutputDebugString (Profil-Rueckfall, Schritt 4b)
   uSCAConsts,         // AutoDiscoverCustomClasses, DiscoveredClasses
-  uEngineApi,         // TAnalysisSession.Acquire/ReleaseEngineLock
+  uEngineApi,         // TAnalysisSession.Acquire/ReleaseEngineLock,
+                      // IsKnownProfile (Schritt 4b)
   uIDEWatchMode;      // GWatchMode
 
 class procedure TIDEAnalysisPrep.SetupForRun(ASettings: TRepoSettings;
@@ -118,6 +121,26 @@ begin
   // 4. UI-Override: explizite Profile-Wahl gewinnt ueber INI.
   if AProfileOverride <> '' then
     try ASettings.Profile := AProfileOverride; except end;
+  // 4b. Unbekanntes Profil -> ide-fast statt still aller Regeln. Seit es
+  //     Projekt-Profile gibt, kann [Rules] IdeProfile einen Namen tragen,
+  //     der nur in EINEM Projekt gilt; im naechsten Projekt loeste
+  //     GetProfile ihn auf AllKinds auf, und der Silent-Lauf ohne Dock
+  //     fuehre im UI-Thread alle Detektoren. Das Dock faellt ueber sein
+  //     Combo (PopulateProfileCombo: ... -> ide-fast) ohnehin auf
+  //     ide-fast zurueck - hier gilt jetzt dieselbe Regel fuer alle Wege.
+  //     Die Wurzel hat der Aufrufer vorher gesetzt (SyncProjectProfiles
+  //     bzw. UseProjectRoot), ein Projekt-Profil des aktiven Projekts ist
+  //     also bekannt.
+  try
+    if not IsKnownProfile(ASettings.Profile) then
+    begin
+      // noinspection DebugOutput (Diagnose-Kanal des Plugins, wie Custom-Rules)
+      OutputDebugString(PChar(Format(
+        'SCA: profile "%s" is unknown here - running ide-fast',
+        [ASettings.Profile])));
+      ASettings.Profile := 'ide-fast';
+    end;
+  except end;
   // 5. Profile-spezifische Detector-Thresholds anwenden.
   try ASettings.ApplyDetectorThresholds(AProjectPath); except end;
   // 6. Global flag fuer Detector-Discovery aus den Settings ableiten.
