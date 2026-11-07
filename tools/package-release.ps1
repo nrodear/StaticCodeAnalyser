@@ -21,6 +21,7 @@
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipSource
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipInstaller   (ohne Setup-EXE)
 #   .\tools\package-release.ps1 -Version 0.9.19 -DryRun          (nur Vorbedingungen)
+#   .\tools\package-release.ps1 -Version 0.9.19.1                (vierteilig, s. $VersionFull)
 #
 # Danach:
 #   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip <OutDir>\*.exe
@@ -56,6 +57,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+
+# Die VERSIONINFO hat vier Felder. Bis 0.9.19 war jede Release-Version
+# dreiteilig und bekam ".0" angehaengt (BPL-/Exe-VERSIONINFO, ISCC
+# /DSCAVersion, Setup-Name). Ein vierteiliger Nachzuegler wie 0.9.19.1
+# traegt das vierte Feld selbst; ".0" dahinter ergaebe fuenf Felder.
+if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+  throw "Version muss x.y.z oder x.y.z.w lauten: $Version"
+}
+$VersionFull = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
 
 function Get-StackReserveMB([string]$Path) {
   # SizeOfStackReserve liegt in PE32 und PE32+ am Optional-Header-Offset
@@ -164,7 +174,7 @@ if ((-not $SkipInstaller) -or $DryRun) {
       $zustand = @()
       if (($text -notmatch $verRegex) -or ($zahl -notmatch $verRegex)) {
         $zustand += 'VERSION'
-        $befunde.Add("$was hat VERSIONINFO $alsText, erwartet $Version.0.")
+        $befunde.Add("$was hat VERSIONINFO $alsText, erwartet $VersionFull.")
       }
 
       $machine = Get-PeMachine $f
@@ -327,6 +337,14 @@ foreach ($p in $platforms) {
 # verweisen, soweit es einzelne Doku-Dateien sind. Nicht dabei: der Ordner
 # i18n und die Quelle uSCAConsts.pas (kein Doku-Inhalt) sowie die Seiten je
 # Regel hinter docs/rules/index.md.
+# Ein vierteiliger Nachzuegler (0.9.19.1) liefert die Doku des Basis-
+# Releases aus, solange er keine eigenen Notes hat: dann gehen die Notes
+# x.y.z ins Archiv, statt dass der Lauf hier nach den Exe-Zips abbricht.
+$notesVersion = $Version
+if (($Version.Split('.').Count -eq 4) -and
+    -not (Test-Path (Join-Path $repo "docs/releases/v$Version.md"))) {
+  $notesVersion = $Version.Substring(0, $Version.LastIndexOf('.'))
+}
 $docItems = @(
   'README.md', 'README_de.md', 'README_fr.md',
   'EXPORTS.md', 'EXPORTS_de.md', 'EXPORTS_fr.md',
@@ -344,7 +362,7 @@ $docItems = @(
   'docs/sca-demo.gif',
   'LICENSE',
   'reDelphix/QUICKFIXES.md', 'reDelphix/README.md',
-  "docs/releases/v$Version.md", "docs/releases/v${Version}_de.md",
+  "docs/releases/v$notesVersion.md", "docs/releases/v${notesVersion}_de.md",
   'docs/releases/v0.9.18.md', 'docs/releases/v0.9.18_de.md',
   'docs/releases/v0.9.17.md', 'docs/releases/v0.9.17_de.md',
   'docs/releases/v0.9.16.md', 'docs/releases/v0.9.16_de.md',
@@ -415,14 +433,14 @@ if (-not $SkipInstaller) {
   }
 
   $iss = Join-Path $repo 'installer\StaticCodeAnalyserSetup.iss'
-  $isccArgs = @('/DSCAVersion=' + $Version + '.0')
+  $isccArgs = @('/DSCAVersion=' + $VersionFull)
   foreach ($s in $schienen) { $isccArgs += ('/D' + $s.Define + '=' + $s.Dir) }
   $isccArgs += ('/O' + $OutDir)
   $isccArgs += $iss
   & $iscc @isccArgs | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen (Exit $LASTEXITCODE)." }
 
-  $setupExe = Join-Path $OutDir "StaticCodeAnalyserSetup-$Version.0.exe"
+  $setupExe = Join-Path $OutDir "StaticCodeAnalyserSetup-$VersionFull.exe"
   if (-not (Test-Path $setupExe)) {
     throw "Setup-EXE fehlt nach ISCC: $setupExe. Abbruch."
   }
