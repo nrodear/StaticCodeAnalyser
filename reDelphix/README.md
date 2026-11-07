@@ -57,10 +57,11 @@ source\uRdxCompilerTraces.pas     Spuren alter Compiler je Sprachmittel (Default
 source\uRdxMagicFixes.pas         Quick-Fix SCA014 "Lokale Konstante einfuehren": Ziel aus dem Fund, dann uRdxIntroPlan/uRdxIntroEdits ohne Sync-Edit-Sitzung; Platte: Lazarus-Projekt, alte Delphi-Projekte (.dof/.bdsproj/.bpr/.bpg, .dproj vor 10.3) und Includes neben der Unit, kein Netzpfad (auch kein Include auf einem Netzpfad; `\\?\C:\..` ist lokal); Plattenblick-Cache TRdxDiskReasonCache (nur aktiv ueber UseDiskCache)
 source\uRdxIntroPlan.pas          Code-Aktion "Lokale Konstante einfuehren" (ohne Fund; auch der Quick-Fix SCA014): Literal am Caret, Deklaration, Spalten, Ablehnungen (reine Textlogik)
 source\uRdxIntroEdits.pas         dieselbe Aktion: Puffertext, Ziel am Caret, Ersetzungen des Writers, Ende des Sync-Blocks (reine Textlogik; in der IDE schreibt sie ueber uRdxMagicFixes, ohne Sync Edit)
-source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret: Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt) als Textlogik, Format() aus Verkettung (TRdxPlacesRunner.FormatRewrite, mit Quellstellen-Dienst), die Aktionen auf Bedingungen (uRdxIfFixes, uRdxCondFixes, Waechter-Klausel ueber uRdxDeepNestingFix.GuardAt); ein Eintrag je Kandidat, FPC-Pruefstand
+source\uRdxContextRunner.pas      Code-Aktionen ohne Fund am Caret: Lokale Konstante (TRdxMagicFixes.IntroduceAt) und try/finally um Create (TRdxTryFixes.CreateAt) als Textlogik, Format() aus Verkettung (TRdxPlacesRunner.FormatRewrite, mit Quellstellen-Dienst), die Aktionen auf Bedingungen (uRdxIfFixes, uRdxCondFixes, Waechter-Klausel ueber uRdxDeepNestingFix.GuardAt), Verkettungen im Formatter-Bereich umbrechen (Bereich ueber uRdxFormatterMarkerFix.MarkerRegionAt, Umbruch ueber uRdxConcatWrap); ein Eintrag je Kandidat, FPC-Pruefstand
 source\uRdxCondExpr.pas           Ausdrucks-Leser der Code-Aktionen auf Bedingungen: Lexer mit Literalen, Vorrang-Parser (not > and > or > Vergleich), Wurzel am Caret (if/while/until/:=), Negation voll geklammert, {$B+}-Suche; reine Textlogik, FPC-Pruefstand
 source\uRdxIfFixes.pas            Code-Aktionen if umkehren, if teilen/zusammenfuegen: Anweisungs-Leser fuer if/else samt dangling else; reine Textlogik, FPC-Pruefstand
 source\uRdxCondFixes.pas          Code-Aktionen De Morgan und Vergleich drehen ueber uRdxCondExpr; reine Textlogik, FPC-Pruefstand
+source\uRdxConcatWrap.pas         Code-Aktion "Verkettungen im Formatter-Bereich nach jedem "+" umbrechen": Anweisungen eines Bereichs zerlegen, Kettenebene, Umbruchpunkte, Sperren, Ersetzungen je Zeile; kennt keine Marker (den Bereich gibt der Aufrufer vor); reine Textlogik, FPC-Pruefstand
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings), Token-Leser und die geteilten Bausteine der Planer: Bereiche (RangeText, CommentInRange, LastCharBefore/FirstCharAfter, CanAppendLine - frueher in uRdxStructFixes), Fragen an die ganze Datei (NextTokenOnLineWith, DeclaresAfter/DeclaresRoutine - frueher in uRdxSimpleFixes), Klammertiefe (ParenDelta) und Meldungstext (QuotedText, ColumnFromMessage); die Planer-Units haengen fuer solche Helfer nicht mehr aneinander; die geteilte Sicht: TRdxMappedLines traegt ihre Map, TRdxCodeMap.Acquire/Release statt Create/Free
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -628,6 +629,7 @@ liegt im Core (`uFindingActions`: `fakContext`, `TEditorContext`,
 | Seiten von "<" tauschen | ein Vergleichsoperator (`=`, `<>`, `<`, `>`, `<=`, `>=`) in einer Bedingung oder auf der rechten Seite einer Zuweisung | `uRdxCondFixes.FlipCompare`: `A < B` -> `B > A` (`<=`/`>=` gespiegelt, `=`/`<>` bleiben). Gesperrt: eine Seite ruft mit Klammern eine Routine (ausser Length/High/Low/Ord/Chr/SizeOf/Abs/Odd/Succ/Pred ohne gleichnamige Routine der Datei), `as`, `inherited`, Kommentar. Kein Eintrag: Typparameter (`TList<T>`), Argument eines Aufrufs |
 | if am "and" teilen | ein `and` der obersten Ebene der Bedingung eines if (reine and-Kette) | `uRdxIfFixes.SplitIf`: `if A and B then X` -> `if A then` / `if B then X`, der Zweig eine Stufe tiefer. Gesperrt: else, `{$B+}`/`{$BOOLEVAL ON}` in der Datei, Direktive, Kommentar in der Bedingung, Zeile in Block-Kommentar/mehrzeiligem String. Kein Eintrag: `and` unter `or` oder in Klammern, while |
 | Mit dem inneren if zusammenfuegen (and) | `if`/`then` eines if, dessen then-Zweig ein if ist (direkt oder allein in `begin..end`) | `uRdxIfFixes.MergeIf`: `if A then if B then X` -> `if A and B then X` (Glied geklammert, wenn es kein Faktor und keine and-Kette ist), eine Stufe flacher, begin/end fallen weg. Gesperrt: else am aeusseren oder inneren if, `{$B+}`, Kommentar zwischen den Koepfen oder um begin/end, end nicht als erstes auf seiner Zeile |
+| Verkettungen im Formatter-Bereich nach jedem "+" umbrechen | irgendwo in einem INTAKTEN Bereich `{(*}` .. `{*)}`, auch auf einer Markerzeile; ein Eintrag fuer ALLE Kandidaten des Bereichs | Fuer Bereiche, die der Formatter der Delphi-IDE (Strg+D, bis Delphi 12 - er kennt die Marker nicht) in eine Zeile gezogen hat. `uRdxFormatterMarkerFix.MarkerRegionAt` findet den Bereich mit der Bilanz des Detektors SCA206 (ein Schalter: ein zweiter Start oeffnet nichts, ein Ende ohne Start schliesst nichts, ein Start ohne Ende ist kein Bereich, ein falsch geschriebener Marker macht seinen Bereich ungueltig - erst "Formatter-Marker exakt schreiben"). `uRdxConcatWrap.PlanRange`: in jeder Anweisung, die ganz im Bereich liegt - Zuweisung (auch `var S: string := ..`), Konstante (`X = ..`, `X: string = ..`) oder EIN Argument eines Aufrufs (`SQL.Add(..)`, `raise E.Create(..)`) - endet die Zeile hinter jedem binaeren `+` der Kettenebene, dem auf derselben Zeile noch ein Operand folgt; das `+` bleibt am Zeilenende, der naechste Operand beginnt die neue Zeile. Einzug: der der ersten Anweisungszeile woertlich (Tabs bleiben) plus zwei Leerzeichen; eine schon vorhandene Fortsetzungszeile behaelt ihren Einzug und gibt ihn ihren neuen Zeilen. Kandidat nur mit mindestens einem String- oder Zeichenliteral auf der Kettenebene; `+` tiefer (`IntToStr(A + B)`), in Strings und Kommentaren bleibt. Gesperrt: mehrzeiliger String in der Anweisung, Block-Kommentar oder Direktive in der Kette (ein `//` am Zeilenende wandert ans Ende der letzten neuen Zeile), `+` am Zeilenanfang in der Anweisung, eine umzubrechende Zeile mit einer weiteren Anweisung, ein Unterdrueckmarker (`noinspection`, `NOSONAR`) in einem Kommentar, der wandern wuerde; alle gesperrt: ausgegraut mit dem Grund des Caret-naechsten. Kein Eintrag: Caret ausserhalb eines intakten Bereichs, kein Kandidat (nur Zahlen, schon umbrochen, zwei Ketten in einem Aufruf, Anweisung kreuzt einen Marker, Bedingung, Routinenkopf, anonyme Methode, asm). Ein Undo-Schritt; zweimal anwenden geht nicht (danach kein Kandidat). Bedeutungsgleich (nur Leerraum und Zeilenenden zwischen Token). Der naechste Strg+D zieht die Zeilen wieder zusammen - schuetzen koennen nur GExperts, CnWizards und JCF |
 
 **Wann ein Eintrag entsteht:** nur mit einem Kandidaten am Caret -
 dann freigegeben oder ausgegraut mit dem Grund im Hint; sonst gar nichts
@@ -714,6 +716,15 @@ Teilen unter `{$B+}` erkennt sie als verschieden. Jede Ersetzung besteht
 (Umkehren), else am inneren/aeusseren if (Zusammenfuegen), Direktive in der
 Anweisung, Typumwandlung als Aufruf (Drehen). Die Umbauten sind auch in
 case-Zweigen und mit dangling else hinter dem inneren if bedeutungsgleich.
+Formatter-Bereich: `uTestRdxConcatWrap` - 43 Tests auch im FPC-Pruefstand,
+2 nur unter Delphi (Bilanz gegen den Detektor SCA206, ContextCaption). Je
+Mutante der Bereichssuche und des Planers (F4 als intakt, zweiter Start
+oeffnet neu, verborgener Marker, unaeres `+`, jedes `+` ein Umbruchpunkt,
+Einzug, jede Sperre, zwei Ketten, Literal, Aufruf-Klammer, Kopfwoerter,
+anonyme Methode, asm, Abschnittskopf, Rest vor dem Bereich, Grund des
+Caret-naechsten, Hinweiszahl) wird mindestens ein Test rot; nur die
+Gegenprobe `ClassAt = 'k'` auf den Markerspalten schuetzt doppelt (der
+Zeilenlauf liefert nur Kommentare im Code, wie bei `ExactMarker`).
 
 **Lokale Konstante:** am haeufigsten gesperrt sind Deklarationszeile,
 Ausdrucksfortsetzung, unklare Zeile darueber, Listen-Komma und case-Zweig.
@@ -1277,6 +1288,18 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\`.
   Waechter-Klausel, De Morgan, Vergleich drehen, if teilen/zusammenfuegen am
   Caret (Abschnitt "Code-Aktionen ohne Fund"); 73 auch im FPC-Pruefstand,
   2 (ContextCaption) nur in reDelphix.Test.
+* `uTestRdxConcatWrap` (45 Tests) - Verkettungen im Formatter-Bereich
+  umbrechen (Abschnitt "Code-Aktionen ohne Fund"); 43 auch im
+  FPC-Pruefstand (`uRdxConcatWrap` steht in der Unit-Liste von build.sh):
+  Angebot mit Ergebnistext exakt (SQL-Zuweisung, `SQL.Add` mit
+  `QuotedStr`/`IntToStr`, Konstante, Inline-Variable, Tab-Einzug,
+  Fortsetzungszeilen, CRLF und LF, ganzer Bereich in einem Eintrag,
+  Idempotenz), Sperren mit Grund, kein Eintrag - jeweils mit der
+  Gegenprobe, dass dieselbe Anweisung im intakten Bereich bzw. eine
+  Kontroll-Anweisung im selben Bereich angeboten wird. 2 nur in
+  reDelphix.Test: die Bilanz der Bereichssuche gegen den echten Detektor
+  SCA206 (F1-F4, Ende hinter Block-Kommentar) und der Menuetext ueber
+  `ContextCaption`.
 * Performance: `uTestRdxSharedMap` (18 Tests, auch im
   FPC-Pruefstand) - `TTestRdxSharedMap` (10): `TRdxCodeMap.Acquire` liefert
   fuer `TRdxMappedLines` EINE Map, fuer andere Zeilen je Aufruf eine neue;
@@ -1300,7 +1323,7 @@ FPC-Pruefstand prueft das fuer alle Units in `tests\`.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxFuncNameFix uTestRdxFormatterMarkerFix uTestRdxContextRunner uTestRdxSharedMap uTestRdxContextFormat uTestRdxContextIf uTestRdxDeepNestingFix
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSuppressTargets uTestRdxProjectUnits uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes uTestRdxRaiseFixes uTestRdxDeclFixes uTestRdxFlowFixes uTestRdxRoutineFixes uTestRdxMethodFixes uTestRdxCleanupFixes uTestRdxCleanupScope uTestRdxTryFixes uTestRdxTryLocks uTestRdxResultFixes uTestRdxInheritedFixes uTestRdxResultGuards uTestRdxTryGates uTestRdxIntroPlan uTestRdxIntroRefuse uTestRdxIntroGuards uTestRdxIntroEdits uTestRdxIntroContext uTestRdxMagicFix uTestRdxSqlTemplate uTestRdxSqlFacts uTestRdxSqlGuards uTestRdxMagicGuards uTestRdxText uTestRdxTextMsgs uTestRdxBench uTestRdxFormatGuards uTestRdxSqlBinds uTestRdxFreeTypes uTestRdxPaths uTestRdxBlocks uTestRdxCategoryArgFix uTestRdxEmptyBlockFix uTestRdxEmptyExceptFix uTestRdxGotoExitFix uTestRdxNativeIntFix uTestRdxParensFix uTestRdxTrailingCommaFix uTestRdxLoopBoundFix uTestRdxFuncNameFix uTestRdxFormatterMarkerFix uTestRdxContextRunner uTestRdxSharedMap uTestRdxContextFormat uTestRdxContextIf uTestRdxDeepNestingFix uTestRdxConcatWrap
 ```
 
 Der Lauf endet mit `PASSED <n>  FAILED 0`.
