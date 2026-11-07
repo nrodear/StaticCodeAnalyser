@@ -150,7 +150,7 @@ function TLegacyImporter.ImportOldRecord(const ALine: string; AOrder: TOrder): B
 var
   Raw: AnsiString;
   PField: PChar;
-  Customer: string;
+  CustomerName: string;
   PSep: PChar;
 
   // A helper inside the routine - nobody else can call or test it (SCA102).
@@ -170,13 +170,13 @@ begin
   if Assigned(PSep) then
     Exit(False);
   // string(PField) reads up to the next #0, wherever that is (SCA160).
-  Customer := Unquote(string(PField));
+  CustomerName := Unquote(string(PField));
   // Two receivers: Imported belongs to the statistics, OrderNo to the
   // order - the reader has to know both types to tell (SCA155).
   with FStats, AOrder do
   begin
     Inc(Imported);
-    Result := (OrderNo > 0) and (Customer <> '') and (Length(Raw) > OLD_COLUMNS[0]);
+    Result := (OrderNo > 0) and (CustomerName <> '') and (Length(Raw) > OLD_COLUMNS[0]);
   end;
   Result := Result and (SwapRecordNo(FStats.Lines) <> 0);
 end;
