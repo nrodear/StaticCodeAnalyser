@@ -7165,3 +7165,29 @@ msgstr "Bezeichner mit Nicht-ASCII-Buchstaben, den Werkzeuge zerlegen - die Date
 
 msgid "Identifier with a non-ASCII character in a file that is not UTF-8 - Free Pascal accepts only ASCII identifiers (A-Z, 0-9, _) and stops with \"illegal character\". Use an ASCII name."
 msgstr "Bezeichner mit einem Nicht-ASCII-Zeichen in einer Datei, die kein UTF-8 ist - Free Pascal akzeptiert nur ASCII-Bezeichner (A-Z, 0-9, _) und bricht mit \"illegal character\" ab. Einen ASCII-Namen verwenden."
+
+# --- 2026-11-07: Projekt-Profile (<Wurzel>\.sca\profiles.json) ---
+
+msgid "Project profiles not loaded, the scan runs without them: %s"
+msgstr "Projekt-Profile nicht geladen, der Scan läuft ohne sie: %s"
+
+msgid "Project profile \"%s\" in %s is ignored: the name belongs to a built-in profile."
+msgstr "Projekt-Profil \"%s\" in %s wird ignoriert: der Name gehört einem eingebauten Profil."
+
+msgid "%s contains \"%s\" in several spellings - the alphabetically last one wins."
+msgstr "%s enthält \"%s\" in mehreren Schreibweisen - die alphabetisch letzte gewinnt."
+
+msgid "Project profile \"%s\" from %s replaces your own profile of the same name for this project."
+msgstr "Projekt-Profil \"%s\" aus %s ersetzt für dieses Projekt das eigene Profil gleichen Namens."
+
+msgid "Project profile \"%s\" in %s names no rule this version knows - it runs all rules."
+msgstr "Projekt-Profil \"%s\" in %s nennt keine Regel, die diese Version kennt - es führt alle Regeln aus."
+
+msgid "\"%s\" comes from the project file %s and is read-only."
+msgstr "\"%s\" stammt aus der Projektdatei %s und ist schreibgeschützt."
+
+msgid "- project"
+msgstr "- Projekt"
+
+msgid "Profile \"%s\": %d of %d rules. From the project file %s, read-only - use \"Copy...\" for your own."
+msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgeschützt - mit \"Kopieren...\" ein eigenes anlegen."

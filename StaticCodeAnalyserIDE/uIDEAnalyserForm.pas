@@ -586,6 +586,12 @@ type
     // ruft das so dass eine im Dock geaenderte Profile-Wahl auch ohne
     // INI-Save fuer Silent-Runs gilt (analog Dock-PrepareAnalysis).
     function CurrentProfileOverride: string;
+    // Projekt-Profile (<Ordner>\.sca\profiles.json) des aktiven Projekts
+    // bzw. der aktiven Gruppe: gibt dem Katalog die Wurzel und befuellt
+    // das Profil-Combo neu, wenn dabei ein Profilname dazukommt oder
+    // wegfaellt. Public, weil auch der Silent-Lauf die Wurzel setzt und
+    // das Combo sonst den alten Stand zeigte.
+    procedure SyncProjectProfiles;
     // Leert das Hauptfenster-Grid samt Kacheln, Combos und Filter.
     // 2026-06-18 (User-Wunsch "die beide Liste sync werden").
     //
@@ -1545,6 +1551,30 @@ begin
   if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
   if Idx < 0 then Idx := 0;
   FProfileCombo.ItemIndex := Idx;
+end;
+
+procedure TAnalyserFrame.SyncProjectProfiles;
+// Die Projektwurzel des Plugins ist der Ordner des aktiven Projekts bzw.
+// der aktiven Gruppe (ActiveIdeProjOrGroupFile, dieselbe Quelle wie die
+// .sca-Baseline) - nicht der Scanpfad im Dock und nicht der Ordner der
+// gespeicherten Datei, mit dem der Silent-Lauf SetupForRun ruft.
+// Neu befuellt wird nur bei geaenderter Namensmenge, ohne Projektdatei
+// also nie. Danach gewinnt die gespeicherte Wahl ([Rules] IdeProfile,
+// ProfileChange schreibt jede Auswahl dorthin) vor der bisherigen
+// Combo-Zeile: beim Frame-Start war die Wurzel noch unbekannt, ein dort
+// gespeichertes Projekt-Profil stand nicht im Combo, und die bisherige
+// Zeile ist dann nur der Rueckfall ide-fast. Projekt-Profile werden hier
+// nur gelesen, nie geschrieben.
+var
+  Idx : Integer;
+begin
+  if not TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile) then Exit;
+  if not Assigned(FProfileCombo) then Exit;
+  PopulateProfileCombo;
+  if not Assigned(FRepoSettings) then Exit;
+  Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
+  if Idx >= 0 then
+    FProfileCombo.ItemIndex := Idx;
 end;
 
 procedure TAnalyserFrame.ApplyToolbarSizing(AUnifCtrlH: Integer);
@@ -3253,6 +3283,9 @@ var
   ProfileOverride: string;
 begin
   if not Assigned(FRepoSettings) then Exit;
+  // VOR dem Lesen des Combos: ein Projekt-Profil muss darin stehen,
+  // bevor die Auswahl als Override gilt.
+  SyncProjectProfiles;
   // Profile-Override aus der UI-Combo extrahieren - leere String wenn nichts
   // gewaehlt (dann gilt der INI-Wert nach UseIdeRuleSet).
   ProfileOverride := '';
@@ -5076,6 +5109,14 @@ begin
     // Dock-Combo gewinnt ueber INI - so wirkt eine Profile-Auswahl im Dock
     // auch im Silent-Run. Wenn das Dock nie geoeffnet wurde: Override leer
     // -> INI-Wert aus UseIdeRuleSet greift.
+    // Projekt-Profile des aktiven Projekts VOR dem Override: mit Dock
+    // ueber den Frame, damit dessen Combo den neuen Stand zeigt (er
+    // setzt die Wurzel selbst und haette sonst keinen Anlass zum
+    // Neubefuellen), ohne Dock direkt im Katalog.
+    if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+      GDockableForm.Frame.SyncProjectProfiles
+    else
+      TRuleCatalog.UseProjectRoot(ActiveIdeProjOrGroupFile);
     var DockOverride := '';
     if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
       DockOverride := GDockableForm.Frame.CurrentProfileOverride;

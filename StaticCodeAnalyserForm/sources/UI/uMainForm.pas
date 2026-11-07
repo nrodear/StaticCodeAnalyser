@@ -285,6 +285,10 @@ type
     // Start und nachdem im Profil-Fenster eines angelegt oder geloescht
     // wurde - sonst kennt das Combo den Namen erst nach einem Neustart.
     procedure PopulateProfileCombo(const APreferred: string);
+    // Projekt-Profile des Scanpfads (<Pfad>\.sca\profiles.json): gibt dem
+    // Katalog die Wurzel und befuellt das Combo neu, wenn dabei ein
+    // Profilname dazukommt oder wegfaellt.
+    procedure SyncProjectProfiles;
     // Getter / Callback fuer den FExportMenu-Konstruktor.
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
@@ -1202,6 +1206,11 @@ procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
 begin
   try
     Settings.RegisterToLeakyClasses;
+    // VOR dem Lesen des Combos: ein Projekt-Profil muss darin stehen,
+    // bevor die Auswahl uebernommen wird. Doppelt mit
+    // ProjectpathChangedScope, weil nicht jede programmatische Aenderung
+    // des Pfads OnChange ausloest - hier ist der letzte Moment vor dem Lauf.
+    SyncProjectProfiles;
     // UI-Combos gewinnen ueber die INI (analog zum IDE-Plugin). Settings.Load
     // hat gerade die INI-Werte gesetzt - die Combos schreiben jetzt drueber.
     // Leerer Combo-Index lassen wir unangetastet (= INI-Wert bleibt aktiv).
@@ -1285,6 +1294,27 @@ begin
   else
     Button6.Hint := _('Analyse directory');
   end;
+  // Neuer Pfad, ggf. neue Projekt-Profile: schon hier, damit sie im Combo
+  // waehlbar sind, bevor der Anwender auf Analyse drueckt.
+  SyncProjectProfiles;
+end;
+
+procedure TForm2.SyncProjectProfiles;
+// Die Projektwurzel der Form ist der Scanpfad (DirOfProjectPath: der
+// Ordner bzw. der Ordner der .dproj/.groupproj). Neu befuellt wird nur
+// bei geaenderter Namensmenge - ohne Projektdatei also nie, das Combo
+// bleibt wie heute. Bevorzugt wird [Rules] Profile der analyser.ini:
+// ProfileComboChange schreibt jede Auswahl dorthin, der Wert ist also
+// die letzte Wahl des Anwenders - auch die eines Projekt-Profils, das
+// beim Start (FormCreate, Wurzel noch unbekannt) nicht im Combo stand.
+// Projekt-Profile werden hier nur gelesen, nie geschrieben.
+begin
+  // Die Wurzel gilt auch ohne Combo (ApplyDetectorConfig prueft es
+  // ebenso) - der Katalog loest das Profil im Lauf daraus auf.
+  if TRuleCatalog.UseProjectRoot(DirOfProjectPath(Projectpath.Text)) and
+     Assigned(ProfileCombo) then
+    PopulateProfileCombo(
+      Trim(TRepoSettings.QuickReadStr('Rules', 'Profile', '')));
 end;
 
 procedure TForm2.AnalyseAllClasses(Sender: TObject; const path: string);

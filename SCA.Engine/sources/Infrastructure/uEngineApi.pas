@@ -338,7 +338,9 @@ function AnalyzeSource(const Source: string;
 // Eigene Profile aus profiles.json (%APPDATA%\StaticCodeAnalyser, Profil-
 // Fenster) zaehlen mit: der Katalog laedt sie beim ersten Zugriff in
 // dasselbe Dictionary, aus dem GetProfile aufloest (EnsureLoaded ->
-// LoadUserProfiles) - auch im CLI-Lauf.
+// LoadUserProfiles) - auch im CLI-Lauf. Ebenso die Projekt-Profile aus
+// <Wurzel>\.sca\profiles.json, sobald der Consumer die Wurzel gesetzt hat
+// (TRuleCatalog.UseProjectRoot) - die CLI tut das vor ihrer Profilpruefung.
 function IsKnownProfile(const AProfile: string): Boolean;
 
 // Alle Profilnamen, die IsKnownProfile als bekannt nimmt (eingebaut und
