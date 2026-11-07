@@ -4255,7 +4255,7 @@ msgstr ""
 msgid "a comment or a directive stands between the two calls"
 msgstr ""
 
-#: reDelphix/source/uRdxConcatWrap.pas:705
+#: reDelphix/source/uRdxConcatWrap.pas:709
 msgid "a comment or directive inside the concatenation - where it belongs after the line break, only the author knows"
 msgstr ""
 
@@ -4352,7 +4352,7 @@ msgstr ""
 msgid "a method resolution clause of the class maps an interface method to %s - callers of the interface expect the empty body to do nothing; raise would break them"
 msgstr ""
 
-#: reDelphix/source/uRdxConcatWrap.pas:703
+#: reDelphix/source/uRdxConcatWrap.pas:707
 msgid "a multi-line string in the statement"
 msgstr ""
 
@@ -6014,8 +6014,8 @@ msgstr ""
 msgid "no for, while or repeat loop around the call"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:230
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:262
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:236
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:268
 msgid "no formatter marker with this text at the reported place"
 msgstr ""
 
@@ -6479,7 +6479,7 @@ msgstr ""
 msgid "only \"const\" and \"var\" sections are merged, not \"%s\""
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:225
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:231
 msgid "only a marker with blanks inside can be corrected - where a missing {(*} or {*)} belongs, only the author knows"
 msgstr ""
 
@@ -7530,7 +7530,7 @@ msgstr ""
 msgid "the comma ends a list inside \"[...]\" (set or array literal)"
 msgstr ""
 
-#: reDelphix/source/uRdxConcatWrap.pas:711
+#: reDelphix/source/uRdxConcatWrap.pas:715
 msgid "the comment at the end of the line suppresses a finding - it would move to another line"
 msgstr ""
 
@@ -8243,7 +8243,7 @@ msgstr ""
 msgid "the line has the comparison \"%s\" more than once - ambiguous"
 msgstr ""
 
-#: reDelphix/source/uRdxConcatWrap.pas:709
+#: reDelphix/source/uRdxConcatWrap.pas:713
 msgid "the line holds more than one statement"
 msgstr ""
 
@@ -8251,7 +8251,7 @@ msgstr ""
 msgid "the line holds more than the one statement of the branch (a second \";\", an else without its own if, an open block) - begin..end around the line would change what runs in the branch"
 msgstr ""
 
-#: reDelphix/source/uRdxFormatterMarkerFix.pas:267
+#: reDelphix/source/uRdxFormatterMarkerFix.pas:273
 msgid "the line holds this marker more than once"
 msgstr ""
 
@@ -8962,7 +8962,7 @@ msgstr ""
 msgid "the skeleton is empty - fill in summary, param and returns"
 msgstr ""
 
-#: reDelphix/source/uRdxConcatWrap.pas:707
+#: reDelphix/source/uRdxConcatWrap.pas:711
 msgid "the statement already puts \"+\" at the start of its lines"
 msgstr ""
 

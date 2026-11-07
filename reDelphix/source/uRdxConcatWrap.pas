@@ -42,8 +42,9 @@ unit uRdxConcatWrap;
 // KEYWORDS), Zahl, ')', ']', '^'. Ein '+' tiefer als die Kettenebene
 // ('IntToStr(A + B)') gehoert zu seinem Operanden und bleibt.
 // Kein Kandidat sind Anweisungen, die mit if, while, for, case, with, until
-// oder einem Routinen- bzw. Property-Kopf beginnen, und eine Anweisung mit
-// ';', begin oder end in einer Klammer (anonyme Methode).
+// oder einem Routinen- bzw. Property-Kopf beginnen, eine Anweisung mit ';',
+// begin oder end in einer Klammer (anonyme Methode) und alles in einem
+// asm-Block.
 //
 // GESPERRT (der Grund steht im ausgegrauten Eintrag): ein mehrzeiliger
 // String in der Anweisung; ein Block-Kommentar oder eine Direktive in der
@@ -167,8 +168,8 @@ type
   // Eine Anweisung des Bereichs. Toks endet mit ihrem Abschluss: dem ';'
   // (gehoert dazu) oder dem Wort, das die naechste beginnt bzw. die Liste
   // beendet (gehoert nicht dazu, sein Spalt schon). Last ist der Index des
-  // letzten eigenen Tokens. Bad: Klammern gehen nicht auf, oder in einer
-  // Klammer steht ein Block (BLOCK_IN_PARENS).
+  // letzten eigenen Tokens. Bad: Klammern gehen nicht auf, in einer Klammer
+  // steht ein Block (BLOCK_IN_PARENS), oder sie steht in einem asm-Block.
   TWrapStmt = record
     Toks : TArray<TWrapTok>;
     Last : Integer;
@@ -281,18 +282,21 @@ begin
   AState.Cur.Bad := AState.InAsm;
 end;
 
-// Die Rolle von T auf Tiefe 0 fuer die Zerlegung: 0 gewoehnlich, 1 beendet
-// die Anweisung und gehoert zu keiner, 2 beginnt die naechste.
-function BoundaryOf(AMap: TRdxCodeMap; const T, APrev: TRdxToken): Integer;
+type
+  // Die Rolle eines Tokens auf Tiefe 0 fuer die Zerlegung: gewoehnlich,
+  // beendet die Anweisung und gehoert zu keiner, beginnt die naechste.
+  TWrapBoundary = (wbNone, wbStop, wbLead);
+
+function BoundaryOf(AMap: TRdxCodeMap; const T, APrev: TRdxToken): TWrapBoundary;
 begin
-  Result := 0;
+  Result := wbNone;
   if IsWordOf(T, APrev, DECL_HEADS)
      and (After(AMap, T).Line <> T.Line) then
-    Exit(1);   // Abschnittskopf
+    Exit(wbStop);   // Abschnittskopf
   if IsWordOf(T, APrev, STOP_WORDS) then
-    Exit(1);
+    Exit(wbStop);
   if IsWordOf(T, APrev, LEAD_WORDS) or IsWordOf(T, APrev, DECL_HEADS) then
-    Result := 2;
+    Result := wbLead;
 end;
 
 // Zerlegt den Bereich in Anweisungen. Eine Anweisung, die am Ende des
@@ -306,7 +310,7 @@ var
   St      : TSplitState;
   GapLine : Integer;
   GapCol  : Integer;
-  Role    : Integer;
+  Role    : TWrapBoundary;
 begin
   St := Default(TSplitState);
   Prev := PrevToken(AMap, AFromLine, AFromCol);
@@ -329,19 +333,19 @@ begin
       St.Cur.Bad := True;
       W.Depth := 0;
     end;
-    Role := 0;
+    Role := wbNone;
     if W.Depth = 0 then
       Role := BoundaryOf(AMap, T, Prev)
     else if (T.Low = ';') or IsWordOf(T, Prev, BLOCK_IN_PARENS) then
       St.Cur.Bad := True;
-    if Role > 0 then
+    if Role <> wbNone then
     begin
       // Der Abschluss traegt den Spalt davor (ein String am Ende der Kette).
       AddTok(St.Cur, W);
       if T.Low = 'end' then
         St.InAsm := False;
       CloseStmt(St, False);
-      if Role = 2 then
+      if Role = wbLead then
       begin
         // Das asm-Wort selbst ist nie ein Kandidat (NO_CHAIN_LEADS); erst
         // die Anweisungen dahinter traegt CloseStmt als Bad.

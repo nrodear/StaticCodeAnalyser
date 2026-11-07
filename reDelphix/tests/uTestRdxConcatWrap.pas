@@ -526,7 +526,9 @@ begin
   Assert.IsTrue(Pos('Anweisungen: 1, ausgelassen: 1', O.Hint) > 0, O.Hint);
   AssertText(Region(['  T := ''a'' + ''b''; U := ''c'';', '  S := ''x'' +',
     '    ''y'';']), Apply(Src, O.Edits));
-  // Der Planer selbst: ein Grund nur ohne umbrochene Anweisung.
+  // Der Planer selbst: ein Grund nur ohne umbrochene Anweisung. Das Innere
+  // des Bereichs (Region): Zeile 6 hinter '  {(*}' (Spalte 7) bis zum '{'
+  // von '  {*)}' in Zeile 9 (Spalte 3); Caret auf Zeile 7.
   Map := NewMap(Src);
   try
     Assert.IsTrue(TRdxConcatWrap.PlanRange(Map, 6, 7, 9, 3, 7, Plan));

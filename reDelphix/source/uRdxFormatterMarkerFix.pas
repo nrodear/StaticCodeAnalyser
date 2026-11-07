@@ -31,6 +31,12 @@ unit uRdxFormatterMarkerFix;
 //   - die Zeile in einem Kommentar oder String beginnt,
 //   - auf der Zeile kein solcher Kommentar mit dem gemeldeten Text steht
 //     (Zeile verschoben, schon korrigiert), oder er dort mehrfach steht.
+//
+// DER BEREICH AM CARET (MarkerRegionAt, seit 2026-11-07): derselbe
+// Zeilenlauf und die Bilanz des Detektors liefern der Code-Aktion ohne Fund
+// "Verkettungen im Formatter-Bereich umbrechen" (uRdxContextRunner,
+// ckWrapConcat) den intakten Bereich - hier, damit die Marker-Regeln nur
+// einmal in reDelphix stehen.
 
 interface
 
