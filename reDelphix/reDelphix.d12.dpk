@@ -151,6 +151,7 @@ contains
   uRdxConcatWrap in 'source\uRdxConcatWrap.pas',
   uRdxDfmTabOrderFix in 'source\uRdxDfmTabOrderFix.pas',
   uRdxDfmComponentFix in 'source\uRdxDfmComponentFix.pas',
+  uRdxDfmDeadEventFix in 'source\uRdxDfmDeadEventFix.pas',
   uRdxContextRunner in 'source\uRdxContextRunner.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixRunner in 'source\uRdxFixRunner.pas',

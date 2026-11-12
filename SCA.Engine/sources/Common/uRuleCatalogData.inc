@@ -371,8 +371,8 @@ const
         'procedure btnSaveClick(Sender: TObject);';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA028:same:delete-dead-event-binding'
     ),
     // SCA029
     (
@@ -489,8 +489,8 @@ const
       GoodEx   : 'EdA.TabOrder = 0' + #13#10 + 'EdB.TabOrder = 1';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA037:same:assign-free-taborder-value'
     ),
     // SCA038
     (
@@ -671,8 +671,8 @@ const
         '// Same-unit access stays legal under Delphi-classic `private`.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA050:same:move-declaration-to-private-section'
     ),
     // SCA051
     (
@@ -692,8 +692,8 @@ const
         'procedure TSub.Run;' + #13#10 + 'begin' + #13#10 + '  Hook;' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA051:same:move-declaration-to-protected-section'
     ),
     // SCA052
     (
@@ -818,7 +818,7 @@ const
       Anchor   : '';
       FixMode  : '';
       EditorHelp: True;
-      EditorHelps: 'SCA061:same:replace-tabs-in-this-line-with-spaces'
+      EditorHelps: 'SCA061:same:replace-tabs-in-this-line-with-spaces,SCA061.2:same:replace-all-tabs-in-this-file'
     ),
     // SCA062
     (
@@ -1404,8 +1404,8 @@ const
         '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA107:same:move-declaration-to-strict-private-section'
     ),
     // SCA108
     (
@@ -1963,8 +1963,8 @@ const
         'interface' + #13#10 + #13#10 + 'uses ...;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA143:same:insert-header-comment-placeholder'
     ),
     // SCA144
     (
@@ -2549,8 +2549,8 @@ const
         #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA184:same:delete-unused-component'
     ),
     // SCA185
     (
@@ -2739,8 +2739,8 @@ const
         '    procedure Write(const S: string);' + #13#10 + '  end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False;
-      EditorHelps: ''
+      EditorHelp: True;
+      EditorHelps: 'SCA198:same:generate-new-guid'
     ),
     // SCA199
     (

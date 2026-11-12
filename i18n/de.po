@@ -7216,6 +7216,9 @@ msgstr "Freien TabOrder-Wert zuweisen"
 msgid "Delete the unused component"
 msgstr "Unbenutzte Komponente löschen"
 
+msgid "Delete the dead event binding"
+msgstr "Tote Event-Bindung löschen"
+
 msgid "an empty comment line - any content satisfies the detector"
 msgstr "eine leere Kommentarzeile - ihr Inhalt ist dem Detektor gleich"
 

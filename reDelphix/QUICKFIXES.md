@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Quick-Fixes aus der Tabelle der einfachen Hilfen (9 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 102 Quick-Fixes aus der Tabelle der einfachen Hilfen (9 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -29,6 +29,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Qu
 | SCA017 DebugOutput | `Debug-Ausgabe in {$IFDEF DEBUG} setzen` / `Debug-Ausgabe löschen` | Quick-Fix | ja / ja | [SCA017](#sca017) |
 | SCA018 DeepNesting | `Letztes if in eine Wächter-Klausel mit Exit umwandeln` | Quick-Fix | nein | [SCA018](#sca018) |
 | SCA020 EmptyMethod | `Leeren Rumpf als beabsichtigt kennzeichnen` / `ENotImplemented im leeren Rumpf auslösen` | Quick-Fix | nein / ja | [SCA020](#sca020) |
+| SCA028 DfmDeadEvent | `Tote Event-Bindung löschen` | Quick-Fix | nein | [SCA028](#sca028) |
 | SCA037 DfmTabOrderConflict | `Freien TabOrder-Wert zuweisen` | Quick-Fix | nein | [SCA037](#sca037) |
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
@@ -593,6 +594,45 @@ procedure TFoo.DoStuff;
 begin
   raise ENotImplemented.Create('TFoo.DoStuff');
 end;
+```
+
+<a id="sca028"></a>
+
+### SCA028 – Tote Event-Bindung löschen
+
+- **Regel:** SCA028 `DfmDeadEvent` – DFM event handler references missing method
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Delete the dead event binding` | `Tote Event-Bindung löschen` | `Supprimer la liaison d'événement morte` |
+
+**Wirkung:** Löscht genau die eine gemeldete Zeile `EventName = HandlerName` aus der .dfm – keine Blockgrenzen-Logik nötig, eine Event-Property ist immer eine einzelne Zeile. Die Methode existiert nachweislich nicht (weder Signatur noch Implementation in der Form-Klasse, s. `uDfmDeadEvent`) – das Löschen des Verweises kann nichts brechen, das vorher funktionierte.
+
+**Nicht angeboten**
+
+- aus der Meldung lässt sich kein Event/Handler-Paar lesen
+- die Fundzeile liegt außer Bereich
+- die Fundzeile trägt nicht mehr exakt dieses Event/Handler-Paar (verschoben oder schon geändert – der Komponentenname steht nicht auf der Event-Zeile selbst, nur Event und Handler)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  object btnGo: TButton
+    Left = 8
+    OnClick = btnGoClick    // Methode im .pas umbenannt/entfernt
+  end
+```
+
+Nachher:
+
+```pascal
+  object btnGo: TButton
+    Left = 8
+  end
 ```
 
 <a id="sca037"></a>

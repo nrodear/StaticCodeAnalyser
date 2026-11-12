@@ -70,7 +70,7 @@ const
   // SCA127, SCA174, SCA199, SCA111 und SCA112; SCA149, SCA096, SCA097 und
   // SCA086 kennzeichnet der Planer, die zweiten Eintraege von SCA128/SCA059
   // kennzeichnen sich selbst.
-  EXPECTED: array[0..100] of TExpectedRow = (
+  EXPECTED: array[0..101] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -389,6 +389,10 @@ const
     // SCA184 (2026-11-12, Track B).
     (Kind: fkDfmComponentUnused; Plan: 'PlanDfmComponentUnused';
      Caption: 'Delete the unused component';
+     Changes: False; Alt: ''; AltCaption: ''),
+    // SCA028 (2026-11-12, Runde 2).
+    (Kind: fkDfmDeadEvent; Plan: 'PlanDfmDeadEvent';
+     Caption: 'Delete the dead event binding';
      Changes: False; Alt: ''; AltCaption: '')
   );
 
