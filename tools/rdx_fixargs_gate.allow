@@ -9,7 +9,6 @@
 # umstellt, nimmt ihren Eintrag mit heraus).
 uRdxAlwaysTrueFix|FormOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxAlwaysTrueFix|TRdxAlwaysTrueFix.ResolveIf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxAttrDuplicateFix|TRdxAttrDuplicateFix.ReadMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxAttrGapFix|AttrNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxAvoidOutFix|TRdxAvoidOutFix.OutToVar|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxClassMethodFix|FullNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
@@ -36,8 +35,6 @@ uRdxExceptionNameFix|TRdxExceptionNameFix.ClassNameOf|-|S1-Bestandsaufnahme, noc
 uRdxFixRunner|FreeReceiverOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxFixRunner|TRdxFixRunner.BlockFix|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxFixTable|FreeTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxFloatEqualityFix|TRdxFloatEqualityFix.Operands|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxFlowFixes|CondMessageOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxFlowFixes|JumpOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxFlowFixes|SelfTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxForRangeFix|TRdxForRangeFix.BoundsOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
@@ -52,7 +49,6 @@ uRdxHttpsFix|TRdxHttpsFix.CallStatementArg|-|S1-Bestandsaufnahme, noch nicht auf
 uRdxHttpsFix|TRdxHttpsFix.Https|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxInheritedEmptyFix|TRdxInheritedEmptyFix.MethodNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxInsecureRandomFix|TRdxInsecureRandomFix.CallOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxIntegerOverflowFix|ProductOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxKeywordCaseFix|TRdxKeywordCaseFix.LowercaseKeyword|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxLineFixes|KeywordOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxLineFixes|TRdxLineFixes.CastTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt

@@ -45,7 +45,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TIntegerOverflowDetector = class
@@ -429,6 +429,9 @@ begin
           '%s := %s * %s - product overflows in 32-bit before widening to Int64; cast one operand to Int64',
           [Lhs, A, B]);
         F.SetKind(fkIntegerOverflow);
+        F.WithFixArg(FA_NAME, Lhs);
+        F.WithFixArg(FA_EXPR, A);
+        F.WithFixArg(FA_EXPR2, B);
         Results.Add(F);
       end;
     finally

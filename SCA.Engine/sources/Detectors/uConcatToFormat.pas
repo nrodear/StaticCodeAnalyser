@@ -47,7 +47,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uFixArgs;
 
 type
   TConcatToFormatDetector = class
@@ -205,12 +205,17 @@ class procedure TConcatToFormatDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
   procedure Report(const Target: string; PlusCount, Line: Integer);
+  var
+    F : TLeakFinding;
   begin
     // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
     // identische Feldfolge, siehe TLeakFinding.New.
-    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+    F := TLeakFinding.New(FileName, MethodNode.Name, Line,
       Format('Concat (%d x ''+'') -> Format(...) %s', [PlusCount, Target]),
-      fkConcatToFormat));
+      fkConcatToFormat);
+    F.WithFixArg(FA_NAME, Target);
+    F.WithFixArg(FA_COUNT, IntToStr(PlusCount));
+    Results.Add(F);
   end;
 
 var

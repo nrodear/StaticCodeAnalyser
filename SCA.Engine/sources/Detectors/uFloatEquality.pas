@@ -55,7 +55,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TFloatEqualityDetector = class
@@ -1343,6 +1343,9 @@ begin
           F.SetKind(fkFloatEquality, fcLow)   // G-Sent-2: DEMOTE statt Drop
         else
           F.SetKind(fkFloatEquality);
+        F.WithFixArg(FA_EXPR, Lhs);
+        F.WithFixArg(FA_OP, Op);
+        F.WithFixArg(FA_EXPR2, Rhs);
         Results.Add(F);
       end;
     finally

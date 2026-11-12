@@ -112,7 +112,8 @@ interface
 
 uses
   uRdxBufferMath,   // TRdxEdit
-  uRdxCodeMap;      // TRdxCodeMap
+  uRdxCodeMap,      // TRdxCodeMap
+  uFixArgs;         // FA_EXPR/FA_OP/FA_EXPR2
 
 const
   // Gruende der Ablehnung als englische msgids (Tests vergleichen mit _()).
@@ -176,18 +177,19 @@ type
     // bzw. IsZero(X) bei einer Null-Seite, bei '<>' mit 'not' davor. Form
     // von TRdxMapPlanner (uRdxFixRunner).
     class function ToleranceCompare(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
-    // Die drei Teile des Vergleichs aus der Meldung
-    // ('Float equality (Ratio = 0.5) is ...'); False ohne diese Form.
-    class function Operands(const AMessage: string; out ALeft, AOp,
+    // Die drei Teile des Vergleichs - FixArgs (FA_EXPR/FA_OP/FA_EXPR2) vor
+    // der Meldung ('Float equality (Ratio = 0.5) is ...'); False ohne
+    // diese Form.
+    class function Operands(const AMessage: TRdxFindingText; out ALeft, AOp,
       ARight: string): Boolean; static;
 
     // Die Funktion der Ersetzung fuer den Menuetext: IsZero, wenn eine
     // Seite eine Null ist (0, 0.0, 00), sonst SameValue; '' ohne Vergleich
     // in der Meldung.
-    class function CallName(const AMessage: string): string; static;
+    class function CallName(const AMessage: TRdxFindingText): string; static;
 
     // Eine Zahl (erstes Zeichen eine Ziffer, wie der Detektor sie meldet)
     // statt eines Bezeichners? Der Adapter fragt DeclaredTypeOf nur fuer
@@ -206,7 +208,7 @@ type
     // ein Feld eines dieser Records ist, sonst ''. Der Adapter nimmt ihn
     // statt DeclaredTypeOf und fragt InWithBlock nur ohne AWith.
     class procedure WithMemberTypes(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AWith: Boolean; out ALeftType,
+      const AMessage: TRdxFindingText; out AWith: Boolean; out ALeftType,
       ARightType: string); static;
 
     // Der Typ von AOperand an ALine aus den Deklarationen der Routinen um
@@ -234,7 +236,7 @@ type
     // (fcLow: Waechter- oder Sentinel-Vergleich, exakt gewollt), die Zeile
     // liegt in einem with-Block (InWithBlock). '' oder der Grund.
     class function ContextReason(ALowConfidence, AInWith: Boolean;
-      const AMessage: string): string; static;
+      const AMessage: TRdxFindingText): string; static;
   end;
 
 implementation
@@ -345,39 +347,49 @@ begin
   Result := (AOperand <> '') and CharInSet(AOperand[1], ['0'..'9']);
 end;
 
-class function TRdxFloatEqualityFix.Operands(const AMessage: string;
+class function TRdxFloatEqualityFix.Operands(const AMessage: TRdxFindingText;
   out ALeft, AOp, ARight: string): Boolean;
 var
   P     : Integer;
   Inner : string;
+  Text  : string;
 begin
   ALeft := '';
   AOp := '';
   ARight := '';
   Result := False;
-  P := Pos(MSG_HEAD, AMessage);
-  if P = 0 then
-    Exit;
-  Inner := Copy(AMessage, P + Length(MSG_HEAD), MaxInt);
-  P := Pos(')', Inner);
-  if P = 0 then
-    Exit;
-  Inner := Copy(Inner, 1, P - 1);
-  P := Pos(' ', Inner);
-  if P = 0 then
-    Exit;
-  ALeft := Copy(Inner, 1, P - 1);
-  Inner := Copy(Inner, P + 1, MaxInt);
-  P := Pos(' ', Inner);
-  if P = 0 then
-    Exit;
-  AOp := Copy(Inner, 1, P - 1);
-  ARight := Copy(Inner, P + 1, MaxInt);
+  if not (AMessage.Args.TryGet(FA_EXPR, ALeft)
+     and AMessage.Args.TryGet(FA_OP, AOp)
+     and AMessage.Args.TryGet(FA_EXPR2, ARight)) then
+  begin
+    ALeft := '';
+    AOp := '';
+    ARight := '';
+    Text := AMessage.Text;
+    P := Pos(MSG_HEAD, Text);
+    if P = 0 then
+      Exit;
+    Inner := Copy(Text, P + Length(MSG_HEAD), MaxInt);
+    P := Pos(')', Inner);
+    if P = 0 then
+      Exit;
+    Inner := Copy(Inner, 1, P - 1);
+    P := Pos(' ', Inner);
+    if P = 0 then
+      Exit;
+    ALeft := Copy(Inner, 1, P - 1);
+    Inner := Copy(Inner, P + 1, MaxInt);
+    P := Pos(' ', Inner);
+    if P = 0 then
+      Exit;
+    AOp := Copy(Inner, 1, P - 1);
+    ARight := Copy(Inner, P + 1, MaxInt);
+  end;
   Result := (ALeft <> '') and (ARight <> '') and (Pos(' ', ARight) = 0)
     and ((AOp = '=') or (AOp = '<>'));
 end;
 
-class function TRdxFloatEqualityFix.CallName(const AMessage: string): string;
+class function TRdxFloatEqualityFix.CallName(const AMessage: TRdxFindingText): string;
 var
   L, Op, R : string;
 begin
@@ -1046,7 +1058,7 @@ begin
 end;
 
 class procedure TRdxFloatEqualityFix.WithMemberTypes(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AWith: Boolean; out ALeftType,
+  ALine: Integer; const AMessage: TRdxFindingText; out AWith: Boolean; out ALeftType,
   ARightType: string);
 var
   L, Op, R : string;
@@ -1089,7 +1101,7 @@ begin
 end;
 
 class function TRdxFloatEqualityFix.ToleranceCompare(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Left, Op, Right, Cmp, Call, Raw, Args, VarText : string;
@@ -1356,7 +1368,7 @@ begin
 end;
 
 class function TRdxFloatEqualityFix.ContextReason(ALowConfidence,
-  AInWith: Boolean; const AMessage: string): string;
+  AInWith: Boolean; const AMessage: TRdxFindingText): string;
 var
   Call : string;
 begin

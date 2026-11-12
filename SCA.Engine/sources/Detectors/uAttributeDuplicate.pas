@@ -26,7 +26,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TAttributeDuplicateDetector = class
@@ -216,6 +216,8 @@ begin
                       '). Identical attribute applied twice has no effect ' +
                       'and is usually a copy-paste artefact.';
       F.SetKind(fkAttributeDuplicate);
+      F.WithFixArg(FA_NAME, Hit.Name + Hit.Args);
+      F.WithFixArg(FA_LINE, IntToStr(FirstLine));
       Results.Add(F);
     end;
   finally

@@ -93,7 +93,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TUnpairedLockDetector = class
@@ -385,6 +385,7 @@ begin
       F.LineNumber := IntToStr(LineNo);
       F.MissingVar := Detail;
       F.SetKind(fkUnpairedLock);
+      F.WithFixArg(FA_NAME, Trim(M.Groups[1].Value));
       Results.Add(F);
     end;
   finally

@@ -37,7 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TLockWithoutTryFinallyDetector = class
@@ -1121,6 +1121,7 @@ begin
                'matching Leave/Release in the finally block.',
                [LockIdent]);
       F.SetKind(fkLockWithoutTryFinally);
+      F.WithFixArg(FA_NAME, LockIdent);
       // K2 Stufe 3 (2026-08-26), Evidenz je Fund statt Katalog-Pauschale:
       //   * Release desselben Locks steht im finally eines umschliessenden
       //     oder direkt anschliessenden try -> die Melde-Behauptung "no

@@ -145,13 +145,15 @@ type
   end;
 
   // Die Form der Planer (uRdxFixTable: TryForm im Geruest TRdxFixFrame).
-  // SCA109/SCA153 bleiben bei dieser Form bis sie in S4 umgestellt werden.
+  // Keine Regel nutzt diese Form mehr (Fix-Datenfeld S4: SCA109/SCA153
+  // umgestellt) - bleibt fuer bestehende Testsignaturen (PlanOf) stehen.
   TRdxTryPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TRdxTryPlan;
     out AReason: string): Boolean;
 
-  // *In-Form (Fix-Datenfeld S3b-2): SCA009/SCA001/SCA156 sind darauf
-  // umgestellt (MissingFinally/FreedOutsideFinally/GetMemWithoutFree).
+  // *In-Form (Fix-Datenfeld S3b-2/S4): alle fuenf Planer von TRdxTryPlan
+  // (MissingFinally/FreedOutsideFinally/GetMemWithoutFree/LockWithoutFinally/
+  // UnpairedLock) sind darauf umgestellt.
   TRdxTryPlannerIn = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
     out AReason: string): Boolean;
@@ -177,13 +179,13 @@ type
     // SCA109: die Sperre der Meldung 'Lock acquired (FLock) but no ...'
     // ('EnterCriticalSection(...)', 'TMonitor.Enter(o)') auf ALine.
     class function LockWithoutFinally(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxTryPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
 
     // SCA153: die Sperre der Meldung '... leaks the lock (FLocker.Lock)'
     // ('Lock', 'EnterCriticalSection') auf ALine.
     class function UnpairedLock(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxTryPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
 
     // SCA156: die Allokation der Meldung 'GetMem without surrounding
@@ -880,20 +882,26 @@ begin
 end;
 
 class function TRdxTryFixes.LockWithoutFinally(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxTryPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
+var
+  LockName : string;
 begin
-  AReason := LockFix(AMap, ALine, MessagePart(AMessage, KEY_LOCK109,
-    KEY_LOCK109E), Match109, APlan);
+  if not AMessage.Args.TryGet(FA_NAME, LockName) then
+    LockName := MessagePart(AMessage.Text, KEY_LOCK109, KEY_LOCK109E);
+  AReason := LockFix(AMap, ALine, LockName, Match109, APlan);
   Result := AReason = '';
 end;
 
 class function TRdxTryFixes.UnpairedLock(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxTryPlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
+var
+  LockName : string;
 begin
-  AReason := LockFix(AMap, ALine, MessageTail(AMessage, KEY_LOCK153), Match153,
-    APlan);
+  if not AMessage.Args.TryGet(FA_NAME, LockName) then
+    LockName := MessageTail(AMessage.Text, KEY_LOCK153);
+  AReason := LockFix(AMap, ALine, LockName, Match153, APlan);
   Result := AReason = '';
 end;
 

@@ -28,7 +28,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext,
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs,
   uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
@@ -223,6 +223,9 @@ begin
         '`%s := Cond` (or `not Cond`).',
         [Lhs1, Rhs1, Lhs1, Rhs2, Lhs1]);
       F.SetKind(fkRedundantConditional);
+      F.WithFixArg(FA_NAME, Lhs1);
+      F.WithFixArg(FA_EXPR, Rhs1);
+      F.WithFixArg(FA_EXPR2, Rhs2);
       Results.Add(F);
       pIf := p;
     end;
