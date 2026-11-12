@@ -161,7 +161,8 @@ uses
   uRdxSimpleFixes,   // SCA075, SCA087 (ExplicitTObject, EmptySection)
   uRdxLineFixes,     // SCA082, SCA071, SCA088
   uRdxRaiseFixes,    // SCA020, SCA120, SCA122
-  uRdxDeclFixes,     // SCA117, SCA197, SCA149
+  uRdxDeclFixes,     // SCA117, SCA197, SCA149, SCA198, SCA143
+  uRdxDfmTabOrderFix,  // SCA037
   uRdxFlowFixes,     // SCA098, SCA080, SCA047
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
@@ -1081,6 +1082,53 @@ function PlanInterfaceGuid(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxDeclFixes.InterfaceGuid);
+end;
+
+// SCA143: leeres '//' zwischen 'unit X;' und 'interface' einfuegen.
+function PlanUnitHeaderSkeleton(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDeclFixes.UnitHeaderSkeleton);
+end;
+
+// SCA198: dieselbe GUID an zwei Interfaces - neue GUID statt der doppelten.
+function PlanDuplicateInterfaceGuid(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDeclFixes.DuplicateInterfaceGuid);
+end;
+
+// SCA037: der Fund-Komponente einen freien TabOrder-Wert geben.
+function PlanDfmTabOrderConflict(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDfmTabOrderFix.FixTabOrder);
+end;
+
+// SCA050/SCA051/SCA107: public-Member enger fassen (nur wenn es das
+// einzige Mitglied seines Abschnitts ist, s. TRdxSimpleFixes.TightenTo...).
+function PlanTightenToStrictPrivate(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxSimpleFixes.TightenToStrictPrivate);
+end;
+
+function PlanTightenToUnitPrivate(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxSimpleFixes.TightenToUnitPrivate);
+end;
+
+function PlanTightenToProtected(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxSimpleFixes.TightenToProtected);
 end;
 
 // SCA149 nach dem Rat der Meldung (TRdxDeclFixes.DirectiveFor): Name traegt
@@ -2262,7 +2310,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 93;
+  FIX_ROW_HIGH = 99;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2317,7 +2365,19 @@ const
      HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkPublicMemberWithoutDoc; Plan: PlanDocSkeleton;
      HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkMissingUnitHeader; Plan: PlanUnitHeaderSkeleton;
+     HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkInterfaceWithoutGuid; Plan: PlanInterfaceGuid;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkDuplicateInterfaceGuid; Plan: PlanDuplicateInterfaceGuid;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkCanBeStrictPrivate; Plan: PlanTightenToStrictPrivate;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkCanBeUnitPrivate; Plan: PlanTightenToUnitPrivate;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkCanBeProtected; Plan: PlanTightenToProtected;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    (Kind: fkDfmTabOrderConflict; Plan: PlanDfmTabOrderConflict;
      HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkMissingOverride; Plan: PlanMissingOverride;
      HintByPlanner: True; Changes: False; Alt: nil),
@@ -2908,7 +2968,13 @@ const
     'Raise the exception',
     'Use raise; to keep the original stack trace',
     'Insert a documentation skeleton',
+    'Insert a header comment placeholder',
     'Insert a new GUID',
+    'Generate a new GUID',
+    'Move declaration to a `strict private` section',
+    'Move declaration to a `private` section',
+    'Move declaration to a `protected` section',
+    'Assign a free TabOrder value',
     'Add "%s;" to the declaration',
     'Assign the condition to %s directly',
     'Remove the redundant %s',
@@ -3036,6 +3102,12 @@ const
     (Name: 'PlanReRaise'; Plan: PlanReRaise),
     (Name: 'PlanDocSkeleton'; Plan: PlanDocSkeleton),
     (Name: 'PlanInterfaceGuid'; Plan: PlanInterfaceGuid),
+    (Name: 'PlanDuplicateInterfaceGuid'; Plan: PlanDuplicateInterfaceGuid),
+    (Name: 'PlanUnitHeaderSkeleton'; Plan: PlanUnitHeaderSkeleton),
+    (Name: 'PlanTightenToStrictPrivate'; Plan: PlanTightenToStrictPrivate),
+    (Name: 'PlanTightenToUnitPrivate'; Plan: PlanTightenToUnitPrivate),
+    (Name: 'PlanTightenToProtected'; Plan: PlanTightenToProtected),
+    (Name: 'PlanDfmTabOrderConflict'; Plan: PlanDfmTabOrderConflict),
     (Name: 'PlanMissingOverride'; Plan: PlanMissingOverride),
     (Name: 'PlanRedundantConditional'; Plan: PlanRedundantConditional),
     (Name: 'PlanRedundantJump'; Plan: PlanRedundantJump),

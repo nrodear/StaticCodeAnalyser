@@ -53,6 +53,9 @@ type
     [Test] procedure Sca074_DeclaresRoutine;
     [Test] procedure Sca087_Variants;
     [Test] procedure Sca087_Refusals;
+    // ---- SCA050/SCA051/SCA107 ----
+    [Test] procedure Sca050_051_107_Variants;
+    [Test] procedure Sca050_051_107_Refusals;
     [Test] procedure Sca139_Variants;
     [Test] procedure Sca139_Refusals;
     [Test] procedure Sca139_DeclaresNonClassType;
@@ -173,6 +176,43 @@ begin
     if TRdxSimpleFixes.EmptySection(Map, ALine,
          Format('Empty `%s` section - delete the section header or add '
            + 'its members.', [ASection]), E, AReason) then
+      Result := Apply(ASource, [E]);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+type
+  TVisTarget = (vtStrictPrivate, vtUnitPrivate, vtProtected);
+
+// SCA050/SCA051/SCA107: public-Member auf ALine enger fassen. ATarget
+// waehlt nur, welche TightenTo...-Funktion gerufen wird - die Meldung
+// selbst wertet keine der drei Hilfen aus (reine Positions-/Struktur-
+// pruefung), ein Platzhaltertext reicht.
+function FixVisibility(ATarget: TVisTarget; const ASource: string;
+  ALine: Integer; out AReason: string): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+  Ok  : Boolean;
+begin
+  Result := '';
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    case ATarget of
+      vtStrictPrivate:
+        Ok := TRdxSimpleFixes.TightenToStrictPrivate(Map, ALine, '', E, AReason);
+      vtUnitPrivate:
+        Ok := TRdxSimpleFixes.TightenToUnitPrivate(Map, ALine, '', E, AReason);
+    else
+      Ok := TRdxSimpleFixes.TightenToProtected(Map, ALine, '', E, AReason);
+    end;
+    if Ok then
       Result := Apply(ASource, [E]);
   finally
     Map.Free;
@@ -1198,6 +1238,48 @@ begin
   // Am Ende der Klasse.
   Assert.AreEqual(InClass(['    FX: Integer;']),
     Fix087(InClass(['    FX: Integer;', '  published']), 6, 'published', R), R);
+end;
+
+// ---- SCA050/SCA051/SCA107 ----
+
+procedure TTestRdxSimpleFixes.Sca050_051_107_Variants;
+var
+  R : string;
+begin
+  // Einziges Mitglied - 'public' wird durch die engere Sichtbarkeit ersetzt.
+  Assert.AreEqual(InClass(['  strict private', '    procedure P;']),
+    FixVisibility(vtStrictPrivate, InClass(['  public', '    procedure P;']),
+      6, R), R);
+  Assert.AreEqual(InClass(['  private', '    procedure P;']),
+    FixVisibility(vtUnitPrivate, InClass(['  public', '    procedure P;']),
+      6, R), R);
+  Assert.AreEqual(InClass(['  protected', '    procedure P;']),
+    FixVisibility(vtProtected, InClass(['  public', '    procedure P;']),
+      6, R), R);
+end;
+
+procedure TTestRdxSimpleFixes.Sca050_051_107_Refusals;
+var
+  R : string;
+begin
+  // Ein weiteres Mitglied VOR dem Fund im selben Abschnitt.
+  Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
+    '    procedure Other;', '    procedure P;']), 7, R));
+  Assert.IsTrue(Pos('another declaration', R) > 0, R);
+  // Ein weiteres Mitglied NACH dem Fund im selben Abschnitt.
+  Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
+    '    procedure P;', '    procedure Other;']), 6, R));
+  Assert.AreNotEqual('', R);
+  // Kein 'public' davor - der Member steht schon in einem anderen Abschnitt.
+  Assert.AreEqual('', FixVisibility(vtStrictPrivate, InClass(['  protected',
+    '    procedure P;']), 6, R));
+  Assert.IsTrue(Pos('no enclosing', R) > 0, R);
+  // Mehrzeiliges Member (Property): ALine+1 liegt noch in der Deklaration -
+  // SectionEmptyReason sperrt konservativ (dokumentierte Grenze).
+  Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
+    '    property Items[Index: Integer]: string',
+    '      read GetItem write SetItem;']), 6, R));
+  Assert.AreNotEqual('', R);
 end;
 
 procedure TTestRdxSimpleFixes.Sca087_Refusals;

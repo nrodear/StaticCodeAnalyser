@@ -205,6 +205,30 @@ type
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
+    // SCA050/SCA051/SCA107: der Member auf ALine ist das EINZIGE Mitglied
+    // seines `public`-Abschnitts (sonst wuerde das Umbenennen des
+    // Abschnitts-Schluesselworts auch die Sichtbarkeit seiner Geschwister
+    // aendern - das darf die Hilfe nicht). Dann reicht es, 'public' durch
+    // die engere Sichtbarkeit zu ersetzen; der Member bleibt auf seiner
+    // Zeile stehen, egal wie viele physische Zeilen seine Deklaration
+    // selbst braucht - drei duenne Weiterleitungen (je Ziel-Sichtbarkeit
+    // eine, AMessage bleibt ungenutzt) auf denselben Kern.
+    // Gesperrt: kein eindeutiges 'public' davor gefunden (Bound erreicht
+    // oder 'interface'/'implementation' zuerst getroffen - Unit-Grenze),
+    // eine andere Deklaration zwischen 'public' und ALine, oder etwas
+    // anderes als ein Abschnitts-Schluesselwort/'end' direkt nach ALine
+    // (SectionEmptyReason, wie bei SCA087 - bei einer mehrzeiligen
+    // Deklaration greift das konservativ nicht und sperrt ebenfalls).
+    class function TightenToStrictPrivate(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+    class function TightenToUnitPrivate(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+    class function TightenToProtected(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+
     // SCA139: 'X.Free' -> 'FreeAndNil(X)' auf Zeile ALine, X = AReceiver
     // aus der Meldung (geschrieben wie im Quelltext). Genau ein Vorkommen
     // im Code der Zeile, X ein blosser Bezeichner (kein Pfad davor), 'Free'
@@ -337,6 +361,7 @@ const
   SPAN_074 = 'sca074';
   SPAN_087 = 'sca087';
   SPAN_139 = 'sca139';
+  SPAN_VISIBILITY = 'sca050';   // SCA050/SCA051/SCA107 teilen sich die Mechanik
   // Dahinter ist ein Name deklariert oder zugewiesen, nicht aufgerufen
   // (UnqualifiedCalls).
   DECL_AFTER: array[0..3] of string = (':', '=', ',', ':=');
@@ -1302,6 +1327,99 @@ begin
   AEdit.Expected := L + #10;
   AEdit.NewText  := '';
   Result := True;
+end;
+
+{ ---- SCA050/SCA051/SCA107 ---- }
+
+const
+  // Rueckwaerts-Suche nach dem oeffnenden 'public': eine Klasse mit mehr
+  // Tokens vor ihrem Member waere ohnehin ein anderes Problem - der
+  // Deckel ist reine Verteidigung gegen eine Endlosschleife bei einer
+  // nie gefundenen Oeffnung.
+  MAX_BACKWARD_TOKENS = 20000;
+
+// Das 'public'-Token, das ALine traegt - rueckwaerts bis zum ersten
+// 'public', 'interface' oder 'implementation' (Unit-Grenze: zu weit
+// gelaufen) oder Dateianfang. Leeres Token (Low = ''), wenn nichts
+// gefunden.
+function EnclosingPublicToken(AMap: TRdxCodeMap; ALine: Integer): TRdxToken;
+var
+  i : Integer;
+begin
+  Result := NextToken(AMap, ALine, 1);
+  for i := 1 to MAX_BACKWARD_TOKENS do
+  begin
+    Result := Before(AMap, Result);
+    if Result.Low = '' then Exit;
+    if Result.Low = 'public' then Exit;
+    if (Result.Low = 'interface') or (Result.Low = 'implementation') then
+      Exit(Default(TRdxToken));
+  end;
+  Result := Default(TRdxToken);
+end;
+
+// Gemeinsamer Kern von TightenToStrictPrivate/-UnitPrivate/-Protected.
+function TightenVisibilityCore(AMap: TRdxCodeMap; ALine: Integer;
+  const ATarget: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  Pub   : TRdxToken;
+  First : TRdxToken;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+  begin
+    AReason := _('line out of range');
+    Exit;
+  end;
+  Pub := EnclosingPublicToken(AMap, ALine);
+  if Pub.Low <> 'public' then
+  begin
+    AReason := _('no enclosing ''public'' section found');
+    Exit;
+  end;
+  // Nichts zwischen 'public' und dem Member - sonst teilen sich mehrere
+  // Member den Abschnitt, und ihn umzubenennen traefe auch die anderen.
+  First := NextToken(AMap, Pub.Line + 1, 1);
+  if First.Line <> ALine then
+  begin
+    AReason := _('another declaration stands between ''public'' and this '
+      + 'member - move this one by hand');
+    Exit;
+  end;
+  // Nichts hinter dem Member bis zum naechsten Abschnitt/''end'' - sonst
+  // dieselbe Gefahr von der anderen Seite. Bei einer mehrzeiligen
+  // Deklaration (z.B. eine Property mit Folgezeilen) liegt ALine+1 noch
+  // IN ihr - SectionEmptyReason sperrt dann folgerichtig konservativ.
+  AReason := SectionEmptyReason(AMap, ALine);
+  if AReason <> '' then Exit;
+  AEdit.Span := TRefactorSpan.Make(SPAN_VISIBILITY, Pub.Line, Pub.Col,
+    Pub.Line, Pub.EndCol);
+  AEdit.Expected := Copy(AMap.Raw(Pub.Line), Pub.Col, Pub.Len);
+  AEdit.NewText := ATarget;
+  Result := True;
+end;
+
+class function TRdxSimpleFixes.TightenToStrictPrivate(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+begin
+  Result := TightenVisibilityCore(AMap, ALine, 'strict private', AEdit, AReason);
+end;
+
+class function TRdxSimpleFixes.TightenToUnitPrivate(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+begin
+  Result := TightenVisibilityCore(AMap, ALine, 'private', AEdit, AReason);
+end;
+
+class function TRdxSimpleFixes.TightenToProtected(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+begin
+  Result := TightenVisibilityCore(AMap, ALine, 'protected', AEdit, AReason);
 end;
 
 // Die Code-Vorkommen von 'X.Free' auf Zeile ALine (X = AReceiver als
