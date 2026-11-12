@@ -5274,6 +5274,11 @@ procedure RunSilentAnalysisForCurrentEditorFile;
 // Holt die aktuell aktive Editor-Datei via TIDEEditor + ruft den Silent-
 // Analyzer. Vorher Settings-Flag pruefen - User kann das Feature ueber
 // Tools > Options ausschalten.
+// ACenterOnFirstFinding=False: dieser Entrypoint ist der explizite "nur
+// diese Datei scannen"-Weg (Editor-Kontextmenue/TEditorContextMenuHook) -
+// rein Marker setzen, kein Auto-Scroll zum ersten Fund (Nutzer-Fund
+// 2026-11-11: der True-Default war fuer diesen Aufrufer nie gedacht,
+// s. Doku an RunSilentAnalysisForFile).
 var
   FilePath : string;
 begin
@@ -5286,7 +5291,7 @@ begin
     cfrNotPascalFile:
       OutputDebugString('SCA Silent: current file is not a Pascal file');
   else
-    RunSilentAnalysisForFile(FilePath);
+    RunSilentAnalysisForFile(FilePath, {ACenterOnFirstFinding=}False);
   end;
 end;
 

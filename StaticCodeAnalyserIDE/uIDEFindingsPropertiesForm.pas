@@ -439,8 +439,9 @@ end;
 procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
   Finding: TLeakFinding; Mode: TFindingNavMode);
 // Mode (fnmPreview/fnmActivate) steuert nur das FOKUS-Verhalten - das macht
-// der Frame selbst (Re-Focus ins Grid bei Preview). Hier ist der Editor-Sprung
-// fuer beide Modi identisch.
+// der Frame selbst (Re-Focus ins Grid bei Preview). Der Editor-Sprung ist
+// fuer beide Modi identisch, AUSSER bei einem .dfm-Fund im Activate-Modus
+// (s.u.).
 // Soft-Navigate via TIDEEditor.ShowFileAtLine - bringt die Datei nach
 // vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret. Wichtig:
 // NICHT TIDEEditor.OpenFileAtLine - das macht SafeCloseModule auf die
@@ -448,10 +449,16 @@ procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
 // schliesst weil FindModule(Foo.dfm) das Foo-Modul liefert. Effekt waere:
 // jeder Click oeffnet die Datei neu.
 //
-// Suppress-Window: ShowFileAtLine kann mehrere EditorViewActivated-
-// Events feuern (Show + CursorPos + Paint). Ohne Suppress wuerde der
-// Tab-Wechsel-Hook diese als "User wechselt zu anderer Datei" interpretieren
-// und das Grid clearen.
+// .dfm-Fund im Activate-Modus (Doppelklick/Enter): ShowFileAtLine findet
+// ueber FindModule(.dfm) nur das Foo-Modul und zeigt dessen ERSTEN
+// Quelltext-Editor - das ist immer die .pas, nie die .dfm (siehe
+// FirstSourceEditorOf). Der Klick landete also mit der .dfm-Zeilennummer
+// in der .pas (Nutzer-Fund 2026-11-11). Fix identisch zu
+// TAnalyserFrame.GridDblClick im Voll-Scan-Grid: fuer .dfm im
+// Activate-Modus OpenFileAtLine (Close-and-Reopen, DFM laedt als Text).
+// Im Preview-Modus bleibt ShowFileAtLine (haeufig getriggert ueber
+// Pfeiltasten/Mausrad) - OpenFileAtLines CloseModule waere dort zu
+// aufdringlich (kann die IDE crashen, s. TAnalyserFrame.PreviewFindingAtRow).
 var
   Line: Integer;
 begin
@@ -461,6 +468,13 @@ begin
   if Line <= 0 then Exit;
 
   FSuppressActivationUntil := GetTickCount + 250;   // ms
+
+  if (Mode = fnmActivate) and SameText(ExtractFileExt(Finding.FileName), '.dfm') then
+  begin
+    TIDEEditor.OpenFileAtLine(Finding.FileName, Line);
+    Exit;
+  end;
+
   TIDEEditor.ShowFileAtLine(Finding.FileName, Line);
   TIDEEditor.CenterCurrentViewOnLine(Line);
 end;
