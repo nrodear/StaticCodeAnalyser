@@ -215,7 +215,10 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # uRdxDfmTabOrderFix (SCA037): reine Zeilen/Einzug-Logik auf der .dfm,
 # ohne Pascal-Token-Bedarf - uTestRdxDfmTabOrderFix hat eine
 # FPC-sichtbare Text-Fixture.
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxConcatWrap uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix uRdxDfmTabOrderFix; do
+# Seit 2026-11-12 (Konzept_reDelphixNaechsteSchritte, Track B) auch
+# uRdxDfmComponentFix (SCA184): dieselbe Lage - reine Zeilen/Einzug-Logik
+# auf der .dfm, uTestRdxDfmComponentFix hat eine FPC-sichtbare Text-Fixture.
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxConcatWrap uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix uRdxDfmTabOrderFix uRdxDfmComponentFix; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

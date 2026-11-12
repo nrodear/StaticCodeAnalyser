@@ -163,6 +163,7 @@ uses
   uRdxRaiseFixes,    // SCA020, SCA120, SCA122
   uRdxDeclFixes,     // SCA117, SCA197, SCA149, SCA198, SCA143
   uRdxDfmTabOrderFix,  // SCA037
+  uRdxDfmComponentFix, // SCA184
   uRdxFlowFixes,     // SCA098, SCA080, SCA047
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
@@ -1106,6 +1107,15 @@ function PlanDfmTabOrderConflict(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxDfmTabOrderFix.FixTabOrder);
+end;
+
+// SCA184: unbenutzte DFM-Komponente loeschen - nur wenn sie ein Blatt ist
+// (keine Kind-Komponenten, s. TRdxDfmComponentFix).
+function PlanDfmComponentUnused(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDfmComponentFix.DeleteUnusedComponent);
 end;
 
 // SCA050/SCA051/SCA107: public-Member enger fassen (nur wenn es das
@@ -2310,7 +2320,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 99;
+  FIX_ROW_HIGH = 100;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2592,6 +2602,10 @@ const
     // SCA206 (2026-11-06): exakte Marker-Form - bedeutungsgleich, nur ein
     // Kommentar aendert sich.
     (Kind: fkFormatterMarker; Plan: PlanFormatterMarker;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA184 (2026-11-12, Track B): unbenutzte DFM-Komponente loeschen -
+    // nur wenn Blatt (keine Kind-Komponenten, s. TRdxDfmComponentFix).
+    (Kind: fkDfmComponentUnused; Plan: PlanDfmComponentUnused;
      HintByPlanner: False; Changes: False; Alt: nil)
   );
 
@@ -2653,8 +2667,20 @@ const
     'the same exception - the original stack trace is kept',
     // PublicMemberWithoutDoc
     'the skeleton is empty - fill in summary, param and returns',
+    // MissingUnitHeader
+    '',
     // InterfaceWithoutGuid
     'a new GUID - only for your own interfaces, never for COM imports',
+    // DuplicateInterfaceGuid
+    'a fresh, unique GUID - nothing else changes',
+    // CanBeStrictPrivate
+    'same meaning - nothing outside this scope uses it',
+    // CanBeUnitPrivate
+    'same meaning - nothing outside this scope uses it',
+    // CanBeProtected
+    'same meaning - nothing outside this scope uses it',
+    // DfmTabOrderConflict
+    'only the tab/focus order changes, not the component',
     // MissingOverride
     '',
     // RedundantConditional
@@ -2928,7 +2954,10 @@ const
     // SCA206: bedeutungsgleich fuer den Compiler.
     // FormatterMarker
     'same meaning for the compiler - only a comment changes; GExperts, '
-      + 'CnWizards and JCF now recognise the marker'
+      + 'CnWizards and JCF now recognise the marker',
+    // DfmComponentUnused
+    'a leaf component with no reference anywhere - deleting it removes '
+      + 'nothing else'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -3046,7 +3075,8 @@ const
     'Let the loop run %s',
     'Remove the empty override %s',
     'Write Result instead of %s',
-    'Write the formatter marker exactly'
+    'Write the formatter marker exactly',
+    'Delete the unused component'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -3079,7 +3109,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..99] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..106] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -3185,7 +3215,8 @@ const
     (Name: 'PlanLoopBound'; Plan: PlanLoopBound),
     (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty),
     (Name: 'PlanFuncNameResult'; Plan: PlanFuncNameResult),
-    (Name: 'PlanFormatterMarker'; Plan: PlanFormatterMarker)
+    (Name: 'PlanFormatterMarker'; Plan: PlanFormatterMarker),
+    (Name: 'PlanDfmComponentUnused'; Plan: PlanDfmComponentUnused)
   );
 
 var

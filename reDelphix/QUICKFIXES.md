@@ -4225,6 +4225,48 @@ Nachher:
     procedure Foo;
 ```
 
+<a id="sca184"></a>
+
+### SCA184 – Unbenutzte DFM-Komponente löschen
+
+- **Regel:** SCA184 `DfmComponentUnused` – DFM component is never referenced in code, other units, or the DFM itself
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Delete the unused component` | `Unbenutzte Komponente löschen` | `Supprimer le composant inutilisé` |
+
+**Wirkung:** Löscht den ganzen `object`/`inherited`/`inline`-Block (Kopfzeile bis zum eigenen `end`) aus der .dfm – reine Zeilen-/Einzug-Logik wie bei SCA037 (TabOrder), kein Parser: die Tiefenbilanz zählt `object`/`inherited`/`inline`/`item` als Öffner und jedes `end` (auch `end>` am Schluss einer Collection-Item-Liste wie `Columns = <item .. end item .. end>`) als Schließer, bis die Tiefe wieder auf die der Kopfzeile fällt. Bedeutungsgleich – die Komponente war nachweislich nirgends referenziert.
+
+**Nicht angeboten**
+
+- die Komponente hat selbst Kind-Komponenten (eine Collection-Item-Liste zählt nicht als Kind, s. `uComponentGraph.TPropValueKind.pvkItemList`) – eine Löschung würde benutzte Kinder mitreißen
+- die Fundzeile ist keine `object`/`inherited`/`inline`-Zeile mit dem gemeldeten Namen mehr (verschoben oder schon geändert)
+- kein zugehöriges `end` lässt sich finden
+- das gefundene `end` steht nicht auf derselben Einzugstiefe wie die Kopfzeile (unerwartete Struktur – lieber keine Hilfe als eine falsche)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  object Panel1: TPanel
+    object btnOld: TButton    // aus dem Code entfernt, im DFM geblieben
+      Left = 8
+      Top = 8
+      Caption = 'Old'
+    end
+  end
+```
+
+Nachher:
+
+```pascal
+  object Panel1: TPanel
+  end
+```
+
 <a id="sca188"></a>
 
 ### SCA188 – Bidi-Steuerzeichen entfernen, in Strings als #$-Code
