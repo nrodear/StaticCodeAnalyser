@@ -21,16 +21,22 @@ uses
   uMethodd12,         // TLeakFinding
   uSCAConsts,         // TFindingKind
   uRdxBufferMath,     // TRdxEdit
-  uRdxRecipeRunner;   // TRdxFixOutcome
+  uRdxRecipeRunner,   // TRdxFixOutcome
+  uFixArgs;           // TFixArgs (Args, Konzept Fix-Datenfeld S1)
 
 type
   // Was die Hilfe aus einem Fund liest - wie der Anbieter aus TLeakFinding.
   // Variant: TLeakFinding.LeakVariant (SCA001 - die Hilfe der Charge H4
   // gibt es nur fuer freed-outside-finally); '' bei allen anderen Regeln.
+  // Args: TLeakFinding.FixArgs (Konzept Fix-Datenfeld, S1) - bis zur
+  // jeweiligen Regel-Umstellung (S2..S5) immer leer (IsEmpty), ein
+  // bestehender Rundlauf sieht davon nichts, da kein Detektor FixArgs
+  // bisher fuellt.
   TSeen = record
     Line    : Integer;
     Msg     : string;
     Variant : string;
+    Args    : TFixArgs;
   end;
 
   // Der Verteiler einer Testunit: ruft fuer AKind den echten Detektor auf
@@ -166,6 +172,7 @@ begin
         Result[n].Line    := F.LineInt;
         Result[n].Msg     := F.Message;
         Result[n].Variant := F.LeakVariant;
+        Result[n].Args    := F.FixArgs;
         Inc(n);
       end;
     SetLength(Result, n);

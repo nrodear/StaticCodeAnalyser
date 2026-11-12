@@ -1,0 +1,58 @@
+# GitHub Actions workflow: haelt die rohen Meldungs-Leser in reDelphiX
+# (reDelphix/source) als Allowlist fest, bis die Umstellung auf
+# TLeakFinding.FixArgs (Konzept Fix-Datenfeld_2026-10-28, S2..S6)
+# abgeschlossen ist.
+#
+# Hintergrund: bis dahin lesen 81+ Routinen die Daten eines Quick-Fixes
+# (Spalte, Bezeichner, Wert) roh aus dem Meldungstext - eine
+# Umformulierung im Detektor kann einen Fix dadurch still brechen. Dieses
+# Gate laesst die Menge NUR SCHRUMPFEN: ein neuer roher Leser ist rot, ein
+# Allowlist-Eintrag ohne Treffer ist ebenfalls rot (die Regel wurde
+# umgestellt oder der Leser entfernt - die Allowlist muss nachziehen).
+# Zweite Pruefung: FixArgs darf in keinem Export-/Baseline-Pfad auftauchen.
+#
+# Das Gate braucht keinen Bau, nur Python und die Quelltexte unter
+# reDelphix/source. Der Selbsttest laeuft zuerst (synthetische Fixtures,
+# unabhaengig vom Ist-Stand) - ein Gate kann sonst still kaputt sein.
+#
+# Lokal vorab pruefen: `python tools/rdx_fixargs_gate.py --selftest`
+#                 und: `python tools/rdx_fixargs_gate.py`
+
+name: reDelphiX FixArgs
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fixargs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Selbsttest des Gates
+        run: python3 tools/rdx_fixargs_gate.py --selftest
+
+      - name: Run FixArgs gate
+        run: python3 tools/rdx_fixargs_gate.py
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "Neuer roher Leser: eine Routine mit Parameter AMessage/AIn,"
+          echo "die Pos/Copy/Length/StartsWith/EndsWith auf diesem Parameter"
+          echo "oder einen der Lese-Helfer (ColumnFromMessage, QuotedText,"
+          echo "NumberAfterKey, NumberAt, TextBetween, WordAfter,"
+          echo "MessagePart, MessageTail, FirstWordOf, NameFromMessage)"
+          echo "aufruft - in die Allowlist eintragen"
+          echo "(tools/rdx_fixargs_gate.allow) ODER besser: auf FixArgs"
+          echo "umstellen (Konzept_FixDatenfeld_2026-10-28.md, S2..S5)."
+          echo ""
+          echo "Veralteter Eintrag: eine Regel wurde bereits umgestellt oder"
+          echo "der Leser entfernt - den Eintrag aus der Allowlist nehmen."
+          echo ""
+          echo "FixArgs in einem Export/Baseline-Pfad: verboten (das Feld"
+          echo "darf keine Fundzahl, keinen Fingerprint und kein SARIF/"
+          echo "Baseline-Byte bewegen) - die Stelle wieder entfernen."

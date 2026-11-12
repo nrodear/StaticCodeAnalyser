@@ -383,6 +383,13 @@ type
   // True genau dann, wenn AReason = '' (so alle Planer der Tabelle).
   TRdxPlannerOf<TPlan> = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TPlan; out AReason: string): Boolean;
+  // Uebergangsform (Konzept Fix-Datenfeld, S1): wie TRdxPlannerOf<TPlan>,
+  // aber AMessage ist TRdxFindingText (Text + FixArgs) statt string. Bis
+  // zur jeweiligen Regel-Umstellung (S2..S5) nutzt sie noch kein
+  // bestehender Planer - S1 ist reines Geruest.
+  TRdxPlannerInOf<TPlan> = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: TRdxFindingText; out APlan: TPlan;
+    out AReason: string): Boolean;
   // Name (Menuetext) und Ersetzungen eines Plans in das Ergebnis.
   TRdxPlanPartsOf<TPlan> = procedure(const APlan: TPlan;
     var AOutcome: TRdxFixOutcome);
@@ -401,6 +408,15 @@ type
     NeedsOpen : Boolean;
   end;
 
+  // Wie TRdxPlanForm<TPlan>, aber mit TRdxPlannerInOf<TPlan> (S1-Geruest,
+  // noch ohne Aufrufer).
+  TRdxPlanFormIn<TPlan> = record
+    Planner   : TRdxPlannerInOf<TPlan>;
+    Parts     : TRdxPlanPartsOf<TPlan>;
+    Check     : TRdxPlanCheckOf<TPlan>;
+    NeedsOpen : Boolean;
+  end;
+
   // Das Geruest.
   TRdxFixFrame = class
   public
@@ -410,6 +426,11 @@ type
     // Angebot der Check; gesperrt ohne Ersetzungen. Den Plan bekommt der
     // Aufrufer in APlan (Kennzeichnung, Variants).
     class function Run<TPlan>(const AForm: TRdxPlanForm<TPlan>;
+      APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
+      out APlan: TPlan): TRdxFixOutcome; static;
+    // Wie Run<TPlan>, aber uebergibt FindingTextOf(AFinding) (Text +
+    // FixArgs) statt AFinding.Message (S1-Geruest, noch ohne Aufrufer).
+    class function RunIn<TPlan>(const AForm: TRdxPlanFormIn<TPlan>;
       APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
       out APlan: TPlan): TRdxFixOutcome; static;
   end;
@@ -430,6 +451,43 @@ begin
   try
     Result.Enabled := AForm.Planner(Map, AFinding.LineInt, AFinding.Message,
       APlan, Result.Reason);
+    AForm.Parts(APlan, Result);
+    if Result.Enabled and Assigned(AForm.Check) then
+      Result.Reason := AForm.Check(APlaces, Map, AFinding, APlan);
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
+  Result.Enabled := Result.Enabled and (Result.Reason = '');
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+// Baut den Planer-Eingang aus einem Fund (Konzept Fix-Datenfeld, S1): Text
+// aus der Meldung (Implicit), Args aus AFinding.FixArgs - solange keine
+// Regel FixArgs fuellt (S2..S5), bleibt Args leer und ein Leser faellt auf
+// Text zurueck wie bisher.
+function FindingTextOf(AFinding: TLeakFinding): TRdxFindingText;
+begin
+  Result := AFinding.Message;
+  Result.Args := AFinding.FixArgs;
+end;
+
+class function TRdxFixFrame.RunIn<TPlan>(const AForm: TRdxPlanFormIn<TPlan>;
+  APlaces: TSourcePlaces; ALines: TStrings; AFinding: TLeakFinding;
+  out APlan: TPlan): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  APlan := Default(TPlan);
+  Result.Reason := MsgNoFileOpen;
+  if not Assigned(ALines) then Exit;
+  if AForm.NeedsOpen and not (Assigned(APlaces) and APlaces.IsOpen) then
+    Exit;
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Enabled := AForm.Planner(Map, AFinding.LineInt,
+      FindingTextOf(AFinding), APlan, Result.Reason);
     AForm.Parts(APlan, Result);
     if Result.Enabled and Assigned(AForm.Check) then
       Result.Reason := AForm.Check(APlaces, Map, AFinding, APlan);
