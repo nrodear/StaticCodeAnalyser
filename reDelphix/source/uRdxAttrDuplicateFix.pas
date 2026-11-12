@@ -38,7 +38,8 @@ interface
 
 uses
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap;           // TRdxCodeMap
+  uRdxCodeMap,           // TRdxCodeMap
+  uFixArgs;              // FA_NAME/FA_LINE
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -69,12 +70,12 @@ type
     // Meldung. Die Ersetzung loescht die Zeile bzw. die Gruppe
     // (NewText = ''); sonst der Grund.
     class function DeleteDuplicate(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Die Meldung zerlegt: AKey (Name + Rest wie der Detektor ihn bildet)
     // und die Zeile des ersten Treffers. False, wenn sie die Form nicht hat.
-    class function ReadMessage(const AMessage: string; out AKey: string;
+    class function ReadMessage(const AMessage: TRdxFindingText; out AKey: string;
       out AFirstLine: Integer): Boolean; static;
 
     // Die Zeile als reine Folge von Attributgruppen. '' oder das msgid des
@@ -135,26 +136,36 @@ begin
     end;
 end;
 
-class function TRdxAttrDuplicateFix.ReadMessage(const AMessage: string;
+class function TRdxAttrDuplicateFix.ReadMessage(const AMessage: TRdxFindingText;
   out AKey: string; out AFirstLine: Integer): Boolean;
 var
-  P, Q, E : Integer;
+  P, Q, E  : Integer;
+  LineText : string;
+  Text     : string;
 begin
-  Result := False;
   AKey := '';
   AFirstLine := 0;
-  P := Pos(KEY_OPEN, AMessage);
+  if AMessage.Args.TryGet(FA_NAME, AKey) and AMessage.Args.TryGet(FA_LINE, LineText) then
+  begin
+    AFirstLine := StrToIntDef(LineText, 0);
+    Exit((AKey <> '') and (AFirstLine > 0));
+  end;
+  AKey := '';
+  AFirstLine := 0;
+  Result := False;
+  Text := AMessage.Text;
+  P := Pos(KEY_OPEN, Text);
   if P = 0 then Exit;
   Inc(P, Length(KEY_OPEN));
-  Q := Pos(KEY_CLOSE, AMessage);
+  Q := Pos(KEY_CLOSE, Text);
   if Q < P then Exit;
-  AKey := Copy(AMessage, P, Q - P);
+  AKey := Copy(Text, P, Q - P);
   Inc(Q, Length(KEY_CLOSE));
   E := Q;
-  while (E <= Length(AMessage)) and (AMessage[E] >= '0')
-        and (AMessage[E] <= '9') do
+  while (E <= Length(Text)) and (Text[E] >= '0')
+        and (Text[E] <= '9') do
     Inc(E);
-  AFirstLine := StrToIntDef(Copy(AMessage, Q, E - Q), 0);
+  AFirstLine := StrToIntDef(Copy(Text, Q, E - Q), 0);
   Result := (AKey <> '') and (AFirstLine > 0);
 end;
 
@@ -222,7 +233,7 @@ begin
 end;
 
 class function TRdxAttrDuplicateFix.DeleteDuplicate(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Key, R, L             : string;

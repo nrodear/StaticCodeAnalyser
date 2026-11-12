@@ -21,7 +21,8 @@ interface
 
 uses
   uRdxBufferMath,     // TRdxEdit
-  uRdxCodeMap;        // TRdxCodeMap
+  uRdxCodeMap,        // TRdxCodeMap
+  uFixArgs;           // FA_EXPR/FA_EXPR2
 
 const
   // Die Gruende als englische msgids (E29), uebersetzt mit _() aus
@@ -46,19 +47,19 @@ type
   public
     // Die Grenzen aus der Meldung 'Reversed for-range: A > B ...'. False,
     // wenn eine fehlt.
-    class function BoundsOf(const AMessage: string; out AFrom,
+    class function BoundsOf(const AMessage: TRdxFindingText; out AFrom,
       ATo: Int64): Boolean; static;
 
     // 'to' -> 'downto' im einen umgekehrten for-Kopf auf ALine; die
     // Schreibweise folgt dem 'to' ('TO' -> 'DOWNTO').
     class function ToDownto(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Start- und Endwert des Kopfs vertauschen ('10 to 1' -> '1 to 10');
     // das 'to' und der Leerraum dazwischen bleiben, wie sie sind.
     class function SwapBounds(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -165,7 +166,7 @@ end;
 // Wochen-Reviews, G09-03, hier ausgeschrieben); den Kopf des letzten
 // Treffers liest ReadHead noch einmal - wie bisher steht in ASite der
 // letzte.
-function FindSite(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+function FindSite(AMap: TRdxCodeMap; ALine: Integer; const AMessage: TRdxFindingText;
   out ASite: TRdxForSite): string;
 var
   Search     : TRdxLineSearch;
@@ -217,25 +218,30 @@ end;
 
 { TRdxForRangeFix }
 
-class function TRdxForRangeFix.BoundsOf(const AMessage: string; out AFrom,
+class function TRdxForRangeFix.BoundsOf(const AMessage: TRdxFindingText; out AFrom,
   ATo: Int64): Boolean;
 var
-  P : Integer;
+  P        : Integer;
+  FromText, ToText, Text : string;
 begin
-  Result := False;
   AFrom := 0;
   ATo := 0;
-  P := Pos(KEY_RANGE, AMessage);
+  if AMessage.Args.TryGet(FA_EXPR, FromText)
+     and AMessage.Args.TryGet(FA_EXPR2, ToText) then
+    Exit(TryStrToInt64(FromText, AFrom) and TryStrToInt64(ToText, ATo));
+  Result := False;
+  Text := AMessage.Text;
+  P := Pos(KEY_RANGE, Text);
   if P = 0 then Exit;
   Inc(P, Length(KEY_RANGE));
-  if not ReadNumberAt(AMessage, P, AFrom) then Exit;
-  if Copy(AMessage, P, Length(KEY_GREATER)) <> KEY_GREATER then Exit;
+  if not ReadNumberAt(Text, P, AFrom) then Exit;
+  if Copy(Text, P, Length(KEY_GREATER)) <> KEY_GREATER then Exit;
   Inc(P, Length(KEY_GREATER));
-  Result := ReadNumberAt(AMessage, P, ATo);
+  Result := ReadNumberAt(Text, P, ATo);
 end;
 
 class function TRdxForRangeFix.ToDownto(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Site : TRdxForSite;
 begin
@@ -251,7 +257,7 @@ begin
 end;
 
 class function TRdxForRangeFix.SwapBounds(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Site          : TRdxForSite;
   L, A, Mid, B  : string;

@@ -19,7 +19,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs;
 
 type
   TRestHttpSecurityDetector = class
@@ -542,13 +542,14 @@ var
   ReIndyOldProto    : TRegEx;
   ReSecProtoOld     : TRegEx;
 
-  procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
+  function Emit(K: TFindingKind; const Detail: string; AtPos: Integer): TLeakFinding;
   begin
     // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
     // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
     // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
     // unveraendert bleiben.
-    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
+    Result := TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K);
+    Results.Add(Result);
   end;
 
 begin
@@ -622,7 +623,7 @@ begin
                'travel unencrypted. Suppress for ad-hoc dev URLs with ' +
                '// noinspection HttpInsteadOfHttps',
                [Url]),
-        M.Index);
+        M.Index).WithFixArg(FA_VALUE, Url);
     end;
 
     // 2a) ...SecureProtocols := [];   NUTZT CodeNoStr (kein Self-Match in Templates).

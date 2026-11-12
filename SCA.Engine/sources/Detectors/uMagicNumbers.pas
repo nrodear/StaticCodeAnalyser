@@ -11,7 +11,7 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uFixArgs;
 
 type
   TMagicNumberDetector = class
@@ -209,6 +209,7 @@ begin
         F.MissingVar := Format('Magic number "%s" in if condition - use a constant',
                                [NumStr]);
         F.SetKind(fkMagicNumber);
+        F.WithFixArg(FA_VALUE, NumStr);
         Results.Add(F);
       end;
     end;

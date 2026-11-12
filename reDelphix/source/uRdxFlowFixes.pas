@@ -85,7 +85,7 @@ type
     // Ausdruck hinter W2 und zwei solchen Anweisungen auf der Zeile (die
     // Meldung nennt keine Spalte).
     class function RedundantConditional(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxFlowPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
       out AReason: string): Boolean; static;
 
     // SCA080: das 'exit;' bzw. 'continue;' der Meldung ('`exit;` directly
@@ -297,22 +297,35 @@ end;
 
 { ---- SCA098 ---- }
 
-// X, W1 und W2 aus '`if Cond then X := True else X := False` can be ...'.
-function CondMessageOf(const AMessage: string; out AMsg: TRdxCondMsg): Boolean;
+// X, W1 und W2 aus '`if Cond then X := True else X := False` can be ...' -
+// FixArgs (FA_NAME/FA_EXPR/FA_EXPR2) vor der Meldung.
+function CondMessageOf(const AMessage: TRdxFindingText; out AMsg: TRdxCondMsg): Boolean;
 var
   P, Q, R, S, E : Integer;
+  Text          : string;
 begin
   AMsg := Default(TRdxCondMsg);
-  P := Pos(' then ', AMessage);
-  Q := Pos(KEY_ASSIGN, AMessage, P + 1);
-  R := Pos(' else ', AMessage, Q + 1);
-  S := Pos(KEY_ASSIGN, AMessage, R + 1);
-  E := Pos('`', AMessage, S + 1);
+  if AMessage.Args.TryGet(FA_NAME, AMsg.Target)
+     and AMessage.Args.TryGet(FA_EXPR, AMsg.First)
+     and AMessage.Args.TryGet(FA_EXPR2, AMsg.Second) then
+  begin
+    AMsg.First := LowerCase(AMsg.First);
+    AMsg.Second := LowerCase(AMsg.Second);
+    Exit((AMsg.Target <> '') and (AMsg.First <> AMsg.Second)
+      and InList(AMsg.First, BOOL_WORDS) and InList(AMsg.Second, BOOL_WORDS));
+  end;
+  AMsg := Default(TRdxCondMsg);
+  Text := AMessage.Text;
+  P := Pos(' then ', Text);
+  Q := Pos(KEY_ASSIGN, Text, P + 1);
+  R := Pos(' else ', Text, Q + 1);
+  S := Pos(KEY_ASSIGN, Text, R + 1);
+  E := Pos('`', Text, S + 1);
   if (P = 0) or (Q = 0) or (R = 0) or (S = 0) or (E = 0) then
     Exit(False);
-  AMsg.Target := Copy(AMessage, P + 6, Q - P - 6);
-  AMsg.First := LowerCase(Copy(AMessage, Q + 4, R - Q - 4));
-  AMsg.Second := LowerCase(Copy(AMessage, S + 4, E - S - 4));
+  AMsg.Target := Copy(Text, P + 6, Q - P - 6);
+  AMsg.First := LowerCase(Copy(Text, Q + 4, R - Q - 4));
+  AMsg.Second := LowerCase(Copy(Text, S + 4, E - S - 4));
   Result := (AMsg.Target <> '') and (AMsg.First <> AMsg.Second)
     and InList(AMsg.First, BOOL_WORDS) and InList(AMsg.Second, BOOL_WORDS);
 end;
@@ -608,7 +621,7 @@ begin
 end;
 
 class function TRdxFlowFixes.RedundantConditional(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxFlowPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
   out AReason: string): Boolean;
 var
   Msg  : TRdxCondMsg;

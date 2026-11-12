@@ -57,7 +57,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils;
+  uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uFixArgs;
 
 type
   TFormatMismatchDetector = class
@@ -883,6 +883,7 @@ var
           'Format: float spec %s without TFormatSettings - locale-dependent '
           + '(comma vs. dot decimal separator)', [FmtStr]);
         F.SetKind(fkFormatLocaleHint);
+        F.WithFixArg(FA_VALUE, FmtStr);
         Results.Add(F);
       end;
     end;

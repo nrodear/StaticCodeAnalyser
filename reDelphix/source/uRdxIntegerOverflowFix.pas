@@ -51,7 +51,8 @@ interface
 
 uses
   uRdxBufferMath,   // TRdxEdit
-  uRdxCodeMap;      // TRdxCodeMap
+  uRdxCodeMap,      // TRdxCodeMap
+  uFixArgs;         // FA_NAME/FA_EXPR/FA_EXPR2
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -91,7 +92,7 @@ type
     // SCA137: 'lhs := a * b;' auf ALine -> 'lhs := Int64(a) * b;' (s. Kopf;
     // die Textform - den Typbeweis fragt der Adapter mit ProofReason).
     class function CastLeft(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxOverflowPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxOverflowPlan;
       out AReason: string): Boolean; static;
 
     // Der Typbeweis zum Plan, aus den Antworten des Quellstellen-Diensts:
@@ -106,7 +107,7 @@ type
 // Die drei Namen der Meldung ('Total := Count * Size - product overflows
 // ...'); False, wenn sie nicht diese Form hat oder einer kein einfacher
 // Bezeichner ist.
-function ProductOf(const AMessage: string; out ATarget, ALeft,
+function ProductOf(const AMessage: TRdxFindingText; out ATarget, ALeft,
   ARight: string): Boolean;
 
 implementation
@@ -147,22 +148,30 @@ begin
       Exit(False);
 end;
 
-function ProductOf(const AMessage: string; out ATarget, ALeft,
+function ProductOf(const AMessage: TRdxFindingText; out ATarget, ALeft,
   ARight: string): Boolean;
 var
   A, M, E : Integer;
+  Text    : string;
 begin
   ATarget := '';
   ALeft := '';
   ARight := '';
-  A := Pos(KEY_ASSIGN, AMessage);
-  M := Pos(KEY_TIMES, AMessage);
-  E := Pos(KEY_TAIL, AMessage);
+  if AMessage.Args.TryGet(FA_NAME, ATarget) and AMessage.Args.TryGet(FA_EXPR, ALeft)
+     and AMessage.Args.TryGet(FA_EXPR2, ARight) then
+    Exit(IsPlainIdent(ATarget) and IsPlainIdent(ALeft) and IsPlainIdent(ARight));
+  ATarget := '';
+  ALeft := '';
+  ARight := '';
+  Text := AMessage.Text;
+  A := Pos(KEY_ASSIGN, Text);
+  M := Pos(KEY_TIMES, Text);
+  E := Pos(KEY_TAIL, Text);
   Result := (A > 1) and (M > A) and (E > M);
   if not Result then Exit;
-  ATarget := Copy(AMessage, 1, A - 1);
-  ALeft := Copy(AMessage, A + Length(KEY_ASSIGN), M - A - Length(KEY_ASSIGN));
-  ARight := Copy(AMessage, M + Length(KEY_TIMES), E - M - Length(KEY_TIMES));
+  ATarget := Copy(Text, 1, A - 1);
+  ALeft := Copy(Text, A + Length(KEY_ASSIGN), M - A - Length(KEY_ASSIGN));
+  ARight := Copy(Text, M + Length(KEY_TIMES), E - M - Length(KEY_TIMES));
   Result := IsPlainIdent(ATarget) and IsPlainIdent(ALeft)
     and IsPlainIdent(ARight);
 end;
@@ -236,7 +245,7 @@ end;
 { TRdxIntegerOverflowFix }
 
 class function TRdxIntegerOverflowFix.CastLeft(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxOverflowPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxOverflowPlan;
   out AReason: string): Boolean;
 var
   LowT, LowL, LowR    : string;

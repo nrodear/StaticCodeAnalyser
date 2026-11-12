@@ -20,7 +20,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext,
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext, uFixArgs,
   uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
@@ -354,6 +354,8 @@ begin
           'Reversed for-range: %d > %d (use `downto`?) - %s',
           [FromVal, ToVal, Snippet]);
         F.SetKind(fkReversedForRange);
+        F.WithFixArg(FA_EXPR, IntToStr(FromVal));
+        F.WithFixArg(FA_EXPR2, IntToStr(ToVal));
         Results.Add(F);
       end;
     end;

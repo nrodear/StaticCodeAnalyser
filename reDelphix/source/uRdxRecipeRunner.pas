@@ -371,8 +371,12 @@ begin
   // Nur SCA044 und SCA003 nennen ihr Ziel in der Meldung; passt die Form
   // nicht, bleibt die Anfrage ohne Gegenprobe (Ziel '', Zahl -1).
   if AFinding.Kind = fkConcatToFormat then
-    TRdxRecipes.ConcatFindingTarget(AFinding.MissingVar, Result.Target,
-      Result.Plus)
+  begin
+    if not (AFinding.FixArgs.TryGet(FA_NAME, Result.Target)
+       and TryStrToInt(AFinding.FixArgs.Get(FA_COUNT, ''), Result.Plus)) then
+      TRdxRecipes.ConcatFindingTarget(AFinding.MissingVar, Result.Target,
+        Result.Plus);
+  end
   else if AFinding.Kind = fkSQLInjection then
   begin
     if not AFinding.FixArgs.TryGet(FA_NAME, Result.Target) then

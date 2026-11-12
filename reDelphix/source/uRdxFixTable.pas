@@ -664,19 +664,12 @@ end;
 // SCA098, SCA080, SCA047 (Charge H2): mit offenem Quellstellen-Dienst,
 // ACheck danach (nil = keiner) - Typen, with-Bloecke. Name ist das Ziel
 // bzw. Exit/Continue.
-function FlowForm(APlanner: TRdxPlannerOf<TRdxFlowPlan>;
-  ACheck: TRdxPlanCheckOf<TRdxFlowPlan>): TRdxPlanForm<TRdxFlowPlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := FlowParts;
-  Result.Check := ACheck;
-  Result.NeedsOpen := True;
-end;
-
-// SCA080/SCA047 (Fix-Datenfeld S3b-1): wie FlowForm, aber fuer
-// TRdxPlannerInOf<TRdxFlowPlan> (TRdxFindingText statt string) - SCA098
-// bleibt bei FlowForm, ihr Planer liest die Meldung unveraendert.
-// FlowParts kennt nur APlan, bleibt unveraendert wiederverwendbar.
+//
+// SCA080/SCA047 (Fix-Datenfeld S3b-1), SCA098 (S4): FlowFormIn fuer
+// TRdxPlannerInOf<TRdxFlowPlan> (TRdxFindingText statt string) - alle drei
+// Planer von TRdxFlowPlan sind jetzt umgestellt, die alte FlowForm/
+// TRdxPlannerOf-Form entfaellt. FlowParts kennt nur APlan, bleibt
+// unveraendert wiederverwendbar.
 function FlowFormIn(APlanner: TRdxPlannerInOf<TRdxFlowPlan>;
   ACheck: TRdxPlanCheckOf<TRdxFlowPlan>): TRdxPlanFormIn<TRdxFlowPlan>;
 begin
@@ -706,18 +699,10 @@ end;
 // SCA009, SCA001, SCA109, SCA153, SCA156 (Charge H4): eine Ersetzung von
 // der Zeile von A bis zur Freigabe; Name X, die Sperre bzw. der Puffer -
 // schon aus der Meldung, auch wenn der Planer ablehnt.
-function TryForm(
-  APlanner: TRdxPlannerOf<TRdxTryPlan>): TRdxPlanForm<TRdxTryPlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := TryParts;
-  Result.Check := nil;
-  Result.NeedsOpen := False;
-end;
-
-// *In-Form fuer SCA009/SCA001/SCA156 (Fix-Datenfeld S3b-2, auf FixArgs
-// umgestellt) - SCA109/SCA153 bleiben bei TryForm/TRdxPlannerOf bis sie
-// in einer spaeteren Charge (S4) umgestellt werden.
+//
+// *In-Form: SCA009/SCA001/SCA156 (Fix-Datenfeld S3b-2), SCA109/SCA153 (S4)
+// - alle fuenf Planer von TRdxTryPlan sind jetzt umgestellt, die alte
+// TryForm/TRdxPlannerOf-Form entfaellt.
 function TryFormIn(
   APlanner: TRdxPlannerInOf<TRdxTryPlan>): TRdxPlanFormIn<TRdxTryPlan>;
 begin
@@ -817,9 +802,10 @@ begin
 end;
 
 // SCA137: mit offenem Quellstellen-Dienst (der Typbeweis), danach
-// OverflowCheck.
-function OverflowForm(
-  APlanner: TRdxPlannerOf<TRdxOverflowPlan>): TRdxPlanForm<TRdxOverflowPlan>;
+// OverflowCheck. Fix-Datenfeld S4: CastLeft ist der einzige Planer von
+// TRdxOverflowPlan und wurde selbst auf TRdxFindingText umgestellt.
+function OverflowFormIn(
+  APlanner: TRdxPlannerInOf<TRdxOverflowPlan>): TRdxPlanFormIn<TRdxOverflowPlan>;
 begin
   Result.Planner := APlanner;
   Result.Parts := OverflowParts;
@@ -1317,8 +1303,8 @@ function PlanRedundantConditional(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxFlowPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
-    FlowForm(TRdxFlowFixes.RedundantConditional, CondCheck),
+  Result := TRdxFixFrame.RunIn<TRdxFlowPlan>(
+    FlowFormIn(TRdxFlowFixes.RedundantConditional, CondCheck),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1486,8 +1472,8 @@ function PlanLockWithoutFinally(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxTryPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxTryPlan>(
-    TryForm(TRdxTryFixes.LockWithoutFinally),
+  Result := TRdxFixFrame.RunIn<TRdxTryPlan>(
+    TryFormIn(TRdxTryFixes.LockWithoutFinally),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1496,8 +1482,8 @@ function PlanUnpairedLock(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxTryPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxTryPlan>(
-    TryForm(TRdxTryFixes.UnpairedLock),
+  Result := TRdxFixFrame.RunIn<TRdxTryPlan>(
+    TryFormIn(TRdxTryFixes.UnpairedLock),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1677,14 +1663,14 @@ end;
 function PlanReversedForRange(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxForRangeFix.ToDownto);
 end;
 
 function PlanReversedForRangeAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxForRangeFix.SwapBounds);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -1830,7 +1816,7 @@ end;
 function PlanAttrDuplicate(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxAttrDuplicateFix.DeleteDuplicate);
 end;
 
@@ -1933,8 +1919,8 @@ function PlanIntegerOverflow(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxOverflowPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxOverflowPlan>(
-    OverflowForm(TRdxIntegerOverflowFix.CastLeft),
+  Result := TRdxFixFrame.RunIn<TRdxOverflowPlan>(
+    OverflowFormIn(TRdxIntegerOverflowFix.CastLeft),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2016,9 +2002,11 @@ var
   L, Op, R     : string;
   InWith       : Boolean;
   WithL, WithR : string;
+  Msg          : TRdxFindingText;
 begin
   Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxFloatEqualityFix.CallName(AFinding.Message);
+  Msg := FindingTextOf(AFinding);
+  Result.Name := TRdxFloatEqualityFix.CallName(Msg);
   if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
   begin
     Result.Reason := MsgNoFileOpen;
@@ -2028,7 +2016,7 @@ begin
   Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxFloatEqualityFix.ToleranceCompare(Map,
-      AFinding.LineInt, AFinding.Message, Result.Edits[0], Result.Reason);
+      AFinding.LineInt, Msg, Result.Edits[0], Result.Reason);
     // Ein with, dessen Ziele Records dieser Unit nur mit Feldern sind,
     // bindet nur deren Felder (rwE30) - dann zaehlt der Blockbereich des
     // Quellstellen-Dienstes nicht, und ein Operand, der ein Feld ist, hat
@@ -2039,14 +2027,14 @@ begin
     if Result.Enabled then
     begin
       TRdxFloatEqualityFix.WithMemberTypes(Map, AFinding.LineInt,
-        AFinding.Message, InWith, WithL, WithR);
+        Msg, InWith, WithL, WithR);
       Result.Reason := TRdxFloatEqualityFix.ContextReason(
         AFinding.Confidence = fcLow,
         APlaces.InWithBlock(AFinding.LineInt) and not InWith,
-        AFinding.Message);
+        Msg);
     end;
     if Result.Enabled and (Result.Reason = '')
-       and TRdxFloatEqualityFix.Operands(AFinding.Message, L, Op, R) then
+       and TRdxFloatEqualityFix.Operands(Msg, L, Op, R) then
       Result.Reason := TRdxFloatEqualityFix.TypeReason(
         L, FloatOperandType(APlaces, Map, AFinding.LineInt, L, WithL),
         R, FloatOperandType(APlaces, Map, AFinding.LineInt, R, WithR));

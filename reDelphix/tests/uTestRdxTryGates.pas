@@ -553,7 +553,7 @@ procedure TTestRdxTryGates.SystemQualified_Jumps;
 var
   R : string;
 begin
-  PlanOf(TRdxTryFixes.LockWithoutFinally, InProc(['  FLock.Enter;',
+  PlanOfIn(TRdxTryFixes.LockWithoutFinally, InProc(['  FLock.Enter;',
     '  if C then System.Exit;', '  DoWork;', '  FLock.Leave;']), 6,
     Format(MSG_109, ['FLock']), R);
   Assert.IsTrue(Pos('Exit in Zeile 7 - mit finally', R) > 0, R);
@@ -632,7 +632,7 @@ procedure TTestRdxTryGates.Lock_PercentInMessage;
 var
   R : string;
 begin
-  PlanOf(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
+  PlanOfIn(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
     '  DoWork;', '  Locks[%1].UnLock;']), 6,
     Format(MSG_153, ['Locks[%1].Lock']), R);
   // 'traegt' im Rahmen von uRdxCodeMap.OneTokenReason bekommt seit der
