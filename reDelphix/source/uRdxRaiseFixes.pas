@@ -54,7 +54,7 @@ type
     // EFoo.Create(...) is constructed ...') als ganze Anweisung - davor ein
     // Anweisungsanfang, hinter der ')' ihr Ende - bekommt 'raise ' davor.
     class function MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA122: 'raise E' auf ALine (E aus der Meldung 'Re-raise of bound
@@ -68,7 +68,7 @@ type
     // ('Wrap(E)'): ein var-/out-Parameter aendert E ebenso, und ob er es
     // ist, sieht der Planer nicht (Review Woche G07-19).
     class function ReRaise(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -94,6 +94,7 @@ uses
   // StartsStatement (SCA120: kein bedingter Ausdruck) kommt seit der
   // Folgewelle des Wochen-Reviews (G07-13) aus uRdxCodeMap - bis dahin band
   // die Unit dafuer uRdxStructFixes ein.
+  uFixArgs,          // FA_NAME/FA_TYPE (Fix-Datenfeld S3b)
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine, FindMethodDecls, MethodDecl (HookReason)
@@ -844,7 +845,7 @@ begin
 end;
 
 class function TRdxRaiseFixes.MissingRaise(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Target : string;
   Hit    : TRdxToken;
@@ -854,7 +855,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Target := CreateTargetOf(AMessage);
+  if not AMessage.Args.TryGet(FA_TYPE, Target) then
+    Target := CreateTargetOf(AMessage.Text);
   if Target = '' then
   begin
     AReason := _('the message has no exception class');
@@ -1057,7 +1059,7 @@ begin
 end;
 
 class function TRdxRaiseFixes.ReRaise(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Name          : string;
   Hit, BoundTok : TRdxToken;
@@ -1069,7 +1071,8 @@ begin
   // 'name of the variable' wie de 'Name der Variablen' - 'the message has
   // no variable name' ist die msgid zu 'Variablenname fehlt in der Meldung'
   // (uRdxCleanupFixes), ein anderer Wortlaut.
-  Name := QuotedText(AMessage, '"');
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := QuotedText(AMessage.Text, '"');
   if Name = '' then
     AReason := _('the message has no name of the variable')
   else

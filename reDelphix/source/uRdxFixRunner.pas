@@ -98,7 +98,7 @@ type
     // nur die lokale Kopie nil). Fehlt SysUtils, kommt die uses-
     // Einfuegung mit - ausser wie bei SCA085 (FreeAndNilCalledLine).
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
-      ALine: Integer; const AMessage: string;
+      ALine: Integer; const AMessage: TRdxFindingText;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
     // SCA066: 'Foo()' -> 'Foo' (TRdxExprFixes.EmptyArgs). Dazu die Typen:
@@ -186,7 +186,7 @@ function MapFixIn(ALines: TStrings; ALine: Integer;
   const AMessage: TRdxFindingText; APlan: TRdxMapPlannerIn): TRdxFixOutcome;
 // SCA123: 'TFoo(X).Free' -> 'X.Free' - Bedingungen am Rumpf.
 function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
-  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 // SCA020, zweiter Eintrag: raise ENotImplemented im leeren Rumpf.
 function EmptyRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
   ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome;
@@ -218,6 +218,7 @@ implementation
 uses
   System.SysUtils,
   System.Generics.Collections,   // TDictionary (UnitStillUsed)
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3b)
   uRefactorInfo,     // TRefactorSpan (FindUsesEntry)
   uRdxRecipes,       // TRdxRecipes (IsPlainIdent, HasUnit)
   uRdxBlocks,        // TRdxBlocks.FindClassHeads/HeritageOf (OtaFreeAncestor)
@@ -948,7 +949,7 @@ begin
 end;
 
 class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
-  ALines: TStrings; ALine: Integer; const AMessage: string;
+  ALines: TStrings; ALine: Integer; const AMessage: TRdxFindingText;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   Map     : TRdxCodeMap;
@@ -963,7 +964,8 @@ begin
   end;
   // X wie in der Meldung - auch fuer Menuetext und Grund, wenn der Planer
   // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
-  Result.Name := FreeReceiverOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Result.Name) then
+    Result.Name := FreeReceiverOf(AMessage.Text);
   SetLength(Result.Edits, 1);
   Called := 0;
   Map := TRdxCodeMap.Acquire(ALines);
@@ -1545,12 +1547,13 @@ end;
 // TRefCountedObject.Free zaehlt nur herunter), und ein Pointer-Operand
 // braucht den Cast zum Uebersetzen (Gegen-Review Zeilen-Hilfen).
 function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
-  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
   Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxLineFixes.CastTargetOf(AMessage);
+  if not AMessage.Args.TryGet(FA_TYPE, Result.Name) then
+    Result.Name := TRdxLineFixes.CastTargetOf(AMessage.Text);
   Map := OpenMapFor(APlaces, ALines, Result);
   if Map = nil then Exit;
   try

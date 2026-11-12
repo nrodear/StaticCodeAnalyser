@@ -64,7 +64,7 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uFixArgs;
 
 function IsIdent(C: Char): Boolean; inline;
 begin
@@ -298,6 +298,7 @@ begin
         '`%s;` directly before `end` is redundant - control flow ' +
         'already leaves the block.', [Kw]);
       F.SetKind(fkRedundantJump);
+      F.WithFixArg(FA_FORM, Kw);
       Results.Add(F);
     end;
     p := q;

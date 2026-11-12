@@ -74,7 +74,7 @@ type
     // SCA011: die ganzen Zeilen von ALine (erste tote Anweisung) bis zur
     // letzten Zeile vor dem Listenende loeschen.
     class function DeleteDeadCode(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // Die Zahl der Zeilen, die eine Ersetzung von DeleteDeadCode loescht
     // (fuer den Menuetext: Name des Eintrags).
@@ -88,6 +88,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,         // FA_FORM (Fix-Datenfeld S3b)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText;         // _(): in die reDelphix-Sprache, nie uLocalization
 
@@ -390,7 +391,7 @@ begin
 end;
 
 class function TRdxDeadCodeFix.DeleteDeadCode(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   TermWord                 : string;
@@ -401,7 +402,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  TermWord := TerminatorOf(AMessage);
+  if not AMessage.Args.TryGet(FA_FORM, TermWord) then
+    TermWord := TerminatorOf(AMessage.Text);
   if TermWord = '' then
   begin
     AReason := _(R_DEAD_NO_TERM);

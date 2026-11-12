@@ -46,7 +46,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12,
+  uAstNode, uSCAConsts, uMethodd12, uFixArgs,
   uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
 type
@@ -264,7 +264,7 @@ begin
         Format('Type-cast %s(...) before Free/Destroy - on a class-typed ' +
                'operand the cast is redundant (Destroy is virtual)',
                [Target]),
-        fkCastAndFree));
+        fkCastAndFree).WithFixArg(FA_TYPE, Target));
     end;
   finally
     Calls.Free;

@@ -58,7 +58,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Classes, uDetectorUtils, uFileTextCache;
+  System.Classes, uDetectorUtils, uFileTextCache, uFixArgs;
 
 function DirLineBetween(const Ranges: TArray<TCondRange>; A, B: Integer): Boolean;
 // Welle 3: True wenn eine {$IFDEF}-Direktiven-Zeile strikt zwischen A und B liegt.
@@ -295,6 +295,7 @@ begin
             F.LineNumber := IntToStr(Nxt.Line);
             F.MissingVar := 'Dead code after ' + TermName;
             F.SetKind(fkDeadCode);
+            F.WithFixArg(FA_FORM, LowerCase(TermName));
             Results.Add(F);
             Break; // Pro Block nur einmal melden
           end;

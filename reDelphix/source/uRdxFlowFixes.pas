@@ -98,7 +98,7 @@ type
     // der Zeile, einer eigenen Routine Exit/Continue in der Unit und im
     // finally-Teil. Hinter dem else eines if faellt 'else Exit' weg.
     class function RedundantJump(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxFlowPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
       out AReason: string): Boolean; static;
 
     // SCA047: das eine 'X := X' auf ALine (X wie in der Meldung
@@ -109,7 +109,7 @@ type
     // Anweisung hinter then/else/do, eines case-Zweigs oder eines Blocks
     // und ueber mehrere Zeilen.
     class function SelfAssignment(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxFlowPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
       out AReason: string): Boolean; static;
   end;
 
@@ -123,6 +123,7 @@ uses
   // StartsStatement und ElseBelongsToIf ebenso seit der Folgewelle des
   // Wochen-Reviews (G07-13) - bis dahin aus uRdxStructFixes.
   System.SysUtils,
+  uFixArgs,          // FA_NAME/FA_FORM (Fix-Datenfeld S3b)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxText;          // _() und die gemeinsamen Texte (Msg...): Gruende in der
                      // reDelphix-Sprache (E29), nie uLocalization
@@ -877,7 +878,7 @@ begin
 end;
 
 class function TRdxFlowFixes.RedundantJump(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxFlowPlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
   out AReason: string): Boolean;
 var
   JumpWord    : string;   // nicht 'Word': verdeckte System.Word (Review R3-06)
@@ -886,7 +887,8 @@ begin
   APlan := Default(TRdxFlowPlan);
   Jump := Default(TRdxToken);
   Semi := Default(TRdxToken);
-  JumpWord := JumpOf(AMessage);
+  if not AMessage.Args.TryGet(FA_FORM, JumpWord) then
+    JumpWord := JumpOf(AMessage.Text);
   if JumpWord = '' then
     AReason := _('the message has no jump statement')
   else
@@ -1086,7 +1088,7 @@ begin
 end;
 
 class function TRdxFlowFixes.SelfAssignment(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxFlowPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxFlowPlan;
   out AReason: string): Boolean;
 var
   Key  : string;
@@ -1094,7 +1096,8 @@ var
 begin
   APlan := Default(TRdxFlowPlan);
   Site := Default(TRdxStmtSite);
-  APlan.Target := SelfTargetOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, APlan.Target) then
+    APlan.Target := SelfTargetOf(AMessage.Text);
   Key := PathKey(APlan.Target);
   if Key = '' then
     AReason := _('the message has no target')

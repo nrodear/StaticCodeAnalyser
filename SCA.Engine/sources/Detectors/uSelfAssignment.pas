@@ -67,7 +67,8 @@ type
 implementation
 
 uses
-  uTypeResolver;   // W2-Schaerfung: Wurzel-Typ + Record-Feld-Aufloesung
+  uTypeResolver,   // W2-Schaerfung: Wurzel-Typ + Record-Feld-Aufloesung
+  uFixArgs;
 
 // noinspection-file CanBeStrictPrivate, GroupedDeclaration, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -567,7 +568,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
         Format('Self-assignment: %s := %s (no-op or copy-paste)',
           [N.Name, N.TypeRef]),
-        fkSelfAssignment));
+        fkSelfAssignment).WithFixArg(FA_NAME, N.Name));
     end;
   finally
     ACtx.Scope := nil;   // Scope gehoert dieser Methode, nicht dem Ctx

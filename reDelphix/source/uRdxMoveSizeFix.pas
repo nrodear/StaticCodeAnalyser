@@ -86,13 +86,13 @@ type
     // von TRdxMapPlanner (uRdxFixRunner). Den Typbeweis der Argumente
     // fuehrt der Adapter danach (Operands, OperandReason).
     class function PointeeSize(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Die Puffer-Argumente desselben Aufrufs mit dem Typ, den sie haben
     // muessen; False mit dem Grund wie PointeeSize.
     class function Operands(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AOperands: TArray<TRdxSizeOperand>;
+      const AMessage: TRdxFindingText; out AOperands: TArray<TRdxSizeOperand>;
       out AReason: string): Boolean; static;
 
     // Typbeweis (Adapter): ADeclaredType ist DeclaredTypeOf des Arguments
@@ -109,13 +109,14 @@ type
     class function PointeeOf(const APointerType: string): string; static;
 
     // Der Zieltyp zum Zeigertyp der Meldung - Name im Menuetext; '' ohne.
-    class function TargetTypeOf(const AMessage: string): string; static;
+    class function TargetTypeOf(const AMessage: TRdxFindingText): string; static;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  uFixArgs,        // FA_NAME/FA_TYPE (Fix-Datenfeld S3b)
   uRefactorInfo,   // TRefactorSpan.Make
   uRdxText;        // _(): in die reDelphix-Sprache, nie uLocalization
 
@@ -203,6 +204,22 @@ begin
       Exit(P.Target);
 end;
 
+// Die eine Routine aus ROUTINES mit diesem Namen (case-insensitiv), wie
+// geschrieben (Gruende); Name = '' (Default), wenn keine passt.
+function RoutineByName(const AName: string): TRdxSizeRoutine;
+var
+  R : TRdxSizeRoutine;
+begin
+  Result := Default(TRdxSizeRoutine);
+  for R in ROUTINES do
+    if SameText(R.Name, AName) then
+    begin
+      Result := R;
+      Result.Name := AName;   // wie geschrieben (Gruende)
+      Exit;
+    end;
+end;
+
 // Routine und Zeigertyp aus der Meldung; False ohne diese Form oder fuer
 // eine Routine, die der Detektor nicht meldet.
 function ParseMessage(const AMessage: string; out ARoutine: TRdxSizeRoutine;
@@ -210,7 +227,6 @@ function ParseMessage(const AMessage: string; out ARoutine: TRdxSizeRoutine;
 var
   P, Q : Integer;
   Name : string;
-  R    : TRdxSizeRoutine;
   Rest : string;
 begin
   Result := False;
@@ -228,22 +244,19 @@ begin
   if Q <= 1 then
     Exit;
   APtr := Copy(Rest, 1, Q - 1);
-  for R in ROUTINES do
-    if SameText(R.Name, Name) then
-    begin
-      ARoutine := R;
-      ARoutine.Name := Name;   // wie geschrieben (Gruende)
-      Exit(True);
-    end;
+  ARoutine := RoutineByName(Name);
+  Result := ARoutine.Name <> '';
 end;
 
-class function TRdxMoveSizeFix.TargetTypeOf(const AMessage: string): string;
+class function TRdxMoveSizeFix.TargetTypeOf(const AMessage: TRdxFindingText): string;
 var
   R   : TRdxSizeRoutine;
   Ptr : string;
 begin
   Result := '';
-  if ParseMessage(AMessage, R, Ptr) then
+  if AMessage.Args.TryGet(FA_TYPE, Ptr) then
+    Result := PointeeOf(Ptr)
+  else if ParseMessage(AMessage.Text, R, Ptr) then
     Result := PointeeOf(Ptr);
 end;
 
@@ -339,7 +352,7 @@ end;
 
 // Den Aufruf auf ALine lesen und pruefen (alles ausser dem Typbeweis).
 // '' oder der Grund.
-function ReadCall(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+function ReadCall(AMap: TRdxCodeMap; ALine: Integer; const AMessage: TRdxFindingText;
   out ACall: TRdxSizeCall): string;
 var
   T, Call, Open, Close : TRdxToken;
@@ -349,10 +362,15 @@ var
   NameLow : string;
   PtrLow  : string;
   Op      : TRdxSizeOperand;
+  AName   : string;
 begin
   Result := '';
   ACall := Default(TRdxSizeCall);
-  if not ParseMessage(AMessage, ACall.Routine, ACall.Ptr) then
+  if AMessage.Args.TryGet(FA_NAME, AName) and AMessage.Args.TryGet(FA_TYPE, ACall.Ptr) then
+    ACall.Routine := RoutineByName(AName)
+  else if not ParseMessage(AMessage.Text, ACall.Routine, ACall.Ptr) then
+    Exit(_(R_SIZE_MSG));
+  if ACall.Routine.Name = '' then
     Exit(_(R_SIZE_MSG));
   ACall.Target := TRdxMoveSizeFix.PointeeOf(ACall.Ptr);
   if ACall.Target = '' then
@@ -441,7 +459,7 @@ begin
 end;
 
 class function TRdxMoveSizeFix.PointeeSize(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   C : TRdxSizeCall;
 begin
@@ -457,7 +475,7 @@ begin
 end;
 
 class function TRdxMoveSizeFix.Operands(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AOperands: TArray<TRdxSizeOperand>;
+  const AMessage: TRdxFindingText; out AOperands: TArray<TRdxSizeOperand>;
   out AReason: string): Boolean;
 var
   C : TRdxSizeCall;
