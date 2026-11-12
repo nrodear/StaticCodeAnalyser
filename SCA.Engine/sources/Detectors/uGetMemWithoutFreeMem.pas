@@ -64,7 +64,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
+  uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
+  uFixArgs;        // FA_NAME (Fix-Datenfeld S3b-2)
 
 // Balance-Zaehlung zwischen Handler-Keyword und FreeMem: oeffnende
 // Bloecke (begin/case/try/record) erhoehen, 'end' senkt. Faellt die
@@ -287,6 +288,7 @@ begin
       F.LineNumber := IntToStr(LineNo);
       F.MissingVar := Detail;
       F.SetKind(fkGetMemWithoutFreeMem);
+      F.WithFixArg(FA_NAME, Trim(M.Groups[1].Value));
       Results.Add(F);
     end;
   finally

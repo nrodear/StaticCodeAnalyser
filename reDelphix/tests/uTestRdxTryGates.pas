@@ -121,6 +121,21 @@ begin
   end;
 end;
 
+// Wie PlanOf, aber fuer die *In-Planer (SCA009/SCA001/SCA156, Fix-
+// Datenfeld S3b-2).
+function PlanOfIn(APlanner: TRdxTryPlannerIn; const ASource: string;
+  ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    APlanner(Map, ALine, AMessage, Result, AReason);
+  finally
+    Map.Free;
+  end;
+end;
+
 // SCA009 mit AMessage: neuer Text oder '' bei Ablehnung (AReason).
 function FixAt(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
@@ -128,7 +143,7 @@ var
   P : TRdxTryPlan;
 begin
   Result := '';
-  P := PlanOf(TRdxTryFixes.MissingFinally, ASource, ALine, AMessage, AReason);
+  P := PlanOfIn(TRdxTryFixes.MissingFinally, ASource, ALine, AMessage, AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edit);
 end;
@@ -170,7 +185,7 @@ var
   P : TRdxTryPlan;
 begin
   Result := '';
-  P := PlanOf(TRdxTryFixes.GetMemWithoutFree, ASource, ALine, AMessage,
+  P := PlanOfIn(TRdxTryFixes.GetMemWithoutFree, ASource, ALine, AMessage,
     AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edit);
@@ -445,10 +460,10 @@ var
   R : string;
   P : TRdxTryPlan;
 begin
-  PlanOf(TRdxTryFixes.MissingFinally, InProc(['  Obj := TFoo.Create;',
+  PlanOfIn(TRdxTryFixes.MissingFinally, InProc(['  Obj := TFoo.Create;',
     '  if Keep(Obj) then', '    Exit;', '  Obj.Free;']), 6, 'Obj', R);
   Assert.IsTrue(Pos('und Obj wird in Zeile 7 weitergegeben', R) > 0, R);
-  P := PlanOf(TRdxTryFixes.GetMemWithoutFree, InProc(['  GetMem(Buf, N);',
+  P := PlanOfIn(TRdxTryFixes.GetMemWithoutFree, InProc(['  GetMem(Buf, N);',
     '  Inc(Buf);', '  FreeMem(Buf);']), 6, MSG_156, R);
   Assert.IsTrue(Pos('Inc(Buf) in Zeile 7', R) > 0, R);
   Assert.AreEqual('Buf', P.Name);
@@ -463,7 +478,7 @@ var
   P      : TRdxTryPlan;
 begin
   Src := InProc(['  X := TFoo.Create; // ok ' + Emoji, '  X.Run;', '  X.Free;']);
-  P := PlanOf(TRdxTryFixes.MissingFinally, Src, 6, 'X', R);
+  P := PlanOfIn(TRdxTryFixes.MissingFinally, Src, 6, 'X', R);
   Assert.AreEqual('', R);
   Assert.AreEqual(Emoji, Copy(P.Edit.Expected, 1, 2), 'Bereich ab dem Zeichen');
   Assert.AreEqual(Emoji + #10'  try', Copy(P.Edit.NewText, 1, 8));
@@ -597,7 +612,7 @@ var
 begin
   Src := InProc(['  var Buf: PAnsiChar := AllocMem(64);', '  Fill(Buf);',
     '  FreeMem(Buf);']);
-  P := PlanOf(TRdxTryFixes.GetMemWithoutFree, Src, 6, MSG_ALLOC_156, R);
+  P := PlanOfIn(TRdxTryFixes.GetMemWithoutFree, Src, 6, MSG_ALLOC_156, R);
   Assert.AreEqual('', R);
   Assert.AreEqual('Buf', P.Name, 'der Puffer, nicht sein Typ');
   Assert.AreEqual(InProc(['  var Buf: PAnsiChar := AllocMem(64);', '  try',

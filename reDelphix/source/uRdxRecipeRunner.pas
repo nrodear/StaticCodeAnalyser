@@ -41,6 +41,7 @@ uses
   System.Classes, System.Generics.Collections,
   uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes,
   uMethodd12,       // TLeakFinding
+  uFixArgs,         // FA_NAME (Fix-Datenfeld S3b-2, SCA003)
   uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
   uRdxPlacesRunner, // TRdxPlacesRunner: Describe, Format, uses (C16)
   uRdxBufferMath;   // TRdxEdit
@@ -373,7 +374,10 @@ begin
     TRdxRecipes.ConcatFindingTarget(AFinding.MissingVar, Result.Target,
       Result.Plus)
   else if AFinding.Kind = fkSQLInjection then
-    Result.Target := TRdxRecipes.SqlFindingTarget(AFinding.MissingVar);
+  begin
+    if not AFinding.FixArgs.TryGet(FA_NAME, Result.Target) then
+      Result.Target := TRdxRecipes.SqlFindingTarget(AFinding.MissingVar);
+  end;
 end;
 
 class function TRdxRecipeRunner.Describe(APlaces: TSourcePlaces;

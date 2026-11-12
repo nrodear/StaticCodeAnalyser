@@ -715,6 +715,18 @@ begin
   Result.NeedsOpen := False;
 end;
 
+// *In-Form fuer SCA009/SCA001/SCA156 (Fix-Datenfeld S3b-2, auf FixArgs
+// umgestellt) - SCA109/SCA153 bleiben bei TryForm/TRdxPlannerOf bis sie
+// in einer spaeteren Charge (S4) umgestellt werden.
+function TryFormIn(
+  APlanner: TRdxPlannerInOf<TRdxTryPlan>): TRdxPlanFormIn<TRdxTryPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := TryParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
 // SCA096, SCA097, SCA121, SCA196 (Charge H5): eine Ersetzung (SCA097: zwei,
 // wenn der letzten Anweisung das ';' fehlt); Kennzeichnung nach dem Fund
 // und der Bedarf an Variants kommen mit dem Plan.
@@ -933,8 +945,11 @@ begin
 end;
 
 // SCA174: reine Textlogik - kein Check, kein offener Quellstellen-Dienst.
-function ObjectListForm(
-  APlanner: TRdxPlannerOf<TRdxObjectListPlan>): TRdxPlanForm<TRdxObjectListPlan>;
+// Seit Fix-Datenfeld S3b-2 nur noch die *In-Form: OwnItems ist der
+// einzige Planer von TRdxObjectListPlan und wurde selbst auf
+// TRdxFindingText umgestellt.
+function ObjectListFormIn(
+  APlanner: TRdxPlannerInOf<TRdxObjectListPlan>): TRdxPlanFormIn<TRdxObjectListPlan>;
 begin
   Result.Planner := APlanner;
   Result.Parts := ObjectListParts;
@@ -1072,7 +1087,7 @@ function PlanEmptySection(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.EmptySectionFix(ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 function PlanFreeWithoutNil(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1101,7 +1116,7 @@ function PlanUnusedUses(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.UnusedUsesFix(APlaces, ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 function PlanCaseElse(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1434,8 +1449,8 @@ function PlanMissingFinally(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxTryPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxTryPlan>(
-    TryForm(TRdxTryFixes.MissingFinally),
+  Result := TRdxFixFrame.RunIn<TRdxTryPlan>(
+    TryFormIn(TRdxTryFixes.MissingFinally),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1451,14 +1466,17 @@ function PlanMemoryLeak(APlaces: TSourcePlaces; ALines: TStrings;
 var
   LeakVar : string;
   P       : TRdxTryPlan;
+  Name    : string;
 begin
   if AFinding.LeakVariant = LEAK_VARIANT_FOF then
-    Exit(TRdxFixFrame.Run<TRdxTryPlan>(
-      TryForm(TRdxTryFixes.FreedOutsideFinally),
+    Exit(TRdxFixFrame.RunIn<TRdxTryPlan>(
+      TryFormIn(TRdxTryFixes.FreedOutsideFinally),
       APlaces, ALines, AFinding, P));
   LeakVar := AFinding.MemoryLeakVariant;
   Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxTryFixes.NameOf(AFinding.Message);
+  if not AFinding.FixArgs.TryGet(FA_NAME, Name) then
+    Name := TRdxTryFixes.NameOf(AFinding.Message);
+  Result.Name := Name;
   Result.Reason := _('no quick fix for the variant %s - only for %s (Free '
     + 'present, but beside the finally)', [LeakVar, LEAK_VARIANT_FOF]);
 end;
@@ -1488,8 +1506,8 @@ function PlanGetMemWithoutFree(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxTryPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxTryPlan>(
-    TryForm(TRdxTryFixes.GetMemWithoutFree),
+  Result := TRdxFixFrame.RunIn<TRdxTryPlan>(
+    TryFormIn(TRdxTryFixes.GetMemWithoutFree),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1620,7 +1638,7 @@ end;
 function PlanAttrGap(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxAttrGapFix.BlankGap);
 end;
 
@@ -1770,7 +1788,7 @@ end;
 function PlanEmptyOnHandler(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxEmptyOnHandlerFix.Reraise);
 end;
 
@@ -1843,7 +1861,7 @@ end;
 function PlanDateFormatSettings(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxFormatSettingsFix.DateFormatSettings);
   FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
@@ -1854,7 +1872,7 @@ function PlanDateFormatSettingsAlt(APlaces: TSourcePlaces; ALines: TStrings;
 var
   Map : TRdxCodeMap;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxFormatSettingsFix.DateFormatInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -2263,10 +2281,14 @@ end;
 // fuer den Menuetext - auch, wenn der Planer ablehnt.
 function PlanConsecutiveSection(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Name : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxConsecutiveSectionFix.Merge);
-  Result.Name := LowerCase(QuotedText(AFinding.Message, '`'));
+  if not AFinding.FixArgs.TryGet(FA_NAME, Name) then
+    Name := LowerCase(QuotedText(AFinding.Message, '`'));
+  Result.Name := Name;
 end;
 
 // SCA086 (Charge QF10): gekennzeichnet nach dem Typ des Parameters (der
@@ -2391,8 +2413,8 @@ function PlanObjectList(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxObjectListPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxObjectListPlan>(
-    ObjectListForm(TRdxObjectListFix.OwnItems),
+  Result := TRdxFixFrame.RunIn<TRdxObjectListPlan>(
+    ObjectListFormIn(TRdxObjectListFix.OwnItems),
     APlaces, ALines, AFinding, P);
 end;
 

@@ -106,7 +106,8 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12, uSQLInjectionScore, uDetectorUtils;
+  uAstNode, uSCAConsts, uMethodd12, uSQLInjectionScore, uDetectorUtils,
+  uFixArgs;   // FA_NAME (Fix-Datenfeld S3b-2)
 
 type
   TSQLInjectionDetector = class
@@ -2521,7 +2522,7 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
     // identische Feldfolge, siehe TLeakFinding.New.
     Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
       DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']',
-      fkSQLInjection));
+      fkSQLInjection).WithFixArg(FA_NAME, DisplayTarget));
   end;
 
 var

@@ -64,7 +64,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
+  uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
+  uFixArgs;        // FA_NAME (Fix-Datenfeld S3b-2)
 
 class procedure TEmptyOnHandlerDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -116,7 +117,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', LineNo,
         Format('Typed exception handler on %s has empty body - silent failure',
           [ExName]),
-        fkEmptyOnHandler));
+        fkEmptyOnHandler).WithFixArg(FA_NAME, ExName));
     end;
   finally
     ReleaseLines(Lines, Cached);

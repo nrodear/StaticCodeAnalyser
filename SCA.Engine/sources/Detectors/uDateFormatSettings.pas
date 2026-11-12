@@ -56,7 +56,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+  uAstSpans,   // CollectWithMethodScope (Voll-Review 2026-09-12)
+  uFixArgs;    // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   // Locale-abhaengige RTL-Funktionen. Klein-geschrieben fuer Lookup.
@@ -192,7 +193,7 @@ begin
   Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
     Format('%s called without explicit TFormatSettings - depends on ' +
            'system locale', [HitName]),
-    fkDateFormatSettings));
+    fkDateFormatSettings).WithFixArg(FA_NAME, HitName));
 end;
 
 procedure WalkAndCheck(Node: TAstNode; const FileName: string;

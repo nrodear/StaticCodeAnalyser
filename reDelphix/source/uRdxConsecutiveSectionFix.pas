@@ -48,7 +48,8 @@ interface
 
 uses
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap;           // TRdxCodeMap
+  uRdxCodeMap,           // TRdxCodeMap, TRdxFindingText
+  uFixArgs;              // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -75,7 +76,7 @@ type
     // AMessage nennt die Art ('Consecutive `var` section ...'). Die
     // Ersetzung loescht die Zeile bzw. das Schluesselwort; sonst der Grund.
     class function Merge(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Steht AAt in einem Anweisungsblock - zwischen begin/asm und dem
@@ -255,7 +256,7 @@ begin
 end;
 
 class function TRdxConsecutiveSectionFix.Merge(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Word, L    : string;
@@ -265,7 +266,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Word := LowerCase(QuotedText(AMessage, '`'));
+  if not AMessage.Args.TryGet(FA_NAME, Word) then
+    Word := LowerCase(QuotedText(AMessage.Text, '`'));
   if Word = '' then
   begin
     AReason := _(R_CS_MSG);

@@ -26,6 +26,7 @@ type
   TTestRdxEmptyOnHandlerFix = class
   public
     [Test] procedure Sca159_Semicolon_Helps;
+    [Test] procedure Sca159_ArgsPrecedence_Helps;
     [Test] procedure Sca159_Semicolon_Variants;
     [Test] procedure Sca159_BeginEnd_OneLine;
     [Test] procedure Sca159_BeginEnd_ManyLines;
@@ -74,7 +75,8 @@ uses
   uRdxFixTable,
   uRdxEmptyOnHandlerFix,
   uRdxText,              // _() und die gemeinsamen Gruende
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit,       // Join, Apply
+  uFixArgs;              // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   // Die Zeile des ersten Handlers in InExcept.
@@ -160,6 +162,37 @@ begin
   Assert.AreEqual('try DoStuff; except on E: EFoo do raise; end;',
     FixAt('try DoStuff; except on E: EFoo do ; end;', 1, Msg('EFoo'), Reason),
     Reason);
+end;
+
+// Fix-Datenfeld S3b-2: FixArgs.FA_NAME gewinnt gegen eine Meldung, die
+// (aus einem alten Lauf) einen anderen Typnamen behauptet.
+procedure TTestRdxEmptyOnHandlerFix.Sca159_ArgsPrecedence_Helps;
+var
+  Source  : string;
+  SL      : TStringList;
+  Map     : TRdxCodeMap;
+  FindMsg : TRdxFindingText;
+  Edit    : TRdxEdit;
+  Reason  : string;
+  Ok      : Boolean;
+begin
+  Source := InExcept(['    on E: EFoo do ;']);
+  SL := TStringList.Create;
+  try
+    SL.Text := Source;
+    Map := TRdxCodeMap.Create(SL);
+    try
+      FindMsg.Text := Msg('EWrong');
+      FindMsg.Args.Put(FA_NAME, 'EFoo');
+      Ok := TRdxEmptyOnHandlerFix.Reraise(Map, HANDLER_LINE, FindMsg, Edit, Reason);
+    finally
+      Map.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+  Assert.IsTrue(Ok, Reason);
+  Assert.AreEqual(InExcept(['    on E: EFoo do raise;']), Apply(Source, Edit));
 end;
 
 procedure TTestRdxEmptyOnHandlerFix.Sca159_Semicolon_Variants;

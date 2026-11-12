@@ -55,6 +55,7 @@ type
     [Test] procedure Sca074_Refusals;
     [Test] procedure Sca074_DeclaresRoutine;
     [Test] procedure Sca087_Variants;
+    [Test] procedure Sca087_ArgsPrecedence;
     [Test] procedure Sca087_Refusals;
     // ---- SCA050/SCA051/SCA107 ----
     [Test] procedure Sca050_051_107_Variants;
@@ -90,7 +91,8 @@ uses
   uRdxTypeProof,     // DeclaresProperty, DeclaresRoutine ... (Folgewelle A4)
   uSourcePlaces,     // TSourcePlaces (CoveringPlace_Branches)
   uRdxPlacesRunner,  // TRdxPlacesRunner.CoveringPlace (rwE33)
-  uTestRdxTextKit;   // Join, Apply
+  uTestRdxTextKit,   // Join, Apply
+  uFixArgs;          // FA_NAME (Fix-Datenfeld S3b-2, Sca087_ArgsPrecedence)
 
 // ---- Helfer ----
 
@@ -1269,6 +1271,36 @@ begin
   // Am Ende der Klasse.
   Assert.AreEqual(InClass(['    FX: Integer;']),
     Fix087(InClass(['    FX: Integer;', '  published']), 6, 'published', R), R);
+end;
+
+// Fix-Datenfeld S3b-2: FixArgs.FA_NAME gewinnt gegen eine Meldung, die
+// (aus einem alten Lauf) einen anderen Abschnittsnamen behauptet.
+procedure TTestRdxSimpleFixes.Sca087_ArgsPrecedence;
+var
+  Source : string;
+  SL     : TStringList;
+  Map    : TRdxCodeMap;
+  Msg    : TRdxFindingText;
+  E      : TRdxEdit;
+  R      : string;
+  Ok     : Boolean;
+begin
+  Source := InClass(['  public', '  private', '    FX: Integer;']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Source;
+    Map := TRdxCodeMap.Create(SL);
+    Msg.Text := 'Empty `private` section - delete the section header or '
+      + 'add its members.';
+    Msg.Args.Put(FA_NAME, 'public');
+    Ok := TRdxSimpleFixes.EmptySection(Map, 5, Msg, E, R);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  Assert.IsTrue(Ok, R);
+  Assert.AreEqual(InClass(['  private', '    FX: Integer;']), Apply(Source, [E]));
 end;
 
 // ---- SCA050/SCA051/SCA107 ----
