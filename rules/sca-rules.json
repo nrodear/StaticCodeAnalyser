@@ -4079,6 +4079,10 @@
       "tags": ["dfm", "dead-code", "maintainability"],
       "detectorUnit": "uDfmComponentUnused.pas",
       "defaultConfidence": "low",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA184", "effect": "same", "slug": "delete-unused-dfm-component" }
+      ],
       "examples": {
         "bad":  "object btnOld: TButton  // removed from code, left in the DFM\nend",
         "good": "// remove the object block from the .dfm and the field from the\n// published section:\nTForm1 = class(TForm)\n  btnSave: TButton;\nend;"
