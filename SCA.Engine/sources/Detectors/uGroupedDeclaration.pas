@@ -308,7 +308,7 @@ begin
         Format('Grouped declaration at column %d (`A, B: Type`) - split ' +
                'into one variable per line for clearer diffs and refactoring.',
           [Col]),
-        fkGroupedDeclaration));
+        fkGroupedDeclaration).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

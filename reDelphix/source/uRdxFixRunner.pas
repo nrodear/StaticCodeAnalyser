@@ -53,7 +53,7 @@ type
     // SCA075: 'class(TObject)' -> 'class' an der Spalte aus der Meldung
     // (nur die Zeilen, kein Parser noetig).
     class function ExplicitTObjectFix(ALines: TStrings; ALine: Integer;
-      const AMessage: string): TRdxFixOutcome; static;
+      const AMessage: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA085: 'X.Free;' (ALine) + 'X := nil;' -> 'FreeAndNil(X);'. X muss
     // in dieser Unit deklariert sein (DeclaredTypeOf): eine Property
@@ -82,7 +82,7 @@ type
     // Meldung. Keine Hilfe, wenn die Unit selbst eine Routine Assert
     // deklariert oder ein with den Namen an ein Member binden kann.
     class function AssertMessageFix(APlaces: TSourcePlaces; ALines: TStrings;
-      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+      ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA087: die leere Sichtbarkeitszeile ALine loeschen (nur die Zeilen).
     class function EmptySectionFix(ALines: TStrings; ALine: Integer;
@@ -107,7 +107,7 @@ type
     // Block. Nicht in einer Datei mit FPC-Weiche oder FPC-Modus: in objfpc
     // ruft erst 'Foo()' eine Prozedurvariable auf.
     class function EmptyArgsFix(APlaces: TSourcePlaces; ALines: TStrings;
-      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+      ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA072 und SCA084: der Planer liefert die Ersetzung und den Namen X,
     // hier die Pruefung von X - kein with; SCA072: X als Boolean deklariert
@@ -116,7 +116,7 @@ type
     // riefe 'X <> nil' auf), keine eigene Routine Assigned.
     class function OperandFix(AKind: TFindingKind; APlaces: TSourcePlaces;
       ALines: TStrings; ALine: Integer;
-      const AMessage: string): TRdxFixOutcome; static;
+      const AMessage: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA007: den uses-Eintrag AUnit (die Meldung) auf ALine loeschen
     // (TRdxStructFixes.RemoveUsesEntry). Gesperrt, wenn der Bereich eine
@@ -150,7 +150,7 @@ type
     // SCA101: das Schluesselwort an der Spalte aus der Meldung; SCA099:
     // das else hinter dem 'end else' auf ALine.
     class function BlockFix(AKind: TFindingKind; ALines: TStrings;
-      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+      ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome; static;
   end;
 
   // Bausteine der Tabelle (uRdxFixTable, Charge R8). Die Planer der
@@ -364,9 +364,9 @@ begin
 end;
 
 class function TRdxFixRunner.ExplicitTObjectFix(ALines: TStrings;
-  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, ALine, AMessage, TRdxSimpleFixes.ExplicitTObject);
+  Result := MapFixIn(ALines, ALine, AMessage, TRdxSimpleFixes.ExplicitTObject);
 end;
 
 // SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
@@ -771,7 +771,7 @@ begin
 end;
 
 class function TRdxFixRunner.AssertMessageFix(APlaces: TSourcePlaces;
-  ALines: TStrings; ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALines: TStrings; ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
@@ -1029,7 +1029,7 @@ begin
 end;
 
 class function TRdxFixRunner.EmptyArgsFix(APlaces: TSourcePlaces;
-  ALines: TStrings; ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALines: TStrings; ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 var
   Map  : TRdxCodeMap;
   Plan : TRdxCallEdit;
@@ -1108,7 +1108,7 @@ end;
 
 class function TRdxFixRunner.OperandFix(AKind: TFindingKind;
   APlaces: TSourcePlaces; ALines: TStrings; ALine: Integer;
-  const AMessage: string): TRdxFixOutcome;
+  const AMessage: TRdxFindingText): TRdxFixOutcome;
 var
   Map  : TRdxCodeMap;
   Plan : TRdxOperandEdit;
@@ -1465,10 +1465,11 @@ begin
 end;
 
 class function TRdxFixRunner.BlockFix(AKind: TFindingKind; ALines: TStrings;
-  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+  ALine: Integer; const AMessage: TRdxFindingText): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
   Kw  : TRdxToken;
+  Col : Integer;
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(ALines) then
@@ -1482,8 +1483,18 @@ begin
       Result.Enabled := TRdxStructFixes.ElseAfterEndOn(Map, ALine, Kw,
         Result.Reason)
     else
+    begin
+      if AMessage.Args.Col > 0 then
+      begin
+        Col := AMessage.Args.Col;
+      end
+      else
+      begin
+        Col := ColumnFromMessage(AMessage.Text);
+      end;
       Result.Enabled := TRdxStructFixes.BranchKeywordAt(Map, ALine,
-        ColumnFromMessage(AMessage), Kw, Result.Reason);
+        Col, Kw, Result.Reason);
+    end;
     if Result.Enabled then
       Result.Enabled := TRdxStructFixes.WrapInBlock(Map, Kw, Result.Edits,
         Result.Reason);

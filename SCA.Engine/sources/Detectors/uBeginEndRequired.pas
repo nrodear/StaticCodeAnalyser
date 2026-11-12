@@ -280,7 +280,7 @@ begin
           Format('Branch at column %d uses a single statement without ' +
                  '`begin..end` - explicit blocks survive future additions ' +
                  'without re-indenting errors.', [Pend.ViolatedCol]),
-          fkBeginEndRequired));
+          fkBeginEndRequired).WithFixCol(Pend.ViolatedCol));
       // Erst jetzt wird der wartende Branch DIESER Zeile zum neuen Anker.
       if Pend.NewSet then
         PendLine := i;
@@ -289,7 +289,7 @@ begin
           Format('Branch at column %d uses a single statement without ' +
                  '`begin..end` - explicit blocks survive future additions ' +
                  'without re-indenting errors.', [Col]),
-          fkBeginEndRequired));
+          fkBeginEndRequired).WithFixCol(Col));
     end;
   finally
     Cols.Free;

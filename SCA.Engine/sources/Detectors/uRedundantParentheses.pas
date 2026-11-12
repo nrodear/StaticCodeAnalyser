@@ -204,6 +204,7 @@ begin
         'Redundant double parentheses at column %d - drop the outer ' +
         '`(...)` around the simple expression.', [Col]);
       F.SetKind(fkRedundantParentheses);
+      F.WithFixCol(Col);
       Results.Add(F);
     end;
   finally

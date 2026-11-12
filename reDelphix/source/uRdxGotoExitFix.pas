@@ -79,12 +79,13 @@ type
     // SCA060: 'goto L' -> 'Exit', wenn L die letzte Anweisung der Routine
     // ist. Spalte aus der Meldung ('(col N)').
     class function GotoToExit(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
-// Die '(col N)' einer Meldung des Detektors; 0 = nicht vorhanden.
-function GotoColumn(const AMessage: string): Integer;
+// Args.Col, sonst die '(col N)' einer Meldung des Detektors; 0 = nicht
+// vorhanden.
+function GotoColumn(const AMessage: TRdxFindingText): Integer;
 
 implementation
 
@@ -109,10 +110,18 @@ const
     'procedure', 'function', ',');
 
 // NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle des Wochen-Reviews
-// (G09-08) eine eigene Ziffernschleife.
-function GotoColumn(const AMessage: string): Integer;
+// (G09-08) eine eigene Ziffernschleife. Args.Col gewinnt, wenn gesetzt
+// (Fix-Datenfeld S2).
+function GotoColumn(const AMessage: TRdxFindingText): Integer;
 begin
-  Result := NumberAfterKey(AMessage, KEY_COL);
+  if AMessage.Args.Col > 0 then
+  begin
+    Result := AMessage.Args.Col;
+  end
+  else
+  begin
+    Result := NumberAfterKey(AMessage.Text, KEY_COL);
+  end;
 end;
 
 // Wie viele 'goto' stehen im Code von ALine?
@@ -249,7 +258,7 @@ begin
 end;
 
 class function TRdxGotoExitFix.GotoToExit(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Col        : Integer;
   G, Lab     : TRdxToken;

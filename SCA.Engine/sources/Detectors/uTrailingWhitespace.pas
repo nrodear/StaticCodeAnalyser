@@ -73,7 +73,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Trailing whitespace from column %d - configure editor to ' +
                'trim on save.', [Col]),
-        fkTrailingWhitespace));
+        fkTrailingWhitespace).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

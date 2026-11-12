@@ -78,7 +78,7 @@ type
     // ALine ist die Zeile des Funds, die Spalte steht in AMessage
     // ('at column N'). Liefert die eine Ersetzung der Zeile oder den Grund.
     class function Split(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -319,14 +319,21 @@ end;
 { TRdxGroupedDeclFix }
 
 class function TRdxGroupedDeclFix.Split(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Col   : Integer;
   Parts : TGroupParts;
   L     : string;
 begin
   AEdit := Default(TRdxEdit);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
     AReason := MsgNoColumn
   else

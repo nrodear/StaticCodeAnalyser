@@ -134,7 +134,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Double semicolon at column %d (`;;`) - drop the extra one.',
           [Col]),
-        fkSuperfluousSemicolon));
+        fkSuperfluousSemicolon).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

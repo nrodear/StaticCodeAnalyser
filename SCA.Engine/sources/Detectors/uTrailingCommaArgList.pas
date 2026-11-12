@@ -135,7 +135,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Trailing comma in argument list at column %d - drop the ' +
                'comma or add the missing argument.', [Col]),
-        fkTrailingCommaArgList));
+        fkTrailingCommaArgList).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

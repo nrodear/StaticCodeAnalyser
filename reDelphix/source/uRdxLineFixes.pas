@@ -34,7 +34,7 @@ type
     // nur Leerraum und ein zweites ';' - beide Code. '; ;' -> ';' (das
     // zweite war eine leere Anweisung).
     class function DoubleSemicolon(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA071: das Schluesselwort aus der Meldung ('"interface" ...
@@ -43,7 +43,7 @@ type
     // mehrzeiligen String beginnt, und nicht beim interface eines Typs
     // ('IFoo =' auf der Zeile davor - das meldet der Detektor auch).
     class function KeywordIndent(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA088: genau ein begin auf ALine, die Datei beginnt mit unit, und
@@ -75,6 +75,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,   // TRefactorSpan.Make
+  uFixArgs,        // FA_NAME (Fix-Datenfeld S2)
   uRdxText;        // _(), Msg...: in die reDelphix-Sprache, nie uLocalization (E29)
 
 const
@@ -98,7 +99,7 @@ const
 { ---- SCA082 ---- }
 
 class function TRdxLineFixes.DoubleSemicolon(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L         : string;
@@ -107,7 +108,10 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+    Col := AMessage.Args.Col
+  else
+    Col := ColumnFromMessage(AMessage.Text);
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;
@@ -129,21 +133,29 @@ end;
 
 { ---- SCA071 ---- }
 
-// Wort und Spalte aus '... "interface" ... currently at column 5' - das
-// Wort zwischen den ersten beiden '"' (QuotedText, uRdxCodeMap; bis
-// Charge B2S-a hier ausgeschrieben), die Spalte ueber NumberAfterKey
-// (uRdxCodeMap; bis zur Folgewelle des Wochen-Reviews, G09-08, hier
-// ausgeschrieben). False, wenn eines fehlt.
-function KeywordOf(const AMessage: string; out AWord: string;
+// Wort und Spalte: Args.Name/Args.Col (Fix-Datenfeld S2), sonst aus
+// '... "interface" ... currently at column 5' - das Wort zwischen den
+// ersten beiden '"' (QuotedText, uRdxCodeMap; bis Charge B2S-a hier
+// ausgeschrieben), die Spalte ueber NumberAfterKey (uRdxCodeMap; bis zur
+// Folgewelle des Wochen-Reviews, G09-08, hier ausgeschrieben). False, wenn
+// eines fehlt.
+function KeywordOf(const AMessage: TRdxFindingText; out AWord: string;
   out ACol: Integer): Boolean;
 begin
-  AWord := QuotedText(AMessage, '"');
-  ACol := NumberAfterKey(AMessage, KEY_CURRENTLY);
+  if AMessage.Args.TryGet(FA_NAME, AWord) and (AMessage.Args.Col > 0) then
+  begin
+    ACol := AMessage.Args.Col;
+  end
+  else
+  begin
+    AWord := QuotedText(AMessage.Text, '"');
+    ACol := NumberAfterKey(AMessage.Text, KEY_CURRENTLY);
+  end;
   Result := (AWord <> '') and (ACol > 1);
 end;
 
 class function TRdxLineFixes.KeywordIndent(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L       : string;

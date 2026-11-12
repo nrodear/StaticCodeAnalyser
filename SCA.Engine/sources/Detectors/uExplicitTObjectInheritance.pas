@@ -154,7 +154,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('`class(TObject)` at column %d - drop the parens (TObject ' +
                'is the implicit base class).', [Col]),
-        fkExplicitTObjectInheritance));
+        fkExplicitTObjectInheritance).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

@@ -26,6 +26,9 @@ type
     [Test] procedure Sca075_OnlyTheReportedOccurrence;
     [Test] procedure Sca075_Refusals;
     [Test] procedure Sca075_MultiLineString_Untouched;
+    // Fix-Datenfeld S2: Args.Col gewinnt, auch wenn der Meldungstext eine
+    // andere Spalte nennt.
+    [Test] procedure Sca075_ArgsColWins_OverMismatchedText;
     // ---- SCA085 ----
     [Test] procedure Sca085_Variants;
     [Test] procedure Sca085_CommentTrap_UsesCodeOccurrence;
@@ -393,6 +396,34 @@ begin
   Assert.IsTrue(Pos('String', R) > 0, R);
   Assert.AreEqual(StringReplace(Src, 'TBar = class(TObject)', 'TBar = class', []),
     Fix075(Src, 9, 10, R), R);
+end;
+
+// Fix-Datenfeld S2 (T5): die Meldung nennt absichtlich eine falsche Spalte
+// (99, dort steht nichts) - Args.Col (die echte Spalte von 'class') muss
+// trotzdem gewinnen, der Meldungstext wird dann nicht gelesen.
+procedure TTestRdxSimpleFixes.Sca075_ArgsColWins_OverMismatchedText;
+var
+  Src : string;
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  E   : TRdxEdit;
+  Msg : TRdxFindingText;
+  R   : string;
+begin
+  Src := InUnit('  TFoo = class(TObject)');
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Src;
+    Map := TRdxCodeMap.Create(SL);
+    Msg := '`class(TObject)` at column 99 - drop the parens';
+    Msg.Args.Col := 10;
+    Assert.IsTrue(TRdxSimpleFixes.ExplicitTObject(Map, 4, Msg, E, R), R);
+    Assert.AreEqual(InUnit('  TFoo = class'), Apply(Src, [E]), R);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
 end;
 
 procedure TTestRdxSimpleFixes.Sca085_DirectiveBeforeFree_Refused;

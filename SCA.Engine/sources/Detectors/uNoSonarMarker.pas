@@ -91,6 +91,7 @@ begin
         'NOSONAR marker at column %d - migrate to `// noinspection` ' +
         'or fix the underlying finding.', [Col]);
       F.SetKind(fkNoSonarMarker);
+      F.WithFixCol(Col);
       Results.Add(F);
     end;
   finally

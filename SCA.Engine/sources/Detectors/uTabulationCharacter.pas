@@ -55,7 +55,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Tab character at column %d - use spaces for indentation ' +
                '(consistency across editors).', [Col]),
-        fkTabulationCharacter));
+        fkTabulationCharacter).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

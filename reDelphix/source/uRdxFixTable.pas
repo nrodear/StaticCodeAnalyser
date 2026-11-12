@@ -157,6 +157,7 @@ uses
   uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
   uRdxRecipes,       // AsciiOnly (SCA085-Gegenprobe)
   uRdxCodeMap,       // TRdxCodeMap (Adapter auf die Code-Sicht)
+  uFixArgs,          // FA_NAME u.a. (Fix-Datenfeld S2)
   uRdxBufferMath,    // TRdxEdit
   uRdxSimpleFixes,   // SCA075, SCA087 (ExplicitTObject, EmptySection)
   uRdxLineFixes,     // SCA082, SCA071, SCA088
@@ -855,6 +856,18 @@ begin
   Result.NeedsOpen := False;
 end;
 
+// Wie OutForm, aber fuer TRdxPlannerInOf<TRdxOutPlan> (Fix-Datenfeld S2) -
+// OutParts kennt nur APlan, nicht AMessage, bleibt also unveraendert
+// wiederverwendbar.
+function OutFormIn(
+  APlanner: TRdxPlannerInOf<TRdxOutPlan>): TRdxPlanFormIn<TRdxOutPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := OutParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
 // SCA174 (Charge QF13): Deklaration und Create in EINEM Undo-Schritt; Name
 // ist der Elementtyp aus der Meldung (auch wenn der Planer ablehnt).
 procedure ObjectListParts(const APlan: TRdxObjectListPlan;
@@ -947,7 +960,7 @@ function PlanExplicitTObject(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.ExplicitTObjectFix(ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -996,7 +1009,7 @@ function PlanAssertMessage(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.AssertMessageFix(APlaces, ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 function PlanEmptySection(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1017,7 +1030,7 @@ function PlanEmptyArgs(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.EmptyArgsFix(APlaces, ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 // SCA072 und SCA084 - OperandFix unterscheidet die Art selbst.
@@ -1025,7 +1038,7 @@ function PlanOperand(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.OperandFix(AFinding.Kind, APlaces, ALines,
-    AFinding.LineInt, AFinding.Message);
+    AFinding.LineInt, FindingTextOf(AFinding));
 end;
 
 function PlanUnusedUses(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1058,20 +1071,20 @@ function PlanBlock(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.BlockFix(AFinding.Kind, ALines, AFinding.LineInt,
-    AFinding.Message);
+    FindingTextOf(AFinding));
 end;
 
 function PlanDoubleSemicolon(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxLineFixes.DoubleSemicolon);
 end;
 
 function PlanKeywordIndent(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxLineFixes.KeywordIndent);
 end;
 
@@ -1341,7 +1354,7 @@ end;
 function PlanCommentedOut(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxCleanupFixes.CommentedOutCode);
 end;
 
@@ -1539,7 +1552,7 @@ end;
 function PlanRedundantParens(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxParensFix.DoubleParens);
 end;
 
@@ -1608,7 +1621,7 @@ function PlanTabs(APlaces: TSourcePlaces; ALines: TStrings;
 var
   Map : TRdxCodeMap;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxTabsFix.Tabs);
   if not Result.Enabled then Exit;
   Map := TRdxCodeMap.Acquire(ALines);
@@ -1666,7 +1679,7 @@ end;
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxTrailingBlanksFix.TrimEnd);
 end;
 
@@ -1674,10 +1687,16 @@ end;
 // wenn der Planer ablehnt.
 function PlanLowercaseKeyword(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Name : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxKeywordCaseFix.LowercaseKeyword);
-  Result.Name := QuotedText(AFinding.Message, '"');
+  if not AFinding.FixArgs.TryGet(FA_NAME, Name) then
+  begin
+    Name := QuotedText(AFinding.Message, '"');
+  end;
+  Result.Name := Name;
 end;
 
 function PlanEmptyExcept(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1704,21 +1723,21 @@ end;
 function PlanNoSonar(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxNoSonarFix.ToNoinspection);
 end;
 
 function PlanTrailingComma(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxTrailingCommaFix.DropComma);
 end;
 
 function PlanGroupedDeclaration(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxGroupedDeclFix.Split);
 end;
 
@@ -1746,7 +1765,7 @@ end;
 function PlanGotoExit(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxGotoExitFix.GotoToExit);
 end;
 
@@ -2149,7 +2168,7 @@ var
   Map    : TRdxCodeMap;
   Detail : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDigitGroupingFix.Group);
   if not Result.Enabled then Exit;
   Result.Reason := TRdxDigitGroupingFix.FileNameReason(AFinding.FileName);
@@ -2195,7 +2214,7 @@ var
   P   : TRdxOutPlan;
   Map : TRdxCodeMap;
 begin
-  Result := TRdxFixFrame.Run<TRdxOutPlan>(OutForm(TRdxAvoidOutFix.OutToVar),
+  Result := TRdxFixFrame.RunIn<TRdxOutPlan>(OutFormIn(TRdxAvoidOutFix.OutToVar),
     APlaces, ALines, AFinding, P);
   // Ein Typ aus einer Unit neben der Datei kann einfach sein (rwE32 Stufe
   // 4: jcl JclStringConversions.pas:407 'UCS4 = Cardinal' in JclBase.pas) -

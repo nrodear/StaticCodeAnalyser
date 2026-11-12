@@ -197,7 +197,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Assert at column %d has no message - add a "why" string ' +
                'for easier diagnosis.', [Col]),
-        fkAssertMessage));
+        fkAssertMessage).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

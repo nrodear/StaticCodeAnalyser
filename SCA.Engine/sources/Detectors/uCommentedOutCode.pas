@@ -912,7 +912,7 @@ var
       Results.Add(TLeakFinding.New(FileName, '', RegStart,
         Format('Comment at column %d looks like commented-out code - ' +
                'delete or extract into a TODO if still relevant.', [RegCol]),
-        fkCommentedOutCode))
+        fkCommentedOutCode).WithFixCol(RegCol))
     else
     begin
       F := TLeakFinding.New(FileName, '', RegStart,
@@ -921,6 +921,7 @@ var
                [RegEnd - RegStart + 1, RegCol]),
         fkCommentedOutCode);
       F.EndLine := RegEnd;
+      F.WithFixCol(RegCol);
       Results.Add(F);
     end;
     RegStart := 0;

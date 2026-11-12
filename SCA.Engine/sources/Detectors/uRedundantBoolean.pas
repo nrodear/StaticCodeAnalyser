@@ -463,6 +463,7 @@ begin
         'Redundant boolean comparison at column %d - drop `= True` / ' +
         '`<> False` (the expression itself is the condition).', [Col]);
       F.SetKind(fkRedundantBoolean);
+      F.WithFixCol(Col);
       Results.Add(F);
     end;
   finally

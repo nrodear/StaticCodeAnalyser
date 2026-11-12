@@ -49,7 +49,7 @@ type
     // SCA094: an der Spalte aus der Meldung ('at column N') '((X))' mit X
     // Bezeichner, Zahl oder String; NewText = '(X)' (X unveraendert).
     class function DoubleParens(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -141,7 +141,7 @@ begin
 end;
 
 class function TRdxParensFix.DoubleParens(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L                     : string;
   Col, J, OpEnd, E, K   : Integer;
@@ -151,7 +151,14 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;

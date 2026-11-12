@@ -146,7 +146,7 @@ type
     // SCA086: der Plan zum Fund auf ALine (Spalte aus der Meldung) - True,
     // oder False mit dem Grund. Form TRdxPlannerOf<TRdxOutPlan>.
     class function OutToVar(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxOutPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxOutPlan;
       out AReason: string): Boolean; static;
 
     // Ist ATypeText ('string', 'System.Integer', 'array of Byte') ein Typ,
@@ -1457,7 +1457,7 @@ begin
 end;
 
 class function TRdxAvoidOutFix.OutToVar(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxOutPlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxOutPlan;
   out AReason: string): Boolean;
 var
   Col, UseLine   : Integer;
@@ -1473,7 +1473,14 @@ var
 begin
   Result := False;
   APlan := Default(TRdxOutPlan);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;
