@@ -149,6 +149,8 @@ contains
   uRdxIfFixes in 'source\uRdxIfFixes.pas',
   uRdxCondFixes in 'source\uRdxCondFixes.pas',
   uRdxConcatWrap in 'source\uRdxConcatWrap.pas',
+  uRdxDfmTabOrderFix in 'source\uRdxDfmTabOrderFix.pas',
+  uRdxDfmComponentFix in 'source\uRdxDfmComponentFix.pas',
   uRdxContextRunner in 'source\uRdxContextRunner.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxFixRunner in 'source\uRdxFixRunner.pas',

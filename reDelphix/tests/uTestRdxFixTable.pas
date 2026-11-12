@@ -70,7 +70,7 @@ const
   // SCA127, SCA174, SCA199, SCA111 und SCA112; SCA149, SCA096, SCA097 und
   // SCA086 kennzeichnet der Planer, die zweiten Eintraege von SCA128/SCA059
   // kennzeichnen sich selbst.
-  EXPECTED: array[0..93] of TExpectedRow = (
+  EXPECTED: array[0..100] of TExpectedRow = (
     (Kind: fkExplicitTObjectInheritance; Plan: 'PlanExplicitTObject';
      Caption: 'Remove (TObject) from the class declaration';
      Changes: False; Alt: ''; AltCaption: ''),
@@ -385,6 +385,10 @@ const
     // SCA206 (2026-11-06).
     (Kind: fkFormatterMarker; Plan: 'PlanFormatterMarker';
      Caption: 'Write the formatter marker exactly';
+     Changes: False; Alt: ''; AltCaption: ''),
+    // SCA184 (2026-11-12, Track B).
+    (Kind: fkDfmComponentUnused; Plan: 'PlanDfmComponentUnused';
+     Caption: 'Delete the unused component';
      Changes: False; Alt: ''; AltCaption: '')
   );
 
@@ -654,8 +658,8 @@ begin
       F.Free;
     end;
   end;
-  Assert.AreEqual<Integer>(8, n,
-    'SCA168, SCA020, SCA093, SCA046, SCA128, SCA059, SCA017, SCA127');
+  Assert.AreEqual<Integer>(9, n,
+    'SCA168, SCA020, SCA093, SCA046, SCA128, SCA059, SCA017, SCA127, SCA061');
 end;
 
 initialization

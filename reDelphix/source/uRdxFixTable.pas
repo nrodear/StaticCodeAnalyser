@@ -1574,6 +1574,14 @@ var
 begin
   Result := Default(TRdxFixOutcome);
   Result.Variant := 1;
+  // Wie MapFix (uRdxFixRunner.pas): ohne offenen Puffer kein
+  // TRdxCodeMap.Acquire - sonst AV (Test AltRows_SetVariantOne ruft jeden
+  // Alt-Planer mit ALines=nil).
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := MsgNoFileOpen;
+    Exit;
+  end;
   Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxTabsFix.TabsForFile(Map, Result.Edits,
