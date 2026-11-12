@@ -82,6 +82,31 @@ type
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
+    // SCA143: hinter 'unit X;' auf ALine eine Leerzeile, eine leere
+    // Kommentarzeile '//' und eine weitere Leerzeile einfuegen - der
+    // Detektor verlangt nur IRGENDEINE Kommentarzeile zwischen 'unit X;'
+    // und 'interface', ihr Inhalt zaehlt nicht (anders als bei SCA019
+    // TODO/FIXME waere ein Platzhaltertext hier also unnoetig und riefe
+    // nur eine andere Regel). Keine Hilfe, wenn ALine keine 'unit ...;'-
+    // Zeile mehr ist (Fund veraltet) oder einen Kommentar/String traegt.
+    class function UnitHeaderSkeleton(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+
+    // SCA198: der Kopf trägt schon ein ['{...}'] - die Klammer bleibt, nur
+    // der String-Literal-Inhalt wird durch eine frisch erzeugte GUID
+    // (CreateGUID) ersetzt. Dieselben Sperren wie InterfaceGuid (generisches
+    // Interface, COM-Import-Merkmale im Rumpf, {$INTERFACES CORBA}/
+    // {$CALLING STDCALL}, Direktive zwischen Kopf und erstem Member) - eine
+    // neue GUID ist dort so falsch wie eine fehlende. Zusaetzlich gesperrt,
+    // wenn nach dem Kopf KEINE eckige Klammer folgt (Fund veraltet - GUID
+    // wurde inzwischen entfernt) oder ihr Inhalt kein einzelnes
+    // String-Literal ist (Attribut statt GUID, von SCA198 ohnehin nie
+    // gemeldet, aber defensiv).
+    class function DuplicateInterfaceGuid(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+
     // SCA149: die Direktive nach DirectiveFor(AMessage) hinter das ';' des
     // Kopfs auf ALine - in der Reihenfolge der Sprachreferenz
     // (reintroduce; overload; virtual/dynamic/override; abstract/final;
@@ -124,7 +149,9 @@ uses
 
 const
   SPAN_117 = 'sca117';
+  SPAN_143 = 'sca143';
   SPAN_197 = 'sca197';
+  SPAN_198 = 'sca198';
   SPAN_149 = 'sca149';
   HEADER_WORDS: array[0..5] of string = ('procedure', 'function',
     'constructor', 'destructor', 'operator', 'property');
@@ -521,6 +548,41 @@ begin
   Result := True;
 end;
 
+{ ---- SCA143 ---- }
+
+class function TRdxDeclFixes.UnitHeaderSkeleton(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+var
+  L : string;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  if (ALine < 1) or (ALine > AMap.LineCount) then
+  begin
+    AReason := _('line out of range');
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  if Pos('unit', LowerCase(TrimLeft(L))) <> 1 then
+  begin
+    AReason := MsgStaleSuffix(_('line %d is no longer a ''unit ...;'' '
+      + 'declaration', [ALine]));
+    Exit;
+  end;
+  if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
+  begin
+    AReason := _('comment or string on the line - the insertion point is '
+      + 'unclear');
+    Exit;
+  end;
+  AEdit.Span := TRefactorSpan.Make(SPAN_143, ALine, 1, ALine, Length(L) + 1);
+  AEdit.Expected := L;
+  AEdit.NewText := L + #10 + #10 + '//' + #10;
+  Result := True;
+end;
+
 { ---- SCA197 ---- }
 
 // 'AName = interface' auf ALine: das Token 'interface'. '' oder der Grund.
@@ -681,6 +743,64 @@ begin
     AEdit.Expected := Copy(L, Last.Col, Last.Len);
     AEdit.NewText := AEdit.Expected + ' ' + G;
   end;
+  Result := True;
+end;
+
+{ ---- SCA198 ---- }
+
+class function TRdxDeclFixes.DuplicateInterfaceGuid(AMap: TRdxCodeMap;
+  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
+var
+  Kw, Next, Close : TRdxToken;
+  NewId : TGUID;
+  Hops  : Integer;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := InterfaceHeaderOn(AMap, ALine, QuotedText(AMessage, '"'), Kw);
+  if AReason = '' then
+  begin
+    Next := After(AMap, Kw);
+    if Next.Low = '(' then
+      Next := AfterClose(AMap, Next);
+    if Next.Low <> '[' then
+      AReason := MsgStaleSuffix(_('no ''['' GUID bracket follows the header'));
+  end;
+  if AReason = '' then
+  begin
+    // '[' bis ']' - dazwischen liegt der String '{...}', dessen Oeffnungs-
+    // und Schluss-Quote je ein eigenes 1-Zeichen-Token sind (TokenAt kennt
+    // keine String-Token, nur Code-/Nicht-Code-Zeichen) - deshalb per
+    // Sprung bis ']' statt eine feste Token-Zahl anzunehmen.
+    Close := Next;
+    Hops := 0;
+    repeat
+      Close := After(AMap, Close);
+      Inc(Hops);
+    until (Close.Low = ']') or (Close.Low = '') or (Hops > 8);
+    if Close.Low <> ']' then
+      AReason := MsgStaleSuffix(
+        _('the ''[...]'' bracket does not hold a single GUID literal'));
+  end;
+  if (AReason = '') and (Close.Line <> Next.Line) then
+    AReason := _('the GUID literal spans more than one line');
+  if (AReason = '') and LooksLikeComImport(AMap, Close) then
+    AReason := _('stdcall/safecall/winapi/dispid in the body - a COM '
+      + 'import needs the real IID, not a new GUID');
+  if AReason = '' then
+    AReason := FileReason(AMap);
+  if (AReason = '') and DirectiveBefore(AMap, ALine, Next) then
+    AReason := _('compiler directive between the header and the first member');
+  if (AReason = '') and (CreateGUID(NewId) <> 0) then
+    AReason := _('CreateGUID returned no GUID');
+  if AReason <> '' then Exit;
+
+  AEdit.Span := TRefactorSpan.Make(SPAN_198, Next.Line, Next.EndCol,
+    Close.Line, Close.Col);
+  AEdit.Expected := Copy(AMap.Raw(Next.Line), Next.EndCol,
+    Close.Col - Next.EndCol);
+  AEdit.NewText := '''' + GUIDToString(NewId) + '''';
   Result := True;
 end;
 

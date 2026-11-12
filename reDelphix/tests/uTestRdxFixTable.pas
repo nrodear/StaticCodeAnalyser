@@ -136,8 +136,26 @@ const
     (Kind: fkPublicMemberWithoutDoc; Plan: 'PlanDocSkeleton';
      Caption: 'Insert a documentation skeleton';
      Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkMissingUnitHeader; Plan: 'PlanUnitHeaderSkeleton';
+     Caption: 'Insert a header comment placeholder';
+     Changes: False; Alt: ''; AltCaption: ''),
     (Kind: fkInterfaceWithoutGuid; Plan: 'PlanInterfaceGuid';
      Caption: 'Insert a new GUID';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkDuplicateInterfaceGuid; Plan: 'PlanDuplicateInterfaceGuid';
+     Caption: 'Generate a new GUID';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkCanBeStrictPrivate; Plan: 'PlanTightenToStrictPrivate';
+     Caption: 'Move declaration to a `strict private` section';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkCanBeUnitPrivate; Plan: 'PlanTightenToUnitPrivate';
+     Caption: 'Move declaration to a `private` section';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkCanBeProtected; Plan: 'PlanTightenToProtected';
+     Caption: 'Move declaration to a `protected` section';
+     Changes: False; Alt: ''; AltCaption: ''),
+    (Kind: fkDfmTabOrderConflict; Plan: 'PlanDfmTabOrderConflict';
+     Caption: 'Assign a free TabOrder value';
      Changes: False; Alt: ''; AltCaption: ''),
     (Kind: fkMissingOverride; Plan: 'PlanMissingOverride';
      Caption: 'Add "%s;" to the declaration';

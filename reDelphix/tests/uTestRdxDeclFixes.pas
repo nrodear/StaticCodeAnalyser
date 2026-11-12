@@ -31,6 +31,10 @@ type
     [Test] procedure Sca117_Refusals;
     [Test] procedure Sca197_Guid;
     [Test] procedure Sca197_Refusals;
+    [Test] procedure Sca198_Guid;
+    [Test] procedure Sca198_Refusals;
+    [Test] procedure Sca143_Skeleton;
+    [Test] procedure Sca143_Refusals;
     [Test] procedure Sca149_Directive;
     [Test] procedure Sca149_Refusals;
   end;
@@ -43,10 +47,11 @@ uses
   uTestRdxTextKit;   // Join, JoinWith, Apply
 
 type
-  TRdxDeclKind = (dkDoc, dkGuid, dkDirective);
+  TRdxDeclKind = (dkDoc, dkGuid, dkDupGuid, dkUnitHeader, dkDirective);
 
 const
   GUID_1 = '{11111111-2222-3333-4444-555555555555}';
+  OLD_GUID_198 = '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}';
 
 // ---- Helfer ----
 
@@ -85,6 +90,10 @@ begin
         Ok := TRdxDeclFixes.DocSkeleton(Map, ALine, AMessage, E, AReason);
       dkGuid:
         Ok := TRdxDeclFixes.InterfaceGuid(Map, ALine, AMessage, E, AReason);
+      dkDupGuid:
+        Ok := TRdxDeclFixes.DuplicateInterfaceGuid(Map, ALine, AMessage, E, AReason);
+      dkUnitHeader:
+        Ok := TRdxDeclFixes.UnitHeaderSkeleton(Map, ALine, AMessage, E, AReason);
     else
       Ok := TRdxDeclFixes.MethodDirective(Map, ALine, AMessage, E, AReason);
     end;
@@ -140,6 +149,14 @@ begin
   Result := Format('Interface "%s" has no GUID - Supports() and '
     + 'QueryInterface() cannot ask for it at run time. Add one with '
     + 'Ctrl+Shift+G.', [AName]);
+end;
+
+function DupGuidMsg(const AName: string): string;
+begin
+  Result := Format('Interface "%s" shares its GUID '
+    + '{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE} with IOther (u.pas:9) - '
+    + 'Supports() returns whichever was registered first. Generate a new '
+    + 'GUID with Ctrl+Shift+G.', [AName]);
 end;
 
 function ShadowMsg(const AName: string): string;
@@ -376,6 +393,73 @@ begin
     '  IFoo = interface(IBar)', '  {$ELSE}', '  IFoo = interface(IBaz)',
     '  {$ENDIF}', '    procedure Run;', '  end;']), 5, GuidMsg('IFoo'), R));
   Assert.IsTrue(Pos('Direktive', R) > 0, R);
+end;
+
+// ---- SCA198 ----
+
+procedure TTestRdxDeclFixes.Sca198_Guid;
+var
+  R : string;
+begin
+  // Eigene Zeile: Klammer bleibt, nur der GUID-Inhalt wechselt.
+  Assert.AreEqual(Join(['type', '  IFoo = interface',
+      '    [''' + GUID_1 + ''']', '    procedure Run;', '  end;']),
+    Fix(dkDupGuid, Join(['type', '  IFoo = interface',
+      '    [''' + OLD_GUID_198 + ''']', '    procedure Run;', '  end;']), 2,
+      DupGuidMsg('IFoo'), R), R);
+  // Mit Vorfahr, alles auf der Kopfzeile (inline).
+  Assert.AreEqual(Join(['type', '  IFoo = interface(IInterface) ['''
+      + GUID_1 + '''] procedure Run; end;']),
+    Fix(dkDupGuid, Join(['type', '  IFoo = interface(IInterface) ['''
+      + OLD_GUID_198 + '''] procedure Run; end;']), 2, DupGuidMsg('IFoo'), R),
+    R);
+end;
+
+procedure TTestRdxDeclFixes.Sca198_Refusals;
+var
+  R : string;
+begin
+  // Generisches Interface - eine GUID gaelte fuer alle Auspraegungen.
+  Assert.AreEqual('', Fix(dkDupGuid, Join(['type', '  IList<T> = interface',
+    '    [''' + OLD_GUID_198 + ''']', '    function Get: T;', '  end;']), 2,
+    DupGuidMsg('IList'), R));
+  Assert.IsTrue(Pos('generisch', R) > 0, R);
+  // Fund veraltet: die GUID wurde inzwischen schon entfernt.
+  Assert.AreEqual('', Fix(dkDupGuid, Join(['type', '  IFoo = interface',
+    '    procedure Run;', '  end;']), 2, DupGuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('bracket', R) > 0, R);
+  // COM-Import: safecall im Rumpf - die echte IID gehoert hinein.
+  Assert.AreEqual('', Fix(dkDupGuid, Join(['type', '  IFoo = interface(IDispatch)',
+    '    [''' + OLD_GUID_198 + ''']', '    function Get: Integer; safecall;',
+    '  end;']), 2, DupGuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('COM', R) > 0, R);
+  // {$INTERFACES CORBA} in der Datei.
+  Assert.AreEqual('', Fix(dkDupGuid, Join(['{$INTERFACES CORBA}', 'type',
+    '  IFoo = interface', '    [''' + OLD_GUID_198 + ''']', '    procedure Run;',
+    '  end;']), 3, DupGuidMsg('IFoo'), R));
+  Assert.IsTrue(Pos('CORBA', R) > 0, R);
+end;
+
+// ---- SCA143 ----
+
+procedure TTestRdxDeclFixes.Sca143_Skeleton;
+var
+  R : string;
+begin
+  Assert.AreEqual(Join(['unit u;', '', '//', '', 'interface', 'implementation',
+      'end.']),
+    Fix(dkUnitHeader, Join(['unit u;', 'interface', 'implementation', 'end.']),
+      1, '', R), R);
+end;
+
+procedure TTestRdxDeclFixes.Sca143_Refusals;
+var
+  R : string;
+begin
+  // ALine ist keine 'unit ...;'-Zeile (mehr) - Fund veraltet.
+  Assert.AreEqual('', Fix(dkUnitHeader, Join(['unit u;', 'interface',
+    'implementation', 'end.']), 2, '', R));
+  Assert.IsTrue(Pos('unit', R) > 0, R);
 end;
 
 // ---- SCA149 ----
