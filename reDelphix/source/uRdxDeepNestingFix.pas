@@ -107,7 +107,7 @@ type
     // zur Waechter-Klausel 'if not A then Exit;' mit B eine Stufe flacher.
     // ALine ist die gemeldete (tiefste) Stelle; die Art steht in AMessage.
     class function GuardClause(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // Code-Aktion C7 ohne Fund (Charge C78, uRdxContextRunner): dieselbe
     // Waechter-Klausel fuer das if am Caret - 'if' oder 'then' auf (ALine,
@@ -123,6 +123,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,         // FA_FORM (Fix-Datenfeld S5)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
   uRdxBlocks;       // TRdxBlocks.BeginBodyAround, TRdxRoutine
@@ -170,20 +171,26 @@ type
   end;
 
 // Die Art aus 'Depth d (kind from ...'; '' ohne.
-function KindOf(const AMessage: string): string;
+function KindOf(const AMessage: TRdxFindingText): string;
 var
   p, q : Integer;
 begin
   Result := '';
-  if Copy(AMessage, 1, Length(MSG_DEPTH)) <> MSG_DEPTH then
+  if AMessage.Args.TryGet(FA_FORM, Result) then
+  begin
+    if not InList(Result, NEST_KINDS) then
+      Result := '';
     Exit;
-  p := Pos('(', AMessage);
+  end;
+  if Copy(AMessage.Text, 1, Length(MSG_DEPTH)) <> MSG_DEPTH then
+    Exit;
+  p := Pos('(', AMessage.Text);
   if p = 0 then
     Exit;
   q := p + 1;
-  while (q <= Length(AMessage)) and CharInSet(AMessage[q], ['a'..'z']) do
+  while (q <= Length(AMessage.Text)) and CharInSet(AMessage.Text[q], ['a'..'z']) do
     Inc(q);
-  Result := Copy(AMessage, p + 1, q - p - 1);
+  Result := Copy(AMessage.Text, p + 1, q - p - 1);
   if not InList(Result, NEST_KINDS) then
     Result := '';
 end;
@@ -624,7 +631,7 @@ end;
 { TRdxDeepNestingFix }
 
 class function TRdxDeepNestingFix.GuardClause(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Kind    : string;

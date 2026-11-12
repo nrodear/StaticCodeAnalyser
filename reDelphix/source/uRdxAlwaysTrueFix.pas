@@ -51,7 +51,7 @@ interface
 
 uses
   uRdxBufferMath,        // TRdxEdit
-  uRdxCodeMap;           // TRdxCodeMap
+  uRdxCodeMap;           // TRdxCodeMap, TRdxFindingText
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -84,6 +84,14 @@ const
   CODE_LEN_GE  = '"Length(..) >= 0"';
   CODE_ZERO_LE = '"0 <= Length(..)"';
 
+  // Fix-Datenfeld S5: FA_FORM-Codes, wie uBoolAlwaysTrue (Engine) sie
+  // schreibt - 1:1 zu den vier Meldungsformen oben, kein Zugriff auf die
+  // Detektor-Unit (reDelphiX importiert keine Detektoren).
+  FORM_LEN_GE  = 'len_ge';
+  FORM_LEN_LT  = 'len_lt';
+  FORM_ZERO_LE = 'zero_le';
+  FORM_ZERO_GT = 'zero_gt';
+
 type
   // Der Planer von SCA150 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxAlwaysTrueFix = class
@@ -92,13 +100,14 @@ type
     // Meldung (sie nennt die Form). Liefert die eine Ersetzung vom if bis
     // zum Ende des letzten Zweigs oder den Grund.
     class function ResolveIf(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
 implementation
 
 uses
+  uFixArgs,          // FA_FORM (Fix-Datenfeld S5)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxText;          // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
@@ -133,13 +142,22 @@ type
     Close : TRdxToken;
   end;
 
-function FormOf(const AMessage: string): TRdxAtForm;
+function FormOf(const AMessage: TRdxFindingText): TRdxAtForm;
+var
+  Code : string;
 begin
-  if Pos(MSG_LEN_GE, AMessage) > 0 then
+  if AMessage.Args.TryGet(FA_FORM, Code) then
+  begin
+    if Code = FORM_LEN_GE then Exit(afLenGe);
+    if Code = FORM_ZERO_LE then Exit(afZeroLe);
+    if (Code = FORM_LEN_LT) or (Code = FORM_ZERO_GT) then Exit(afFalse);
+    Exit(afNone);
+  end;
+  if Pos(MSG_LEN_GE, AMessage.Text) > 0 then
     Result := afLenGe
-  else if Pos(MSG_ZERO_LE, AMessage) > 0 then
+  else if Pos(MSG_ZERO_LE, AMessage.Text) > 0 then
     Result := afZeroLe
-  else if (Pos(MSG_LEN_LT, AMessage) > 0) or (Pos(MSG_ZERO_GT, AMessage) > 0) then
+  else if (Pos(MSG_LEN_LT, AMessage.Text) > 0) or (Pos(MSG_ZERO_GT, AMessage.Text) > 0) then
     Result := afFalse
   else
     Result := afNone;
@@ -352,7 +370,7 @@ end;
 { TRdxAlwaysTrueFix }
 
 class function TRdxAlwaysTrueFix.ResolveIf(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Form                     : TRdxAtForm;
   Cond                     : TRdxAtCond;

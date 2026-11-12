@@ -39,6 +39,8 @@ type
     [Test] procedure BranchNotSimple_NoHelp;
     [Test] procedure CommentInRemovedPart_NoHelp;
     [Test] procedure Directive_NoHelp;
+    // ---- Fix-Datenfeld S5 ----
+    [Test] procedure ArgsPrecedence_FormWinsOverMismatchedMessage;
   end;
 
 {$IFNDEF FPC}
@@ -70,7 +72,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.CaptionFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxAlwaysTrueFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxAlwaysTrueFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -327,6 +329,31 @@ begin
     '  {$ELSE}', '    B', '  {$ENDIF};']), BODY, GE_MSG, _(R_AT_DIRECTIVE));
   AssertLineRefused('  if Length(S) >= 0 then A; {$IFDEF X}',
     _(R_AT_DIRECTIVE));
+end;
+
+// Fix-Datenfeld S5: FixArgs.FA_FORM gewinnt gegen eine Meldung, die (aus
+// einem alten Lauf) eine andere Form behauptet - hier: Args sagt "immer
+// wahr" (len_ge), der Text allein waere die FALSCH-Form (keine Hilfe).
+procedure TTestRdxAlwaysTrueFix.ArgsPrecedence_FormWinsOverMismatchedMessage;
+var
+  Source : string;
+  Map    : TRdxCodeMap;
+  Msg    : TRdxFindingText;
+  E      : TRdxEdit;
+  R      : string;
+  Ok     : Boolean;
+begin
+  Source := Wrap(['  if Length(S) >= 0 then A;']);
+  Map := NewMap(Source);
+  try
+    Msg.Text := LT_MSG;                       // behauptet die FALSCH-Form
+    Msg.Args.Put(FA_FORM, FORM_LEN_GE);        // Args sagt: immer WAHR
+    Ok := TRdxAlwaysTrueFix.ResolveIf(Map, BODY, Msg, E, R);
+  finally
+    Map.Free;
+  end;
+  Assert.IsTrue(Ok, R);
+  Assert.AreEqual(Wrap(['  A;']), Apply(Source, [E]));
 end;
 
 {$IFNDEF FPC}

@@ -115,8 +115,6 @@ const
   CREATE_PREFIX = 'create';
   // SCA096 (b): ein Aufruf, der abbricht (BlockedReason).
   RAISE_PREFIX = 'raise';
-  KEY_CTOR    = 'Constructor has no `inherited` call';
-  KEY_DTOR    = 'Destructor has no `inherited` call';
   // Damit endet der Ablauf: ein inherited dahinter liefe nie (SCA097).
   DEAD_END_WORDS: array[0..4] of string = ('exit', 'raise', 'halt', 'abort',
     'goto');
@@ -714,24 +712,24 @@ end;
 // Klasse ohne 'class' davor, ein begin-Rumpf ohne asm und ohne Direktive
 // davor, kein 'inherited' im Text der Routine und die Klasse in der Unit.
 // Legt den Planerlauf ACtx.Scan an. '' oder der Grund.
+// Fix-Datenfeld S5: keine Meldungspruefung mehr (fester Text ohne Wert,
+// nur Plausibilitaet) - AWord kommt vom AUFRUFER (ConstructorInherited
+// setzt KW_CONSTRUCTOR, DestructorInherited KW_DESTRUCTOR), das Kind des
+// Funds entscheidet also schon, welche Variante laeuft; eine zusaetzliche
+// "steht 'Constructor'/'Destructor' in der Meldung"-Pruefung war reine
+// Verdopplung derselben Entscheidung.
 function MethodCtxReason(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage, AWord: string; out ACtx: TRdxMethodCtx): string;
+  const AWord: string; out ACtx: TRdxMethodCtx): string;
 var
-  Key, What : string;
+  What : string;
 begin
   ACtx := Default(TRdxMethodCtx);
   ACtx.Scan := NewScan(AMap);
   // What: die Ergaenzung der Kopf-Suche als ganze uebersetzte Phrase
   // (RoutineOnLine setzt sie in MsgNoHeader/MsgHeadersFmt ein).
-  Key := KEY_DTOR;
   What := _('of a destructor');
   if AWord = KW_CONSTRUCTOR then
-  begin
-    Key := KEY_CTOR;
     What := _('of a constructor');
-  end;
-  if Pos(Key, AMessage) = 0 then
-    Exit(_('unknown message - no "%s"', [Key]));
   Result := RoutineOnLine(AMap, ALine, AWord, What, ACtx.Routine);
   if Result = '' then
     Result := MethodHeadReason(ACtx.Routine);
@@ -783,7 +781,7 @@ begin
   APlan := Default(TRdxResultPlan);
   APlan.Name := STMT_INHERITED;
   Edits := nil;
-  AReason := MethodCtxReason(AMap, ALine, AMessage, KW_CONSTRUCTOR, Ctx);
+  AReason := MethodCtxReason(AMap, ALine, KW_CONSTRUCTOR, Ctx);
   if AReason = '' then
     AReason := CtorVariantReason(Ctx, APlan);
   if AReason = '' then
@@ -802,7 +800,7 @@ begin
   APlan.Name := STMT_INHERITED;
   APlan.Changes := True;
   Edits := nil;
-  AReason := MethodCtxReason(AMap, ALine, AMessage, KW_DESTRUCTOR, Ctx);
+  AReason := MethodCtxReason(AMap, ALine, KW_DESTRUCTOR, Ctx);
   if AReason = '' then
     AReason := DtorOverrideReason(Ctx.Scan, Ctx.Routine);
   if AReason = '' then

@@ -41,6 +41,8 @@ type
     [Test] procedure AnonymousGotoOrShadowedExit_NoHelp;
     [Test] procedure LayoutOrIndent_NoHelp;
     [Test] procedure ConditionalExpression_NoHelp;
+    // ---- Fix-Datenfeld S5 ----
+    [Test] procedure ArgsPrecedence_FormWinsOverMismatchedMessage;
   end;
 
 {$IFNDEF FPC}
@@ -66,7 +68,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.CaptionFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxDeepNestingFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxDeepNestingFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -434,6 +436,32 @@ begin
   // Delphi 13: 'if X then A else B' als Ausdruck in der Bedingung.
   AssertRefused(Std('  if (if X then A else B) then'), INNER,
     _(R_DN_COND_EXPR));
+end;
+
+// Fix-Datenfeld S5: FixArgs.FA_FORM gewinnt gegen eine Meldung, die (aus
+// einem alten Lauf) eine andere Art behauptet ('for', das auf der
+// gemeldeten Zeile nicht steht) - Args sagt die richtige Art ('if').
+procedure TTestRdxDeepNestingFix.ArgsPrecedence_FormWinsOverMismatchedMessage;
+var
+  Source : string;
+  Map    : TRdxCodeMap;
+  Msg    : TRdxFindingText;
+  E      : TRdxEdit;
+  R      : string;
+  Ok     : Boolean;
+begin
+  Source := Std('  if List[0].Visible then');
+  Map := NewMap(Source);
+  try
+    Msg.Text := Format('Depth 5 (for from line %d, limit: 4)', [INNER]);
+    Msg.Args.Put(FA_FORM, 'if');
+    Ok := TRdxDeepNestingFix.GuardClause(Map, INNER, Msg, E, R);
+  finally
+    Map.Free;
+  end;
+  Assert.IsTrue(Ok, R);
+  Assert.AreEqual(StdFixed('  if not List[0].Visible then Exit;'),
+    Apply(Source, [E]));
 end;
 
 {$IFNDEF FPC}

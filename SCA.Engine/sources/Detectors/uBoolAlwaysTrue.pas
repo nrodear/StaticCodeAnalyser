@@ -48,8 +48,16 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils, uRegExMatches,
+  uFileTextCache, uDetectorUtils, uRegExMatches, uFixArgs,
   uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+
+const
+  // Fix-Datenfeld S5: FA_FORM-Codes fuer reDelphiX (uRdxAlwaysTrueFix.FormOf),
+  // je 1:1 zur bisherigen Meldungsform - kein neues Vokabular, nur kuerzer.
+  FORM_LEN_GE  = 'len_ge';
+  FORM_LEN_LT  = 'len_lt';
+  FORM_ZERO_LE = 'zero_le';
+  FORM_ZERO_GT = 'zero_gt';
 
 const
   // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
@@ -98,9 +106,15 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNo);
       if AlwaysTrue then
-        F.MissingVar := N_('Length(...) >= 0 is always True (Length is never negative)')
+      begin
+        F.MissingVar := N_('Length(...) >= 0 is always True (Length is never negative)');
+        F.WithFixArg(FA_FORM, FORM_LEN_GE);
+      end
       else
+      begin
         F.MissingVar := N_('Length(...) < 0 is always False (Length is never negative)');
+        F.WithFixArg(FA_FORM, FORM_LEN_LT);
+      end;
       F.SetKind(fkBoolAlwaysTrue);
       Results.Add(F);
     end;
@@ -118,9 +132,15 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(LineNo);
       if AlwaysTrue then
-        F.MissingVar := N_('0 <= Length(...) is always True (Length is never negative)')
+      begin
+        F.MissingVar := N_('0 <= Length(...) is always True (Length is never negative)');
+        F.WithFixArg(FA_FORM, FORM_ZERO_LE);
+      end
       else
+      begin
         F.MissingVar := N_('0 > Length(...) is always False (Length is never negative)');
+        F.WithFixArg(FA_FORM, FORM_ZERO_GT);
+      end;
       F.SetKind(fkBoolAlwaysTrue);
       Results.Add(F);
     end;
