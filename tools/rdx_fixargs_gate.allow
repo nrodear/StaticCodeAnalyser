@@ -22,9 +22,8 @@ uRdxDeadCodeFix|TRdxDeadCodeFix.TerminatorOf|-|S1-Bestandsaufnahme, noch nicht a
 uRdxDebugOutputFix|TRdxDebugOutputFix.CallNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxDeclFixes|MemberNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxDeclFixes|MethodNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxDeclFixes|OverrideReason|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxDeclFixes|ReintroduceReason|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
-uRdxDeclFixes|TRdxDeclFixes.DirectiveFor|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|TRdxDeclFixes.DirectiveFor|-|SCA149: liest nur feste Schluesselwoerter ("missing `override`"/"hides all inherited"), keinen Bezeichner - bewusst nicht auf FixArgs umgestellt (Fix-Datenfeld S3a-2)
+uRdxDeclFixes|TRdxDeclFixes.MethodDirective|-|SCA149: Rueckfall-Extraktion (ClassPartOf/WordAfter) fuer die Elternklasse (override) bzw. eigene Klasse (reintroduce), wenn Args.FA_NAME2 fehlt (Fix-Datenfeld S3a-2; ersetzt die fruehere Zuordnung zu OverrideReason/ReintroduceReason, die den Rohzugriff nicht mehr selbst machen)
 uRdxDeclFixes|TRdxDeclFixes.DuplicateInterfaceGuid|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxDeclFixes|TRdxDeclFixes.InterfaceGuid|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
 uRdxDeepNestingFix|KindOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt

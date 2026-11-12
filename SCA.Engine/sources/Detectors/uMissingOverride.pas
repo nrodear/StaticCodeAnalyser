@@ -65,7 +65,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uDetectorUtils,  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uFixArgs;        // FA_NAME, FA_NAME2 (Fix-Datenfeld S3a-2)
 
 // Direkter Parent-Klassenname aus nkClass.TypeRef. Der Parser legt die
 // Vorfahrenliste SPACE-separiert ab ('TBase IThing') - der fruehere
@@ -266,18 +267,25 @@ begin
             // waere es ein Compilerfehler - dort helfen 'overload' oder
             // 'reintroduce'. Der Fund bleibt in beiden Faellen: die
             // Deklaration versteckt die geerbten Ueberladungen so oder so.
+            F.WithFixArg(FA_NAME, TDetectorUtils.UnqualifiedNameLast(DM.Name));
             if PolySigs.IndexOf(MethName + '(' + SignaturSchluessel(DM)) >= 0 then
+            begin
               F.MissingVar := Format(
                 'Method %s.%s shadows virtual %s.%s - missing `override` (W1010)',
                 [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
-                 Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)])
+                 Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)]);
+              F.WithFixArg(FA_NAME2, Parent.Name);
+            end
             else
+            begin
               F.MissingVar := Format(
                 'Method %s.%s hides all inherited %s.%s overloads (W1010) - ' +
                 'signatures differ, so use `overload` or `reintroduce`; ' +
                 '`override` would not compile',
                 [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
                  Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)]);
+              F.WithFixArg(FA_NAME2, C.Name);
+            end;
             F.SetKind(fkMissingOverride);
             Results.Add(F);
           end;

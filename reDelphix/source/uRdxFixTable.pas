@@ -673,23 +673,14 @@ begin
   Result.NeedsOpen := True;
 end;
 
-// SCA164, SCA147 (Charge H3b): alle Ersetzungen (Deklaration und
-// Implementierung bzw. forward und Rumpf) in EINEM Undo-Schritt, Name die
-// Routine bzw. Methode, danach die Include-Dateien (IncludeCheck).
-function RoutineForm(
-  APlanner: TRdxPlannerOf<TRdxRoutinePlan>): TRdxPlanForm<TRdxRoutinePlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := RoutineParts;
-  Result.Check := IncludeCheck;
-  Result.NeedsOpen := False;
-end;
-
-// Wie RoutineForm, aber fuer TRdxPlannerInOf<TRdxRoutinePlan> (Fix-
-// Datenfeld S3a-1) - RoutineParts/IncludeCheck kennen nur APlan/AFinding,
-// nicht AMessage, bleiben also unveraendert wiederverwendbar. Betrifft nur
-// die Planer, die auf RunIn umgestellt werden (SCA125, SCA164) - SCA147
-// bleibt auf RoutineForm/Run.
+// SCA125/SCA164/SCA147 (Charge H3b, seit Fix-Datenfeld S3a-1/S3a-2 nur
+// noch die *In-Form - die Planer aller drei wurden auf TRdxFindingText
+// umgestellt, eine Form mit TRdxPlannerOf<TRdxRoutinePlan> (string) koennte
+// sie nicht mehr binden): alle Ersetzungen (Deklaration und Implementierung
+// bzw. forward und Rumpf) in EINEM Undo-Schritt, Name die Routine bzw.
+// Methode, danach die Include-Dateien (IncludeCheck). RoutineParts/
+// IncludeCheck kennen nur APlan/AFinding, nicht AMessage, bleiben also
+// unveraendert wiederverwendbar.
 function RoutineFormIn(
   APlanner: TRdxPlannerInOf<TRdxRoutinePlan>): TRdxPlanFormIn<TRdxRoutinePlan>;
 begin
@@ -875,8 +866,13 @@ begin
   AOutcome.Edits := APlan.Edits;
 end;
 
-// SCA119: nur die Zeilen - kein Quellstellen-Dienst, kein Check.
-function LocalConstantNameForm: TRdxPlanForm<TRdxLocalConstantNamePlan>;
+// SCA119: nur die Zeilen - kein Quellstellen-Dienst, kein Check. Seit
+// Fix-Datenfeld S3a-2 nur noch die *In-Form: RenameConstant ist der
+// einzige Planer von TRdxLocalConstantNamePlan und wurde selbst auf
+// TRdxFindingText umgestellt - eine Form mit
+// TRdxPlannerOf<TRdxLocalConstantNamePlan> (string) koennte ihn nicht
+// mehr binden.
+function LocalConstantNameFormIn: TRdxPlanFormIn<TRdxLocalConstantNamePlan>;
 begin
   Result.Planner := TRdxLocalConstantNameFix.RenameConstant;
   Result.Parts := LocalConstantNameParts;
@@ -1276,7 +1272,7 @@ end;
 function PlanMissingOverride(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDeclFixes.MethodDirective);
   Result.Name := TRdxDeclFixes.DirectiveFor(AFinding.Message);
   Result.ChangesBehavior := Result.Name = DIRECTIVE_OVERRIDE;
@@ -1383,10 +1379,11 @@ function PlanUnusedPrivateMethod(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   P : TRdxRoutinePlan;
+  Form : TRdxPlanFormIn<TRdxRoutinePlan>;
 begin
-  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
-    RoutineForm(TRdxRoutineFixes.UnusedPrivateMethod),
-    APlaces, ALines, AFinding, P);
+  Form := RoutineFormIn(TRdxRoutineFixes.UnusedPrivateMethod);
+  Result := TRdxFixFrame.RunIn<TRdxRoutinePlan>(Form, APlaces, ALines,
+    AFinding, P);
   if not Result.Enabled then Exit;
   Result.Reason := NetworkPathReason(AFinding.FileName, rrForms);
   if Result.Reason = '' then
@@ -1543,8 +1540,8 @@ function PlanManagedResult(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.ManagedResultInit),
+  Result := TRdxFixFrame.RunIn<TRdxResultPlan>(
+    ResultFormIn(TRdxResultFixes.ManagedResultInit),
     APlaces, ALines, AFinding, P);
   if not Result.Enabled then Exit;
   Result.Hint := _(R_RESULT_INIT_HINT);
@@ -2177,8 +2174,8 @@ function PlanConstStringParameter(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxParamPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxParamPlan>(
-    ParamForm(TRdxConstStringParameterFix.MakeConst),
+  Result := TRdxFixFrame.RunIn<TRdxParamPlan>(
+    ParamFormIn(TRdxConstStringParameterFix.MakeConst),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2199,8 +2196,8 @@ function PlanLocalConstantName(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxLocalConstantNamePlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxLocalConstantNamePlan>(
-    LocalConstantNameForm, APlaces, ALines, AFinding, P);
+  Result := TRdxFixFrame.RunIn<TRdxLocalConstantNamePlan>(
+    LocalConstantNameFormIn, APlaces, ALines, AFinding, P);
 end;
 
 // SCA069 (Charge QF10): Zifferntrenner gibt es erst ab Delphi 11, FPC 3.2
@@ -2340,10 +2337,12 @@ end;
 function PlanCanBeClassMethod(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
-  Map : TRdxCodeMap;
+  Map  : TRdxCodeMap;
+  AMsg : TRdxFindingText;
 begin
   Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxClassMethodFix.MethodNameOf(AFinding.Message);
+  AMsg := FindingTextOf(AFinding);
+  Result.Name := TRdxClassMethodFix.MethodNameOf(AMsg);
   if not Assigned(ALines) then
   begin
     Result.Reason := MsgNoFileOpen;
@@ -2352,7 +2351,7 @@ begin
   Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxClassMethodFix.MakeStatic(Map, AFinding.LineInt,
-      AFinding.Message, Result.Edits, Result.Reason);
+      AMsg, Result.Edits, Result.Reason);
   finally
     TRdxCodeMap.Release(Map);
   end;
@@ -2456,7 +2455,7 @@ begin
 end;
 
 // SCA125 (Charge A4, Todo Q14): Deklaration und Implementierung des leeren
-// Overrides in EINEM Schritt - die Plan-Form von SCA147 (RoutineForm; der
+// Overrides in EINEM Schritt - die Plan-Form von SCA147 (RoutineFormIn; der
 // Plan nennt keine Includes, IncludeCheck bleibt still). Name = der
 // Methodenname aus der Meldung, auch gesperrt.
 function PlanInheritedMethodEmpty(APlaces: TSourcePlaces; ALines: TStrings;

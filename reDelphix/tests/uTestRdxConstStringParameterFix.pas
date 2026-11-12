@@ -20,6 +20,7 @@ type
   TTestRdxConstStringParameterFix = class
   public
     [Test] procedure LocalFunction_Const;
+    [Test] procedure FixArgsWinsOverText;
     [Test] procedure Forward_And_Impl;
     [Test] procedure PrivateMethod_DeclAndImpl;
     [Test] procedure ImplementationClass_PublicMethod;
@@ -60,6 +61,7 @@ uses
   uRdxBufferMath, uRdxCodeMap, uRdxText,
   uRdxUnusedParameterFix,       // TRdxParamPlan, R_UP_* (geteilte Gruende)
   uRdxConstStringParameterFix,
+  uFixArgs,         // FA_NAME, FA_TYPE (Fix-Datenfeld S3a-2)
   uTestRdxTextKit   // Join, Apply, NewMap
 {$IFNDEF FPC}
   , System.Generics.Collections,
@@ -106,6 +108,23 @@ begin
     Result := Apply(ASource, P.Edits);
 end;
 
+// Wie Fix, aber mit einem fertigen TRdxFindingText (Fix-Datenfeld S3a-2).
+function FixIn(const ASource: string; ALine: Integer;
+  const AMsg: TRdxFindingText; out AReason: string): string;
+var
+  P   : TRdxParamPlan;
+  Map : TRdxCodeMap;
+begin
+  Result := '';
+  Map := NewMap(ASource);
+  try
+    if TRdxConstStringParameterFix.MakeConst(Map, ALine, AMsg, P, AReason) then
+      Result := Apply(ASource, P.Edits);
+  finally
+    Map.Free;
+  end;
+end;
+
 // Abgelehnt mit genau dem Grund AWant.
 procedure AssertRefused(const ASource: string; ALine: Integer;
   const AName, AWant: string);
@@ -144,6 +163,25 @@ begin
       '  Result := Length(s);', 'end;']),
     Fix(ImplUnit(['function Hash(s: string): Integer;', 'begin',
       '  Result := Length(s);', 'end;']), 4, 's', R), R);
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME/FA_TYPE) gewinnt vor der
+// Meldung, wenn beide einen anderen Namen/Typ nennen.
+procedure TTestRdxConstStringParameterFix.FixArgsWinsOverText;
+var
+  Src, Fixed : string;
+  Msg        : TRdxFindingText;
+  R          : string;
+begin
+  Src := ImplUnit(['function Hash(s: string): Integer;', 'begin',
+    '  Result := Length(s);', 'end;']);
+  Msg.Text := CMsg('andererName', 'AnsiString');
+  Msg.Args.Put(FA_NAME, 's');
+  Msg.Args.Put(FA_TYPE, 'string');
+  Fixed := FixIn(Src, 4, Msg, R);
+  Assert.AreEqual(
+    ImplUnit(['function Hash(const s: string): Integer;', 'begin',
+      '  Result := Length(s);', 'end;']), Fixed, R);
 end;
 
 procedure TTestRdxConstStringParameterFix.Forward_And_Impl;

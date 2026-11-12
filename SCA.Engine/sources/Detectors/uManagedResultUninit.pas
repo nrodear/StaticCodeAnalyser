@@ -116,7 +116,8 @@ implementation
 
 uses
   System.StrUtils, System.SysUtils,
-  uDetectorUtils;
+  uDetectorUtils,
+  uFixArgs;        // FA_NAME, FA_TYPE (Fix-Datenfeld S3a-2)
 
 const
   RESULT_IDENT = 'result';
@@ -771,7 +772,9 @@ begin
                'content, not empty. Initialize Result first (e.g. ' +
                'Result := nil / Result := [] / Result := '''')',
           [TDetectorUtils.UnqualifiedNameLast(M.Name), ReadWhat, RetType]),
-        fkManagedResultUninit));
+        fkManagedResultUninit)
+        .WithFixArg(FA_NAME, TDetectorUtils.UnqualifiedNameLast(M.Name))
+        .WithFixArg(FA_TYPE, RetType));
     end;
   finally
     Methods.Free;

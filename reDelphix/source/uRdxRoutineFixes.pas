@@ -126,8 +126,10 @@ type
     // Formdatei prueft der Aufrufer (FormNamesMethod),
     // die {$I}-Dateien davor (seit Charge B1-FD in APlan.Includes) ebenso
     // mit IncludeReason.
+    // Seit Fix-Datenfeld S3a-2: AMessage.Args.Get(FA_NAME) ('TKlasse.Methode')
+    // gewinnt vor dem Meldungstext.
     class function UnusedPrivateMethod(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxRoutinePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
 
     // SCA147: nennt die Formdatei (.dfm/.fmx/.lfm-Text) AName als Wort -
@@ -1461,7 +1463,7 @@ begin
 end;
 
 class function TRdxRoutineFixes.UnusedPrivateMethod(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxRoutinePlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
   out AReason: string): Boolean;
 var
   Full, ClassPath : string;
@@ -1471,7 +1473,8 @@ begin
   APlan := Default(TRdxRoutinePlan);
   D := Default(TRdxRoutine);
   R := Default(TRdxRoutine);
-  Full := NameFromMessage(AMessage, KEY_METHOD);
+  if not AMessage.Args.TryGet(FA_NAME, Full) then
+    Full := NameFromMessage(AMessage.Text, KEY_METHOD);
   ClassPath := Copy(Full, 1, LastDelimiter('.', Full) - 1);
   APlan.Name := LastPart(Full);
   if (ClassPath = '') or (APlan.Name = '') then

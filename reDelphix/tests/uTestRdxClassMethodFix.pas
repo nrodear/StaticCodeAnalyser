@@ -24,6 +24,7 @@ type
     [Test] procedure DirectiveAfterDeclaration_Kept;
     [Test] procedure MultiLineDeclaration_Becomes;
     [Test] procedure CallsElsewhere_StayValid;
+    [Test] procedure FixArgsWinsOverText;
     // ---- Gegenproben ----
     [Test] procedure MemberInBody_NoHelp;
     [Test] procedure SelfOrTObjectMember_NoHelp;
@@ -71,6 +72,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxClassMethodFix,
   uRdxText,              // _() und die gemeinsamen Gruende
+  uFixArgs,              // FA_NAME (Fix-Datenfeld S3a-2)
   uTestRdxTextKit;       // Join, Apply, LineOf, LineStartingWith, NewMap
 
 const
@@ -102,6 +104,27 @@ end;
 function AddUnit(const AHead: string; const ABody: array of string): string;
 begin
   Result := UnitWith(AHead, ABody, IMPL_ADD);
+end;
+
+// Wie PlanAt, aber mit einem fertigen TRdxFindingText (Fix-Datenfeld
+// S3a-2: Args koennen vom Meldungstext abweichen).
+function PlanAtIn(const ASource: string; ALine: Integer;
+  const AMsg: TRdxFindingText; out AReason: string): string;
+var
+  Map   : TRdxCodeMap;
+  Edits : TArray<TRdxEdit>;
+  Ok    : Boolean;
+begin
+  Result := '';
+  AReason := '';
+  Map := NewMap(ASource);
+  try
+    Ok := TRdxClassMethodFix.MakeStatic(Map, ALine, AMsg, Edits, AReason);
+  finally
+    Map.Free;
+  end;
+  if Ok then
+    Result := Apply(ASource, Edits);
 end;
 
 function MsgFor(const AFull: string): string;
@@ -242,6 +265,23 @@ begin
     []), 'class function TMath.Add', 'function TMath.Add', []),
     'sonst bleibt alles');
   Assert.IsTrue(Pos(Join(BODY_AFTER), Fixed) > 0, Fixed);
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Name gewinnt vor der Meldung, wenn beide
+// einen anderen Namen nennen.
+procedure TTestRdxClassMethodFix.FixArgsWinsOverText;
+var
+  Src, Fixed : string;
+  Msg        : TRdxFindingText;
+  R          : string;
+begin
+  Src := AddUnit(HEAD, ['  public', DECL_ADD]);
+  Msg.Text := MsgFor('TMath.NichtAdd');
+  Msg.Args.Put(FA_NAME, 'TMath.Add');
+  Fixed := PlanAtIn(Src, LineStartingWith(Src, ADD_HEAD), Msg, R);
+  Assert.IsTrue(Fixed <> '', R);
+  Assert.AreEqual(UnitWith(HEAD, ['  public', STATIC_ADD], IMPL_ADD_CLASS),
+    Fixed);
 end;
 
 // ---- Gegenproben ----

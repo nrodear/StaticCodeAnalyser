@@ -111,9 +111,11 @@ type
   public
     // SCA119: die lokale Konstante der Meldung auf ALine in UPPER_SNAKE_CASE
     // umbenennen, mit allen Verweisen der Routine (s. Kopf). Die Form von
-    // TRdxPlannerOf<TRdxLocalConstantNamePlan> (uRdxFixTable).
+    // TRdxPlannerInOf<TRdxLocalConstantNamePlan> (uRdxFixTable) seit
+    // Fix-Datenfeld S3a-2: AMessage.Args.Get(FA_NAME/FA_NAME2) gewinnt vor
+    // dem Meldungstext.
     class function RenameConstant(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxLocalConstantNamePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxLocalConstantNamePlan;
       out AReason: string): Boolean; static;
     // Name und Routine aus der Meldung ('Local const X in R - consider
     // ...'); '' ohne diese Form.
@@ -129,7 +131,8 @@ uses
   System.SysUtils,
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxBlocks,       // TRdxBlocks.HeadBefore/ReadRoutine, TRdxRoutine
-  uRdxText;         // _(), MsgMovedSuffix, MsgStaleSuffix
+  uRdxText,         // _(), MsgMovedSuffix, MsgStaleSuffix
+  uFixArgs;         // FA_NAME, FA_NAME2 (Fix-Datenfeld S3a-2)
 
 const
   SPAN_119 = 'sca119';
@@ -605,7 +608,7 @@ begin
 end;
 
 class function TRdxLocalConstantNameFix.RenameConstant(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string;
+  ALine: Integer; const AMessage: TRdxFindingText;
   out APlan: TRdxLocalConstantNamePlan; out AReason: string): Boolean;
 var
   RoutineName : string;
@@ -618,7 +621,10 @@ begin
   Routine := Default(TRdxRoutine);
   Bodies := Default(TRdxBodies);
   APlan := Default(TRdxLocalConstantNamePlan);
-  APlan.OldName := ConstNameOf(AMessage, RoutineName);
+  if AMessage.Args.TryGet(FA_NAME, APlan.OldName) then
+    AMessage.Args.TryGet(FA_NAME2, RoutineName)
+  else
+    APlan.OldName := ConstNameOf(AMessage.Text, RoutineName);
   if APlan.OldName = '' then
   begin
     AReason := _(R_LCN_FORM);
