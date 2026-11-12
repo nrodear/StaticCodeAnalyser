@@ -61,7 +61,7 @@ implementation
 // Signatur ist von der Detektor-Registry vorgegeben.
 
 uses
-  uFileTextCache, uInterfaceGuidIndex;
+  uFixArgs, uFileTextCache, uInterfaceGuidIndex;
 
 const
   // So viele andere Fundstellen stehen im Meldungstext, dann folgt
@@ -203,7 +203,7 @@ begin
         Format('Interface "%s" has no GUID - Supports() and QueryInterface() ' +
                'cannot ask for it at run time. Add one with Ctrl+Shift+G.',
                [Decl.Name]),
-        fkInterfaceWithoutGuid));
+        fkInterfaceWithoutGuid).WithFixArg(FA_NAME, Decl.Name));
       Continue;
     end;
 

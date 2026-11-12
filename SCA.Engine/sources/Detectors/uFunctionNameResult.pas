@@ -39,7 +39,7 @@ type
 implementation
 
 uses
-  uFileTextCache, uDetectorUtils, uStaticFiles, uFuncNameResultScan;
+  uFixArgs, uFileTextCache, uDetectorUtils, uStaticFiles, uFuncNameResultScan;
 
 // Ist eine Lese-Stelle auf der Zeile ALine bewiesen?
 function LineProven(const AHits: TFuncNameHits; ALine: Integer): Boolean;
@@ -108,7 +108,8 @@ begin
       Seen.Add(Key, True);
       if H.Use = fnuAssign then
         Results.Add(TLeakFinding.New(FileName, H.Routine, H.Line,
-          TFuncNameScan.MessageOf(H), fkFunctionNameAsResult))
+          TFuncNameScan.MessageOf(H), fkFunctionNameAsResult)
+          .WithFixArg(FA_NAME, H.Written))
       else
         Results.Add(ReadFinding(FileName, Hits, H));
     end;

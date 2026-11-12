@@ -119,6 +119,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   System.StrUtils,
   uFileTextCache, uDetectorUtils, uAstSpans;
 
@@ -700,6 +701,7 @@ begin
             'Top-level routine %s appears unused (no caller within the unit, ' +
             'no interface forward-declaration)', [MethName]);
           F.SetKind(fkUnusedRoutine);
+          F.WithFixArg(FA_NAME, MethName);
           // Phase 1 ist hochkonfident: kein cross-unit-Confound (kein
           // interface-Decl), self-Calls sind ausgenommen.
           F.Confidence := fcHigh;

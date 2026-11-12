@@ -99,6 +99,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   System.Classes,        // TStringList fuer die Quelltext-Gates (2026-07-31)
   uFileTextCache,        // AcquireLines/ReleaseLines - Lazy-Load, nur bei Kandidaten
   uManagedResultUninit,
@@ -611,6 +612,7 @@ begin
     'Function %s never assigns Result (return value undefined)',
     [TDetectorUtils.UnqualifiedNameLast(MethodNode.Name)]);
   F.SetKind(fkRoutineResultUnassigned);
+  F.WithFixArg(FA_NAME, TDetectorUtils.UnqualifiedNameLast(MethodNode.Name));
   Results.Add(F);
 end;
 

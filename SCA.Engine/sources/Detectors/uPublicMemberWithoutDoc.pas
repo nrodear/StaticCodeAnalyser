@@ -64,6 +64,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   System.RegularExpressions,
   uFileTextCache, uRegExMatches;
 
@@ -222,6 +223,7 @@ begin
                'directly above explaining purpose + contract.',
                [Name]);
       F.SetKind(fkPublicMemberWithoutDoc);
+      F.WithFixArg(FA_NAME, Name);
       Results.Add(F);
     end;
   finally

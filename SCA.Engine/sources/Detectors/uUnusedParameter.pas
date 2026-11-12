@@ -88,6 +88,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   System.RegularExpressions;   // GATE E - Prozedurwert-Muster
 
 function IsIdentChar(C: Char): Boolean; inline;
@@ -1395,6 +1396,7 @@ begin
         F.MissingVar := Format(
           'Unused parameter: %s (never read in method body)', [Name]);
         F.SetKind(fkUnusedParameter);
+        F.WithFixArg(FA_NAME, Name);
         Results.Add(F);
       end;
     end;

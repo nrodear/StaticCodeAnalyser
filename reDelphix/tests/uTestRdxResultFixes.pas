@@ -105,13 +105,35 @@ begin
   end;
 end;
 
+// Wie PlanOf, aber fuer TRdxResultPlannerIn (Fix-Datenfeld S3a-1:
+// ResultDefault) - AMessage ist TRdxFindingText, Implicit uebernimmt den
+// Literal-String-Fall unveraendert.
+function PlanOfIn(APlanner: TRdxResultPlannerIn; const ASource: string;
+  ALine: Integer; const AMessage: TRdxFindingText;
+  out AReason: string): TRdxResultPlan;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    APlanner(Map, ALine, AMessage, Result, AReason);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
 // SCA121 an der Zeile, die mit AHead beginnt: neuer Text oder '' (AReason).
 function Fix121(const ASource, AHead, AName: string; out AReason: string): string;
 var
   P : TRdxResultPlan;
 begin
   Result := '';
-  P := PlanOf(TRdxResultFixes.ResultDefault, ASource,
+  P := PlanOfIn(TRdxResultFixes.ResultDefault, ASource,
     LineStartingWith(ASource, AHead), Format(MSG_121, [AName]), AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edits);
@@ -177,7 +199,7 @@ begin
   Assert.AreEqual(InUnit(['function F(A: Integer): Integer;', 'begin',
     '  Result := 0;', '  if A > 0 then', '    Log(''x'');',
     'end;']), Fix121(S, 'function F', 'F', R), R);
-  P := PlanOf(TRdxResultFixes.ResultDefault, S, 4, Format(MSG_121, ['F']), R);
+  P := PlanOfIn(TRdxResultFixes.ResultDefault, S, 4, Format(MSG_121, ['F']), R);
   Assert.AreEqual('0', P.Name);
   Assert.AreEqual<Integer>(1, Length(P.Edits));
   // Ein Programm uebersetzt der Compiler ebenso.

@@ -41,6 +41,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   uFileTextCache,
   uAstSpans;
 
@@ -489,6 +490,7 @@ begin
           'Unused local variable: %s (declared but never read or written)',
           [Name]);
         F.SetKind(fkUnusedLocalVar);
+        F.WithFixArg(FA_NAME, Name);
         Results.Add(F);
       end;
     end;

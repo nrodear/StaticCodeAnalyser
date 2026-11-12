@@ -72,6 +72,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   uDetectorUtils;   // FirstParentToken (Hebung, Voll-Review 2026-09-12)
 
 const
@@ -312,6 +313,7 @@ begin
                'Suggested: E%s',
                [C.Name, C.Name]);
       F.SetKind(fkExceptionName);
+      F.WithFixArg(FA_NAME, C.Name);
       Results.Add(F);
     end;
   finally

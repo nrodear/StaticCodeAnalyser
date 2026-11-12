@@ -685,6 +685,20 @@ begin
   Result.NeedsOpen := False;
 end;
 
+// Wie RoutineForm, aber fuer TRdxPlannerInOf<TRdxRoutinePlan> (Fix-
+// Datenfeld S3a-1) - RoutineParts/IncludeCheck kennen nur APlan/AFinding,
+// nicht AMessage, bleiben also unveraendert wiederverwendbar. Betrifft nur
+// die Planer, die auf RunIn umgestellt werden (SCA125, SCA164) - SCA147
+// bleibt auf RoutineForm/Run.
+function RoutineFormIn(
+  APlanner: TRdxPlannerInOf<TRdxRoutinePlan>): TRdxPlanFormIn<TRdxRoutinePlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := RoutineParts;
+  Result.Check := IncludeCheck;
+  Result.NeedsOpen := False;
+end;
+
 // SCA009, SCA001, SCA109, SCA153, SCA156 (Charge H4): eine Ersetzung von
 // der Zeile von A bis zur Freigabe; Name X, die Sperre bzw. der Puffer -
 // schon aus der Meldung, auch wenn der Planer ablehnt.
@@ -702,6 +716,19 @@ end;
 // und der Bedarf an Variants kommen mit dem Plan.
 function ResultForm(
   APlanner: TRdxPlannerOf<TRdxResultPlan>): TRdxPlanForm<TRdxResultPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := ResultParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
+// Wie ResultForm, aber fuer TRdxPlannerInOf<TRdxResultPlan> (Fix-Datenfeld
+// S3a-1) - ResultParts kennt nur APlan, bleibt unveraendert wiederverwendbar.
+// Betrifft nur SCA121 (ResultDefault) - SCA096/097/196 bleiben auf
+// ResultForm/Run.
+function ResultFormIn(
+  APlanner: TRdxPlannerInOf<TRdxResultPlan>): TRdxPlanFormIn<TRdxResultPlan>;
 begin
   Result.Planner := APlanner;
   Result.Parts := ResultParts;
@@ -734,8 +761,11 @@ end;
 // Eine Formdatei, die die Methode als Ereignis bindet, liest die Hilfe
 // bewusst nicht: TReader findet die Methode ueber TObject.MethodAddress,
 // und das vergleicht ohne Gross/klein (System.pas, UTF8IdentIdentCompare).
-function MethodNameForm(
-  APlanner: TRdxPlannerOf<TRdxMethodNamePlan>): TRdxPlanForm<TRdxMethodNamePlan>;
+// Seit Fix-Datenfeld S3a-1 nur noch die *In-Form: Capitalize ist der
+// einzige Planer von TRdxMethodNamePlan und wurde selbst auf
+// TRdxFindingText umgestellt.
+function MethodNameFormIn(APlanner: TRdxPlannerInOf<TRdxMethodNamePlan>):
+  TRdxPlanFormIn<TRdxMethodNamePlan>;
 begin
   Result.Planner := APlanner;
   Result.Parts := MethodNameParts;
@@ -801,6 +831,18 @@ begin
   Result.NeedsOpen := False;
 end;
 
+// Wie ParamForm, aber fuer TRdxPlannerInOf<TRdxParamPlan> (Fix-Datenfeld
+// S3a-1) - ParamParts kennt nur APlan, bleibt unveraendert wiederverwendbar.
+// Betrifft nur SCA054 (MarkUnused) - SCA170 bleibt auf ParamForm/Run.
+function ParamFormIn(
+  APlanner: TRdxPlannerInOf<TRdxParamPlan>): TRdxPlanFormIn<TRdxParamPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := ParamParts;
+  Result.Check := nil;
+  Result.NeedsOpen := False;
+end;
+
 // SCA118 (Charge QF9): alle Ersetzungen der Umbenennung in EINEM
 // Undo-Schritt; Name der neue Name ('Rename the exception class to %s') -
 // schon gesetzt, wenn der Planer ablehnt.
@@ -811,8 +853,12 @@ begin
   AOutcome.Edits := APlan.Edits;
 end;
 
-// SCA118: nur die Zeilen - kein Quellstellen-Dienst, kein Check.
-function ExceptionNameForm: TRdxPlanForm<TRdxExceptionNamePlan>;
+// SCA118: nur die Zeilen - kein Quellstellen-Dienst, kein Check. Seit
+// Fix-Datenfeld S3a-1 nur noch die *In-Form: RenameClass ist der einzige
+// Planer von TRdxExceptionNamePlan und wurde selbst auf TRdxFindingText
+// umgestellt - eine Form mit TRdxPlannerOf<TRdxExceptionNamePlan> (string)
+// koennte ihn nicht mehr binden.
+function ExceptionNameFormIn: TRdxPlanFormIn<TRdxExceptionNamePlan>;
 begin
   Result.Planner := TRdxExceptionNameFix.RenameClass;
   Result.Parts := ExceptionNameParts;
@@ -1146,14 +1192,14 @@ end;
 function PlanDocSkeleton(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDeclFixes.DocSkeleton);
 end;
 
 function PlanInterfaceGuid(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDeclFixes.InterfaceGuid);
 end;
 
@@ -1286,11 +1332,11 @@ function PlanUnusedRoutine(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 var
   P    : TRdxRoutinePlan;
-  Form : TRdxPlanForm<TRdxRoutinePlan>;
+  Form : TRdxPlanFormIn<TRdxRoutinePlan>;
 begin
-  Form := RoutineForm(TRdxRoutineFixes.UnusedRoutine);
+  Form := RoutineFormIn(TRdxRoutineFixes.UnusedRoutine);
   Form.Check := UnusedRoutineCheck;
-  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(Form, APlaces, ALines,
+  Result := TRdxFixFrame.RunIn<TRdxRoutinePlan>(Form, APlaces, ALines,
     AFinding, P);
 end;
 
@@ -1362,10 +1408,14 @@ end;
 // wenn der Planer ablehnt.
 function PlanUnusedVar(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Name : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxCleanupFixes.UnusedLocalVar);
-  Result.Name := TRdxCleanupFixes.UnusedVarName(AFinding.Message);
+  if not AFinding.FixArgs.TryGet(FA_NAME, Name) then
+    Name := TRdxCleanupFixes.UnusedVarName(AFinding.Message);
+  Result.Name := Name;
 end;
 
 function PlanMissingFinally(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1479,8 +1529,8 @@ function PlanResultDefault(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxResultPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxResultPlan>(
-    ResultForm(TRdxResultFixes.ResultDefault),
+  Result := TRdxFixFrame.RunIn<TRdxResultPlan>(
+    ResultFormIn(TRdxResultFixes.ResultDefault),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1840,8 +1890,8 @@ function PlanMethodName(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxMethodNamePlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxMethodNamePlan>(
-    MethodNameForm(TRdxMethodNameFix.Capitalize),
+  Result := TRdxFixFrame.RunIn<TRdxMethodNamePlan>(
+    MethodNameFormIn(TRdxMethodNameFix.Capitalize),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2113,8 +2163,8 @@ function PlanUnusedParameter(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxParamPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxParamPlan>(
-    ParamForm(TRdxUnusedParameterFix.MarkUnused),
+  Result := TRdxFixFrame.RunIn<TRdxParamPlan>(
+    ParamFormIn(TRdxUnusedParameterFix.MarkUnused),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2138,7 +2188,7 @@ function PlanExceptionName(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxExceptionNamePlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxExceptionNamePlan>(ExceptionNameForm,
+  Result := TRdxFixFrame.RunIn<TRdxExceptionNamePlan>(ExceptionNameFormIn,
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2414,8 +2464,8 @@ function PlanInheritedMethodEmpty(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxRoutinePlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxRoutinePlan>(
-    RoutineForm(TRdxInheritedEmptyFix.DeleteOverride),
+  Result := TRdxFixFrame.RunIn<TRdxRoutinePlan>(
+    RoutineFormIn(TRdxInheritedEmptyFix.DeleteOverride),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -2424,10 +2474,14 @@ end;
 // Menuetext ('%s'), auch wenn der Planer ablehnt.
 function PlanFuncNameResult(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Name : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxFuncNameFix.ResultAssign);
-  Result.Name := TRdxFuncNameFix.NameOf(AFinding.Message);
+  if not AFinding.FixArgs.TryGet(FA_NAME, Name) then
+    Name := TRdxFuncNameFix.NameOf(AFinding.Message);
+  Result.Name := Name;
 end;
 
 // SCA206 (2026-11-06): Leerraum im Formatter-Marker -> exakte Form '{(*}'

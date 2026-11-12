@@ -67,7 +67,7 @@ type
     // Kopf und bei einem Kommentar VOR dem Kopf auf seiner Zeile (er
     // stuende sonst in jeder Geruestzeile).
     class function DocSkeleton(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA197: hinter den Kopf 'IFoo = interface(IBar)' auf ALine die Zeile
@@ -79,7 +79,7 @@ type
     // der Datei, bei einer Direktive vom Kopf bis zum ersten Member (Kopf
     // unter {$IFDEF} doppelt: die GUID kaeme nur in einen Zweig).
     class function InterfaceGuid(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA143: hinter 'unit X;' auf ALine eine Leerzeile, eine leere
@@ -144,6 +144,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,        // FA_NAME (Fix-Datenfeld S3a-1)
   uRdxText,        // _(), gemeinsame Texte (MsgMovedSuffix, MsgStaleSuffix ...)
   uRefactorInfo;   // TRefactorSpan.Make
 
@@ -474,17 +475,19 @@ begin
 end;
 
 // Darf ueber ALine ein Geruest? '' oder der Grund; ASig ist der Kopf.
-function DocReason(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
-  out ASig: TRdxSignature): string;
+function DocReason(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: TRdxFindingText; out ASig: TRdxSignature): string;
 var
-  R : string;
+  R, Name : string;
 begin
   ASig := Default(TRdxSignature);
   if AMap.StartsInside(ALine) then
     Exit(MsgLineStartsInCommentOrString);
   if not TRdxDeclFixes.ReadSignature(AMap, ALine, ASig, R) then
     Exit(R);
-  if not SameText(ASig.Name, MemberNameOf(AMessage)) then
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := MemberNameOf(AMessage.Text);
+  if not SameText(ASig.Name, Name) then
     Exit(DeclMovedReason);
   if CommentEndsAbove(AMap, ALine) then
     Exit(_('a comment spanning several lines ends above - the detector sees '
@@ -519,7 +522,8 @@ begin
 end;
 
 class function TRdxDeclFixes.DocSkeleton(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
 var
   Sig    : TRdxSignature;
   L      : string;
@@ -700,17 +704,22 @@ begin
 end;
 
 class function TRdxDeclFixes.InterfaceGuid(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
 var
   Kw, Last, Next : TRdxToken;
   L, Indent, G   : string;
+  Name           : string;
   NewId          : TGUID;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
   // Der Name aus 'Interface "IFoo" has no GUID ...' (bis Charge B2S-a
-  // eine eigene Kopie QuotedNameOf).
-  AReason := InterfaceHeaderOn(AMap, ALine, QuotedText(AMessage, '"'), Kw);
+  // eine eigene Kopie QuotedNameOf), bevorzugt aus FixArgs (Fix-Datenfeld
+  // S3a-1).
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := QuotedText(AMessage.Text, '"');
+  AReason := InterfaceHeaderOn(AMap, ALine, Name, Kw);
   if AReason = '' then
     AReason := HeaderTail(AMap, Kw, Last, Next);
   if (AReason = '') and LooksLikeComImport(AMap, Next) then
