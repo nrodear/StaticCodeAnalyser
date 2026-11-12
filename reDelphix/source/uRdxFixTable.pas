@@ -761,18 +761,9 @@ end;
 // Eine Formdatei, die die Methode als Ereignis bindet, liest die Hilfe
 // bewusst nicht: TReader findet die Methode ueber TObject.MethodAddress,
 // und das vergleicht ohne Gross/klein (System.pas, UTF8IdentIdentCompare).
-function MethodNameForm(
-  APlanner: TRdxPlannerOf<TRdxMethodNamePlan>): TRdxPlanForm<TRdxMethodNamePlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := MethodNameParts;
-  Result.Check := nil;
-  Result.NeedsOpen := False;
-end;
-
-// Wie MethodNameForm, aber fuer TRdxPlannerInOf<TRdxMethodNamePlan>
-// (Fix-Datenfeld S3a-1) - MethodNameParts kennt nur APlan, bleibt
-// unveraendert wiederverwendbar.
+// Seit Fix-Datenfeld S3a-1 nur noch die *In-Form: Capitalize ist der
+// einzige Planer von TRdxMethodNamePlan und wurde selbst auf
+// TRdxFindingText umgestellt.
 function MethodNameFormIn(APlanner: TRdxPlannerInOf<TRdxMethodNamePlan>):
   TRdxPlanFormIn<TRdxMethodNamePlan>;
 begin
@@ -862,18 +853,11 @@ begin
   AOutcome.Edits := APlan.Edits;
 end;
 
-// SCA118: nur die Zeilen - kein Quellstellen-Dienst, kein Check.
-function ExceptionNameForm: TRdxPlanForm<TRdxExceptionNamePlan>;
-begin
-  Result.Planner := TRdxExceptionNameFix.RenameClass;
-  Result.Parts := ExceptionNameParts;
-  Result.Check := nil;
-  Result.NeedsOpen := False;
-end;
-
-// Wie ExceptionNameForm, aber fuer TRdxPlannerInOf<TRdxExceptionNamePlan>
-// (Fix-Datenfeld S3a-1) - ExceptionNameParts kennt nur APlan, bleibt
-// unveraendert wiederverwendbar.
+// SCA118: nur die Zeilen - kein Quellstellen-Dienst, kein Check. Seit
+// Fix-Datenfeld S3a-1 nur noch die *In-Form: RenameClass ist der einzige
+// Planer von TRdxExceptionNamePlan und wurde selbst auf TRdxFindingText
+// umgestellt - eine Form mit TRdxPlannerOf<TRdxExceptionNamePlan> (string)
+// koennte ihn nicht mehr binden.
 function ExceptionNameFormIn: TRdxPlanFormIn<TRdxExceptionNamePlan>;
 begin
   Result.Planner := TRdxExceptionNameFix.RenameClass;
