@@ -60,6 +60,10 @@ type
     [Test] procedure LineHelpers_TailBetweenAndLastChar;
     // Umstellung E29 (Gruppe G5): die Gruende folgen der reDelphix-Sprache.
     [Test] procedure Reasons_FollowLanguage;
+    // Konzept Fix-Datenfeld, S1, Risiko R6: der Implicit-Operator von
+    // TRdxFindingText nur unter Delphi belegt (FPC-Pruefstand allein
+    // reicht nicht - das ist der Beleg fuer beide Seiten).
+    [Test] procedure FindingText_ImplicitAtProcedureType;
   end;
 
 implementation
@@ -800,6 +804,33 @@ begin
     MarkerReason('// todo: later'));
   Assert.IsTrue(Pos('noinspection-Marker im Bereich - er unterdr',
     MarkerReason('// noinspection X')) = 1, 'de');
+end;
+
+// Risiko R6 (Konzept Fix-Datenfeld, S1): derselbe Signaturaufbau wie
+// TRdxMapPlannerIn/TRdxPlannerInOf<TPlan> (uRdxFixRunner/uRdxFixTable) -
+// ein Parameter vom Typ TRdxFindingText statt string, OHNE diese Units zu
+// importieren (sie sind nicht FPC-sicher). Der Implicit-Operator haengt
+// nur am Parametertyp selbst, nicht am Namen der Prozedurvariable.
+type
+  TFindingTextProc = function(const AMsg: TRdxFindingText): string;
+
+function EchoFindingText(const AMsg: TRdxFindingText): string;
+begin
+  Result := AMsg.Text;
+end;
+
+procedure TTestRdxCodeMap.FindingText_ImplicitAtProcedureType;
+var
+  P : TFindingTextProc;
+begin
+  P := EchoFindingText;
+  // Der eigentliche Beleg: ein String-Literal an einen
+  // TRdxFindingText-Parameter - ueber eine Prozedurvariable (wie
+  // MapFixIn/RunIn einen Planer rufen wuerden), nicht nur per direkter
+  // Zuweisung.
+  Assert.AreEqual('hello', P('hello'));
+  Assert.AreEqual('hello', EchoFindingText('hello'));
+  Assert.IsTrue(TRdxFindingText('hello').Args.IsEmpty, 'Args leer ohne Fix-Datenfeld');
 end;
 
 initialization
