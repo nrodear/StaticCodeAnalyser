@@ -4,7 +4,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uLocalization;  // _() — SeverityText/TypeText lokalisierbar
+  uSCAConsts, uLocalization,  // _() — SeverityText/TypeText lokalisierbar
+  uFixArgs;                   // TFixArgs (TLeakFinding.FixArgs)
 
 const
   // Trenner der Verschachtelungskette (TLeakFinding.StructureChain).
@@ -123,6 +124,12 @@ type
     // Benutzertext, NIE durch _() - und wie StructureChain NICHT im
     // Fingerprint: die Fundidentitaet bleibt unberuehrt.
     CustomFixHint: string;
+    // S0 (Konzept_FixDatenfeld_2026-10-28.md): Fix-Weg des Regel-Treffers
+    // (Spalte, Bezeichner, Wert, Form), direkt vom Detektor gefuellt - noch
+    // OHNE Aufrufer (kein Detektor setzt es, kein Leser in reDelphix nimmt
+    // es). Wie StructureChain/LeakVariant NICHT im Meldetext, NICHT im
+    // Fingerprint, NICHT im Export - ein Werttyp, keine Fundbewegung.
+    FixArgs: TFixArgs;
     // NEUES FELD -> CopyFrom ergaenzen. uTestFindingCopy zaehlt die
     // Felder per RTTI und wird sonst rot.
 
@@ -149,6 +156,11 @@ type
     // Neuer TLeakFinding mit allen Feldern von Self (CopyFrom); gehoert
     // dem Aufrufer. Immer TLeakFinding, auch fuer eine Unterklasse.
     function Clone: TLeakFinding;
+    // Fluent-Helfer fuer FixArgs (S0, noch ohne Aufrufer) - geben Self
+    // zurueck, damit die Ein-Ausdruck-Form aus New() erhalten bleibt, z.B.
+    // Results.Add(TLeakFinding.New(..).WithFixCol(Col)).
+    function WithFixCol(ACol: Integer): TLeakFinding;
+    function WithFixArg(const AKey, AValue: string): TLeakFinding;
     // Setzt Kind UND Severity in einem Schritt - Severity wird aus
     // KIND_META.DefaultSeverity gezogen (single source of truth). Detektoren
     // die einen kontext-abhaengigen Severity brauchen (z.B. uLeakDetector2,
@@ -351,6 +363,7 @@ begin
   StructureChain        := ASource.StructureChain;
   LeakVariant           := ASource.LeakVariant;
   CustomFixHint         := ASource.CustomFixHint;
+  FixArgs               := ASource.FixArgs;
 end;
 
 function TLeakFinding.Clone: TLeakFinding;
@@ -362,6 +375,18 @@ begin
     Result.Free;
     raise;
   end;
+end;
+
+function TLeakFinding.WithFixCol(ACol: Integer): TLeakFinding;
+begin
+  FixArgs.Col := ACol;
+  Result := Self;
+end;
+
+function TLeakFinding.WithFixArg(const AKey, AValue: string): TLeakFinding;
+begin
+  FixArgs.Put(AKey, AValue);
+  Result := Self;
 end;
 
 procedure TLeakFinding.SetKind(K: TFindingKind);

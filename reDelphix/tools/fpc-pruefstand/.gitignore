@@ -9,6 +9,7 @@ uRefactor*.pas
 uSourcePlaces.pas
 uFindingActions.pas
 uScaConfigDir.pas
+uFixArgs.pas
 uSCAConsts.pas
 uTest*.pas
 uRdx*.pas

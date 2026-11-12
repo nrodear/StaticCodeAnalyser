@@ -26,12 +26,13 @@ interface
 
 uses
   DUnitX.TestFramework,
-  uMethodd12;                   // TLeakFinding
+  uMethodd12,                   // TLeakFinding
+  uFixArgs;                     // TFixArgs (FixArgs-Feld)
 
 const
   // Felder von TLeakFinding. Neues Feld: erst CopyFrom ergaenzen, dann
   // diese Zahl.
-  FINDING_FIELD_COUNT = 15;   // 15: CustomFixHint (fix-hint der Custom Rules)
+  FINDING_FIELD_COUNT = 16;   // 16: FixArgs (S0, Fix-Datenfeld)
 
 type
   [TestFixture]
@@ -95,6 +96,14 @@ begin
   Result := AType.MinValue + (AOld - AType.MinValue + Step) mod Count;
 end;
 
+// Unterscheidbarer TFixArgs-Wert je Feldindex (wie ShiftedOrdinal fuer
+// Ordinalfelder) - nie IsEmpty, also nie gleich dem Vorgabewert.
+function MakeFilledFixArgs(AIndex: Integer): TFixArgs;
+begin
+  Result.Col := 1 + AIndex;
+  Result.Put(FA_NAME, 'x' + IntToStr(AIndex));
+end;
+
 procedure FillEveryField(AFinding: TLeakFinding);
 var
   Ctx   : TRttiContext;
@@ -109,7 +118,9 @@ begin
     if Field.FieldType = nil then
       Assert.Fail('Feld ' + Field.Name + ': Typ ohne RTTI');
     Old := Field.GetValue(AFinding);
-    if IsStringKind(Field.FieldType.TypeKind) then
+    if Field.Name = 'FixArgs' then
+      Field.SetValue(AFinding, TValue.From<TFixArgs>(MakeFilledFixArgs(Index)))
+    else if IsStringKind(Field.FieldType.TypeKind) then
       Field.SetValue(AFinding, Old.AsString + '<' + Field.Name + '>')
     else if IsOrdinalKind(Field.FieldType.TypeKind) then
     begin
@@ -134,7 +145,9 @@ var
 begin
   VA := AField.GetValue(A);
   VB := AField.GetValue(B);
-  if IsStringKind(AField.FieldType.TypeKind) then
+  if AField.Name = 'FixArgs' then
+    Result := VA.AsType<TFixArgs>.SameAs(VB.AsType<TFixArgs>)
+  else if IsStringKind(AField.FieldType.TypeKind) then
     Result := VA.AsString = VB.AsString
   else if IsOrdinalKind(AField.FieldType.TypeKind) then
     Result := VA.AsOrdinal = VB.AsOrdinal
