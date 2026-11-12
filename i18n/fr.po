@@ -7223,3 +7223,12 @@ msgstr "même signification - rien en dehors de cette portée ne l'utilise"
 
 msgid "only the tab/focus order changes, not the component"
 msgstr "seul l'ordre de tabulation/focus change, pas le composant"
+
+msgid "Replace all tabs in this file"
+msgstr "Remplacer toutes les tabulations de ce fichier"
+
+msgid "tabs become spaces in %d of %d line(s) with a tab; tabs in strings and directives stay, as does a line whose tab width is ambiguous"
+msgstr "les tabulations deviennent des espaces dans %d des %d ligne(s) avec une tabulation ; les tabulations dans les chaînes et les directives restent, de même qu'une ligne dont la largeur de tabulation est ambiguë"
+
+msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"
+msgstr "aucune tabulation du fichier ne peut être remplacée (toutes sont dans une chaîne ou une directive de compilation, ou leur largeur de tabulation est ambiguë)"

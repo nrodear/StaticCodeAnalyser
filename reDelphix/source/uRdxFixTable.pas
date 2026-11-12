@@ -1551,6 +1551,42 @@ begin
   end;
 end;
 
+const
+  // SCA061, zweiter Eintrag: Hinweis/Grund. %d, %d Ersetzt/Gesamt. Hier
+  // (nicht in uRdxTabsFix) - der i18n-Extraktor loest _(KONST) nur gegen
+  // Konstanten DERSELBEN Datei auf (collect_string_consts ist je Quelldatei).
+  R_TABS_FILE_HINT_MASS = 'tabs become spaces in %d of %d line(s) with a '
+    + 'tab; tabs in strings and directives stay, as does a line whose '
+    + 'tab width is ambiguous';
+  R_TABS_FILE_NONE = 'no tab in the file can be replaced (all are inside a '
+    + 'string or a compiler directive, or their tab width is ambiguous)';
+
+// SCA061, zweiter Eintrag (Massenmodus, Variant 1 - Track D 2026-11-12):
+// alle Tabs der Datei in einem Schritt. Kein MapFix (das ist auf EINE
+// Zeile/EINEN Edit zugeschnitten) - TRdxTabsFix.TabsForFile liefert direkt
+// das Edit-Array fuer TRdxFixOutcome.Edits. Hinweis/Reason setzt der Planer
+// selbst (AlternativeFixFor kennt kein FIX_HINTS-Fallback wie FixFor).
+function PlanTabsFile(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map              : TRdxCodeMap;
+  Replaced, Skipped: Integer;
+begin
+  Result := Default(TRdxFixOutcome);
+  Result.Variant := 1;
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Enabled := TRdxTabsFix.TabsForFile(Map, Result.Edits,
+      Replaced, Skipped);
+    if Result.Enabled then
+      Result.Hint := _(R_TABS_FILE_HINT_MASS, [Replaced, Replaced + Skipped])
+    else
+      Result.Reason := _(R_TABS_FILE_NONE);
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
+end;
+
 function PlanTrailingBlanks(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
@@ -2449,7 +2485,7 @@ const
      HintByPlanner: False; Changes: True;
      Alt: PlanReversedForRangeAlt),
     (Kind: fkTabulationCharacter; Plan: PlanTabs;
-     HintByPlanner: True; Changes: False; Alt: nil),
+     HintByPlanner: True; Changes: False; Alt: PlanTabsFile),
     (Kind: fkTrailingWhitespace; Plan: PlanTrailingBlanks;
      HintByPlanner: False; Changes: False; Alt: nil),
     (Kind: fkLowercaseKeyword; Plan: PlanLowercaseKeyword;
@@ -3097,7 +3133,7 @@ const
     'Remove the first duplicate inherited call',
     '', '',
     'Swap the loop bounds',
-    '', '', '',
+    'Replace all tabs in this file', '', '',
     '', '', '', '', '', '', '', '', '', '',
     'Pass TFormatSettings.Invariant',
     'Pass TFormatSettings.Invariant',
@@ -3118,7 +3154,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..106] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..107] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -3175,6 +3211,7 @@ const
     (Name: 'PlanReversedForRange'; Plan: PlanReversedForRange),
     (Name: 'PlanReversedForRangeAlt'; Plan: PlanReversedForRangeAlt),
     (Name: 'PlanTabs'; Plan: PlanTabs),
+    (Name: 'PlanTabsFile'; Plan: PlanTabsFile),
     (Name: 'PlanTrailingBlanks'; Plan: PlanTrailingBlanks),
     (Name: 'PlanLowercaseKeyword'; Plan: PlanLowercaseKeyword),
     (Name: 'PlanEmptyExcept'; Plan: PlanEmptyExcept),

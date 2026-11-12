@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7229 Zeilen, 348600 Bytes
-  CPoLines_de: array[0..7228] of string = (
+  // i18n\de.po - 7238 Zeilen, 349252 Bytes
+  CPoLines_de: array[0..7237] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7243,7 +7243,16 @@ const
     'msgstr "bedeutungsgleich - nichts au'#$00DF'erhalb dieses Bereichs nutzt es"',
     '',
     'msgid "only the tab/focus order changes, not the component"',
-    'msgstr "nur die Tab-/Fokus-Reihenfolge '#$00E4'ndert sich, nicht die Komponente"'
+    'msgstr "nur die Tab-/Fokus-Reihenfolge '#$00E4'ndert sich, nicht die Komponente"',
+    '',
+    'msgid "Replace all tabs in this file"',
+    'msgstr "Alle Tabulatoren dieser Datei ersetzen"',
+    '',
+    'msgid "tabs become spaces in %d of %d line(s) with a tab; tabs in strings and directives stay, as does a line whose tab width is ambiguous"',
+    'msgstr "Tabs werden in %d von %d Zeilen mit Tab zu Leerzeichen; Tabs in Strings und Direktiven bleiben, ebenso eine Zeile, deren Tabweite mehrdeutig ist"',
+    '',
+    'msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"',
+    'msgstr "kein Tab der Datei kann ersetzt werden (alle stehen in einem String oder einer Compiler-Direktive, oder ihre Tabweite ist mehrdeutig)"'
   );
 
   // i18n\en.po - 268 Zeilen, 7196 Bytes
@@ -7518,8 +7527,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7225 Zeilen, 362588 Bytes
-  CPoLines_fr: array[0..7224] of string = (
+  // i18n\fr.po - 7234 Zeilen, 363341 Bytes
+  CPoLines_fr: array[0..7233] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14744,7 +14753,16 @@ const
     'msgstr "m'#$00EA'me signification - rien en dehors de cette port'#$00E9'e ne l''utilise"',
     '',
     'msgid "only the tab/focus order changes, not the component"',
-    'msgstr "seul l''ordre de tabulation/focus change, pas le composant"'
+    'msgstr "seul l''ordre de tabulation/focus change, pas le composant"',
+    '',
+    'msgid "Replace all tabs in this file"',
+    'msgstr "Remplacer toutes les tabulations de ce fichier"',
+    '',
+    'msgid "tabs become spaces in %d of %d line(s) with a tab; tabs in strings and directives stay, as does a line whose tab width is ambiguous"',
+    'msgstr "les tabulations deviennent des espaces dans %d des %d ligne(s) avec une tabulation ; les tabulations dans les cha'#$00EE'nes et les directives restent, de m'#$00EA'me qu''une ligne dont la largeur de tabulation est ambigu'#$00EB'"',
+    '',
+    'msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"',
+    'msgstr "aucune tabulation du fichier ne peut '#$00EA'tre remplac'#$00E9'e (toutes sont dans une cha'#$00EE'ne ou une directive de compilation, ou leur largeur de tabulation est ambigu'#$00EB')"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
