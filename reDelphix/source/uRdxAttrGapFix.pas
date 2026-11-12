@@ -38,7 +38,8 @@ interface
 
 uses
   uRdxBufferMath,      // TRdxEdit
-  uRdxCodeMap;         // TRdxCodeMap
+  uRdxCodeMap,         // TRdxCodeMap, TRdxFindingText
+  uFixArgs;            // FA_NAME (Fix-Datenfeld S3b-2)
 
 type
   TRdxAttrGapFix = class
@@ -47,7 +48,7 @@ type
     // loescht die Leerzeilen dahinter samt Zeilenende (Bereich ueber
     // mehrere Zeilen, NewText = ''); sonst der Grund.
     class function BlankGap(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -213,15 +214,19 @@ end;
 { ---- SCA183 ---- }
 
 class function TRdxAttrGapFix.BlankGap(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
 var
   First, N, Start, Col : Integer;
   Prev, Head           : TRdxToken;
   L                    : string;
+  Name                 : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  AReason := AttrLineReason(AMap, ALine, AttrNameOf(AMessage), First);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := AttrNameOf(AMessage.Text);
+  AReason := AttrLineReason(AMap, ALine, Name, First);
   if AReason <> '' then Exit;
   // Die Leerzeilen: ab ALine + 1 bis vor die erste Zeile mit Inhalt.
   N := ALine + 1;

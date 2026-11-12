@@ -132,7 +132,8 @@ unit uRdxTryFixes;
 interface
 
 uses
-  uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap,
+  uFixArgs;   // FA_NAME (Fix-Datenfeld S3b-2, SCA009/001/156)
 
 type
   // Ergebnis der Planer: die eine Ersetzung und der Name fuer den
@@ -144,8 +145,15 @@ type
   end;
 
   // Die Form der Planer (uRdxFixTable: TryForm im Geruest TRdxFixFrame).
+  // SCA109/SCA153 bleiben bei dieser Form bis sie in S4 umgestellt werden.
   TRdxTryPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out APlan: TRdxTryPlan;
+    out AReason: string): Boolean;
+
+  // *In-Form (Fix-Datenfeld S3b-2): SCA009/SCA001/SCA156 sind darauf
+  // umgestellt (MissingFinally/FreedOutsideFinally/GetMemWithoutFree).
+  TRdxTryPlannerIn = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
     out AReason: string): Boolean;
 
   // Die Planer der Charge H4 (s. Kopf): je Fund EINE Ersetzung oder der
@@ -157,13 +165,13 @@ type
     // ' (try/except instead of try/finally)' - es sagt nichts ueber den
     // Ort, s. Kopf) auf ALine und ihre Freigabe in try/finally setzen.
     class function MissingFinally(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxTryPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
 
     // SCA001, Variante freed-outside-finally (Meldung: 'X'): dieselbe
     // Hilfe; die Variante prueft der Aufrufer.
     class function FreedOutsideFinally(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxTryPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
 
     // SCA109: die Sperre der Meldung 'Lock acquired (FLock) but no ...'
@@ -181,7 +189,7 @@ type
     // SCA156: die Allokation der Meldung 'GetMem without surrounding
     // try/finally - ...' (AllocMem, ReallocMem) auf ALine.
     class function GetMemWithoutFree(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxTryPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
       out AReason: string): Boolean; static;
 
     // Der Bezeichner am Anfang der Meldung (SCA009/SCA001: X, auch vor
@@ -822,14 +830,16 @@ end;
 
 { TRdxTryFixes }
 
-// SCA009/SCA001: der Name aus der Meldung, dann der Baustein.
-function ObjectFix(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
-  out APlan: TRdxTryPlan): string;
+// SCA009/SCA001: der Name aus der Meldung (FixArgs vor Text, Fix-
+// Datenfeld S3b-2), dann der Baustein.
+function ObjectFix(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: TRdxFindingText; out APlan: TRdxTryPlan): string;
 var
   Pair : TRdxPair;
 begin
   APlan := Default(TRdxTryPlan);
-  APlan.Name := FirstWordOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, APlan.Name) then
+    APlan.Name := FirstWordOf(AMessage.Text);
   Pair := Default(TRdxPair);
   Result := ObjectPair(AMap, ALine, APlan.Name, Pair);
   if Result = '' then
@@ -837,7 +847,7 @@ begin
 end;
 
 class function TRdxTryFixes.MissingFinally(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxTryPlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
 begin
   AReason := ObjectFix(AMap, ALine, AMessage, APlan);
@@ -845,7 +855,7 @@ begin
 end;
 
 class function TRdxTryFixes.FreedOutsideFinally(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxTryPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
 begin
   AReason := ObjectFix(AMap, ALine, AMessage, APlan);
@@ -893,7 +903,7 @@ begin
 end;
 
 class function TRdxTryFixes.GetMemWithoutFree(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxTryPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxTryPlan;
   out AReason: string): Boolean;
 var
   Pair : TRdxPair;
@@ -901,7 +911,8 @@ var
 begin
   APlan := Default(TRdxTryPlan);
   Pair := Default(TRdxPair);
-  Func := FirstWordOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Func) then
+    Func := FirstWordOf(AMessage.Text);
   if Func = '' then
     AReason := _('the message has no allocation')
   else

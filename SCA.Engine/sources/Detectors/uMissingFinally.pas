@@ -31,7 +31,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uLeakDetector2, uAnalyzeContext,
-  uDetectorUtils, uFileTextCache;
+  uDetectorUtils, uFileTextCache,
+  uFixArgs;   // FA_NAME (Fix-Datenfeld S3b-2)
 
 type
   TMissingFinallyDetector = class
@@ -434,6 +435,7 @@ begin
       else
         F.MissingVar := V.Name;
       F.SetKind(fkMissingFinally);
+      F.WithFixArg(FA_NAME, V.Name);
       Results.Add(F);
     end;
   finally

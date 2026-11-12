@@ -11,6 +11,7 @@ type
   public
     [Test] procedure FilledSections_NoFinding;
     [Test] procedure EmptyPublicBeforePrivate_Reported;
+    [Test] procedure EmptyPublicBeforePrivate_FixArgsNameFilled;
     [Test] procedure EmptyAtClassEnd_Reported;
     [Test] procedure EmptyVisibilitySection_KindAndSeverity;
     [Test] procedure AttributedMembersOnly_NoFinding;
@@ -26,7 +27,7 @@ implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  uSCAConsts, uMethodd12, uFixArgs,
   uTestFindingHelper;
 
 // DUnitX-Fixture-Form: die public-Section enthaelt NUR attributierte
@@ -109,6 +110,35 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyVisibilitySection));
   finally F.Free; end;
+end;
+
+// Fix-Datenfeld S3b-2: der Abschnittsname steht als FA_NAME in FixArgs,
+// nicht nur im Meldetext.
+procedure TTestEmptyVisibilitySection.EmptyPublicBeforePrivate_FixArgsNameFilled;
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '  private'#13#10 +
+  '    FX: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var
+  F : TObjectList<TLeakFinding>;
+  N : TLeakFinding;
+  V : string;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    N := TFindingHelper.FirstOf(F, fkEmptyVisibilitySection);
+    Assert.IsNotNull(N);
+    Assert.IsTrue(N.FixArgs.TryGet(FA_NAME, V));
+    Assert.AreEqual('public', V);
+  finally
+    F.Free;
+  end;
 end;
 
 procedure TTestEmptyVisibilitySection.EmptyAtClassEnd_Reported;

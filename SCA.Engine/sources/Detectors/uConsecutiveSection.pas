@@ -38,7 +38,8 @@ implementation
 
 uses
   uFileTextCache,
-  uDetectorUtils;   // BlankStringLiterals (Inline-var-Gate)
+  uDetectorUtils,   // BlankStringLiterals (Inline-var-Gate)
+  uFixArgs;         // FA_NAME (Fix-Datenfeld S3b-2)
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
 begin
@@ -154,7 +155,7 @@ begin
                 Format('Consecutive `%s` section - merge with the previous %s ' +
                        'block (one section keyword should declare all of them).',
                   [Lower, Lower]),
-                fkConsecutiveSection));
+                fkConsecutiveSection).WithFixArg(FA_NAME, Lower));
             LastSection := Lower;
           end
           else if IsResetKw then

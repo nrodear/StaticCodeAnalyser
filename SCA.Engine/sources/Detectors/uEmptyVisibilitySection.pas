@@ -34,7 +34,8 @@ implementation
 
 uses
   uFileTextCache,
-  uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
+  uDetectorUtils,   // ExtractFirstWord (Voll-Review 2026-09-12)
+  uFixArgs;         // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   // Das Wort steht in der Erkennung UND zweimal in der
@@ -152,6 +153,7 @@ begin
             'Empty `%s` section - delete the section header or add ' +
             'its members.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
+          F.WithFixArg(FA_NAME, LastVisName);
           Results.Add(F);
         end;
         LastVis := Lower;
@@ -170,6 +172,7 @@ begin
             'Empty `%s` section at end of class - delete the section ' +
             'header.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
+          F.WithFixArg(FA_NAME, LastVisName);
           Results.Add(F);
         end;
         LastVis := '';

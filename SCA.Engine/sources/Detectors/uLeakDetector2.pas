@@ -260,7 +260,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uAstSpans;   // Stufe B/I3: Teilbaum-Maximum, vormals lokal als SubtreeMaxLine
+  uAstSpans,   // Stufe B/I3: Teilbaum-Maximum, vormals lokal als SubtreeMaxLine
+  uFixArgs;    // FA_NAME (Fix-Datenfeld S3b-2)
     // Bewusst implementation-seitig: das Primitiv wird nur im Rumpf von
     // FreeInFinallyRegionBySource gebraucht, die interface-Huelle dieser Unit
     // muss dafuer nicht wachsen. uAstSpans haengt nur an uAstNode, das die
@@ -5351,7 +5352,7 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // Realmessung nicht stand), return-value -> Hint.
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
     VLine: Integer; const AVariant: string;
-    AConf: TFindingConfidence);
+    AConf: TFindingConfidence; const AName: string);
   var
     F: TLeakFinding;
   begin
@@ -5364,6 +5365,13 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
     F.Kind        := fkMemoryLeak;
     F.Confidence  := AConf;
     F.LeakVariant := AVariant;
+    // Fix-Datenfeld S3b-2: AName ist in allen drei Aufrufstellen V.Name
+    // (bei der Rueckgabewert-Variante ist nur MissingVar um
+    // LEAK_RETURN_VALUE_SUFFIX ergaenzt) - als Parameter statt ueber eine
+    // Vorab-Referenz auf V (das ist ein spaeter deklariertes lokales Var
+    // der einschliessenden Routine, fuer eine frueher deklarierte
+    // geschachtelte Prozedur nicht sichtbar).
+    F.WithFixArg(FA_NAME, AName);
     Results.Add(F);
   end;
 
@@ -5623,7 +5631,7 @@ begin
               Variante := 'proven-leak';
               Konf     := fcHigh;
             end;
-            AddFinding(V.Name, lsError, ReportLine, Variante, Konf);
+            AddFinding(V.Name, lsError, ReportLine, Variante, Konf, V.Name);
           end;
         end
         else if not FreeInFin and HasFinally
@@ -5701,7 +5709,7 @@ begin
             // SARIF-variant sind schwereunabhaengig.
             AddFinding(V.Name, lsWarning, ReportLine,
                        'freed-outside-finally',
-                       KindDefaultConfidence(fkMemoryLeak));
+                       KindDefaultConfidence(fkMemoryLeak), V.Name);
         end;
 
         Continue;
@@ -5747,7 +5755,7 @@ begin
         // Sicht (Hint), bleibt aber im Referenzlauf erhalten.
         AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsHint, ReportLine,
                    'return-value-not-freed',
-                   KindDefaultConfidence(fkMemoryLeak));
+                   KindDefaultConfidence(fkMemoryLeak), V.Name);
       end;
     end;
   finally

@@ -86,7 +86,7 @@ type
 
     // SCA087: die leere Sichtbarkeitszeile ALine loeschen (nur die Zeilen).
     class function EmptySectionFix(ALines: TStrings; ALine: Integer;
-      const AMessage: string): TRdxFixOutcome; static;
+      const AMessage: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA139: 'X.Free' -> 'FreeAndNil(X)', X aus der Meldung. Dieselbe
     // Variablen- und Typ-Pruefung wie SCA085 (kein record/object/interface/
@@ -129,7 +129,7 @@ type
     // Verhalten: der initialization-Abschnitt der Unit laeuft nicht mehr
     // (Kennzeichnung in uRdxFixTable).
     class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
-      ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
+      ALine: Integer; const AUnit: TRdxFindingText): TRdxFixOutcome; static;
 
     // SCA168: ein leeres else vor das end des case auf ALine
     // (TRdxStructFixes.CaseElse) - bedeutungsgleich.
@@ -805,9 +805,9 @@ begin
 end;
 
 class function TRdxFixRunner.EmptySectionFix(ALines: TStrings; ALine: Integer;
-  const AMessage: string): TRdxFixOutcome;
+  const AMessage: TRdxFindingText): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, ALine, AMessage, TRdxSimpleFixes.EmptySection);
+  Result := MapFixIn(ALines, ALine, AMessage, TRdxSimpleFixes.EmptySection);
 end;
 
 // X aus der SCA139-Meldung 'X.Free without subsequent X := nil - ...';
@@ -1272,7 +1272,7 @@ begin
 end;
 
 class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
-  ALines: TStrings; ALine: Integer; const AUnit: string): TRdxFixOutcome;
+  ALines: TStrings; ALine: Integer; const AUnit: TRdxFindingText): TRdxFixOutcome;
 var
   Map         : TRdxCodeMap;
   Clause      : TRdxUsesClause;
@@ -1281,9 +1281,12 @@ var
   ForeignLine : Integer;
   FromText    : Boolean;
   Twin        : Boolean;
+  Name        : string;
 begin
   Result := Default(TRdxFixOutcome);
-  Result.Name := Trim(AUnit);
+  if not AUnit.Args.TryGet(FA_NAME, Name) then
+    Name := AUnit.Text;
+  Result.Name := Trim(Name);
   Index := -1;
   Foreign := '';
   ForeignLine := 0;

@@ -59,7 +59,8 @@ interface
 
 uses
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap;       // TRdxCodeMap
+  uRdxCodeMap,       // TRdxCodeMap, TRdxFindingText
+  uFixArgs;          // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   // Die Gruende als englische msgids (die Tests pruefen sie mit _()).
@@ -93,7 +94,7 @@ type
     // AMessage wird nur der Typname gelesen, falls vorhanden. Liefert die
     // eine Ersetzung oder den Grund.
     class function Reraise(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -253,13 +254,15 @@ begin
 end;
 
 // Steht 'on' am Anfang eines Handlers, und ist der Typ der gemeldete?
+// ANamed kommt vorzugsweise aus FixArgs, sonst aus der Meldung (Fix-
+// Datenfeld S3b-2) - der Aufrufer loest das vorher auf.
 function ContextReason(AMap: TRdxCodeMap; const AHead: TOnHead;
-  const AMessage: string): string;
+  const ANamed: string): string;
 var
   Named : string;
 begin
   Result := '';
-  Named := TypeFromMessage(AMessage);
+  Named := ANamed;
   if (Named <> '') and not SameText(Named, TokText(AMap, AHead.TypeTok)) then
     Exit(MsgMovedSuffix(_(R_EOH_MOVED)));
   if SameText(AHead.TypeTok.Low, 'eabort') then
@@ -631,18 +634,21 @@ end;
 { TRdxEmptyOnHandlerFix }
 
 class function TRdxEmptyOnHandlerFix.Reraise(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
-  Head : TOnHead;
-  Body : TEmptyBody;
+  Head  : TOnHead;
+  Body  : TEmptyBody;
+  Named : string;
 begin
   AEdit := Default(TRdxEdit);
+  if not AMessage.Args.TryGet(FA_NAME, Named) then
+    Named := TypeFromMessage(AMessage.Text);
   AReason := FindHead(AMap, ALine, Head);
   if AReason = '' then
     AReason := ReadBody(AMap, Head, Body);
   if AReason = '' then
-    AReason := ContextReason(AMap, Head, AMessage);
+    AReason := ContextReason(AMap, Head, Named);
   if AReason = '' then
     AReason := CommentReason(AMap, Head, Body);
   if AReason = '' then

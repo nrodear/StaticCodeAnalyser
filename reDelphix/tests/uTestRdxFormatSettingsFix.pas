@@ -35,6 +35,7 @@ type
     [Test] procedure Sca128_Edit_StartsBehindLastArgument;
     [Test] procedure Sca128_Alt_AppendsInvariant;
     [Test] procedure Sca128_MessageName_Read;
+    [Test] procedure Sca128_ArgsPrecedence_Helps;
     // ---- keine Hilfe ----
     [Test] procedure Sca128_Moved_NoHelp;
     [Test] procedure Sca128_CallOnFollowingLine_Helps;
@@ -120,7 +121,8 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
-  uTestRdxTextKit;       // Apply, NewMap
+  uTestRdxTextKit,       // Apply, NewMap
+  uFixArgs;              // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   CRLF = #13#10;
@@ -320,6 +322,28 @@ begin
   Src := InUnit(['  r := DateToStr(d);']);
   AssertRefused(Src, BODY_LINE, 'etwas anderes', _(R_FS_NO_NAME));
   AssertRefused(Src, BODY_LINE, Msg('strtoint'), _(R_FS_NO_NAME), True);
+end;
+
+// Fix-Datenfeld S3b-2: FixArgs.FA_NAME gewinnt gegen eine Meldung, die
+// (aus einem alten Lauf) einen anderen Funktionsnamen behauptet.
+procedure TTestRdxFormatSettingsFix.Sca128_ArgsPrecedence_Helps;
+var
+  Map    : TRdxCodeMap;
+  FMsg   : TRdxFindingText;
+  Edit   : TRdxEdit;
+  Reason : string;
+  Ok     : Boolean;
+begin
+  Map := NewMap(InUnit(['  r := DateToStr(d);']));
+  try
+    FMsg.Text := Msg('strtoint');   // kein Treffer in der Liste
+    FMsg.Args.Put(FA_NAME, 'datetostr');
+    Ok := TRdxFormatSettingsFix.DateFormatSettings(Map, BODY_LINE, FMsg,
+      Edit, Reason);
+  finally
+    Map.Free;
+  end;
+  Assert.IsTrue(Ok, Reason);
 end;
 
 // ---- keine Hilfe ----

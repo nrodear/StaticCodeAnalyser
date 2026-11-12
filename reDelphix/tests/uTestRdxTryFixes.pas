@@ -80,6 +80,22 @@ begin
   end;
 end;
 
+// Wie PlanOf, aber fuer die *In-Planer (SCA009/SCA001/SCA156, Fix-
+// Datenfeld S3b-2) - AMessage bleibt string, die Implicit-Umwandlung
+// (TRdxFindingText) greift am Aufruf von APlanner.
+function PlanOfIn(APlanner: TRdxTryPlannerIn; const ASource: string;
+  ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
+var
+  Map : TRdxCodeMap;
+begin
+  Map := NewMap(ASource);
+  try
+    APlanner(Map, ALine, AMessage, Result, AReason);
+  finally
+    Map.Free;
+  end;
+end;
+
 // SCA009: neuer Text oder '' bei Ablehnung (AReason).
 function Fix(const ASource: string; ALine: Integer; const AMessage: string;
   out AReason: string): string;
@@ -87,7 +103,7 @@ var
   P : TRdxTryPlan;
 begin
   Result := '';
-  P := PlanOf(TRdxTryFixes.MissingFinally, ASource, ALine, AMessage, AReason);
+  P := PlanOfIn(TRdxTryFixes.MissingFinally, ASource, ALine, AMessage, AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edit);
 end;
@@ -114,7 +130,7 @@ begin
     Fix(InProc(['  X := TStringList.Create;', '  X.Add(''a'');', '  Foo(X);',
       '  X.Free;']), 6, 'X', R), R);
   // Name fuer den Menuetext: X aus der Meldung, auch mit Suffix.
-  P := PlanOf(TRdxTryFixes.MissingFinally, InProc(['  X := TFoo.Create;',
+  P := PlanOfIn(TRdxTryFixes.MissingFinally, InProc(['  X := TFoo.Create;',
     '  X.Run;', '  X.Free;']), 6, 'X', R);
   Assert.AreEqual('', R);
   Assert.AreEqual('X', P.Name);
@@ -349,7 +365,7 @@ begin
   S := InProc(['  X := TStringList.Create;', '  Y := TStringList.Create;',
     '  try', '    Y.Add(''a'');', '  finally', '    Y.Free;', '  end;',
     '  X.Free;']);
-  P := PlanOf(TRdxTryFixes.FreedOutsideFinally, S, 6, 'X', R);
+  P := PlanOfIn(TRdxTryFixes.FreedOutsideFinally, S, 6, 'X', R);
   Assert.AreEqual('', R);
   Assert.AreEqual('X', P.Name);
   Assert.AreEqual(InProc(['  X := TStringList.Create;', '  try',
@@ -357,7 +373,7 @@ begin
     '    finally', '      Y.Free;', '    end;', '  finally', '    X.Free;',
     '  end;']), Apply(S, P.Edit));
   // Dieselben Sperren wie SCA009.
-  PlanOf(TRdxTryFixes.FreedOutsideFinally, InProc(['  X := TFoo.Create;',
+  PlanOfIn(TRdxTryFixes.FreedOutsideFinally, InProc(['  X := TFoo.Create;',
     '  if C then', '    X.Free;']), 6, 'X', R);
   Assert.IsTrue(Pos('bedingte', R) > 0, R);
 end;

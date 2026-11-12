@@ -50,7 +50,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uTypeIndex;
+  uTypeIndex,
+  uFixArgs;   // FA_NAME, FA_NAME2 (Fix-Datenfeld S3b-2)
 
 const
   // `TList<T>.Create` aber NICHT `TObjectList<T>.Create`. Negative
@@ -204,6 +205,8 @@ begin
                               'Use TObjectList<' + Pair.Value + '> instead ' +
                               '(OwnsObjects=True is the default).';
               F.SetKind(fkTObjectListWithoutOwnership);
+              F.WithFixArg(FA_NAME, Pair.Value);
+              F.WithFixArg(FA_NAME2, Pair.Key);
               Results.Add(F);
             end;
           end;

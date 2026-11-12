@@ -36,7 +36,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
+  uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
+  uFixArgs;        // FA_NAME (Fix-Datenfeld S3b-2)
 
 const
   ATTR_LINE_RE = '^\s*\[\s*[A-Za-z_]\w*';
@@ -120,6 +121,7 @@ begin
                       'the attribute should have been removed or attached ' +
                       'to a different member.';
       F.SetKind(fkAttributeMisalignment);
+      F.WithFixArg(FA_NAME, AttrName);
       Results.Add(F);
     end;
   finally

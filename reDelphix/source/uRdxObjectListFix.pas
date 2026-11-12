@@ -70,7 +70,8 @@ interface
 
 uses
   uRdxBufferMath,   // TRdxEdit
-  uRdxCodeMap;      // TRdxCodeMap
+  uRdxCodeMap,      // TRdxCodeMap, TRdxFindingText
+  uFixArgs;         // FA_NAME, FA_NAME2 (Fix-Datenfeld S3b-2)
 
 const
   // Die Gruende der Ablehnung als englische msgids (die Tests pruefen sie
@@ -133,7 +134,7 @@ type
     // SCA174: 'TList<T>' -> 'TObjectList<T>' in Deklaration und Create der
     // lokalen Liste der Meldung (s. Kopf der Unit).
     class function OwnItems(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxObjectListPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxObjectListPlan;
       out AReason: string): Boolean; static;
   end;
 
@@ -732,7 +733,7 @@ end;
 { TRdxObjectListFix }
 
 class function TRdxObjectListFix.OwnItems(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxObjectListPlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxObjectListPlan;
   out AReason: string): Boolean;
 var
   AType, VarLow, Name : string;
@@ -747,8 +748,12 @@ begin
   Facts := Default(TListFacts);
   LoopVars := nil;
   Result := False;
-  AType := ListTypeArgOf(AMessage);
-  VarLow := LowerCase(ListVarOf(AMessage));
+  if not AMessage.Args.TryGet(FA_NAME, AType) then
+    AType := ListTypeArgOf(AMessage.Text);
+  if AMessage.Args.TryGet(FA_NAME2, VarLow) then
+    VarLow := LowerCase(VarLow)
+  else
+    VarLow := LowerCase(ListVarOf(AMessage.Text));
   APlan.Name := AType;
   if (AType = '') or (VarLow = '') then
   begin

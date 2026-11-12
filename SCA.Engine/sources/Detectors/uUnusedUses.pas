@@ -195,7 +195,8 @@ uses
   System.Classes,    // TStringList (Quelltext-Kanal, D4)
   System.StrUtils,   // PosEx (F3: uses-Klauseln blanken)
   uDetectorUtils,    // StripStringsAndCommentsCached (D4)
-  uFileTextCache;    // AcquireLines/ReleaseLines (D4)
+  uFileTextCache,    // AcquireLines/ReleaseLines (D4)
+  uFixArgs;          // FA_NAME (Fix-Datenfeld S3b-2)
 
 { ---- Hilfsmethoden ---- }
 
@@ -1998,6 +1999,7 @@ begin
       F.LineNumber := IntToStr(Item.Line);
       F.MissingVar := Item.Name;
       F.SetKind(fkUnusedUses);
+      F.WithFixArg(FA_NAME, Item.Name);
       Results.Add(F);
     end;
   finally

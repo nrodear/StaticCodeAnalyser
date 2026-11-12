@@ -132,7 +132,8 @@ interface
 
 uses
   uRdxBufferMath,     // TRdxEdit
-  uRdxCodeMap;        // TRdxCodeMap
+  uRdxCodeMap,        // TRdxCodeMap, TRdxFindingText
+  uFixArgs;           // FA_NAME (Fix-Datenfeld S3b-2, SCA128)
 
 const
   // Die Gruende als englische msgids (E29); die Tests vergleichen mit _().
@@ -243,11 +244,11 @@ type
     // SCA128, Hauptweg: ', FormatSettings' an jeden Aufruf der Liste auf
     // ALine (eine Ersetzung).
     class function DateFormatSettings(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // SCA128, Alt-Weg: ', TFormatSettings.Invariant'.
     class function DateFormatInvariant(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // SCA059, Hauptweg: drittes Argument ', FormatSettings' an das eine
     // Format auf ALine.
@@ -2706,7 +2707,8 @@ end;
 
 // SCA128 fuer beide Wege. Seit rwE30 Stufe 2 auch Aufrufe auf Folgezeilen
 // der Anweisung und Aufrufe, deren Klammer tiefer schliesst (ReadCall).
-function PlanLocale(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+function PlanLocale(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AInvariant: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Want     : string;
@@ -2720,7 +2722,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Want := TRdxFormatSettingsFix.CalledNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Want) then
+    Want := TRdxFormatSettingsFix.CalledNameOf(AMessage.Text);
   if Want = '' then
   begin
     AReason := _(R_FS_NO_NAME);
@@ -2899,14 +2902,14 @@ end;
 { TRdxFormatSettingsFix }
 
 class function TRdxFormatSettingsFix.DateFormatSettings(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 begin
   Result := PlanLocale(AMap, ALine, AMessage, False, AEdit, AReason);
 end;
 
 class function TRdxFormatSettingsFix.DateFormatInvariant(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 begin
   Result := PlanLocale(AMap, ALine, AMessage, True, AEdit, AReason);

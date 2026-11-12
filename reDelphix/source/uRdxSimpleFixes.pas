@@ -46,7 +46,8 @@ unit uRdxSimpleFixes;
 interface
 
 uses
-  uRdxBufferMath, uRdxCodeMap;
+  uRdxBufferMath, uRdxCodeMap,
+  uFixArgs;   // FA_NAME (Fix-Datenfeld S3b-2, SCA087)
 
 type
   // Wie ein SCA126-Anker endet: Bedingung (if/while/case bis then/do/of)
@@ -202,7 +203,7 @@ type
     // bei 'strict' allein (es gehoert zur naechsten Zeile) und nicht, wenn
     // bis zum naechsten Code eine Direktive steht.
     class function EmptySection(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA050/SCA051/SCA107: der Member auf ALine ist das EINZIGE Mitglied
@@ -1313,7 +1314,7 @@ begin
 end;
 
 class function TRdxSimpleFixes.EmptySection(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L    : string;
   Name : string;
@@ -1322,7 +1323,8 @@ begin
   AEdit := Default(TRdxEdit);
   AReason := '';
   L := '';
-  Name := SectionNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := SectionNameOf(AMessage.Text);
   if Name = '' then
     AReason := _('the message has no section')
   // Die Zeile wird samt Zeilenende geloescht - dahinter steht in einer
