@@ -7194,3 +7194,36 @@ msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgeschü
 
 msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"
 msgstr "Projekt-Profil \"%s\" - aktiv beim nächsten Analyselauf, nicht gespeichert (es gehört zu diesem Projekt)"
+
+msgid "Insert a header comment placeholder"
+msgstr "Kopfkommentar-Platzhalter einfügen"
+
+msgid "Generate a new GUID"
+msgstr "Neue GUID erzeugen"
+
+msgid "Move declaration to a `strict private` section"
+msgstr "Deklaration in einen `strict private`-Abschnitt verschieben"
+
+msgid "Move declaration to a `private` section"
+msgstr "Deklaration in einen `private`-Abschnitt verschieben"
+
+msgid "Move declaration to a `protected` section"
+msgstr "Deklaration in einen `protected`-Abschnitt verschieben"
+
+msgid "Assign a free TabOrder value"
+msgstr "Freien TabOrder-Wert zuweisen"
+
+msgid "Delete the unused component"
+msgstr "Unbenutzte Komponente löschen"
+
+msgid "an empty comment line - any content satisfies the detector"
+msgstr "eine leere Kommentarzeile - ihr Inhalt ist dem Detektor gleich"
+
+msgid "a fresh, unique GUID - nothing else changes"
+msgstr "eine frische, eindeutige GUID - sonst ändert sich nichts"
+
+msgid "same meaning - nothing outside this scope uses it"
+msgstr "bedeutungsgleich - nichts außerhalb dieses Bereichs nutzt es"
+
+msgid "only the tab/focus order changes, not the component"
+msgstr "nur die Tab-/Fokus-Reihenfolge ändert sich, nicht die Komponente"

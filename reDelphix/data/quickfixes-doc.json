@@ -2746,6 +2746,175 @@
         "{*)}"
       ],
       "hinweis": "Die Regel SCA206 meldet auch Marker ohne Partner (Start ohne Ende, Ende ohne Start, zweiter Start); dort lehnt die Hilfe mit Grund ab. Ein absichtlich bis zum Dateiende offener Bereich lässt sich mit `// noinspection FormatterMarker` in der Zeile davor stilllegen."
+    },
+    "DfmComponentUnused": {
+      "titel": "Unbenutzte DFM-Komponente löschen",
+      "was": "Löscht den ganzen `object`/`inherited`/`inline`-Block (Kopfzeile bis zum eigenen `end`) aus der .dfm – reine Zeilen-/Einzug-Logik wie bei SCA037 (TabOrder), kein Parser: die Tiefenbilanz zählt `object`/`inherited`/`inline`/`item` als Öffner und jedes `end` (auch `end>` am Schluss einer Collection-Item-Liste wie `Columns = <item .. end item .. end>`) als Schließer, bis die Tiefe wieder auf die der Kopfzeile fällt. Bedeutungsgleich – die Komponente war nachweislich nirgends referenziert.",
+      "nichtAngeboten": [
+        "die Komponente hat selbst Kind-Komponenten (eine Collection-Item-Liste zählt nicht als Kind, s. `uComponentGraph.TPropValueKind.pvkItemList`) – eine Löschung würde benutzte Kinder mitreißen",
+        "die Fundzeile ist keine `object`/`inherited`/`inline`-Zeile mit dem gemeldeten Namen mehr (verschoben oder schon geändert)",
+        "kein zugehöriges `end` lässt sich finden",
+        "das gefundene `end` steht nicht auf derselben Einzugstiefe wie die Kopfzeile (unerwartete Struktur – lieber keine Hilfe als eine falsche)"
+      ],
+      "beispielVorher": [
+        "  object Panel1: TPanel",
+        "    object btnOld: TButton    // aus dem Code entfernt, im DFM geblieben",
+        "      Left = 8",
+        "      Top = 8",
+        "      Caption = 'Old'",
+        "    end",
+        "  end"
+      ],
+      "beispielNachher": [
+        "  object Panel1: TPanel",
+        "  end"
+      ]
+    },
+    "DuplicateInterfaceGuid": {
+      "titel": "Doppelte GUID neu erzeugen",
+      "was": "Ersetzt den String-Inhalt der vorhandenen `['{...}']`-Klammer durch eine frisch erzeugte GUID (`CreateGUID`) – die Klammer selbst bleibt stehen. Dieselben Sperren wie bei SCA197 (generische Interfaces, COM-Merkmale im Rumpf, `{$INTERFACES CORBA}`/`{$CALLING STDCALL}` in der Datei, Direktive zwischen Kopf und erstem Member), zusätzlich gesperrt, wenn nach dem Kopf keine eckige Klammer mehr folgt oder ihr Inhalt kein einzelnes String-Literal ist. Bedeutungsgleich – die neue GUID ersetzt nur die alte, der Vertrag des Interfaces ändert sich nicht.",
+      "nichtAngeboten": [
+        "generisches Interface – eine GUID gälte für alle Ausprägungen (Supports würde sie vermischen)",
+        "nach dem Kopf folgt keine eckige Klammer mehr (Fund veraltet – die GUID wurde inzwischen entfernt)",
+        "der Inhalt der Klammer ist kein einzelnes String-Literal, oder die Klammer reicht über mehr als eine Zeile",
+        "`stdcall`/`safecall`/`winapi`/`dispid` im Rumpf – ein COM-Import braucht die echte IID, keine neue GUID",
+        "`{$INTERFACES CORBA}` bzw. `{$CALLING STDCALL}` in der Datei",
+        "eine Compiler-Direktive zwischen dem Kopf und dem ersten Member"
+      ],
+      "beispielVorher": [
+        "  IReader = interface",
+        "    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']",
+        "    function Read: string;",
+        "  end;",
+        "",
+        "  IWriter = interface",
+        "    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']   // kopiert, nicht neu erzeugt",
+        "    procedure Write(const S: string);",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  IReader = interface",
+        "    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']",
+        "    function Read: string;",
+        "  end;",
+        "",
+        "  IWriter = interface",
+        "    ['{A1B2C3D4-5E6F-7890-ABCD-EF1234567890}']   // frisch erzeugt",
+        "    procedure Write(const S: string);",
+        "  end;"
+      ]
+    },
+    "CanBeUnitPrivate": {
+      "titel": "Sichtbarkeit auf unit-private verengen",
+      "was": "Ersetzt `public` durch `private` (Delphi-klassisch, Unit-Scope) – nur, wenn der gemeldete Member das EINZIGE Mitglied seines `public`-Abschnitts ist (sonst träfe die Umbenennung auch seine Geschwister). Bedeutungsgleich innerhalb der analysierten Datei; der Detektor läuft bewusst nur dateiweit – ein fremder Aufrufer zeigt sich spätestens beim Compiler mit E2361.",
+      "nichtAngeboten": [
+        "kein eindeutiges `public` vor der Fundzeile gefunden (Unit-Grenze bzw. `interface`/`implementation` zuerst erreicht)",
+        "eine andere Deklaration steht zwischen `public` und der Fundzeile",
+        "nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end` (mehrzeilige Deklaration – konservativ gesperrt)"
+      ],
+      "beispielVorher": [
+        "  TFoo = class",
+        "  public",
+        "    procedure Helper;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TFoo = class",
+        "  private",
+        "    procedure Helper;",
+        "  end;"
+      ]
+    },
+    "CanBeProtected": {
+      "titel": "Sichtbarkeit auf protected verengen",
+      "was": "Wie bei CanBeUnitPrivate (SCA050), ersetzt `public` aber durch `protected` – nur wenn der Member das einzige Mitglied seines `public`-Abschnitts ist. Bedeutungsgleich innerhalb der analysierten Datei.",
+      "nichtAngeboten": [
+        "kein eindeutiges `public` vor der Fundzeile gefunden",
+        "eine andere Deklaration steht zwischen `public` und der Fundzeile",
+        "nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end`"
+      ],
+      "beispielVorher": [
+        "  TBase = class",
+        "  public",
+        "    procedure Hook;          // wird nur von TSub gerufen",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TBase = class",
+        "  protected",
+        "    procedure Hook;",
+        "  end;"
+      ]
+    },
+    "CanBeStrictPrivate": {
+      "titel": "Sichtbarkeit auf strict private verengen",
+      "was": "Wie bei CanBeUnitPrivate (SCA050), ersetzt `public` aber durch `strict private` – nur wenn der Member das einzige Mitglied seines `public`-Abschnitts ist. Bedeutungsgleich innerhalb der analysierten Datei.",
+      "nichtAngeboten": [
+        "kein eindeutiges `public` vor der Fundzeile gefunden",
+        "eine andere Deklaration steht zwischen `public` und der Fundzeile",
+        "nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end`"
+      ],
+      "beispielVorher": [
+        "  TFoo = class",
+        "  public",
+        "    procedure Helper;       // nur TFoo.Run ruft es",
+        "    procedure Run;",
+        "  end;"
+      ],
+      "beispielNachher": [
+        "  TFoo = class",
+        "  strict private",
+        "    procedure Helper;",
+        "  public",
+        "    procedure Run;",
+        "  end;"
+      ]
+    },
+    "MissingUnitHeader": {
+      "titel": "Unit-Kopfkommentar einfügen",
+      "was": "Fügt hinter `unit X;` eine Leerzeile, eine leere `//`-Zeile und eine weitere Leerzeile ein – der Detektor verlangt nur irgendeine Kommentarzeile zwischen `unit X;` und `interface`, ihr Inhalt zählt nicht (ein Platzhaltertext wäre unnötig und riefe nur eine andere Regel, anders als bei SCA019 TODO/FIXME). Bedeutungsgleich.",
+      "nichtAngeboten": [
+        "die Zeile ist keine `unit ...;`-Zeile mehr (Fund veraltet)",
+        "die Zeile trägt einen Kommentar oder String"
+      ],
+      "beispielVorher": [
+        "unit MyUnit;",
+        "",
+        "interface"
+      ],
+      "beispielNachher": [
+        "unit MyUnit;",
+        "",
+        "//",
+        "",
+        "interface"
+      ]
+    },
+    "DfmTabOrderConflict": {
+      "titel": "TabOrder neu durchnummerieren",
+      "was": "Gibt der gemeldeten Komponente den kleinsten TabOrder-Wert, den keine ihrer Geschwister im selben Parent trägt – reine Zeilen-/Einzug-Logik auf der .dfm, kein Parser: der Elter ist die nächste Zeile rückwärts mit weniger Einzug als die Fund-Zeile, die Geschwister sind alle `object`/`inherited`/`inline`-Zeilen vorwärts vom Elter mit genau demselben Einzug. Der Detektor meldet jede beteiligte Komponente einzeln; bei einem Zwei-Komponenten-Konflikt löst der Fix den ganzen Konflikt, bei mehr Geschwistern bleibt ein Rest-Konflikt für die anderen Funde stehen – ein erneuter Scan zeigt das. Bedeutungsgleich (rein visuell, kein Code-Pfad betroffen).",
+      "nichtAngeboten": [
+        "die Zeile ist keine `object`/`inherited`/`inline`-Zeile mehr (Fund veraltet)",
+        "kein Elter gefunden (DFM-Wurzel oder unerwartete Struktur)",
+        "die Komponente hat keine eigene `TabOrder = N`-Zeile (mehr)",
+        "bereits jeder Wert 0..Anzahl Geschwister ist belegt (Verteidigung – bei einem echten Fund nicht erreichbar)"
+      ],
+      "beispielVorher": [
+        "  object EdA: TEdit",
+        "    TabOrder = 0",
+        "  end",
+        "  object EdB: TEdit",
+        "    TabOrder = 0",
+        "  end"
+      ],
+      "beispielNachher": [
+        "  object EdA: TEdit",
+        "    TabOrder = 0",
+        "  end",
+        "  object EdB: TEdit",
+        "    TabOrder = 1",
+        "  end"
+      ]
     }
   }
 }

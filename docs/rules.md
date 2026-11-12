@@ -985,6 +985,7 @@ User sees the raw value and can corrupt the type. Pick a control compatible with
 | Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `ux` |
 | Detector | `uDfmTabOrderConflict.pas` |
+| Editor help | `SCA037:same:assign-free-taborder-value` |
 
 VCL serialisation tolerates duplicate `TabOrder` but tab navigation becomes order-of-declaration dependent and unpredictable for the user. Renumber so `TabOrder` is unique per parent.
 
@@ -1242,6 +1243,7 @@ end;
 | Confidence | `low` - hidden at the default `[Rules] MinConfidence=medium` |
 | Tags | `encapsulation`, `visibility` |
 | Detector | `uVisibilityCheck.pas` |
+| Editor help | `SCA050:same:move-declaration-to-private-section` |
 
 Single-file analysis: the `public` member is referenced from somewhere in the same unit (other classes, top-level procedures, ...), but NOT exclusively from the declaring class itself. Tightening to Delphi-classic `private` (which is unit-scope, not class-scope) is safe: every legal caller within the unit keeps working. This detector intentionally runs single-file ONLY - the previous cross-unit/cross-project scan produced too many false positives (RTTI/DFM streaming, sibling .dpk/.dproj consumers, generic instantiations, plugin APIs). The hint is a recommendation; if a foreign unit consumes the member, the compiler will catch the broken visibility with E2361 once the change is applied. Skips: published, virtual/abstract/override/dynamic, class constructors/destructors, RTTI-driven base classes (TForm/TFrame/TDataModule/TComponent), pure-class-method utility classes. Suppress per-line with `// noinspection CanBeUnitPrivate` for intentional public surface (library API, plugin entry point).
 
@@ -1258,6 +1260,7 @@ Single-file analysis: the `public` member is referenced from somewhere in the sa
 | Confidence | `low` - hidden at the default `[Rules] MinConfidence=medium` |
 | Tags | `encapsulation`, `visibility` |
 | Detector | `uVisibilityCheck.pas` |
+| Editor help | `SCA051:same:move-declaration-to-protected-section` |
 
 Single-file analysis: every visible caller of the public member is itself a method of a class deriving from the declaring class. `protected` is the minimum visibility that satisfies all current call sites and signals the design intent ('this is an extension hook, not part of the consumer API'). Same single-file caveat as CanBeUnitPrivate / CanBeStrictPrivate: cross-unit consumers are invisible to the detector; the compiler verifies the refactor via E2361 if a foreign caller exists. Skips: published / RTTI-exposed members, virtual/override roots that are part of the documented hierarchy. Tighten with confidence inside the declaring project; for shipped library APIs verify external callers manually first.
 
@@ -2692,6 +2695,7 @@ procedure DoStuff;
 | Confidence | `low` - hidden at the default `[Rules] MinConfidence=medium` |
 | Tags | `encapsulation`, `visibility` |
 | Detector | `uVisibilityCheck.pas` |
+| Editor help | `SCA107:same:move-declaration-to-strict-private-section` |
 
 Single-file analysis: every visible caller of the `public` member is itself a method of the SAME class (no sibling class, no top-level procedure, no subclass in this unit). `strict private` (D2007+, class-scope, not unit-scope) is the tightest correct visibility. Same single-file caveat as CanBeUnitPrivate: cross-unit consumers are invisible and the compiler enforces correctness via E2361 if the change breaks something. Skips: published, virtual/abstract/override/dynamic, class constructors/destructors, RTTI-driven bases (TForm/TFrame/TDataModule/TComponent), pure-class-method utility classes. Suppress per-line with `// noinspection CanBeStrictPrivate` for intentional public surface.
 
@@ -3836,6 +3840,7 @@ uses
 | Severity | Hint | Type | Code Smell |
 | Tags | `documentation`, `convention`, `sonar50` |
 | Detector | `uMissingUnitHeader.pas` |
+| Editor help | `SCA143:same:insert-header-comment-placeholder` |
 
 A short header comment between the `unit ...;` declaration and the `interface` keyword tells future maintainers what the unit is for - purpose, scope, important invariants, ownership. The detector reads the file's leading lines, finds the `unit` and `interface` markers, and verifies that at least one comment line (`//`, `{...}`, or `(* ... *)`) exists between them. Severity is Hint because many legacy units skip the header without functional consequence. Maps to Sonar-50 rule #48.
 
@@ -5033,6 +5038,7 @@ procedure Foo;
 | Confidence | `low` - hidden at the default `[Rules] MinConfidence=medium` |
 | Tags | `dfm`, `dead-code`, `maintainability` |
 | Detector | `uDfmComponentUnused.pas` |
+| Editor help | `SCA184:same:delete-unused-component` |
 
 A component declared in the .dfm has no event binding, is not referenced by any other component's properties (DataSource, Action, ActiveControl, ...), is never used in the form's own Pascal code, and is not accessed from any other unit via the form global. It is most likely a leftover after refactoring that still allocates at runtime. Because the use-proof is name-based (no exact binding), this rule is emitted at low confidence and stays out of the default-confidence profile until validated on real-world code. Persistent field components (T*Field) and embedded frames / inherited components are skipped conservatively; the detector stays silent without a repo-wide cross-unit index.
 
@@ -5386,6 +5392,7 @@ type
 | Tags | `interface`, `guid`, `copy-paste`, `rtti` |
 | Detector | `uInterfaceGuid.pas` |
 | Scope | the whole scan - directory, project (`.dproj`) or project group (`.groupproj`) |
+| Editor help | `SCA198:same:generate-new-guid` |
 
 Interface GUIDs identify the interface at run time and must be unique across the program. Declaring a new interface by copying the previous one and forgetting to regenerate the GUID produces code that compiles cleanly and misbehaves silently: Supports(Obj, ISecond, X) succeeds and hands back the FIRST interface, so calls land on the wrong methods or a cast appears to work where it should not. Nothing in the toolchain warns about this. The check needs the whole scan, not one file: the index is built from the same file list that is analysed, so the scope follows the selection - directory, project (.dproj) or project group (.groupproj). The message names the other declarations with file and line, because finding the twin is the actual work. In single-file mode the comparison is limited to that file - 'unique' is not a claim one file can support.
 

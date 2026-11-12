@@ -852,6 +852,10 @@
       "type": "Code Smell",
       "tags": ["dfm", "ux"],
       "detectorUnit": "uDfmTabOrderConflict.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA037", "effect": "same", "slug": "assign-free-taborder-value" }
+      ],
       "examples": {
         "bad":  "EdA.TabOrder = 0\nEdB.TabOrder = 0   // same parent",
         "good": "EdA.TabOrder = 0\nEdB.TabOrder = 1"
@@ -1120,6 +1124,10 @@
       "tags": ["encapsulation", "visibility"],
       "detectorUnit": "uVisibilityCheck.pas",
       "defaultConfidence": "low",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA050", "effect": "same", "slug": "move-declaration-to-private-section" }
+      ],
       "examples": {
         "bad":  "type\n  TFoo = class\n  public\n    procedure Helper;\n  end;\n  TBar = class\n    procedure Run;  // calls Foo.Helper - same unit\n  end;",
         "good": "type\n  TFoo = class\n  private\n    procedure Helper;\n  end;\n// Same-unit access stays legal under Delphi-classic `private`."
@@ -1140,6 +1148,10 @@
       "tags": ["encapsulation", "visibility"],
       "detectorUnit": "uVisibilityCheck.pas",
       "defaultConfidence": "low",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA051", "effect": "same", "slug": "move-declaration-to-protected-section" }
+      ],
       "examples": {
         "bad":  "type\n  TBase = class\n  public\n    procedure Hook;          // only called from TSub\n  end;\n  TSub = class(TBase)\n  public\n    procedure Run;\n  end;\n\nprocedure TBase.Hook;\nbegin\nend;\n\nprocedure TSub.Run;\nbegin\n  Hook;\nend;",
         "good": "type\n  TBase = class\n  protected\n    procedure Hook;\n  end;\n  TSub = class(TBase)\n  public\n    procedure Run;\n  end;\n\nprocedure TBase.Hook;\nbegin\nend;\n\nprocedure TSub.Run;\nbegin\n  Hook;\nend;"
@@ -2380,6 +2392,10 @@
       "tags": ["encapsulation", "visibility"],
       "detectorUnit": "uVisibilityCheck.pas",
       "defaultConfidence": "low",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA107", "effect": "same", "slug": "move-declaration-to-strict-private-section" }
+      ],
       "examples": {
         "bad":  "type\n  TFoo = class\n  public\n    procedure Helper;       // only TFoo.Run calls it\n    procedure Run;\n  end;",
         "good": "type\n  TFoo = class\n  strict private\n    procedure Helper;\n  public\n    procedure Run;\n  end;"
@@ -3152,6 +3168,10 @@
       "type": "Code Smell",
       "tags": ["documentation", "convention", "sonar50"],
       "detectorUnit": "uMissingUnitHeader.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA143", "effect": "same", "slug": "insert-header-comment-placeholder" }
+      ],
       "examples": {
         "bad":  "unit MyUnit;\n\ninterface\n\nuses ...;",
         "good": "unit MyUnit;\n\n// Database-connection pool: wraps FireDAC TFDConnection setup\n// for the report subsystem. Thread-safe; single instance per app.\n\ninterface\n\nuses ...;"
@@ -4081,7 +4101,7 @@
       "defaultConfidence": "low",
       "editorHelp": true,
       "editorHelps": [
-        { "id": "SCA184", "effect": "same", "slug": "delete-unused-dfm-component" }
+        { "id": "SCA184", "effect": "same", "slug": "delete-unused-component" }
       ],
       "examples": {
         "bad":  "object btnOld: TButton  // removed from code, left in the DFM\nend",
@@ -4454,6 +4474,10 @@
         "rtti"
       ],
       "detectorUnit": "uInterfaceGuid.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA198", "effect": "same", "slug": "generate-new-guid" }
+      ],
       "examples": {
         "bad": "type\n  IReader = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    function Read: string;\n  end;\n\n  IWriter = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']  // copied, not regenerated\n    procedure Write(const S: string);\n  end;\n\n// succeeds and yields an IReader:\nif Supports(Obj, IWriter, W) then W.Write('x');",
         "good": "type\n  IReader = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    function Read: string;\n  end;\n\n  IWriter = interface\n    ['{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}']  // Ctrl+Shift+G\n    procedure Write(const S: string);\n  end;"

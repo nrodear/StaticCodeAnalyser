@@ -100,7 +100,14 @@
       "InheritedMethodEmpty",
       "FunctionNameAsResult",
       "FormatterMarker",
-      "FileReadError"
+      "FileReadError",
+      "DuplicateInterfaceGuid",
+      "CanBeUnitPrivate",
+      "CanBeProtected",
+      "CanBeStrictPrivate",
+      "MissingUnitHeader",
+      "DfmTabOrderConflict",
+      "DfmComponentUnused"
     ]
   }
 }
