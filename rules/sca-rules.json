@@ -1365,7 +1365,8 @@
       "defaultConfidence": "low",
       "editorHelp": true,
       "editorHelps": [
-        { "id": "SCA061", "effect": "same", "slug": "replace-tabs-in-this-line-with-spaces" }
+        { "id": "SCA061", "effect": "same", "slug": "replace-tabs-in-this-line-with-spaces" },
+        { "id": "SCA061.2", "effect": "same", "slug": "replace-all-tabs-in-this-file" }
       ],
       "examples": {
         "bad":  "procedure Foo;\nbegin\n<TAB>DoStuff;\nend;",

@@ -1455,7 +1455,7 @@ if Failed then Exit;
 | Confidence | `low` - hidden at the default `[Rules] MinConfidence=medium` |
 | Tags | `formatting`, `style` |
 | Detector | `uTabulationCharacter.pas` |
-| Editor help | `SCA061:same:replace-tabs-in-this-line-with-spaces` |
+| Editor help | `SCA061:same:replace-tabs-in-this-line-with-spaces`, `SCA061.2:same:replace-all-tabs-in-this-file` |
 
 Pascal coding convention has been space-indentation since the 80s. Tabs render at 2/4/8 columns depending on the editor, break code-review side-by-side diffs and confuse alignment. SonarDelphi tracks the same as communitydelphi:TabulationCharacter.
 

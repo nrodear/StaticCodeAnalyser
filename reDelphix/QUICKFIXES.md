@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Quick-Fixes aus der Tabelle der einfachen Hilfen (9 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -38,7 +38,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Qu
 | SCA054 UnusedParameter | `Parameter %s mit "_" als absichtlich ungenutzt kennzeichnen` | Quick-Fix | nein | [SCA054](#sca054) |
 | SCA059 FormatLocaleHint | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA059](#sca059) |
 | SCA060 GotoStatement | `"goto" durch Exit ersetzen` | Quick-Fix | nein | [SCA060](#sca060) |
-| SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | Quick-Fix | nein | [SCA061](#sca061) |
+| SCA061 TabulationCharacter | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` / `Alle Tabulatoren dieser Datei ersetzen` | Quick-Fix | nein / nein | [SCA061](#sca061) |
 | SCA063 TrailingWhitespace | `Leerraum am Zeilenende entfernen` | Quick-Fix | nein | [SCA063](#sca063) |
 | SCA064 LowercaseKeyword | `%s klein schreiben` | Quick-Fix | nein | [SCA064](#sca064) |
 | SCA065 NoSonarMarker | `NOSONAR durch einen Marker "noinspection All" ersetzen` | Quick-Fix | ja | [SCA065](#sca065) |
@@ -1052,21 +1052,47 @@ end;
 
 - **Regel:** SCA061 `TabulationCharacter` – Tab character in source
 - **Art:** Quick-Fix
-- **Ändert Verhalten:** nein
+- **Ändert Verhalten:**
+  - Eintrag 1: nein
+  - Eintrag 2: nein
 
-| en | de | fr |
-|---|---|---|
-| `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
+| Eintrag | en | de | fr |
+|---|---|---|---|
+| 1 | `Replace the tabs in this line with spaces` | `Tabulatoren dieser Zeile durch Leerzeichen ersetzen` | `Remplacer les tabulations de cette ligne par des espaces` |
+| 2 | `Replace all tabs in this file` | `Alle Tabulatoren dieser Datei ersetzen` | `Remplacer toutes les tabulations de ce fichier` |
 
-**Wirkung:** Ersetzt die Tabulatoren der gemeldeten Zeile im Code und in Kommentaren durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen); Leerraum mit Tab am Zeilenende entfällt ganz, eine Zeile nur aus Leerraum wird leer. Die Tabweite (2, 4 oder 8; 3 nur, wenn die ganze Datei sie belegt) leitet die Hilfe zuerst aus den acht Zeilen darüber und darunter ab, und wenn die nicht entscheiden, aus der ganzen Datei: Einrückung (hinter `begin`, `then`, `do` … steht die Folgezeile tiefer, und zwar um die Stufe der Datei; hinter einer abgeschlossenen Anweisung nicht tiefer) und Ausrichtung (Textspalten hinter den Tabs gegen Nachbarn nur aus Leerzeichen bzw. gegen dieselben Zeichen wie `= `, `: `, `//` in Tabellen). Ergeben alle in Frage kommenden Weiten dieselbe Zeile, spielt die Weite keine Rolle; belegt nichts eine, gilt die Annahme 2. Der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten Tab bis zum letzten ersetzten Tab bzw. bis zum Zeilenende; Tabs in Strings und Compiler-Direktiven dazwischen bleiben. Nur die gemeldete Zeile.
+**Wirkung (Eintrag 1):** Ersetzt die Tabulatoren der gemeldeten Zeile im Code und in Kommentaren durch Leerzeichen bis zum nächsten Tabstopp (Leerzeichen und Tab davor werden sauber zusammengezogen); Leerraum mit Tab am Zeilenende entfällt ganz, eine Zeile nur aus Leerraum wird leer. Die Tabweite (2, 4 oder 8; 3 nur, wenn die ganze Datei sie belegt) leitet die Hilfe zuerst aus den acht Zeilen darüber und darunter ab, und wenn die nicht entscheiden, aus der ganzen Datei: Einrückung (hinter `begin`, `then`, `do` … steht die Folgezeile tiefer, und zwar um die Stufe der Datei; hinter einer abgeschlossenen Anweisung nicht tiefer) und Ausrichtung (Textspalten hinter den Tabs gegen Nachbarn nur aus Leerzeichen bzw. gegen dieselben Zeichen wie `= `, `: `, `//` in Tabellen). Ergeben alle in Frage kommenden Weiten dieselbe Zeile, spielt die Weite keine Rolle; belegt nichts eine, gilt die Annahme 2. Der Hinweis nennt die Weite und woher sie kommt. Eine Ersetzung vom ersten Tab bis zum letzten ersetzten Tab bzw. bis zum Zeilenende; Tabs in Strings und Compiler-Direktiven dazwischen bleiben. Nur die gemeldete Zeile.
+
+**Wirkung (Eintrag 2):** Wendet dieselbe Umformung (Tabweite aus Nachbarzeilen bzw. Datei, Annahme 2 ohne Beleg) auf JEDE Zeile mit einem Tab in der Datei an, in einem Schritt. Eine einzelne gesperrte Zeile (Tab in String/Direktive, zwei Tabweiten gleich gut) fällt aus der Liste heraus und blockiert die anderen Zeilen nicht – nur wenn keine Zeile einen Edit liefert, bleibt der Menüpunkt ganz gesperrt.
 
 **Nicht angeboten**
 
 - der erste Tab der Zeile liegt in einem String, mehrzeiligen String oder einer Compiler-Direktive (der Detektor meldet ihn trotzdem, der Fund bliebe stehen)
 - die Nachbarzeilen passen zu zwei Tabweiten (etwa 4 und 8) gleich gut, die Datei entscheidet nicht, und die beiden ergeben verschiedene Zeilen
 - die Zeile ist verschoben, oder die Meldung nennt keine Spalte
+- Eintrag 2: keine Zeile der Datei liefert einen Edit (jede Tab-Zeile ist gesperrt, oder die Datei hat gar keinen Tab)
 
 **Beispiel:** nicht abbildbar – der Unterschied ist nur Leerraum (Tab gegen Leerzeichen).
+
+**Beispiel (Eintrag 2)**
+
+Vorher:
+
+```pascal
+begin
+	A;
+	B;
+end;
+```
+
+Nachher:
+
+```pascal
+begin
+  A;
+  B;
+end;
+```
 
 **Hinweis.** Bleibt hinter dem ersten Tab ein Tab in einem String oder einer Direktive stehen, meldet der Detektor die Zeile nach der Hilfe weiter.
 

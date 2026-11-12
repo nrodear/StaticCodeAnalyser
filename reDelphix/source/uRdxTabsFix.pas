@@ -80,8 +80,17 @@ unit uRdxTabsFix;
 // Tab der Zeile liegt in einem String oder einer Direktive (der Fund bliebe
 // stehen), zwei Tabweiten passen gleich gut und aendern die Zeile
 // verschieden. Bleibt ein Tab in einem String hinter dem ersten stehen,
-// meldet der Detektor die Zeile danach mit dessen Spalte (wie bisher). Nur
-// die gemeldete Zeile - der Massenmodus kommt spaeter.
+// meldet der Detektor die Zeile danach mit dessen Spalte (wie bisher).
+//
+// MASSENMODUS (TabsForFile, zweiter Eintrag derselben Regel - Variant 1
+// ueber FIX_ROWS[idx].Alt wie bei SCA168/SCA020): wendet dieselbe
+// Zeilenlogik (PlanOf/Replaceable/TabWidth/NewTextOf) auf JEDE Zeile mit
+// einem Tab an, EIN Undo-Schritt (Vorbild uRdxConcatWrap.PlanRange: ein
+// TArray<TRdxEdit>, das PlanByteEdits atomar anwendet). Eine einzelne
+// gesperrte Zeile (Tab in String/Direktive, zwei Weiten gleich gut) faellt
+// einfach aus der Liste heraus und blockiert die anderen Zeilen nicht -
+// erst wenn KEINE Zeile einen Edit liefert, ist die Hilfe insgesamt
+// gesperrt.
 //
 // OHNE ToolsAPI und ohne Delphi-only-Unit (FPC-Pruefstand): den Adapter
 // PlanTabs (Form TRdxFixPlanner) traegt die Tabelle uRdxFixTable; den
@@ -131,6 +140,11 @@ const
     + 'width in question; tabs in strings stay';
   R_TABS_TRAIL_HINT = 'the tabs at the end of the line are removed; nothing '
     + 'else changes';
+  // Die Hinweise/der Grund des Massenmodus (zweiter Eintrag, Variant 1)
+  // stehen NICHT hier, sondern als lokale Konstanten bei PlanTabsFile in
+  // uRdxFixTable.pas - der i18n-Extraktor loest _(KONST) nur gegen
+  // Konstanten DERSELBEN Datei auf (collect_string_consts ist je Quelldatei),
+  // und der Adapter (nicht diese reine Text-Logik-Unit) ruft sie auf.
 
 type
   // Woher die Tabweite von TabWidth kommt.
@@ -165,6 +179,15 @@ type
     // Wie oft die Belege einer ganzen Datei gerechnet wurden (FileProfile,
     // je Code-Sicht einmal) - fuer Tests und das Messgeruest.
     class function FileScans: Integer; static;
+
+    // Massenmodus (s. Kopf): die Tabs ALLER Zeilen der Datei in einem
+    // Schritt. AEdits ist leer und Result False, wenn keine Zeile einen
+    // Edit liefert (kein Tab in der Datei, oder jede Zeile mit Tab ist
+    // gesperrt) - AReplaced/ASkipped zaehlen trotzdem, fuer den Hinweis im
+    // gesperrten Menuepunkt.
+    class function TabsForFile(AMap: TRdxCodeMap;
+      out AEdits: TArray<TRdxEdit>;
+      out AReplaced, ASkipped: Integer): Boolean; static;
   end;
 
 implementation
@@ -991,6 +1014,50 @@ begin
   AEdit.Expected := Copy(L, S0, S1 + 1 - S0);
   AEdit.NewText := NewTextOf(AMap, Plan, W);
   Result := True;
+end;
+
+class function TRdxTabsFix.TabsForFile(AMap: TRdxCodeMap;
+  out AEdits: TArray<TRdxEdit>; out AReplaced, ASkipped: Integer): Boolean;
+var
+  i        : Integer;
+  Plan     : TRdxTabPlan;
+  W, Other : Integer;
+  Source   : TRdxTabWidthSource;
+  Edit     : TRdxEdit;
+  S0, S1   : Integer;
+begin
+  AEdits := nil;
+  AReplaced := 0;
+  ASkipped := 0;
+  for i := 1 to AMap.LineCount do
+  begin
+    if Pos(TAB, AMap.Raw(i)) = 0 then Continue;
+    if not PlanOf(AMap, i, Plan) then Continue;
+    // Wie Tabs(): der erste Tab muss im Leerraum am Zeilenende, im Code
+    // oder im Kommentar liegen - sonst bliebe der Fund dieser Zeile stehen.
+    if not ((Plan.Trail > 0) and (Plan.First >= Plan.Trail))
+       and not Replaceable(AMap, i, Plan.First) then
+    begin
+      Inc(ASkipped);
+      Continue;
+    end;
+    W := TabWidth(AMap, i, Source, Other);
+    if Source = twAmbiguous then
+    begin
+      Inc(ASkipped);
+      Continue;
+    end;
+    S0 := SpanStart(Plan);
+    S1 := SpanEnd(Plan);
+    Edit := Default(TRdxEdit);
+    Edit.Span := TRefactorSpan.Make(SPAN_061, i, S0, i, S1 + 1);
+    Edit.Expected := Copy(Plan.Text, S0, S1 + 1 - S0);
+    Edit.NewText := NewTextOf(AMap, Plan, W);
+    SetLength(AEdits, Length(AEdits) + 1);
+    AEdits[High(AEdits)] := Edit;
+    Inc(AReplaced);
+  end;
+  Result := Length(AEdits) > 0;
 end;
 
 class function TRdxTabsFix.Hint(AMap: TRdxCodeMap; ALine: Integer): string;

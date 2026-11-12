@@ -54,6 +54,10 @@ type
     [Test] procedure BlankLineWithTabs_Emptied;
     [Test] procedure DirectiveTab_NoHelp;
     [Test] procedure MultiLineStringTab_NoHelp;
+    // Massenmodus (Track D, 2026-11-12): alle Tabs der Datei in einem Schritt.
+    [Test] procedure FileMode_MultipleLines_OneStep;
+    [Test] procedure FileMode_SkippedLineDoesNotBlockOthers;
+    [Test] procedure FileMode_NothingToReplace_NoHelp;
   end;
 
 {$IFNDEF FPC}
@@ -64,6 +68,7 @@ type
     [Test] procedure Plan_Hint_File;
     [Test] procedure Plan_Hint_LineEnd;
     [Test] procedure Plan_Adapter;
+    [Test] procedure Plan_Adapter_FileMode;
     [Test] procedure Detector_RoundTrip;
     [Test] procedure Detector_CommentsAndLineEnd_RoundTrip;
     [Test] procedure Detector_StringOnly_NoHelp;
@@ -165,6 +170,31 @@ begin
     SL.Text := ASource;
     Result := SL[ALine - 1];
   finally
+    SL.Free;
+  end;
+end;
+
+// Massenmodus: alle Tabs von ASource in einem Schritt (TabsForFile),
+// AReplaced/ASkipped wie die Funktion. '' ohne jeden Edit (Result False) -
+// ASource bleibt dann unveraendert, wie bei Fix/FixLine.
+function FixFile(const ASource: string;
+  out AReplaced, ASkipped: Integer): string;
+var
+  SL    : TStringList;
+  Map   : TRdxCodeMap;
+  Edits : TArray<TRdxEdit>;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    if TRdxTabsFix.TabsForFile(Map, Edits, AReplaced, ASkipped) then
+      Result := Apply(ASource, Edits)
+    else
+      Result := ASource;
+  finally
+    Map.Free;
     SL.Free;
   end;
 end;
@@ -784,6 +814,54 @@ begin
   Assert.AreEqual(_(R_TAB_IN_TEXT), R);
 end;
 
+// ---- Massenmodus (Track D, 2026-11-12) ----
+
+// Beide Tabs-Zeilen derselben Datei in EINEM Schritt - Gegenprobe zu
+// OnlyReportedLine_Changes, die auf derselben Fixture nur Zeile 2 aendert
+// (Einzelzeilen-Fix); der Massenmodus aendert hier beide.
+procedure TTestRdxTabsFix.FileMode_MultipleLines_OneStep;
+var
+  Replaced, Skipped : Integer;
+begin
+  Assert.AreEqual(Join(['begin', '  A;', '  B;', 'end;']),
+    FixFile(Join(['begin', TAB + 'A;', TAB + 'B;', 'end;']),
+      Replaced, Skipped), '');
+  Assert.AreEqual<Integer>(2, Replaced);
+  Assert.AreEqual<Integer>(0, Skipped);
+end;
+
+// Eine gesperrte Zeile (Tab im String, wie FirstTabInString_NoHelp) faellt
+// einfach aus der Liste heraus - die andere Zeile wird trotzdem ersetzt.
+procedure TTestRdxTabsFix.FileMode_SkippedLineDoesNotBlockOthers;
+var
+  Replaced, Skipped : Integer;
+  S                  : string;
+begin
+  S := FixFile(Join(['S := ''a' + TAB + 'b'';', TAB + 'C;']),
+    Replaced, Skipped);
+  Assert.AreEqual('S := ''a' + TAB + 'b'';', LineAt(S, 1), S);
+  Assert.AreEqual('  C;', LineAt(S, 2), S);
+  Assert.AreEqual<Integer>(1, Replaced);
+  Assert.AreEqual<Integer>(1, Skipped);
+end;
+
+// Keine Zeile liefert einen Edit (einzige Tab-Stelle im String) -> Result
+// False, ASource unveraendert; eine Datei ganz ohne Tab ebenso.
+procedure TTestRdxTabsFix.FileMode_NothingToReplace_NoHelp;
+var
+  Replaced, Skipped : Integer;
+  Src                : string;
+begin
+  Src := 'S := ''a' + TAB + 'b'';';
+  Assert.AreEqual(Src, FixFile(Src, Replaced, Skipped), '');
+  Assert.AreEqual<Integer>(0, Replaced);
+  Assert.AreEqual<Integer>(1, Skipped);
+  Src := Join(['begin', '  A;', 'end;']);
+  Assert.AreEqual(Src, FixFile(Src, Replaced, Skipped), '');
+  Assert.AreEqual<Integer>(0, Replaced);
+  Assert.AreEqual<Integer>(0, Skipped);
+end;
+
 {$IFNDEF FPC}
 
 // ---- Adapter der Tabelle und echter Detektor ----
@@ -910,6 +988,38 @@ begin
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreEqual<Integer>(0, Length(O.Edits));
+    Assert.AreNotEqual('', O.Reason);
+  finally
+    F.Free;
+    SL.Free;
+  end;
+end;
+
+// Zweiter Eintrag der Regel (Massenmodus) ueber AlternativeFixFor - wie
+// Plan_Adapter fuer FixFor, hier fuer den Datei-weiten Fix.
+procedure TTestRdxTabsDetector.Plan_Adapter_FileMode;
+var
+  SL : TStringList;
+  F  : TLeakFinding;
+  O  : TRdxFixOutcome;
+begin
+  SL := TStringList.Create;
+  F := nil;
+  try
+    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
+    SL.Text := Join(['begin', TAB + 'A;', TAB + 'B;', 'end;']);
+    O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
+    Assert.IsTrue(O.Enabled, O.Reason);
+    Assert.AreEqual<Integer>(1, O.Variant);
+    Assert.AreEqual<Integer>(2, Length(O.Edits));
+    Assert.AreEqual(_('Replace all tabs in this file'),
+      TRdxFixTable.CaptionFor(fkTabulationCharacter, O));
+    // Nur die String-Zeile im Spiel: nichts zu tun, Grund statt Edits.
+    SL.Text := 'S := ''a' + TAB + 'b'';';
+    F.Free;
+    F := TLeakFinding.New('t.pas', '', 1, TabMsg(1), fkTabulationCharacter);
+    O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
+    Assert.IsFalse(O.Enabled);
     Assert.AreNotEqual('', O.Reason);
   finally
     F.Free;

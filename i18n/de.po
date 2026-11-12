@@ -7227,3 +7227,12 @@ msgstr "bedeutungsgleich - nichts außerhalb dieses Bereichs nutzt es"
 
 msgid "only the tab/focus order changes, not the component"
 msgstr "nur die Tab-/Fokus-Reihenfolge ändert sich, nicht die Komponente"
+
+msgid "Replace all tabs in this file"
+msgstr "Alle Tabulatoren dieser Datei ersetzen"
+
+msgid "tabs become spaces in %d of %d line(s) with a tab; tabs in strings and directives stay, as does a line whose tab width is ambiguous"
+msgstr "Tabs werden in %d von %d Zeilen mit Tab zu Leerzeichen; Tabs in Strings und Direktiven bleiben, ebenso eine Zeile, deren Tabweite mehrdeutig ist"
+
+msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"
+msgstr "kein Tab der Datei kann ersetzt werden (alle stehen in einem String oder einer Compiler-Direktive, oder ihre Tabweite ist mehrdeutig)"

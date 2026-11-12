@@ -236,7 +236,8 @@ const
      AltCaption: 'Swap the loop bounds'),
     (Kind: fkTabulationCharacter; Plan: 'PlanTabs';
      Caption: 'Replace the tabs in this line with spaces';
-     Changes: False; Alt: ''; AltCaption: ''),
+     Changes: False; Alt: 'PlanTabsFile';
+     AltCaption: 'Replace all tabs in this file'),
     (Kind: fkTrailingWhitespace; Plan: 'PlanTrailingBlanks';
      Caption: 'Remove the trailing whitespace';
      Changes: False; Alt: ''; AltCaption: ''),
