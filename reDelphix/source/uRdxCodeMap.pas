@@ -22,7 +22,8 @@ interface
 
 uses
   System.Classes,   // TStrings
-  uRefactorInfo;    // TRefactorSpan (RangeText, CommentInRange)
+  uRefactorInfo,    // TRefactorSpan (RangeText, CommentInRange)
+  uFixArgs;         // TFixArgs (TRdxFindingText.Args, Fix-Datenfeld S1)
 
 const
   MIN_MULTI_QUOTES = 3;   // ''' oeffnet einen mehrzeiligen String (Delphi 12)
@@ -262,6 +263,21 @@ type
     // Kontext (IsKeywordAfter, die KEYWORDS der Planer).
     function IsWord: Boolean;
     function EndCol: Integer;   // hinter dem letzten Zeichen
+  end;
+
+  // Eingang der Planer statt eines blossen Meldungstexts (Konzept
+  // Fix-Datenfeld, S1): Implicit aus string, damit jeder bestehende Test
+  // und jeder bestehende Aufrufer mit einem String-Literal unveraendert
+  // uebersetzt - Args ist bis zur jeweiligen Regel-Umstellung (S2..S5)
+  // immer leer (TFixArgs.IsEmpty), ein Leser nimmt dann weiter Text wie
+  // bisher. uFixArgs.TFixArgs ist bewusst wertartig (kein Zeiger/Objekt),
+  // FPC-tauglich (nur SysUtils) - diese Unit ist die FPC-Pruefstand-Seite
+  // des Uebergangs, FindingTextOf (nur Delphi, uRdxFixTable.pas) baut sie
+  // aus einem echten TLeakFinding.
+  TRdxFindingText = record
+    Text : string;
+    Args : TFixArgs;
+    class operator Implicit(const S: string): TRdxFindingText;
   end;
 
   // Praedikat einer Token-Suche auf einer Zeile (OneTokenOnLine): passt T?
@@ -1277,6 +1293,14 @@ end;
 function TRdxToken.EndCol: Integer;
 begin
   Result := Col + Len;
+end;
+
+{ TRdxFindingText }
+
+class operator TRdxFindingText.Implicit(const S: string): TRdxFindingText;
+begin
+  Result.Text := S;
+  Result.Args := Default(TFixArgs);
 end;
 
 { ---- Token-Lesen auf der Code-Sicht ---- }

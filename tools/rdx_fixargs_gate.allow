@@ -1,0 +1,95 @@
+# tools/rdx_fixargs_gate.allow - rohe Meldungs-Leser in reDelphix/source
+# (Konzept Fix-Datenfeld_2026-10-28, Abschnitt 7) fuer tools/rdx_fixargs_gate.py.
+#
+# Format je Zeile: Unit|Routine|Regel|Grund
+# Ist-Stand S1 (2026-11-12, 86 Routinen) - Regel noch nicht einzeln
+# zugeordnet (erste Bestandsaufnahme, kein Nachweis je Regel), nur als
+# GESAMTMENGE eingefroren: ein neuer Leser ist rot, ein Eintrag ohne
+# Treffer ist ebenfalls rot (Ratsche - wer eine Regel auf FixArgs
+# umstellt, nimmt ihren Eintrag mit heraus).
+uRdxAlwaysTrueFix|FormOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxAlwaysTrueFix|TRdxAlwaysTrueFix.ResolveIf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxAttrDuplicateFix|TRdxAttrDuplicateFix.ReadMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxAttrGapFix|AttrNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxAvoidOutFix|TRdxAvoidOutFix.OutToVar|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxClassMethodFix|FullNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxCleanupFixes|RegionOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxCleanupFixes|TRdxCleanupFixes.UnusedVarName|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxCodeMap|ColumnFromMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxConsecutiveSectionFix|TRdxConsecutiveSectionFix.Merge|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxConstStringParameterFix|ConstParamOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeadCodeFix|TRdxDeadCodeFix.TerminatorOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDebugOutputFix|TRdxDebugOutputFix.CallNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|MemberNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|MethodNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|OverrideReason|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|ReintroduceReason|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|TRdxDeclFixes.DirectiveFor|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|TRdxDeclFixes.DuplicateInterfaceGuid|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeclFixes|TRdxDeclFixes.InterfaceGuid|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDeepNestingFix|KindOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDfmComponentFix|ReportedName|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDfmDeadEventFix|ParseBinding|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxDigitGroupingFix|TRdxDigitGroupingFix.Group|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxEmptyBlockFix|TRdxEmptyBlockFix.WithToCall|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxEmptyOnHandlerFix|TypeFromMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxExceptionNameFix|TRdxExceptionNameFix.ClassNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFixRunner|FreeReceiverOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFixRunner|TRdxFixRunner.BlockFix|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFixTable|FreeTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFloatEqualityFix|TRdxFloatEqualityFix.Operands|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFlowFixes|CondMessageOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFlowFixes|JumpOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFlowFixes|SelfTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxForRangeFix|TRdxForRangeFix.BoundsOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFormatSettingsFix|TRdxFormatSettingsFix.CalledNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFormatSettingsFix|TRdxFormatSettingsFix.FloatSpecOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFormatterMarkerFix|ReportedText|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFormatterMarkerFix|TRdxFormatterMarkerFix.ExactOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxFuncNameFix|TRdxFuncNameFix.NameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxGotoExitFix|GotoColumn|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxGroupedDeclFix|TRdxGroupedDeclFix.Split|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxHttpsFix|TRdxHttpsFix.CallStatementArg|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxHttpsFix|TRdxHttpsFix.Https|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxInheritedEmptyFix|TRdxInheritedEmptyFix.MethodNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxInsecureRandomFix|TRdxInsecureRandomFix.CallOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxIntegerOverflowFix|ProductOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxKeywordCaseFix|TRdxKeywordCaseFix.LowercaseKeyword|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxLineFixes|KeywordOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxLineFixes|TRdxLineFixes.CastTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxLineFixes|TRdxLineFixes.DoubleSemicolon|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxLocalConstantNameFix|TRdxLocalConstantNameFix.ConstNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxLoopBoundFix|TRdxLoopBoundFix.HeadOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxMagicFixes|TRdxMagicFixes.NumberOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxMethodNameFix|MethodNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxMoveSizeFix|ParseMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxNoSonarFix|TRdxNoSonarFix.ToNoinspection|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxObjectListFix|ListTypeArgOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxObjectListFix|ListVarOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxParamNameFix|ParseFinding|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxParensFix|TRdxParensFix.DoubleParens|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRaiseFixes|CreateTargetOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRaiseFixes|TRdxRaiseFixes.ReRaise|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRecipes|TRdxRecipes.ConcatFindingTarget|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRecipes|TRdxRecipes.SqlFindingTarget|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxResultFixes|TRdxResultFixes.ManagedResultInit|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxResultFixes|TRdxResultFixes.ResultDefault|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRoutineFixes|TRdxRoutineFixes.UnusedPrivateMethod|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxRoutineFixes|TRdxRoutineFixes.UnusedRoutine|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|SectionNameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|TRdxExprFixes.AssignedNil|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|TRdxExprFixes.EmptyArgs|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|TRdxExprFixes.RedundantBool|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|TRdxSimpleFixes.AssertMessage|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxSimpleFixes|TRdxSimpleFixes.ExplicitTObject|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTabsFix|TRdxTabsFix.Tabs|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxThreadResumeFix|TRdxThreadResumeFix.ReceiverOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTrailingBlanksFix|TRdxTrailingBlanksFix.ColumnOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTrailingCommaFix|TRdxTrailingCommaFix.DropComma|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|FirstWordOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|ObjectFix|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|TRdxTryFixes.GetMemWithoutFree|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|TRdxTryFixes.LockWithoutFinally|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|TRdxTryFixes.NameOf|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxTryFixes|TRdxTryFixes.UnpairedLock|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt
+uRdxUnusedParameterFix|UnusedParamName|-|S1-Bestandsaufnahme, noch nicht auf FixArgs umgestellt

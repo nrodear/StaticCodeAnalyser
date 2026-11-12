@@ -159,6 +159,15 @@ type
   // oeffnet ihnen die Code-Sicht.
   TRdxMapPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  // Uebergangsform (Konzept Fix-Datenfeld, S1): wie TRdxMapPlanner, aber
+  // AMessage trägt zusaetzlich FixArgs (TRdxFindingText.Args). Bis zur
+  // jeweiligen Regel-Umstellung (S2..S5) bleibt Args leer und ein Planer
+  // liest wie bisher nur .Text; MapFixIn uebergibt TRdxFindingText nicht
+  // .Text, damit ein umgestellter Planer beides sehen kann. Noch KEIN
+  // bestehender Planer nutzt diese Form (S1 ist reines Geruest).
+  TRdxMapPlannerIn = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
+    out AReason: string): Boolean;
   // FlowFix (SCA098/SCA080/SCA047) mit TRdxFlowPlanner/TRdxFlowReason steht
   // seit Charge H5c als Plan-Form im Geruest der Tabelle (uRdxFixTable,
   // TRdxFixFrame; Gegen-Review H5, Major 2) - hier brauchte es niemand.
@@ -170,6 +179,11 @@ type
 // die Ersetzung nach Edits[0], sonst der Grund.
 function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
   APlan: TRdxMapPlanner): TRdxFixOutcome;
+// Wie MapFix, aber fuer TRdxMapPlannerIn (Konzept Fix-Datenfeld, S1) -
+// AMessage ist TRdxFindingText statt string, Implicit uebernimmt einen
+// String-Aufruf unveraendert. Noch ohne Aufrufer (S1 ist Geruest).
+function MapFixIn(ALines: TStrings; ALine: Integer;
+  const AMessage: TRdxFindingText; APlan: TRdxMapPlannerIn): TRdxFixOutcome;
 // SCA123: 'TFoo(X).Free' -> 'X.Free' - Bedingungen am Rumpf.
 function CastFreeFix(APlaces: TSourcePlaces; ALines: TStrings;
   ALine: Integer; const AMessage: string): TRdxFixOutcome;
@@ -307,6 +321,28 @@ const
 
 function MapFix(ALines: TStrings; ALine: Integer; const AMessage: string;
   APlan: TRdxMapPlanner): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := MsgNoFileOpen;
+    Exit;
+  end;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Acquire(ALines);
+  try
+    Result.Enabled := APlan(Map, ALine, AMessage, Result.Edits[0], Result.Reason);
+  finally
+    TRdxCodeMap.Release(Map);
+  end;
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+function MapFixIn(ALines: TStrings; ALine: Integer;
+  const AMessage: TRdxFindingText; APlan: TRdxMapPlannerIn): TRdxFixOutcome;
 var
   Map : TRdxCodeMap;
 begin
