@@ -75,11 +75,11 @@ type
     // SCA017, erster Eintrag: die Anweisung in '{$IFDEF DEBUG}' ..
     // '{$ENDIF}' (eigene Zeilen, Einrueckung der Anweisung).
     class function WrapInDebug(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // SCA017, zweiter Eintrag: die Anweisung loeschen (ihre ganzen Zeilen).
     class function DeleteCall(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // Der Name aus der Meldung ('Debug output: writeln' -> 'writeln',
     // klein); '' ohne.
@@ -90,6 +90,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,         // FA_NAME (Fix-Datenfeld S3b)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText;         // _(): in die reDelphix-Sprache, nie uLocalization
 
@@ -271,7 +272,7 @@ end;
 
 // Die gemeldete Anweisung und alle Sperren, die beide Eintraege teilen.
 // '' oder der Grund.
-function ReadSite(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+function ReadSite(AMap: TRdxCodeMap; ALine: Integer; const AMessage: TRdxFindingText;
   out ASite: TRdxDebugSite): string;
 var
   Name     : string;
@@ -280,7 +281,8 @@ var
   Nb       : Integer;
 begin
   ASite := Default(TRdxDebugSite);
-  Name := TRdxDebugOutputFix.CallNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := TRdxDebugOutputFix.CallNameOf(AMessage.Text);
   if Name = '' then
     Exit(_(R_DBG_NO_NAME));
   if (ALine < 1) or (ALine > AMap.LineCount) then
@@ -341,7 +343,7 @@ begin
 end;
 
 class function TRdxDebugOutputFix.WrapInDebug(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Site   : TRdxDebugSite;
@@ -366,7 +368,7 @@ begin
 end;
 
 class function TRdxDebugOutputFix.DeleteCall(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Site : TRdxDebugSite;

@@ -66,7 +66,7 @@ type
     // (sonst kann T oder der Typ von X Free verdecken, oder der Cast ist
     // zum Uebersetzen noetig), prueft der Aufrufer.
     class function CastFree(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -399,7 +399,7 @@ begin
 end;
 
 class function TRdxLineFixes.CastFree(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Target : string;
   Site   : TRdxCastSite;
@@ -407,7 +407,8 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Target := CastTargetOf(AMessage);
+  if not AMessage.Args.TryGet(FA_TYPE, Target) then
+    Target := CastTargetOf(AMessage.Text);
   if Target = '' then
     AReason := _('the message has no type name')
   else if LooksLikeInterfaceName(Target) then

@@ -58,7 +58,7 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uFixArgs;
 
 type
   TReRaiseExceptionDetector = class
@@ -108,6 +108,7 @@ begin
             'Re-raise of bound variable "%s" loses the original stack trace - use bare `raise;` instead',
             [HandlerVar]);
           F.SetKind(fkReRaiseException);
+          F.WithFixArg(FA_NAME, HandlerVar);
           Results.Add(F);
         end;
       finally

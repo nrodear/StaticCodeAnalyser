@@ -69,7 +69,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils, uTypeIndex, uRegExMatches;
+  uFileTextCache, uDetectorUtils, uTypeIndex, uRegExMatches, uFixArgs;
 
 const
   // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
@@ -443,13 +443,20 @@ var
         Exit(True);
   end;
 
-  procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
+  procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer;
+    const AFixName: string = '');
+  var
+    F : TLeakFinding;
   begin
     // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
     // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
     // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
-    // unveraendert bleiben.
-    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
+    // unveraendert bleiben. AFixName (Fix-Datenfeld S3b): optional, nur
+    // SCA113 fuellt ihn - andere Aufrufer bleiben unveraendert (leer).
+    F := TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K);
+    if AFixName <> '' then
+      F.WithFixArg(FA_NAME, AFixName);
+    Results.Add(F);
   end;
 
   // SCA113: <ident>.Resume - die ganze Regel in einer Prozedur
@@ -507,7 +514,7 @@ var
                  'Suppress per line if this is not a TThread reference: ' +
                  '// noinspection ThreadResumeDeprecated',
                  [Recv, Recv]),
-          M.Index);
+          M.Index, Recv);
       end;
   end;
 

@@ -59,7 +59,7 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils,
+  uFileTextCache, uDetectorUtils, uFixArgs,
   uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
 
 // Real-World-FP-Audit 2026-07-10: extrahiert den fuehrenden Bezeichner eines
@@ -160,6 +160,8 @@ begin
         '%s(...) uses SizeOf(%s) which is only pointer size (4/8 bytes), not the buffer size',
         [Func, PtrType]);
       F.SetKind(fkMoveSizeOfPointer);
+      F.WithFixArg(FA_NAME, Func);
+      F.WithFixArg(FA_TYPE, PtrType);
       Results.Add(F);
     end;
   finally

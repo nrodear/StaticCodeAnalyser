@@ -106,7 +106,7 @@ type
     // Spalte). Liefert die eine Ersetzung 'Resume' -> 'Start' oder den
     // Grund (Beweis im Kopf).
     class function ResumeToStart(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -114,6 +114,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,              // FA_NAME (Fix-Datenfeld S3b)
   uRefactorInfo,         // TRefactorSpan.Make
   uRdxBlocks,            // TRdxBlocks (Routinengrenzen, Klassenkoepfe)
   uRdxCompilerTraces,    // OldCompilerTrace, TRdxCompilerFloor
@@ -622,7 +623,7 @@ begin
 end;
 
 class function TRdxThreadResumeFix.ResumeToStart(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Name      : string;
@@ -633,7 +634,8 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Name := ReceiverOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := ReceiverOf(AMessage.Text);
   if Name = '' then
   begin
     AReason := _(R_TR_NO_NAME);

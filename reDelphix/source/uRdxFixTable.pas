@@ -673,6 +673,19 @@ begin
   Result.NeedsOpen := True;
 end;
 
+// SCA080/SCA047 (Fix-Datenfeld S3b-1): wie FlowForm, aber fuer
+// TRdxPlannerInOf<TRdxFlowPlan> (TRdxFindingText statt string) - SCA098
+// bleibt bei FlowForm, ihr Planer liest die Meldung unveraendert.
+// FlowParts kennt nur APlan, bleibt unveraendert wiederverwendbar.
+function FlowFormIn(APlanner: TRdxPlannerInOf<TRdxFlowPlan>;
+  ACheck: TRdxPlanCheckOf<TRdxFlowPlan>): TRdxPlanFormIn<TRdxFlowPlan>;
+begin
+  Result.Planner := APlanner;
+  Result.Parts := FlowParts;
+  Result.Check := ACheck;
+  Result.NeedsOpen := True;
+end;
+
 // SCA125/SCA164/SCA147 (Charge H3b, seit Fix-Datenfeld S3a-1/S3a-2 nur
 // noch die *In-Form - die Planer aller drei wurden auf TRdxFindingText
 // umgestellt, eine Form mit TRdxPlannerOf<TRdxRoutinePlan> (string) koennte
@@ -1029,7 +1042,8 @@ begin
   // Gegenprobe gegen den Fund wie bei SCA044/SCA003 (Minor 20, hier Nit
   // 26): die Meldung nennt X ('`X.Free; X := nil;` - ...'). Steht nach
   // Einfuegungen oberhalb ein anderes Paar auf der Zeile, nicht umschreiben.
-  Named := FreeTargetOf(AFinding.Message);
+  if not AFinding.FixArgs.TryGet(FA_NAME, Named) then
+    Named := FreeTargetOf(AFinding.Message);
   if Result.Enabled and (Named <> '')
      and not SameText(TRdxRecipes.AsciiOnly(Named),
                       TRdxRecipes.AsciiOnly(Result.Name)) then
@@ -1065,7 +1079,7 @@ function PlanFreeWithoutNil(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
   Result := TRdxFixRunner.FreeWithoutNilFix(APlaces, ALines, AFinding.LineInt,
-    AFinding.Message, AUsesNames);
+    FindingTextOf(AFinding), AUsesNames);
 end;
 
 function PlanEmptyArgs(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1146,7 +1160,7 @@ end;
 function PlanCastFree(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := CastFreeFix(APlaces, ALines, AFinding.LineInt, AFinding.Message);
+  Result := CastFreeFix(APlaces, ALines, AFinding.LineInt, FindingTextOf(AFinding));
 end;
 
 // SCA020, erster Eintrag: der Absichtskommentar (EmptyBody ohne Anweisung).
@@ -1174,14 +1188,14 @@ end;
 function PlanMissingRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxRaiseFixes.MissingRaise);
 end;
 
 function PlanReRaise(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxRaiseFixes.ReRaise);
 end;
 
@@ -1298,8 +1312,8 @@ function PlanRedundantJump(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxFlowPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
-    FlowForm(TRdxFlowFixes.RedundantJump, nil),
+  Result := TRdxFixFrame.RunIn<TRdxFlowPlan>(
+    FlowFormIn(TRdxFlowFixes.RedundantJump, nil),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1308,8 +1322,8 @@ function PlanSelfAssignment(APlaces: TSourcePlaces; ALines: TStrings;
 var
   P : TRdxFlowPlan;
 begin
-  Result := TRdxFixFrame.Run<TRdxFlowPlan>(
-    FlowForm(TRdxFlowFixes.SelfAssignment, SelfAssignCheck),
+  Result := TRdxFixFrame.RunIn<TRdxFlowPlan>(
+    FlowFormIn(TRdxFlowFixes.SelfAssignment, SelfAssignCheck),
     APlaces, ALines, AFinding, P);
 end;
 
@@ -1929,9 +1943,10 @@ end;
 function PlanThreadResume(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxThreadResumeFix.ResumeToStart);
-  Result.Name := TRdxThreadResumeFix.ReceiverOf(AFinding.Message);
+  if not AFinding.FixArgs.TryGet(FA_NAME, Result.Name) then
+    Result.Name := TRdxThreadResumeFix.ReceiverOf(AFinding.Message);
 end;
 
 // SCA167 (Charge QF4): 'Randomize;' in den initialization-Abschnitt
@@ -1939,7 +1954,7 @@ end;
 function PlanInsecureRandom(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxInsecureRandomFix.AddRandomize);
 end;
 
@@ -2045,9 +2060,11 @@ var
   Map : TRdxCodeMap;
   Ops : TArray<TRdxSizeOperand>;
   i   : Integer;
+  Msg : TRdxFindingText;
 begin
   Result := Default(TRdxFixOutcome);
-  Result.Name := TRdxMoveSizeFix.TargetTypeOf(AFinding.Message);
+  Msg := FindingTextOf(AFinding);
+  Result.Name := TRdxMoveSizeFix.TargetTypeOf(Msg);
   if not Assigned(ALines) or not Assigned(APlaces) or not APlaces.IsOpen then
   begin
     Result.Reason := MsgNoFileOpen;
@@ -2057,8 +2074,8 @@ begin
   Map := TRdxCodeMap.Acquire(ALines);
   try
     Result.Enabled := TRdxMoveSizeFix.PointeeSize(Map, AFinding.LineInt,
-      AFinding.Message, Result.Edits[0], Result.Reason)
-      and TRdxMoveSizeFix.Operands(Map, AFinding.LineInt, AFinding.Message,
+      Msg, Result.Edits[0], Result.Reason)
+      and TRdxMoveSizeFix.Operands(Map, AFinding.LineInt, Msg,
         Ops, Result.Reason);
   finally
     TRdxCodeMap.Release(Map);
@@ -2083,7 +2100,7 @@ end;
 function PlanDebugOutput(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDebugOutputFix.WrapInDebug);
 end;
 
@@ -2092,7 +2109,7 @@ end;
 function PlanDebugOutputAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDebugOutputFix.DeleteCall);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -2107,7 +2124,7 @@ end;
 function PlanDeadCode(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDeadCodeFix.DeleteDeadCode);
   if Result.Enabled then
     Result.Name := IntToStr(TRdxDeadCodeFix.LineCountOf(Result.Edits[0]));

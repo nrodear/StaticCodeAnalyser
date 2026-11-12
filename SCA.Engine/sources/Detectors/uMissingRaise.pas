@@ -60,7 +60,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uDetectorUtils;
+  uDetectorUtils, uFixArgs;
 
 function IsUpperAsciiLetter(C: Char): Boolean; inline;
 begin
@@ -273,6 +273,7 @@ begin
       F.MissingVar := Format(
         'Exception %s.Create(...) is constructed but never raised', [Target]);
       F.SetKind(fkMissingRaise);
+      F.WithFixArg(FA_TYPE, Target);
       Results.Add(F);
     end;
   finally

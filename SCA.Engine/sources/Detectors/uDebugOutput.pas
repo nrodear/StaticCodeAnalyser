@@ -43,7 +43,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uDetectorUtils;   // IsTestFixturePath (Geltungsbereich-Gate)
+  uDetectorUtils, uFixArgs;   // IsTestFixturePath (Geltungsbereich-Gate)
 
 const
   DEBUG_CALLS : array[0..4] of string = (
@@ -431,7 +431,7 @@ var
     // Debug -> unterdruecken. Additiv per nkConditionalRange-Marker.
     if LineInDebugRange(Line) then Exit;
     Results.Add(TLeakFinding.New(FileName, '', Line,
-      'Debug output: ' + Found.Trim, fkDebugOutput));
+      'Debug output: ' + Found.Trim, fkDebugOutput).WithFixArg(FA_NAME, Found.Trim));
   end;
 
 var

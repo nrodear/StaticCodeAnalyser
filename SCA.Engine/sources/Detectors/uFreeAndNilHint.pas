@@ -36,7 +36,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFixArgs, uFileTextCache;
 
 function IsIdent(C: Char): Boolean; inline;
 begin
@@ -154,6 +154,7 @@ begin
         'avoids dangling pointer if Free raises).',
         [Receiver, Receiver, Receiver]);
       F.SetKind(fkFreeAndNilHint);
+      F.WithFixArg(FA_NAME, Receiver);
       Results.Add(F);
     end;
   finally

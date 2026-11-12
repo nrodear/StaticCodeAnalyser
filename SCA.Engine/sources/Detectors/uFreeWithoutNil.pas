@@ -81,7 +81,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils, uFixArgs;
 
 // Letzte Segment-Komponente vor `.Free`/`.Destroy` extrahieren.
 // `L.Free` -> `L`; `Self.FList.Free` -> `FList`; `'foo'` -> ''.
@@ -623,6 +623,7 @@ begin
           '%s.Free without subsequent %s := nil - prefer FreeAndNil(%s)',
           [Recv, Recv, Recv]);
         F.SetKind(fkFreeWithoutNil);
+        F.WithFixArg(FA_NAME, Recv);
         Results.Add(F);
       end;
     finally

@@ -66,7 +66,7 @@ implementation
 
 uses
   System.Classes, System.RegularExpressions,
-  uFileTextCache, uDetectorUtils,
+  uFileTextCache, uDetectorUtils, uFixArgs,
   uRegExMatches;   // CachedEx - RANDOM_RE je Thread einmal kompiliert
 
 // True wenn das Random-Token an MatchIndex (1-basiert) ein Methoden-Aufruf auf
@@ -237,7 +237,7 @@ var
     Results.Add(TLeakFinding.New(FileName, '', ALine,
       ACallName + '(...) without prior Randomize - ' +
       'deterministic sequence (Seed=0 until Randomize)',
-      fkInsecureRandom));
+      fkInsecureRandom).WithFixArg(FA_NAME, ACallName));
   end;
 
 begin

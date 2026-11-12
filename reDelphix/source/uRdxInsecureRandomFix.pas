@@ -82,7 +82,7 @@ type
     // ALine ist die Zeile der Anweisung mit dem Aufruf. Liefert die eine
     // Einfuegung von 'Randomize;' (s. Kopf) oder den Grund.
     class function AddRandomize(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -90,6 +90,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3b)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxText;          // _(): in die reDelphix-Sprache (E29), nie uLocalization
 
@@ -381,7 +382,7 @@ begin
 end;
 
 class function TRdxInsecureRandomFix.AddRandomize(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Call         : string;
@@ -389,7 +390,8 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Call := CallOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Call) then
+    Call := CallOf(AMessage.Text);
   if Call = '' then
   begin
     AReason := _(R_RND_NO_CALL);
