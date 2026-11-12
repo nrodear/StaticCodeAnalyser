@@ -839,6 +839,7 @@ When the user edits one bound control, the second receives a parallel update fro
 | Severity | **Error** | Type | Bug |
 | Tags | `dfm`, `streaming`, `dead-code` |
 | Detector | `uDfmDeadEvent.pas` |
+| Editor help | `SCA028:same:delete-dead-event-binding` |
 
 DFM streaming crashes at form-load time with *"class TForm has no published method X"*. Usually caused by a manual rename in the `.pas` without updating the `.dfm`.
 

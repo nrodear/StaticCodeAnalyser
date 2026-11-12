@@ -7212,6 +7212,9 @@ msgstr "Attribuer une valeur TabOrder libre"
 msgid "Delete the unused component"
 msgstr "Supprimer le composant inutilisé"
 
+msgid "Delete the dead event binding"
+msgstr "Supprimer la liaison d'événement morte"
+
 msgid "an empty comment line - any content satisfies the detector"
 msgstr "une ligne de commentaire vide - n'importe quel contenu satisfait le détecteur"
 

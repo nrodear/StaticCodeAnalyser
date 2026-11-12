@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7238 Zeilen, 349252 Bytes
-  CPoLines_de: array[0..7237] of string = (
+  // i18n\de.po - 7241 Zeilen, 349328 Bytes
+  CPoLines_de: array[0..7240] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7233,6 +7233,9 @@ const
     'msgid "Delete the unused component"',
     'msgstr "Unbenutzte Komponente l'#$00F6'schen"',
     '',
+    'msgid "Delete the dead event binding"',
+    'msgstr "Tote Event-Bindung l'#$00F6'schen"',
+    '',
     'msgid "an empty comment line - any content satisfies the detector"',
     'msgstr "eine leere Kommentarzeile - ihr Inhalt ist dem Detektor gleich"',
     '',
@@ -7527,8 +7530,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7234 Zeilen, 363341 Bytes
-  CPoLines_fr: array[0..7233] of string = (
+  // i18n\fr.po - 7237 Zeilen, 363430 Bytes
+  CPoLines_fr: array[0..7236] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14742,6 +14745,9 @@ const
     '',
     'msgid "Delete the unused component"',
     'msgstr "Supprimer le composant inutilis'#$00E9'"',
+    '',
+    'msgid "Delete the dead event binding"',
+    'msgstr "Supprimer la liaison d'''#$00E9'v'#$00E9'nement morte"',
     '',
     'msgid "an empty comment line - any content satisfies the detector"',
     'msgstr "une ligne de commentaire vide - n''importe quel contenu satisfait le d'#$00E9'tecteur"',

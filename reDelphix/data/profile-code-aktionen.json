@@ -107,7 +107,8 @@
       "CanBeStrictPrivate",
       "MissingUnitHeader",
       "DfmTabOrderConflict",
-      "DfmComponentUnused"
+      "DfmComponentUnused",
+      "DfmDeadEvent"
     ]
   }
 }

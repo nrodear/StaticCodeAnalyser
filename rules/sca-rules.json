@@ -679,6 +679,10 @@
       "type": "Bug",
       "tags": ["dfm", "streaming", "dead-code"],
       "detectorUnit": "uDfmDeadEvent.pas",
+      "editorHelp": true,
+      "editorHelps": [
+        { "id": "SCA028", "effect": "same", "slug": "delete-dead-event-binding" }
+      ],
       "examples": {
         "bad":  "object btnSave: TButton\n  OnClick = btnSaveClick   // method removed in .pas\nend",
         "good": "object btnSave: TButton\n  OnClick = btnSaveClick\nend\n\n// and in the .pas, published:\nprocedure btnSaveClick(Sender: TObject);"

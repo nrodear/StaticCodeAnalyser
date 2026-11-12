@@ -164,6 +164,7 @@ uses
   uRdxDeclFixes,     // SCA117, SCA197, SCA149, SCA198, SCA143
   uRdxDfmTabOrderFix,  // SCA037
   uRdxDfmComponentFix, // SCA184
+  uRdxDfmDeadEventFix, // SCA028
   uRdxFlowFixes,     // SCA098, SCA080, SCA047
   uRdxRoutineFixes,  // SCA164, SCA147
   uRdxCleanupFixes,  // SCA070, SCA053
@@ -1107,6 +1108,15 @@ function PlanDfmTabOrderConflict(APlaces: TSourcePlaces; ALines: TStrings;
 begin
   Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
     TRdxDfmTabOrderFix.FixTabOrder);
+end;
+
+// SCA028: die eine Event-Bindung im DFM loeschen, deren Handler-Methode in
+// der Form-Klasse nicht mehr existiert (s. TRdxDfmDeadEventFix).
+function PlanDfmDeadEvent(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+    TRdxDfmDeadEventFix.DeleteDeadEvent);
 end;
 
 // SCA184: unbenutzte DFM-Komponente loeschen - nur wenn sie ein Blatt ist
@@ -2364,7 +2374,7 @@ type
   end;
 
 const
-  FIX_ROW_HIGH = 100;
+  FIX_ROW_HIGH = 101;
 
   // Je Art eine Zeile; die Reihenfolge ist die der Chargen (Stufe 2a,
   // Stufe 2 Rest, uQuickFix-Umzug/Stufe 3, Zeilen, Ausnahmen, Deklarationen
@@ -2650,6 +2660,10 @@ const
     // SCA184 (2026-11-12, Track B): unbenutzte DFM-Komponente loeschen -
     // nur wenn Blatt (keine Kind-Komponenten, s. TRdxDfmComponentFix).
     (Kind: fkDfmComponentUnused; Plan: PlanDfmComponentUnused;
+     HintByPlanner: False; Changes: False; Alt: nil),
+    // SCA028 (2026-11-12, Runde 2): tote Event-Bindung im DFM loeschen -
+    // echt angehaengt wie SCA184, nicht gespleisst (Lehre Track A).
+    (Kind: fkDfmDeadEvent; Plan: PlanDfmDeadEvent;
      HintByPlanner: False; Changes: False; Alt: nil)
   );
 
@@ -3001,7 +3015,12 @@ const
       + 'CnWizards and JCF now recognise the marker',
     // DfmComponentUnused
     'a leaf component with no reference anywhere - deleting it removes '
-      + 'nothing else'
+      + 'nothing else',
+    // DfmDeadEvent (Runde 2, 2026-11-12): die Methode existiert nachweislich
+    // nicht (weder Signatur noch Implementation) - nichts kann durch das
+    // Loeschen des Verweises brechen.
+    'the handler method does not exist in the form class - removing the '
+      + 'reference breaks nothing that worked before'
   );
 
   // Menuetexte (msgids) unter dem Index der Zeile; '%s' = Name der Hilfe
@@ -3120,7 +3139,8 @@ const
     'Remove the empty override %s',
     'Write Result instead of %s',
     'Write the formatter marker exactly',
-    'Delete the unused component'
+    'Delete the unused component',
+    'Delete the dead event binding'
   );
 
   // Menuetexte des zweiten Eintrags (Alt), '' ohne.
@@ -3153,6 +3173,8 @@ const
     '', '', '', '', '', '', '', '', '', '', '', '',
     // DfmComponentUnused (Track B, 2026-11-12): echt angehaengt - FIX_ROWS
     // fuehrt sie als letzte Zeile.
+    '',
+    // DfmDeadEvent (Runde 2, 2026-11-12): kein Alt, echt angehaengt.
     ''
   );
 
@@ -3162,7 +3184,7 @@ const
   // faellt dort auf (Wochen-Review 2026-10-21, Major P03/P29: welcher Planer
   // an welcher Art haengt, band bis dahin kein Test). Ein neuer Planer
   // braucht hier eine Zeile, sonst nennt PlannerName '?'.
-  PLANNER_NAMES: array[0..107] of TRdxPlannerName = (
+  PLANNER_NAMES: array[0..108] of TRdxPlannerName = (
     (Name: 'PlanExplicitTObject'; Plan: PlanExplicitTObject),
     (Name: 'PlanFreeAndNil'; Plan: PlanFreeAndNil),
     (Name: 'PlanNilComparison'; Plan: PlanNilComparison),
@@ -3270,7 +3292,8 @@ const
     (Name: 'PlanInheritedMethodEmpty'; Plan: PlanInheritedMethodEmpty),
     (Name: 'PlanFuncNameResult'; Plan: PlanFuncNameResult),
     (Name: 'PlanFormatterMarker'; Plan: PlanFormatterMarker),
-    (Name: 'PlanDfmComponentUnused'; Plan: PlanDfmComponentUnused)
+    (Name: 'PlanDfmComponentUnused'; Plan: PlanDfmComponentUnused),
+    (Name: 'PlanDfmDeadEvent'; Plan: PlanDfmDeadEvent)
   );
 
 var

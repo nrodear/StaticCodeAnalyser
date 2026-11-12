@@ -209,6 +209,7 @@
         <DCCReference Include="source\uRdxConcatWrap.pas"/>
         <DCCReference Include="source\uRdxDfmTabOrderFix.pas"/>
         <DCCReference Include="source\uRdxDfmComponentFix.pas"/>
+        <DCCReference Include="source\uRdxDfmDeadEventFix.pas"/>
         <DCCReference Include="source\uRdxContextRunner.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="source\uRdxFixRunner.pas"/>

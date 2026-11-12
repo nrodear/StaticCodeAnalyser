@@ -2788,6 +2788,26 @@
         "  end"
       ]
     },
+    "DfmDeadEvent": {
+      "titel": "Tote Event-Bindung löschen",
+      "was": "Löscht genau die eine gemeldete Zeile `EventName = HandlerName` aus der .dfm – keine Blockgrenzen-Logik nötig, eine Event-Property ist immer eine einzelne Zeile. Die Methode existiert nachweislich nicht (weder Signatur noch Implementation in der Form-Klasse, s. `uDfmDeadEvent`) – das Löschen des Verweises kann nichts brechen, das vorher funktionierte.",
+      "nichtAngeboten": [
+        "aus der Meldung lässt sich kein Event/Handler-Paar lesen",
+        "die Fundzeile liegt außer Bereich",
+        "die Fundzeile trägt nicht mehr exakt dieses Event/Handler-Paar (verschoben oder schon geändert – der Komponentenname steht nicht auf der Event-Zeile selbst, nur Event und Handler)"
+      ],
+      "beispielVorher": [
+        "  object btnGo: TButton",
+        "    Left = 8",
+        "    OnClick = btnGoClick    // Methode im .pas umbenannt/entfernt",
+        "  end"
+      ],
+      "beispielNachher": [
+        "  object btnGo: TButton",
+        "    Left = 8",
+        "  end"
+      ]
+    },
     "DuplicateInterfaceGuid": {
       "titel": "Doppelte GUID neu erzeugen",
       "was": "Ersetzt den String-Inhalt der vorhandenen `['{...}']`-Klammer durch eine frisch erzeugte GUID (`CreateGUID`) – die Klammer selbst bleibt stehen. Dieselben Sperren wie bei SCA197 (generische Interfaces, COM-Merkmale im Rumpf, `{$INTERFACES CORBA}`/`{$CALLING STDCALL}` in der Datei, Direktive zwischen Kopf und erstem Member), zusätzlich gesperrt, wenn nach dem Kopf keine eckige Klammer mehr folgt oder ihr Inhalt kein einzelnes String-Literal ist. Bedeutungsgleich – die neue GUID ersetzt nur die alte, der Vertrag des Interfaces ändert sich nicht.",
