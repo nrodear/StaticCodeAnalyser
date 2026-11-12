@@ -107,6 +107,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uFixArgs,
   System.Classes,      // TStringList (FFI-Typnamen-Set)
   System.StrUtils,     // PosEx (Gate 8: Codewort-Suche)
   uDetectorUtils,      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
@@ -549,6 +550,7 @@ begin
         'Method `%s` should be PascalCase (start with uppercase letter).',
         [Name]);
       F.SetKind(fkMethodName);
+      F.WithFixArg(FA_NAME, Name);
       Results.Add(F);
     end;
   finally

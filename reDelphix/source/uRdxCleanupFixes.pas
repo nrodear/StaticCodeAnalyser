@@ -128,7 +128,7 @@ type
     // seit der Nachpruefung der Charge B1-FD bei einem '// noinspection'
     // darueber, der auf die Zeile zielt (MarkerAboveCut).
     class function UnusedLocalVar(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // X aus 'Unused local variable: X (declared but never read or
@@ -170,6 +170,7 @@ implementation
 uses
   System.SysUtils,
   System.StrUtils,   // PosEx (WrapPiece, rwE31)
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // ReadRoutine (SCA053: Ende des Gueltigkeitsbereichs),
                      // MarkerAboveReason (Marker ueber der Deklaration)
@@ -2231,10 +2232,11 @@ begin
 end;
 
 class function TRdxCleanupFixes.UnusedLocalVar(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Key               : string;
+  Name              : string;
   Decl              : TRdxVarDecl;
   CutStart, CutStop : TRdxTextPos;
 begin
@@ -2242,7 +2244,9 @@ begin
   Decl := Default(TRdxVarDecl);
   CutStart := TextPos(0, 0);
   CutStop := TextPos(0, 0);
-  Key := LowerCase(UnusedVarName(AMessage));
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := UnusedVarName(AMessage.Text);
+  Key := LowerCase(Name);
   if Key = '' then
     AReason := _('the message has no variable name')
   else if InList(Key, RESERVED) then

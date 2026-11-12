@@ -107,7 +107,7 @@ type
     // ('Override X contains only "inherited" ...'). Liefert die beiden
     // Ersetzungen (Deklaration, Implementierung) oder den Grund.
     class function DeleteOverride(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxRoutinePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
     // Der Methodenname aus der Meldung, '' ohne.
     class function MethodNameOf(const AMessage: string): string; static;
@@ -117,6 +117,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
   uRdxBlocks,        // TRdxBlocks (Finder, ReadRoutine), TRdxRoutine
   uRdxDeclFixes,     // ParamNamesOf
   uRdxText;          // _(): in die reDelphix-Sprache (E29), nie uLocalization
@@ -500,7 +501,7 @@ begin
 end;
 
 class function TRdxInheritedEmptyFix.DeleteOverride(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxRoutinePlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
   out AReason: string): Boolean;
 var
   C    : TRdxIeCtx;
@@ -508,7 +509,8 @@ var
 begin
   APlan := Default(TRdxRoutinePlan);
   C := Default(TRdxIeCtx);
-  C.Meth := MethodNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, C.Meth) then
+    C.Meth := MethodNameOf(AMessage.Text);
   C.LowMeth := LowerCase(C.Meth);
   APlan.Name := C.Meth;
   if (C.Meth = '') or (Pos('.', C.Meth) > 0) then

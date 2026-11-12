@@ -81,7 +81,7 @@ type
     // SCA204: 'Name :=' -> 'Result :=' fuer jede Zuweisung an den Namen aus
     // AMessage am Anweisungsanfang auf ALine (Form TRdxMapPlanner).
     class function ResultAssign(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Der Name aus der Meldung ('GetCount'), '' ohne.
@@ -92,6 +92,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,              // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
   uRdxBlocks;       // BeginBodyAround, TRdxRoutine
@@ -293,7 +294,7 @@ begin
 end;
 
 class function TRdxFuncNameFix.ResultAssign(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Name : string;
@@ -303,7 +304,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   R := Default(TRdxRoutine);
-  Name := NameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := NameOf(AMessage.Text);
   if Name = '' then
   begin
     AReason := _(R_FN_MESSAGE);

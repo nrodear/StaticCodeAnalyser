@@ -119,7 +119,7 @@ type
     // mit allen Verweisen der Datei (s. Kopf). Die Form von
     // TRdxPlannerOf<TRdxExceptionNamePlan> (uRdxFixTable).
     class function RenameClass(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxExceptionNamePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxExceptionNamePlan;
       out AReason: string): Boolean; static;
     // Der Klassenname aus der Meldung ('Exception class X should start
     // ...'); '' ohne diese Form.
@@ -137,6 +137,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,         // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxBlocks,       // TRdxBlocks.HeadBefore (die Routine um einen Verweis)
   uRdxText;         // _(), MsgMovedSuffix, MsgStaleSuffix
@@ -529,8 +530,8 @@ begin
 end;
 
 class function TRdxExceptionNameFix.RenameClass(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxExceptionNamePlan;
-  out AReason: string): Boolean;
+  ALine: Integer; const AMessage: TRdxFindingText;
+  out APlan: TRdxExceptionNamePlan; out AReason: string): Boolean;
 var
   Decl, Cls : TRdxToken;
   From      : Integer;
@@ -540,7 +541,8 @@ begin
   Cls := Default(TRdxToken);
   From := 1;
   APlan := Default(TRdxExceptionNamePlan);
-  APlan.OldName := ClassNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, APlan.OldName) then
+    APlan.OldName := ClassNameOf(AMessage.Text);
   if APlan.OldName = '' then
   begin
     AReason := _(R_EXC_FORM);

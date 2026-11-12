@@ -75,6 +75,7 @@ implementation
 // Self-scan Stil-Cluster - Guard-Ketten mit Exit sind hier die Lesart.
 
 uses
+  uFixArgs,
   System.StrUtils,
   uFileTextCache, uDetectorUtils;
 
@@ -678,6 +679,7 @@ begin
           'the visibility of the ancestor method (ancestor not in this unit)',
           [MethName]);
       F.SetKind(fkInheritedMethodEmpty, Konf);
+      F.WithFixArg(FA_NAME, MethName);
       Results.Add(F);
     end;
   finally

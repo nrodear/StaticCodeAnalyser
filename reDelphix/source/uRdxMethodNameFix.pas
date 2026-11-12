@@ -146,7 +146,7 @@ type
     // SCA106: den Namen der Meldung in Deklaration (Kopf auf ALine) und
     // Implementierung gross beginnen (s. Kopf der Unit).
     class function Capitalize(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxMethodNamePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxMethodNamePlan;
       out AReason: string): Boolean; static;
   end;
 
@@ -159,6 +159,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,         // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,    // TRefactorSpan.Make
   uRdxText,         // _(): in die reDelphix-Sprache, nie uLocalization
   uRdxBlocks;       // TRdxBlocks (Finder), EnclosingClass, ClassEnd
@@ -1004,7 +1005,7 @@ end;
 { TRdxMethodNameFix }
 
 class function TRdxMethodNameFix.Capitalize(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxMethodNamePlan;
+  const AMessage: TRdxFindingText; out APlan: TRdxMethodNamePlan;
   out AReason: string): Boolean;
 var
   Name     : string;
@@ -1014,7 +1015,8 @@ begin
   APlan := Default(TRdxMethodNamePlan);
   ImplOnly := False;
   Head := Default(TRdxToken);
-  Name := MethodNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := MethodNameOf(AMessage.Text);
   APlan.Name := PascalName(Name);
   if not StartsLower(Name) then
     AReason := _(R_MN_NO_NAME)

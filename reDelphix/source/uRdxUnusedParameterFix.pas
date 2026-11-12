@@ -154,7 +154,7 @@ type
     // und Doku zu '_Name' umbenennen (s. Kopf). Form TRdxPlannerOf
     // (uRdxFixTable).
     class function MarkUnused(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxParamPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxParamPlan;
       out AReason: string): Boolean; static;
 
     // Die Stelle des Parameters AName: genau eine Implementierung, deren
@@ -179,6 +179,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxText;          // _(), MsgMovedSuffix, MsgStaleSuffix (nie uLocalization)
 
@@ -814,7 +815,7 @@ begin
 end;
 
 class function TRdxUnusedParameterFix.MarkUnused(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxParamPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxParamPlan;
   out AReason: string): Boolean;
 var
   Site : TRdxParamSite;
@@ -822,7 +823,8 @@ var
   D    : TRdxParamDecl;
 begin
   APlan := Default(TRdxParamPlan);
-  Name := UnusedParamName(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := UnusedParamName(AMessage.Text);
   APlan.Name := Name;
   if Name = '' then
     AReason := _(R_UP_NO_NAME)

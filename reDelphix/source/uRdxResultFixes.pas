@@ -135,6 +135,13 @@ type
     const AMessage: string; out APlan: TRdxResultPlan;
     out AReason: string): Boolean;
 
+  // Wie TRdxResultPlanner, aber fuer die auf FixArgs umgestellten Planer
+  // (Fix-Datenfeld S3a-1: ResultDefault) - ResultFormIn/TRdxFixFrame.RunIn
+  // in uRdxFixTable. SCA096/097/196 bleiben auf TRdxResultPlanner.
+  TRdxResultPlannerIn = function(AMap: TRdxCodeMap; ALine: Integer;
+    const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
+    out AReason: string): Boolean;
+
   // Eine Typdeklaration der Datei (TRdxScan): 'Name [<..>] = [packed] Art'
   // - der Name, das Token davor (im Typabschnitt eines aus TYPE_DECL_PREV)
   // und die Art (KindAfterName). Auch 'A = B' in einem Ausdruck steht hier
@@ -201,7 +208,7 @@ type
     // assigns Result ...') - 'Result := <Literal>;' bzw.
     // 'Result := Default(T);'.
     class function ResultDefault(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxResultPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
       out AReason: string): Boolean; static;
 
     // SCA196: die Funktion um die Lese-Zeile ALine (Meldung 'Function X
@@ -280,6 +287,7 @@ implementation
 
 uses
   System.SysUtils,
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
   uRdxCompilerTraces,  // OldCompilerTrace (SCA121: Spuren alter Compiler)
@@ -1696,7 +1704,7 @@ begin
 end;
 
 class function TRdxResultFixes.ResultDefault(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxResultPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
   out AReason: string): Boolean;
 var
   Scan  : TRdxScan;
@@ -1710,7 +1718,8 @@ begin
   Value := '';
   AReason := '';
   Scan := NewScan(AMap);
-  Name := TextBetween(AMessage, KEY_FUNC, KEY_NEVER);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := TextBetween(AMessage.Text, KEY_FUNC, KEY_NEVER);
   if Name = '' then
     AReason := _('the message has no function name');
   if AReason = '' then

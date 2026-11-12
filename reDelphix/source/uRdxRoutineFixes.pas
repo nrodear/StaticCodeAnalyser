@@ -107,7 +107,7 @@ type
     // Kopf '// noinspection X' - MarkerAboveReason). Die {$I}-Dateien davor
     // nennt APlan.Includes - der Aufrufer prueft sie mit IncludeReason.
     class function UnusedRoutine(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxRoutinePlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
       out AReason: string): Boolean; static;
 
     // SCA147: die Methode der Meldung 'Private method TFoo.X appears unused
@@ -185,6 +185,7 @@ implementation
 uses
   System.SysUtils,
   System.Classes,    // TStrings (NameInInclude: TRdxIncludeTest)
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
   uRefactorInfo,     // TRefactorSpan.Make
   // uRdxBlocks (Routinengrenzen, Decl/Impl-Finder, Klassenkopf, Include-
   // Kette, MarkerAboveReason - bis Charge B2S-b hier, Review R6-12) steht
@@ -1431,7 +1432,7 @@ begin
 end;
 
 class function TRdxRoutineFixes.UnusedRoutine(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxRoutinePlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxRoutinePlan;
   out AReason: string): Boolean;
 var
   Head : TRdxToken;
@@ -1439,7 +1440,8 @@ var
 begin
   APlan := Default(TRdxRoutinePlan);
   R := Default(TRdxRoutine);
-  APlan.Name := NameFromMessage(AMessage, KEY_ROUTINE);
+  if not AMessage.Args.TryGet(FA_NAME, APlan.Name) then
+    APlan.Name := NameFromMessage(AMessage.Text, KEY_ROUTINE);
   if APlan.Name = '' then
     AReason := _('the message has no routine name')
   else

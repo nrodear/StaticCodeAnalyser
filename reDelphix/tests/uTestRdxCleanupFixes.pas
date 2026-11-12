@@ -59,6 +59,7 @@ type
     [Test] procedure Sca053_UseRefusals;
     [Test] procedure Sca053_ShapeRefusals;
     [Test] procedure Sca053_ContextRefusals;
+    [Test] procedure Sca053_FixArgsWinsOverText;
     [Test] procedure CutEdit_Lines;
     [Test] procedure CutEdit_InsideLines;
   end;
@@ -67,7 +68,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
+  uFixArgs, uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
   uTestRdxTextKit;   // Join, Apply, InProc
 
 type
@@ -894,6 +895,38 @@ begin
   AssertRefused(ckVar, InImpl(['procedure P;', 'type',
     '  TR = record case B: Boolean of True: (A: Integer); end;', 'var',
     '  X: Integer;', 'begin', 'end;']), 8, VarMsg('X'), 'Variantenteil');
+end;
+
+// Fix-Datenfeld S3a-1: FixArgs.Name gewinnt vor der Meldung, wenn beide
+// einen anderen Namen nennen (zeigt, dass der Planer wirklich erst Args
+// liest, nicht nur zufaellig denselben Text neu parst).
+procedure TTestRdxCleanupFixes.Sca053_FixArgsWinsOverText;
+var
+  Map    : TRdxCodeMap;
+  SL     : TStringList;
+  Source : string;
+  Msg    : TRdxFindingText;
+  E      : TRdxEdit;
+  R      : string;
+  Ok     : Boolean;
+begin
+  Source := InImpl(['procedure P;', 'var', '  A: Integer;',
+    '  X: TObject;', 'begin', '  A := 1;', 'end;']);
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Source;
+    Map := TRdxCodeMap.Create(SL);
+    Msg.Text := VarMsg('NichtX');
+    Msg.Args.Put(FA_NAME, 'X');
+    Ok := TRdxCleanupFixes.UnusedLocalVar(Map, 7, Msg, E, R);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+  Assert.IsTrue(Ok, R);
+  Assert.AreEqual(InImpl(['procedure P;', 'var', '  A: Integer;', 'begin',
+    '  A := 1;', 'end;']), Apply(Source, E));
 end;
 
 // ---- CutEdit ----
