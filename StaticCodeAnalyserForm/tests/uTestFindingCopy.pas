@@ -60,6 +60,7 @@ function FindingFieldCount: Integer;
 implementation
 
 uses
+  System.SysUtils,              // IntToStr (MakeFilledFixArgs)
   System.Rtti,                  // TRttiContext, TRttiField, TValue
   System.TypInfo,               // tkUString, tkEnumeration, tkInteger
   uSCAConsts;                   // fkMemoryLeak, lsError, lsWarning
