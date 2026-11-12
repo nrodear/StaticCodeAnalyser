@@ -161,6 +161,7 @@ uses
   uTestEditorBulbGeometry in 'uTestEditorBulbGeometry.pas',
   uTestEditorFindingStore in 'uTestEditorFindingStore.pas',
   uTestFindingCopy in 'uTestFindingCopy.pas',
+  uTestFixArgs in 'uTestFixArgs.pas',
   uTestFindingKeyPolicy in 'uTestFindingKeyPolicy.pas',
   uTestBulbDecision in 'uTestBulbDecision.pas',
   uTestFindingSourcePick in 'uTestFindingSourcePick.pas',

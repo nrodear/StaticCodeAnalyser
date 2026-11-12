@@ -177,7 +177,7 @@ UNITS=()
 # uSCAConsts gehoert NICHT hierher: die Planer-Testunits der Chargen Q/R
 # binden sie nur hinter {$IFNDEF FPC} (Hygiene H2) - FPC hat sie nie
 # uebersetzt, ein Lauf haengt so nicht an einer ungeprueften Unit.
-for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir; do
+for u in uRefactorInfo uRefactorInfoBuilder uRefactorConcat uFindingActions uScaConfigDir uFixArgs; do
   need "$SCA/SCA.Engine/sources/Common/$u.pas"
   UNITS+=("$SCA/SCA.Engine/sources/Common/$u.pas")
 done

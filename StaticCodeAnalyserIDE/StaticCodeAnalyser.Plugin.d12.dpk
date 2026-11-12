@@ -101,6 +101,7 @@ contains
   uDetectorUtils in '..\SCA.Engine\sources\Common\uDetectorUtils.pas',
   uFindingActions in '..\SCA.Engine\sources\Common\uFindingActions.pas',
   uFindingActionMenu in '..\SCA.Engine\sources\Common\uFindingActionMenu.pas',
+  uFixArgs in '..\SCA.Engine\sources\Common\uFixArgs.pas',
   uJsonFormat in '..\SCA.Engine\sources\Common\uJsonFormat.pas',
   uLocalization in '..\SCA.Engine\sources\Common\uLocalization.pas',
   uMethodd12 in '..\SCA.Engine\sources\Common\uMethodd12.pas',
