@@ -2390,7 +2390,7 @@ end;
 function PlanBoolAlwaysTrue(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxAlwaysTrueFix.ResolveIf);
 end;
 
@@ -2437,7 +2437,7 @@ end;
 function PlanDeepNesting(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxDeepNestingFix.GuardClause);
 end;
 

@@ -331,12 +331,19 @@ begin
   AssertCtorRefused(S, 'constructor TFoo', 'eines Konstruktors - mehrdeutig');
   AssertCtorRefused(InUnit(['  TX = Integer;'], ['constructor Create;',
     'begin', 'end;']), 'constructor Create', 'ohne Klasse');
+  // Fix-Datenfeld S5: die fruehere "fremde Meldung"-Sperre ist entfallen -
+  // AWord kommt vom Aufrufer (ConstructorInherited setzt ihn fest), das
+  // Kind des Funds entscheidet schon, welche Variante laeuft; eine
+  // zusaetzliche Textpruefung war reine Verdopplung. Ein beliebiger
+  // Meldungstext hilft jetzt genauso.
   S := InUnit(['  TFoo = class', '    constructor Create;', '  end;'],
     ['constructor TFoo.Create;', 'begin', 'end;']);
   P := PlanAt(TRdxInheritedFixes.ConstructorInherited, S, 'constructor TFoo',
     'Something else', R);
-  Assert.IsTrue(Pos('Meldung unbekannt', R) > 0, R);
-  Assert.AreEqual(STMT_INHERITED, P.Name, 'Menuetext auch gesperrt');
+  Assert.AreEqual('', R, R);
+  // TFoo ist direkter TObject-Erbe -> 'inherited Create', nicht blosses
+  // 'inherited' (CtorVariantReason/STMT_INHERITED_CREATE).
+  Assert.AreEqual(STMT_INHERITED_CREATE, P.Name);
 end;
 
 // ---- SCA097 ----

@@ -54,7 +54,8 @@ implementation
 
 uses
   System.Generics.Defaults,  // Perf Charge R3: einmal geholte Comparer
-  uDetectorUtils;   // Perf P3: NestingChainPush/-Text (Kette als Index)
+  uDetectorUtils,   // Perf P3: NestingChainPush/-Text (Kette als Index)
+  uFixArgs;         // FA_FORM (Fix-Datenfeld S5)
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxNesting (analyser.ini ->
 // DeepNestingMaxDepth). Default 4 (also wird ab 5 verschachtelten
@@ -287,6 +288,7 @@ begin
           'Depth %d (%s from line %d, limit: %d)',
           [Tiefste.Depth, KindName(Tiefste.Kind),
            Tiefste.Line, MaxNesting]);
+        F.WithFixArg(FA_FORM, KindName(Tiefste.Kind));
         F.SetKind(fkDeepNesting);
         // Die Kette als Text erst JETZT - nur fuer meldende
         // Methoden. Sie stammt aus DEMSELBEN Walk wie Tiefe und
