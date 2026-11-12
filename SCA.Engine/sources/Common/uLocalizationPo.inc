@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7196 Zeilen, 347422 Bytes
-  CPoLines_de: array[0..7195] of string = (
+  // i18n\de.po - 7229 Zeilen, 348600 Bytes
+  CPoLines_de: array[0..7228] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7210,7 +7210,40 @@ const
     'msgstr "Profil \"%s\": %d von %d Regeln. Aus der Projektdatei %s, schreibgesch'#$00FC'tzt - mit \"Kopieren...\" ein eigenes anlegen."',
     '',
     'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
-    'msgstr "Projekt-Profil \"%s\" - aktiv beim n'#$00E4'chsten Analyselauf, nicht gespeichert (es geh'#$00F6'rt zu diesem Projekt)"'
+    'msgstr "Projekt-Profil \"%s\" - aktiv beim n'#$00E4'chsten Analyselauf, nicht gespeichert (es geh'#$00F6'rt zu diesem Projekt)"',
+    '',
+    'msgid "Insert a header comment placeholder"',
+    'msgstr "Kopfkommentar-Platzhalter einf'#$00FC'gen"',
+    '',
+    'msgid "Generate a new GUID"',
+    'msgstr "Neue GUID erzeugen"',
+    '',
+    'msgid "Move declaration to a `strict private` section"',
+    'msgstr "Deklaration in einen `strict private`-Abschnitt verschieben"',
+    '',
+    'msgid "Move declaration to a `private` section"',
+    'msgstr "Deklaration in einen `private`-Abschnitt verschieben"',
+    '',
+    'msgid "Move declaration to a `protected` section"',
+    'msgstr "Deklaration in einen `protected`-Abschnitt verschieben"',
+    '',
+    'msgid "Assign a free TabOrder value"',
+    'msgstr "Freien TabOrder-Wert zuweisen"',
+    '',
+    'msgid "Delete the unused component"',
+    'msgstr "Unbenutzte Komponente l'#$00F6'schen"',
+    '',
+    'msgid "an empty comment line - any content satisfies the detector"',
+    'msgstr "eine leere Kommentarzeile - ihr Inhalt ist dem Detektor gleich"',
+    '',
+    'msgid "a fresh, unique GUID - nothing else changes"',
+    'msgstr "eine frische, eindeutige GUID - sonst '#$00E4'ndert sich nichts"',
+    '',
+    'msgid "same meaning - nothing outside this scope uses it"',
+    'msgstr "bedeutungsgleich - nichts au'#$00DF'erhalb dieses Bereichs nutzt es"',
+    '',
+    'msgid "only the tab/focus order changes, not the component"',
+    'msgstr "nur die Tab-/Fokus-Reihenfolge '#$00E4'ndert sich, nicht die Komponente"'
   );
 
   // i18n\en.po - 268 Zeilen, 7196 Bytes
@@ -7485,8 +7518,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7192 Zeilen, 361369 Bytes
-  CPoLines_fr: array[0..7191] of string = (
+  // i18n\fr.po - 7225 Zeilen, 362588 Bytes
+  CPoLines_fr: array[0..7224] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14678,7 +14711,40 @@ const
     'msgstr "Profil '#$00AB' %s '#$00BB' : %d r'#$00E8'gles sur %d. Du fichier de projet %s, en lecture seule - utilisez '#$00AB' Copier... '#$00BB' pour le v'#$00F4'tre."',
     '',
     'msgid "Project profile \"%s\" - active on next analysis run, not saved (it belongs to this project)"',
-    'msgstr "Profil de projet '#$00AB' %s '#$00BB' - actif '#$00E0' la prochaine analyse, non enregistr'#$00E9' (il appartient '#$00E0' ce projet)"'
+    'msgstr "Profil de projet '#$00AB' %s '#$00BB' - actif '#$00E0' la prochaine analyse, non enregistr'#$00E9' (il appartient '#$00E0' ce projet)"',
+    '',
+    'msgid "Insert a header comment placeholder"',
+    'msgstr "Ins'#$00E9'rer un espace r'#$00E9'serv'#$00E9' de commentaire d''en-t'#$00EA'te"',
+    '',
+    'msgid "Generate a new GUID"',
+    'msgstr "G'#$00E9'n'#$00E9'rer un nouveau GUID"',
+    '',
+    'msgid "Move declaration to a `strict private` section"',
+    'msgstr "D'#$00E9'placer la d'#$00E9'claration dans une section `strict private`"',
+    '',
+    'msgid "Move declaration to a `private` section"',
+    'msgstr "D'#$00E9'placer la d'#$00E9'claration dans une section `private`"',
+    '',
+    'msgid "Move declaration to a `protected` section"',
+    'msgstr "D'#$00E9'placer la d'#$00E9'claration dans une section `protected`"',
+    '',
+    'msgid "Assign a free TabOrder value"',
+    'msgstr "Attribuer une valeur TabOrder libre"',
+    '',
+    'msgid "Delete the unused component"',
+    'msgstr "Supprimer le composant inutilis'#$00E9'"',
+    '',
+    'msgid "an empty comment line - any content satisfies the detector"',
+    'msgstr "une ligne de commentaire vide - n''importe quel contenu satisfait le d'#$00E9'tecteur"',
+    '',
+    'msgid "a fresh, unique GUID - nothing else changes"',
+    'msgstr "un GUID nouveau et unique - rien d''autre ne change"',
+    '',
+    'msgid "same meaning - nothing outside this scope uses it"',
+    'msgstr "m'#$00EA'me signification - rien en dehors de cette port'#$00E9'e ne l''utilise"',
+    '',
+    'msgid "only the tab/focus order changes, not the component"',
+    'msgstr "seul l''ordre de tabulation/focus change, pas le composant"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

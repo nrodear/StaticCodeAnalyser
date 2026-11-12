@@ -3,7 +3,7 @@
 > **Erzeugte Datei – nicht von Hand bearbeiten.** Quelle: [`data/quickfixes-doc.json`](data/quickfixes-doc.json) (Titel, Beschreibung, Sperren, Beispiele) und der Quelltext: welche Hilfen es gibt, ihre Menütexte und ob sie das Verhalten ändern, stehen in [`source/uRdxFixTable.pas`](source/uRdxFixTable.pas) (`FIX_ROWS`, `FIX_CAPTIONS`, `FIX_ALT_CAPTIONS`) und [`source/uRdxActionCore.pas`](source/uRdxActionCore.pas) (Rezepte), die Übersetzungen in [`i18n/de.po`](../i18n/de.po) und [`i18n/fr.po`](../i18n/fr.po), Regel-IDs und Namen in [`rules/sca-rules.json`](../rules/sca-rules.json).
 > Erzeugen (Repo-Wurzel): `python tools/gen-quickfix-doc.py`, prüfen: `python tools/gen-quickfix-doc.py --check` (auch in der CI, `.github/workflows/quickfix-doc.yml`).
 
-reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
+reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 101 Quick-Fixes aus der Tabelle der einfachen Hilfen (8 davon mit zweitem Eintrag) und 6 weitere Code-Aktionen des Anbieters. Wie die Hilfen im Einzelnen prüfen und schreiben, beschreibt [README.md](README.md), Abschnitt „Was die Aktionen tun“.
 
 ## Lesehilfe
 
@@ -29,8 +29,11 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Qui
 | SCA017 DebugOutput | `Debug-Ausgabe in {$IFDEF DEBUG} setzen` / `Debug-Ausgabe löschen` | Quick-Fix | ja / ja | [SCA017](#sca017) |
 | SCA018 DeepNesting | `Letztes if in eine Wächter-Klausel mit Exit umwandeln` | Quick-Fix | nein | [SCA018](#sca018) |
 | SCA020 EmptyMethod | `Leeren Rumpf als beabsichtigt kennzeichnen` / `ENotImplemented im leeren Rumpf auslösen` | Quick-Fix | nein / ja | [SCA020](#sca020) |
+| SCA037 DfmTabOrderConflict | `Freien TabOrder-Wert zuweisen` | Quick-Fix | nein | [SCA037](#sca037) |
 | SCA046 ReversedForRange | `"to" durch "downto" ersetzen` / `Schleifengrenzen vertauschen` | Quick-Fix | ja / ja | [SCA046](#sca046) |
 | SCA047 SelfAssignment | `Selbstzuweisung von %s entfernen` | Quick-Fix | nein | [SCA047](#sca047) |
+| SCA050 CanBeUnitPrivate | `` Deklaration in einen `private`-Abschnitt verschieben `` | Quick-Fix | nein | [SCA050](#sca050) |
+| SCA051 CanBeProtected | `` Deklaration in einen `protected`-Abschnitt verschieben `` | Quick-Fix | nein | [SCA051](#sca051) |
 | SCA053 UnusedLocalVar | `Ungenutzte Variable %s entfernen` | Quick-Fix | nein | [SCA053](#sca053) |
 | SCA054 UnusedParameter | `Parameter %s mit "_" als absichtlich ungenutzt kennzeichnen` | Quick-Fix | nein | [SCA054](#sca054) |
 | SCA059 FormatLocaleHint | `FormatSettings ausdrücklich übergeben` / `TFormatSettings.Invariant übergeben` | Quick-Fix | nein / ja | [SCA059](#sca059) |
@@ -66,6 +69,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Qui
 | SCA099 IfElseBegin | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA099](#sca099) |
 | SCA101 BeginEndRequired | `Zweig in begin..end setzen` | Quick-Fix | nein | [SCA101](#sca101) |
 | SCA106 MethodName | `Methodennamen als %s schreiben` | Quick-Fix | nein | [SCA106](#sca106) |
+| SCA107 CanBeStrictPrivate | `` Deklaration in einen `strict private`-Abschnitt verschieben `` | Quick-Fix | nein | [SCA107](#sca107) |
 | SCA109 LockWithoutTryFinally | `Sperre %s in einem try/finally-Block freigeben` | Quick-Fix | ja | [SCA109](#sca109) |
 | SCA111 ParamByNameInLoop | `%s vor die Schleife ziehen` | Quick-Fix | ja | [SCA111](#sca111) |
 | SCA112 FieldByNameInLoop | `%s vor die Schleife ziehen` | Quick-Fix | ja | [SCA112](#sca112) |
@@ -85,6 +89,7 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Qui
 | SCA131 IfThenShortCircuit | `IfThen durch if..then..else ersetzen` | Quick-Fix | ja | [SCA131](#sca131) |
 | SCA137 IntegerOverflow | `%s vor der Multiplikation nach Int64 umwandeln` | Quick-Fix | ja | [SCA137](#sca137) |
 | SCA139 FreeWithoutNil | `FreeAndNil(%s) verwenden` | Quick-Fix | nein | [SCA139](#sca139) |
+| SCA143 MissingUnitHeader | `Kopfkommentar-Platzhalter einfügen` | Quick-Fix | nein | [SCA143](#sca143) |
 | SCA144 FloatEquality | `Statt des exakten Vergleichs %s verwenden` | Quick-Fix | ja | [SCA144](#sca144) |
 | SCA147 UnusedPrivateMethod | `Ungenutzte private Methode %s löschen` | Quick-Fix | nein | [SCA147](#sca147) |
 | SCA148 CanBeClassMethod | `%s zur statischen Klassenmethode machen` | Quick-Fix | nein | [SCA148](#sca148) |
@@ -105,11 +110,13 @@ reDelphix hängt an Funde des SCA-Plugins Code-Aktionen. Hier steht jede: 94 Qui
 | SCA180 AttributeDuplicate | `Doppeltes Attribut entfernen` | Quick-Fix | nein | [SCA180](#sca180) |
 | SCA181 AttributeCategoryWithoutString | `Dem Attribut einen Kategorienamen geben` | Quick-Fix | nein | [SCA181](#sca181) |
 | SCA183 AttributeMisalignment | `Leerzeile nach dem Attribut entfernen` | Quick-Fix | nein | [SCA183](#sca183) |
+| SCA184 DfmComponentUnused | `Unbenutzte Komponente löschen` | Quick-Fix | nein | [SCA184](#sca184) |
 | SCA188 SourceBidiOverride | `Bidi-Steuerzeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA188](#sca188) |
 | SCA192 SourceInvisibleChar | `Unsichtbare Zeichen entfernen (in Strings als #$-Code)` | Quick-Fix | nein | [SCA192](#sca192) |
 | SCA193 SourceNonAsciiIdentifier | `Namen in ASCII-Buchstaben schreiben: %s` | Quick-Fix | nein | [SCA193](#sca193) |
 | SCA196 ManagedResultUninit | `Result zuerst initialisieren: %s` | Quick-Fix | ja | [SCA196](#sca196) |
 | SCA197 InterfaceWithoutGuid | `Neue GUID einfügen` | Quick-Fix | nein | [SCA197](#sca197) |
+| SCA198 DuplicateInterfaceGuid | `Neue GUID erzeugen` | Quick-Fix | nein | [SCA198](#sca198) |
 | SCA199 ParamNameMismatch | `Parameternamen "%s" aus dem SQL verwenden` | Quick-Fix | ja | [SCA199](#sca199) |
 | SCA203 LoopPastHighBound | `Schleife %s laufen lassen` | Quick-Fix | ja | [SCA203](#sca203) |
 | SCA204 FunctionNameAsResult | `Result statt %s schreiben` | Quick-Fix | nein | [SCA204](#sca204) |
@@ -588,6 +595,51 @@ begin
 end;
 ```
 
+<a id="sca037"></a>
+
+### SCA037 – TabOrder neu durchnummerieren
+
+- **Regel:** SCA037 `DfmTabOrderConflict` – Duplicate TabOrder among siblings
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Assign a free TabOrder value` | `Freien TabOrder-Wert zuweisen` | `Attribuer une valeur TabOrder libre` |
+
+**Wirkung:** Gibt der gemeldeten Komponente den kleinsten TabOrder-Wert, den keine ihrer Geschwister im selben Parent trägt – reine Zeilen-/Einzug-Logik auf der .dfm, kein Parser: der Elter ist die nächste Zeile rückwärts mit weniger Einzug als die Fund-Zeile, die Geschwister sind alle `object`/`inherited`/`inline`-Zeilen vorwärts vom Elter mit genau demselben Einzug. Der Detektor meldet jede beteiligte Komponente einzeln; bei einem Zwei-Komponenten-Konflikt löst der Fix den ganzen Konflikt, bei mehr Geschwistern bleibt ein Rest-Konflikt für die anderen Funde stehen – ein erneuter Scan zeigt das. Bedeutungsgleich (rein visuell, kein Code-Pfad betroffen).
+
+**Nicht angeboten**
+
+- die Zeile ist keine `object`/`inherited`/`inline`-Zeile mehr (Fund veraltet)
+- kein Elter gefunden (DFM-Wurzel oder unerwartete Struktur)
+- die Komponente hat keine eigene `TabOrder = N`-Zeile (mehr)
+- bereits jeder Wert 0..Anzahl Geschwister ist belegt (Verteidigung – bei einem echten Fund nicht erreichbar)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  object EdA: TEdit
+    TabOrder = 0
+  end
+  object EdB: TEdit
+    TabOrder = 0
+  end
+```
+
+Nachher:
+
+```pascal
+  object EdA: TEdit
+    TabOrder = 0
+  end
+  object EdB: TEdit
+    TabOrder = 1
+  end
+```
+
 <a id="sca046"></a>
 
 ### SCA046 – `to` durch `downto` ersetzen
@@ -679,6 +731,86 @@ Nachher:
 ```pascal
   Foo;
   Bar;
+```
+
+<a id="sca050"></a>
+
+### SCA050 – Sichtbarkeit auf unit-private verengen
+
+- **Regel:** SCA050 `CanBeUnitPrivate` – Public member could be unit-private
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `` Move declaration to a `private` section `` | `` Deklaration in einen `private`-Abschnitt verschieben `` | `` Déplacer la déclaration dans une section `private` `` |
+
+**Wirkung:** Ersetzt `public` durch `private` (Delphi-klassisch, Unit-Scope) – nur, wenn der gemeldete Member das EINZIGE Mitglied seines `public`-Abschnitts ist (sonst träfe die Umbenennung auch seine Geschwister). Bedeutungsgleich innerhalb der analysierten Datei; der Detektor läuft bewusst nur dateiweit – ein fremder Aufrufer zeigt sich spätestens beim Compiler mit E2361.
+
+**Nicht angeboten**
+
+- kein eindeutiges `public` vor der Fundzeile gefunden (Unit-Grenze bzw. `interface`/`implementation` zuerst erreicht)
+- eine andere Deklaration steht zwischen `public` und der Fundzeile
+- nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end` (mehrzeilige Deklaration – konservativ gesperrt)
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  TFoo = class
+  public
+    procedure Helper;
+  end;
+```
+
+Nachher:
+
+```pascal
+  TFoo = class
+  private
+    procedure Helper;
+  end;
+```
+
+<a id="sca051"></a>
+
+### SCA051 – Sichtbarkeit auf protected verengen
+
+- **Regel:** SCA051 `CanBeProtected` – Public member could be protected
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `` Move declaration to a `protected` section `` | `` Deklaration in einen `protected`-Abschnitt verschieben `` | `` Déplacer la déclaration dans une section `protected` `` |
+
+**Wirkung:** Wie bei CanBeUnitPrivate (SCA050), ersetzt `public` aber durch `protected` – nur wenn der Member das einzige Mitglied seines `public`-Abschnitts ist. Bedeutungsgleich innerhalb der analysierten Datei.
+
+**Nicht angeboten**
+
+- kein eindeutiges `public` vor der Fundzeile gefunden
+- eine andere Deklaration steht zwischen `public` und der Fundzeile
+- nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  TBase = class
+  public
+    procedure Hook;          // wird nur von TSub gerufen
+  end;
+```
+
+Nachher:
+
+```pascal
+  TBase = class
+  protected
+    procedure Hook;
+  end;
 ```
 
 <a id="sca053"></a>
@@ -2279,6 +2411,49 @@ end;
 
 **Hinweis.** Aufrufe wie `doWork;` bleiben stehen und binden weiter; RTTI (`TRttiMethod.Name`) und `TObject.MethodName` nennen danach den neuen Namen.
 
+<a id="sca107"></a>
+
+### SCA107 – Sichtbarkeit auf strict private verengen
+
+- **Regel:** SCA107 `CanBeStrictPrivate` – Public member could be strict private
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `` Move declaration to a `strict private` section `` | `` Deklaration in einen `strict private`-Abschnitt verschieben `` | `` Déplacer la déclaration dans une section `strict private` `` |
+
+**Wirkung:** Wie bei CanBeUnitPrivate (SCA050), ersetzt `public` aber durch `strict private` – nur wenn der Member das einzige Mitglied seines `public`-Abschnitts ist. Bedeutungsgleich innerhalb der analysierten Datei.
+
+**Nicht angeboten**
+
+- kein eindeutiges `public` vor der Fundzeile gefunden
+- eine andere Deklaration steht zwischen `public` und der Fundzeile
+- nach der Fundzeile folgt nicht direkt ein Abschnitts-Schlüsselwort bzw. `end`
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  TFoo = class
+  public
+    procedure Helper;       // nur TFoo.Run ruft es
+    procedure Run;
+  end;
+```
+
+Nachher:
+
+```pascal
+  TFoo = class
+  strict private
+    procedure Helper;
+  public
+    procedure Run;
+  end;
+```
+
 <a id="sca109"></a>
 
 ### SCA109 – Sperre in try/finally freigeben
@@ -3192,6 +3367,45 @@ Nachher:
 
 ```pascal
     FreeAndNil(FList);
+```
+
+<a id="sca143"></a>
+
+### SCA143 – Unit-Kopfkommentar einfügen
+
+- **Regel:** SCA143 `MissingUnitHeader` – Unit has no descriptive header comment
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Insert a header comment placeholder` | `Kopfkommentar-Platzhalter einfügen` | `Insérer un espace réservé de commentaire d'en-tête` |
+
+**Wirkung:** Fügt hinter `unit X;` eine Leerzeile, eine leere `//`-Zeile und eine weitere Leerzeile ein – der Detektor verlangt nur irgendeine Kommentarzeile zwischen `unit X;` und `interface`, ihr Inhalt zählt nicht (ein Platzhaltertext wäre unnötig und riefe nur eine andere Regel, anders als bei SCA019 TODO/FIXME). Bedeutungsgleich.
+
+**Nicht angeboten**
+
+- die Zeile ist keine `unit ...;`-Zeile mehr (Fund veraltet)
+- die Zeile trägt einen Kommentar oder String
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+unit MyUnit;
+
+interface
+```
+
+Nachher:
+
+```pascal
+unit MyUnit;
+
+//
+
+interface
 ```
 
 <a id="sca144"></a>
@@ -4229,7 +4443,7 @@ Nachher:
 
 ### SCA184 – Unbenutzte DFM-Komponente löschen
 
-- **Regel:** SCA184 `DfmComponentUnused` – DFM component is never referenced in code, other units, or the DFM itself
+- **Regel:** SCA184 `DfmComponentUnused` – Unused DFM component
 - **Art:** Quick-Fix
 - **Ändert Verhalten:** nein
 
@@ -4487,6 +4701,59 @@ type
 ```
 
 **Hinweis.** Im Beispiel steht eine feste GUID wie im Test; die Hilfe erzeugt jedes Mal eine neue.
+
+<a id="sca198"></a>
+
+### SCA198 – Doppelte GUID neu erzeugen
+
+- **Regel:** SCA198 `DuplicateInterfaceGuid` – Two interfaces share the same GUID
+- **Art:** Quick-Fix
+- **Ändert Verhalten:** nein
+
+| en | de | fr |
+|---|---|---|
+| `Generate a new GUID` | `Neue GUID erzeugen` | `Générer un nouveau GUID` |
+
+**Wirkung:** Ersetzt den String-Inhalt der vorhandenen `['{...}']`-Klammer durch eine frisch erzeugte GUID (`CreateGUID`) – die Klammer selbst bleibt stehen. Dieselben Sperren wie bei SCA197 (generische Interfaces, COM-Merkmale im Rumpf, `{$INTERFACES CORBA}`/`{$CALLING STDCALL}` in der Datei, Direktive zwischen Kopf und erstem Member), zusätzlich gesperrt, wenn nach dem Kopf keine eckige Klammer mehr folgt oder ihr Inhalt kein einzelnes String-Literal ist. Bedeutungsgleich – die neue GUID ersetzt nur die alte, der Vertrag des Interfaces ändert sich nicht.
+
+**Nicht angeboten**
+
+- generisches Interface – eine GUID gälte für alle Ausprägungen (Supports würde sie vermischen)
+- nach dem Kopf folgt keine eckige Klammer mehr (Fund veraltet – die GUID wurde inzwischen entfernt)
+- der Inhalt der Klammer ist kein einzelnes String-Literal, oder die Klammer reicht über mehr als eine Zeile
+- `stdcall`/`safecall`/`winapi`/`dispid` im Rumpf – ein COM-Import braucht die echte IID, keine neue GUID
+- `{$INTERFACES CORBA}` bzw. `{$CALLING STDCALL}` in der Datei
+- eine Compiler-Direktive zwischen dem Kopf und dem ersten Member
+
+**Beispiel**
+
+Vorher:
+
+```pascal
+  IReader = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']
+    function Read: string;
+  end;
+
+  IWriter = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']   // kopiert, nicht neu erzeugt
+    procedure Write(const S: string);
+  end;
+```
+
+Nachher:
+
+```pascal
+  IReader = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']
+    function Read: string;
+  end;
+
+  IWriter = interface
+    ['{A1B2C3D4-5E6F-7890-ABCD-EF1234567890}']   // frisch erzeugt
+    procedure Write(const S: string);
+  end;
+```
 
 <a id="sca199"></a>
 

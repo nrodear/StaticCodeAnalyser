@@ -2668,7 +2668,7 @@ const
     // PublicMemberWithoutDoc
     'the skeleton is empty - fill in summary, param and returns',
     // MissingUnitHeader
-    '',
+    'an empty comment line - any content satisfies the detector',
     // InterfaceWithoutGuid
     'a new GUID - only for your own interfaces, never for COM imports',
     // DuplicateInterfaceGuid
@@ -3086,6 +3086,12 @@ const
     '', '', '', '', '', '',
     'Raise ENotImplemented in the empty body',
     '', '', '', '', '', '', '', '', '', '', '', '',
+    // Einschub Track A (2026-11-12): MissingUnitHeader, DuplicateInterfaceGuid,
+    // CanBeStrictPrivate, CanBeUnitPrivate, CanBeProtected, DfmTabOrderConflict -
+    // alle Alt: nil, hier eingefuegt (nicht angehaengt), weil FIX_ROWS sie
+    // mitten in diesen Block aus lauter Alt-losen Zeilen spleisst; ans Ende
+    // gehaengt waeren ALLE folgenden Indizes um 6 verschoben gewesen.
+    '', '', '', '', '', '',
     '', '', '', '', '', '', '', '', '', '',
     '', '', '',
     'Remove the first duplicate inherited call',
@@ -3100,7 +3106,10 @@ const
     '', '', '',
     '', '', '', '', '', '', '',
     'Raise EInvalidOpException instead (invalid state)',
-    '', '', '', '', '', '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '', '', '',
+    // DfmComponentUnused (Track B, 2026-11-12): echt angehaengt - FIX_ROWS
+    // fuehrt sie als letzte Zeile.
+    ''
   );
 
   // Die Namen der Planer (PlannerName, fuer uTestRdxFixTable): eine eigene
