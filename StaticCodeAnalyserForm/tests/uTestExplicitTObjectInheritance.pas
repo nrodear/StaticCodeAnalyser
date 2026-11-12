@@ -18,6 +18,8 @@ type
     [Test] procedure TObjectWithInterfaceList_NoFinding;
     [Test] procedure TObjectListDescendant_NoFinding;
     [Test] procedure TObjectInCommentAndString_NoFinding;
+    // Fix-Datenfeld S2 (T3): der Detektor fuellt FixArgs.Col.
+    [Test] procedure ExplicitTObject_FixArgsColFilled;
   end;
 
 implementation
@@ -183,6 +185,29 @@ begin
   try Assert.AreEqual<Integer>(0,
     TFindingHelper.Count(F, fkExplicitTObjectInheritance),
     'weder Kommentar noch Literal sind eine Deklaration');
+  finally F.Free; end;
+end;
+
+procedure TTestExplicitTObjectInheritance.ExplicitTObject_FixArgsColFilled;
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class(TObject)'#13#10 +
+  'end;'#13#10 +
+  'implementation end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    for Fnd in F do
+      if Fnd.Kind = fkExplicitTObjectInheritance then
+      begin
+        Assert.IsTrue(Fnd.FixArgs.Col > 0, 'FixArgs.Col sollte gefuellt sein');
+        Exit;
+      end;
+    Assert.Fail('expected fkExplicitTObjectInheritance finding');
   finally F.Free; end;
 end;
 

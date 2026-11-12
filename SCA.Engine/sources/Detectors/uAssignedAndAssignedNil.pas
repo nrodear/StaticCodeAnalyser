@@ -311,6 +311,7 @@ begin
         '`Assigned(X) and (X <> nil)` at column %d is redundant - ' +
         '`Assigned` already implies `<> nil`.', [Col]);
       F.SetKind(fkAssignedAndAssignedNil);
+      F.WithFixCol(Col);
       Results.Add(F);
     end;
   finally

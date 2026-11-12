@@ -105,7 +105,7 @@ type
     // geloeschten Text und wenn ein Kommentar mit anderem Text ueber die
     // Region hinausreicht (Prosa oder nicht eindeutiger Code).
     class function CommentedOutCode(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA053: die Deklaration des Namens aus der Meldung ('Unused local
@@ -449,8 +449,11 @@ end;
 
 { ---- SCA070 ---- }
 
-// Zeilenzahl und Spalte aus der Meldung; False ohne diese Form.
-function RegionOf(const AMessage: string; ALine: Integer;
+// Zeilenzahl und Spalte aus der Meldung; Args.Col (Fix-Datenfeld S2)
+// gewinnt fuer die Spalte, wenn gesetzt - die Zeilenzahl bleibt
+// Text-Sache (sie steckt zusaetzlich schon in TLeakFinding.EndLine,
+// kein FixArgs-Schluessel noetig). False ohne diese Form.
+function RegionOf(const AMessage: TRdxFindingText; ALine: Integer;
   out ARegion: TRdxRegion): Boolean;
 var
   P, N : Integer;
@@ -458,17 +461,21 @@ begin
   ARegion := Default(TRdxRegion);
   ARegion.First := ALine;
   N := 0;
-  if Pos(KEY_ONE, AMessage) = 1 then
+  if Pos(KEY_ONE, AMessage.Text) = 1 then
   begin
     N := 1;
-    ARegion.Col := NumberAt(AMessage, Length(KEY_ONE) + 1);
+    ARegion.Col := NumberAt(AMessage.Text, Length(KEY_ONE) + 1);
   end
-  else if Pos(KEY_BLOCK, AMessage) = 1 then
+  else if Pos(KEY_BLOCK, AMessage.Text) = 1 then
   begin
-    N := NumberAt(AMessage, Length(KEY_BLOCK) + 1);
-    P := Pos(KEY_START, AMessage);
+    N := NumberAt(AMessage.Text, Length(KEY_BLOCK) + 1);
+    P := Pos(KEY_START, AMessage.Text);
     if P > 0 then
-      ARegion.Col := NumberAt(AMessage, P + Length(KEY_START));
+      ARegion.Col := NumberAt(AMessage.Text, P + Length(KEY_START));
+  end;
+  if AMessage.Args.Col > 0 then
+  begin
+    ARegion.Col := AMessage.Args.Col;
   end;
   ARegion.Last := ALine + N - 1;
   Result := (N > 0) and (N < MAX_NUMBER) and (ARegion.Col > 0);
@@ -1419,7 +1426,7 @@ begin
 end;
 
 class function TRdxCleanupFixes.CommentedOutCode(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   Region            : TRdxRegion;

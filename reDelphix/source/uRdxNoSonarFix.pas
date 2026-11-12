@@ -69,7 +69,7 @@ type
     // SCA065: NOSONAR in ALine (Spalte des '//' aus der Meldung 'at column
     // N') -> Marker-Zeile darueber, Rest des Kommentars hinter dem Code.
     class function ToNoinspection(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -127,7 +127,7 @@ begin
 end;
 
 class function TRdxNoSonarFix.ToNoinspection(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L, Body, Lead, Code, Rest  : string;
@@ -136,7 +136,14 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;

@@ -47,6 +47,7 @@ implementation
 uses
   System.Generics.Defaults,  // Perf Charge R3: einmal geholter Default-Comparer
   System.StrUtils,
+  uFixArgs,                  // FA_NAME (Fix-Datenfeld S2)
   uFileTextCache;
 
 const
@@ -294,7 +295,7 @@ begin
         Results.Add(TLeakFinding.New(FileName, '', i + 1,
           Format('Keyword "%s" should be lowercase ("%s") at column %d.',
             [Hit.Word, LowerCase(Hit.Word), Hit.Col]),
-          fkLowercaseKeyword));
+          fkLowercaseKeyword).WithFixCol(Hit.Col).WithFixArg(FA_NAME, Hit.Word));
     end;
   finally
     Hits.Free;

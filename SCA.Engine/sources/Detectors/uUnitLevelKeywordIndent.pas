@@ -43,6 +43,7 @@ implementation
 
 uses
   uFileTextCache,
+  uFixArgs,         // FA_NAME (Fix-Datenfeld S2)
   uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 // True wenn Lower einem strukturellen Section-Keyword entspricht, das
@@ -286,6 +287,7 @@ begin
           'Unit-level keyword "%s" should start at column 1 ' +
           '(currently at column %d).', [Word, Col]);
         F.SetKind(fkUnitLevelKeywordIndent);
+        F.WithFixCol(Col).WithFixArg(FA_NAME, Word);
         Results.Add(F);
       end
       else if IsSoloOnlyKw(Lower) and RestEmpty then
@@ -298,6 +300,7 @@ begin
           'Unit-level keyword "%s" should start at column 1 ' +
           '(currently at column %d).', [Word, Col]);
         F.SetKind(fkUnitLevelKeywordIndent);
+        F.WithFixCol(Col).WithFixArg(FA_NAME, Word);
         Results.Add(F);
       end;
     end;

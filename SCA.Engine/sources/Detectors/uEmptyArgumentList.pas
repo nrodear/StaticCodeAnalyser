@@ -178,7 +178,7 @@ begin
         Results.Add(TLeakFinding.New(FileName, '', i + 1,
           Format('Empty argument list `()` at column %d - drop the parens ' +
                  '(Delphi convention).', [Cols[k]]),
-          fkEmptyArgumentList));
+          fkEmptyArgumentList).WithFixCol(Cols[k]));
     end;
   finally
     Cols.Free;

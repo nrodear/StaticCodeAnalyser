@@ -20,14 +20,15 @@ type
   // Der Planer von SCA063 (Form TRdxMapPlanner, uRdxFixRunner).
   TRdxTrailingBlanksFix = class
   public
-    // Die Spalte aus der Meldung ('from column N'); 0 = nicht vorhanden.
-    class function ColumnOf(const AMessage: string): Integer; static;
+    // Die Spalte aus Args.Col, sonst aus der Meldung ('from column N');
+    // 0 = nicht vorhanden.
+    class function ColumnOf(const AMessage: TRdxFindingText): Integer; static;
 
     // ALine endet ab der Spalte aus der Meldung nur noch auf Leerzeichen
     // und Tabs, und keines davon ist String-Inhalt: diese Endfolge wird
     // geloescht (NewText ''). Eine Zeile nur aus Leerraum wird leer.
     class function TrimEnd(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -49,14 +50,23 @@ const
     + 'string - it is content, the help does not delete it';
 
 // Der Zahlenleser ist NumberAfterKey (uRdxCodeMap) - bis zur Folgewelle
-// des Wochen-Reviews (G09-30) eine Kopie von ColumnFromMessage.
-class function TRdxTrailingBlanksFix.ColumnOf(const AMessage: string): Integer;
+// des Wochen-Reviews (G09-30) eine Kopie von ColumnFromMessage. Args.Col
+// gewinnt, wenn gesetzt (Fix-Datenfeld S2).
+class function TRdxTrailingBlanksFix.ColumnOf(
+  const AMessage: TRdxFindingText): Integer;
 begin
-  Result := NumberAfterKey(AMessage, KEY_FROM);
+  if AMessage.Args.Col > 0 then
+  begin
+    Result := AMessage.Args.Col;
+  end
+  else
+  begin
+    Result := NumberAfterKey(AMessage.Text, KEY_FROM);
+  end;
 end;
 
 class function TRdxTrailingBlanksFix.TrimEnd(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L        : string;

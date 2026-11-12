@@ -162,7 +162,7 @@ type
     // bis zum naechsten Tabstopp (Weite aus TabWidth), Tabs am Zeilenende
     // entfallen. Spalte aus der Meldung ('Tab character at column N').
     class function Tabs(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Die Tabweite fuer ALine (s. Kopf); bei twAmbiguous die kleinere der
@@ -970,7 +970,7 @@ begin
 end;
 
 class function TRdxTabsFix.Tabs(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L         : string;
   Col       : Integer;
@@ -982,7 +982,14 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;

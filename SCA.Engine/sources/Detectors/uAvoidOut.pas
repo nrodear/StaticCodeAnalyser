@@ -408,7 +408,7 @@ begin
         Format('`out` parameter at column %d - prefer `var` (out clears ' +
                'managed types on entry, leaves records uninitialized).',
           [Col]),
-        fkAvoidOut));
+        fkAvoidOut).WithFixCol(Col));
     end;
   finally
     Twins.Free;

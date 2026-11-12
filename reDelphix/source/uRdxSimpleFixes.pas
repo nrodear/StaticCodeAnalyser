@@ -104,7 +104,7 @@ type
     // N') -> 'class'. Die leere Kurzform 'class(TObject);' wird zu
     // 'class end;' - nie 'class;' (das waere eine Vorwaertsdeklaration).
     class function ExplicitTObject(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA085: 'X.Free;' (Zeile ALine) + 'X := nil;' (naechste Zeile) ->
@@ -193,7 +193,7 @@ type
     // kein Kommentar darin steht und es nicht 'Obj.Assert' ist; ein
     // Literal traegt hoechstens 255 Zeichen (E2056).
     class function AssertMessage(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA087: die leere Sichtbarkeitszeile ALine loeschen. Nur, wenn sie
@@ -271,7 +271,7 @@ type
     // reference to/of object). Ob ein blosser Name eine Variable ist,
     // prueft der Aufrufer (APlan.Callee).
     class function EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxCallEdit;
+      const AMessage: TRdxFindingText; out APlan: TRdxCallEdit;
       out AReason: string): Boolean; static;
 
     // SCA072: 'X = True' / 'X <> False' -> 'X', 'X = False' / 'X <> True'
@@ -283,7 +283,7 @@ type
     // 'X = True and Y' ist 'X = (True and Y)'. Dass X ein Boolean ist,
     // prueft der Aufrufer (APlan.Name).
     class function RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxOperandEdit;
+      const AMessage: TRdxFindingText; out APlan: TRdxOperandEdit;
       out AReason: string): Boolean; static;
 
     // SCA084: 'Assigned(X) and (X <> nil)' bzw. '(X <> nil) and Assigned(X)'
@@ -294,7 +294,7 @@ type
     // einen Funktionszeiger auf, Assigned() nicht), prueft der Aufrufer
     // (APlan.Name, TRdxTypeProof.PointerLikeType).
     class function AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxOperandEdit;
+      const AMessage: TRdxFindingText; out APlan: TRdxOperandEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -473,7 +473,7 @@ begin
 end;
 
 class function TRdxSimpleFixes.ExplicitTObject(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L        : string;
@@ -485,7 +485,14 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   L := AMap.Raw(ALine);
   if Col < 1 then
   begin
@@ -1174,7 +1181,7 @@ begin
 end;
 
 class function TRdxSimpleFixes.AssertMessage(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L        : string;
@@ -1186,7 +1193,14 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   AReason := AssertHeadReason(AMap, ALine, Col, OpenCol);
   if AReason <> '' then Exit;
   AReason := AssertCloseReason(AMap, ALine, OpenCol, CloseCol);
@@ -1654,7 +1668,7 @@ begin
 end;
 
 class function TRdxExprFixes.EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxCallEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out APlan: TRdxCallEdit; out AReason: string): Boolean;
 var
   L       : string;
   Col     : Integer;
@@ -1664,7 +1678,14 @@ begin
   Result := False;
   APlan := Default(TRdxCallEdit);
   AReason := '';
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;
@@ -1718,7 +1739,7 @@ begin
 end;
 
 class function TRdxExprFixes.RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxOperandEdit;
+  const AMessage: TRdxFindingText; out APlan: TRdxOperandEdit;
   out AReason: string): Boolean;
 var
   L            : string;
@@ -1727,7 +1748,14 @@ var
 begin
   Result := False;
   APlan := Default(TRdxOperandEdit);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;
@@ -1824,7 +1852,7 @@ begin
 end;
 
 class function TRdxExprFixes.AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out APlan: TRdxOperandEdit;
+  const AMessage: TRdxFindingText; out APlan: TRdxOperandEdit;
   out AReason: string): Boolean;
 var
   L     : string;
@@ -1835,7 +1863,14 @@ var
 begin
   Result := False;
   APlan := Default(TRdxOperandEdit);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;

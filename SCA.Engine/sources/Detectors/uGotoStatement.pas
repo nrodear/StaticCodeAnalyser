@@ -216,7 +216,7 @@ begin
         Format('`goto` weakens structured control flow - refactor to ' +
                'early-Exit, extracted helper, or state-machine instead ' +
                '(col %d).', [Col]),
-        fkGotoStatement));
+        fkGotoStatement).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

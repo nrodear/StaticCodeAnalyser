@@ -220,7 +220,7 @@ begin
         Format('Integer literal at column %d has >=%d digits without `_` ' +
                'grouping - consider readability (e.g. 1_000_000).',
           [Col, MIN_GROUP_LEN]),
-        fkDigitGrouping));
+        fkDigitGrouping).WithFixCol(Col));
     end;
   finally
     ReleaseLines(Lines, Cached);

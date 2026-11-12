@@ -86,7 +86,7 @@ type
     // SCA069: das Literal an der Spalte der Meldung in Dreiergruppen; die
     // Ersetzung genau ueber den Ziffern. Sonst der Grund.
     class function Group(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // ADigits (nur Ziffern) mit '_' in Dreiergruppen von rechts
@@ -292,7 +292,7 @@ begin
 end;
 
 class function TRdxDigitGroupingFix.Group(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Col, Stop : Integer;
   Digits    : string;
@@ -300,7 +300,14 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Col := ColumnFromMessage(AMessage);
+  if AMessage.Args.Col > 0 then
+  begin
+    Col := AMessage.Args.Col;
+  end
+  else
+  begin
+    Col := ColumnFromMessage(AMessage.Text);
+  end;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;

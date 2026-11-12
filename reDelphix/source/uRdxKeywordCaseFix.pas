@@ -57,7 +57,7 @@ type
     // SCA064: Meldung 'Keyword "Begin" should be lowercase ("begin") at
     // column 1.' Schreibt das Wort an der Spalte klein (gleiche Laenge).
     class function LowercaseKeyword(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -66,6 +66,7 @@ implementation
 uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S2)
   uRdxText;          // _(), MsgMovedSuffix (E29)
 
 const
@@ -194,7 +195,7 @@ begin
 end;
 
 class function TRdxKeywordCaseFix.LowercaseKeyword(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   L, Kw, Lower : string;
@@ -204,8 +205,15 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  Kw := QuotedText(AMessage, '"');
-  Col := ColumnFromMessage(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, Kw) or (AMessage.Args.Col <= 0) then
+  begin
+    Kw := QuotedText(AMessage.Text, '"');
+    Col := ColumnFromMessage(AMessage.Text);
+  end
+  else
+  begin
+    Col := AMessage.Args.Col;
+  end;
   Lower := LowerCase(Kw);
   if (Kw = '') or (Col <= 0) then
   begin
