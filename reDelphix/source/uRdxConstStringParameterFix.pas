@@ -83,10 +83,11 @@ type
   TRdxConstStringParameterFix = class
   public
     // SCA170: 'const' vor die Gruppe des Parameters der Meldung, in der
-    // Implementierung und jeder Deklaration (s. Kopf). Form TRdxPlannerOf
-    // (uRdxFixTable).
+    // Implementierung und jeder Deklaration (s. Kopf). Form TRdxPlannerInOf
+    // (uRdxFixTable) seit Fix-Datenfeld S3a-2: AMessage.Args.Get(FA_NAME/
+    // FA_TYPE) gewinnt vor dem Meldungstext.
     class function MakeConst(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxParamPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxParamPlan;
       out AReason: string): Boolean; static;
   end;
 
@@ -101,7 +102,8 @@ uses
   System.SysUtils,
   uRdxBufferMath,    // AddEdit
   uRdxBlocks,        // TRdxBlocks.HeritageOf, HasDirective
-  uRdxText;          // _(), MsgMovedSuffix, MsgStaleSuffix (nie uLocalization)
+  uRdxText,          // _(), MsgMovedSuffix, MsgStaleSuffix (nie uLocalization)
+  uFixArgs;          // FA_NAME, FA_TYPE (Fix-Datenfeld S3a-2)
 
 const
   SPAN_170 = 'sca170';
@@ -379,7 +381,7 @@ end;
 { TRdxConstStringParameterFix }
 
 class function TRdxConstStringParameterFix.MakeConst(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxParamPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxParamPlan;
   out AReason: string): Boolean;
 var
   Site       : TRdxParamSite;
@@ -387,9 +389,13 @@ var
   D          : TRdxParamDecl;
   IncLine    : Integer;
   First      : TRdxToken;
+  HasName    : Boolean;
 begin
   APlan := Default(TRdxParamPlan);
-  if not ConstParamOf(AMessage, Name, Typ) then
+  HasName := AMessage.Args.TryGet(FA_NAME, Name);
+  if HasName then
+    AMessage.Args.TryGet(FA_TYPE, Typ)
+  else if not ConstParamOf(AMessage.Text, Name, Typ) then
   begin
     AReason := _(R_CS_NO_NAME);
     Exit(False);

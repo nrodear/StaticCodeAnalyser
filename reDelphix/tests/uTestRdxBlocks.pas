@@ -143,6 +143,27 @@ begin
   end;
 end;
 
+// Wie ResultReason, aber fuer TRdxResultPlannerIn (Fix-Datenfeld S3a-2:
+// ManagedResultInit).
+function ResultReasonIn(APlanner: TRdxResultPlannerIn; const ASource: string;
+  ALine: Integer; const AMessage: TRdxFindingText): string;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+  P   : TRdxResultPlan;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := ASource;
+    Map := TRdxCodeMap.Create(SL);
+    APlanner(Map, ALine, AMessage, P, Result);
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
 // Eine Unit mit den Typen ATypes (interface) und den Zeilen AImpl.
 function InUnit(const ATypes, AImpl: array of string): string;
 begin
@@ -328,7 +349,7 @@ begin
     'function F: string;', '  procedure Inner;', '    type TLoc = class end;',
     '  begin', '  end;', 'begin', '  Result := Result + ''x'';', 'end;',
     'end.']);
-  R := ResultReason(TRdxResultFixes.ManagedResultInit, Src,
+  R := ResultReasonIn(TRdxResultFixes.ManagedResultInit, Src,
     LineStartingWith(Src, 'Result := Result'), MSG_196);
   Assert.IsTrue(Pos(Format('Routine in Zeile %d: lokaler Klassen',
     [LineStartingWith(Src, 'procedure Inner;')]), R) = 1, R);
@@ -347,7 +368,7 @@ var
 begin
   Src := Join(['unit u;', 'interface', 'implementation',
     'function F: string; begin Result := Result + ''x''; end;', 'end.']);
-  R := ResultReason(TRdxResultFixes.ManagedResultInit, Src,
+  R := ResultReasonIn(TRdxResultFixes.ManagedResultInit, Src,
     LineStartingWith(Src, 'function F:'), MSG_196);
   Assert.AreEqual('', R, 'Hilfe fuer F auf der Fundzeile');
 end;

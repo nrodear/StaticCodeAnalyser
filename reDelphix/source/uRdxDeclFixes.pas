@@ -119,9 +119,13 @@ type
     // Form hat - class, Parameter ohne Namen, Rueckgabe, Aufrufkonvention
     // (der Detektor vergleicht nur Typen). 'reintroduce' nicht bei
     // generischem Vorfahren (TBase<Integer>: der Detektor haelt T und
-    // Integer fuer verschieden, override waere dort der Fix).
+    // Integer fuer verschieden, override waere dort der Fix). Seit
+    // Fix-Datenfeld S3a-2: AMessage.Args.Get(FA_NAME) (Methodenname) und
+    // FA_NAME2 (Eltern- bzw. eigene Klasse, je nach Richtung) gewinnen vor
+    // dem Meldungstext; DirectiveFor bleibt auf dem Meldungstext (feste
+    // Schluesselwoerter, keine Bezeichner).
     class function MethodDirective(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // SCA149: der Rat aus der Meldung - 'override' bei 'missing
@@ -144,7 +148,7 @@ implementation
 
 uses
   System.SysUtils,
-  uFixArgs,        // FA_NAME (Fix-Datenfeld S3a-1)
+  uFixArgs,        // FA_NAME (S3a-1), FA_NAME2 (S3a-2)
   uRdxText,        // _(), gemeinsame Texte (MsgMovedSuffix, MsgStaleSuffix ...)
   uRefactorInfo;   // TRefactorSpan.Make
 
@@ -1064,15 +1068,17 @@ begin
 end;
 
 // override: im Rumpf der Elternklasse (Meldung: 'shadows virtual
-// TBase.X') eine Methode X derselben Form? '' oder der Grund.
-function OverrideReason(AMap: TRdxCodeMap; const AMessage: string;
+// TBase.X') eine Methode X derselben Form? ABase ist die Elternklasse
+// (Args FA_NAME2 oder aus der Meldung, Fix-Datenfeld S3a-2). '' oder der
+// Grund.
+function OverrideReason(AMap: TRdxCodeMap; const ABase: string;
   const ASig: TRdxSignature): string;
 var
   Base : string;
   Cls  : TRdxToken;
   S    : string;
 begin
-  Base := ClassPartOf(WordAfter(AMessage, 'virtual '));
+  Base := ABase;
   if (Base = '') or not ClassHeaderBefore(AMap, ASig.Keyword.Line, Base, Cls) then
     Exit(_('parent class %s not found in the text - override cannot be '
       + 'checked', [Base]));
@@ -1091,15 +1097,16 @@ begin
 end;
 
 // reintroduce: nicht bei generischem Vorfahren der eigenen Klasse
-// (Meldung: 'Method TDerived.X ...'). '' oder der Grund.
-function ReintroduceReason(AMap: TRdxCodeMap; const AMessage: string;
+// (Meldung: 'Method TDerived.X ...'). AOwn ist die eigene Klasse (Args
+// FA_NAME2 oder aus der Meldung, Fix-Datenfeld S3a-2). '' oder der Grund.
+function ReintroduceReason(AMap: TRdxCodeMap; const AOwn: string;
   const ASig: TRdxSignature): string;
 var
   Own : string;
   Cls : TRdxToken;
 begin
   Result := '';
-  Own := ClassPartOf(WordAfter(AMessage, 'Method '));
+  Own := AOwn;
   if (Own = '') or not ClassHeaderBefore(AMap, ASig.Keyword.Line, Own, Cls) then
     Result := _('class header %s not found in the text', [Own])
   else if GenericAncestor(AMap, Cls) then
@@ -1108,8 +1115,10 @@ begin
 end;
 
 // Der Kopf auf ALine fuer ADirective: '' oder der Grund; ASig ist der Kopf.
+// AMethodName ist der unqualifizierte Methodenname (Args FA_NAME oder aus
+// der Meldung, Fix-Datenfeld S3a-2).
 function HeadReason(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage, ADirective: string; out ASig: TRdxSignature): string;
+  const AMethodName, ADirective: string; out ASig: TRdxSignature): string;
 var
   R : string;
 begin
@@ -1119,7 +1128,7 @@ begin
       + 'inherited"'));
   if not TRdxDeclFixes.ReadSignature(AMap, ALine, ASig, R) then
     Exit(R);
-  if not SameText(ASig.Name, MethodNameOf(AMessage))
+  if not SameText(ASig.Name, AMethodName)
      or (ASig.Keyword.Low = 'property') then
     Exit(DeclMovedReason);
   Result := DirectiveReason(DirectivesAfter(AMap, ASig.HeaderEnd), ADirective);
@@ -1128,20 +1137,32 @@ begin
 end;
 
 class function TRdxDeclFixes.MethodDirective(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
+  out AReason: string): Boolean;
 var
-  Sig       : TRdxSignature;
-  E         : TRdxToken;
-  Directive : string;
+  Sig        : TRdxSignature;
+  E          : TRdxToken;
+  Directive  : string;
+  MethodName : string;
+  Secondary  : string;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Directive := DirectiveFor(AMessage);
-  AReason := HeadReason(AMap, ALine, AMessage, Directive, Sig);
+  Directive := DirectiveFor(AMessage.Text);
+  if not AMessage.Args.TryGet(FA_NAME, MethodName) then
+    MethodName := MethodNameOf(AMessage.Text);
+  if not AMessage.Args.TryGet(FA_NAME2, Secondary) then
+  begin
+    if Directive = DIRECTIVE_OVERRIDE then
+      Secondary := ClassPartOf(WordAfter(AMessage.Text, 'virtual '))
+    else
+      Secondary := ClassPartOf(WordAfter(AMessage.Text, 'Method '));
+  end;
+  AReason := HeadReason(AMap, ALine, MethodName, Directive, Sig);
   if (AReason = '') and (Directive = DIRECTIVE_OVERRIDE) then
-    AReason := OverrideReason(AMap, AMessage, Sig)
+    AReason := OverrideReason(AMap, Secondary, Sig)
   else if AReason = '' then
-    AReason := ReintroduceReason(AMap, AMessage, Sig);
+    AReason := ReintroduceReason(AMap, Secondary, Sig);
   if AReason <> '' then Exit;
   E := DirectiveAnchor(AMap, Sig.HeaderEnd, Directive);
   AEdit.Span := TRefactorSpan.Make(SPAN_149, E.Line, E.Col, E.Line, E.EndCol);

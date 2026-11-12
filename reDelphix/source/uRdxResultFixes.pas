@@ -136,8 +136,9 @@ type
     out AReason: string): Boolean;
 
   // Wie TRdxResultPlanner, aber fuer die auf FixArgs umgestellten Planer
-  // (Fix-Datenfeld S3a-1: ResultDefault) - ResultFormIn/TRdxFixFrame.RunIn
-  // in uRdxFixTable. SCA096/097/196 bleiben auf TRdxResultPlanner.
+  // (Fix-Datenfeld S3a-1: ResultDefault; S3a-2: ManagedResultInit) -
+  // ResultFormIn/TRdxFixFrame.RunIn in uRdxFixTable. SCA096/097 bleiben
+  // auf TRdxResultPlanner.
   TRdxResultPlannerIn = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
     out AReason: string): Boolean;
@@ -213,9 +214,11 @@ type
 
     // SCA196: die Funktion um die Lese-Zeile ALine (Meldung 'Function X
     // reads Result before assigning it (...) - for return type T, ...') -
-    // 'Result := '''';', 'Result := nil;' bzw. 'VarClear(Result);'.
+    // 'Result := '''';', 'Result := nil;' bzw. 'VarClear(Result);'. Seit
+    // Fix-Datenfeld S3a-2: AMessage.Args.Get(FA_NAME/FA_TYPE) gewinnt vor
+    // dem Meldungstext.
     class function ManagedResultInit(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out APlan: TRdxResultPlan;
+      const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
       out AReason: string): Boolean; static;
   end;
 
@@ -287,7 +290,7 @@ implementation
 
 uses
   System.SysUtils,
-  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-1)
+  uFixArgs,          // FA_NAME (S3a-1), FA_TYPE (S3a-2)
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxRtlTypes,      // IsRtlClassOrInterface (SCA196: Interface aus der RTL)
   uRdxCompilerTraces,  // OldCompilerTrace (SCA121: Spuren alter Compiler)
@@ -1744,7 +1747,7 @@ begin
 end;
 
 class function TRdxResultFixes.ManagedResultInit(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out APlan: TRdxResultPlan;
+  ALine: Integer; const AMessage: TRdxFindingText; out APlan: TRdxResultPlan;
   out AReason: string): Boolean;
 var
   Scan    : TRdxScan;
@@ -1759,8 +1762,10 @@ begin
   Edits := nil;
   AReason := '';
   Scan := NewScan(AMap);
-  Name := TextBetween(AMessage, KEY_FUNC, KEY_READS);
-  MsgType := TextBetween(AMessage, KEY_TYPE, KEY_TYPE_END);
+  if not AMessage.Args.TryGet(FA_NAME, Name) then
+    Name := TextBetween(AMessage.Text, KEY_FUNC, KEY_READS);
+  if not AMessage.Args.TryGet(FA_TYPE, MsgType) then
+    MsgType := TextBetween(AMessage.Text, KEY_TYPE, KEY_TYPE_END);
   if (Name = '') or (MsgType = '') then
     AReason := _('the message has no function or return type')
   // Der Name im Menue schon aus der Meldung (der Beweis folgt).

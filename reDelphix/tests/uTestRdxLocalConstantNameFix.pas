@@ -20,6 +20,7 @@ type
   public
     // ---- Umformung ----
     [Test] procedure Simple_RenamesDeclarationAndUses;
+    [Test] procedure FixArgsWinsOverText;
     [Test] procedure UpperSnake_Conversions;
     [Test] procedure CaseOnly_OtherRoutineUntouched;
     [Test] procedure NestedRoutineUse_Renamed;
@@ -70,6 +71,7 @@ uses
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxLocalConstantNameFix,
   uRdxText,              // _() und die gemeinsamen Gruende
+  uFixArgs,              // FA_NAME, FA_NAME2 (Fix-Datenfeld S3a-2)
   uTestRdxTextKit;       // Join, Apply, NewMap
 
 const
@@ -167,6 +169,33 @@ begin
   Assert.AreEqual<Integer>(DECL_LINE, P.Edits[0].Span.StartLine);
   Assert.AreEqual<Integer>(3, P.Edits[0].Span.StartCol);
   Assert.AreEqual('MAX_RETRIES', P.Name, 'Name fuer den Menuetext');
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME/FA_NAME2) gewinnt vor der
+// Meldung, wenn beide einen anderen Namen/Routine nennen.
+procedure TTestRdxLocalConstantNameFix.FixArgsWinsOverText;
+var
+  Src, Fixed : string;
+  R          : string;
+  P          : TRdxLocalConstantNamePlan;
+  FMsg       : TRdxFindingText;
+  Map        : TRdxCodeMap;
+begin
+  Src := UnitWith(['procedure Foo;', 'const', '  MaxRetries = 3;', 'var',
+    '  I: Integer;', 'begin', '  for I := 1 to MaxRetries do',
+    '    Work(I, MaxRetries);', 'end;']);
+  FMsg.Text := Msg('andererName', 'AndereRoutine');
+  FMsg.Args.Put(FA_NAME, 'MaxRetries');
+  FMsg.Args.Put(FA_NAME2, 'Foo');
+  Map := NewMap(Src);
+  try
+    Assert.IsTrue(TRdxLocalConstantNameFix.RenameConstant(Map, DECL_LINE, FMsg,
+      P, R), R);
+  finally
+    Map.Free;
+  end;
+  Fixed := Apply(Src, P.Edits);
+  Assert.AreEqual(Snake(Src), Fixed, R);
 end;
 
 procedure TTestRdxLocalConstantNameFix.UpperSnake_Conversions;

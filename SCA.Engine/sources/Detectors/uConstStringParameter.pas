@@ -55,7 +55,8 @@ implementation
 uses
   System.StrUtils,
   uDetectorUtils,  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
-  uAstSpans;       // FindBodyBlock (Voll-Review 2026-09-12)
+  uAstSpans,       // FindBodyBlock (Voll-Review 2026-09-12)
+  uFixArgs;        // FA_NAME, FA_TYPE (Fix-Datenfeld S3a-2)
 
 const
   STRING_TYPES : array[0..5] of string = (
@@ -198,6 +199,8 @@ begin
                         'refcount bump on each call and clarifies that the ' +
                         'method does not mutate the argument.';
         F.SetKind(fkConstStringParameter);
+        F.WithFixArg(FA_NAME, P.Name);
+        F.WithFixArg(FA_TYPE, P.TypeRef);
         Results.Add(F);
       end;
     end;

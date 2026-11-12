@@ -36,6 +36,7 @@ type
     [Test] procedure Sca143_Skeleton;
     [Test] procedure Sca143_Refusals;
     [Test] procedure Sca149_Directive;
+    [Test] procedure Sca149_FixArgsWinsOverText;
     [Test] procedure Sca149_Refusals;
   end;
 
@@ -44,6 +45,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxDeclFixes,
+  uFixArgs,          // FA_NAME, FA_NAME2 (Fix-Datenfeld S3a-2)
   uTestRdxTextKit;   // Join, JoinWith, Apply
 
 type
@@ -520,6 +522,34 @@ begin
     Fix(dkDirective, Hierarchy(['    procedure DoWork; overload; stdcall; virtual;'],
       DERIVED, ['    procedure DoWork; overload; stdcall;']), 10,
       ShadowMsg('DoWork'), R), R);
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME/FA_NAME2) gewinnt vor der
+// Meldung (Methodenname + Elternklasse im override-Zweig).
+procedure TTestRdxDeclFixes.Sca149_FixArgsWinsOverText;
+var
+  Src, Fixed : string;
+  R          : string;
+  E          : TRdxEdit;
+  FMsg       : TRdxFindingText;
+  Map        : TRdxCodeMap;
+  Ok         : Boolean;
+begin
+  Src := Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+    ['    procedure DoWork;']);
+  FMsg.Text := ShadowMsg('AndereMethode');
+  FMsg.Args.Put(FA_NAME, 'DoWork');
+  FMsg.Args.Put(FA_NAME2, 'TBase');
+  Map := NewMap(Src);
+  try
+    Ok := TRdxDeclFixes.MethodDirective(Map, 10, FMsg, E, R);
+  finally
+    Map.Free;
+  end;
+  Assert.IsTrue(Ok, R);
+  Fixed := Apply(Src, [E]);
+  Assert.AreEqual(Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
+    ['    procedure DoWork; override;']), Fixed, R);
 end;
 
 procedure TTestRdxDeclFixes.Sca149_Refusals;

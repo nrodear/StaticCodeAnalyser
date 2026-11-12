@@ -69,7 +69,8 @@ implementation
 
 uses
   System.StrUtils,
-  uDetectorUtils;   // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uDetectorUtils,   // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uFixArgs;
 
 function IsAlreadyClassMethod(MethodNode: TAstNode): Boolean;
 begin
@@ -517,7 +518,7 @@ begin
       Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
         Format('Method %s never accesses Self or instance fields - could ' +
                'be declared as `%s`', [M.Name, ClassKind]),
-        fkCanBeClassMethod));
+        fkCanBeClassMethod).WithFixArg(FA_NAME, M.Name));
     end;
   finally
     PolyNames.Free;    // nil-safe wenn kein Kandidat den Lazy-Build erreicht hat

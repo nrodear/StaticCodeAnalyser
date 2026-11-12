@@ -221,7 +221,14 @@ UNITS+=("$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas")
 # Seit 2026-11-12 (Konzept_reDelphixNaechsteSchritte, Runde 2) auch
 # uRdxDfmDeadEventFix (SCA028): dieselbe Lage - eine einzelne Zeile auf der
 # .dfm loeschen, uTestRdxDfmDeadEventFix hat eine FPC-sichtbare Text-Fixture.
-for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxConcatWrap uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix uRdxDfmTabOrderFix uRdxDfmComponentFix uRdxDfmDeadEventFix; do
+# Vorgefunden am 2026-11-12 (Fix-Datenfeld S3a-2): uRdxClassMethodFix
+# (SCA148), uRdxConstStringParameterFix (SCA170, dazu die von ihr
+# gebundene uRdxUnusedParameterFix fuer TRdxParamPlan/ReadSite) und
+# uRdxLocalConstantNameFix (SCA119) waren trotz FPC-tauglicher
+# Text-Fixture (Kopf der jeweiligen Testunit sagt es ausdruecklich) nie in
+# dieser Liste - kein Zusammenhang mit dieser Charge, nur jetzt bemerkt,
+# weil ihre Testunits erstmals einzeln aufgerufen wurden.
+for u in uRdxText uRdxRecipes uRdxPaths uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxBlocks uRdxSuppress uRdxSimpleFixes uRdxStructFixes uRdxLineFixes uRdxRaiseFixes uRdxDeclFixes uRdxFlowFixes uRdxRoutineFixes uRdxCleanupFixes uRdxTryFixes uRdxResultFixes uRdxSqlTemplate uRdxIntroPlan uRdxIntroEdits uRdxRtlTypes uRdxCompilerTraces uRdxMagicFixes uRdxTypeProof uRdxTrySpan uRdxHandOver uRdxInheritedFixes uRdxSqlFacts uRdxCategoryArgFix uRdxEmptyBlockFix uRdxEmptyExceptFix uRdxGotoExitFix uRdxNativeIntFix uRdxParensFix uRdxTrailingCommaFix uRdxLoopBoundFix uRdxInheritedEmptyFix uRdxFuncNameFix uRdxFormatterMarkerFix uRdxPlacesRunner uRdxDeepNestingFix uRdxCondExpr uRdxIfFixes uRdxCondFixes uRdxConcatWrap uRdxContextRunner uRdxHttpsFix uRdxFloatEqualityFix uRdxFormatSettingsFix uRdxRawExceptionFix uRdxAvoidOutFix uRdxMethodNameFix uRdxDfmTabOrderFix uRdxDfmComponentFix uRdxDfmDeadEventFix uRdxClassMethodFix uRdxConstStringParameterFix uRdxLocalConstantNameFix uRdxUnusedParameterFix; do
   if [ -f "$RDX/source/$u.pas" ]; then
     UNITS+=("$RDX/source/$u.pas")
   else

@@ -393,6 +393,8 @@ begin
                      'a glance.',
                      [K.Name, M.Name]);
             F.SetKind(fkLocalConstantName);
+            F.WithFixArg(FA_NAME, K.Name);
+            F.WithFixArg(FA_NAME2, M.Name);
             Results.Add(F);
           end;
       finally

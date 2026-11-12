@@ -47,6 +47,7 @@ type
     [Test] procedure Refuse121_AsmAndDirective;
     [Test] procedure Refuse121_TypeAndStale;
     [Test] procedure Sca196_String;
+    [Test] procedure Sca196_FixArgsWinsOverText;
     [Test] procedure Sca196_NilKinds;
     [Test] procedure Sca196_Variant;
     [Test] procedure Sca196_Enclosing;
@@ -63,6 +64,7 @@ uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxResultFixes,
   uRdxInheritedFixes,  // SCA096/SCA097 (seit Review Woche G08-04)
+  uFixArgs,            // FA_NAME, FA_TYPE (Fix-Datenfeld S3a-2)
   uTestRdxTextKit;   // Join, Apply, LineStartingWith
 
 const
@@ -150,7 +152,7 @@ function Fix196(const ASource, ARead, AMessage: string; out AReason: string;
   out APlan: TRdxResultPlan): string;
 begin
   Result := '';
-  APlan := PlanOf(TRdxResultFixes.ManagedResultInit, ASource,
+  APlan := PlanOfIn(TRdxResultFixes.ManagedResultInit, ASource,
     LineStartingWith(ASource, ARead), AMessage, AReason);
   if AReason = '' then
     Result := Apply(ASource, APlan.Edits);
@@ -427,9 +429,33 @@ begin
   Assert.IsFalse(P.NeedsVariants);
   // ShortString und System.-Praefix gehoeren zur string-Familie.
   S := ReadsResult(NO_TYPES, 'System.ShortString');
-  Assert.AreEqual('Result := ''''', PlanOf(TRdxResultFixes.ManagedResultInit,
+  Assert.AreEqual('Result := ''''', PlanOfIn(TRdxResultFixes.ManagedResultInit,
     S, LineStartingWith(S, 'Use(Result)'),
     Format(MSG_196, ['F', 'System.ShortString']), R).Name, R);
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME/FA_TYPE) gewinnt vor der
+// Meldung, wenn beide einen anderen Namen/Typ nennen.
+procedure TTestRdxResultFixes.Sca196_FixArgsWinsOverText;
+var
+  R, S, Fixed : string;
+  P           : TRdxResultPlan;
+  FMsg        : TRdxFindingText;
+begin
+  S := InUnit(['function Join(const A: array of string): string;', 'var',
+    '  I: Integer;', 'begin', '  for I := 0 to High(A) do',
+    '    Result := Result + A[I];', 'end;']);
+  FMsg.Text := Msg196('AndereFunktion', 'Integer');
+  FMsg.Args.Put(FA_NAME, 'Join');
+  FMsg.Args.Put(FA_TYPE, 'string');
+  P := PlanOfIn(TRdxResultFixes.ManagedResultInit, S,
+    LineStartingWith(S, 'Result := Result'), FMsg, R);
+  Assert.AreEqual('', R, R);
+  Fixed := Apply(S, P.Edits);
+  Assert.AreEqual(InUnit(['function Join(const A: array of string): string;',
+    'var', '  I: Integer;', 'begin', '  Result := '''';',
+    '  for I := 0 to High(A) do', '    Result := Result + A[I];', 'end;']),
+    Fixed, R);
 end;
 
 procedure TTestRdxResultFixes.Sca196_NilKinds;
@@ -464,7 +490,7 @@ begin
   Assert.AreEqual('VarClear(Result)', P.Name);
   Assert.IsTrue(P.NeedsVariants, 'Variants in uses');
   S := ReadsResult(NO_TYPES, 'OleVariant');
-  P := PlanOf(TRdxResultFixes.ManagedResultInit, S,
+  P := PlanOfIn(TRdxResultFixes.ManagedResultInit, S,
     LineStartingWith(S, 'Use(Result)'), Format(MSG_196, ['F', 'OleVariant']),
     R);
   Assert.IsTrue(P.NeedsVariants, R);
@@ -522,7 +548,7 @@ begin
   AssertRefused196(InUnit(['function F: string;', 'begin', '  Use(X);',
     'end;']), 'Use(X)', 'F', 'string', 'kein Result');
   S := ReadsResult(NO_TYPES, 'string');
-  Assert.AreEqual('', PlanOf(TRdxResultFixes.ManagedResultInit, S,
+  Assert.AreEqual('', PlanOfIn(TRdxResultFixes.ManagedResultInit, S,
     LineStartingWith(S, 'Use(Result)'), 'Function F reads Result before',
     R).Name);
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);

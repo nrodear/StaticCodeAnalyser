@@ -547,17 +547,17 @@ var
 begin
   S := UnitWith(NO_HEAD, STATIC_BYTES, ['function F: TBytes;', 'begin',
     '  Result[0] := 1;', 'end;']);
-  AssertRefused(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
+  AssertRefusedIn(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
     Format(MSG_196, ['F', 'TBytes']), 'array ...');
   S := UnitWith(NO_HEAD, DYN_BYTES, ['function F: TBytes;', 'begin',
     '  Result[0] := 1;', 'end;']);
-  F := RunFix(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
+  F := RunFixIn(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
     Format(MSG_196, ['F', 'TBytes']));
   Assert.AreNotEqual('', F.Text, F.Reason);
   Assert.AreEqual('Result := nil', F.Plan.Name);
   S := UnitWith(NO_HEAD, OWN_STRING, ['function F: RawUtf8;', 'begin',
     '  Result := Result + ''x'';', 'end;']);
-  F := RunFix(TRdxResultFixes.ManagedResultInit, S, 'Result := Result',
+  F := RunFixIn(TRdxResultFixes.ManagedResultInit, S, 'Result := Result',
     Format(MSG_196, ['F', 'RawUtf8']));
   Assert.AreNotEqual('', F.Text, F.Reason);
   Assert.AreEqual('Result := ''''', F.Plan.Name);

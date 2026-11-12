@@ -132,7 +132,8 @@ uses
   uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.RegularExpressions, System.IOUtils,
   uDetectorUtils, uFileTextCache,
-  uRegExMatches;   // CachedEx - Muster je Thread einmal kompiliert
+  uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
+  uFixArgs;        // FA_NAME (Fix-Datenfeld S3a-2)
 
 // Liest die zur PAS-Datei gehoerende DFM (gleicher Pfad mit .dfm-Extension)
 // und extrahiert alle Event-Handler-Werte. Pattern:
@@ -950,6 +951,7 @@ begin
                 'Private method %s.%s appears unused (no call within the unit)',
                 [C.Name, MethName]);
               F.SetKind(fkUnusedPrivateMethod);
+              F.WithFixArg(FA_NAME, C.Name + '.' + MethName);
               Results.Add(F);
             end;
           end;

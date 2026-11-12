@@ -50,6 +50,7 @@ type
     [Test] procedure Sca147_ForeignInterface_NoHelp;
     [Test] procedure Sca147_Moved_NoHelp;
     [Test] procedure Sca147_FormNamesMethod;
+    [Test] procedure Sca147_FixArgsWinsOverText;
     [Test] procedure Sca147_FirstEntryInterface_NoHelp;
     [Test] procedure Sca147_InterfaceAncestors;
     [Test] procedure Sca147_CommentAboveImpl;
@@ -64,6 +65,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxRoutineFixes,
+  uFixArgs,          // FA_NAME (Fix-Datenfeld S3a-2)
   uTestRdxTextKit;   // Join, Apply, WriteText, NewTempDir, RemoveTree
 
 // ---- Helfer ----
@@ -348,6 +350,31 @@ begin
   Assert.AreEqual('', Fix(Foo('', ''), 7, 'Private method Dead is unused',
     R));
   Assert.IsTrue(Pos('fehlt in der Meldung', R) > 0, R);
+end;
+
+// Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME) ('TFoo.Dead') gewinnt vor der
+// Meldung - dasselbe Ergebnis wie der normale textbasierte Weg.
+procedure TTestRdxMethodFixes.Sca147_FixArgsWinsOverText;
+var
+  Src, Expected, Fixed : string;
+  R                     : string;
+  P                     : TRdxRoutinePlan;
+  FMsg                  : TRdxFindingText;
+  Map                   : TRdxCodeMap;
+begin
+  Src := Foo('', '');
+  Expected := FixOk(Src, 7, 'TFoo', 'Dead');
+  FMsg.Text := 'Private method TAndere.Andere appears unused (no call '
+    + 'within the unit)';
+  FMsg.Args.Put(FA_NAME, 'TFoo.Dead');
+  Map := NewMap(Src);
+  try
+    Assert.IsTrue(TRdxRoutineFixes.UnusedPrivateMethod(Map, 7, FMsg, P, R), R);
+  finally
+    Map.Free;
+  end;
+  Fixed := Apply(Src, P.Edits);
+  Assert.AreEqual(Expected, Fixed, R);
 end;
 
 procedure TTestRdxMethodFixes.Sca147_FormNamesMethod;

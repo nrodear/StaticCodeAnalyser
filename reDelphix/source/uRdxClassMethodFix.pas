@@ -106,12 +106,13 @@ type
   public
     // ALine ist die Zeile des Kopfworts der Implementierung, AMessage die
     // Meldung ('Method TKlasse.Methode never accesses Self ...'). Liefert
-    // die beiden Ersetzungen oder den Grund.
+    // die beiden Ersetzungen oder den Grund. Seit Fix-Datenfeld S3a-2:
+    // AMessage.Args.Get(FA_NAME) gewinnt vor dem Meldungstext.
     class function MakeStatic(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdits: TArray<TRdxEdit>;
+      const AMessage: TRdxFindingText; out AEdits: TArray<TRdxEdit>;
       out AReason: string): Boolean; static;
     // Der Methodenname aus der Meldung (Menuetext), '' ohne.
-    class function MethodNameOf(const AMessage: string): string; static;
+    class function MethodNameOf(const AMessage: TRdxFindingText): string; static;
   end;
 
 implementation
@@ -120,7 +121,8 @@ uses
   System.SysUtils,
   uRefactorInfo,     // TRefactorSpan.Make
   uRdxBlocks,        // TRdxBlocks (Finder, ReadRoutine), TRdxRoutine
-  uRdxText;          // _(): in die reDelphix-Sprache (E29), nie uLocalization
+  uRdxText,          // _(): in die reDelphix-Sprache (E29), nie uLocalization
+  uFixArgs;          // FA_NAME (Fix-Datenfeld S3a-2)
 
 const
   SPAN_148 = 'sca148';
@@ -191,12 +193,14 @@ begin
       E - Length(KEY_METHOD) - 1));
 end;
 
-// Klasse und Methode aus der Meldung. '' oder der Grund.
-function MessageReason(const AMessage: string; var C: TRdxCmCtx): string;
+// Klasse und Methode aus Args oder der Meldung. '' oder der Grund.
+function MessageReason(const AMessage: TRdxFindingText;
+  var C: TRdxCmCtx): string;
 var
   P : Integer;
 begin
-  C.Full := FullNameOf(AMessage);
+  if not AMessage.Args.TryGet(FA_NAME, C.Full) then
+    C.Full := FullNameOf(AMessage.Text);
   P := Pos('.', C.Full);
   if (P <= 1) or (P = Length(C.Full)) then
     Exit(_(R_CM_MESSAGE));
@@ -498,7 +502,7 @@ end;
 { TRdxClassMethodFix }
 
 class function TRdxClassMethodFix.MakeStatic(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdits: TArray<TRdxEdit>;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdits: TArray<TRdxEdit>;
   out AReason: string): Boolean;
 var
   C : TRdxCmCtx;
@@ -523,9 +527,14 @@ begin
   Result := AReason = '';
 end;
 
-class function TRdxClassMethodFix.MethodNameOf(const AMessage: string): string;
+class function TRdxClassMethodFix.MethodNameOf(
+  const AMessage: TRdxFindingText): string;
+var
+  Full : string;
 begin
-  Result := LastPart(FullNameOf(AMessage));
+  if not AMessage.Args.TryGet(FA_NAME, Full) then
+    Full := FullNameOf(AMessage.Text);
+  Result := LastPart(Full);
 end;
 
 end.
