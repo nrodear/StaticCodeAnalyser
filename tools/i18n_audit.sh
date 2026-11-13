@@ -72,15 +72,38 @@ fi
 #    Ergebnis falsch, sondern die Eingabe. Bewusst NICHT Exit 1: der ist
 #    fuer echte Luecken reserviert, und ein Gate, das aus zwei Gruenden
 #    denselben Code liefert, wird missverstanden.
-# '|| true' ist Pflicht: unter 'set -e' beendet eine fehlschlagende
-# Kommandosubstitution das Skript SOFORT und STUMM. grep -l liefert 1,
-# wenn keine Datei passt - also im Normalfall. Ohne den Auffang stand
-# hier Exit 1 ganz ohne Meldung, und das sieht von aussen aus wie
-# "fehlende Strings". Die Gegenprobe hat es gezeigt, nicht das Lesen.
-juenger="$(find "$repo_root" -type f -name '*.pas' -newer "$pot_file"            -not -path '*/__history/*' -exec grep -l '_(' {} + 2>/dev/null            | head -3 || true)"
-if [ -n "$juenger" ]; then
-  echo "i18n/template.pot ist STALE - diese Quelldateien sind juenger:" >&2
-  echo "$juenger" | sed 's|^|  |' >&2
+#
+#    Seit 2026-11-13 ueber den INHALT statt ueber Dateizeiten. Die erste
+#    Fassung fragte 'find -newer template.pot'. Im frischen Checkout der
+#    CI sind Dateizeiten aber Schreibzeiten des Checkouts - irgendeine
+#    .pas ist dort immer juenger als die .pot. Das Gate meldete auf GitHub
+#    deshalb bei JEDEM Lauf STALE (Exit 2) und kam nie bis zu den
+#    fehlenden Strings: 25 reDelphix-Texte blieben so ohne Uebersetzung,
+#    und rot war die Pruefung wochenlang aus dem falschen Grund.
+#    'i18n_extract.py --check' extrahiert neu und vergleicht den Inhalt
+#    (Strings UND Fundstellen) - dieselbe Pruefung, die der CI-Schritt
+#    danach ohnehin verlangt.
+#
+# python3 vor python: auf den ubuntu-Runnern gibt es nur python3; unter
+# Windows kann 'python3' ein Store-Platzhalter sein, der nichts ausfuehrt -
+# darum zaehlt nur ein Kandidat, der wirklich laeuft.
+py=""
+for kandidat in python3 python; do
+  if command -v "$kandidat" >/dev/null 2>&1 \
+     && "$kandidat" -c "import sys" >/dev/null 2>&1; then
+    py="$kandidat"
+    break
+  fi
+done
+if [ -z "$py" ]; then
+  echo "Kein lauffaehiges Python gefunden - die Frische von" >&2
+  echo "i18n/template.pot laesst sich nicht pruefen" >&2
+  echo "(tools/i18n_extract.py --check)." >&2
+  exit 2
+fi
+if ! "$py" "$repo_root/tools/i18n_extract.py" --check >/dev/null 2>&1; then
+  echo "i18n/template.pot ist STALE - der Quelltext fuehrt andere" >&2
+  echo "_()-Strings oder andere Fundstellen als die Vorlage." >&2
   echo "Erst 'python tools/i18n_extract.py' laufen lassen, sonst sind" >&2
   echo "fehlende UND vorhandene Strings gleichermassen unzuverlaessig." >&2
   exit 2
