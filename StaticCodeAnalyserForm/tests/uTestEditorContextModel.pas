@@ -6,6 +6,16 @@ unit uTestEditorContextModel;
 // das Editor-Kontextmenue Anbieter fragt (Not-Aus EditorContextActions) und
 // sein Modell mit und ohne Code-Aktionen ohne Fund samt der Stelle der
 // Omitted-Hinweiszeile. Stub-Anbieter meldet jeder Test wieder ab.
+//
+// TTestModuleCloseDecision (2026-11-13): darf die Fund-Navigation ein Modul
+// ohne die Rueckfrage der IDE schliessen? DecideModuleClose mit jedem
+// Beleg-Zustand eines Editors (nichts geaendert, gleich der Datei, gleich
+// dem Vergleichsstand, Datei seither geaendert, kein Vergleichsstand,
+// Puffer nicht gelesen, Formular geaendert, unbekannter Editor). Die
+// Sicherheitsregel der Tests: im Zweifel mcdAsk.
+// TTestBufferMatchesDisk: der Vergleich dahinter - SameBytes, und
+// BufferMatchesDisk mit jeder Lesart der Datei (UTF-8 mit/ohne BOM, UTF-16
+// LE/BE, ANSI); eine Abweichung darf nie als gleich durchgehen.
 
 interface
 
@@ -35,6 +45,55 @@ type
     [Test] procedure Popup_NotWanted_EmptyModel;
     [Test] procedure Omitted_NoContext_AtTheEnd;
     [Test] procedure Omitted_WithContext_BeforeContextPart;
+  end;
+
+  [TestFixture]
+  TTestModuleCloseDecision = class
+  public
+    [Test] procedure NoEditors_Plain;
+    [Test] procedure NothingModified_Plain;
+    [Test] procedure UnmodifiedEditorsNeedNoProof_Plain;
+    [Test] procedure ModifiedSource_EqualsBaseline_DiskUnchanged_Force;
+    [Test] procedure ModifiedSource_EqualsDisk_Force;
+    [Test] procedure ModifiedSource_DiffersFromDiskAndBaseline_Ask;
+    [Test] procedure ModifiedSource_NoBaseline_Ask;
+    [Test] procedure ModifiedSource_EqualsBaseline_ButDiskChangedSince_Ask;
+    [Test] procedure ModifiedSource_BaselineFlagsWithoutBaseline_Ask;
+    [Test] procedure ModifiedSource_NothingProven_Ask;
+    [Test] procedure ModifiedSource_BufferNotRead_Ask_EvenWithOtherFlags;
+    [Test] procedure ModifiedForm_Ask_EvenWhenSourceIsProven;
+    [Test] procedure UnmodifiedForm_DoesNotBlock_Force;
+    [Test] procedure ModifiedUnknownEditor_Ask;
+    [Test] procedure ModifiedFormWithSourceFlags_StillAsk;
+    [Test] procedure TwoSources_BothProven_Force;
+    [Test] procedure TwoSources_SecondUnproven_Ask;
+    [Test] procedure TwoSources_FirstUnproven_Ask;
+  end;
+
+  [TestFixture]
+  TTestBufferMatchesDisk = class
+  public
+    // SameBytes
+    [Test] procedure SameBytes_BothEmpty_True;
+    [Test] procedure SameBytes_Equal_True;
+    [Test] procedure SameBytes_DifferentLength_False;
+    [Test] procedure SameBytes_LastByteDiffers_False;
+    // BufferMatchesDisk
+    [Test] procedure Match_Ascii_Identical;
+    [Test] procedure Match_BothEmpty;
+    [Test] procedure Match_EmptyDisk_NonEmptyBuffer_False;
+    [Test] procedure Match_EmptyBuffer_NonEmptyDisk_False;
+    [Test] procedure Match_Utf8NoBom_Umlauts;
+    [Test] procedure Match_Utf8Bom_IsStripped;
+    [Test] procedure Match_Utf8BomOnly_EmptyBuffer;
+    [Test] procedure Match_BufferCarryingBom_False;
+    [Test] procedure Match_Utf16LE;
+    [Test] procedure Match_Utf16BE;
+    [Test] procedure Match_Utf16_OddLength_False;
+    [Test] procedure Match_Ansi_Umlauts;
+    [Test] procedure Match_OneCharTyped_False;
+    [Test] procedure Match_UsesEntryAddedByIde_False;
+    [Test] procedure Match_LineEndingsAreNotNormalised_False;
   end;
 
 implementation
@@ -437,7 +496,335 @@ begin
   end;
 end;
 
+{ TTestModuleCloseDecision }
+
+const
+  // 'Groesse' mit o-Umlaut und scharfem s - als Zeichencodes, damit diese
+  // Datei ASCII bleibt.
+  UMLAUT_TEXT = 'Gr'#$00F6#$00DF'e := 1;'#13#10;
+  UNIT_LINE   = 'unit A;'#13#10;
+
+// Ein Editor, den die IDE nicht als geaendert fuehrt - nichts belegt.
+function Unmodified(AKind: TModuleEditorKind): TModuleEditorState;
+begin
+  Result := Default(TModuleEditorState);
+  Result.Kind := AKind;
+end;
+
+// Ein als geaendert gefuehrter Editor - nichts belegt.
+function ModifiedEditor(AKind: TModuleEditorKind): TModuleEditorState;
+begin
+  Result := Unmodified(AKind);
+  Result.Modified := True;
+end;
+
+// Geaenderter Quelltext-Editor, Puffer gelesen - noch ohne jeden Beleg.
+function ModifiedSource: TModuleEditorState;
+begin
+  Result := ModifiedEditor(mekSource);
+  Result.BufferRead := True;
+end;
+
+// ... dessen Puffer dem Vergleichsstand gleicht, die Datei ist dieselbe.
+function ProvenByBaseline: TModuleEditorState;
+begin
+  Result := ModifiedSource;
+  Result.HasBaseline      := True;
+  Result.EqualsBaseline   := True;
+  Result.DiskAsAtBaseline := True;
+end;
+
+// ... dessen Puffer der Datei gleicht.
+function ProvenByDisk: TModuleEditorState;
+begin
+  Result := ModifiedSource;
+  Result.EqualsDisk := True;
+end;
+
+procedure ExpectDecision(AExpected: TModuleCloseDecision;
+  const AEditors: array of TModuleEditorState; const AWhy: string);
+begin
+  Assert.IsTrue(DecideModuleClose(AEditors) = AExpected, AWhy);
+end;
+
+function Utf8Of(const AText: string): TBytes;
+begin
+  Result := TEncoding.UTF8.GetBytes(AText);
+end;
+
+procedure TTestModuleCloseDecision.NoEditors_Plain;
+var
+  None : TArray<TModuleEditorState>;
+begin
+  None := nil;
+  ExpectDecision(mcdPlain, None, 'ohne Editoren entscheidet die IDE wie immer');
+end;
+
+procedure TTestModuleCloseDecision.NothingModified_Plain;
+begin
+  ExpectDecision(mcdPlain, [Unmodified(mekSource), Unmodified(mekForm)],
+    'nichts geaendert: die IDE fragt ohnehin nicht');
+end;
+
+procedure TTestModuleCloseDecision.UnmodifiedEditorsNeedNoProof_Plain;
+begin
+  // Vergleichsfelder eines NICHT geaenderten Editors zaehlen nicht: kein
+  // gelesener Puffer, kein Vergleichsstand - und trotzdem keine Rueckfrage,
+  // auch nicht bei einem unbekannten Editor.
+  ExpectDecision(mcdPlain,
+    [Unmodified(mekSource), Unmodified(mekOther), Unmodified(mekForm)],
+    'unveraendert bleibt unveraendert');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_EqualsBaseline_DiskUnchanged_Force;
+begin
+  ExpectDecision(mcdForce, [ProvenByBaseline],
+    'nur die Aenderung der IDE im Puffer: ohne Rueckfrage');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_EqualsDisk_Force;
+begin
+  ExpectDecision(mcdForce, [ProvenByDisk],
+    'Puffer gleich Datei: nichts zu verlieren');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_DiffersFromDiskAndBaseline_Ask;
+var
+  S : TModuleEditorState;
+begin
+  S := ModifiedSource;
+  S.HasBaseline      := True;
+  S.DiskAsAtBaseline := True;   // Datei dieselbe, aber der Puffer weicht ab
+  ExpectDecision(mcdAsk, [S], 'getippt: die IDE fragt');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_NoBaseline_Ask;
+begin
+  // Vom Nutzer geoeffnet, von der IDE oder von ihm geaendert - nicht zu
+  // unterscheiden.
+  ExpectDecision(mcdAsk, [ModifiedSource], 'ohne Vergleichsstand kein Beweis');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_EqualsBaseline_ButDiskChangedSince_Ask;
+var
+  S : TModuleEditorState;
+begin
+  // Gespeichert und danach von Hand auf den alten Stand zurueckgenommen:
+  // der Puffer gleicht dem Vergleichsstand, ist aber ungespeicherte Arbeit.
+  S := ProvenByBaseline;
+  S.DiskAsAtBaseline := False;
+  ExpectDecision(mcdAsk, [S], 'Datei seither geaendert: der Vergleichsstand beweist nichts');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_BaselineFlagsWithoutBaseline_Ask;
+var
+  S : TModuleEditorState;
+begin
+  S := ProvenByBaseline;
+  S.HasBaseline := False;
+  ExpectDecision(mcdAsk, [S], 'Gleichheit ohne Vergleichsstand zaehlt nicht');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_NothingProven_Ask;
+var
+  S : TModuleEditorState;
+begin
+  S := ModifiedSource;
+  S.HasBaseline := True;        // vorhanden, aber weder Puffer noch Datei gleich
+  ExpectDecision(mcdAsk, [S], 'kein Beleg: die IDE fragt');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedSource_BufferNotRead_Ask_EvenWithOtherFlags;
+var
+  S : TModuleEditorState;
+begin
+  S := ProvenByBaseline;
+  S.EqualsDisk := True;
+  S.BufferRead := False;
+  ExpectDecision(mcdAsk, [S], 'ohne gelesenen Puffer gibt es keinen Beweis');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedForm_Ask_EvenWhenSourceIsProven;
+begin
+  ExpectDecision(mcdAsk, [ProvenByBaseline, ModifiedEditor(mekForm)],
+    'ein geaendertes Formular laesst sich nicht belegen');
+end;
+
+procedure TTestModuleCloseDecision.UnmodifiedForm_DoesNotBlock_Force;
+begin
+  // Der Fall aus der Messung: src:uOrderForm.pas* form:uOrderForm.dfm
+  ExpectDecision(mcdForce, [ProvenByBaseline, Unmodified(mekForm)],
+    'Unit nur von der IDE geaendert, Formular unveraendert');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedUnknownEditor_Ask;
+begin
+  ExpectDecision(mcdAsk, [ProvenByDisk, ModifiedEditor(mekOther)],
+    'unbekannter geaenderter Editor: fragen');
+end;
+
+procedure TTestModuleCloseDecision.ModifiedFormWithSourceFlags_StillAsk;
+var
+  S : TModuleEditorState;
+begin
+  // Belege gelten nur fuer Quelltext - ein Formular mit denselben Feldern
+  // bleibt unbelegt.
+  S := ProvenByBaseline;
+  S.EqualsDisk := True;
+  S.Kind       := mekForm;
+  ExpectDecision(mcdAsk, [S], 'Formular bleibt unbelegt');
+  S.Kind := mekOther;
+  ExpectDecision(mcdAsk, [S], 'unbekannter Editor bleibt unbelegt');
+end;
+
+procedure TTestModuleCloseDecision.TwoSources_BothProven_Force;
+begin
+  // Unit und DFM in der Textansicht, beide belegt.
+  ExpectDecision(mcdForce, [ProvenByBaseline, ProvenByDisk], 'beide belegt');
+end;
+
+procedure TTestModuleCloseDecision.TwoSources_SecondUnproven_Ask;
+begin
+  ExpectDecision(mcdAsk, [ProvenByBaseline, ModifiedSource], 'der zweite ist nicht belegt');
+end;
+
+procedure TTestModuleCloseDecision.TwoSources_FirstUnproven_Ask;
+begin
+  ExpectDecision(mcdAsk, [ModifiedSource, ProvenByDisk], 'der erste ist nicht belegt');
+end;
+
+{ TTestBufferMatchesDisk }
+
+procedure TTestBufferMatchesDisk.SameBytes_BothEmpty_True;
+begin
+  Assert.IsTrue(SameBytes(nil, nil));
+end;
+
+procedure TTestBufferMatchesDisk.SameBytes_Equal_True;
+begin
+  Assert.IsTrue(SameBytes(TBytes.Create(1, 2, 3), TBytes.Create(1, 2, 3)));
+end;
+
+procedure TTestBufferMatchesDisk.SameBytes_DifferentLength_False;
+begin
+  Assert.IsFalse(SameBytes(TBytes.Create(1, 2, 3), TBytes.Create(1, 2)));
+  Assert.IsFalse(SameBytes(nil, TBytes.Create(1)));
+  Assert.IsFalse(SameBytes(TBytes.Create(1), nil));
+end;
+
+procedure TTestBufferMatchesDisk.SameBytes_LastByteDiffers_False;
+begin
+  Assert.IsFalse(SameBytes(TBytes.Create(1, 2, 3), TBytes.Create(1, 2, 4)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Ascii_Identical;
+begin
+  Assert.IsTrue(BufferMatchesDisk(Utf8Of(UNIT_LINE), Utf8Of(UNIT_LINE)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_BothEmpty;
+begin
+  Assert.IsTrue(BufferMatchesDisk(nil, nil));
+end;
+
+procedure TTestBufferMatchesDisk.Match_EmptyDisk_NonEmptyBuffer_False;
+begin
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('x'), nil));
+end;
+
+procedure TTestBufferMatchesDisk.Match_EmptyBuffer_NonEmptyDisk_False;
+begin
+  Assert.IsFalse(BufferMatchesDisk(nil, Utf8Of('x')));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf8NoBom_Umlauts;
+begin
+  Assert.IsTrue(BufferMatchesDisk(Utf8Of(UMLAUT_TEXT), Utf8Of(UMLAUT_TEXT)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf8Bom_IsStripped;
+begin
+  // Der Puffer traegt nie ein BOM, die Datei schon.
+  Assert.IsTrue(BufferMatchesDisk(Utf8Of(UMLAUT_TEXT),
+    TBytes.Create($EF, $BB, $BF) + Utf8Of(UMLAUT_TEXT)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf8BomOnly_EmptyBuffer;
+begin
+  Assert.IsTrue(BufferMatchesDisk(nil, TBytes.Create($EF, $BB, $BF)));
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('x'), TBytes.Create($EF, $BB, $BF)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_BufferCarryingBom_False;
+var
+  WithBom : TBytes;
+begin
+  // Streng: ein BOM im Puffer ist ein Zeichen mehr als in der Datei.
+  WithBom := TBytes.Create($EF, $BB, $BF) + Utf8Of('x');
+  Assert.IsFalse(BufferMatchesDisk(WithBom, WithBom));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf16LE;
+var
+  Disk : TBytes;
+begin
+  Disk := TBytes.Create($FF, $FE) + TEncoding.Unicode.GetBytes(UMLAUT_TEXT);
+  Assert.IsTrue(BufferMatchesDisk(Utf8Of(UMLAUT_TEXT), Disk));
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of(UMLAUT_TEXT + 'x'), Disk));
+  Assert.IsTrue(BufferMatchesDisk(nil, TBytes.Create($FF, $FE)), 'nur das BOM');
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf16BE;
+var
+  Disk : TBytes;
+begin
+  Disk := TBytes.Create($FE, $FF)
+    + TEncoding.BigEndianUnicode.GetBytes(UMLAUT_TEXT);
+  Assert.IsTrue(BufferMatchesDisk(Utf8Of(UMLAUT_TEXT), Disk));
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('x' + UMLAUT_TEXT), Disk));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Utf16_OddLength_False;
+begin
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('A'),
+    TBytes.Create($FF, $FE, $41, $00, $42)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_Ansi_Umlauts;
+var
+  Disk   : TBytes;
+  Buffer : TBytes;
+begin
+  // Eine ANSI-Datei ohne BOM: die IDE liest sie mit der Codepage des
+  // Systems, der Puffer traegt denselben Text als UTF-8.
+  Disk   := TEncoding.ANSI.GetBytes(UMLAUT_TEXT);
+  Buffer := Utf8Of(TEncoding.ANSI.GetString(Disk));
+  Assert.IsTrue(BufferMatchesDisk(Buffer, Disk));
+  Assert.IsFalse(BufferMatchesDisk(Buffer + Utf8Of('x'), Disk));
+end;
+
+procedure TTestBufferMatchesDisk.Match_OneCharTyped_False;
+begin
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('unit AB;'#13#10), Utf8Of(UNIT_LINE)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_UsesEntryAddedByIde_False;
+begin
+  // Genau der Fall, fuer den es den Vergleichsstand gibt: der Puffer
+  // gleicht der Datei NICHT mehr, obwohl niemand getippt hat.
+  Assert.IsFalse(BufferMatchesDisk(
+    Utf8Of('uses A, B, FireDAC.Phys.PG, FireDAC.Phys.PGDef;'#13#10),
+    Utf8Of('uses A, B;'#13#10)));
+end;
+
+procedure TTestBufferMatchesDisk.Match_LineEndingsAreNotNormalised_False;
+begin
+  Assert.IsFalse(BufferMatchesDisk(Utf8Of('a'#10'b'), Utf8Of('a'#13#10'b')));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestEditorContextModel);
+  TDUnitX.RegisterTestFixture(TTestModuleCloseDecision);
+  TDUnitX.RegisterTestFixture(TTestBufferMatchesDisk);
 
 end.

@@ -131,11 +131,12 @@ type
     // Zeigt eine .dfm als TEXT im Code-Editor und setzt den Caret auf
     // LineNumber (<= 0: nur zeigen). Die IDE laedt eine DFM nur dann als
     // Text, wenn ihr Form-Modul NICHT offen ist (gemessen 2026-11-13) - ist
-    // die Unit offen, wird ihr Modul deshalb zuerst geschlossen, auf dem
-    // normalen Weg der IDE: bei ungespeicherten Aenderungen fragt sie selbst,
-    // "Abbrechen" laesst alles, wie es ist. True NUR, wenn danach die
-    // oberste Ansicht wirklich die .dfm zeigt; sonst bleibt der Caret
-    // unangetastet.
+    // die Unit offen, wird ihr Modul deshalb zuerst geschlossen. Traegt es
+    // nachweislich nichts vom Nutzer (nur was die IDE selbst eingetragen
+    // hat), ohne Rueckfrage; sonst auf dem normalen Weg der IDE: bei
+    // ungespeicherten Aenderungen fragt sie selbst, "Abbrechen" laesst
+    // alles, wie es ist. True NUR, wenn danach die oberste Ansicht wirklich
+    // die .dfm zeigt; sonst bleibt der Caret unangetastet.
     class function ShowDfmAsTextAtLine(const AbsPath: string;
                                        LineNumber: Integer): Boolean; static;
 
@@ -165,6 +166,12 @@ type
     // Zeile out-of-range, ...).
     class function InsertLineAbove(const AbsPath: string;
       LineNumber: Integer; const NewLine: string): Boolean; static;
+
+    // Vom zentralen IDE-Notifier (uIDELineHighlighter) bei ofnFileClosing:
+    // der Vergleichsstand, an dem die Navigation erkennt, ob seit ihrem
+    // Sprung jemand getippt hat (s. "Vergleichsstand" in der
+    // Implementierung), wird mit dem Modul nicht mehr gebraucht.
+    class procedure NoteFileClosing(const AFileName: string); static;
   end;
 
 const
@@ -177,6 +184,13 @@ const
 // wenn %TEMP%\sca-navtrace.on existiert. Wirft nie.
 procedure NavTrace(const AText: string);
 
+// Wie NavTrace, haengt aber an, was die IDE zu AFileName gerade fuehrt:
+// 'Modul[src:Unit.pas* form:Unit.dfm]', '*' = gilt als geaendert, '-' ohne
+// Modul. Fuer die Frage, WANN eine Unit ohne Zutun des Nutzers als geaendert
+// gilt (s. "Vergleichsstand" in der Implementierung). Gelesen wird nur bei
+// laufender Spur. Wirft nie.
+procedure NavTraceState(const AWhat, AFileName: string);
+
 implementation
 
 // noinspection-file AvoidOut, BeginEndRequired, DuplicateBlock, GroupedDeclaration, MultipleExit, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
@@ -184,9 +198,11 @@ implementation
 
 uses
   Winapi.Windows,        // OutputDebugString; VOR System.SysUtils (FindClose-Falle)
-  System.SysUtils, System.IOUtils,
+  System.SysUtils, System.IOUtils, System.Classes,
+  System.Generics.Collections,
   uCrashDiag,            // EStackExhausted - nie verschlucken
-  uEditorContextModel;   // ApplyEditorBlock, CharColOfIndex - der getestete Kern
+  uEditorContextModel,   // ApplyEditorBlock, DecideModuleClose - der getestete Kern
+  uPathNormalize;        // Schluessel der Vergleichsstaende
 
 function IsDfmFile(const AFileName: string): Boolean;
 begin
@@ -273,6 +289,212 @@ begin
   View := EditorSvc.TopView;
   if Assigned(View) and Assigned(View.Buffer) then
     Result := View.Buffer.FileName;
+end;
+
+// ---------------------------------------------------------------------------
+// Vergleichsstand "so sah der Puffer direkt nach dem Sprung aus"
+//
+// Wozu: die IDE fuehrt eine Unit als geaendert, sobald sie selbst Units in
+// die uses-Klausel eingetragen hat, die das Formular braucht
+// (ShowcaseDemo\uOrderForm: FireDAC.Phys.PG, FireDAC.Phys.PGDef). Schliesst
+// die Fund-Navigation so eine Unit, fragte die IDE jedesmal "Speichern?" -
+// auch wenn niemand getippt hat (Nutzer-Fund 2026-11-13). CloseModuleOf
+// schliesst deshalb OHNE Rueckfrage, wenn der Puffer nachweislich nichts
+// vom Nutzer traegt: er gleicht der Datei, oder er gleicht dem
+// Vergleichsstand und die Datei ist seither dieselbe
+// (uEditorContextModel.DecideModuleClose).
+//
+// WANN die IDE die Unit aendert (gemessen 2026-11-13, uOrderForm): NICHT
+// beim Oeffnen - nach OpenFile und bei ofnFileOpened gleicht der Puffer der
+// Datei, auch Sekunden spaeter -, sondern synchron in IOTASourceEditor.Show,
+// mit dem die Navigation den Tab nach vorn holt (5989 -> 6026 Bytes, der
+// uses-Eintrag; das Setzen des Carets aendert nichts). Es ist also unser
+// eigener Sprung, der die Unit "aendert".
+//
+// Ein Vergleichsstand entsteht deshalb genau dort und NUR, wenn der Puffer
+// unmittelbar VOR dem Show nachweislich nichts Ungespeichertes trug - das
+// Modul hat dieser Aufruf gerade erst geoeffnet, oder der Editor galt nicht
+// als geaendert, oder sein Puffer glich der Datei (UnitAtLine). Dazwischen
+// laeuft nur unser synchroner Aufruf; was danach im Puffer steht, ist Datei
+// plus Aenderung der IDE. Traegt der Puffer vor dem Sprung schon etwas
+// (getippt, oder von der IDE bei einem Ansichtswechsel des Nutzers
+// eingetragen - das ist von aussen nicht zu unterscheiden), entsteht keiner;
+// dort gilt nur der Vergleich mit der Datei, sonst fragt die IDE wie bisher.
+// Gehalten werden Puffertext UND Dateiinhalt: nach einem Speichern
+// dazwischen beweist die Gleichheit mit dem alten Puffertext nichts mehr.
+// ---------------------------------------------------------------------------
+
+const
+  // Groesser wird kein Puffer verglichen oder gehalten - dann fragt die IDE.
+  MAX_COMPARE_BYTES = 16 * 1024 * 1024;
+
+type
+  TNavBaseline = record
+    Buffer : TBytes;   // Puffertext (UTF-8, wie IOTAEditReader ihn liefert)
+    Disk   : TBytes;   // rohe Dateibytes zum selben Zeitpunkt
+  end;
+
+var
+  // Schluessel: BaselineKey(Datei des Quelltext-Editors). Nur Hauptthread.
+  GNavBaselines : TDictionary<string, TNavBaseline> = nil;
+
+function BaselineKey(const AFileName: string): string;
+begin
+  Result := NormalizePathForKey(ExpandFileName(AFileName));
+end;
+
+function ReadEditorBytes(const AEditor: IOTASourceEditor;
+  out ABytes: TBytes): Boolean;
+// Der Puffertext als UTF-8-Bytes. False ohne Reader, ueber
+// MAX_COMPARE_BYTES oder bei jedem Fehler des Readers - der Aufrufer
+// behandelt das als "nicht belegbar". Der Reader ist beim Ruecksprung frei.
+const
+  BLOCK = 16384;
+var
+  Reader : IOTAEditReader;
+  Chunk  : TBytes;
+  Got    : Integer;
+  Total  : Integer;
+begin
+  Result := False;
+  ABytes := nil;
+  if not Assigned(AEditor) then Exit;
+  try
+    Reader := AEditor.CreateReader;
+    if not Assigned(Reader) then Exit;
+    SetLength(Chunk, BLOCK);
+    Total := 0;
+    repeat
+      Got := Reader.GetText(Total, PAnsiChar(@Chunk[0]), BLOCK);
+      if Got > 0 then
+      begin
+        if Total + Got > MAX_COMPARE_BYTES then
+        begin
+          ABytes := nil;
+          Exit;
+        end;
+        SetLength(ABytes, Total + Got);
+        Move(Chunk[0], ABytes[Total], Got);
+        Inc(Total, Got);
+      end;
+    until Got < BLOCK;
+    Result := True;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Die Puffer-API wirft ohne eigene Klasse (Modul im Abbau, Puffer
+    // gesperrt): nicht gelesen - dann fragt die IDE.
+    on Exception do
+    begin
+      ABytes := nil;
+      Result := False;
+    end;
+  end;
+end;
+
+function LoadFileBytes(const AFileName: string; out ABytes: TBytes): Boolean;
+// Liest die Datei, ohne sie fuer andere zu sperren. False ueber
+// MAX_COMPARE_BYTES; Lesefehler wirft der Stream (s. ReadFileBytes).
+var
+  Stream : TFileStream;
+begin
+  ABytes := nil;
+  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
+  try
+    Result := Stream.Size <= MAX_COMPARE_BYTES;
+    if not Result then Exit;
+    SetLength(ABytes, Stream.Size);
+    if Length(ABytes) > 0 then
+      Stream.ReadBuffer(ABytes[0], Length(ABytes));
+  finally
+    Stream.Free;
+  end;
+end;
+
+function ReadFileBytes(const AFileName: string; out ABytes: TBytes): Boolean;
+// Die rohen Bytes der Datei. False, wenn sie fehlt, nicht lesbar oder
+// groesser als MAX_COMPARE_BYTES ist.
+begin
+  try
+    Result := LoadFileBytes(AFileName, ABytes);
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Datei weg, gesperrt, Lesefehler (EFOpenError, EReadError,
+    // EInOutError ...): nicht gelesen - dann fragt die IDE.
+    on Exception do
+    begin
+      ABytes := nil;
+      Result := False;
+    end;
+  end;
+end;
+
+procedure ForgetBaseline(const AFileName: string);
+begin
+  if Assigned(GNavBaselines) then
+    GNavBaselines.Remove(BaselineKey(AFileName));
+end;
+
+function HoldsNothingUnsaved(const AEditor: IOTASourceEditor): Boolean;
+// Traegt der Editor nachweislich nichts Ungespeichertes? Ja, wenn die IDE
+// ihn nicht als geaendert fuehrt (dann schloesse sie ihn selbst ohne
+// Rueckfrage) oder sein Puffer der Datei gleicht. Nicht lesbar: Nein.
+var
+  Buffer : TBytes;
+  Disk   : TBytes;
+begin
+  Result := False;
+  if not Assigned(AEditor) then Exit;
+  try
+    Result := not AEditor.Modified
+      or (ReadEditorBytes(AEditor, Buffer)
+        and ReadFileBytes(AEditor.FileName, Disk)
+        and BufferMatchesDisk(Buffer, Disk));
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // ToolsAPI ohne eigene Fehlerklasse: nicht belegt - kein Vergleichsstand.
+    on Exception do
+      Result := False;
+  end;
+end;
+
+procedure RememberBaseline(const AEditor: IOTASourceEditor);
+// Haelt Puffertext und Dateiinhalt des Editors fest. NUR von der einen
+// Stelle zu rufen, an der der Puffer nachweislich nichts vom Nutzer traegt
+// (UnitAtLine, s. Kopf dieses Abschnitts). Ist eines von beiden nicht
+// lesbar, gibt es keinen Vergleichsstand (ein alter verfaellt). Wirft nie.
+var
+  FileName : string;
+  Baseline : TNavBaseline;
+begin
+  if not Assigned(AEditor) then Exit;
+  try
+    FileName := AEditor.FileName;
+    ForgetBaseline(FileName);
+    if not ReadEditorBytes(AEditor, Baseline.Buffer) then Exit;
+    if not ReadFileBytes(FileName, Baseline.Disk) then Exit;
+    if not Assigned(GNavBaselines) then
+      GNavBaselines := TDictionary<string, TNavBaseline>.Create;
+    GNavBaselines.AddOrSetValue(BaselineKey(FileName), Baseline);
+    NavTrace(Format('stand: %s Puffer=%d Datei=%d gleichDatei=%s',
+      [ExtractFileName(FileName), Length(Baseline.Buffer),
+       Length(Baseline.Disk),
+       BoolToStr(BufferMatchesDisk(Baseline.Buffer, Baseline.Disk), True)]));
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Ohne Vergleichsstand fragt die IDE - das ist der sichere Ausgang
+    // fuer jeden Fehler hier (ToolsAPI ohne eigene Fehlerklasse).
+    on Exception do
+      if FileName <> '' then
+        ForgetBaseline(FileName);
+  end;
 end;
 
 function FindOrOpenModule(const AbsPath: string): IOTAModule;
@@ -369,6 +591,21 @@ begin
       ExtractFileName(TopViewFileName)]));
 end;
 
+procedure NavTraceState(const AWhat, AFileName: string);
+begin
+  try
+    TraceState(AWhat, AFileName);
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Nur Spur: ein Modul im Auf- oder Abbau darf sie nicht stoeren
+    // (ToolsAPI ohne eigene Fehlerklasse).
+    on Exception do
+      NavTrace(AWhat + ' (Zustand nicht lesbar)');
+  end;
+end;
+
 function IsModuleOpen(const AFileName: string): Boolean;
 var
   ModSvc : IOTAModuleServices;
@@ -401,9 +638,107 @@ begin
     and not Assigned(FirstSourceEditorOf(Module));
 end;
 
+function EditorCloseState(const AEditor: IOTAEditor;
+  out ATag: string): TModuleEditorState;
+// Liest EINEN Datei-Editor fuer die Schliess-Entscheidung. Belegt wird nur,
+// was gelesen wurde: ein nicht lesbarer Puffer, eine nicht lesbare Datei
+// oder ein fehlender Vergleichsstand lassen die Felder False (dann fragt die
+// IDE). ATag: der Zustand fuer die Spur. Haelt beim Ruecksprung nichts.
+var
+  Src      : IOTASourceEditor;
+  Buffer   : TBytes;
+  Disk     : TBytes;
+  DiskRead : Boolean;
+  Baseline : TNavBaseline;
+begin
+  Result := Default(TModuleEditorState);
+  Result.Kind := mekOther;
+  ATag := EditorTag(AEditor);
+  if not Assigned(AEditor) then Exit;
+  Result.Modified := AEditor.Modified;
+  if Supports(AEditor, IOTAFormEditor) then
+    Result.Kind := mekForm
+  else if Supports(AEditor, IOTASourceEditor, Src) then
+    Result.Kind := mekSource;
+  if (Result.Kind <> mekSource) or not Result.Modified then Exit;
+
+  Result.BufferRead := ReadEditorBytes(Src, Buffer);
+  if not Result.BufferRead then
+  begin
+    ATag := ATag + '[Puffer nicht lesbar]';
+    Exit;
+  end;
+  DiskRead := ReadFileBytes(Src.FileName, Disk);
+  Result.EqualsDisk := DiskRead and BufferMatchesDisk(Buffer, Disk);
+  Result.HasBaseline := Assigned(GNavBaselines)
+    and GNavBaselines.TryGetValue(BaselineKey(Src.FileName), Baseline);
+  if Result.HasBaseline then
+  begin
+    Result.EqualsBaseline   := SameBytes(Buffer, Baseline.Buffer);
+    Result.DiskAsAtBaseline := DiskRead and SameBytes(Disk, Baseline.Disk);
+  end;
+  ATag := ATag + Format('[Puffer=%d Datei=%s gleichDatei=%s Stand=%s '
+    + 'gleichStand=%s DateiWieStand=%s]',
+    [Length(Buffer), BoolToStr(DiskRead, True),
+     BoolToStr(Result.EqualsDisk, True), BoolToStr(Result.HasBaseline, True),
+     BoolToStr(Result.EqualsBaseline, True),
+     BoolToStr(Result.DiskAsAtBaseline, True)]);
+end;
+
+function ModuleCloseDecision(const AFileName: string): TModuleCloseDecision;
+// Darf das Modul zu AFileName ohne die Rueckfrage der IDE zu? Liest jeden
+// Datei-Editor des Moduls und entscheidet in
+// uEditorContextModel.DecideModuleClose. Jeder Fehler heisst mcdAsk. Eigene
+// Routine, damit beim Ruecksprung keine Editor-Referenz mehr lebt
+// (s. CloseModuleOf). Schreibt die Entscheidung in die Spur.
+const
+  NAMES : array[TModuleCloseDecision] of string = (
+    'normal (nichts geaendert)', 'OHNE Rueckfrage (nachweislich unbearbeitet)',
+    'IDE fragt');
+var
+  ModSvc : IOTAModuleServices;
+  Module : IOTAModule;
+  States : TArray<TModuleEditorState>;
+  Tags   : TArray<string>;
+  i      : Integer;
+begin
+  Result := mcdAsk;
+  try
+    if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+    Module := ModSvc.FindModule(AFileName);
+    if not Assigned(Module) then Exit;
+    SetLength(States, Module.ModuleFileCount);
+    SetLength(Tags, Length(States));
+    for i := 0 to High(States) do
+      States[i] := EditorCloseState(Module.ModuleFileEditors[i], Tags[i]);
+    Result := DecideModuleClose(States);
+    NavTrace(Format('close: Entscheid %s - %s',
+      [NAMES[Result], string.Join(' ', Tags)]));
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Jeder Fehler beim Lesen (ToolsAPI ohne eigene Fehlerklasse) laesst
+    // die IDE fragen - nie umgekehrt.
+    on E: Exception do
+    begin
+      Result := mcdAsk;
+      NavTrace('close: Entscheid IDE fragt - Fehler beim Lesen: '
+        + E.ClassName + ': ' + E.Message);
+    end;
+  end;
+end;
+
 function CloseModuleOf(const AFileName: string): Boolean;
-// Schliesst das Modul, das die IDE zu AFileName fuehrt, auf ihrem NORMALEN
-// Schliessen-Weg. True, wenn danach keines mehr offen ist (oder nie war).
+// Schliesst das Modul, das die IDE zu AFileName fuehrt. True, wenn danach
+// keines mehr offen ist (oder nie war).
+//
+// Ohne Rueckfrage (ForceClosed=True) NUR, wenn ModuleCloseDecision belegt
+// hat, dass kein Editor etwas vom Nutzer traegt (Vergleichsstand, s.
+// RememberBaseline) - dann verfallen allein die Aenderungen, die die IDE
+// selbst gemacht hat, geschrieben wird nichts (gemessen 2026-11-13: kein
+// Dialog, Dateien auf der Platte unveraendert). Sonst auf dem NORMALEN
+// Schliessen-Weg der IDE:
 //
 // ToolsAPI.pas woertlich - IOTAModule50.CloseModule(ForceClosed): "allows
 // an add-in to force a module closed regardless of whether or not it is
@@ -413,25 +748,28 @@ function CloseModuleOf(const AFileName: string): Boolean;
 // False if this module was not closed." Von Speichern steht bei
 // ForceClosed=True nichts - es schliesst auch ein geaendertes Modul ohne
 // Rueckfrage (der fruehere SafeCloseModule rief genau das und nannte es
-// "save-if-dirty"). Deshalb False: bei ungespeicherten Aenderungen fragt
-// die IDE selbst, "Abbrechen" liefert False und der Sprung unterbleibt -
-// nichts wird ungefragt verworfen, nichts ungefragt geschrieben.
+// "save-if-dirty"). Deshalb im Zweifel False: bei ungespeicherten
+// Aenderungen fragt die IDE selbst, "Abbrechen" liefert False und der
+// Sprung unterbleibt - nichts vom Nutzer wird ungefragt verworfen, nichts
+// ungefragt geschrieben.
 // Gemessen 2026-11-13: "geaendert" ist eine Unit auch OHNE Zutun des
-// Nutzers, wenn die IDE beim Laden des Formulars fehlende Units in die
-// uses-Klausel eintraegt (ShowcaseDemo\uOrderForm: FireDAC.Phys.PG) - dann
-// fragt sie bei jedem Schliessen. Und: ofnFileClosing feuert auch auf
-// diesem Weg (nach der Rueckfrage), die Abraeum-Haken von Highlighter und
-// Watch-Mode laufen also wie beim Schliessen von Hand.
+// Nutzers, wenn die IDE fehlende Units des Formulars in die uses-Klausel
+// eintraegt (ShowcaseDemo\uOrderForm: FireDAC.Phys.PG) - auf dem False-Weg
+// fragt sie dann bei jedem Schliessen. Und: ofnFileClosing feuert auf
+// beiden Wegen, die Abraeum-Haken von Highlighter und Watch-Mode laufen
+// also wie beim Schliessen von Hand.
 //
 // Refcount: waehrend CloseModule darf niemand einen Editor, Puffer oder
 // eine Ansicht des Moduls halten, sonst meldet die IDE "Der Referenzzaehler
 // von Instanz von Klasse TEditSource zeigt die Anzahl 1". Diese Routine
 // haelt nur das Modul; alles, was Editoren anfasst (TraceState,
-// IsModuleOpen), steht in eigenen Routinen, deren Interface-Temporaere beim
-// Ruecksprung frei sind. Dasselbe gilt fuer jeden Aufrufer bis zum Klick.
+// ModuleCloseDecision, IsModuleOpen), steht in eigenen Routinen, deren
+// Interface-Temporaere beim Ruecksprung frei sind. Dasselbe gilt fuer jeden
+// Aufrufer bis zum Klick.
 var
   ModSvc : IOTAModuleServices;
   Module : IOTAModule;
+  Force  : Boolean;
   Closed : Boolean;
 begin
   if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
@@ -439,7 +777,8 @@ begin
   Module := ModSvc.FindModule(AFileName);
   if not Assigned(Module) then Exit(True);
   TraceState('close: vor', AFileName);
-  Closed := Module.CloseModule(False);
+  Force  := ModuleCloseDecision(AFileName) = mcdForce;
+  Closed := Module.CloseModule(Force);
   Module := nil;
   Result := Closed and not IsModuleOpen(AFileName);
   NavTrace(Format('close: %s CloseModule=%s geschlossen=%s',
@@ -518,8 +857,16 @@ function UnitAtLine(const AbsPath: string; ALine: Integer): Boolean;
 // offen (von einem DFM-Sprung), wird die zuerst geschlossen - sonst traefe
 // das Form-Modul beim Oeffnen auf den offenen Text-Puffer seiner eigenen
 // DFM. Lehnt der Nutzer das Schliessen ab, unterbleibt der Sprung.
+//
+// SrcEditor.Show ist der Aufruf, in dem die IDE eine Unit von sich aus
+// aendert (uses-Eintraege zum Formular, gemessen 2026-11-13). Trug der
+// Puffer unmittelbar davor nichts Ungespeichertes, wird der Stand danach
+// als Vergleichsstand festgehalten - so erkennt CloseModuleOf spaeter, dass
+// seither niemand getippt hat (s. "Vergleichsstand" oben).
 var
   DfmPath   : string;
+  WasOpen   : Boolean;
+  WasClean  : Boolean;
   SrcEditor : IOTASourceEditor;
 begin
   Result := False;
@@ -528,10 +875,14 @@ begin
     DfmPath := ChangeFileExt(AbsPath, '.dfm');
     if IsStandaloneDfmText(DfmPath) and not CloseModuleOf(DfmPath) then Exit;
   end;
+  WasOpen   := IsModuleOpen(AbsPath);
   SrcEditor := FirstSourceEditorOf(FindOrOpenModule(AbsPath));
   if not Assigned(SrcEditor) or (ALine <= 0) then Exit;
+  WasClean := not WasOpen or HoldsNothingUnsaved(SrcEditor);
   SrcEditor.Show;   // Tab nach vorne bringen
   Result := PlaceCaret(SrcEditor, ALine);
+  if WasClean then
+    RememberBaseline(SrcEditor);
 end;
 
 var
@@ -973,5 +1324,15 @@ begin
 
   Result := True;
 end;
+
+class procedure TIDEEditor.NoteFileClosing(const AFileName: string);
+begin
+  ForgetBaseline(AFileName);
+end;
+
+initialization
+
+finalization
+  FreeAndNil(GNavBaselines);
 
 end.

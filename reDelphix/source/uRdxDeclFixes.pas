@@ -93,7 +93,7 @@ type
       const AMessage: string; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
-    // SCA198: der Kopf trägt schon ein ['{...}'] - die Klammer bleibt, nur
+    // SCA198: der Kopf traegt schon ein ['{...}'] - die Klammer bleibt, nur
     // der String-Literal-Inhalt wird durch eine frisch erzeugte GUID
     // (CreateGUID) ersetzt. Dieselben Sperren wie InterfaceGuid (generisches
     // Interface, COM-Import-Merkmale im Rumpf, {$INTERFACES CORBA}/

@@ -403,7 +403,9 @@ begin
     NavTrace('panel: ViewActivated UNTERDRUECKT ' + AFileName);
     Exit;
   end;
-  NavTrace('panel: ViewActivated ' + AFileName);
+  // Mit Modulzustand: an dieser Zeile ist abzulesen, ob eine Unit schon bei
+  // der Aktivierung ihres Tabs als geaendert gilt, ohne dass jemand tippte.
+  NavTraceState('panel: ViewActivated ' + AFileName, AFileName);
   // Eine .dfm als Text-Tab: ihre Funde liegen im Cache des Frames unter der
   // Partner-.pas (dem Scan-Ziel). Erst die laden, dann wechselt SetActiveFile
   // fuer die .dfm nur den Titel - sonst leerte der Wechsel von einem fremden

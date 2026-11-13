@@ -17,10 +17,12 @@ interface
 uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes,
-  Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Winapi.Windows, Winapi.Messages,
+  Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.Grids,
+  Winapi.Windows, Winapi.Messages,
+  uMethodd12,             // TLeakFinding im Sprung-Callback des Panels
   uFuzzyComboSearch,
   uFindingGridRenderer,   // TFindingGridLayout: Breiten <-> INI-Text
-  uFindingsPropertiesFrame;   // Toolbar-Zeile des Datei-Fund-Panels
+  uFindingsPropertiesFrame;   // Toolbar-Zeile und Vorschau-Navigation des Panels
 
 type
   // ---- Zeilen-Filter des Datei-Fund-Panels: reine Funktion ------------
@@ -85,6 +87,70 @@ type
     [Test] procedure SameBox_AfterWindowRecreate;
     [Test] procedure SameBox_AfterThemeRefresh;
     [Test] procedure TabOrder_ButtonsThenComboThenFilter;
+  end;
+
+  // ---- Vorschau-Navigation des Panels: Frist je Ausloeser -------------
+  // Nutzer-Auftrag 2026-11-13: beim Scrollen mit dem Mausrad sprang der
+  // Editor an jedem Zwischenhalt. Reine Funktionen - welcher Ausloeser
+  // welche Frist bekommt und ob er den Sprung erzwingt.
+  [TestFixture]
+  TTestPanelNavTiming = class
+  public
+    [Test] procedure Click_ShortDelay_Forced;
+    [Test] procedure Key_ItsOwnDelay_NotForced;
+    [Test] procedure Wheel_LongDelay_NotForced;
+    [Test] procedure Wheel_WaitsClearlyLongerThanClickAndKey;
+    [Test] procedure OnlyTheClickIsForced;
+  end;
+
+  // ---- Mausrad gegen den ECHTEN Frame ---------------------------------
+  // Die VCL feuert beim Rad erst OnMouseWheel, bewegt dann die Auswahl und
+  // feuert dabei OnClick. Geprueft wird, was am Ende beim Callback des
+  // Panels ankommt - in Echtzeit ueber den Timer des Frames. Die Pruefungen
+  // sind so gebaut, dass eine langsame Maschine sie nicht kippen kann: ein
+  // Timer feuert nie zu frueh, und gewartet wird auf das Ereignis, nicht auf
+  // die Uhr.
+  [TestFixture]
+  TTestPanelWheelNav = class
+  strict private
+    FForm       : TForm;
+    FFrame      : TFindingsPropertiesFrame;
+    FGrid       : TStringGrid;
+    FJumps      : Integer;
+    FLastLine   : string;
+    FLastMode   : TFindingNavMode;
+    // Tick des letzten Rad-Ereignisses und der kleinste Abstand, in dem
+    // danach ein Sprung kam (High(Cardinal): noch keiner).
+    FHasNotch   : Boolean;
+    FNotchTick  : Cardinal;
+    FMinSinceNotch : Cardinal;
+    // Der Sprung laeuft im Timer des Frames: eine Exception dort faengt
+    // TApplication.HandleException - ohne OnException als MELDUNGSBOX, an
+    // der der Testlauf haengen bliebe. Hier wird sie stattdessen
+    // festgehalten und laesst den Test scheitern.
+    FSavedOnException : TExceptionEvent;
+    FHooked           : Boolean;
+    FHandlerError     : string;
+    procedure AppException(Sender: TObject; E: Exception);
+    procedure AssertNothingRaisedInHandlers;
+    procedure FrameJump(Sender: TObject; Finding: TLeakFinding;
+      Mode: TFindingNavMode);
+    procedure Notch;
+    procedure ClickRow;
+    procedure PumpFor(AMilliseconds: Cardinal);
+    function  PumpUntilJumps(ACount: Integer): Boolean;
+    function  PumpUntilLine(const ALine: string): Boolean;
+    procedure ForgetJumps;
+    procedure AssertNoJumpBeforeTheWheelRested;
+  public
+    [Setup]    procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Wheel_JumpsOnlyAfterTheWheelRests;
+    [Test] procedure Wheel_ManyNotches_OneJump_ToTheRestRow;
+    [Test] procedure Wheel_NotchesWithPauses_NoJumpInBetween;
+    [Test] procedure Wheel_AtListEnd_NoJump_NextClickStillForced;
+    [Test] procedure Click_StillJumps_AlsoOnTheSameRow;
+    [Test] procedure PreviewJump_WhileTheFormIsHidden_RaisesNothing;
   end;
 
   // ---- Fuzzy-Bewertung: reine Funktion, kein Fenster noetig -----------
@@ -178,6 +244,11 @@ implementation
 // der Katalog, eine Aufspaltung wuerde nur das Setup duplizieren.
 // HardcodedString: 'Rule20'/'Rule1' sind FIXTURE-EINGABEN in das
 // Tipp-Feld, keine nutzersichtbaren Texte.
+
+uses
+  System.Types,                  // Point
+  System.Generics.Collections,   // TObjectList - Funde fuer das Panel
+  uSCAConsts;                    // fkConcatToFormat - Fundart der Testfunde
 
 const
   SEPARATOR_TAG = -1;
@@ -410,33 +481,46 @@ begin
   end;
 end;
 
-procedure TTestPanelToolbarLayout.Setup;
+function NewHiddenForm: TForm;
+// Das Formular der Panel-Tests - nie sichtbar, kein Fenster stiehlt Fokus.
+begin
+  Result := TForm.CreateNew(nil);
+  Result.ClientWidth  := 480;
+  Result.ClientHeight := 320;
+end;
+
+function NewPanelIn(AForm: TForm): TFindingsPropertiesFrame;
+// Das Datei-Fund-Panel in AForm (das Formular besitzt es).
+//
+// Der Frame erzeugt schon im KONSTRUKTOR Fenster: die Eintraege der
+// Schweregrad-Combo leben im Windows-Control (EnsureComboItems). Ein Frame
+// ohne Parent haengt sein Fenster dafuer an das Application-Fenster
+// (TCustomFrame.CreateParams). Das hat jede GUI-Anwendung, auch die IDE -
+// diese Konsolen-Exe nicht (TApplication.CreateHandle prueft IsConsole),
+// dort endete der Konstruktor in "Element 'FindingsPropertiesFrame' hat kein
+// uebergeordnetes Fenster". Fuer genau diese Strecke steht deshalb das
+// Formular als Application-Fenster ein. Beim Einhaengen verwirft der Frame
+// seine Fenster wieder (TCustomFrame.SetParent), der Aufrufer legt sie mit
+// HandleNeeded unter dem Formular neu an - dieselbe Folge wie beim Andocken
+// in der IDE.
 var
   SavedAppWindow : HWND;
 begin
-  FForm := TForm.CreateNew(nil);
-  FForm.ClientWidth  := 480;
-  FForm.ClientHeight := 320;
-  // Der Frame erzeugt schon im KONSTRUKTOR Fenster: die Eintraege der
-  // Schweregrad-Combo leben im Windows-Control (EnsureComboItems). Ein
-  // Frame ohne Parent haengt sein Fenster dafuer an das Application-Fenster
-  // (TCustomFrame.CreateParams). Das hat jede GUI-Anwendung, auch die IDE -
-  // diese Konsolen-Exe nicht (TApplication.CreateHandle prueft IsConsole),
-  // dort endete der Konstruktor in "Element 'FindingsPropertiesFrame' hat
-  // kein uebergeordnetes Fenster". Fuer genau diese Strecke steht deshalb
-  // das Formular als Application-Fenster ein. Beim Einhaengen verwirft der
-  // Frame seine Fenster wieder (TCustomFrame.SetParent), CreateWindows legt
-  // sie unter dem Formular neu an - dieselbe Folge wie beim Andocken in der
-  // IDE.
   SavedAppWindow := Application.Handle;
-  Application.Handle := FForm.Handle;
+  Application.Handle := AForm.Handle;
   try
-    FFrame := TFindingsPropertiesFrame.Create(FForm);
-    FFrame.Parent := FForm;
+    Result := TFindingsPropertiesFrame.Create(AForm);
+    Result.Parent := AForm;
   finally
     Application.Handle := SavedAppWindow;
   end;
-  FFrame.Align  := alClient;
+  Result.Align := alClient;
+end;
+
+procedure TTestPanelToolbarLayout.Setup;
+begin
+  FForm   := NewHiddenForm;
+  FFrame  := NewPanelIn(FForm);
   FCombo  := FindChild(FFrame, TComboBox) as TComboBox;
   FFilter := FindChild(FFrame, TEdit) as TEdit;
   Assert.IsNotNull(FCombo, 'das Panel hat eine Schweregrad-Combo');
@@ -594,6 +678,332 @@ begin
   end;
   Assert.IsTrue(FCombo.TabOrder < FFilter.TabOrder,
     'Tab geht von der Combo ins Filterfeld');
+end;
+
+{ TTestPanelNavTiming }
+
+procedure TTestPanelNavTiming.Click_ShortDelay_Forced;
+var
+  T : TNavTiming;
+begin
+  T := NavTimingFor(ntClick);
+  Assert.AreEqual<Integer>(NAV_DELAY_CLICK_MS, T.DelayMs);
+  Assert.AreEqual<Integer>(50, T.DelayMs, 'der Einfachklick bleibt bei 50 ms');
+  Assert.IsTrue(T.Force, 'ein Klick springt auch auf die schon angesprungene Zeile');
+end;
+
+procedure TTestPanelNavTiming.Key_ItsOwnDelay_NotForced;
+var
+  T : TNavTiming;
+begin
+  T := NavTimingFor(ntKey);
+  Assert.AreEqual<Integer>(NAV_DELAY_KEY_MS, T.DelayMs);
+  Assert.AreEqual<Integer>(80, T.DelayMs, 'die Pfeiltasten bleiben bei 80 ms');
+  Assert.IsFalse(T.Force, 'eine Taste, die nichts bewegt, loest keinen Sprung aus');
+end;
+
+procedure TTestPanelNavTiming.Wheel_LongDelay_NotForced;
+var
+  T : TNavTiming;
+begin
+  T := NavTimingFor(ntWheel);
+  Assert.AreEqual<Integer>(NAV_DELAY_WHEEL_MS, T.DelayMs);
+  Assert.AreEqual<Integer>(350, T.DelayMs, 'das Rad wartet 350 ms');
+  Assert.IsFalse(T.Force, 'das Rad am Listenende loest keinen Sprung aus');
+end;
+
+procedure TTestPanelNavTiming.Wheel_WaitsClearlyLongerThanClickAndKey;
+begin
+  // "Deutlich laenger": mehr als das Dreifache der laengsten anderen Frist -
+  // zwischen zwei Rasten oder Fingerzuegen liegen leicht 100-200 ms.
+  Assert.IsTrue(NavTimingFor(ntWheel).DelayMs > 3 * NavTimingFor(ntKey).DelayMs);
+  Assert.IsTrue(NavTimingFor(ntWheel).DelayMs > 3 * NavTimingFor(ntClick).DelayMs);
+end;
+
+procedure TTestPanelNavTiming.OnlyTheClickIsForced;
+var
+  Trigger : TNavTrigger;
+begin
+  // Force heisst: springen, auch wenn die Zeile dieselbe ist. Das darf nur
+  // der Mausklick - sonst spraenge das Rad am Listenende und jede Taste, die
+  // nichts bewegt.
+  for Trigger := Low(TNavTrigger) to High(TNavTrigger) do
+  begin
+    Assert.AreEqual<Boolean>(Trigger = ntClick, NavTimingFor(Trigger).Force,
+      'Ausloeser ' + IntToStr(Ord(Trigger)));
+  end;
+end;
+
+{ TTestPanelWheelNav }
+
+type
+  // DoMouseWheel und Click sind protected.
+  TGridCrack = class(TStringGrid);
+
+const
+  WHEEL_ROWS = 6;
+  // noinspection HardcodedPath
+  WHEEL_FILE = 'C:\t\uWheel.pas';   // Testdaten, nie geoeffnet
+  // Ein Timer feuert nie zu frueh - GetTickCount und WM_TIMER laufen aber
+  // auf einem Raster von 10-16 ms: so viel darf der gemessene Abstand unter
+  // der Frist liegen. Die alte Klick-Frist (50 ms) bleibt weit darunter.
+  TICK_TOLERANCE_MS = 50;
+  // Obergrenze fuer das Warten auf einen Sprung - reichlich, damit eine
+  // langsame Maschine den Test nicht kippt; gewartet wird nur bis zum Sprung.
+  JUMP_TIMEOUT_MS   = 5000;
+
+function NewWheelFindings: TObjectList<TLeakFinding>;
+// WHEEL_ROWS Funde in den Zeilen 10, 20, ... - der Aufrufer reicht die Liste
+// an SetFindings weiter, das Funde UND Liste uebernimmt.
+var
+  i : Integer;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to WHEEL_ROWS do
+    begin
+      Result.Add(TLeakFinding.New(WHEEL_FILE, 'Run', i * 10,
+        'Fund ' + IntToStr(i), fkConcatToFormat));
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure TTestPanelWheelNav.Setup;
+begin
+  FHandlerError := '';
+  FHooked       := False;
+  FForm  := NewHiddenForm;
+  FFrame := NewPanelIn(FForm);
+  FFrame.SetFindings(WHEEL_FILE, NewWheelFindings);
+  FGrid := FindChild(FFrame, TStringGrid) as TStringGrid;
+  Assert.IsNotNull(FGrid, 'das Panel hat ein Grid');
+  FGrid.HandleNeeded;
+  Assert.AreEqual<Integer>(WHEEL_ROWS + 1, FGrid.RowCount, 'Kopfzeile und Funde');
+  FGrid.Row := 1;
+  FFrame.OnFindingClick := FrameJump;
+  // Ab hier laufen Nachrichten: Exceptions aus Handlern festhalten statt
+  // sie als Meldungsbox zu zeigen (erst jetzt - nach den Asserts oben, damit
+  // der Haken nie ohne TearDown stehen bleibt).
+  FSavedOnException := Application.OnException;
+  Application.OnException := AppException;
+  FHooked := True;
+  // Was der Aufbau an Navigation angestossen hat: ablaufen lassen, vergessen.
+  PumpFor(NAV_DELAY_CLICK_MS + 150);
+  ForgetJumps;
+end;
+
+procedure TTestPanelWheelNav.TearDown;
+begin
+  FreeAndNil(FForm);   // besitzt den Frame samt Timer
+  if FHooked then
+  begin
+    Application.OnException := FSavedOnException;
+  end;
+  FHooked := False;
+end;
+
+procedure TTestPanelWheelNav.AppException(Sender: TObject; E: Exception);
+begin
+  if FHandlerError = '' then
+  begin
+    FHandlerError := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+procedure TTestPanelWheelNav.AssertNothingRaisedInHandlers;
+begin
+  Assert.AreEqual('', FHandlerError,
+    'keine Exception in einem Nachrichten-Handler des Panels');
+end;
+
+procedure TTestPanelWheelNav.FrameJump(Sender: TObject; Finding: TLeakFinding;
+  Mode: TFindingNavMode);
+var
+  Since : Cardinal;
+begin
+  Inc(FJumps);
+  FLastLine := Finding.LineNumber;
+  FLastMode := Mode;
+  if not FHasNotch then Exit;
+  Since := GetTickCount - FNotchTick;
+  if Since < FMinSinceNotch then
+  begin
+    FMinSinceNotch := Since;
+  end;
+end;
+
+procedure TTestPanelWheelNav.Notch;
+// Eine Rad-Raste nach unten, wie die VCL sie nach WM_MOUSEWHEEL verarbeitet:
+// OnMouseWheel, dann die Auswahlbewegung samt dem Click daraus. Der Tick
+// wird VOR dem Aufruf genommen - der gemessene Abstand ist nie zu klein.
+begin
+  FHasNotch  := True;
+  FNotchTick := GetTickCount;
+  TGridCrack(FGrid).DoMouseWheel([], -WHEEL_DELTA, Point(0, 0));
+end;
+
+procedure TTestPanelWheelNav.ClickRow;
+// Ein Mausklick auf die aktuelle Zeile, soweit er das Panel betrifft: ein
+// OnClick ausserhalb jeder Rad-Bewegung.
+begin
+  TGridCrack(FGrid).Click;
+end;
+
+procedure TTestPanelWheelNav.PumpFor(AMilliseconds: Cardinal);
+var
+  Start : Cardinal;
+begin
+  Start := GetTickCount;
+  repeat
+    Application.ProcessMessages;
+    Sleep(5);
+  until GetTickCount - Start >= AMilliseconds;
+  Application.ProcessMessages;
+end;
+
+function TTestPanelWheelNav.PumpUntilJumps(ACount: Integer): Boolean;
+var
+  Start : Cardinal;
+begin
+  Start := GetTickCount;
+  while (FJumps < ACount) and (GetTickCount - Start < JUMP_TIMEOUT_MS) do
+  begin
+    Application.ProcessMessages;
+    Sleep(5);
+  end;
+  Result := FJumps >= ACount;
+end;
+
+function TTestPanelWheelNav.PumpUntilLine(const ALine: string): Boolean;
+var
+  Start : Cardinal;
+begin
+  Start := GetTickCount;
+  while (FLastLine <> ALine) and (GetTickCount - Start < JUMP_TIMEOUT_MS) do
+  begin
+    Application.ProcessMessages;
+    Sleep(5);
+  end;
+  Result := FLastLine = ALine;
+end;
+
+procedure TTestPanelWheelNav.ForgetJumps;
+begin
+  FJumps         := 0;
+  FLastLine      := '';
+  FLastMode      := fnmActivate;
+  FHasNotch      := False;
+  FMinSinceNotch := High(Cardinal);
+end;
+
+procedure TTestPanelWheelNav.AssertNoJumpBeforeTheWheelRested;
+// Jeder Sprung kam erst, nachdem das Rad NAV_DELAY_WHEEL_MS geruht hatte -
+// gemessen am Rad-Ereignis davor. Unabhaengig von der Last: ein Stocken der
+// Maschine verlaengert die Abstaende nur.
+begin
+  Assert.IsTrue(FMinSinceNotch <> High(Cardinal), 'es gab einen Sprung');
+  Assert.IsTrue(FMinSinceNotch + TICK_TOLERANCE_MS >= NAV_DELAY_WHEEL_MS,
+    Format('Sprung schon %d ms nach dem Rad - erlaubt erst nach %d ms',
+      [FMinSinceNotch, NAV_DELAY_WHEEL_MS]));
+end;
+
+procedure TTestPanelWheelNav.Wheel_JumpsOnlyAfterTheWheelRests;
+begin
+  Notch;   // Zeile 1 -> 2
+  Assert.AreEqual<Integer>(2, FGrid.Row, 'das Rad bewegt die Auswahl sofort');
+  Assert.AreEqual<Integer>(0, FJumps, 'der Editor springt nicht sofort');
+  Assert.IsTrue(PumpUntilJumps(1), 'nach der Ruhefrist folgt der Editor');
+  AssertNoJumpBeforeTheWheelRested;
+  Assert.AreEqual('20', FLastLine, 'zur Zeile, auf der das Rad stehen blieb');
+  Assert.IsTrue(FLastMode = fnmPreview, 'als Vorschau');
+  PumpFor(NAV_DELAY_CLICK_MS + 100);
+  Assert.AreEqual<Integer>(1, FJumps, 'genau ein Sprung');
+  AssertNothingRaisedInHandlers;
+end;
+
+procedure TTestPanelWheelNav.Wheel_ManyNotches_OneJump_ToTheRestRow;
+var
+  i : Integer;
+begin
+  // Drei Rasten, ohne dass dazwischen eine Nachricht laeuft: 1 -> 4.
+  for i := 1 to 3 do
+  begin
+    Notch;
+  end;
+  Assert.AreEqual<Integer>(4, FGrid.Row);
+  Assert.AreEqual<Integer>(0, FJumps, 'waehrend des Scrollens springt nichts');
+  Assert.IsTrue(PumpUntilJumps(1), 'nach der Ruhefrist folgt der Editor');
+  AssertNoJumpBeforeTheWheelRested;
+  Assert.AreEqual('40', FLastLine, 'zur Ruhe-Zeile, nicht zu einer dazwischen');
+  PumpFor(NAV_DELAY_CLICK_MS + 100);
+  Assert.AreEqual<Integer>(1, FJumps, 'drei Rasten, ein Sprung');
+  AssertNothingRaisedInHandlers;
+end;
+
+procedure TTestPanelWheelNav.Wheel_NotchesWithPauses_NoJumpInBetween;
+// Pausen laenger als die Klick-Frist, kuerzer als die Rad-Frist - der
+// Zwischenhalt beim Scrollen. Bis 2026-11-13 sprang der Editor in jeder.
+const
+  PAUSE_MS = 120;
+var
+  i : Integer;
+begin
+  for i := 1 to 3 do
+  begin
+    Notch;
+    PumpFor(PAUSE_MS);
+  end;
+  Assert.IsTrue(PumpUntilLine('40'), 'am Ende steht der Editor auf der Ruhe-Zeile');
+  AssertNoJumpBeforeTheWheelRested;
+  AssertNothingRaisedInHandlers;
+end;
+
+procedure TTestPanelWheelNav.Wheel_AtListEnd_NoJump_NextClickStillForced;
+begin
+  FGrid.Row := WHEEL_ROWS;   // letzte Zeile; die Auswahlbewegung feuert Click
+  Assert.IsTrue(PumpUntilJumps(1), 'Aufbau: der Editor steht auf der letzten Zeile');
+  ForgetJumps;
+
+  Notch;   // am Listenende bewegt das Rad nichts - und die VCL feuert kein Click
+  Assert.AreEqual<Integer>(WHEEL_ROWS, FGrid.Row);
+  PumpFor(NAV_DELAY_WHEEL_MS + 250);
+  Assert.AreEqual<Integer>(0, FJumps, 'keine Bewegung, kein Sprung');
+
+  // Nichts bleibt haengen: der naechste echte Klick auf dieselbe Zeile ist
+  // wieder ein erzwungener Klick.
+  ClickRow;
+  Assert.IsTrue(PumpUntilJumps(1), 'ein Klick nach dem Rad springt');
+  Assert.AreEqual('60', FLastLine);
+  AssertNothingRaisedInHandlers;
+end;
+
+procedure TTestPanelWheelNav.Click_StillJumps_AlsoOnTheSameRow;
+begin
+  ClickRow;
+  Assert.IsTrue(PumpUntilJumps(1), 'ein Klick springt');
+  Assert.AreEqual('10', FLastLine);
+  Assert.IsTrue(FLastMode = fnmPreview, 'als Vorschau');
+  ClickRow;
+  Assert.IsTrue(PumpUntilJumps(2), 'der Klick auf dieselbe Zeile springt erneut');
+  AssertNothingRaisedInHandlers;
+end;
+
+procedure TTestPanelWheelNav.PreviewJump_WhileTheFormIsHidden_RaisesNothing;
+// Nach einem Vorschau-Sprung holt der Frame den Fokus ins Grid zurueck. Das
+// Formular dieses Tests ist nie sichtbar - wie ein Panel, das in der Frist
+// nach dem letzten Rad-Ereignis verschwindet. TWinControl.CanFocus sagt
+// dann trotzdem Ja, und SetFocus warf "Deaktiviertes oder unsichtbares
+// Fenster kann den Fokus nicht erhalten" - aus dem Timer heraus, also als
+// Meldungsbox der Anwendung (so gefunden: der Testlauf blieb an ihr haengen).
+begin
+  Assert.IsFalse(FForm.Visible, 'Vorbedingung: das Formular ist unsichtbar');
+  Notch;
+  Assert.IsTrue(PumpUntilJumps(1), 'der Sprung selbst findet statt');
+  PumpFor(NAV_DELAY_CLICK_MS);
+  AssertNothingRaisedInHandlers;
 end;
 
 { TTestFuzzyMatch }

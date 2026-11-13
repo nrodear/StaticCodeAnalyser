@@ -160,7 +160,7 @@ type
   TRdxMapPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
     const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
   // Uebergangsform (Konzept Fix-Datenfeld, S1): wie TRdxMapPlanner, aber
-  // AMessage trägt zusaetzlich FixArgs (TRdxFindingText.Args). Bis zur
+  // AMessage traegt zusaetzlich FixArgs (TRdxFindingText.Args). Bis zur
   // jeweiligen Regel-Umstellung (S2..S5) bleibt Args leer und ein Planer
   // liest wie bisher nur .Text; MapFixIn uebergibt TRdxFindingText nicht
   // .Text, damit ein umgestellter Planer beides sehen kann. Noch KEIN
