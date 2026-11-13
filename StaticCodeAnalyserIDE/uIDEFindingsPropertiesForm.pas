@@ -56,12 +56,16 @@ type
     FThemeSub      : IInterface;
     FFindingsSub   : IInterface;
     // Suppress-Window fuer EditorViewActivated: ein Click auf einen Finding
-    // triggert OpenFileAtLine, das mehrere EditorViewActivated-Events feuern
-    // kann (M.Show, SafeCloseModule, transient empty buffer). Diese wuerden
-    // SetActiveFile triggern und das Grid clearen. Solange GetTickCount <
-    // FSuppressActivationUntil ist, ignoriert HandleEditorViewActivated alle
-    // Events. 250ms reichen fuer typische Event-Bursts ohne legitime
-    // User-Tab-Wechsel nennenswert zu blockieren.
+    // feuert mehrere EditorViewActivated-Events (Show; bei einem DFM-Fund
+    // schliesst die Unit, ein fremder Tab rueckt kurz nach, dann oeffnet
+    // die DFM). Diese wuerden SetActiveFile triggern und das Grid clearen.
+    // Waehrend des Sprungs selbst (FNavDepth > 0 - die Rueckfrage der IDE
+    // beim Schliessen kann beliebig lange offen stehen) und in den 250 ms
+    // danach (FSuppressActivationUntil, fuer nachlaufende Events) ignoriert
+    // HandleEditorViewActivated alle Events. Zaehler statt Flag: steht die
+    // Rueckfrage, kann ein Timer-Tick des Grids einen zweiten Klick
+    // hineinschieben - dessen Ende darf die Sperre des ersten nicht loesen.
+    FNavDepth                : Integer;
     FSuppressActivationUntil : Cardinal;
     // Re-Scan-Cache: pro Datei die Modification-Time vom letzten erfolgten
     // Scan. TriggerAutoScan skippt, wenn die Datei seit dem letzten Scan
@@ -87,6 +91,10 @@ type
     FHasPendingState : Boolean;
     procedure ReadIniState;
     procedure WriteIniState;
+    // Vom Nutzer gezogene Spaltenbreiten des Fund-Grids (analyser.ini,
+    // Schluessel INI_KEY_COLWIDTHS). Geschrieben wird im selben Lauf wie
+    // die Fenster-Geometrie (WriteIniState) - kein weiterer INI-Schreiber.
+    procedure ReadGridColumnWidths;
     procedure ApplyPendingStateToHost;
     procedure CenterOnIDEMainWindow;
     class function IniFilePath: string; static;
@@ -195,6 +203,7 @@ const
   CAPTION_DEFAULT = 'Static Code Analysis - File';
   IDENTIFIER      = 'StaticCodeAnalyser.FindingsPropertiesDockForm';
   INI_SECTION     = 'FindingsPropertiesPanel';
+  INI_KEY_COLWIDTHS = 'GridColWidths';
   // Mindestabstand zum Bildschirmrand bei Off-Screen-Check. 8px reicht
   // damit die Titlebar noch greifbar ist.
   ONSCREEN_MARGIN = 8;
@@ -318,6 +327,17 @@ begin
   // CenterOnIDEMainWindow wenn Werte ungueltig.
   ReadIniState;
   ApplyPendingStateToHost;
+  ReadGridColumnWidths;
+
+  // Rule-Spalte wie im Haupt-Grid: dieselbe Titel-Funktion, die dort die
+  // Zelle fuellt (TAnalyserFrame.InitGridConfig, Spalte 4).
+  FFrame.RuleTextProvider :=
+    function(F: TLeakFinding): string
+    var
+      Dummy : string;
+    begin
+      Result := BuildFindingTitle(F, Dummy);
+    end;
 
   // Initial-Apply: erstmal das jetzt aktive IDE-Theme einmalig anwenden,
   // damit das Frame nicht im Default-VCL-Style aufpoppt.
@@ -372,11 +392,27 @@ procedure TFindingsPropertiesDockableForm.HandleEditorViewActivated(
 // UND triggern automatisch einen Single-File-Scan damit der Properties-
 // Panel-User die Findings sofort sieht ohne extra "Aktuelle Datei"-Klick.
 // SetActiveFile ist idempotent fuer SameText-Treffer - kein Flicker.
-// Suppress-Window: nach einem Finding-Click sendet ShowFileAtLine eine
-// Burst-Sequenz von Events; in den ersten 250ms ignorieren.
+// Suppress-Window: waehrend eines Finding-Clicks und 250 ms danach sendet
+// der Sprung eine Burst-Sequenz von Events - ignorieren (s. FNavDepth).
+var
+  ScanFile : string;
 begin
   if not Assigned(FFrame) then Exit;
-  if GetTickCount < FSuppressActivationUntil then Exit;
+  if (FNavDepth > 0) or (GetTickCount < FSuppressActivationUntil) then
+  begin
+    NavTrace('panel: ViewActivated UNTERDRUECKT ' + AFileName);
+    Exit;
+  end;
+  NavTrace('panel: ViewActivated ' + AFileName);
+  // Eine .dfm als Text-Tab: ihre Funde liegen im Cache des Frames unter der
+  // Partner-.pas (dem Scan-Ziel). Erst die laden, dann wechselt SetActiveFile
+  // fuer die .dfm nur den Titel - sonst leerte der Wechsel von einem fremden
+  // Tab die Liste, und der Auto-Scan fuellte sie nicht (Paar unveraendert).
+  ScanFile := AFileName;
+  if not SameText(FFrame.CurrentFile, AFileName)
+     and ResolveScanFile(AFileName, ScanFile)
+     and not SameText(ScanFile, AFileName) then
+    FFrame.SetActiveFile(ScanFile);
   FFrame.SetActiveFile(AFileName);
   // Auto-Scan der neuen Datei. ACenterOnFirstFinding=False, sonst wuerde
   // der Editor bei jedem Tab-Wechsel auf den ersten Befund springen.
@@ -424,6 +460,8 @@ begin
   end;
   // Ownership-Transfer in den Frame; SetFindings macht's atomisch + freed
   // Owned nach dem Reinkopieren in FAllFindings.
+  NavTrace(Format('panel: SetFindings %s n=%d',
+    [ExtractFileName(FileName), Owned.Count]));
   FFrame.SetFindings(FileName, Owned);
 end;
 
@@ -440,43 +478,40 @@ procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
   Finding: TLeakFinding; Mode: TFindingNavMode);
 // Mode (fnmPreview/fnmActivate) steuert nur das FOKUS-Verhalten - das macht
 // der Frame selbst (Re-Focus ins Grid bei Preview). Der Editor-Sprung ist
-// fuer beide Modi identisch, AUSSER bei einem .dfm-Fund im Activate-Modus
-// (s.u.).
-// Soft-Navigate via TIDEEditor.ShowFileAtLine - bringt die Datei nach
-// vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret. Wichtig:
-// NICHT TIDEEditor.OpenFileAtLine - das macht SafeCloseModule auf die
-// Companion-Datei, was ein normales Form-Modul (Foo.pas+Foo.dfm) komplett
-// schliesst weil FindModule(Foo.dfm) das Foo-Modul liefert. Effekt waere:
-// jeder Click oeffnet die Datei neu.
+// fuer beide Modi identisch: TIDEEditor.ShowFileCenteredAtLine bringt die
+// Datei nach vorne (oder oeffnet sie), setzt den Caret und zentriert - das
+// nur nach Erfolg.
 //
-// .dfm-Fund im Activate-Modus (Doppelklick/Enter): ShowFileAtLine findet
-// ueber FindModule(.dfm) nur das Foo-Modul und zeigt dessen ERSTEN
-// Quelltext-Editor - das ist immer die .pas, nie die .dfm (siehe
-// FirstSourceEditorOf). Der Klick landete also mit der .dfm-Zeilennummer
-// in der .pas (Nutzer-Fund 2026-11-11). Fix identisch zu
-// TAnalyserFrame.GridDblClick im Voll-Scan-Grid: fuer .dfm im
-// Activate-Modus OpenFileAtLine (Close-and-Reopen, DFM laedt als Text).
-// Im Preview-Modus bleibt ShowFileAtLine (haeufig getriggert ueber
-// Pfeiltasten/Mausrad) - OpenFileAtLines CloseModule waere dort zu
-// aufdringlich (kann die IDE crashen, s. TAnalyserFrame.PreviewFindingAtRow).
+// .dfm-Fund: die DFM kommt als TEXT, in BEIDEN Modi (Nico-Entscheid
+// 2026-11-13: auch der Einfachklick). Die IDE zeigt sie nur als Text, wenn
+// die Unit nicht offen ist - der Sprung schliesst deren Modul deshalb
+// vorher (mit Rueckfrage der IDE bei ungespeicherten Aenderungen) und beim
+// naechsten .pas-Fund umgekehrt den DFM-Text. Vorher landete der Klick mit
+// der .dfm-Zeilennummer in der .pas (Nutzer-Fund 2026-11-11).
 var
-  Line: Integer;
+  Path  : string;
+  Line  : Integer;
+  Shown : Boolean;
 begin
   if not Assigned(Finding) then Exit;
-  if Finding.FileName = '' then Exit;
+  // Kopie statt Finding.FileName als const-Argument: der Fund gehoert der
+  // Liste des Frames und ueberlebt den Sprung nicht sicher.
+  Path := Finding.FileName;
+  if Path = '' then Exit;
   Line := StrToIntDef(Finding.LineNumber, 0);
   if Line <= 0 then Exit;
 
-  FSuppressActivationUntil := GetTickCount + 250;   // ms
-
-  if (Mode = fnmActivate) and SameText(ExtractFileExt(Finding.FileName), '.dfm') then
-  begin
-    TIDEEditor.OpenFileAtLine(Finding.FileName, Line);
-    Exit;
+  NavTrace(Format('panel: Klick EIN modus=%d %s:%d',
+    [Ord(Mode), ExtractFileName(Path), Line]));
+  Shown := False;
+  Inc(FNavDepth);
+  try
+    Shown := TIDEEditor.ShowFileCenteredAtLine(Path, Line);
+  finally
+    Dec(FNavDepth);
+    FSuppressActivationUntil := GetTickCount + 250;   // ms
+    NavTrace('panel: Klick AUS ok=' + BoolToStr(Shown, True));
   end;
-
-  TIDEEditor.ShowFileAtLine(Finding.FileName, Line);
-  TIDEEditor.CenterCurrentViewOnLine(Line);
 end;
 
 procedure TFindingsPropertiesDockableForm.InitialPopulateFromActiveEditor;
@@ -546,6 +581,7 @@ begin
   if not FileExists(AFileName) then Exit;
   if ShouldSkipPair(AFileName, ScanFile) then Exit;
 
+  NavTrace('panel: AutoScan ' + ExtractFileName(ScanFile));
   try
     // Welle 1b: Scan-Zeit nur bei ECHTEM Lauf stempeln - ein busy-Skip
     // (Engine-Lock belegt) darf den Cache nicht fuellen, sonst bleibt die
@@ -876,19 +912,42 @@ begin
   end;
 end;
 
+procedure TFindingsPropertiesDockableForm.ReadGridColumnWidths;
+// Fehlt der Schluessel oder ist er unlesbar (andere Spaltenzahl, von Hand
+// verdorben), lehnt der Frame ab und behaelt seine Vorgabe.
+var
+  Ini  : TMemIniFile;
+  Text : string;
+begin
+  if not Assigned(FFrame) then Exit;
+  if not TFile.Exists(IniFilePath) then Exit;
+  Ini := TMemIniFile.Create(IniFilePath);
+  try
+    Text := Ini.ReadString(INI_SECTION, INI_KEY_COLWIDTHS, '');
+  finally
+    Ini.Free;
+  end;
+  if Text <> '' then
+    FFrame.ApplyColumnWidthsText(Text);
+end;
+
 procedure TFindingsPropertiesDockableForm.WriteIniState;
 // Session-Persistence: vom Frame-OnDestroying-Hook gerufen. Erfasst die
 // Geometrie BEVOR der Host-Form weggeht, damit sie beim naechsten Open
-// innerhalb der selben IDE-Session restored werden kann.
+// innerhalb der selben IDE-Session restored werden kann. Im selben Lauf
+// gehen die vom Nutzer gezogenen Spaltenbreiten mit (leer = nie gezogen
+// -> Schluessel bleibt, wie er ist).
 var
   Host: TCustomForm;
   Ini: TCommentPreservingIni;
+  ColWidths: string;
 begin
   if not Assigned(FFrame) then Exit;
   Host := GetParentForm(FFrame);
   if not Assigned(Host) then Exit;
   // Nur sinnvolle Geometrien persistieren.
   if (Host.Width <= 0) or (Host.Height <= 0) then Exit;
+  ColWidths := FFrame.ColumnWidthsText;
   try
     // TCommentPreservingIni statt TMemIniFile (2026-08-21): schreibt in
     // dieselbe analyser.ini wie die Einstellungen. Jedes Verschieben des
@@ -899,6 +958,8 @@ begin
       Ini.WriteInteger(INI_SECTION, 'Top',    Host.Top);
       Ini.WriteInteger(INI_SECTION, 'Width',  Host.Width);
       Ini.WriteInteger(INI_SECTION, 'Height', Host.Height);
+      if ColWidths <> '' then
+        Ini.WriteString(INI_SECTION, INI_KEY_COLWIDTHS, ColWidths);
       Ini.UpdateFile;
     finally
       Ini.Free;

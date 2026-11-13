@@ -151,6 +151,17 @@ type
 // am Wortanfang - damit 'sql' bei 'SQLInjection' vor 'MssqlHelper' landet.
 function FuzzyMatch(const APattern, AText: string; var AScore: Integer): Boolean;
 
+// Zeilen-Filter fuer ein Grid: AQuery wird an Leerraum in Begriffe zerlegt,
+// JEDER Begriff muss in MINDESTENS EINER Zelle treffen (UND ueber Begriffe,
+// ODER ueber Zellen). Ein Begriff trifft eine Zelle, wenn er dort als
+// Teilstring steht ODER per FuzzyMatch mit ausreichender Guete - die
+// Schwelle (FUZZY_ROW_MIN_PER_CHAR je Zeichen) haelt verstreute
+// Zufallstreffer in langen Meldetexten draussen: ohne sie traefe 'abc'
+// jede Zeile, deren Meldung irgendwo a..b..c enthaelt. Leere Anfrage
+// trifft alles.
+function FuzzyMatchRow(const AQuery: string;
+  const ACells: array of string): Boolean;
+
 implementation
 
 uses
@@ -276,6 +287,61 @@ begin
   else if AScore < 0 then
   begin
     AScore := 0;
+  end;
+end;
+
+const
+  // Mindest-Score je Begriffszeichen, ab dem ein reiner Fuzzy-Treffer
+  // (kein Teilstring) eine Grid-Zeile durchlaesst. 4 = im Schnitt jedes
+  // zweite Zeichen schliesst direkt an (SCORE_CONSECUTIVE = 8).
+  FUZZY_ROW_MIN_PER_CHAR = 4;
+
+function TermHitsCell(const ATermLow, ACell: string): Boolean;
+var
+  Score : Integer;
+begin
+  if ACell = '' then
+  begin
+    Result := False;
+    Exit;
+  end;
+  if Pos(ATermLow, LowerCase(ACell)) > 0 then
+  begin
+    Result := True;
+    Exit;
+  end;
+  Score := 0;
+  Result := FuzzyMatch(ATermLow, ACell, Score)
+        and (Score >= FUZZY_ROW_MIN_PER_CHAR * Length(ATermLow));
+end;
+
+function FuzzyMatchRow(const AQuery: string;
+  const ACells: array of string): Boolean;
+var
+  Terms   : TArray<string>;
+  Term    : string;
+  Cell    : string;
+  TermHit : Boolean;
+begin
+  Result := True;
+  Terms := LowerCase(Trim(AQuery)).Split([' ', #9],
+    TStringSplitOptions.ExcludeEmpty);
+  for Term in Terms do
+  begin
+    TermHit := False;
+    for Cell in ACells do
+    begin
+      if TermHitsCell(Term, Cell) then
+      begin
+        TermHit := True;
+        Break;
+      end;
+    end;
+    if not TermHit then
+    begin
+      Result := False;
+      Exit;
+    end;
   end;
 end;
 

@@ -2270,8 +2270,11 @@ end;
 procedure TAnalyserFrame.PreviewFindingAtRow(ARow: Integer);
 // Soft-Navigate zum Fund in Zeile ARow (Preview): Editor zeigt die Stelle,
 // Fokus kehrt ins Grid zurueck, damit der User mit Pfeiltasten weiternavigieren
-// kann. KEIN OpenFileAtLine (das wuerde per CloseModule die IDE crashen) -
-// ShowFileAtLine schliesst nichts. Highlights setzt bereits GridSelectCell.
+// kann. Einen .dfm-Fund zeigt der Sprung als Text und schliesst dafuer das
+// Form-Modul der Unit (TIDEEditor.ShowDfmAsTextAtLine; die IDE fragt bei
+// ungespeicherten Aenderungen selbst). Zentriert wird nur nach Erfolg
+// (ShowFileCenteredAtLine) - sonst traefe der Caret die gerade oberste,
+// fremde Datei. Highlights setzt GridSelectCell.
 var
   idx     : Integer;
   Finding : TLeakFinding;
@@ -2288,8 +2291,7 @@ begin
   if (absPath = '') or (lineNo <= 0) then Exit;
   if not FileExists(absPath) then Exit;
 
-  TIDEEditor.ShowFileAtLine(absPath, lineNo);
-  TIDEEditor.CenterCurrentViewOnLine(lineNo);
+  TIDEEditor.ShowFileCenteredAtLine(absPath, lineNo);
   if FResultGrid.CanFocus then FResultGrid.SetFocus;
   FLastPreviewRow := ARow;
 end;
@@ -4277,31 +4279,27 @@ begin
     Exit;
   end;
 
-  // .pas-Befund: SOFT-Navigate statt OpenFileAtLine. OpenFileAtLine ruft
-  // SafeCloseModule -> CloseModule(True) auf die Companion-.dfm; ist das
-  // Form-Modul gerade offen, schliesst das den ganzen Designer und crasht
-  // die IDE intern mit "Der Referenzzaehler von Instanz von Klasse
-  // TEditSource zeigt die Anzahl 1" (WalkDependencies-Destroy). ShowFileAtLine
-  // oeffnet/zeigt nur und schliesst NICHTS - identisch zum File-Findings-Panel.
+  // .pas-Befund: derselbe Sprung wie im File-Findings-Panel. Er schliesst
+  // hoechstens die DFM derselben Unit, wenn sie von einem DFM-Sprung noch
+  // als freistehender Text offen ist - nie das Form-Modul selbst (das
+  // crashte die IDE einmal mit "Der Referenzzaehler von Instanz von Klasse
+  // TEditSource zeigt die Anzahl 1"). Zentriert wird nur nach Erfolg - lehnt
+  // der Nutzer das Schliessen ab, liegt oben noch die DFM.
   if not SameText(ExtractFileExt(absPath), '.dfm') then
   begin
     if GLiveAnalyserFrame <> Pointer(Self) then Exit;   // Lifecycle-Sentinel
-    TIDEEditor.ShowFileAtLine(absPath, lineNo);
-    TIDEEditor.CenterCurrentViewOnLine(lineNo);
+    TIDEEditor.ShowFileCenteredAtLine(absPath, lineNo);
     ScheduleHighlightRefresh(absPath);
     StatusMode(Format(_('Opened: %s  Line: %d'),
       [ExtractFileName(absPath), lineNo]));
     Exit;
   end;
 
-  // .dfm-Befund: hier ist das Schliessen der .pas GEWOLLT, damit die DFM als
-  // TEXT (statt im Form-Designer) laedt. Drei moegliche Auspraegungen:
-  //   ofmRegular         -> normal
-  //   ofmDfmAsText       -> .pas war zu/unmodifiziert -> DFM als Text geoeffnet,
-  //                         CursorPos zeigt auf die Befund-Zeile.
-  // Einen dritten Modus gab es nur auf dem Papier - s. TOpenFileMode.
-  // Wer die .dfm doppelklickt, dessen modifizierte Companion-.pas wird
-  // dabei still gespeichert und geschlossen.
+  // .dfm-Befund: die DFM kommt als Text (TIDEEditor.ShowDfmAsTextAtLine).
+  // Ist die Unit offen, schliesst die IDE dafuer ihr Form-Modul - bei
+  // ungespeicherten Aenderungen mit ihrer eigenen Rueckfrage.
+  //   ofmDfmAsText -> DFM steht als Text im Editor, Caret auf der Befund-Zeile
+  //   ofmRegular   -> Sprung kam nicht zustande, Caret unangetastet
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).

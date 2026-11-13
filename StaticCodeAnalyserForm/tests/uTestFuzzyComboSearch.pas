@@ -1,6 +1,9 @@
 ﻿unit uTestFuzzyComboSearch;
 
-// Tests fuer uFuzzyComboSearch (SCA.SharedUI).
+// Tests fuer uFuzzyComboSearch (SCA.SharedUI) - und fuer das Datei-Fund-
+// Panel, das seinen Zeilen-Filter daraus bezieht: Filter-Treffer,
+// Spaltenbreiten-Text und die Toolbar-Zeile mit Schweregrad-Combo und
+// Filterfeld (uFindingsPropertiesFrame).
 //
 // Der Kern-Test ist SelChange_DoesNotNotifyHost. Er haelt fest, was die
 // urspruengliche Fassung falsch machte: VCLs OnSelect ist CBN_SELCHANGE,
@@ -15,9 +18,75 @@ uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes,
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Winapi.Windows, Winapi.Messages,
-  uFuzzyComboSearch;
+  uFuzzyComboSearch,
+  uFindingGridRenderer,   // TFindingGridLayout: Breiten <-> INI-Text
+  uFindingsPropertiesFrame;   // Toolbar-Zeile des Datei-Fund-Panels
 
 type
+  // ---- Zeilen-Filter des Datei-Fund-Panels: reine Funktion ------------
+  [TestFixture]
+  TTestFuzzyMatchRow = class
+  public
+    [Test] procedure EmptyQuery_MatchesEverything;
+    [Test] procedure Substring_InAnyCell_Matches;
+    [Test] procedure Fuzzy_InOneCell_Matches;
+    [Test] procedure ScatteredLetters_InLongMessage_DoNotMatch;
+    [Test] procedure Terms_AreAnded_AcrossCells;
+    [Test] procedure OneTermMissing_NoMatch;
+    [Test] procedure CaseInsensitive;
+    [Test] procedure LettersSpreadOverTwoCells_DoNotMatch;
+  end;
+
+  // ---- Spaltenbreiten-Persistenz: Text hin und zurueck ----------------
+  [TestFixture]
+  TTestGridWidthsText = class
+  public
+    [Test] procedure RoundTrip_KeepsValues;
+    [Test] procedure WrongCount_Rejected;
+    [Test] procedure NonNumeric_Rejected;
+    [Test] procedure OutOfRange_Rejected;
+    [Test] procedure Whitespace_Tolerated;
+    [Test] procedure EmptyText_Rejected;
+  end;
+
+  // ---- Toolbar-Zeile des Panels: die Aufteilung als reine Rechnung ----
+  [TestFixture]
+  TTestSplitToolbarRest = class
+  public
+    [Test] procedure EvenRest_FillsTheRowExactly;
+    [Test] procedure OddRest_BothStillEqual_OnePixelFree;
+    [Test] procedure TooNarrow_WidthIsZeroNotNegative;
+    [Test] procedure NoButtonsNoGap_SplitsInHalf;
+  end;
+
+  // ---- Toolbar-Zeile gegen den ECHTEN Frame ---------------------------
+  // Nutzer-Auftrag 2026-11-13: das Filterfeld steht nicht allein in einer
+  // Zeile, sondern neben der Schweregrad-Combo, und ist IMMER so gross
+  // wie sie. Geprueft werden die Fenster, nicht die gewuenschten Werte -
+  // eine csDropDownList-Combo bekommt ihre Hoehe von Windows.
+  [TestFixture]
+  TTestPanelToolbarLayout = class
+  strict private
+    FForm   : TForm;
+    FFrame  : TFindingsPropertiesFrame;
+    FCombo  : TComboBox;
+    FFilter : TEdit;
+    procedure CreateWindows;
+    procedure AssertSameBox(const AContext: string);
+  public
+    [Setup]    procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Filter_SitsInToolbarRow_RightOfCombo;
+    [Test] procedure SameBox_RightAfterWindowCreation;
+    [Test] procedure SameBox_AtEveryPanelWidth;
+    [Test] procedure FieldsGrowWithThePanel;
+    [Test] procedure FieldsFillTheRowRightOfTheButtons;
+    [Test] procedure SameBox_AfterDpiChange;
+    [Test] procedure SameBox_AfterWindowRecreate;
+    [Test] procedure SameBox_AfterThemeRefresh;
+    [Test] procedure TabOrder_ButtonsThenComboThenFilter;
+  end;
+
   // ---- Fuzzy-Bewertung: reine Funktion, kein Fenster noetig -----------
   [TestFixture]
   TTestFuzzyMatch = class
@@ -97,9 +166,11 @@ type
 implementation
 
 // noinspection-file ClassPerFile, EmptyVisibilitySection, DuplicateString, GodClass, HardcodedString
-// Zwei Fixtures in einer Unit: die reine Bewertungsfunktion und der
+// Mehrere Fixtures in einer Unit: die reine Bewertungsfunktion und der
 // Ereignis-Vertrag gehoeren fachlich zusammen und sollen zusammen
-// gefunden werden. 'public' direkt nach dem Klassenkopf ist die
+// gefunden werden; die Fixtures des Datei-Fund-Panels (Zeilen-Filter,
+// Spaltenbreiten, Toolbar-Zeile) stehen beim Matcher, den es benutzt.
+// 'public' direkt nach dem Klassenkopf ist die
 // DUnitX-Form (Testmethoden muessen sichtbar sein). Der Beispielstring
 // 'SCA003  SQLInjection' wiederholt sich absichtlich - er ist der
 // Pruefgegenstand mehrerer Faelle. GodClass: eine DUnitX-Fixture
@@ -113,6 +184,417 @@ const
   // Zeichenfolge, die garantiert keinen Eintrag trifft - genau die
   // Eingabe, mit der die Listenindex-Ausnahme gemeldet wurde.
   NO_MATCH_QUERY = 'tesgvfljkmnlkm';
+
+{ TTestFuzzyMatchRow }
+
+const
+  // Eine Zeile, wie das Panel sie zeigt: File/Method/Line/Type/Rule/Severity.
+  ROW_FILE   = 'uOrderForm.pas';
+  ROW_METHOD = 'TOrderForm.SaveClick';
+  ROW_LINE   = '142';
+  ROW_TYPE   = 'Vulnerability';
+  ROW_RULE   = 'SQL injection: query text is concatenated from user input';
+  ROW_SEV    = 'Error';
+
+function RowHits(const AQuery: string): Boolean;
+begin
+  Result := FuzzyMatchRow(AQuery,
+    [ROW_FILE, ROW_METHOD, ROW_LINE, ROW_TYPE, ROW_RULE, ROW_SEV]);
+end;
+
+procedure TTestFuzzyMatchRow.EmptyQuery_MatchesEverything;
+begin
+  Assert.IsTrue(RowHits(''), 'leere Anfrage filtert nichts');
+  Assert.IsTrue(RowHits('   '), 'nur Leerraum filtert nichts');
+end;
+
+procedure TTestFuzzyMatchRow.Substring_InAnyCell_Matches;
+begin
+  Assert.IsTrue(RowHits('orderform'), 'Datei-Spalte');
+  Assert.IsTrue(RowHits('142'), 'Zeilen-Spalte');
+  Assert.IsTrue(RowHits('concatenated'), 'Rule-Spalte');
+  Assert.IsTrue(RowHits('err'), 'Severity-Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.Fuzzy_InOneCell_Matches;
+begin
+  Assert.IsTrue(RowHits('sqlinj'),
+    'Luecke ueber die Wortgrenze: SQL injection');
+  Assert.IsTrue(RowHits('savclk'),
+    'CamelCase-Kuerzel im Methodennamen: SaveClick');
+end;
+
+procedure TTestFuzzyMatchRow.ScatteredLetters_InLongMessage_DoNotMatch;
+begin
+  // q..x..t kommen in der Meldung in dieser Reihenfolge vor, aber weit
+  // verstreut - ohne Guete-Schwelle traefe das jede lange Zeile.
+  Assert.IsFalse(RowHits('qxt'),
+    'verstreute Einzelbuchstaben sind kein Treffer');
+end;
+
+procedure TTestFuzzyMatchRow.Terms_AreAnded_AcrossCells;
+begin
+  Assert.IsTrue(RowHits('order sql error'),
+    'jeder Begriff trifft eine andere Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.OneTermMissing_NoMatch;
+begin
+  Assert.IsFalse(RowHits('order warning'),
+    'der zweite Begriff steht in keiner Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.CaseInsensitive;
+begin
+  Assert.IsTrue(RowHits('VULNERAB'));
+  Assert.IsTrue(RowHits('SaveCLICK'));
+end;
+
+procedure TTestFuzzyMatchRow.LettersSpreadOverTwoCells_DoNotMatch;
+begin
+  // 'pas142' stuende nur ueber die Spaltengrenze Datei|Zeile hinweg -
+  // gesucht wird je Zelle, nicht ueber die verkettete Zeile.
+  Assert.IsFalse(FuzzyMatchRow('pas142', ['uOrderForm.pas', '142']));
+end;
+
+{ TTestGridWidthsText }
+
+procedure TTestGridWidthsText.RoundTrip_KeepsValues;
+var
+  Text : string;
+  W    : TArray<Integer>;
+begin
+  Text := TFindingGridLayout.WidthsToText([90, 85, 40, 72, 240, 64]);
+  Assert.AreEqual('90,85,40,72,240,64', Text);
+  Assert.IsTrue(TFindingGridLayout.TryTextToWidths(Text, 6, W));
+  Assert.AreEqual<Integer>(6, Length(W));
+  Assert.AreEqual<Integer>(90, W[0]);
+  Assert.AreEqual<Integer>(240, W[4]);
+  Assert.AreEqual<Integer>(64, W[5]);
+end;
+
+procedure TTestGridWidthsText.WrongCount_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  // Eintrag aus einer Fassung mit fuenf Spalten darf sechs nicht stellen.
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('95,40,72,200,56', 6, W));
+  Assert.AreEqual<Integer>(0, Length(W));
+end;
+
+procedure TTestGridWidthsText.NonNumeric_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,abc,40', 3, W));
+end;
+
+procedure TTestGridWidthsText.OutOfRange_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,0,40', 3, W),
+    'Breite 0 wuerde die Spalte unsichtbar machen');
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,-5,40', 3, W));
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,99999,40', 3, W));
+end;
+
+procedure TTestGridWidthsText.Whitespace_Tolerated;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsTrue(TFindingGridLayout.TryTextToWidths(' 90 , 85 ,40', 3, W));
+  Assert.AreEqual<Integer>(85, W[1]);
+end;
+
+procedure TTestGridWidthsText.EmptyText_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('', 6, W));
+end;
+
+{ TTestSplitToolbarRest }
+
+procedure TTestSplitToolbarRest.EvenRest_FillsTheRowExactly;
+var
+  S : TToolbarSplit;
+begin
+  // 348 px Toolbar, drei Buttons a 26, Abstand 4: Rest 262 -> 2 x 131.
+  S := SplitToolbarRest(348, 78, 4);
+  Assert.AreEqual<Integer>(131, S.FieldWidth);
+  Assert.AreEqual<Integer>(82, S.FirstLeft,
+    'das erste Feld beginnt hinter Buttons + Abstand');
+  Assert.AreEqual<Integer>(217, S.SecondLeft,
+    'das zweite hinter dem ersten + Abstand');
+  Assert.AreEqual<Integer>(348, S.SecondLeft + S.FieldWidth,
+    'und endet am rechten Rand');
+end;
+
+procedure TTestSplitToolbarRest.OddRest_BothStillEqual_OnePixelFree;
+var
+  S : TToolbarSplit;
+begin
+  S := SplitToolbarRest(349, 78, 4);
+  Assert.AreEqual<Integer>(131, S.FieldWidth,
+    'das ungerade Pixel bekommt KEINES der beiden Felder');
+  Assert.AreEqual<Integer>(348, S.SecondLeft + S.FieldWidth,
+    'es bleibt rechts frei');
+end;
+
+procedure TTestSplitToolbarRest.TooNarrow_WidthIsZeroNotNegative;
+var
+  S : TToolbarSplit;
+begin
+  S := SplitToolbarRest(50, 78, 4);
+  Assert.AreEqual<Integer>(0, S.FieldWidth);
+  Assert.AreEqual<Integer>(82, S.FirstLeft);
+  Assert.AreEqual<Integer>(86, S.SecondLeft);
+  // Grenze: der Rest reicht genau fuer die beiden Abstaende.
+  Assert.AreEqual<Integer>(0, SplitToolbarRest(86, 78, 4).FieldWidth);
+  Assert.AreEqual<Integer>(0, SplitToolbarRest(87, 78, 4).FieldWidth,
+    'ein einzelnes Restpixel laesst sich nicht teilen');
+  Assert.AreEqual<Integer>(1, SplitToolbarRest(88, 78, 4).FieldWidth);
+end;
+
+procedure TTestSplitToolbarRest.NoButtonsNoGap_SplitsInHalf;
+var
+  S : TToolbarSplit;
+begin
+  S := SplitToolbarRest(100, 0, 0);
+  Assert.AreEqual<Integer>(50, S.FieldWidth);
+  Assert.AreEqual<Integer>(0, S.FirstLeft);
+  Assert.AreEqual<Integer>(50, S.SecondLeft);
+end;
+
+{ TTestPanelToolbarLayout }
+
+function FindChild(AParent: TWinControl; AClass: TControlClass): TControl;
+// Erstes Kind-Control der Klasse, in die Tiefe. Die Felder des Frames sind
+// strict private - das Panel hat aber genau EINE Combo und EIN Edit.
+var
+  i : Integer;
+begin
+  for i := 0 to AParent.ControlCount - 1 do
+  begin
+    Result := AParent.Controls[i];
+    if Result is AClass then Exit;
+    if Result is TWinControl then
+    begin
+      Result := FindChild(TWinControl(Result), AClass);
+      if Assigned(Result) then Exit;
+    end;
+  end;
+  Result := nil;
+end;
+
+function WindowBox(AControl: TWinControl): TRect;
+// Das wirkliche Fenster, nicht die VCL-Eigenschaften.
+begin
+  Winapi.Windows.GetWindowRect(AControl.Handle, Result);
+end;
+
+function ButtonsEnd(ABar: TWinControl): Integer;
+// Rechte Kante des rechtesten Toolbar-Buttons; 0 ohne Button.
+var
+  i : Integer;
+begin
+  Result := 0;
+  for i := 0 to ABar.ControlCount - 1 do
+  begin
+    if (ABar.Controls[i] is TButton)
+       and (ABar.Controls[i].BoundsRect.Right > Result) then
+    begin
+      Result := ABar.Controls[i].BoundsRect.Right;
+    end;
+  end;
+end;
+
+procedure TTestPanelToolbarLayout.Setup;
+var
+  SavedAppWindow : HWND;
+begin
+  FForm := TForm.CreateNew(nil);
+  FForm.ClientWidth  := 480;
+  FForm.ClientHeight := 320;
+  // Der Frame erzeugt schon im KONSTRUKTOR Fenster: die Eintraege der
+  // Schweregrad-Combo leben im Windows-Control (EnsureComboItems). Ein
+  // Frame ohne Parent haengt sein Fenster dafuer an das Application-Fenster
+  // (TCustomFrame.CreateParams). Das hat jede GUI-Anwendung, auch die IDE -
+  // diese Konsolen-Exe nicht (TApplication.CreateHandle prueft IsConsole),
+  // dort endete der Konstruktor in "Element 'FindingsPropertiesFrame' hat
+  // kein uebergeordnetes Fenster". Fuer genau diese Strecke steht deshalb
+  // das Formular als Application-Fenster ein. Beim Einhaengen verwirft der
+  // Frame seine Fenster wieder (TCustomFrame.SetParent), CreateWindows legt
+  // sie unter dem Formular neu an - dieselbe Folge wie beim Andocken in der
+  // IDE.
+  SavedAppWindow := Application.Handle;
+  Application.Handle := FForm.Handle;
+  try
+    FFrame := TFindingsPropertiesFrame.Create(FForm);
+    FFrame.Parent := FForm;
+  finally
+    Application.Handle := SavedAppWindow;
+  end;
+  FFrame.Align  := alClient;
+  FCombo  := FindChild(FFrame, TComboBox) as TComboBox;
+  FFilter := FindChild(FFrame, TEdit) as TEdit;
+  Assert.IsNotNull(FCombo, 'das Panel hat eine Schweregrad-Combo');
+  Assert.IsNotNull(FFilter, 'das Panel hat ein Filterfeld');
+  CreateWindows;
+end;
+
+procedure TTestPanelToolbarLayout.TearDown;
+begin
+  FreeAndNil(FForm);   // besitzt den Frame
+end;
+
+procedure TTestPanelToolbarLayout.CreateWindows;
+// Wie beim ersten Anzeigen: erst mit dem Fenster bekommt die Combo ihre
+// echte Hoehe. HandleNeeded erzeugt auch alle Eltern-Fenster.
+begin
+  FCombo.HandleNeeded;
+  FFilter.HandleNeeded;
+  Assert.IsTrue(FCombo.HandleAllocated and FFilter.HandleAllocated,
+    'Combo und Filterfeld brauchen ein Fensterhandle');
+end;
+
+procedure TTestPanelToolbarLayout.AssertSameBox(const AContext: string);
+var
+  ComboBox, FilterBox : TRect;
+begin
+  ComboBox  := WindowBox(FCombo);
+  FilterBox := WindowBox(FFilter);
+  Assert.IsTrue(ComboBox.Width > 0, AContext + ': die Combo hat eine Breite');
+  Assert.IsTrue(ComboBox.Height > 0, AContext + ': die Combo hat eine Hoehe');
+  Assert.AreEqual<Integer>(ComboBox.Width, FilterBox.Width,
+    AContext + ': Breite');
+  Assert.AreEqual<Integer>(ComboBox.Height, FilterBox.Height,
+    AContext + ': Hoehe');
+  Assert.AreEqual<Integer>(ComboBox.Top, FilterBox.Top,
+    AContext + ': Oberkante');
+end;
+
+procedure TTestPanelToolbarLayout.Filter_SitsInToolbarRow_RightOfCombo;
+begin
+  Assert.AreSame(FCombo.Parent, FFilter.Parent,
+    'Filterfeld und Combo stehen in DERSELBEN Zeile (gleiches Eltern-Panel)');
+  Assert.IsTrue(FFilter.Left >= FCombo.Left + FCombo.Width,
+    'das Filterfeld steht rechts neben der Combo, ohne Ueberlappung');
+end;
+
+procedure TTestPanelToolbarLayout.SameBox_RightAfterWindowCreation;
+begin
+  // Kein Resize dazwischen: schon das Erzeugen des Combo-Fensters (Windows
+  // setzt dabei ihre echte Hoehe) muss das Filterfeld nachziehen.
+  AssertSameBox('direkt nach der Fenster-Erzeugung');
+end;
+
+procedure TTestPanelToolbarLayout.SameBox_AtEveryPanelWidth;
+const
+  // Mindestbreite des Frames (360), gerade und ungerade Reste, breit.
+  WIDTHS : array[0..5] of Integer = (360, 421, 480, 555, 777, 1200);
+var
+  W : Integer;
+begin
+  for W in WIDTHS do
+  begin
+    FForm.ClientWidth := W;
+    AssertSameBox(Format('Panelbreite %d', [W]));
+  end;
+end;
+
+procedure TTestPanelToolbarLayout.FieldsGrowWithThePanel;
+const
+  GROW = 200;   // gerade: die Haelfte davon ist exakt, ohne Restpixel
+var
+  Narrow      : Integer;
+  NarrowField : Integer;
+begin
+  // Sicher ueber der Mindestbreite des Frames (die ist DPI-skaliert) -
+  // darunter klemmt der Frame und waechst nicht mit dem Formular.
+  Narrow := FFrame.Constraints.MinWidth + 40;
+  FForm.ClientWidth := Narrow;
+  Assert.AreEqual<Integer>(Narrow, FFrame.Width,
+    'Vorbedingung: der Frame folgt der Formularbreite');
+  NarrowField := FCombo.Width;
+  FForm.ClientWidth := Narrow + GROW;
+  Assert.AreEqual<Integer>(NarrowField + GROW div 2, FCombo.Width,
+    'jedes der beiden Felder bekommt die Haelfte der zusaetzlichen Breite');
+  AssertSameBox('nach dem Verbreitern');
+  FForm.ClientWidth := Narrow;
+  Assert.AreEqual<Integer>(NarrowField, FCombo.Width,
+    'und gibt sie beim Verkleinern wieder ab');
+  AssertSameBox('nach dem Verkleinern');
+end;
+
+procedure TTestPanelToolbarLayout.FieldsFillTheRowRightOfTheButtons;
+var
+  Bar    : TWinControl;
+  RowEnd : Integer;
+begin
+  FForm.ClientWidth := 600;
+  Bar := FCombo.Parent;
+  Assert.IsTrue(ButtonsEnd(Bar) > 0, 'die Toolbar hat Buttons');
+  Assert.IsTrue(FCombo.Left >= ButtonsEnd(Bar),
+    Format('die Combo beginnt hinter den Buttons (%d >= %d)',
+      [FCombo.Left, ButtonsEnd(Bar)]));
+  // Hoechstens das eine ungerade Restpixel bleibt rechts frei.
+  RowEnd := FFilter.Left + FFilter.Width;
+  Assert.IsTrue((RowEnd = Bar.ClientWidth) or (RowEnd = Bar.ClientWidth - 1),
+    Format('das Filterfeld endet am rechten Rand der Toolbar (%d von %d)',
+      [RowEnd, Bar.ClientWidth]));
+end;
+
+procedure TTestPanelToolbarLayout.SameBox_AfterDpiChange;
+var
+  HeightBefore : Integer;
+begin
+  FForm.ClientWidth := 600;
+  HeightBefore := FCombo.Height;
+  // Monitorwechsel auf 150 %: VCL skaliert Bounds und Schriften aller
+  // Controls, die Combo bekommt dabei von Windows eine neue Hoehe.
+  FForm.ScaleForPPI(MulDiv(FForm.CurrentPPI, 3, 2));
+  CreateWindows;
+  AssertSameBox('nach dem DPI-Wechsel auf 150 %');
+  Assert.IsTrue(FCombo.Height > HeightBefore,
+    Format('die Combo ist mit der Schrift gewachsen (%d -> %d)',
+      [HeightBefore, FCombo.Height]));
+end;
+
+procedure TTestPanelToolbarLayout.SameBox_AfterWindowRecreate;
+begin
+  FForm.ClientWidth := 600;
+  // Andocken/Abdocken in der IDE erzeugt die Fenster des Frames neu.
+  FFrame.Perform(CM_RECREATEWND, 0, 0);
+  CreateWindows;
+  AssertSameBox('nach der Fenster-Neuerzeugung');
+end;
+
+procedure TTestPanelToolbarLayout.SameBox_AfterThemeRefresh;
+begin
+  FForm.ClientWidth := 600;
+  FFrame.RefreshFromTheme;
+  AssertSameBox('nach dem Theme-Wechsel');
+end;
+
+procedure TTestPanelToolbarLayout.TabOrder_ButtonsThenComboThenFilter;
+var
+  Bar : TWinControl;
+  i   : Integer;
+begin
+  Bar := FCombo.Parent;
+  for i := 0 to Bar.ControlCount - 1 do
+  begin
+    if Bar.Controls[i] is TButton then
+    begin
+      Assert.IsTrue(TButton(Bar.Controls[i]).TabOrder < FCombo.TabOrder,
+        'die Buttons kommen vor der Combo');
+    end;
+  end;
+  Assert.IsTrue(FCombo.TabOrder < FFilter.TabOrder,
+    'Tab geht von der Combo ins Filterfeld');
+end;
 
 { TTestFuzzyMatch }
 

@@ -96,6 +96,17 @@ type
   TFindingGridLayout = class
   public
     class procedure SetColumnWidths(AGrid: TStringGrid); static;
+    // Spaltenbreiten <-> INI-Text ('90,85,40,...'). TryTextToWidths nimmt
+    // nur eine Liste mit GENAU ACount Werten im Bereich
+    // MIN_COL_WIDTH..MAX_COL_WIDTH an - ein Eintrag aus einer Fassung mit
+    // anderer Spaltenzahl oder ein von Hand verdorbener Wert faellt damit
+    // auf die Vorgabe zurueck, statt eine Spalte auf 0 oder 30000 px zu
+    // stellen.
+    const MIN_COL_WIDTH = 12;
+    const MAX_COL_WIDTH = 4000;
+    class function WidthsToText(const AWidths: array of Integer): string; static;
+    class function TryTextToWidths(const AText: string; ACount: Integer;
+      out AWidths: TArray<Integer>): Boolean; static;
   end;
 
 implementation
@@ -345,6 +356,44 @@ begin
   regelW := AGrid.ClientWidth - used;
   if regelW > 80 then
     AGrid.ColWidths[4] := regelW;
+end;
+
+class function TFindingGridLayout.WidthsToText(
+  const AWidths: array of Integer): string;
+var
+  Parts : TArray<string>;
+  i     : Integer;
+begin
+  SetLength(Parts, Length(AWidths));
+  for i := 0 to High(AWidths) do
+  begin
+    Parts[i] := IntToStr(AWidths[i]);
+  end;
+  Result := string.Join(',', Parts);
+end;
+
+class function TFindingGridLayout.TryTextToWidths(const AText: string;
+  ACount: Integer; out AWidths: TArray<Integer>): Boolean;
+var
+  Parts : TArray<string>;
+  i, W  : Integer;
+begin
+  Result := False;
+  AWidths := nil;
+  Parts := AText.Split([',']);
+  if (ACount <= 0) or (Length(Parts) <> ACount) then Exit;
+  SetLength(AWidths, ACount);
+  for i := 0 to ACount - 1 do
+  begin
+    if not TryStrToInt(Trim(Parts[i]), W) or
+       (W < MIN_COL_WIDTH) or (W > MAX_COL_WIDTH) then
+    begin
+      AWidths := nil;
+      Exit;
+    end;
+    AWidths[i] := W;
+  end;
+  Result := True;
 end;
 
 end.

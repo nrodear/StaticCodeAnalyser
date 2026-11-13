@@ -20,10 +20,13 @@
 // Layout (siehe Konzept_FindingsPropertiesPanel.md, Abschnitt "Layout"):
 //   +-- TPanel (Header, alTop) ---------------------+
 //   | TLabel  "<filename> (N Findings)"             |
-//   | TComboBox  All / Errors / Errors+Warnings     |
+//   | [x][r][o] [TComboBox Schweregrad][TEdit Filter] |
 //   +-----------------------------------------------+
 //   | TStringGrid (alClient, virtual via GetCellText)|
 //   +-----------------------------------------------+
+// Combo und Filterfeld teilen sich den Platz rechts der Buttons je zur
+// Haelfte - immer gleich breit, gleich hoch, gleiche Oberkante
+// (LayoutToolbar).
 
 interface
 
@@ -57,16 +60,36 @@ type
   strict private
     FHeaderPanel   : TPanel;
     FHeaderLabel   : TLabel;
-    // Sub-Panel direkt unter dem Header-Label - traegt die drei Toolbar-
-    // Controls in fester Reihenfolge: [Clear][Reload] FSeverityCombo.
-    // Reihenfolge ergibt sich aus der Create-Reihenfolge in BuildControls
-    // ueber Align=alLeft (Clear+Reload) bzw. alClient (Combo).
+    // Sub-Panel direkt unter dem Header-Label - traegt die Toolbar-Controls
+    // in fester Reihenfolge: [Clear][Reload][ClearMarks] FSeverityCombo
+    // FSearchEdit. Die Buttons stehen ueber Align=alLeft (Create-
+    // Reihenfolge), Combo und Filterfeld positioniert LayoutToolbar.
     FToolbarPanel  : TPanel;
     FBtnClear      : TButton;
     FBtnReload     : TButton;
     FBtnClearMarks : TButton;
     FSeverityCombo : TComboBox;
+    // Fuzzy-Filter ueber den Inhalt aller sichtbaren Spalten - dieselbe
+    // Bedienung wie das Suchfeld des Haupt-Grids (tippen = filtern,
+    // entprellt), Treffer-Regel in uFuzzyComboSearch.FuzzyMatchRow.
+    // Steht in der Toolbar-Zeile rechts neben der Combo, immer so gross
+    // wie sie (Nutzer-Auftrag 2026-11-13).
+    FSearchEdit    : TEdit;
+    // LayoutToolbar setzt Bounds, deren WM_SIZE wieder bei ToolbarResize
+    // ankommt - die Sperre haelt den Lauf einstufig.
+    FInToolbarLayout : Boolean;
+    FSearchTimer   : TTimer;
     FGrid          : TStringGrid;
+    // True, sobald der Nutzer eine Spalte gezogen hat ODER gespeicherte
+    // Breiten geladen wurden. Ab dann fasst GridResize keine Breite mehr
+    // an - vorher streckt es die Rule-Spalte auf den Rest.
+    FUserSizedCols : Boolean;
+    FOnColumnWidthsChanged : TNotifyEvent;
+    // Liefert den Text der Rule-Spalte. Der IDE-Wrapper haengt hier
+    // BuildFindingTitle ein (dieselbe Zelle wie im Haupt-Grid) - die
+    // Funktion lebt im Plugin und ist aus SCA.SharedUI nicht erreichbar.
+    // Ohne Provider: Rule-Name (+ Bezeichner).
+    FRuleTextProvider : TFunc<TLeakFinding, string>;
     // 1-Slot-Cache fuer die Style-Services des Renderers. Die Closure in
     // RefreshFromTheme laeuft PRO GEZEICHNETER ZELLE; im IDE-Plugin steckt
     // dahinter der StyleServicesProvider-Hook auf IOTAIDEThemingServices -
@@ -119,16 +142,33 @@ type
     FNavForce        : Boolean;
     procedure BuildControls;
     procedure BuildGridConfig;
+    // Schweregrad-Combo und Filterfeld nebeneinander, gleich gross.
+    procedure LayoutToolbar;
     procedure EnsureComboItems;
     procedure ApplySeverityFilter;
     procedure UpdateHeader;
+    procedure StretchRuleColumn;
+    function  RuleTextOf(F: TLeakFinding): string;
+    function  DataCellText(F: TLeakFinding; ACol: Integer): string;
+    function  MatchesSearch(F: TLeakFinding; const AQuery: string): Boolean;
   strict protected
     // Wird von VCL gerufen wenn das Window-Handle erstellt wird - das
     // passiert beim ersten Show UND bei jedem Re-Parent (Dock/Undock).
     // Items defensiv repopulieren, falls VCL sie waehrend der Re-Parent-
     // Sequenz verworfen hat.
     procedure CreateWnd; override;
+    // DPI-Wechsel: VCL skaliert erst die Bounds, dann CurrentPPI - nach dem
+    // ganzen Durchlauf die Toolbar-Zeile mit den Endwerten neu legen.
+    procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
+    // OnResize der Toolbar (neue Breite) UND der Combo (Windows gibt ihr
+    // die Hoehe erst mit dem Fenster und nach jedem Schriftwechsel neu).
+    procedure ToolbarResize(Sender: TObject);
     procedure SeverityComboChange(Sender: TObject);
+    procedure SearchEditChange(Sender: TObject);
+    procedure SearchTimerTick(Sender: TObject);
+    // Vom Grid gerufen, wenn der NUTZER eine Spalte gezogen hat (nicht bei
+    // programmatischen Breiten).
+    procedure GridUserColSized(Sender: TObject);
     // Toolbar-Buttons - Funktionalitaet wird in Step 2 dranngeschraubt.
     // Aktuell leere Stubs, damit das Layout sichtbar ist und Naming feststeht.
     procedure BtnClearClick(Sender: TObject);
@@ -203,8 +243,27 @@ type
     function VisibleCount: Integer;
     function TotalCount: Integer;
 
+    // Spaltenbreiten fuer die Persistenz des Wrappers, auf 96 DPI
+    // normalisiert ('90,90,40,...'). Leer, solange der Nutzer nichts
+    // gezogen hat - dann gilt weiter die Vorgabe mit gestreckter
+    // Rule-Spalte und es gibt nichts zu speichern.
+    function  ColumnWidthsText: string;
+    // Gegenstueck: False (und keine Aenderung) bei unlesbarem Text oder
+    // falscher Spaltenzahl.
+    function  ApplyColumnWidthsText(const AText: string): Boolean;
+    // Aktueller Filtertext (Tests/Wrapper); Setzen filtert sofort.
+    function  SearchText: string;
+    // Setzt den Filtertext und filtert sofort (ohne Entprellung).
+    procedure SetSearchText(const AText: string);
+
     property CurrentFile: string read FCurrentFile;
     property OnFindingClick: TFindingClickEvent read FOnClick write FOnClick;
+    // Feuert, wenn der NUTZER eine Spalte mit der Maus gezogen hat.
+    property OnColumnWidthsChanged: TNotifyEvent
+      read FOnColumnWidthsChanged write FOnColumnWidthsChanged;
+    // Text der Rule-Spalte; der IDE-Wrapper haengt BuildFindingTitle ein.
+    property RuleTextProvider: TFunc<TLeakFinding, string>
+      read FRuleTextProvider write FRuleTextProvider;
     // Wird im Destructor gefeuert BEVOR die Felder freed werden. IDE-
     // Plugin-Wrapper nutzt das, um seinen FFrame-Slot auf nil zu setzen,
     // damit asynchrone Callbacks (Theme-Sub, Watch-Findings-Sub) nicht
@@ -228,6 +287,21 @@ type
       read FOnClearEditorMarksRequested write FOnClearEditorMarksRequested;
   end;
 
+  // Ergebnis von SplitToolbarRest: zwei gleich breite Felder nebeneinander.
+  TToolbarSplit = record
+    FieldWidth : Integer;   // Breite JEDES der beiden Felder, nie negativ
+    FirstLeft  : Integer;   // linke Kante des ersten Felds
+    SecondLeft : Integer;   // linke Kante des zweiten Felds
+  end;
+
+// Teilt die Breite einer Toolbar-Zeile rechts ihrer Buttons in ZWEI gleich
+// breite Felder: [Buttons] Abstand [Feld 1] Abstand [Feld 2]. Beide bekommen
+// exakt dieselbe Breite; ein ungerades Restpixel bleibt rechts frei, und
+// reicht der Platz nicht, ist die Breite 0 statt negativ. Reine Rechnung -
+// der Frame legt damit Schweregrad-Combo und Filterfeld (LayoutToolbar).
+function SplitToolbarRest(AClientWidth, AButtonsWidth,
+  AGap: Integer): TToolbarSplit;
+
 implementation
 
 {$R *.dfm}
@@ -240,6 +314,7 @@ uses
   uAnalyserTheme,    // ActiveStyleServices
   uIDEToolbar,       // ApplySegoeUI - selbes Font-Setup wie TAnalyserFrame
   uPathNormalize,    // SPOT fuer Pfad-Normalisierung
+  uFuzzyComboSearch, // FuzzyMatchRow - derselbe Matcher wie die Filter-Combo
   uLocalization;     // _() Translation-Macro
 
 type
@@ -247,18 +322,40 @@ type
   // brauchen den Hook fuer die Stretching-Spaltenbreite (Message-Column).
   // Standard-VCL-Pattern - genauso wie TControlAccess in uIDEAnalyserForm.
   TStringGridAccess = class(TStringGrid);
+  // Derselbe Crack fuer die Schweregrad-Combo (LayoutToolbar).
+  TComboBoxAccess = class(TComboBox);
+
+  // Meldet, wenn der NUTZER eine Spalte mit der Maus gezogen hat.
+  // ColWidthsChanged feuert auch bei jeder programmatischen Breite (Aufbau,
+  // Strecken der Rule-Spalte, DPI-Wechsel) - nur waehrend gsColSizing ist
+  // es die Maus (TCustomGrid.MouseUp setzt die Breite, BEVOR es den
+  // Zustand zuruecknimmt).
+  TFindingsGrid = class(TStringGrid)
+  strict private
+    FOnUserColSized : TNotifyEvent;
+  protected
+    procedure ColWidthsChanged; override;
+  public
+    property OnUserColSized: TNotifyEvent
+      read FOnUserColSized write FOnUserColSized;
+  end;
 
 const
-  // Spalten-Layout (5 Spalten: Method / Line / Type / Rule / Severity).
-  // Analog zum IDE-Grid (uIDEAnalyserForm), abzueglich der Datei-Spalte
-  // weil das Properties-Fenster sowieso datei-bezogen ist.
-  COL_METHOD   = 0;
-  COL_LINE     = 1;
-  COL_TYPE     = 2;
-  COL_RULE     = 3;
-  COL_SEVERITY = 4;
-  COL_COUNT    = 5;
+  // Spalten-Layout - IDENTISCH zum Haupt-Grid des Plugins
+  // (uIDEAnalyserForm.BuildResultGrid): File / Method / Line / Type /
+  // Rule / Severity, gleiche Reihenfolge, gleiche Titel-msgids. Die
+  // Datei-Spalte ist im Einzeldatei-Panel fast immer gleich (.pas oder
+  // die Partner-.dfm), steht aber wie im Haupt-Grid (Nutzer-Auftrag
+  // 2026-11-13: gleiche Spalten).
+  COL_FILE     = 0;
+  COL_METHOD   = 1;
+  COL_LINE     = 2;
+  COL_TYPE     = 3;
+  COL_RULE     = 4;
+  COL_SEVERITY = 5;
+  COL_COUNT    = 6;
 
+  HEADER_FILE     = 'File';
   HEADER_METHOD   = 'Method';
   HEADER_LINE     = 'Line';
   HEADER_TYPE     = 'Type';
@@ -269,17 +366,45 @@ const
   COMBO_ERRORS_ONLY         = 'Errors only';
   COMBO_ERRORS_AND_WARNINGS = 'Errors + Warnings';
 
-  // Fixed-width-Spalten in Pixeln (96-DPI). Rule stretcht via GridResize.
-  // Knapp dimensioniert damit das Panel auch im schmalen Dock-Mode
-  // (rechts/links angedockt, ~280-350 px) noch alle Spalten zeigt -
-  // sonst wuerde Severity ganz rechts ausgeblendet. Akzent-Bar links
-  // bleibt zusaetzlich als Severity-Farbindikator immer sichtbar.
-  W_METHOD   = 95;
+  // Vorgabe-Breiten in Pixeln (96-DPI). Rule streckt via GridResize auf
+  // den Rest, SOLANGE der Nutzer keine Spalte gezogen hat. Knapper als im
+  // Haupt-Grid, weil das Panel meist schmal angedockt ist; jede Spalte ist
+  // mit der Maus ziehbar (goColSizing), die Breiten merkt sich der Wrapper.
+  W_FILE     = 90;
+  W_METHOD   = 90;
   W_LINE     = 40;
   W_TYPE     = 72;
-  W_SEVERITY = 56;
+  W_SEVERITY = 64;
   // Mindest-Breite fuer Rule wenn der Rest schon eng ist.
-  W_RULE_MIN = 80;
+  W_RULE_MIN = 120;
+  // Entprellung des Suchfelds - Wert wie im Haupt-Grid (SearchChange).
+  SEARCH_DEBOUNCE_MS = 200;
+  // Toolbar-Zeile, 96-DPI-Pixel (LayoutToolbar skaliert): Abstand vor der
+  // Schweregrad-Combo und zwischen Combo und Filterfeld; Oberkante der
+  // beiden Felder - der 1-px-Rand, den die Combo schon als alClient hatte.
+  TOOLBAR_GAP       = 4;
+  TOOLBAR_FIELD_TOP = 1;
+  // Hoehe der Combo, bis Windows ihr mit dem Fenster die echte gibt.
+  COMBO_START_H     = 24;
+
+function SplitToolbarRest(AClientWidth, AButtonsWidth,
+  AGap: Integer): TToolbarSplit;
+begin
+  Result.FieldWidth := (AClientWidth - AButtonsWidth - 2 * AGap) div 2;
+  if Result.FieldWidth < 0 then
+    Result.FieldWidth := 0;
+  Result.FirstLeft  := AButtonsWidth + AGap;
+  Result.SecondLeft := Result.FirstLeft + Result.FieldWidth + AGap;
+end;
+
+{ TFindingsGrid }
+
+procedure TFindingsGrid.ColWidthsChanged;
+begin
+  inherited;
+  if (FGridState = gsColSizing) and Assigned(FOnUserColSized) then
+    FOnUserColSized(Self);
+end;
 
 { TFindingsPropertiesFrame }
 
@@ -298,6 +423,10 @@ begin
   FNavTimer.Enabled  := False;
   FNavTimer.Interval := 80;           // ms Debounce gegen Key-Repeat
   FNavTimer.OnTimer  := NavTimerTick;
+  FSearchTimer := TTimer.Create(Self);
+  FSearchTimer.Enabled  := False;
+  FSearchTimer.Interval := SEARCH_DEBOUNCE_MS;
+  FSearchTimer.OnTimer  := SearchTimerTick;
   BuildControls;
   BuildGridConfig;
   UpdateHeader;
@@ -314,6 +443,7 @@ begin
   if Assigned(FOnDestroying) then
     try FOnDestroying(Self); except end;
   if Assigned(FNavTimer) then FNavTimer.Enabled := False;   // kein Tick im Teardown
+  if Assigned(FSearchTimer) then FSearchTimer.Enabled := False;
   FVisibleRows.Free;
   FAllFindings.Free;
   FFindingsByFile.Free;
@@ -324,9 +454,12 @@ procedure TFindingsPropertiesFrame.BuildControls;
 const
   BTN_SIZE = 26;   // quadratisch ("4-eckig") - 26 px DIP, skaliert
                    // ueber Form.Scaled wenn der User DPI != 96 fuehrt
+var
+  Grid : TFindingsGrid;
 begin
   // ---- Header-Panel ----
-  // Header-Hoehe nun 18 (Label) + 28 (Toolbar) + 6 (Padding) = ~52.
+  // Header-Hoehe: 18 (Label) + 28 (Toolbar) + 6 (Padding) = ~52. Das
+  // Suchfeld hat keine eigene Zeile mehr - es steht in der Toolbar.
   FHeaderPanel := TPanel.Create(Self);
   FHeaderPanel.Parent    := Self;
   FHeaderPanel.Align     := alTop;
@@ -343,9 +476,10 @@ begin
   TIDEToolbar.ApplySegoeUI(FHeaderLabel);
   FHeaderLabel.Font.Style := [fsBold];   // bold NACH ApplySegoeUI
 
-  // ---- Toolbar-Sub-Panel: [Clear][Reload] FSeverityCombo ----
-  // Liegt als alTop UNTER dem Label im Header. Reihenfolge der Children
-  // ergibt sich aus der Create-Sequenz + Align (alLeft+alLeft+alClient).
+  // ---- Toolbar-Sub-Panel: [Clear][Reload][ClearMarks] Combo Filter ----
+  // Liegt als alTop UNTER dem Label im Header. Die Buttons ordnen sich
+  // ueber die Create-Sequenz + alLeft; Combo und Filterfeld legt
+  // LayoutToolbar in den Rest. Tab-Reihenfolge = Create-Reihenfolge.
   FToolbarPanel := TPanel.Create(Self);
   FToolbarPanel.Parent     := FHeaderPanel;
   FToolbarPanel.Align      := alTop;
@@ -407,22 +541,45 @@ begin
   TIDEToolbar.ApplySegoeUI(FBtnClearMarks);
   FBtnClearMarks.Font.Size := 11;
 
-  // Severity-Combo - rechter Rest (alClient nach den drei alLeft).
+  // Severity-Combo - linke Haelfte des Rests rechts der drei Buttons.
+  // Kein Align: Position und Breite setzt LayoutToolbar.
   FSeverityCombo := TComboBox.Create(Self);
   FSeverityCombo.Parent    := FToolbarPanel;
-  FSeverityCombo.Align     := alClient;
-  FSeverityCombo.AlignWithMargins := True;
-  FSeverityCombo.Margins.SetBounds(4, 1, 0, 1);
-  FSeverityCombo.Height    := 24;   // expliziter Wert, sonst kann VCL beim
-                                    // Re-Parent (Dock-Recreate) auf 0 gehen
-                                    // und die Combo wird optisch verschluckt
+  FSeverityCombo.Height    := COMBO_START_H;   // expliziter Wert, sonst kann
+                                    // VCL beim Re-Parent (Dock-Recreate) auf
+                                    // 0 gehen und die Combo wird optisch
+                                    // verschluckt
   FSeverityCombo.Style     := csDropDownList;
   TIDEToolbar.ApplySegoeUI(FSeverityCombo);
   EnsureComboItems;
   FSeverityCombo.OnChange  := SeverityComboChange;
 
+  // ---- Suchfeld: Fuzzy-Filter ueber den Zeileninhalt ----
+  // Rechte Haelfte des Rests, in DERSELBEN Zeile wie die Combo und immer
+  // so gross wie sie (Nutzer-Auftrag 2026-11-13; vorher eine eigene Zeile
+  // unter der Toolbar). AutoSize aus: die Hoehe gibt die Combo vor, nicht
+  // die Schrift des Felds. TextHint ist der des Haupt-Grid-Suchfelds
+  // (gleiche msgid).
+  FSearchEdit := TEdit.Create(Self);
+  FSearchEdit.Parent   := FToolbarPanel;
+  FSearchEdit.AutoSize := False;
+  FSearchEdit.TextHint := _('Filter file / method / finding...');
+  FSearchEdit.OnChange := SearchEditChange;
+  TIDEToolbar.ApplySegoeUI(FSearchEdit);
+
+  // Neu legen bei neuer Toolbar-Breite UND wenn die Combo ihre Hoehe
+  // aendert: eine csDropDownList-Combo bekommt ihre Hoehe von Windows
+  // (Schrift), erst mit dem Fenster und nach jedem Schrift-/DPI-Wechsel.
+  // OnResize ist auf TComboBox protected - derselbe Class-Crack wie beim
+  // Grid (TStringGridAccess).
+  FToolbarPanel.OnResize := ToolbarResize;
+  TComboBoxAccess(FSeverityCombo).OnResize := ToolbarResize;
+  LayoutToolbar;
+
   // ---- Grid ----
-  FGrid := TStringGrid.Create(Self);
+  Grid := TFindingsGrid.Create(Self);
+  Grid.OnUserColSized := GridUserColSized;
+  FGrid := Grid;
   FGrid.Parent      := Self;
   FGrid.Align       := alClient;
   FGrid.DefaultDrawing := False;     // wir zeichnen via OnDrawCell
@@ -435,7 +592,7 @@ begin
   FGrid.FixedRows   := 1;
   FGrid.FixedCols   := 0;
   FGrid.Options     := FGrid.Options
-                       + [goRowSelect, goThumbTracking]
+                       + [goRowSelect, goThumbTracking, goColSizing]
                        - [goEditing, goRangeSelect];
   FGrid.DefaultRowHeight := 18;
   FGrid.OnDrawCell  := GridDrawCell;
@@ -454,27 +611,30 @@ begin
   // Header-Captions setzen (im Virtual-Mode liefert GetCellText sie bei
   // ARow=0; aber DefaultDrawing=False zeichnet auch den Header via
   // OnDrawCell, der ueber GetCellText geht - hier nur defensiv setzen).
+  FGrid.Cells[COL_FILE,     0] := _(HEADER_FILE);
   FGrid.Cells[COL_METHOD,   0] := _(HEADER_METHOD);
   FGrid.Cells[COL_LINE,     0] := _(HEADER_LINE);
   FGrid.Cells[COL_TYPE,     0] := _(HEADER_TYPE);
   FGrid.Cells[COL_RULE,     0] := _(HEADER_RULE);
   FGrid.Cells[COL_SEVERITY, 0] := _(HEADER_SEVERITY);
 
+  FGrid.ColWidths[COL_FILE]     := W_FILE;
   FGrid.ColWidths[COL_METHOD]   := W_METHOD;
   FGrid.ColWidths[COL_LINE]     := W_LINE;
   FGrid.ColWidths[COL_TYPE]     := W_TYPE;
+  FGrid.ColWidths[COL_RULE]     := W_RULE_MIN;
   FGrid.ColWidths[COL_SEVERITY] := W_SEVERITY;
-  // Rule stretcht auf den Rest in GridResize.
+  // Rule stretcht auf den Rest in GridResize (bis der Nutzer zieht).
 end;
 
 procedure TFindingsPropertiesFrame.BuildGridConfig;
 begin
   // IDE-Style-Config: Theme aktiv, Severity-Akzent-Bar links, Virtual-Mode
-  // via GetCellText. SeverityColumn auf unsere Spaltennummerierung
-  // umbiegen (1 = Sev).
+  // via GetCellText. Seit dem Spalten-Abgleich mit dem Haupt-Grid passt
+  // IDEConfig unveraendert (Severity = Spalte 5, Datei-Spalte 0 fett).
   FGridConfig := TFindingGridRenderer.IDEConfig(
     {ASortColumn=}-1, {ASortDescending=}False);
-  FGridConfig.SeverityColumn   := COL_SEVERITY;  // jetzt 4 (vorher 1)
+  FGridConfig.SeverityColumn   := COL_SEVERITY;
   FGridConfig.GetCellText      := GetCellText;
   FGridConfig.GetCellSeverity  := GetCellSeverity;
   FGridConfig.ShowSortIndicator := True;
@@ -522,6 +682,8 @@ begin
     // - VCL-Style-Engine paint'd damit den Drop-Body manuell.
     FSeverityCombo.Color      := Style.GetSystemColor(clWindow);
     FSeverityCombo.Font.Color := Style.GetSystemColor(clWindowText);
+    FSearchEdit.Color         := Style.GetSystemColor(clWindow);
+    FSearchEdit.Font.Color    := Style.GetSystemColor(clWindowText);
 
     FGrid.Color           := Style.GetSystemColor(clWindow);
     FGrid.Font.Color      := Style.GetSystemColor(clWindowText);
@@ -685,8 +847,64 @@ begin
   // (weiss) bis der Wrapper-FrameCreated-Pfad zum RefreshFromTheme kommt.
   // Bei Re-Parent (Dock/Undock) noetig weil die Color-Properties teils
   // zurueckgesetzt werden.
-  if Assigned(FHeaderPanel) and Assigned(FSeverityCombo) and Assigned(FGrid) then
+  if Assigned(FHeaderPanel) and Assigned(FSeverityCombo) and
+     Assigned(FSearchEdit) and Assigned(FGrid) then
     RefreshFromTheme;
+  // Nach dem Re-Parent stehen die Bounds der Toolbar-Felder evtl. auf den
+  // Werten vor dem Recreate - neu legen (prueft seine Felder selbst).
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.ChangeScale(M, D: Integer;
+  isDpiChange: Boolean);
+begin
+  inherited;
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.ToolbarResize(Sender: TObject);
+begin
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.LayoutToolbar;
+// Schweregrad-Combo und Filterfeld teilen sich den Platz rechts der drei
+// Buttons je zur Haelfte: beide bekommen DENSELBEN berechneten Wert als
+// Breite (kein "Rest per alClient" - das waere ein Rundungspixel mehr).
+// Hoehe und Oberkante gibt die Combo vor: eine csDropDownList-Combo laesst
+// sich nicht strecken, Windows legt ihre Hoehe aus der Schrift fest. Das
+// Filterfeld (AutoSize aus) uebernimmt deshalb die ZURUECKGELESENEN Werte
+// der Combo, nicht die gewuenschten. Gerechnet wird mit den wirklichen
+// Button-Breiten, nicht mit BTN_SIZE - die Buttons sind DPI-skaliert.
+// Laeuft auch beim DFM-Laden (Felder fehlen noch) und kann im Abbau noch
+// einmal ankommen (Felder zeigen dann auf freigegebene Controls).
+var
+  PPI   : Integer;
+  Split : TToolbarSplit;
+  H     : Integer;
+begin
+  if FInToolbarLayout or (csDestroying in ComponentState) then Exit;
+  // Das Filterfeld entsteht in BuildControls als LETZTES Toolbar-Control -
+  // steht es, stehen Panel, Buttons und Combo auch.
+  if not Assigned(FSearchEdit) then Exit;
+  FInToolbarLayout := True;
+  try
+    PPI := FToolbarPanel.CurrentPPI;
+    if PPI <= 0 then PPI := 96;
+    Split := SplitToolbarRest(FToolbarPanel.ClientWidth,
+      FBtnClear.Width + FBtnReload.Width + FBtnClearMarks.Width,
+      MulDiv(TOOLBAR_GAP, PPI, 96));
+    // Hoehe 0 kennt der Dock-Recreate (s. BuildControls) - dann die
+    // Start-Hoehe, Windows korrigiert sie mit dem Fenster.
+    H := FSeverityCombo.Height;
+    if H <= 0 then H := MulDiv(COMBO_START_H, PPI, 96);
+    FSeverityCombo.SetBounds(Split.FirstLeft,
+      MulDiv(TOOLBAR_FIELD_TOP, PPI, 96), Split.FieldWidth, H);
+    FSearchEdit.SetBounds(Split.SecondLeft, FSeverityCombo.Top,
+      FSeverityCombo.Width, FSeverityCombo.Height);
+  finally
+    FInToolbarLayout := False;
+  end;
 end;
 
 procedure TFindingsPropertiesFrame.EnsureComboItems;
@@ -715,6 +933,8 @@ var
   F        : TLeakFinding;
   Sev      : TFindingSeverity;
   FilterIdx: Integer;
+  Query    : string;
+  Pass     : Boolean;
 begin
   // Defensive: Combo-Items koennen nach Dock/Undock-Recreate fehlen UND
   // ItemIndex transient -1 zeigen. EnsureComboItems repopuliert wenn
@@ -723,17 +943,22 @@ begin
   FilterIdx := FSeverityCombo.ItemIndex;
   if FilterIdx < 0 then FilterIdx := 0;
 
+  Query := Trim(FSearchEdit.Text);
   FVisibleRows.Clear;
   for F in FAllFindings do
   begin
     Sev := SeverityFromKindLevel(F.Kind, F.Severity);
     case FilterIdx of
-      0 : FVisibleRows.Add(F);                                  // All
-      1 : if Sev = fsError then FVisibleRows.Add(F);            // Errors only
-      2 : if Sev in [fsError, fsWarning] then FVisibleRows.Add(F);
+      1 : Pass := Sev = fsError;                     // Errors only
+      2 : Pass := Sev in [fsError, fsWarning];
     else
-      FVisibleRows.Add(F);                                       // unbekannt -> show all
+      Pass := True;                                  // All / unbekannt
     end;
+    // Fuzzy-Suche zuletzt: sie ist der teure Teil (Rule-Text je Zeile).
+    if Pass and (Query <> '') then
+      Pass := MatchesSearch(F, Query);
+    if Pass then
+      FVisibleRows.Add(F);
   end;
   // Sort nach Filter, vor RowCount-Setzen.
   SortVisibleRows;
@@ -742,7 +967,47 @@ begin
     FGrid.RowCount := 2
   else
     FGrid.RowCount := FVisibleRows.Count + 1;
+  // Die Zeilennummern bedeuten nach jedem Filter-/Sortierlauf andere
+  // Funde - das "schon navigiert"-Gedaechtnis gilt nicht mehr.
+  FLastNavigatedRow := -1;
   FGrid.Invalidate;
+end;
+
+function TFindingsPropertiesFrame.MatchesSearch(F: TLeakFinding;
+  const AQuery: string): Boolean;
+// Gesucht wird ueber genau das, was die sechs Spalten ZEIGEN.
+begin
+  Result := FuzzyMatchRow(AQuery,
+    [DataCellText(F, COL_FILE), DataCellText(F, COL_METHOD),
+     DataCellText(F, COL_LINE), DataCellText(F, COL_TYPE),
+     DataCellText(F, COL_RULE), DataCellText(F, COL_SEVERITY)]);
+end;
+
+procedure TFindingsPropertiesFrame.SearchEditChange(Sender: TObject);
+begin
+  // Entprellt wie im Haupt-Grid: ein Filterlauf nach Tippstopp.
+  FSearchTimer.Enabled := False;
+  FSearchTimer.Enabled := True;
+end;
+
+procedure TFindingsPropertiesFrame.SearchTimerTick(Sender: TObject);
+begin
+  FSearchTimer.Enabled := False;
+  ApplySeverityFilter;
+  UpdateHeader;
+end;
+
+function TFindingsPropertiesFrame.SearchText: string;
+begin
+  Result := FSearchEdit.Text;
+end;
+
+procedure TFindingsPropertiesFrame.SetSearchText(const AText: string);
+begin
+  FSearchEdit.Text := AText;       // feuert OnChange -> Timer
+  FSearchTimer.Enabled := False;   // ... hier aber sofort
+  ApplySeverityFilter;
+  UpdateHeader;
 end;
 
 procedure TFindingsPropertiesFrame.GridMouseDown(Sender: TObject;
@@ -783,14 +1048,27 @@ procedure TFindingsPropertiesFrame.SortVisibleRows;
 var
   SortCol     : Integer;
   Descending  : Boolean;
+  RuleKeys    : TDictionary<TLeakFinding, string>;
+  F           : TLeakFinding;
 begin
   if FSortColumn < 0 then Exit;
   SortCol    := FSortColumn;
   Descending := FSortDescending;
+  // Rule-Text EINMAL je Fund vorberechnen (wie TFindingSorter den
+  // Datei-Schluessel): der Provider loest je Aufruf einen Fix-Hinweis auf,
+  // im Vergleicher liefe das O(n log n) mal.
+  RuleKeys := TDictionary<TLeakFinding, string>.Create;
+  try
+  if SortCol = COL_RULE then
+    for F in FVisibleRows do
+      RuleKeys.AddOrSetValue(F, RuleTextOf(F));
   FVisibleRows.Sort(TComparer<TLeakFinding>.Construct(
     function(const L, R: TLeakFinding): Integer
     begin
       case SortCol of
+        COL_FILE:
+          Result := CompareText(ExtractFileName(L.FileName),
+                                ExtractFileName(R.FileName));
         COL_METHOD:
           Result := CompareText(L.MethodName, R.MethodName);
         COL_LINE:
@@ -799,8 +1077,7 @@ begin
         COL_TYPE:
           Result := CompareText(L.TypeText, R.TypeText);
         COL_RULE:
-          Result := CompareText(KIND_META[L.Kind].Name,
-                                KIND_META[R.Kind].Name);
+          Result := CompareText(RuleKeys[L], RuleKeys[R]);
         COL_SEVERITY:
           Result := Integer(SeverityFromKindLevel(L.Kind, L.Severity)) -
                     Integer(SeverityFromKindLevel(R.Kind, R.Severity));
@@ -809,6 +1086,9 @@ begin
       end;
       if Descending then Result := -Result;
     end));
+  finally
+    RuleKeys.Free;
+  end;
 end;
 
 procedure TFindingsPropertiesFrame.UpdateHeader;
@@ -939,13 +1219,12 @@ begin
 end;
 
 function TFindingsPropertiesFrame.GetCellText(ACol, ARow: Integer): string;
-var
-  F : TLeakFinding;
 begin
   Result := '';
   if ARow = 0 then
   begin
     case ACol of
+      COL_FILE:     Result := _(HEADER_FILE);
       COL_METHOD:   Result := _(HEADER_METHOD);
       COL_LINE:     Result := _(HEADER_LINE);
       COL_TYPE:     Result := _(HEADER_TYPE);
@@ -955,28 +1234,39 @@ begin
     Exit;
   end;
   if (ARow - 1) >= FVisibleRows.Count then Exit;
-  F := FVisibleRows[ARow - 1];
+  Result := DataCellText(FVisibleRows[ARow - 1], ACol);
+end;
+
+function TFindingsPropertiesFrame.DataCellText(F: TLeakFinding;
+  ACol: Integer): string;
+// Zell-Inhalt einer Datenzeile - dieselben Felder wie die Zell-Closure
+// des Haupt-Grids (TAnalyserFrame.InitGridConfig). Eine Quelle fuer
+// Zeichnen UND Suchen: gefunden wird, was dasteht.
+begin
   case ACol of
+    COL_FILE:     Result := ExtractFileName(F.FileName);
     COL_METHOD:   Result := F.MethodName;
     COL_LINE:     Result := F.LineNumber;
     COL_TYPE:     Result := F.TypeText;
-    COL_RULE:
-      begin
-        // Konsistent zur zentralen BuildFindingTitle-Heuristik im
-        // IDE-Plugin: Rule-Name + Identifier-Suffix wenn MissingVar
-        // ein Identifier-only-Wert ist (z.B. ein Variablen-Name) -
-        // sonst nur Rule-Name.
-        Result := KIND_META[F.Kind].Name;
-        if (F.MissingVar <> '') and (Pos(' ', F.MissingVar) = 0) then
-          Result := Result + ': ' + F.MissingVar;
-      end;
-    COL_SEVERITY:
-      case SeverityFromKindLevel(F.Kind, F.Severity) of
-        fsError:   Result := 'E';
-        fsWarning: Result := 'W';
-        fsHint:    Result := 'H';
-      end;
+    COL_RULE:     Result := RuleTextOf(F);
+    COL_SEVERITY: Result := F.SeverityText;
+  else
+    Result := '';
   end;
+end;
+
+function TFindingsPropertiesFrame.RuleTextOf(F: TLeakFinding): string;
+begin
+  if Assigned(FRuleTextProvider) then
+  begin
+    Result := FRuleTextProvider(F);
+    Exit;
+  end;
+  // Ohne Wrapper (Standalone/Tests): Rule-Name + Bezeichner, wenn
+  // MissingVar ein reiner Bezeichner ist.
+  Result := KIND_META[F.Kind].Name;
+  if (F.MissingVar <> '') and (Pos(' ', F.MissingVar) = 0) then
+    Result := Result + ': ' + F.MissingVar;
 end;
 
 function TFindingsPropertiesFrame.GetCellSeverity(
@@ -1096,11 +1386,58 @@ begin
 end;
 
 procedure TFindingsPropertiesFrame.GridResize(Sender: TObject);
+begin
+  // Hat der Nutzer Breiten gezogen (oder wurden gespeicherte geladen),
+  // gehoeren sie ihm: kein Resize des Panels darf sie ueberschreiben.
+  if FUserSizedCols then Exit;
+  StretchRuleColumn;
+end;
+
+procedure TFindingsPropertiesFrame.GridUserColSized(Sender: TObject);
+begin
+  FUserSizedCols := True;
+  if Assigned(FOnColumnWidthsChanged) then
+    FOnColumnWidthsChanged(Self);
+end;
+
+function TFindingsPropertiesFrame.ColumnWidthsText: string;
+var
+  W   : array[0..COL_COUNT - 1] of Integer;
+  i   : Integer;
+  PPI : Integer;
+begin
+  Result := '';
+  if not FUserSizedCols then Exit;
+  PPI := FGrid.CurrentPPI;
+  if PPI <= 0 then PPI := 96;
+  for i := 0 to COL_COUNT - 1 do
+    W[i] := MulDiv(FGrid.ColWidths[i], 96, PPI);
+  Result := TFindingGridLayout.WidthsToText(W);
+end;
+
+function TFindingsPropertiesFrame.ApplyColumnWidthsText(
+  const AText: string): Boolean;
+var
+  W   : TArray<Integer>;
+  i   : Integer;
+  PPI : Integer;
+begin
+  Result := TFindingGridLayout.TryTextToWidths(AText, COL_COUNT, W);
+  if not Result then Exit;
+  PPI := FGrid.CurrentPPI;
+  if PPI <= 0 then PPI := 96;
+  for i := 0 to COL_COUNT - 1 do
+    FGrid.ColWidths[i] := MulDiv(W[i], PPI, 96);
+  FUserSizedCols := True;
+end;
+
+procedure TFindingsPropertiesFrame.StretchRuleColumn;
 var
   Avail : Integer;
 begin
   // Rule stretcht auf die restliche Breite (minus Scrollbar-Margin).
   Avail := FGrid.ClientWidth
+           - FGrid.ColWidths[COL_FILE]
            - FGrid.ColWidths[COL_METHOD]
            - FGrid.ColWidths[COL_LINE]
            - FGrid.ColWidths[COL_TYPE]
