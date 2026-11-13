@@ -440,25 +440,20 @@ procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
   Finding: TLeakFinding; Mode: TFindingNavMode);
 // Mode (fnmPreview/fnmActivate) steuert nur das FOKUS-Verhalten - das macht
 // der Frame selbst (Re-Focus ins Grid bei Preview). Der Editor-Sprung ist
-// fuer beide Modi identisch, AUSSER bei einem .dfm-Fund im Activate-Modus
-// (s.u.).
+// fuer beide Modi identisch.
 // Soft-Navigate via TIDEEditor.ShowFileAtLine - bringt die Datei nach
-// vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret. Wichtig:
-// NICHT TIDEEditor.OpenFileAtLine - das macht SafeCloseModule auf die
-// Companion-Datei, was ein normales Form-Modul (Foo.pas+Foo.dfm) komplett
-// schliesst weil FindModule(Foo.dfm) das Foo-Modul liefert. Effekt waere:
-// jeder Click oeffnet die Datei neu.
+// vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret und
+// schliesst NICHTS.
 //
-// .dfm-Fund im Activate-Modus (Doppelklick/Enter): ShowFileAtLine findet
-// ueber FindModule(.dfm) nur das Foo-Modul und zeigt dessen ERSTEN
-// Quelltext-Editor - das ist immer die .pas, nie die .dfm (siehe
-// FirstSourceEditorOf). Der Klick landete also mit der .dfm-Zeilennummer
-// in der .pas (Nutzer-Fund 2026-11-11). Fix identisch zu
-// TAnalyserFrame.GridDblClick im Voll-Scan-Grid: fuer .dfm im
-// Activate-Modus OpenFileAtLine (Close-and-Reopen, DFM laedt als Text).
-// Im Preview-Modus bleibt ShowFileAtLine (haeufig getriggert ueber
-// Pfeiltasten/Mausrad) - OpenFileAtLines CloseModule waere dort zu
-// aufdringlich (kann die IDE crashen, s. TAnalyserFrame.PreviewFindingAtRow).
+// .dfm-Fund: ShowFileAtLine reicht an ShowDfmAsTextAtLine weiter - die DFM
+// wird ueber "Ansicht als Text" gezeigt, in BEIDEN Modi (Nico-Entscheid
+// 2026-11-13: auch der Einfachklick). Vorher landete der Klick mit der
+// .dfm-Zeilennummer in der .pas (Nutzer-Fund 2026-11-11; der erste Fix
+// ueber Close-and-Reopen im Activate-Modus griff nicht, weil OpenFile(.dfm)
+// bei vorhandener Partner-.pas wieder das Form-Modul oeffnet).
+// Zentriert wird nur nach ERFOLG: CenterCurrentViewOnLine setzt den Caret
+// der obersten Ansicht - nach einem gescheiterten Sprung waere das eine
+// fremde Datei.
 var
   Line: Integer;
 begin
@@ -469,14 +464,8 @@ begin
 
   FSuppressActivationUntil := GetTickCount + 250;   // ms
 
-  if (Mode = fnmActivate) and SameText(ExtractFileExt(Finding.FileName), '.dfm') then
-  begin
-    TIDEEditor.OpenFileAtLine(Finding.FileName, Line);
-    Exit;
-  end;
-
-  TIDEEditor.ShowFileAtLine(Finding.FileName, Line);
-  TIDEEditor.CenterCurrentViewOnLine(Line);
+  if TIDEEditor.ShowFileAtLine(Finding.FileName, Line) then
+    TIDEEditor.CenterCurrentViewOnLine(Line);
 end;
 
 procedure TFindingsPropertiesDockableForm.InitialPopulateFromActiveEditor;

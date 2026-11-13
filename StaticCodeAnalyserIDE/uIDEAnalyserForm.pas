@@ -2270,8 +2270,9 @@ end;
 procedure TAnalyserFrame.PreviewFindingAtRow(ARow: Integer);
 // Soft-Navigate zum Fund in Zeile ARow (Preview): Editor zeigt die Stelle,
 // Fokus kehrt ins Grid zurueck, damit der User mit Pfeiltasten weiternavigieren
-// kann. KEIN OpenFileAtLine (das wuerde per CloseModule die IDE crashen) -
-// ShowFileAtLine schliesst nichts. Highlights setzt bereits GridSelectCell.
+// kann. ShowFileAtLine schliesst nichts; einen .dfm-Fund zeigt es als Text
+// (ShowDfmAsTextAtLine). Zentriert wird nur nach Erfolg - sonst traefe der
+// Caret die gerade oberste, fremde Datei. Highlights setzt GridSelectCell.
 var
   idx     : Integer;
   Finding : TLeakFinding;
@@ -2288,8 +2289,8 @@ begin
   if (absPath = '') or (lineNo <= 0) then Exit;
   if not FileExists(absPath) then Exit;
 
-  TIDEEditor.ShowFileAtLine(absPath, lineNo);
-  TIDEEditor.CenterCurrentViewOnLine(lineNo);
+  if TIDEEditor.ShowFileAtLine(absPath, lineNo) then
+    TIDEEditor.CenterCurrentViewOnLine(lineNo);
   if FResultGrid.CanFocus then FResultGrid.SetFocus;
   FLastPreviewRow := ARow;
 end;
@@ -4294,14 +4295,11 @@ begin
     Exit;
   end;
 
-  // .dfm-Befund: hier ist das Schliessen der .pas GEWOLLT, damit die DFM als
-  // TEXT (statt im Form-Designer) laedt. Drei moegliche Auspraegungen:
-  //   ofmRegular         -> normal
-  //   ofmDfmAsText       -> .pas war zu/unmodifiziert -> DFM als Text geoeffnet,
-  //                         CursorPos zeigt auf die Befund-Zeile.
-  // Einen dritten Modus gab es nur auf dem Papier - s. TOpenFileMode.
-  // Wer die .dfm doppelklickt, dessen modifizierte Companion-.pas wird
-  // dabei still gespeichert und geschlossen.
+  // .dfm-Befund: die DFM wird ueber "Ansicht als Text" gezeigt
+  // (TIDEEditor.ShowDfmAsTextAtLine) - geschlossen und gespeichert wird
+  // nichts mehr.
+  //   ofmDfmAsText -> DFM steht als Text im Editor, Caret auf der Befund-Zeile
+  //   ofmRegular   -> Umschalten gescheitert, Caret unangetastet
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
