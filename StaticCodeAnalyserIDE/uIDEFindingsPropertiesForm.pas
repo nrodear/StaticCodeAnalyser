@@ -392,7 +392,12 @@ procedure TFindingsPropertiesDockableForm.HandleEditorViewActivated(
 // Burst-Sequenz von Events; in den ersten 250ms ignorieren.
 begin
   if not Assigned(FFrame) then Exit;
-  if GetTickCount < FSuppressActivationUntil then Exit;
+  if GetTickCount < FSuppressActivationUntil then
+  begin
+    NavTrace('panel: ViewActivated UNTERDRUECKT ' + AFileName);
+    Exit;
+  end;
+  NavTrace('panel: ViewActivated ' + AFileName);
   FFrame.SetActiveFile(AFileName);
   // Auto-Scan der neuen Datei. ACenterOnFirstFinding=False, sonst wuerde
   // der Editor bei jedem Tab-Wechsel auf den ersten Befund springen.
@@ -440,6 +445,8 @@ begin
   end;
   // Ownership-Transfer in den Frame; SetFindings macht's atomisch + freed
   // Owned nach dem Reinkopieren in FAllFindings.
+  NavTrace(Format('panel: SetFindings %s n=%d',
+    [ExtractFileName(FileName), Owned.Count]));
   FFrame.SetFindings(FileName, Owned);
 end;
 
@@ -471,7 +478,8 @@ procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
 // der obersten Ansicht - nach einem gescheiterten Sprung waere das eine
 // fremde Datei.
 var
-  Line: Integer;
+  Line  : Integer;
+  Shown : Boolean;
 begin
   if not Assigned(Finding) then Exit;
   if Finding.FileName = '' then Exit;
@@ -480,8 +488,12 @@ begin
 
   FSuppressActivationUntil := GetTickCount + 250;   // ms
 
-  if TIDEEditor.ShowFileAtLine(Finding.FileName, Line) then
+  NavTrace(Format('panel: Klick EIN modus=%d %s:%d',
+    [Ord(Mode), ExtractFileName(Finding.FileName), Line]));
+  Shown := TIDEEditor.ShowFileAtLine(Finding.FileName, Line);
+  if Shown then
     TIDEEditor.CenterCurrentViewOnLine(Line);
+  NavTrace('panel: Klick AUS ok=' + BoolToStr(Shown, True));
 end;
 
 procedure TFindingsPropertiesDockableForm.InitialPopulateFromActiveEditor;
@@ -551,6 +563,7 @@ begin
   if not FileExists(AFileName) then Exit;
   if ShouldSkipPair(AFileName, ScanFile) then Exit;
 
+  NavTrace('panel: AutoScan ' + ExtractFileName(ScanFile));
   try
     // Welle 1b: Scan-Zeit nur bei ECHTEM Lauf stempeln - ein busy-Skip
     // (Engine-Lock belegt) darf den Cache nicht fuellen, sonst bleibt die

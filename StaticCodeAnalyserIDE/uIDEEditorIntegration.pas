@@ -171,6 +171,16 @@ type
       LineNumber: Integer; const NewLine: string): Boolean; static;
   end;
 
+const
+  // Ablaufspur der Fund-Navigation: geschrieben wird nur, solange im
+  // TEMP-Verzeichnis die Schalterdatei liegt (Inhalt egal). Kein Egress.
+  NAVTRACE_SWITCH = 'sca-navtrace.on';
+  NAVTRACE_FILE   = 'sca-navtrace.log';
+
+// Eine Zeile Ablaufspur (Zeitstempel + Text) nach %TEMP%\sca-navtrace.log,
+// wenn %TEMP%\sca-navtrace.on existiert. Wirft nie.
+procedure NavTrace(const AText: string);
+
 implementation
 
 // noinspection-file AvoidOut, BeginEndRequired, DuplicateBlock, GroupedDeclaration, MultipleExit, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
@@ -220,12 +230,46 @@ begin
   Result := nil;
 end;
 
+procedure NavTrace(const AText: string);
+// Reine Win32-Aufrufe statt TFile: ein Schreibfehler ist dann ein
+// Rueckgabewert, keine Exception - die Spur darf die Navigation nie stoeren.
+var
+  Dir     : string;
+  Line    : UTF8String;
+  Handle  : THandle;
+  Written : DWORD;
+begin
+  Dir := IncludeTrailingPathDelimiter(TPath.GetTempPath);
+  if not FileExists(Dir + NAVTRACE_SWITCH) then Exit;
+  Line := UTF8Encode(FormatDateTime('hh:nn:ss.zzz', Now,
+    TFormatSettings.Invariant) + ' ' + AText + sLineBreak);
+  Handle := CreateFile(PChar(Dir + NAVTRACE_FILE), FILE_APPEND_DATA,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_ALWAYS,
+    FILE_ATTRIBUTE_NORMAL, 0);
+  if Handle = INVALID_HANDLE_VALUE then Exit;
+  WriteFile(Handle, PAnsiChar(Line)^, Length(Line), Written, nil);
+  CloseHandle(Handle);
+end;
+
 procedure DfmNavLog(const AText: string);
-// Fehlerdiagnose der DFM-Navigation (DebugView, Praefix 'SCA: dfmnav') -
-// immer an: welcher Schritt scheiterte, laesst sich von aussen nicht sehen.
+// Diagnose der DFM-Navigation: DebugView (Praefix 'SCA: dfmnav') und Spur.
 begin
   // noinspection DebugOutput
   OutputDebugString(PChar('SCA: dfmnav ' + AText));
+  NavTrace(AText);
+end;
+
+function TopViewFileName: string;
+// Datei der obersten Editor-Ansicht, '' ohne Ansicht - nur fuer die Spur.
+var
+  EditorSvc : IOTAEditorServices;
+  View      : IOTAEditView;
+begin
+  Result := '';
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  View := EditorSvc.TopView;
+  if Assigned(View) and Assigned(View.Buffer) then
+    Result := View.Buffer.FileName;
 end;
 
 function FindOrOpenModule(const AbsPath: string): IOTAModule;
@@ -246,38 +290,77 @@ begin
   Result := ModSvc.FindModule(AbsPath);
 end;
 
-function PlaceCaret(const AEditor: IOTASourceEditor; ALine: Integer): Boolean;
-// Caret der ersten Ansicht auf ALine, Spalte 1, und in den sichtbaren
-// Bereich. False ohne Ansicht.
+function PlaceCaretInView(const AView: IOTAEditView; ALine: Integer): Boolean;
+// Caret der Ansicht auf ALine, Spalte 1, und in den sichtbaren Bereich.
 var
-  EditView : IOTAEditView;
-  EditPos  : TOTAEditPos;
+  EditPos : TOTAEditPos;
+begin
+  Result := False;
+  if not Assigned(AView) then Exit;
+  EditPos.Col  := 1;
+  EditPos.Line := ALine;
+  AView.CursorPos := EditPos;
+  AView.MoveViewToCursor;
+  AView.Paint;
+  Result := True;
+end;
+
+function PlaceCaret(const AEditor: IOTASourceEditor; ALine: Integer): Boolean;
+// Caret der ersten Ansicht auf ALine. False ohne Ansicht.
 begin
   Result := False;
   if not Assigned(AEditor) or (AEditor.EditViewCount < 1) then Exit;
-  EditView := AEditor.GetEditView(0);
-  if not Assigned(EditView) then Exit;
-  EditPos.Col  := 1;
-  EditPos.Line := ALine;
-  EditView.CursorPos := EditPos;
-  EditView.MoveViewToCursor;
-  EditView.Paint;
+  Result := PlaceCaretInView(AEditor.GetEditView(0), ALine);
+end;
+
+function ViewShowsFile(const AView: IOTAEditView; const AbsPath: string): Boolean;
+begin
+  Result := Assigned(AView) and Assigned(AView.Buffer)
+    and SameText(AView.Buffer.FileName, AbsPath);
+end;
+
+function SwapViewOfUnit(const AView: IOTAEditView;
+  const AbsPath: string): Boolean;
+// Loest "Ansicht als Text" auf AView aus - nur wenn AView nachweislich die
+// Unit zur DFM AbsPath zeigt. False mit Diagnose sonst.
+var
+  Actions : IOTAEditActions;
+begin
+  Result := False;
+  if not Assigned(AView) or not Assigned(AView.Buffer)
+     or not SameText(ChangeFileExt(AView.Buffer.FileName, ''),
+                     ChangeFileExt(AbsPath, '')) then
+  begin
+    DfmNavLog('oberste Ansicht ist nicht die Unit: ' + AbsPath);
+    Exit;
+  end;
+  if not Supports(AView, IOTAEditActions, Actions) then
+  begin
+    DfmNavLog('Ansicht ohne IOTAEditActions: ' + AbsPath);
+    Exit;
+  end;
+  Actions.SwapSourceFormView;
   Result := True;
 end;
 
 function SwapToDfmText(const AModule: IOTAModule;
-  const AbsPath: string): IOTASourceEditor;
-// Designer-Ansicht -> Textansicht ("Ansicht als Text", Alt+F12) und den
-// DFM-Texteditor liefern; nil mit Diagnose, wenn ein Schritt scheitert.
-// SwapSourceFormView wirkt auf die OBERSTE Ansicht: erst die Unit dieses
-// Moduls nach vorn und pruefen, dass sie es wirklich ist - sonst schaltete
+  const AbsPath: string): IOTAEditView;
+// Liefert die Ansicht, die die DFM als TEXT zeigt ("Ansicht als Text",
+// Alt+F12); nil mit Diagnose, wenn ein Schritt scheitert.
+// SwapSourceFormView ist ein UMSCHALTER und wirkt auf die OBERSTE Ansicht.
+// Deshalb ZUSTANDSBASIERT: erst die Unit dieses Moduls nach vorn, dann
+// lesen, was oben liegt. Zeigt die Ansicht schon die .dfm, wird NICHT
+// geschaltet - ein zweiter Aufruf (Vorschau-Klick + Doppelklick im
+// Datei-Fund-Panel) schaltete sonst wieder zurueck (Nutzer-Fund
+// 2026-11-13: bei offener .pas kam die DFM nicht). Geschaltet wird nur,
+// wenn oben nachweislich die Unit DIESES Moduls liegt - sonst schaltete
 // ein fremdes Formular um.
 var
   EditorSvc : IOTAEditorServices;
   ModSvc    : IOTAModuleServices;
   PasEditor : IOTASourceEditor;
+  DfmEditor : IOTASourceEditor;
   TopView   : IOTAEditView;
-  Actions   : IOTAEditActions;
 begin
   Result := nil;
   if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
@@ -288,26 +371,29 @@ begin
     DfmNavLog('Modul ohne Unit-Editor: ' + AbsPath);
     Exit;
   end;
+  DfmNavLog('swap: vor Show top=' + TopViewFileName);
   PasEditor.Show;
   TopView := EditorSvc.TopView;
-  if not Assigned(TopView) or not Assigned(TopView.Buffer)
-     or not SameText(ChangeFileExt(TopView.Buffer.FileName, ''),
-                     ChangeFileExt(AbsPath, '')) then
+  DfmNavLog('swap: nach Show top=' + TopViewFileName);
+  if ViewShowsFile(TopView, AbsPath) then
   begin
-    DfmNavLog('oberste Ansicht ist nicht die Unit: ' + AbsPath);
-    Exit;
+    DfmNavLog('swap: oben liegt schon die DFM - kein Umschalten');
+    Exit(TopView);
   end;
-  if not Supports(TopView, IOTAEditActions, Actions) then
-  begin
-    DfmNavLog('Ansicht ohne IOTAEditActions: ' + AbsPath);
-    Exit;
-  end;
-  Actions.SwapSourceFormView;
-  Actions := nil;
+  if not SwapViewOfUnit(TopView, AbsPath) then Exit;
   TopView := nil;
-  Result := DfmTextEditorOf(ModSvc.FindModule(AbsPath));
-  if not Assigned(Result) then
-    DfmNavLog('nach "Ansicht als Text" kein DFM-Texteditor: ' + AbsPath);
+  TopView := EditorSvc.TopView;
+  DfmNavLog('swap: nach SwapSourceFormView top=' + TopViewFileName);
+  if ViewShowsFile(TopView, AbsPath) then
+    Exit(TopView);
+  DfmEditor := DfmTextEditorOf(ModSvc.FindModule(AbsPath));
+  if Assigned(DfmEditor) and (DfmEditor.EditViewCount > 0) then
+  begin
+    DfmNavLog('swap: DFM-Texteditor ueber das Modul gefunden');
+    DfmEditor.Show;
+    Exit(DfmEditor.GetEditView(0));
+  end;
+  DfmNavLog('nach "Ansicht als Text" zeigt nichts die DFM: ' + AbsPath);
 end;
 
 class function TIDEEditor.TryGetCurrentPasFile(out APath: string): TCurrentFileResult;
@@ -535,10 +621,13 @@ class function TIDEEditor.ShowDfmAsTextAtLine(const AbsPath: string;
 var
   Module    : IOTAModule;
   DfmEditor : IOTASourceEditor;
+  DfmView   : IOTAEditView;
 begin
   Result := False;
   if not IsDfmFile(AbsPath) then Exit;
 
+  DfmNavLog(Format('dfm: Start %s:%d top=%s',
+    [ExtractFileName(AbsPath), LineNumber, TopViewFileName]));
   Module := FindOrOpenModule(AbsPath);
   if not Assigned(Module) then
   begin
@@ -547,12 +636,20 @@ begin
   end;
 
   DfmEditor := DfmTextEditorOf(Module);
-  if not Assigned(DfmEditor) then
-    DfmEditor := SwapToDfmText(Module, AbsPath);
-  if not Assigned(DfmEditor) then Exit;
-
-  DfmEditor.Show;
-  Result := (LineNumber <= 0) or PlaceCaret(DfmEditor, LineNumber);
+  if Assigned(DfmEditor) then
+  begin
+    DfmNavLog('dfm: Modul fuehrt DFM-Texteditor - nur zeigen');
+    DfmEditor.Show;
+    Result := (LineNumber <= 0) or PlaceCaret(DfmEditor, LineNumber);
+  end
+  else
+  begin
+    DfmView := SwapToDfmText(Module, AbsPath);
+    if Assigned(DfmView) then
+      Result := (LineNumber <= 0) or PlaceCaretInView(DfmView, LineNumber);
+  end;
+  DfmNavLog(Format('dfm: Ende ok=%s top=%s',
+    [BoolToStr(Result, True), TopViewFileName]));
 end;
 
 class function TIDEEditor.ShowFileAtLine(const AbsPath: string;
