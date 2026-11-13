@@ -7239,3 +7239,78 @@ msgstr "Tabs werden in %d von %d Zeilen mit Tab zu Leerzeichen; Tabs in Strings 
 
 msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"
 msgstr "kein Tab der Datei kann ersetzt werden (alle stehen in einem String oder einer Compiler-Direktive, oder ihre Tabweite ist mehrdeutig)"
+
+msgid "line out of range"
+msgstr "Zeile außerhalb des gültigen Bereichs"
+
+msgid "line %d is no longer a 'unit ...;' declaration"
+msgstr "Zeile %d ist keine 'unit ...;'-Deklaration mehr"
+
+msgid "comment or string on the line - the insertion point is unclear"
+msgstr "Kommentar oder String auf der Zeile - die Einfügestelle ist unklar"
+
+msgid "no '[' GUID bracket follows the header"
+msgstr "hinter dem Kopf folgt keine GUID-Klammer '['"
+
+msgid "the '[...]' bracket does not hold a single GUID literal"
+msgstr "die Klammer '[...]' enthält nicht genau ein GUID-Literal"
+
+msgid "the GUID literal spans more than one line"
+msgstr "das GUID-Literal geht über mehr als eine Zeile"
+
+msgid "no enclosing 'public' section found"
+msgstr "kein umschließender 'public'-Abschnitt gefunden"
+
+msgid "another declaration stands between 'public' and this member - move this one by hand"
+msgstr "zwischen 'public' und diesem Member steht eine weitere Deklaration - diesen von Hand verschieben"
+
+msgid "could not read the component name from the finding"
+msgstr "der Komponentenname konnte nicht aus dem Fund gelesen werden"
+
+msgid "line %d is out of range (declaration moved?)"
+msgstr "Zeile %d liegt außerhalb des gültigen Bereichs (Deklaration verschoben?)"
+
+msgid "line %d is no longer this component's declaration (moved or already changed?)"
+msgstr "Zeile %d ist nicht mehr die Deklaration dieser Komponente (verschoben oder schon geändert?)"
+
+msgid "component block too large to scan safely"
+msgstr "Komponentenblock zu groß, um ihn sicher zu durchsuchen"
+
+msgid "could not find the matching 'end' for this component"
+msgstr "das zugehörige 'end' dieser Komponente wurde nicht gefunden"
+
+msgid "component has child components - deleting it would remove them too"
+msgstr "Komponente hat Kindkomponenten - ihr Löschen entfernte auch diese"
+
+msgid "unexpected indentation around the matching 'end' - structure not recognised"
+msgstr "unerwartete Einrückung am zugehörigen 'end' - Struktur nicht erkannt"
+
+msgid "line %d is no longer an object/inherited/inline line (declaration moved?)"
+msgstr "Zeile %d ist keine object/inherited/inline-Zeile mehr (Deklaration verschoben?)"
+
+msgid "no enclosing parent component found"
+msgstr "keine umschließende Elternkomponente gefunden"
+
+msgid "this component no longer has its own TabOrder property"
+msgstr "diese Komponente hat keine eigene TabOrder-Property mehr"
+
+msgid "parent block too large to scan safely"
+msgstr "Block der Elternkomponente zu groß, um ihn sicher zu durchsuchen"
+
+msgid "no free TabOrder value found"
+msgstr "kein freier TabOrder-Wert gefunden"
+
+msgid "could not read the event binding from the finding"
+msgstr "die Event-Bindung konnte nicht aus dem Fund gelesen werden"
+
+msgid "line %d is no longer an event binding (moved or already changed?)"
+msgstr "Zeile %d ist keine Event-Bindung mehr (verschoben oder schon geändert?)"
+
+msgid "line %d no longer binds %s to %s (moved or already changed?)"
+msgstr "Zeile %d bindet %s nicht mehr an %s (verschoben oder schon geändert?)"
+
+msgid "a leaf component with no reference anywhere - deleting it removes nothing else"
+msgstr "eine Blattkomponente, die nirgends referenziert wird - ihr Löschen entfernt sonst nichts"
+
+msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"
+msgstr "die Handler-Methode gibt es in der Form-Klasse nicht - das Entfernen der Referenz bricht nichts, was vorher funktionierte"

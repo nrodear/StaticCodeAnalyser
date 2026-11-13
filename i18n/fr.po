@@ -7235,3 +7235,78 @@ msgstr "les tabulations deviennent des espaces dans %d des %d ligne(s) avec une 
 
 msgid "no tab in the file can be replaced (all are inside a string or a compiler directive, or their tab width is ambiguous)"
 msgstr "aucune tabulation du fichier ne peut être remplacée (toutes sont dans une chaîne ou une directive de compilation, ou leur largeur de tabulation est ambiguë)"
+
+msgid "line out of range"
+msgstr "ligne hors limites"
+
+msgid "line %d is no longer a 'unit ...;' declaration"
+msgstr "la ligne %d n'est plus une déclaration 'unit ...;'"
+
+msgid "comment or string on the line - the insertion point is unclear"
+msgstr "commentaire ou chaîne sur la ligne - le point d'insertion n'est pas clair"
+
+msgid "no '[' GUID bracket follows the header"
+msgstr "aucun crochet GUID '[' ne suit l'en-tête"
+
+msgid "the '[...]' bracket does not hold a single GUID literal"
+msgstr "le crochet '[...]' ne contient pas exactement un littéral GUID"
+
+msgid "the GUID literal spans more than one line"
+msgstr "le littéral GUID s'étend sur plus d'une ligne"
+
+msgid "no enclosing 'public' section found"
+msgstr "aucune section 'public' englobante trouvée"
+
+msgid "another declaration stands between 'public' and this member - move this one by hand"
+msgstr "une autre déclaration se trouve entre 'public' et ce membre - à déplacer à la main"
+
+msgid "could not read the component name from the finding"
+msgstr "impossible de lire le nom du composant dans le résultat"
+
+msgid "line %d is out of range (declaration moved?)"
+msgstr "la ligne %d est hors limites (déclaration déplacée ?)"
+
+msgid "line %d is no longer this component's declaration (moved or already changed?)"
+msgstr "la ligne %d n'est plus la déclaration de ce composant (déplacée ou déjà modifiée ?)"
+
+msgid "component block too large to scan safely"
+msgstr "bloc du composant trop grand pour être parcouru de façon sûre"
+
+msgid "could not find the matching 'end' for this component"
+msgstr "le 'end' correspondant à ce composant est introuvable"
+
+msgid "component has child components - deleting it would remove them too"
+msgstr "le composant a des composants enfants - le supprimer les supprimerait aussi"
+
+msgid "unexpected indentation around the matching 'end' - structure not recognised"
+msgstr "indentation inattendue autour du 'end' correspondant - structure non reconnue"
+
+msgid "line %d is no longer an object/inherited/inline line (declaration moved?)"
+msgstr "la ligne %d n'est plus une ligne object/inherited/inline (déclaration déplacée ?)"
+
+msgid "no enclosing parent component found"
+msgstr "aucun composant parent englobant trouvé"
+
+msgid "this component no longer has its own TabOrder property"
+msgstr "ce composant n'a plus sa propre propriété TabOrder"
+
+msgid "parent block too large to scan safely"
+msgstr "bloc du composant parent trop grand pour être parcouru de façon sûre"
+
+msgid "no free TabOrder value found"
+msgstr "aucune valeur TabOrder libre trouvée"
+
+msgid "could not read the event binding from the finding"
+msgstr "impossible de lire la liaison d'événement dans le résultat"
+
+msgid "line %d is no longer an event binding (moved or already changed?)"
+msgstr "la ligne %d n'est plus une liaison d'événement (déplacée ou déjà modifiée ?)"
+
+msgid "line %d no longer binds %s to %s (moved or already changed?)"
+msgstr "la ligne %d ne lie plus %s à %s (déplacée ou déjà modifiée ?)"
+
+msgid "a leaf component with no reference anywhere - deleting it removes nothing else"
+msgstr "un composant feuille référencé nulle part - sa suppression n'enlève rien d'autre"
+
+msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"
+msgstr "la méthode du gestionnaire n'existe pas dans la classe de la fiche - supprimer la référence ne casse rien qui fonctionnait auparavant"

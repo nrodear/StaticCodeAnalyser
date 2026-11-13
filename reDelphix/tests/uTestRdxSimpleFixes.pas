@@ -1334,7 +1334,7 @@ begin
   // Ein weiteres Mitglied VOR dem Fund im selben Abschnitt.
   Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
     '    procedure Other;', '    procedure P;']), 7, R));
-  Assert.IsTrue(Pos('another declaration', R) > 0, R);
+  Assert.IsTrue(Pos('weitere Deklaration', R) > 0, R);
   // Ein weiteres Mitglied NACH dem Fund im selben Abschnitt.
   Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
     '    procedure P;', '    procedure Other;']), 6, R));
@@ -1342,7 +1342,7 @@ begin
   // Kein 'public' davor - der Member steht schon in einem anderen Abschnitt.
   Assert.AreEqual('', FixVisibility(vtStrictPrivate, InClass(['  protected',
     '    procedure P;']), 6, R));
-  Assert.IsTrue(Pos('no enclosing', R) > 0, R);
+  Assert.IsTrue(Pos('Abschnitt gefunden', R) > 0, R);
   // Mehrzeiliges Member (Property): ALine+1 liegt noch in der Deklaration -
   // SectionEmptyReason sperrt konservativ (dokumentierte Grenze).
   Assert.AreEqual('', FixVisibility(vtProtected, InClass(['  public',
