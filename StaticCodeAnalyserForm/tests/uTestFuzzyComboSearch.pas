@@ -15,9 +15,36 @@ uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes,
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Winapi.Windows, Winapi.Messages,
-  uFuzzyComboSearch;
+  uFuzzyComboSearch,
+  uFindingGridRenderer;   // TFindingGridLayout: Breiten <-> INI-Text
 
 type
+  // ---- Zeilen-Filter des Datei-Fund-Panels: reine Funktion ------------
+  [TestFixture]
+  TTestFuzzyMatchRow = class
+  public
+    [Test] procedure EmptyQuery_MatchesEverything;
+    [Test] procedure Substring_InAnyCell_Matches;
+    [Test] procedure Fuzzy_InOneCell_Matches;
+    [Test] procedure ScatteredLetters_InLongMessage_DoNotMatch;
+    [Test] procedure Terms_AreAnded_AcrossCells;
+    [Test] procedure OneTermMissing_NoMatch;
+    [Test] procedure CaseInsensitive;
+    [Test] procedure LettersSpreadOverTwoCells_DoNotMatch;
+  end;
+
+  // ---- Spaltenbreiten-Persistenz: Text hin und zurueck ----------------
+  [TestFixture]
+  TTestGridWidthsText = class
+  public
+    [Test] procedure RoundTrip_KeepsValues;
+    [Test] procedure WrongCount_Rejected;
+    [Test] procedure NonNumeric_Rejected;
+    [Test] procedure OutOfRange_Rejected;
+    [Test] procedure Whitespace_Tolerated;
+    [Test] procedure EmptyText_Rejected;
+  end;
+
   // ---- Fuzzy-Bewertung: reine Funktion, kein Fenster noetig -----------
   [TestFixture]
   TTestFuzzyMatch = class
@@ -113,6 +140,135 @@ const
   // Zeichenfolge, die garantiert keinen Eintrag trifft - genau die
   // Eingabe, mit der die Listenindex-Ausnahme gemeldet wurde.
   NO_MATCH_QUERY = 'tesgvfljkmnlkm';
+
+{ TTestFuzzyMatchRow }
+
+const
+  // Eine Zeile, wie das Panel sie zeigt: File/Method/Line/Type/Rule/Severity.
+  ROW_FILE   = 'uOrderForm.pas';
+  ROW_METHOD = 'TOrderForm.SaveClick';
+  ROW_LINE   = '142';
+  ROW_TYPE   = 'Vulnerability';
+  ROW_RULE   = 'SQL injection: query text is concatenated from user input';
+  ROW_SEV    = 'Error';
+
+function RowHits(const AQuery: string): Boolean;
+begin
+  Result := FuzzyMatchRow(AQuery,
+    [ROW_FILE, ROW_METHOD, ROW_LINE, ROW_TYPE, ROW_RULE, ROW_SEV]);
+end;
+
+procedure TTestFuzzyMatchRow.EmptyQuery_MatchesEverything;
+begin
+  Assert.IsTrue(RowHits(''), 'leere Anfrage filtert nichts');
+  Assert.IsTrue(RowHits('   '), 'nur Leerraum filtert nichts');
+end;
+
+procedure TTestFuzzyMatchRow.Substring_InAnyCell_Matches;
+begin
+  Assert.IsTrue(RowHits('orderform'), 'Datei-Spalte');
+  Assert.IsTrue(RowHits('142'), 'Zeilen-Spalte');
+  Assert.IsTrue(RowHits('concatenated'), 'Rule-Spalte');
+  Assert.IsTrue(RowHits('err'), 'Severity-Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.Fuzzy_InOneCell_Matches;
+begin
+  Assert.IsTrue(RowHits('sqlinj'),
+    'Luecke ueber die Wortgrenze: SQL injection');
+  Assert.IsTrue(RowHits('savclk'),
+    'CamelCase-Kuerzel im Methodennamen: SaveClick');
+end;
+
+procedure TTestFuzzyMatchRow.ScatteredLetters_InLongMessage_DoNotMatch;
+begin
+  // q..x..t kommen in der Meldung in dieser Reihenfolge vor, aber weit
+  // verstreut - ohne Guete-Schwelle traefe das jede lange Zeile.
+  Assert.IsFalse(RowHits('qxt'),
+    'verstreute Einzelbuchstaben sind kein Treffer');
+end;
+
+procedure TTestFuzzyMatchRow.Terms_AreAnded_AcrossCells;
+begin
+  Assert.IsTrue(RowHits('order sql error'),
+    'jeder Begriff trifft eine andere Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.OneTermMissing_NoMatch;
+begin
+  Assert.IsFalse(RowHits('order warning'),
+    'der zweite Begriff steht in keiner Spalte');
+end;
+
+procedure TTestFuzzyMatchRow.CaseInsensitive;
+begin
+  Assert.IsTrue(RowHits('VULNERAB'));
+  Assert.IsTrue(RowHits('SaveCLICK'));
+end;
+
+procedure TTestFuzzyMatchRow.LettersSpreadOverTwoCells_DoNotMatch;
+begin
+  // 'pas142' stuende nur ueber die Spaltengrenze Datei|Zeile hinweg -
+  // gesucht wird je Zelle, nicht ueber die verkettete Zeile.
+  Assert.IsFalse(FuzzyMatchRow('pas142', ['uOrderForm.pas', '142']));
+end;
+
+{ TTestGridWidthsText }
+
+procedure TTestGridWidthsText.RoundTrip_KeepsValues;
+var
+  Text : string;
+  W    : TArray<Integer>;
+begin
+  Text := TFindingGridLayout.WidthsToText([90, 85, 40, 72, 240, 64]);
+  Assert.AreEqual('90,85,40,72,240,64', Text);
+  Assert.IsTrue(TFindingGridLayout.TryTextToWidths(Text, 6, W));
+  Assert.AreEqual<Integer>(6, Length(W));
+  Assert.AreEqual<Integer>(90, W[0]);
+  Assert.AreEqual<Integer>(240, W[4]);
+  Assert.AreEqual<Integer>(64, W[5]);
+end;
+
+procedure TTestGridWidthsText.WrongCount_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  // Eintrag aus einer Fassung mit fuenf Spalten darf sechs nicht stellen.
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('95,40,72,200,56', 6, W));
+  Assert.AreEqual<Integer>(0, Length(W));
+end;
+
+procedure TTestGridWidthsText.NonNumeric_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,abc,40', 3, W));
+end;
+
+procedure TTestGridWidthsText.OutOfRange_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,0,40', 3, W),
+    'Breite 0 wuerde die Spalte unsichtbar machen');
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,-5,40', 3, W));
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('90,99999,40', 3, W));
+end;
+
+procedure TTestGridWidthsText.Whitespace_Tolerated;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsTrue(TFindingGridLayout.TryTextToWidths(' 90 , 85 ,40', 3, W));
+  Assert.AreEqual<Integer>(85, W[1]);
+end;
+
+procedure TTestGridWidthsText.EmptyText_Rejected;
+var
+  W : TArray<Integer>;
+begin
+  Assert.IsFalse(TFindingGridLayout.TryTextToWidths('', 6, W));
+end;
 
 { TTestFuzzyMatch }
 

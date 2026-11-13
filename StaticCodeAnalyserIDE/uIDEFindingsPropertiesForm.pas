@@ -87,6 +87,10 @@ type
     FHasPendingState : Boolean;
     procedure ReadIniState;
     procedure WriteIniState;
+    // Vom Nutzer gezogene Spaltenbreiten des Fund-Grids (analyser.ini,
+    // Schluessel INI_KEY_COLWIDTHS). Geschrieben wird im selben Lauf wie
+    // die Fenster-Geometrie (WriteIniState) - kein weiterer INI-Schreiber.
+    procedure ReadGridColumnWidths;
     procedure ApplyPendingStateToHost;
     procedure CenterOnIDEMainWindow;
     class function IniFilePath: string; static;
@@ -195,6 +199,7 @@ const
   CAPTION_DEFAULT = 'Static Code Analysis - File';
   IDENTIFIER      = 'StaticCodeAnalyser.FindingsPropertiesDockForm';
   INI_SECTION     = 'FindingsPropertiesPanel';
+  INI_KEY_COLWIDTHS = 'GridColWidths';
   // Mindestabstand zum Bildschirmrand bei Off-Screen-Check. 8px reicht
   // damit die Titlebar noch greifbar ist.
   ONSCREEN_MARGIN = 8;
@@ -318,6 +323,17 @@ begin
   // CenterOnIDEMainWindow wenn Werte ungueltig.
   ReadIniState;
   ApplyPendingStateToHost;
+  ReadGridColumnWidths;
+
+  // Rule-Spalte wie im Haupt-Grid: dieselbe Titel-Funktion, die dort die
+  // Zelle fuellt (TAnalyserFrame.InitGridConfig, Spalte 4).
+  FFrame.RuleTextProvider :=
+    function(F: TLeakFinding): string
+    var
+      Dummy : string;
+    begin
+      Result := BuildFindingTitle(F, Dummy);
+    end;
 
   // Initial-Apply: erstmal das jetzt aktive IDE-Theme einmalig anwenden,
   // damit das Frame nicht im Default-VCL-Style aufpoppt.
@@ -865,19 +881,42 @@ begin
   end;
 end;
 
+procedure TFindingsPropertiesDockableForm.ReadGridColumnWidths;
+// Fehlt der Schluessel oder ist er unlesbar (andere Spaltenzahl, von Hand
+// verdorben), lehnt der Frame ab und behaelt seine Vorgabe.
+var
+  Ini  : TMemIniFile;
+  Text : string;
+begin
+  if not Assigned(FFrame) then Exit;
+  if not TFile.Exists(IniFilePath) then Exit;
+  Ini := TMemIniFile.Create(IniFilePath);
+  try
+    Text := Ini.ReadString(INI_SECTION, INI_KEY_COLWIDTHS, '');
+  finally
+    Ini.Free;
+  end;
+  if Text <> '' then
+    FFrame.ApplyColumnWidthsText(Text);
+end;
+
 procedure TFindingsPropertiesDockableForm.WriteIniState;
 // Session-Persistence: vom Frame-OnDestroying-Hook gerufen. Erfasst die
 // Geometrie BEVOR der Host-Form weggeht, damit sie beim naechsten Open
-// innerhalb der selben IDE-Session restored werden kann.
+// innerhalb der selben IDE-Session restored werden kann. Im selben Lauf
+// gehen die vom Nutzer gezogenen Spaltenbreiten mit (leer = nie gezogen
+// -> Schluessel bleibt, wie er ist).
 var
   Host: TCustomForm;
   Ini: TCommentPreservingIni;
+  ColWidths: string;
 begin
   if not Assigned(FFrame) then Exit;
   Host := GetParentForm(FFrame);
   if not Assigned(Host) then Exit;
   // Nur sinnvolle Geometrien persistieren.
   if (Host.Width <= 0) or (Host.Height <= 0) then Exit;
+  ColWidths := FFrame.ColumnWidthsText;
   try
     // TCommentPreservingIni statt TMemIniFile (2026-08-21): schreibt in
     // dieselbe analyser.ini wie die Einstellungen. Jedes Verschieben des
@@ -888,6 +927,8 @@ begin
       Ini.WriteInteger(INI_SECTION, 'Top',    Host.Top);
       Ini.WriteInteger(INI_SECTION, 'Width',  Host.Width);
       Ini.WriteInteger(INI_SECTION, 'Height', Host.Height);
+      if ColWidths <> '' then
+        Ini.WriteString(INI_SECTION, INI_KEY_COLWIDTHS, ColWidths);
       Ini.UpdateFile;
     finally
       Ini.Free;
