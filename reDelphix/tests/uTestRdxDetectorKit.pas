@@ -214,6 +214,7 @@ begin
     Places := TSourcePlaces.Create;
     Finding := TLeakFinding.New(AFile, '', ASeen.Line, ASeen.Msg, AKind);
     Finding.LeakVariant := ASeen.Variant;
+    Finding.FixArgs := ASeen.Args;
     SL.Text := ASource;
     if AIdeView then
       Places.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);

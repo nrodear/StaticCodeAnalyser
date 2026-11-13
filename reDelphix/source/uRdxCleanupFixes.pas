@@ -475,9 +475,7 @@ begin
       ARegion.Col := NumberAt(AMessage.Text, P + Length(KEY_START));
   end;
   if AMessage.Args.Col > 0 then
-  begin
     ARegion.Col := AMessage.Args.Col;
-  end;
   ARegion.Last := ALine + N - 1;
   Result := (N > 0) and (N < MAX_NUMBER) and (ARegion.Col > 0);
 end;
@@ -2244,8 +2242,7 @@ begin
   Decl := Default(TRdxVarDecl);
   CutStart := TextPos(0, 0);
   CutStop := TextPos(0, 0);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := UnusedVarName(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   Key := LowerCase(Name);
   if Key = '' then
     AReason := _('the message has no variable name')

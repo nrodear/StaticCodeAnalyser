@@ -36,7 +36,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxLineFixes,
+  uRdxBufferMath, uRdxCodeMap, uRdxLineFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply
 
 type
@@ -47,7 +47,7 @@ type
 // Die Hilfe AKind fuer Zeile ALine mit der Meldung AMessage: neuer Text
 // oder '' bei Ablehnung (AReason).
 function Fix(AKind: TRdxLineKind; const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL : TStringList;
   Map : TRdxCodeMap;
@@ -79,22 +79,26 @@ begin
 end;
 
 // Die Meldungen wie die Detektoren sie schreiben.
-function SemiMsg(ACol: Integer): string;
+function SemiMsg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Double semicolon at column %d (`;;`) - drop the extra '
-    + 'one.', [ACol]);
+  Result.Text := Format('Double semicolon at column %d (`;;`) - drop the '
+    + 'extra one.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
-function IndentMsg(const AWord: string; ACol: Integer): string;
+function IndentMsg(const AWord: string; ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Unit-level keyword "%s" should start at column 1 '
+  Result.Text := Format('Unit-level keyword "%s" should start at column 1 '
     + '(currently at column %d).', [AWord, ACol]);
+  Result.Args.Put(FA_NAME, AWord);
+  Result.Args.Col := ACol;
 end;
 
-function CastMsg(const AType: string): string;
+function CastMsg(const AType: string): TRdxFindingText;
 begin
-  Result := Format('Type-cast %s(...) before Free/Destroy - on a class-typed '
-    + 'operand the cast is redundant (Destroy is virtual)', [AType]);
+  Result.Text := Format('Type-cast %s(...) before Free/Destroy - on a '
+    + 'class-typed operand the cast is redundant (Destroy is virtual)', [AType]);
+  Result.Args.Put(FA_TYPE, AType);
 end;
 
 // Eine Unit mit einer Routine P und den Zeilen ALines als Rumpf von P (ab

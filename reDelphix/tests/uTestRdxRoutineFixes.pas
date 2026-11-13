@@ -85,7 +85,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxRoutineFixes,
+  uRdxCodeMap, uRdxRoutineFixes, uFixArgs,
   uRdxBlocks,  // ReadRoutine, Finder, IncludeSearchPath (seit Charge B2S-b)
   uRdxPaths,   // IsNetworkPath (seit Charge B2S-a dort, bis dahin hier)
   uTestRdxTextKit;   // Join, Apply, WriteText, NewTempDir
@@ -96,9 +96,10 @@ const
 
 // ---- Helfer ----
 
-function Msg(const AName: string): string;
+function Msg(const AName: string): TRdxFindingText;
 begin
-  Result := 'Top-level routine ' + AName + MSG_TAIL;
+  Result.Text := 'Top-level routine ' + AName + MSG_TAIL;
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).
@@ -110,7 +111,8 @@ end;
 
 // Der Plan fuer die Meldung AMessage auf Zeile ALine; AReason = '' heisst
 // Hilfe.
-function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): TRdxRoutinePlan;
 var
   SL  : TStringList;

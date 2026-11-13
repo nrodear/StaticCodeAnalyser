@@ -201,43 +201,18 @@ begin
     Result := 'Downto';
 end;
 
-// Die ganze Zahl ab S[I] (optional '-'); I steht danach hinter ihr.
-function ReadNumberAt(const S: string; var I: Integer; out AVal: Int64): Boolean;
-var
-  Start, Digits : Integer;
-begin
-  AVal := 0;
-  Start := I;
-  if (I <= Length(S)) and (S[I] = '-') then Inc(I);
-  Digits := I;
-  while (I <= Length(S)) and CharInSet(S[I], ['0'..'9']) do Inc(I);
-  Result := IsDigits(Copy(S, Digits, I - Digits));
-  if Result then
-    AVal := StrToInt64(Copy(S, Start, I - Start));
-end;
-
 { TRdxForRangeFix }
 
 class function TRdxForRangeFix.BoundsOf(const AMessage: TRdxFindingText; out AFrom,
   ATo: Int64): Boolean;
 var
-  P        : Integer;
-  FromText, ToText, Text : string;
+  FromText, ToText : string;
 begin
   AFrom := 0;
   ATo := 0;
-  if AMessage.Args.TryGet(FA_EXPR, FromText)
-     and AMessage.Args.TryGet(FA_EXPR2, ToText) then
-    Exit(TryStrToInt64(FromText, AFrom) and TryStrToInt64(ToText, ATo));
-  Result := False;
-  Text := AMessage.Text;
-  P := Pos(KEY_RANGE, Text);
-  if P = 0 then Exit;
-  Inc(P, Length(KEY_RANGE));
-  if not ReadNumberAt(Text, P, AFrom) then Exit;
-  if Copy(Text, P, Length(KEY_GREATER)) <> KEY_GREATER then Exit;
-  Inc(P, Length(KEY_GREATER));
-  Result := ReadNumberAt(Text, P, ATo);
+  AMessage.Args.TryGet(FA_EXPR, FromText);
+  AMessage.Args.TryGet(FA_EXPR2, ToText);
+  Result := TryStrToInt64(FromText, AFrom) and TryStrToInt64(ToText, ATo);
 end;
 
 class function TRdxForRangeFix.ToDownto(AMap: TRdxCodeMap; ALine: Integer;

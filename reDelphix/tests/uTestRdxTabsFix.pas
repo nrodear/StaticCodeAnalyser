@@ -87,7 +87,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxTabsFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxTabsFix, uFixArgs,
   uRdxText,              // _(), MsgNoColumn, MsgByHand (E29)
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -99,10 +99,11 @@ const
 // ---- Helfer ----
 
 // Die Meldung wie der Detektor sie schreibt.
-function TabMsg(ACol: Integer): string;
+function TabMsg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Tab character at column %d - use spaces for indentation '
-    + '(consistency across editors).', [ACol]);
+  Result.Text := Format('Tab character at column %d - use spaces for '
+    + 'indentation (consistency across editors).', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // '~' als Tab: die Muster aus den Fundstellen bleiben lesbar.
@@ -118,7 +119,8 @@ begin
 end;
 
 // Die Hilfe fuer Zeile ALine: neuer Text oder '' bei Ablehnung (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   SL  : TStringList;
@@ -901,15 +903,17 @@ end;
 // Tabs).
 function Plan(const ASource: string; ALine: Integer): TRdxFixOutcome;
 var
-  SL : TStringList;
-  F  : TLeakFinding;
+  SL  : TStringList;
+  F   : TLeakFinding;
+  Msg : TRdxFindingText;
 begin
   SL := TStringList.Create;
   F := nil;
   try
     SL.Text := ASource;
-    F := TLeakFinding.New('t.pas', '', ALine,
-      TabMsg(Pos(TAB, SL[ALine - 1])), fkTabulationCharacter);
+    Msg := TabMsg(Pos(TAB, SL[ALine - 1]));
+    F := TLeakFinding.New('t.pas', '', ALine, Msg.Text, fkTabulationCharacter);
+    F.FixArgs := Msg.Args;
     Result := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
     F.Free;
@@ -975,7 +979,8 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
+    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1).Text, fkTabulationCharacter);
+    F.FixArgs := TabMsg(1).Args;
     SL.Text := Join(['begin', TAB + 'A;', 'end;']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -1006,7 +1011,8 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1), fkTabulationCharacter);
+    F := TLeakFinding.New('t.pas', '', 2, TabMsg(1).Text, fkTabulationCharacter);
+    F.FixArgs := TabMsg(1).Args;
     SL.Text := Join(['begin', TAB + 'A;', TAB + 'B;', 'end;']);
     O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -1017,7 +1023,8 @@ begin
     // Nur die String-Zeile im Spiel: nichts zu tun, Grund statt Edits.
     SL.Text := 'S := ''a' + TAB + 'b'';';
     F.Free;
-    F := TLeakFinding.New('t.pas', '', 1, TabMsg(1), fkTabulationCharacter);
+    F := TLeakFinding.New('t.pas', '', 1, TabMsg(1).Text, fkTabulationCharacter);
+    F.FixArgs := TabMsg(1).Args;
     O := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil);
     Assert.IsFalse(O.Enabled);
     Assert.AreNotEqual('', O.Reason);
@@ -1073,6 +1080,7 @@ begin
   try
     F := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
       fkTabulationCharacter);
+    F.FixArgs := Seen[0].Args;
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsFalse(O.Enabled);

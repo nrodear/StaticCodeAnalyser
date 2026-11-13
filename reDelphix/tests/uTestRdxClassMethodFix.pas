@@ -127,14 +127,16 @@ begin
     Result := Apply(ASource, Edits);
 end;
 
-function MsgFor(const AFull: string): string;
+function MsgFor(const AFull: string): TRdxFindingText;
 begin
-  Result := Format(MSG_FMT, [AFull]);
+  Result.Text := Format(MSG_FMT, [AFull]);
+  Result.Args.Put(FA_NAME, AFull);
 end;
 
 // Der Planer fuer Zeile ALine und Meldung AMsg: der neue Text, oder '' bei
 // Ablehnung (AReason).
-function PlanAt(const ASource: string; ALine: Integer; const AMsg: string;
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMsg: TRdxFindingText;
   out AReason: string): string;
 var
   Map   : TRdxCodeMap;
@@ -276,7 +278,7 @@ var
   R          : string;
 begin
   Src := AddUnit(HEAD, ['  public', DECL_ADD]);
-  Msg.Text := MsgFor('TMath.NichtAdd');
+  Msg := MsgFor('TMath.NichtAdd');
   Msg.Args.Put(FA_NAME, 'TMath.Add');
   Fixed := PlanAtIn(Src, LineStartingWith(Src, ADD_HEAD), Msg, R);
   Assert.IsTrue(Fixed <> '', R);
@@ -488,13 +490,14 @@ end;
 // (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanCanBeClassMethod - zwei
 // Ersetzungen, gesperrt ohne Ersetzungen, Name aus der Meldung).
 function PlanVia(const ASource: string; ALine: Integer;
-  const AMsg: string): TRdxFixOutcome;
+  const AMsg: TRdxFindingText): TRdxFixOutcome;
 var
   S : TSeen;
 begin
   S := Default(TSeen);
   S.Line := ALine;
-  S.Msg := AMsg;
+  S.Msg := AMsg.Text;
+  S.Args := AMsg.Args;
   Result := PlanFixIn(ASource, 't.pas', fkCanBeClassMethod, S);
 end;
 
@@ -502,10 +505,13 @@ end;
 function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
+  Msg  : TRdxFindingText;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
-  Result := PlanVia(ASource, Seen[0].Line, Seen[0].Msg);
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Result := PlanVia(ASource, Seen[0].Line, Msg);
 end;
 
 // Fund fuer Fund ueber die Tabelle, nach jeder Ersetzung neu gemeldet, bis

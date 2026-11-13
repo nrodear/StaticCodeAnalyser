@@ -68,7 +68,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxTryFixes,
+  uRdxCodeMap, uRdxTryFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply, InProc, NewMap
 
 const
@@ -84,9 +84,7 @@ const
 
 // ---- Helfer (Join und Apply kommen seit Review R6-08, InProc und NewMap
 // seit der Review Woche G08-14 aus uTestRdxTextKit, die der Pruefstand
-// mitkopiert. PlanOf steht wie in uTestRdxTryFixes hier: sein Kopf nennt
-// TRdxTryPlanner aus uRdxTryFixes, und das Kit bindet keine Planer-Unit -
-// der Pruefstand uebersetzt es fuer jede Testunit mit) ----
+// mitkopiert) ----
 
 // Ein Surrogatpaar (Emoji), zur Laufzeit gebaut: FPC 3.2 wertet ein
 // konstantes '...' + #$D83D#$DE00 als ANSI-Ausdruck aus ('?').
@@ -107,22 +105,16 @@ begin
     + #13#10 + Join(['end;', 'end.']);
 end;
 
-// Der Plan des Planers APlanner fuer Zeile ALine; AReason = '' heisst Hilfe.
-function PlanOf(APlanner: TRdxTryPlanner; const ASource: string;
-  ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
-var
-  Map : TRdxCodeMap;
+// Der Name AName als Text UND FixArgs.FA_NAME (Fix-Datenfeld S6) - diese
+// Datei nutzt den bloßen Namen als Stellvertreter fuer die Meldung.
+function NameMsg(const AName: string): TRdxFindingText;
 begin
-  Map := NewMap(ASource);
-  try
-    APlanner(Map, ALine, AMessage, Result, AReason);
-  finally
-    Map.Free;
-  end;
+  Result.Text := AName;
+  Result.Args.Put(FA_NAME, TRdxTryFixes.NameOf(AName));
 end;
 
-// Wie PlanOf, aber fuer die *In-Planer (SCA009/SCA001/SCA156, Fix-
-// Datenfeld S3b-2).
+// Der Plan des *In-Planers APlanner fuer Zeile ALine (SCA009/SCA001/
+// SCA156, Fix-Datenfeld S3b-2); AReason = '' heisst Hilfe.
 function PlanOfIn(APlanner: TRdxTryPlannerIn; const ASource: string;
   ALine: Integer; const AMessage: string; out AReason: string): TRdxTryPlan;
 var
@@ -130,7 +122,7 @@ var
 begin
   Map := NewMap(ASource);
   try
-    APlanner(Map, ALine, AMessage, Result, AReason);
+    APlanner(Map, ALine, NameMsg(AMessage), Result, AReason);
   finally
     Map.Free;
   end;
@@ -555,7 +547,7 @@ var
 begin
   PlanOfIn(TRdxTryFixes.LockWithoutFinally, InProc(['  FLock.Enter;',
     '  if C then System.Exit;', '  DoWork;', '  FLock.Leave;']), 6,
-    Format(MSG_109, ['FLock']), R);
+    'FLock', R);
   Assert.IsTrue(Pos('Exit in Zeile 7 - mit finally', R) > 0, R);
   AssertRefused(Around(['if Keep(X) then', '  System.Exit;']),
     'Exit in Zeile 8, und X wird in Zeile 7 weitergegeben');
@@ -630,11 +622,22 @@ end;
 // EConvertError. Jetzt geht er als Argument hinein (OneTokenReason).
 procedure TTestRdxTryGates.Lock_PercentInMessage;
 var
-  R : string;
+  R    : string;
+  Msg  : TRdxFindingText;
+  Map  : TRdxCodeMap;
+  Plan : TRdxTryPlan;
+  Src  : string;
 begin
-  PlanOfIn(TRdxTryFixes.UnpairedLock, InProc(['  Locks[%1].Lock; Locks[%1].Lock;',
-    '  DoWork;', '  Locks[%1].UnLock;']), 6,
-    Format(MSG_153, ['Locks[%1].Lock']), R);
+  Msg.Text := Format(MSG_153, ['Locks[%1].Lock']);
+  Msg.Args.Put(FA_NAME, 'Locks[%1].Lock');
+  Src := InProc(['  Locks[%1].Lock; Locks[%1].Lock;', '  DoWork;',
+    '  Locks[%1].UnLock;']);
+  Map := NewMap(Src);
+  try
+    TRdxTryFixes.UnpairedLock(Map, 6, Msg, Plan, R);
+  finally
+    Map.Free;
+  end;
   // 'traegt' im Rahmen von uRdxCodeMap.OneTokenReason bekommt seit der
   // Umstellung E29 (Gruppe G5) in de.po einen echten Umlaut - die Quelle
   // bleibt ASCII: Anfang und Ende ohne das Wort.

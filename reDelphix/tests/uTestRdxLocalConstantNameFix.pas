@@ -80,11 +80,13 @@ const
 // ---- Helfer ----
 
 // Die Meldung des Detektors fuer die Konstante AName in ARoutine.
-function Msg(const AName, ARoutine: string): string;
+function Msg(const AName, ARoutine: string): TRdxFindingText;
 begin
-  Result := Format('Local const %s in %s - consider UPPER_SNAKE_CASE '
+  Result.Text := Format('Local const %s in %s - consider UPPER_SNAKE_CASE '
     + '(MAX_RETRIES, BUFFER_SIZE) for numeric constants. Helps reader '
     + 'distinguish constants from variables at a glance.', [AName, ARoutine]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_NAME2, ARoutine);
 end;
 
 // Eine Unit: Zeilen 1-3 Kopf, interface und 'implementation', AImpl ab
@@ -98,7 +100,7 @@ end;
 // Der Planer fuer Zeile ALine mit AMessage: der neue Text, oder '' bei
 // Ablehnung (AReason); den Plan in APlan.
 function PlanWith(const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string;
+  const AMessage: TRdxFindingText; out AReason: string;
   out APlan: TRdxLocalConstantNamePlan): string;
 var
   Map : TRdxCodeMap;
@@ -128,7 +130,7 @@ begin
 end;
 
 procedure AssertRefusedAt(const ASource: string; ALine: Integer;
-  const AMessage, AReason: string);
+  const AMessage: TRdxFindingText; const AReason: string);
 var
   R : string;
   P : TRdxLocalConstantNamePlan;
@@ -184,7 +186,7 @@ begin
   Src := UnitWith(['procedure Foo;', 'const', '  MaxRetries = 3;', 'var',
     '  I: Integer;', 'begin', '  for I := 1 to MaxRetries do',
     '    Work(I, MaxRetries);', 'end;']);
-  FMsg.Text := Msg('andererName', 'AndereRoutine');
+  FMsg := Msg('andererName', 'AndereRoutine');
   FMsg.Args.Put(FA_NAME, 'MaxRetries');
   FMsg.Args.Put(FA_NAME2, 'Foo');
   Map := NewMap(Src);

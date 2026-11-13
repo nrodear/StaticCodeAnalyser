@@ -109,8 +109,6 @@ const
   // Hier endet eine Anweisung.
   STATEMENT_ENDS: array[0..5] of string = (';', 'end', 'else', 'until',
     'except', 'finally');
-  KEY_EXCEPTION = 'Exception ';
-  KEY_CREATE    = '.Create';
   // Wie uMissingRaise.CreateSuffixOk: nur diese Create-Varianten meldet der
   // Detektor ('CreateAndRaise' nicht).
   CREATE_SUFFIXES: array[0..7] of string = ('', 'fmt', 'res', 'help',
@@ -763,19 +761,6 @@ end;
 
 { ---- SCA120 ---- }
 
-// EFoo aus 'Exception EFoo.Create(...) is constructed but never raised'.
-function CreateTargetOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(KEY_EXCEPTION, AMessage);
-  Q := Pos(KEY_CREATE, AMessage);
-  if (P = 1) and (Q > P + Length(KEY_EXCEPTION)) then
-    Result := Copy(AMessage, P + Length(KEY_EXCEPTION),
-      Q - P - Length(KEY_EXCEPTION));
-end;
-
 // Steht an T 'ATarget.Create..' als ganze Anweisung? Dann True; AWhole
 // False, wenn es nur Teil eines Ausdrucks ist.
 function CreateAt(AMap: TRdxCodeMap; const T, APrev: TRdxToken;
@@ -855,8 +840,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not AMessage.Args.TryGet(FA_TYPE, Target) then
-    Target := CreateTargetOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_TYPE, Target);
   if Target = '' then
   begin
     AReason := _('the message has no exception class');
@@ -1066,13 +1050,10 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  // E aus 'Re-raise of bound variable "E" loses ...' (bis Charge B2S-a
-  // eine eigene Kopie BoundNameOf).
   // 'name of the variable' wie de 'Name der Variablen' - 'the message has
   // no variable name' ist die msgid zu 'Variablenname fehlt in der Meldung'
   // (uRdxCleanupFixes), ein anderer Wortlaut.
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := QuotedText(AMessage.Text, '"');
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
     AReason := _('the message has no name of the variable')
   else

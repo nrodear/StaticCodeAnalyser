@@ -67,7 +67,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxDeadCodeFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxDeadCodeFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -84,14 +84,15 @@ begin
 end;
 
 // Die Meldung des Detektors zum Terminator ATerm ('Exit', 'raise' ...).
-function Msg(const ATerm: string): string;
+function Msg(const ATerm: string): TRdxFindingText;
 begin
-  Result := 'Dead code after ' + ATerm;
+  Result.Text := 'Dead code after ' + ATerm;
+  Result.Args.Put(FA_FORM, LowerCase(ATerm));
 end;
 
 // Der Planer fuer Zeile ALine: True mit der Ersetzung, sonst der Grund.
 function PlanEdit(const ASource: string; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
 begin
@@ -240,9 +241,9 @@ begin
   Assert.IsTrue(PlanEdit(Wrap(['  Exit;', '  Foo;', '', '  Bar;']), BODY + 1,
     Msg('Exit'), E, R), R);
   Assert.AreEqual<Integer>(3, TRdxDeadCodeFix.LineCountOf(E));
-  Assert.AreEqual('exit', TRdxDeadCodeFix.TerminatorOf(Msg('Exit')));
-  Assert.AreEqual('continue', TRdxDeadCodeFix.TerminatorOf(Msg('Continue')));
-  Assert.AreEqual('', TRdxDeadCodeFix.TerminatorOf(Msg('Halt')));
+  Assert.AreEqual('exit', TRdxDeadCodeFix.TerminatorOf(Msg('Exit').Text));
+  Assert.AreEqual('continue', TRdxDeadCodeFix.TerminatorOf(Msg('Continue').Text));
+  Assert.AreEqual('', TRdxDeadCodeFix.TerminatorOf(Msg('Halt').Text));
   Assert.AreEqual('', TRdxDeadCodeFix.TerminatorOf('Dead code'));
 end;
 

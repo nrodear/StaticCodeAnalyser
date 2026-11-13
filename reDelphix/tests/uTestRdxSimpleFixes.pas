@@ -104,6 +104,7 @@ var
   SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
+  Msg : TRdxFindingText;
 begin
   Result := '';
   SL := TStringList.Create;
@@ -111,8 +112,9 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    if TRdxSimpleFixes.ExplicitTObject(Map, ALine,
-         Format('`class(TObject)` at column %d - drop the parens', [ACol]), E, AReason) then
+    Msg.Text := Format('`class(TObject)` at column %d - drop the parens', [ACol]);
+    Msg.Args.Col := ACol;
+    if TRdxSimpleFixes.ExplicitTObject(Map, ALine, Msg, E, AReason) then
       Result := Apply(ASource, [E]);
   finally
     Map.Free;
@@ -147,6 +149,7 @@ var
   SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
+  Msg : TRdxFindingText;
 begin
   Result := '';
   SL := TStringList.Create;
@@ -154,9 +157,10 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    if TRdxSimpleFixes.AssertMessage(Map, ALine,
-         Format('Assert at column %d has no message - add a "why" string '
-           + 'for easier diagnosis.', [ACol]), E, AReason) then
+    Msg.Text := Format('Assert at column %d has no message - add a "why" '
+      + 'string for easier diagnosis.', [ACol]);
+    Msg.Args.Col := ACol;
+    if TRdxSimpleFixes.AssertMessage(Map, ALine, Msg, E, AReason) then
       Result := Apply(ASource, [E]);
   finally
     Map.Free;
@@ -171,6 +175,7 @@ var
   SL  : TStringList;
   Map : TRdxCodeMap;
   E   : TRdxEdit;
+  Msg : TRdxFindingText;
 begin
   Result := '';
   SL := TStringList.Create;
@@ -178,9 +183,10 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    if TRdxSimpleFixes.EmptySection(Map, ALine,
-         Format('Empty `%s` section - delete the section header or add '
-           + 'its members.', [ASection]), E, AReason) then
+    Msg.Text := Format('Empty `%s` section - delete the section header or '
+      + 'add its members.', [ASection]);
+    Msg.Args.Put(FA_NAME, ASection);
+    if TRdxSimpleFixes.EmptySection(Map, ALine, Msg, E, AReason) then
       Result := Apply(ASource, [E]);
   finally
     Map.Free;

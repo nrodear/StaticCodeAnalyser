@@ -71,10 +71,11 @@ type
   end;
 
 // Die Meldung des Detektors fuer die Spalte ACol.
-function NsMsg(ACol: Integer): string;
+function NsMsg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('NOSONAR marker at column %d - migrate to `// noinspection` '
-    + 'or fix the underlying finding.', [ACol]);
+  Result.Text := Format('NOSONAR marker at column %d - migrate to '
+    + '`// noinspection` or fix the underlying finding.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // Eine Unit mit den Zeilen ALines als Rumpf einer Routine (ab Zeile 6).
@@ -395,7 +396,8 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
+    F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7).Text, fkNoSonarMarker);
+    F.FixArgs := NsMsg(7).Args;
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
@@ -409,7 +411,8 @@ begin
   // danach die Regeln der Zeile, NOSONAR tat das nicht) setzt erst die
   // Tabellenzeile (FixFor) - der Adapter laesst sie auf dem Default.
   Seen.Line := 6;
-  Seen.Msg := NsMsg(7);
+  Seen.Msg := NsMsg(7).Text;
+  Seen.Args := NsMsg(7).Args;
   Seen.Variant := '';
   O := PlanFixIn(Src, FILE_NAME, fkNoSonarMarker, Seen);
   Assert.IsTrue(O.Enabled, O.Reason);
@@ -421,7 +424,8 @@ var
   F : TLeakFinding;
   O : TRdxFixOutcome;
 begin
-  F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7), fkNoSonarMarker);
+  F := TLeakFinding.New(FILE_NAME, '', 6, NsMsg(7).Text, fkNoSonarMarker);
+  F.FixArgs := NsMsg(7).Args;
   try
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
   finally

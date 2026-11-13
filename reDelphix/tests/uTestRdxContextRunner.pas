@@ -115,7 +115,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, PlanFixIn
   {$ENDIF}
   uFindingActions,       // TEditorContext
-  uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes, uRdxTryFixes,
+  uRdxBufferMath, uRdxCodeMap, uRdxMagicFixes, uRdxTryFixes, uFixArgs,
   uRdxContextRunner,
   uRdxText,              // _
   uTestRdxTextKit;       // Join, Apply, NewMap, CaretOf, LineOf, TempName,
@@ -552,14 +552,17 @@ var
   O      : TRdxContextOutcome;
   Map    : TRdxCodeMap;
   P      : TRdxTryPlan;
+  Msg    : TRdxFindingText;
 begin
   O := OneAt(ProcWith(['  X: TFoo;'], ['  X := TFoo.Cr{^}eate;', '  X.Run;',
     '  if X.Ok then', '    Bar;', '  X.Free;', '  X := nil;']),
     ckTryFinallyCreate, Src);
   Map := NewMap(Src);
   try
+    Msg.Text := 'X';
+    Msg.Args.Put(FA_NAME, 'X');
     Assert.IsTrue(TRdxTryFixes.MissingFinally(Map,
-      LineOf(Src, 'X := TFoo.Create'), 'X', P, R), R);
+      LineOf(Src, 'X := TFoo.Create'), Msg, P, R), R);
   finally
     Map.Free;
   end;
@@ -1005,6 +1008,7 @@ begin
   Result := Default(TSeen);
   Result.Line := ALine;
   Result.Msg := AMsg;
+  Result.Args.Put(FA_NAME, AMsg);
 end;
 
 procedure TTestRdxContextCaption.Caption_ConstLikeSca014;

@@ -57,7 +57,8 @@ uses
   uRdxFixTable,          // CaptionFor, FixFor
   uEngineApi,            // TSourcePlaces
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit,       // Join, Apply
+  uFixArgs;              // FA_NAME, TFixArgs
 
 // ---- Helfer ----
 
@@ -173,6 +174,7 @@ begin
       fkMemoryLeak);
     try
       Original.LeakVariant := ASeen.Variant;
+      Original.FixArgs := ASeen.Args;
       Kopie := Original.Clone;
     finally
       Original.Free;
@@ -221,6 +223,8 @@ begin
   Seen := Default(TSeen);
   Seen.Line := 7;
   Seen.Msg := 'obj';
+  Seen.Args := Default(TFixArgs);
+  Seen.Args.Put(FA_NAME, 'obj');
   O := PlanFixIn(Source, 't.pas', fkMissingFinally, Seen);
   Assert.IsTrue(O.Enabled, O.Reason);
   Assert.AreEqual(InRoutine(Join(['obj := TStringList.Create;', 'try',

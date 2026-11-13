@@ -92,10 +92,11 @@ begin
 end;
 
 // Die Meldung des Detektors fuer den Typ AType.
-function Msg(const AType: string): string;
+function Msg(const AType: string): TRdxFindingText;
 begin
-  Result := Format('Typed exception handler on %s has empty body - silent '
-    + 'failure', [AType]);
+  Result.Text := Format('Typed exception handler on %s has empty body - '
+    + 'silent failure', [AType]);
+  Result.Args.Put(FA_NAME, AType);
 end;
 
 // Der Grund einer verschobenen Stelle, in der Sprache der Tests.
@@ -106,8 +107,8 @@ end;
 
 // Der Planer an Zeile ALine mit der Meldung AMessage: der neue Text, bei
 // einer Ablehnung '' und der Grund in AReason.
-function FixAt(const ASource: string; ALine: Integer; const AMessage: string;
-  out AReason: string): string;
+function FixAt(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL   : TStringList;
   Map  : TRdxCodeMap;
@@ -182,7 +183,7 @@ begin
     SL.Text := Source;
     Map := TRdxCodeMap.Create(SL);
     try
-      FindMsg.Text := Msg('EWrong');
+      FindMsg.Text := Msg('EWrong').Text;
       FindMsg.Args.Put(FA_NAME, 'EFoo');
       Ok := TRdxEmptyOnHandlerFix.Reraise(Map, HANDLER_LINE, FindMsg, Edit, Reason);
     finally
@@ -537,8 +538,9 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', HANDLER_LINE, Msg('EFoo'),
+    F := TLeakFinding.New('t.pas', '', HANDLER_LINE, Msg('EFoo').Text,
       fkEmptyOnHandler);
+    F.FixArgs := Msg('EFoo').Args;
     // Ohne Zeilen: kein Puffer.
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);

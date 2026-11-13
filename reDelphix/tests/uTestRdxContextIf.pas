@@ -151,6 +151,7 @@ uses
   uRdxIfFixes,           // R_IF_*
   uRdxCondFixes,         // R_CF_*
   uRdxDeepNestingFix,    // GuardClause, R_DN_*
+  uFixArgs,              // FA_FORM
   uRdxText,              // _
   uTestRdxTextKit;       // Join, Apply, InProc, CaretOf, LineOf, NewMap
 
@@ -495,13 +496,16 @@ var
   O        : TRdxContextOutcome;
   Map      : TRdxCodeMap;
   E        : TRdxEdit;
+  Msg      : TRdxFindingText;
 begin
   O := KindAt(InProc(['  Prepare;', '  {^}if Ready then', '  begin',
     '    if Deep then', '      Work;', '  end;']), ckGuardClause, Src);
   Map := NewMap(Src);
   try
+    Msg.Text := 'Depth 2 (if from line 8, limit: 1)';
+    Msg.Args.Put(FA_FORM, 'if');
     Assert.IsTrue(TRdxDeepNestingFix.GuardClause(Map, LineOf(Src, 'if Deep'),
-      'Depth 2 (if from line 8, limit: 1)', E, Why), Why);
+      Msg, E, Why), Why);
   finally
     Map.Free;
   end;

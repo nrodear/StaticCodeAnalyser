@@ -509,8 +509,7 @@ var
 begin
   APlan := Default(TRdxRoutinePlan);
   C := Default(TRdxIeCtx);
-  if not AMessage.Args.TryGet(FA_NAME, C.Meth) then
-    C.Meth := MethodNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, C.Meth);
   C.LowMeth := LowerCase(C.Meth);
   APlan.Name := C.Meth;
   if (C.Meth = '') or (Pos('.', C.Meth) > 0) then

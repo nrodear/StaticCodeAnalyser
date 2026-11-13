@@ -42,7 +42,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxRoutineFixes, uRdxMagicFixes,
-  uRdxPaths,
+  uRdxPaths, uFixArgs,
   uTestRdxTextKit;   // Join, JoinWith, WriteText, NewTempDir, RemoveTree
 
 const
@@ -256,6 +256,7 @@ var
   Plan : TRdxRoutinePlan;
   R    : string;
   Ok   : Boolean;
+  Msg  : TRdxFindingText;
 begin
   // Bis Charge B2S-a: der Planer nennt das Include, und IncludeReason
   // lehnte ab - "Include defs.inc ... auf einem Netzpfad (\\?\C:)", obwohl
@@ -269,7 +270,9 @@ begin
       '{$I defs.inc}', 'implementation', '', 'procedure Dead;', 'begin',
       'end;', '', 'end.']);
     Map := TRdxCodeMap.Create(SL);
-    Ok := TRdxRoutineFixes.UnusedRoutine(Map, 7, MSG_164, Plan, R);
+    Msg.Text := MSG_164;
+    Msg.Args.Put(FA_NAME, 'Dead');
+    Ok := TRdxRoutineFixes.UnusedRoutine(Map, 7, Msg, Plan, R);
     Assert.IsTrue(Ok, R);
     Assert.AreEqual<Integer>(1, Integer(Length(Plan.Includes)), 'Includes');
     WriteText(T.Dir + 'defs.inc', '{$DEFINE RDX_B2S}');

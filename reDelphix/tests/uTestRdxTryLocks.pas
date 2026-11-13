@@ -59,7 +59,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxTryFixes,
+  uRdxCodeMap, uRdxTryFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply, NewMap
 
 const
@@ -90,17 +90,25 @@ function PlanAt(ARule: TRule; const ASource: string; ALine: Integer;
   const AText: string; out AReason: string): TRdxTryPlan;
 var
   Map : TRdxCodeMap;
+  Msg : TRdxFindingText;
 begin
   Map := NewMap(ASource);
   try
+    Msg.Args.Put(FA_NAME, AText);
     case ARule of
-      r109: TRdxTryFixes.LockWithoutFinally(Map, ALine,
-        Format(MSG_109, [AText]), Result, AReason);
-      r153: TRdxTryFixes.UnpairedLock(Map, ALine, Format(MSG_153, [AText]),
-        Result, AReason);
+      r109:
+      begin
+        Msg.Text := Format(MSG_109, [AText]);
+        TRdxTryFixes.LockWithoutFinally(Map, ALine, Msg, Result, AReason);
+      end;
+      r153:
+      begin
+        Msg.Text := Format(MSG_153, [AText]);
+        TRdxTryFixes.UnpairedLock(Map, ALine, Msg, Result, AReason);
+      end;
     else
-      TRdxTryFixes.GetMemWithoutFree(Map, ALine, Format(MSG_156, [AText]),
-        Result, AReason);
+      Msg.Text := Format(MSG_156, [AText]);
+      TRdxTryFixes.GetMemWithoutFree(Map, ALine, Msg, Result, AReason);
     end;
   finally
     Map.Free;

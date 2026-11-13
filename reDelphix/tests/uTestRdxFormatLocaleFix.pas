@@ -80,7 +80,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // PlanAltFixIn, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxFormatSettingsFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Apply, NewMap
 
@@ -119,15 +119,18 @@ begin
   Result := UnitText(RTL_USES, [], ABody);
 end;
 
-// Die Meldung des Detektors zum Formatstring AFormat.
-function Msg(const AFormat: string): string;
+// Die Meldung des Detektors zum Formatstring AFormat, mit FixArgs.FA_VALUE
+// gefuellt (Fix-Datenfeld S6: der Planer liest nur noch Args).
+function Msg(const AFormat: string): TRdxFindingText;
 begin
-  Result := 'Format: float spec ' + AFormat + ' without TFormatSettings - '
+  Result.Text := 'Format: float spec ' + AFormat + ' without TFormatSettings - '
     + 'locale-dependent (comma vs. dot decimal separator)';
+  Result.Args.Put(FA_VALUE, AFormat);
 end;
 
 // Der Planer auf ASource; True mit der Ersetzung oder False mit dem Grund.
-function PlanOn(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOn(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AAlt: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -146,7 +149,8 @@ begin
 end;
 
 // Der Text nach der Hilfe; '' bei Ablehnung (Grund in AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AAlt: Boolean; out AReason: string): string;
 var
   E : TRdxEdit;
@@ -157,7 +161,7 @@ begin
 end;
 
 procedure AssertFixed(const AExpected, ASource: string; ALine: Integer;
-  const AMessage: string; AAlt: Boolean = False);
+  const AMessage: TRdxFindingText; AAlt: Boolean = False);
 var
   Reason : string;
 begin
@@ -166,7 +170,7 @@ begin
 end;
 
 procedure AssertRefused(const ASource: string; ALine: Integer;
-  const AMessage, AReason: string; AAlt: Boolean = False);
+  const AMessage: TRdxFindingText; const AReason: string; AAlt: Boolean = False);
 var
   Got : string;
 begin
@@ -271,14 +275,14 @@ procedure TTestRdxFormatLocaleFix.Sca059_MessageAndMoneySpec_Read;
 var
   F : string;
 begin
-  Assert.IsTrue(TRdxFormatSettingsFix.FloatSpecOf(Msg('%.2f EUR'), F));
+  Assert.IsTrue(TRdxFormatSettingsFix.FloatSpecOf(Msg('%.2f EUR').Text, F));
   Assert.AreEqual('%.2f EUR', F);
   // Ein Formatstring mit ' - ' darin bleibt ganz.
-  Assert.IsTrue(TRdxFormatSettingsFix.FloatSpecOf(Msg('a - %f'), F));
+  Assert.IsTrue(TRdxFormatSettingsFix.FloatSpecOf(Msg('a - %f').Text, F));
   Assert.AreEqual('a - %f', F);
   Assert.IsFalse(TRdxFormatSettingsFix.FloatSpecOf('Format: 2 placeholders, '
     + '1 arguments', F));
-  Assert.IsFalse(TRdxFormatSettingsFix.FloatSpecOf(Msg(''), F));
+  Assert.IsFalse(TRdxFormatSettingsFix.FloatSpecOf(Msg('').Text, F));
   Assert.IsTrue(TRdxFormatSettingsFix.HasMoneySpec('%m'));
   Assert.IsTrue(TRdxFormatSettingsFix.HasMoneySpec('x %.2M y'));
   Assert.IsTrue(TRdxFormatSettingsFix.HasMoneySpec('%0:m'));

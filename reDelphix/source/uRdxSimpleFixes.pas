@@ -486,14 +486,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   L := AMap.Raw(ALine);
   if Col < 1 then
   begin
@@ -1194,14 +1187,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   AReason := AssertHeadReason(AMap, ALine, Col, OpenCol);
   if AReason <> '' then Exit;
   AReason := AssertCloseReason(AMap, ALine, OpenCol, CloseCol);
@@ -1264,14 +1250,6 @@ begin
     or (ALow = 'published') or (ALow = 'strict') or (ALow = 'end');
 end;
 
-// 'Empty `strict private` section ...' - der Abschnitt zwischen den
-// Backticks (uEmptyVisibilitySection.SektionsName), klein; '' ohne sie
-// (QuotedText, uRdxCodeMap - bis Charge B2S-a hier ausgeschrieben).
-function SectionNameOf(const AMessage: string): string;
-begin
-  Result := LowerCase(QuotedText(AMessage, '`'));
-end;
-
 // Traegt die Zeile ALine (Text L) genau den Abschnitt AName - ohne
 // Kommentar, und 'strict' nicht von seinem Abschnitt getrennt? '' oder der
 // Grund.
@@ -1323,8 +1301,7 @@ begin
   AEdit := Default(TRdxEdit);
   AReason := '';
   L := '';
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := SectionNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
     AReason := _('the message has no section')
   // Die Zeile wird samt Zeilenende geloescht - dahinter steht in einer
@@ -1680,14 +1657,7 @@ begin
   Result := False;
   APlan := Default(TRdxCallEdit);
   AReason := '';
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;
@@ -1750,14 +1720,7 @@ var
 begin
   Result := False;
   APlan := Default(TRdxOperandEdit);
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;
@@ -1865,14 +1828,7 @@ var
 begin
   Result := False;
   APlan := Default(TRdxOperandEdit);
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   if Col < 1 then
   begin
     AReason := MsgNoColumn;

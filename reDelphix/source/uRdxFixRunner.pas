@@ -810,18 +810,6 @@ begin
   Result := MapFixIn(ALines, ALine, AMessage, TRdxSimpleFixes.EmptySection);
 end;
 
-// X aus der SCA139-Meldung 'X.Free without subsequent X := nil - ...';
-// '' ohne diese Form.
-function FreeReceiverOf(const AMessage: string): string;
-var
-  P : Integer;
-begin
-  Result := '';
-  P := Pos('.Free without', AMessage);
-  if P > 1 then
-    Result := Trim(Copy(AMessage, 1, P - 1));
-end;
-
 // Das Kopfwort (procedure, function, constructor, destructor, operator)
 // einer Routine, deren Kopf auf ALine beginnt ('class' davor erlaubt, auch
 // Attribute auf derselben Zeile: '[Weak] procedure ..' - Nachpruefung FB);
@@ -964,8 +952,7 @@ begin
   end;
   // X wie in der Meldung - auch fuer Menuetext und Grund, wenn der Planer
   // ablehnt; die Ersetzung schreibt X so, wie es im Quelltext steht.
-  if not AMessage.Args.TryGet(FA_NAME, Result.Name) then
-    Result.Name := FreeReceiverOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Result.Name);
   SetLength(Result.Edits, 1);
   Called := 0;
   Map := TRdxCodeMap.Acquire(ALines);
@@ -1284,8 +1271,7 @@ var
   Name        : string;
 begin
   Result := Default(TRdxFixOutcome);
-  if not AUnit.Args.TryGet(FA_NAME, Name) then
-    Name := AUnit.Text;
+  AUnit.Args.TryGet(FA_NAME, Name);
   Result.Name := Trim(Name);
   Index := -1;
   Foreign := '';
@@ -1489,14 +1475,7 @@ begin
         Result.Reason)
     else
     begin
-      if AMessage.Args.Col > 0 then
-      begin
-        Col := AMessage.Args.Col;
-      end
-      else
-      begin
-        Col := ColumnFromMessage(AMessage.Text);
-      end;
+      Col := AMessage.Args.Col;
       Result.Enabled := TRdxStructFixes.BranchKeywordAt(Map, ALine,
         Col, Kw, Result.Reason);
     end;
@@ -1555,8 +1534,7 @@ var
   Map : TRdxCodeMap;
 begin
   Result := Default(TRdxFixOutcome);
-  if not AMessage.Args.TryGet(FA_TYPE, Result.Name) then
-    Result.Name := TRdxLineFixes.CastTargetOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_TYPE, Result.Name);
   Map := OpenMapFor(APlaces, ALines, Result);
   if Map = nil then Exit;
   try

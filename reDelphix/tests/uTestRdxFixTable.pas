@@ -519,6 +519,7 @@ begin
     // Die Meldung wie der Detektor sie schreibt (uSuperfluousSemicolon).
     F := TLeakFinding.New('t.pas', '', 4, 'Double semicolon at column 7 '
       + '(`;;`) - drop the extra one.', fkSuperfluousSemicolon);
+    F.FixArgs.Col := 7;
     SL.Text := Join(['unit u;', 'implementation', 'procedure P;',
       'begin ; ;', 'end;', 'end.']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
@@ -566,6 +567,7 @@ begin
     F := TLeakFinding.New('t.pas', '', 3, '`class(TObject)` at column 10 - drop '
       + 'the parens (TObject is the implicit base class).',
       fkExplicitTObjectInheritance);
+    F.FixArgs.Col := 10;
     SL.Text := Join(['unit u;', 'type', '  TFoo = class(TObject)', '  end;',
       'implementation', 'end.']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);

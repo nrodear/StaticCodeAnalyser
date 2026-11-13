@@ -90,7 +90,7 @@ type
     // Der Planer (TRdxMapPlanner-Form, MapFix oeffnet die Code-Sicht):
     // eine Ersetzung im einen passenden Kopf auf ALine, sonst der Grund.
     class function LastIndex(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -464,7 +464,7 @@ begin
 end;
 
 class function TRdxLoopBoundFix.LastIndex(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Head   : TRdxLoopBoundHead;
   Action : TRdxLoopBoundAction;
@@ -473,7 +473,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if not HeadOf(AMessage, Head) then
+  if not HeadOf(AMessage.Text, Head) then
   begin
     AReason := _(R_LOOPB_MESSAGE);
     Exit;

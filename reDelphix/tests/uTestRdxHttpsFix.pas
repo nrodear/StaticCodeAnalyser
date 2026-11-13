@@ -71,7 +71,7 @@ uses
   uRdxRecipeRunner, uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, DetectSource
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxHttpsFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxHttpsFix, uFixArgs,
   uRdxPaths,             // SetRdxRemoteDriveTest (Naht fuer das Netzlaufwerk)
   uTestRdxTextKit;       // Join, Apply, WriteText, NewTempDir, RemoveTree
 
@@ -101,6 +101,14 @@ begin
     + '// noinspection HttpInsteadOfHttps', [AUrl]);
 end;
 
+// Wie Msg, aber mit FixArgs.FA_VALUE gefuellt (Fix-Datenfeld S6: der Planer
+// liest nur noch Args, keinen Meldungstext mehr).
+function MsgA(const AUrl: string): TRdxFindingText;
+begin
+  Result.Text := Msg(AUrl);
+  Result.Args.Put(FA_VALUE, AUrl);
+end;
+
 // Anweisungen in einer Routine mit Url: string; die erste auf Zeile 8.
 function Wrap(const AStatements: array of string): string;
 begin
@@ -124,7 +132,7 @@ begin
   try
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
-    if TRdxHttpsFix.Https(Map, ALine, Msg(AUrl), E, AReason) then
+    if TRdxHttpsFix.Https(Map, ALine, MsgA(AUrl), E, AReason) then
       Result := Apply(ASource, E);
   finally
     Map.Free;
@@ -189,7 +197,7 @@ begin
   try
     SL.Text := Wrap(['  Url := ''' + EXAMPLE_URL + ''';']);
     Map := TRdxCodeMap.Create(SL);
-    Assert.IsTrue(TRdxHttpsFix.Https(Map, FIRST_LINE, Msg(EXAMPLE_URL), E, R), R);
+    Assert.IsTrue(TRdxHttpsFix.Https(Map, FIRST_LINE, MsgA(EXAMPLE_URL), E, R), R);
     Assert.AreEqual('http://', E.Expected);
     Assert.AreEqual('https://', E.NewText);
     Assert.AreEqual<Integer>(FIRST_LINE, E.Span.StartLine);
@@ -307,7 +315,7 @@ begin
       E, R), 'keine Hilfe');
     Assert.IsTrue(Pos(WHY_NO_URL, R) > 0, R);
     // https ist schon da: kein 'http://'-Literal.
-    Assert.IsFalse(TRdxHttpsFix.Https(Map, FIRST_LINE, Msg(EXAMPLE_HTTPS), E, R),
+    Assert.IsFalse(TRdxHttpsFix.Https(Map, FIRST_LINE, MsgA(EXAMPLE_HTTPS), E, R),
       'keine Hilfe');
     Assert.IsTrue(Pos(WHY_NO_URL, R) > 0, R);
   finally
@@ -749,7 +757,8 @@ begin
     Lines.Text := Wrap(['  Url := ''' + EXAMPLE_URL + ''';']);
     Finding := TLeakFinding.New(
       'D:\repo\unittests\general\TestServer\TestServerControllerU.pas', '',
-      FIRST_LINE, Msg(EXAMPLE_URL), fkHttpInsteadOfHttps);
+      FIRST_LINE, MsgA(EXAMPLE_URL).Text, fkHttpInsteadOfHttps);
+    Finding.FixArgs := MsgA(EXAMPLE_URL).Args;
     try
       O := TRdxFixTable.FixFor(nil, Lines, Finding, nil);
       Assert.IsFalse(O.Enabled, 'Testordner');
@@ -761,7 +770,8 @@ begin
     // Gegenprobe: dieselbe Zeile ausserhalb eines Testordners ('TestServer'
     // allein ist kein Testordner, der Dateiname zaehlt nicht).
     Finding := TLeakFinding.New('D:\repo\samples\TestServer\TestU.pas', '',
-      FIRST_LINE, Msg(EXAMPLE_URL), fkHttpInsteadOfHttps);
+      FIRST_LINE, MsgA(EXAMPLE_URL).Text, fkHttpInsteadOfHttps);
+    Finding.FixArgs := MsgA(EXAMPLE_URL).Args;
     try
       O := TRdxFixTable.FixFor(nil, Lines, Finding, nil);
       Assert.IsTrue(O.Enabled, O.Reason);
@@ -791,8 +801,9 @@ begin
     ForceDirectories(ExtractFilePath(Path));
     Lines.Text := Wrap(['  Url := ''' + EXAMPLE_URL + ''';']);
     WriteText(Path, Lines.Text);
-    Finding := TLeakFinding.New(Path, '', FIRST_LINE, Msg(EXAMPLE_URL),
+    Finding := TLeakFinding.New(Path, '', FIRST_LINE, MsgA(EXAMPLE_URL).Text,
       fkHttpInsteadOfHttps);
+    Finding.FixArgs := MsgA(EXAMPLE_URL).Args;
     try
       O := TRdxFixTable.FixFor(nil, Lines, Finding, nil);
       Assert.IsTrue(O.Enabled, O.Reason);

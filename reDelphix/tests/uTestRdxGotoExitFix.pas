@@ -123,6 +123,7 @@ var
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
+  Msg : TRdxFindingText;
 begin
   Result := '';
   AReason := '';
@@ -131,9 +132,9 @@ begin
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
     try
-      Ok := TRdxGotoExitFix.GotoToExit(Map, ALine,
-        Format('`goto` weakens structured control flow (col %d).', [ACol]),
-        E, AReason);
+      Msg.Text := Format('`goto` weakens structured control flow (col %d).', [ACol]);
+      Msg.Args.Col := ACol;
+      Ok := TRdxGotoExitFix.GotoToExit(Map, ALine, Msg, E, AReason);
     finally
       Map.Free;
     end;
@@ -456,6 +457,7 @@ begin
     // Der Fund zeigt auf Zeile 8, doch dort steht kein 'goto'.
     F := TLeakFinding.New('t.pas', '', GOTO_LINE + 1, 'x (col 3).',
       fkGotoStatement);
+    F.FixArgs.Col := 3;
     SL.Text := Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
   finally
@@ -490,11 +492,14 @@ end;
 procedure TTestRdxGotoExitDetector.Detector_ReportsGotoLineAndColumn;
 var
   Seen : TArray<TSeen>;
+  Msg  : TRdxFindingText;
 begin
   Seen := Detect(Wrap(['  if A then goto Fin;', '  Work;', 'Fin:']));
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
   Assert.AreEqual<Integer>(GOTO_LINE, Seen[0].Line, 'Zeile des goto');
-  Assert.AreEqual<Integer>(13, GotoColumn(Seen[0].Msg), 'Spalte des goto');
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Assert.AreEqual<Integer>(13, GotoColumn(Msg), 'Spalte des goto');
 end;
 
 procedure TTestRdxGotoExitDetector.Detector_RoundTrip;

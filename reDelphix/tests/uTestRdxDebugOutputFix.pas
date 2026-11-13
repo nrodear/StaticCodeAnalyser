@@ -70,7 +70,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // PlanAltFixIn, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxDebugOutputFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxDebugOutputFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -87,15 +87,16 @@ begin
 end;
 
 // Die Meldung des Detektors zum Namen AName (klein).
-function Msg(const AName: string): string;
+function Msg(const AName: string): TRdxFindingText;
 begin
-  Result := 'Debug output: ' + AName;
+  Result.Text := 'Debug output: ' + AName;
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Der Planer (ADelete: zweiter Eintrag) fuer Zeile ALine: der neue Text,
 // oder '' bei Ablehnung (AReason).
 function PlanWith(const ASource: string; ALine: Integer;
-  const AMessage: string; ADelete: Boolean; out AReason: string): string;
+  const AMessage: TRdxFindingText; ADelete: Boolean; out AReason: string): string;
 var
   Map : TRdxCodeMap;
   E   : TRdxEdit;

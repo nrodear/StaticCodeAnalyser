@@ -390,8 +390,9 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if not AMessage.Args.TryGet(FA_NAME, Call) then
-    Call := CallOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Call);
+  if not InList(LowerCase(LastPart(Call)), RANDOM_CALLS) then
+    Call := '';
   if Call = '' then
   begin
     AReason := _(R_RND_NO_CALL);

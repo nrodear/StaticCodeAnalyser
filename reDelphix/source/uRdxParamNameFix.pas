@@ -81,7 +81,7 @@ type
     // einen Platzhalter der Meldung, der einen Tippfehler entfernt ist.
     // AEdit ersetzt nur den Text zwischen den Quotes.
     class function UsePlaceholder(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
   end;
 
@@ -480,7 +480,7 @@ end;
 { TRdxParamNameFix }
 
 class function TRdxParamNameFix.UsePlaceholder(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 var
   F       : TParamFinding;
@@ -496,7 +496,7 @@ begin
   e := 0;
   Call := Default(TRdxToken);
   Routine := Default(TRdxRoutine);
-  AReason := ParseFinding(AMessage, F);
+  AReason := ParseFinding(AMessage.Text, F);
   if AReason = '' then
     AReason := FindCall(AMap, ALine, F, Call, c, e);
   if AReason = '' then

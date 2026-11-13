@@ -150,30 +150,14 @@ end;
 
 function ProductOf(const AMessage: TRdxFindingText; out ATarget, ALeft,
   ARight: string): Boolean;
-var
-  A, M, E : Integer;
-  Text    : string;
 begin
   ATarget := '';
   ALeft := '';
   ARight := '';
-  if AMessage.Args.TryGet(FA_NAME, ATarget) and AMessage.Args.TryGet(FA_EXPR, ALeft)
-     and AMessage.Args.TryGet(FA_EXPR2, ARight) then
-    Exit(IsPlainIdent(ATarget) and IsPlainIdent(ALeft) and IsPlainIdent(ARight));
-  ATarget := '';
-  ALeft := '';
-  ARight := '';
-  Text := AMessage.Text;
-  A := Pos(KEY_ASSIGN, Text);
-  M := Pos(KEY_TIMES, Text);
-  E := Pos(KEY_TAIL, Text);
-  Result := (A > 1) and (M > A) and (E > M);
-  if not Result then Exit;
-  ATarget := Copy(Text, 1, A - 1);
-  ALeft := Copy(Text, A + Length(KEY_ASSIGN), M - A - Length(KEY_ASSIGN));
-  ARight := Copy(Text, M + Length(KEY_TIMES), E - M - Length(KEY_TIMES));
-  Result := IsPlainIdent(ATarget) and IsPlainIdent(ALeft)
-    and IsPlainIdent(ARight);
+  AMessage.Args.TryGet(FA_NAME, ATarget);
+  AMessage.Args.TryGet(FA_EXPR, ALeft);
+  AMessage.Args.TryGet(FA_EXPR2, ARight);
+  Result := IsPlainIdent(ATarget) and IsPlainIdent(ALeft) and IsPlainIdent(ARight);
 end;
 
 // Ein Wort, gleich ALow (klein; Gross/klein egal wie Delphi)?

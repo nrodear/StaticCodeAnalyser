@@ -62,6 +62,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxBlocks, uRdxTryFixes, uRdxResultFixes, uRdxInheritedFixes,
+  uFixArgs,
   uTestRdxTextKit;   // Join, LineStartingWith
 
 const
@@ -101,6 +102,24 @@ begin
     'initialization', '  Init;', 'end.']);
 end;
 
+// Der Name AName als Text UND FixArgs.FA_NAME (Fix-Datenfeld S6).
+function NameMsg(const AName: string): TRdxFindingText;
+begin
+  Result.Text := AName;
+  Result.Args.Put(FA_NAME, AName);
+end;
+
+// Die SCA196-Meldung fuer Funktion AName mit Rueckgabetyp AType.
+function Msg196(const AName, AType: string): TRdxFindingText;
+begin
+  Result.Text := Format('Function %s reads Result before assigning it '
+    + '(Result appears on the right-hand side of its own first '
+    + 'assignment) - for return type %s, Result is a hidden var '
+    + 'parameter aliasing the caller''s', [AName, AType]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_TYPE, AType);
+end;
+
 // SCA009 fuer X auf der Zeile mit 'X := TFoo.Create': '' (Hilfe) oder der
 // Grund.
 function TryReason(const ASource: string): string;
@@ -115,7 +134,7 @@ begin
     SL.Text := ASource;
     Map := TRdxCodeMap.Create(SL);
     TRdxTryFixes.MissingFinally(Map, LineStartingWith(ASource, 'X := TFoo.Create'),
-      'X', P, Result);
+      NameMsg('X'), P, Result);
   finally
     Map.Free;
     SL.Free;
@@ -350,7 +369,7 @@ begin
     '  begin', '  end;', 'begin', '  Result := Result + ''x'';', 'end;',
     'end.']);
   R := ResultReasonIn(TRdxResultFixes.ManagedResultInit, Src,
-    LineStartingWith(Src, 'Result := Result'), MSG_196);
+    LineStartingWith(Src, 'Result := Result'), Msg196('F', 'string'));
   Assert.IsTrue(Pos(Format('Routine in Zeile %d: lokaler Klassen',
     [LineStartingWith(Src, 'procedure Inner;')]), R) = 1, R);
 end;
@@ -369,7 +388,7 @@ begin
   Src := Join(['unit u;', 'interface', 'implementation',
     'function F: string; begin Result := Result + ''x''; end;', 'end.']);
   R := ResultReasonIn(TRdxResultFixes.ManagedResultInit, Src,
-    LineStartingWith(Src, 'function F:'), MSG_196);
+    LineStartingWith(Src, 'function F:'), Msg196('F', 'string'));
   Assert.AreEqual('', R, 'Hilfe fuer F auf der Fundzeile');
 end;
 

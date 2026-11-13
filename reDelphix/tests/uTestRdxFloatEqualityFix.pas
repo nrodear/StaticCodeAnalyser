@@ -97,7 +97,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxFloatEqualityFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap, LineOf
 
@@ -114,15 +114,19 @@ begin
 end;
 
 // Die Meldung des Detektors (uFloatEquality) fuer den Vergleich.
-function Msg(const ALeft, AOp, ARight: string): string;
+function Msg(const ALeft, AOp, ARight: string): TRdxFindingText;
 begin
-  Result := Format('Float equality (%s %s %s) is unreliable due to IEEE-754 '
-    + 'rounding - use SameValue/Math.IsZero', [ALeft, AOp, ARight]);
+  Result.Text := Format('Float equality (%s %s %s) is unreliable due to '
+    + 'IEEE-754 rounding - use SameValue/Math.IsZero', [ALeft, AOp, ARight]);
+  Result.Args.Put(FA_EXPR, ALeft);
+  Result.Args.Put(FA_OP, AOp);
+  Result.Args.Put(FA_EXPR2, ARight);
 end;
 
 // Der Planer fuer Zeile ALine mit der Meldung AMessage: der neue Text, oder
 // '' bei Ablehnung (AReason).
-function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   Map : TRdxCodeMap;
@@ -962,6 +966,7 @@ begin
   try
     Places := TSourcePlaces.Create;
     F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, fkFloatEquality);
+    F.FixArgs := ASeen.Args;
     F.Confidence := AConfidence;
     SL.Text := ASource;
     if AOpen then
@@ -1001,11 +1006,14 @@ procedure TTestRdxFloatEqualityDetector.Detector_ReportsLineAndOperands;
 var
   Seen     : TArray<TSeen>;
   L, Op, R : string;
+  Msg      : TRdxFindingText;
 begin
   Seen := Detect(DWrap(['  if Ratio = 0.5 then Work;']));
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
   Assert.AreEqual<Integer>(DLINE, Seen[0].Line, 'Zeile des Vergleichs');
-  Assert.IsTrue(TRdxFloatEqualityFix.Operands(Seen[0].Msg, L, Op, R),
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Assert.IsTrue(TRdxFloatEqualityFix.Operands(Msg, L, Op, R),
     Seen[0].Msg);
   Assert.AreEqual('Ratio', L);
   Assert.AreEqual('=', Op);

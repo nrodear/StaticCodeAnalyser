@@ -126,8 +126,6 @@ uses
 
 const
   SPAN_148 = 'sca148';
-  KEY_METHOD = 'Method ';
-  KEY_NEVER  = ' never accesses Self';
   KW_CLASS   = 'class';
   KW_STATIC  = ' static;';
   ANCESTOR_OK = 'tobject';
@@ -181,26 +179,13 @@ type
     Members  : TArray<string>;    // Member der Klasse, klein
   end;
 
-// 'TMath.Add' aus der Meldung; '' ohne diese Form.
-function FullNameOf(const AMessage: string): string;
-var
-  E : Integer;
-begin
-  Result := '';
-  E := Pos(KEY_NEVER, AMessage);
-  if (Pos(KEY_METHOD, AMessage) = 1) and (E > Length(KEY_METHOD) + 1) then
-    Result := Trim(Copy(AMessage, Length(KEY_METHOD) + 1,
-      E - Length(KEY_METHOD) - 1));
-end;
-
 // Klasse und Methode aus Args oder der Meldung. '' oder der Grund.
 function MessageReason(const AMessage: TRdxFindingText;
   var C: TRdxCmCtx): string;
 var
   P : Integer;
 begin
-  if not AMessage.Args.TryGet(FA_NAME, C.Full) then
-    C.Full := FullNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, C.Full);
   P := Pos('.', C.Full);
   if (P <= 1) or (P = Length(C.Full)) then
     Exit(_(R_CM_MESSAGE));
@@ -532,8 +517,7 @@ class function TRdxClassMethodFix.MethodNameOf(
 var
   Full : string;
 begin
-  if not AMessage.Args.TryGet(FA_NAME, Full) then
-    Full := FullNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Full);
   Result := LastPart(Full);
 end;
 

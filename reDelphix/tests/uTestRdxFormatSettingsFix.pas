@@ -160,14 +160,16 @@ begin
 end;
 
 // Die Meldung des Detektors zum Namen ALow (klein).
-function Msg(const ALow: string): string;
+function Msg(const ALow: string): TRdxFindingText;
 begin
-  Result := ALow + ' called without explicit TFormatSettings - depends on '
-    + 'system locale';
+  Result.Text := ALow + ' called without explicit TFormatSettings - depends '
+    + 'on system locale';
+  Result.Args.Put(FA_NAME, ALow);
 end;
 
 // Der Planer auf ASource; True mit der Ersetzung oder False mit dem Grund.
-function PlanOn(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOn(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AAlt: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -186,7 +188,8 @@ begin
 end;
 
 // Der Text nach der Hilfe; '' bei Ablehnung (Grund in AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AAlt: Boolean; out AReason: string): string;
 var
   E : TRdxEdit;
@@ -197,7 +200,7 @@ begin
 end;
 
 procedure AssertFixed(const AExpected, ASource: string; ALine: Integer;
-  const AMessage: string; AAlt: Boolean = False);
+  const AMessage: TRdxFindingText; AAlt: Boolean = False);
 var
   Reason : string;
 begin
@@ -206,7 +209,8 @@ begin
 end;
 
 procedure AssertRefused(const ASource: string; ALine: Integer;
-  const AMessage, AReason: string; AAlt: Boolean = False);
+  const AMessage: TRdxFindingText; const AReason: string;
+  AAlt: Boolean = False);
 var
   Got : string;
 begin
@@ -313,11 +317,11 @@ var
   Src : string;
 begin
   Assert.AreEqual('datetostr', TRdxFormatSettingsFix.CalledNameOf(
-    Msg('datetostr')));
+    Msg('datetostr').Text));
   Assert.AreEqual('formatcurr', TRdxFormatSettingsFix.CalledNameOf(
-    Msg('formatcurr')));
+    Msg('formatcurr').Text));
   // Kein Name der Liste bzw. eine fremde Meldung.
-  Assert.AreEqual('', TRdxFormatSettingsFix.CalledNameOf(Msg('strtoint')));
+  Assert.AreEqual('', TRdxFormatSettingsFix.CalledNameOf(Msg('strtoint').Text));
   Assert.AreEqual('', TRdxFormatSettingsFix.CalledNameOf('etwas anderes'));
   Src := InUnit(['  r := DateToStr(d);']);
   AssertRefused(Src, BODY_LINE, 'etwas anderes', _(R_FS_NO_NAME));
@@ -336,7 +340,7 @@ var
 begin
   Map := NewMap(InUnit(['  r := DateToStr(d);']));
   try
-    FMsg.Text := Msg('strtoint');   // kein Treffer in der Liste
+    FMsg := Msg('strtoint');   // kein Treffer in der Liste
     FMsg.Args.Put(FA_NAME, 'datetostr');
     Ok := TRdxFormatSettingsFix.DateFormatSettings(Map, BODY_LINE, FMsg,
       Edit, Reason);
@@ -1239,7 +1243,7 @@ end;
 // Der Alt-Weg sperrt mit R_FS_DISPLAY (Zeile ATargetLine, Ziel AWhat); der
 // Hauptweg bleibt angeboten.
 procedure AssertDisplay(const ASource: string; ALine: Integer;
-  const AMessage: string; ATargetLine: Integer; const AWhat: string);
+  const AMessage: TRdxFindingText; ATargetLine: Integer; const AWhat: string);
 var
   Reason : string;
 begin

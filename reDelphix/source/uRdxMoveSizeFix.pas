@@ -149,8 +149,6 @@ type
 
 const
   SPAN_154 = 'sca154';
-  MSG_CALL_END = '(...)';
-  MSG_SIZEOF   = 'SizeOf(';
   KW_SIZEOF    = 'sizeof';
 
   ROUTINES: array[0..3] of TRdxSizeRoutine = (
@@ -220,43 +218,12 @@ begin
     end;
 end;
 
-// Routine und Zeigertyp aus der Meldung; False ohne diese Form oder fuer
-// eine Routine, die der Detektor nicht meldet.
-function ParseMessage(const AMessage: string; out ARoutine: TRdxSizeRoutine;
-  out APtr: string): Boolean;
-var
-  P, Q : Integer;
-  Name : string;
-  Rest : string;
-begin
-  Result := False;
-  ARoutine := Default(TRdxSizeRoutine);
-  APtr := '';
-  P := Pos(MSG_CALL_END, AMessage);
-  if P <= 1 then
-    Exit;
-  Name := Copy(AMessage, 1, P - 1);
-  Q := Pos(MSG_SIZEOF, AMessage);
-  if Q = 0 then
-    Exit;
-  Rest := Copy(AMessage, Q + Length(MSG_SIZEOF), MaxInt);
-  Q := Pos(')', Rest);
-  if Q <= 1 then
-    Exit;
-  APtr := Copy(Rest, 1, Q - 1);
-  ARoutine := RoutineByName(Name);
-  Result := ARoutine.Name <> '';
-end;
-
 class function TRdxMoveSizeFix.TargetTypeOf(const AMessage: TRdxFindingText): string;
 var
-  R   : TRdxSizeRoutine;
   Ptr : string;
 begin
   Result := '';
   if AMessage.Args.TryGet(FA_TYPE, Ptr) then
-    Result := PointeeOf(Ptr)
-  else if ParseMessage(AMessage.Text, R, Ptr) then
     Result := PointeeOf(Ptr);
 end;
 
@@ -368,7 +335,7 @@ begin
   ACall := Default(TRdxSizeCall);
   if AMessage.Args.TryGet(FA_NAME, AName) and AMessage.Args.TryGet(FA_TYPE, ACall.Ptr) then
     ACall.Routine := RoutineByName(AName)
-  else if not ParseMessage(AMessage.Text, ACall.Routine, ACall.Ptr) then
+  else
     Exit(_(R_SIZE_MSG));
   if ACall.Routine.Name = '' then
     Exit(_(R_SIZE_MSG));

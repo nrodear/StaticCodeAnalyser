@@ -51,7 +51,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxFuncNameFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxFuncNameFix, uFixArgs,
   uTestRdxTextKit   // Join, Apply, LineOf
 {$IFNDEF FPC}
   , System.Generics.Collections,
@@ -76,9 +76,10 @@ const
   ADVICE = ' - write ''Result :='' (the bare name in an expression is a '
     + 'recursive call)';
 
-function Msg(const AName: string): string;
+function Msg(const AName: string): TRdxFindingText;
 begin
-  Result := FNR_ASSIGN_PREFIX + AName + FNR_ASSIGN_MID + ADVICE;
+  Result.Text := FNR_ASSIGN_PREFIX + AName + FNR_ASSIGN_MID + ADVICE;
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // ---- Helfer ----
@@ -110,7 +111,7 @@ begin
 end;
 
 // Die Hilfe fuer die Zeile mit AMarker: neuer Text oder '' bei Ablehnung.
-function Fix(const ASource, AMarker, AMessage: string;
+function Fix(const ASource, AMarker: string; const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   SL  : TStringList;
@@ -336,7 +337,7 @@ var
   Finding : TLeakFinding;
   O       : TRdxFixOutcome;
 begin
-  Finding := TLeakFinding.New('t.pas', '', 1, Msg('GetCount'),
+  Finding := TLeakFinding.New('t.pas', '', 1, Msg('GetCount').Text,
     fkFunctionNameAsResult);
   try
     O := TRdxFixTable.FixFor(nil, nil, Finding, nil);

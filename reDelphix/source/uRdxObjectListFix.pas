@@ -748,12 +748,9 @@ begin
   Facts := Default(TListFacts);
   LoopVars := nil;
   Result := False;
-  if not AMessage.Args.TryGet(FA_NAME, AType) then
-    AType := ListTypeArgOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, AType);
   if AMessage.Args.TryGet(FA_NAME2, VarLow) then
-    VarLow := LowerCase(VarLow)
-  else
-    VarLow := LowerCase(ListVarOf(AMessage.Text));
+    VarLow := LowerCase(VarLow);
   APlan.Name := AType;
   if (AType = '') or (VarLow = '') then
   begin

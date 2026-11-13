@@ -402,8 +402,9 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not AMessage.Args.TryGet(FA_FORM, TermWord) then
-    TermWord := TerminatorOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_FORM, TermWord);
+  if not InList(TermWord, TERMINATORS) then
+    TermWord := '';
   if TermWord = '' then
   begin
     AReason := _(R_DEAD_NO_TERM);

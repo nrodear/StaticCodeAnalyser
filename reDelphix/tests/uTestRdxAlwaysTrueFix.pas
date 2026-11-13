@@ -94,6 +94,18 @@ begin
     + #13#10 + Join(['end;', 'end.']);
 end;
 
+// Die Form (FA_FORM-Code) zu einer der vier bekannten Meldungs-Konstanten,
+// wie der echte Detektor sie befuellt - leer, wenn AMsg keine davon ist
+// (dann liest ResolveIf nur noch den Text, Args bleibt leer).
+function FormOfMsg(const AMsg: string): string;
+begin
+  if AMsg = GE_MSG then Result := FORM_LEN_GE
+  else if AMsg = ZLE_MSG then Result := FORM_ZERO_LE
+  else if AMsg = LT_MSG then Result := FORM_LEN_LT
+  else if AMsg = ZGT_MSG then Result := FORM_ZERO_GT
+  else Result := '';
+end;
+
 // Der Planer fuer Zeile ALine und Meldung AMsg: der neue Text, oder '' bei
 // Ablehnung (AReason).
 function PlanAt(const ASource: string; ALine: Integer; const AMsg: string;
@@ -102,12 +114,15 @@ var
   Map : TRdxCodeMap;
   E   : TRdxEdit;
   Ok  : Boolean;
+  Msg : TRdxFindingText;
 begin
   Result := '';
   AReason := '';
   Map := NewMap(ASource);
   try
-    Ok := TRdxAlwaysTrueFix.ResolveIf(Map, ALine, AMsg, E, AReason);
+    Msg.Text := AMsg;
+    Msg.Args.Put(FA_FORM, FormOfMsg(AMsg));
+    Ok := TRdxAlwaysTrueFix.ResolveIf(Map, ALine, Msg, E, AReason);
   finally
     Map.Free;
   end;
@@ -388,6 +403,7 @@ begin
   S := Default(TSeen);
   S.Line := ALine;
   S.Msg := AMsg;
+  S.Args.Put(FA_FORM, FormOfMsg(AMsg));
   Result := PlanFixIn(ASource, 't.pas', fkBoolAlwaysTrue, S);
 end;
 

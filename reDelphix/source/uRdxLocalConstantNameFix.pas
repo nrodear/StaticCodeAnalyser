@@ -621,10 +621,8 @@ begin
   Routine := Default(TRdxRoutine);
   Bodies := Default(TRdxBodies);
   APlan := Default(TRdxLocalConstantNamePlan);
-  if AMessage.Args.TryGet(FA_NAME, APlan.OldName) then
-    AMessage.Args.TryGet(FA_NAME2, RoutineName)
-  else
-    APlan.OldName := ConstNameOf(AMessage.Text, RoutineName);
+  AMessage.Args.TryGet(FA_NAME, APlan.OldName);
+  AMessage.Args.TryGet(FA_NAME2, RoutineName);
   if APlan.OldName = '' then
   begin
     AReason := _(R_LCN_FORM);

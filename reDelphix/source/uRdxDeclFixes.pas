@@ -179,7 +179,6 @@ const
   // Womit der Rumpf eines Interfaces beginnt (SCA197).
   INTERFACE_BODY: array[0..3] of string = ('procedure', 'function',
     'property', 'end');
-  KEY_MEMBER   = 'Public member ';
   KEY_SHADOWS  = 'missing `override`';
   KEY_HIDES    = 'hides all inherited';
   // Gruende, die mehrere Routinen nennen - englische msgids (Entscheid
@@ -415,21 +414,6 @@ end;
 
 { ---- SCA117 ---- }
 
-// Den Namen aus 'Public member X has no documentation ...'.
-function MemberNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(KEY_MEMBER, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(KEY_MEMBER));
-  Q := P;
-  while (Q <= Length(AMessage)) and (AMessage[Q] <> ' ') do
-    Inc(Q);
-  Result := Copy(AMessage, P, Q - P);
-end;
-
 // Endet die naechste nicht leere Zeile ueber ALine in einem Kommentar, der
 // weiter oben begann? Der Detektor haelt die Schlusszeile eines
 // mehrzeiligen Kommentars fuer Code - vermutlich steht dort schon Doku.
@@ -489,8 +473,7 @@ begin
     Exit(MsgLineStartsInCommentOrString);
   if not TRdxDeclFixes.ReadSignature(AMap, ALine, ASig, R) then
     Exit(R);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := MemberNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if not SameText(ASig.Name, Name) then
     Exit(DeclMovedReason);
   if CommentEndsAbove(AMap, ALine) then
@@ -718,11 +701,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  // Der Name aus 'Interface "IFoo" has no GUID ...' (bis Charge B2S-a
-  // eine eigene Kopie QuotedNameOf), bevorzugt aus FixArgs (Fix-Datenfeld
-  // S3a-1).
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := QuotedText(AMessage.Text, '"');
+  AMessage.Args.TryGet(FA_NAME, Name);
   AReason := InterfaceHeaderOn(AMap, ALine, Name, Kw);
   if AReason = '' then
     AReason := HeaderTail(AMap, Kw, Last, Next);
@@ -826,49 +805,6 @@ begin
     Result := DIRECTIVE_OVERRIDE
   else if Pos(KEY_HIDES, AMessage) > 0 then
     Result := DIRECTIVE_REINTRODUCE;
-end;
-
-// Das Wort hinter AKey in AMessage (bis zum naechsten ' '); '' ohne AKey.
-function WordAfter(const AMessage, AKey: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(AKey, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(AKey));
-  Q := Pos(' ', AMessage + ' ', P);
-  Result := Copy(AMessage, P, Q - P);
-end;
-
-// Die Klasse aus 'TOuter.TBase<T>.DoWork': 'TBase' (letztes Segment vor
-// dem Methodennamen, ohne Typparameter).
-function ClassPartOf(const AQualified: string): string;
-var
-  P : Integer;
-begin
-  Result := Copy(AQualified, 1, LastDelimiter('.', AQualified) - 1);
-  P := LastDelimiter('.', Result);
-  Result := Copy(Result, P + 1, MaxInt);
-  P := Pos('<', Result);
-  if P > 0 then
-    Result := Copy(Result, 1, P - 1);
-end;
-
-// Den Methodennamen aus 'Method TDerived.DoWork shadows ...' bzw.
-// '... hides ...'.
-function MethodNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos('Method ', AMessage);
-  if P <> 1 then Exit;
-  Q := Pos(' ', AMessage, P + 7);
-  if Q = 0 then Exit;
-  Result := Copy(AMessage, P + 7, Q - P - 7);
-  P := LastDelimiter('.', Result);
-  Result := Copy(Result, P + 1, MaxInt);
 end;
 
 // Das naechste ';' ab ATok einschliesslich; Low = '' am Dateiende.
@@ -1149,15 +1085,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   Directive := DirectiveFor(AMessage.Text);
-  if not AMessage.Args.TryGet(FA_NAME, MethodName) then
-    MethodName := MethodNameOf(AMessage.Text);
-  if not AMessage.Args.TryGet(FA_NAME2, Secondary) then
-  begin
-    if Directive = DIRECTIVE_OVERRIDE then
-      Secondary := ClassPartOf(WordAfter(AMessage.Text, 'virtual '))
-    else
-      Secondary := ClassPartOf(WordAfter(AMessage.Text, 'Method '));
-  end;
+  AMessage.Args.TryGet(FA_NAME, MethodName);
+  AMessage.Args.TryGet(FA_NAME2, Secondary);
   AReason := HeadReason(AMap, ALine, MethodName, Directive, Sig);
   if (AReason = '') and (Directive = DIRECTIVE_OVERRIDE) then
     AReason := OverrideReason(AMap, Secondary, Sig)

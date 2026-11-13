@@ -266,8 +266,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not AMessage.Args.TryGet(FA_NAME, Word) then
-    Word := LowerCase(QuotedText(AMessage.Text, '`'));
+  AMessage.Args.TryGet(FA_NAME, Word);
   if Word = '' then
   begin
     AReason := _(R_CS_MSG);

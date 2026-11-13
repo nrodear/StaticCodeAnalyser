@@ -58,7 +58,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes,
+  uRdxBufferMath, uRdxCodeMap, uRdxRaiseFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply, InProc
 
 type
@@ -73,7 +73,7 @@ const
 // AArg ist bei rkEmpty das Anweisungsformat ('' = Kommentar), sonst die
 // Meldung.
 function Fix(AKind: TRdxRaiseKind; const ASource: string; ALine: Integer;
-  const AArg: string; out AReason: string): string;
+  const AArg: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -88,7 +88,7 @@ begin
     Map := TRdxCodeMap.Create(SL);
     case AKind of
       rkEmpty:
-        Ok := TRdxRaiseFixes.EmptyBody(Map, ALine, AArg, E, AReason);
+        Ok := TRdxRaiseFixes.EmptyBody(Map, ALine, AArg.Text, E, AReason);
       rkMissing:
         Ok := TRdxRaiseFixes.MissingRaise(Map, ALine, AArg, E, AReason);
     else
@@ -102,16 +102,18 @@ begin
   end;
 end;
 
-function MissingMsg(const AType: string): string;
+function MissingMsg(const AType: string): TRdxFindingText;
 begin
-  Result := Format('Exception %s.Create(...) is constructed but never raised',
-    [AType]);
+  Result.Text := Format('Exception %s.Create(...) is constructed but '
+    + 'never raised', [AType]);
+  Result.Args.Put(FA_TYPE, AType);
 end;
 
-function ReRaiseMsg(const AName: string): string;
+function ReRaiseMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Re-raise of bound variable "%s" loses the original stack '
-    + 'trace - use bare `raise;` instead', [AName]);
+  Result.Text := Format('Re-raise of bound variable "%s" loses the '
+    + 'original stack trace - use bare `raise;` instead', [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).

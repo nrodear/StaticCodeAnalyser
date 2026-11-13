@@ -67,7 +67,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.CaptionFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxExceptionNameFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxExceptionNameFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -77,11 +77,12 @@ const
 // ---- Helfer ----
 
 // Die Meldung des Detektors fuer die Klasse AName.
-function Msg(const AName: string): string;
+function Msg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Exception class %s should start with ''E'' prefix '
+  Result.Text := Format('Exception class %s should start with ''E'' prefix '
     + '(Delphi-RTL convention: EAbort, EDivByZero, EMyError). Suggested: E%s',
     [AName, AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Eine Unit: Zeilen 1-3 Kopf und interface, Zeile 4 'implementation',
@@ -95,7 +96,7 @@ end;
 // Der Planer fuer Zeile ALine mit AMessage: der neue Text, oder '' bei
 // Ablehnung (AReason); den Plan in APlan.
 function PlanWith(const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string;
+  const AMessage: TRdxFindingText; out AReason: string;
   out APlan: TRdxExceptionNamePlan): string;
 var
   Map : TRdxCodeMap;

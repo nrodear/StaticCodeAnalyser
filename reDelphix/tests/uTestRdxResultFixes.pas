@@ -129,6 +129,13 @@ begin
   end;
 end;
 
+// Die SCA121-Meldung fuer Funktion AName.
+function Msg121(const AName: string): TRdxFindingText;
+begin
+  Result.Text := Format(MSG_121, [AName]);
+  Result.Args.Put(FA_NAME, AName);
+end;
+
 // SCA121 an der Zeile, die mit AHead beginnt: neuer Text oder '' (AReason).
 function Fix121(const ASource, AHead, AName: string; out AReason: string): string;
 var
@@ -136,20 +143,22 @@ var
 begin
   Result := '';
   P := PlanOfIn(TRdxResultFixes.ResultDefault, ASource,
-    LineStartingWith(ASource, AHead), Format(MSG_121, [AName]), AReason);
+    LineStartingWith(ASource, AHead), Msg121(AName), AReason);
   if AReason = '' then
     Result := Apply(ASource, P.Edits);
 end;
 
 // Die SCA196-Meldung fuer Funktion AName mit Rueckgabetyp AType.
-function Msg196(const AName, AType: string): string;
+function Msg196(const AName, AType: string): TRdxFindingText;
 begin
-  Result := Format(MSG_196, [AName, AType]);
+  Result.Text := Format(MSG_196, [AName, AType]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_TYPE, AType);
 end;
 
 // SCA196 an der Lese-Zeile, die mit ARead beginnt.
-function Fix196(const ASource, ARead, AMessage: string; out AReason: string;
-  out APlan: TRdxResultPlan): string;
+function Fix196(const ASource, ARead: string; const AMessage: TRdxFindingText;
+  out AReason: string; out APlan: TRdxResultPlan): string;
 begin
   Result := '';
   APlan := PlanOfIn(TRdxResultFixes.ManagedResultInit, ASource,
@@ -201,7 +210,7 @@ begin
   Assert.AreEqual(InUnit(['function F(A: Integer): Integer;', 'begin',
     '  Result := 0;', '  if A > 0 then', '    Log(''x'');',
     'end;']), Fix121(S, 'function F', 'F', R), R);
-  P := PlanOfIn(TRdxResultFixes.ResultDefault, S, 4, Format(MSG_121, ['F']), R);
+  P := PlanOfIn(TRdxResultFixes.ResultDefault, S, 4, Msg121('F'), R);
   Assert.AreEqual('0', P.Name);
   Assert.AreEqual<Integer>(1, Length(P.Edits));
   // Ein Programm uebersetzt der Compiler ebenso.
@@ -431,7 +440,7 @@ begin
   S := ReadsResult(NO_TYPES, 'System.ShortString');
   Assert.AreEqual('Result := ''''', PlanOfIn(TRdxResultFixes.ManagedResultInit,
     S, LineStartingWith(S, 'Use(Result)'),
-    Format(MSG_196, ['F', 'System.ShortString']), R).Name, R);
+    Msg196('F', 'System.ShortString'), R).Name, R);
 end;
 
 // Fix-Datenfeld S3a-2: FixArgs.Get(FA_NAME/FA_TYPE) gewinnt vor der
@@ -445,7 +454,7 @@ begin
   S := InUnit(['function Join(const A: array of string): string;', 'var',
     '  I: Integer;', 'begin', '  for I := 0 to High(A) do',
     '    Result := Result + A[I];', 'end;']);
-  FMsg.Text := Msg196('AndereFunktion', 'Integer');
+  FMsg := Msg196('AndereFunktion', 'Integer');
   FMsg.Args.Put(FA_NAME, 'Join');
   FMsg.Args.Put(FA_TYPE, 'string');
   P := PlanOfIn(TRdxResultFixes.ManagedResultInit, S,
@@ -491,7 +500,7 @@ begin
   Assert.IsTrue(P.NeedsVariants, 'Variants in uses');
   S := ReadsResult(NO_TYPES, 'OleVariant');
   P := PlanOfIn(TRdxResultFixes.ManagedResultInit, S,
-    LineStartingWith(S, 'Use(Result)'), Format(MSG_196, ['F', 'OleVariant']),
+    LineStartingWith(S, 'Use(Result)'), Msg196('F', 'OleVariant'),
     R);
   Assert.IsTrue(P.NeedsVariants, R);
 end;
