@@ -42,6 +42,19 @@ uses
   uAnalyserTypes,
   uFindingGridRenderer;
 
+const
+  // Vorschau-Navigation: so viele Millisekunden nach dem LETZTEN Ausloeser
+  // folgt der Editor der Auswahl (jeder weitere Ausloeser setzt die Frist
+  // neu). Klick und Tasten wie seit 2026-08-04.
+  NAV_DELAY_CLICK_MS = 50;
+  NAV_DELAY_KEY_MS   = 80;
+  // Mausrad: erst wenn es DEUTLICH ruht (Nutzer-Auftrag 2026-11-13). Beim
+  // schnellen Scrollen liegen zwischen zwei Rasten oder Fingerzuegen mehr als
+  // 50 ms - mit der Klick-Frist sprang der Editor an jedem Zwischenhalt, und
+  // jeder Sprung laedt eine .pas oder schliesst und oeffnet fuer eine .dfm
+  // ein Modul.
+  NAV_DELAY_WHEEL_MS = 350;
+
 type
   // Navigations-Modus fuer den Finding-Click-Callback:
   //   fnmPreview  - Editor folgt der Auswahl, Fokus kehrt ins Grid zurueck
@@ -55,6 +68,21 @@ type
   // anders machen). Mode steuert das Fokus-Verhalten (s.o.).
   TFindingClickEvent = procedure(Sender: TObject;
     Finding: TLeakFinding; Mode: TFindingNavMode) of object;
+
+  // Was die Auswahl im Grid bewegt hat - danach richtet sich, wann der
+  // Editor ihr folgt (NavTimingFor).
+  TNavTrigger = (
+    ntClick,    // Mausklick auf eine Zeile
+    ntKey,      // Pfeil / Bild / Pos1 / Ende (beim Loslassen)
+    ntWheel);   // Mausrad
+
+  // Wie lange die Auswahl ruhen muss, bevor der Editor springt, und ob er
+  // auch auf die schon angesprungene Zeile springt (Force - der Klick auf
+  // dieselbe Zeile zentriert neu).
+  TNavTiming = record
+    DelayMs : Integer;
+    Force   : Boolean;
+  end;
 
   TFindingsPropertiesFrame = class(TFrame)
   strict private
@@ -193,9 +221,8 @@ type
     // wir bewaffnen nur den Nav-Timer, Handled bleibt False.
     procedure GridMouseWheel(Sender: TObject; Shift: TShiftState;
       WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
-    // Timer bewaffnen: AIntervalMs je Quelle (Maus 50, Tastatur 80),
-    // AForce erzwingt den Sprung auch auf die unveraenderte Zeile.
-    procedure ArmNavTimer(AIntervalMs: Integer; AForce: Boolean);
+    // Timer (neu) bewaffnen - Frist und Force je Ausloeser aus NavTimingFor.
+    procedure ArmNavTimer(ATrigger: TNavTrigger);
     procedure NavTimerTick(Sender: TObject);
     procedure NavigateToRow(ARow: Integer; Mode: TFindingNavMode);
     procedure GridResize(Sender: TObject);
@@ -302,6 +329,12 @@ type
 function SplitToolbarRest(AClientWidth, AButtonsWidth,
   AGap: Integer): TToolbarSplit;
 
+// Frist und Force der Vorschau-Navigation je Ausloeser:
+//   ntClick  NAV_DELAY_CLICK_MS, Force (auch auf dieselbe Zeile)
+//   ntKey    NAV_DELAY_KEY_MS,   ohne Force
+//   ntWheel  NAV_DELAY_WHEEL_MS, ohne Force
+function NavTimingFor(ATrigger: TNavTrigger): TNavTiming;
+
 implementation
 
 {$R *.dfm}
@@ -330,12 +363,24 @@ type
   // Strecken der Rule-Spalte, DPI-Wechsel) - nur waehrend gsColSizing ist
   // es die Maus (TCustomGrid.MouseUp setzt die Breite, BEVOR es den
   // Zustand zuruecknimmt).
+  //
+  // Und es markiert die Spanne, in der das MAUSRAD die Auswahl bewegt:
+  // TCustomGrid.DoMouseWheelDown/Up setzt Row, das ruft FocusCell und der
+  // Click. Ein OnClick in dieser Spanne ist kein Mausklick (InWheelMove) -
+  // exakt, ohne Zeitfenster, und try/finally nimmt die Marke auch dann
+  // zurueck, wenn das Rad am Listenende keine Zeile mehr bewegt.
   TFindingsGrid = class(TStringGrid)
   strict private
     FOnUserColSized : TNotifyEvent;
+    FWheelMoveDepth : Integer;
   protected
     procedure ColWidthsChanged; override;
+    function DoMouseWheelDown(Shift: TShiftState;
+      MousePos: TPoint): Boolean; override;
+    function DoMouseWheelUp(Shift: TShiftState;
+      MousePos: TPoint): Boolean; override;
   public
+    function InWheelMove: Boolean;
     property OnUserColSized: TNotifyEvent
       read FOnUserColSized write FOnUserColSized;
   end;
@@ -397,6 +442,33 @@ begin
   Result.SecondLeft := Result.FirstLeft + Result.FieldWidth + AGap;
 end;
 
+function NavTimingFor(ATrigger: TNavTrigger): TNavTiming;
+begin
+  Result.Force := ATrigger = ntClick;
+  case ATrigger of
+    ntClick : Result.DelayMs := NAV_DELAY_CLICK_MS;
+    ntKey   : Result.DelayMs := NAV_DELAY_KEY_MS;
+  else
+    Result.DelayMs := NAV_DELAY_WHEEL_MS;
+  end;
+end;
+
+function CanTakeFocus(AControl: TWinControl): Boolean;
+// Darf AControl.SetFocus gerufen werden, ohne dass es wirft?
+// TWinControl.CanFocus prueft die Kette nur BIS zum Formular, das Formular
+// selbst nicht. Ist das weder aktiv noch sichtbar und aktiviert, wirft
+// TCustomForm.SetFocus EInvalidOperation ("Deaktiviertes oder unsichtbares
+// Fenster kann den Fokus nicht erhalten"). Der Sprung laeuft aus einem
+// Timer: die Exception landete in einer Fehlermeldung der Anwendung - etwa
+// wenn das Panel in der Frist nach dem letzten Rad-Ereignis verschwindet.
+var
+  Form : TCustomForm;
+begin
+  Form := GetParentForm(AControl);
+  Result := Assigned(Form) and AControl.CanFocus
+    and (Form.Active or (Form.Visible and Form.Enabled));
+end;
+
 { TFindingsGrid }
 
 procedure TFindingsGrid.ColWidthsChanged;
@@ -404,6 +476,33 @@ begin
   inherited;
   if (FGridState = gsColSizing) and Assigned(FOnUserColSized) then
     FOnUserColSized(Self);
+end;
+
+function TFindingsGrid.DoMouseWheelDown(Shift: TShiftState;
+  MousePos: TPoint): Boolean;
+begin
+  Inc(FWheelMoveDepth);
+  try
+    Result := inherited DoMouseWheelDown(Shift, MousePos);
+  finally
+    Dec(FWheelMoveDepth);
+  end;
+end;
+
+function TFindingsGrid.DoMouseWheelUp(Shift: TShiftState;
+  MousePos: TPoint): Boolean;
+begin
+  Inc(FWheelMoveDepth);
+  try
+    Result := inherited DoMouseWheelUp(Shift, MousePos);
+  finally
+    Dec(FWheelMoveDepth);
+  end;
+end;
+
+function TFindingsGrid.InWheelMove: Boolean;
+begin
+  Result := FWheelMoveDepth > 0;
 end;
 
 { TFindingsPropertiesFrame }
@@ -421,7 +520,7 @@ begin
   FLastNavigatedRow := -1;
   FNavTimer := TTimer.Create(Self);   // Owner=Self -> Auto-Free
   FNavTimer.Enabled  := False;
-  FNavTimer.Interval := 80;           // ms Debounce gegen Key-Repeat
+  FNavTimer.Interval := NAV_DELAY_KEY_MS;   // ArmNavTimer setzt die Frist je Ausloeser
   FNavTimer.OnTimer  := NavTimerTick;
   FSearchTimer := TTimer.Create(Self);
   FSearchTimer.Enabled  := False;
@@ -1302,7 +1401,7 @@ begin
   // ShowFileAtLine fokussiert den Editor (SrcEditor.Show). Im Preview-Modus
   // den Fokus zurueck ins Grid holen - sonst stirbt die Pfeiltasten-Navigation
   // nach dem ersten Sprung. Im Activate-Modus behaelt der Editor den Fokus.
-  if (Mode = fnmPreview) and FGrid.CanFocus then
+  if (Mode = fnmPreview) and CanTakeFocus(FGrid) then
     FGrid.SetFocus;
 end;
 
@@ -1313,7 +1412,19 @@ begin
   // Durchklicken der Liste ein Sprung pro Klick. Force: ein Klick auf die
   // bereits navigierte Zeile soll erneut zentrieren, auch wenn sich die
   // Zeile nicht geaendert hat.
-  ArmNavTimer(50, True);
+  //
+  // Dieses Ereignis feuert die VCL aber nicht nur beim Mausklick, sondern bei
+  // JEDER Bewegung der Auswahl - auch wenn das MAUSRAD sie bewegt, direkt
+  // nach GridMouseWheel (TCustomGrid.DoMouseWheelDown/Up setzt Row, SetRow
+  // ruft FocusCell, FocusCell ruft Click). Bis 2026-11-13 bewaffnete es den
+  // Timer dann mit der Klick-Frist UND Force neu: jede Raste war ein
+  // erzwungener Klick, der Editor sprang an jedem Zwischenhalt. Ein Click
+  // aus der Rad-Bewegung zaehlt deshalb als Rad - er verkuerzt die Frist
+  // nicht und erzwingt nichts.
+  if (FGrid is TFindingsGrid) and TFindingsGrid(FGrid).InWheelMove then
+    ArmNavTimer(ntWheel)
+  else
+    ArmNavTimer(ntClick);
 end;
 
 procedure TFindingsPropertiesFrame.GridDblClick(Sender: TObject);
@@ -1347,7 +1458,7 @@ begin
   // Auswahl beim KeyDown schon bewegt, daher steht FGrid.Row beim Tick richtig.
   case Key of
     VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END:
-      ArmNavTimer(80, False);   // re-armieren: nur die Ruhe-Zeile springt
+      ArmNavTimer(ntKey);   // re-armieren: nur die Ruhe-Zeile springt
   end;
 end;
 
@@ -1357,21 +1468,25 @@ procedure TFindingsPropertiesFrame.GridMouseWheel(Sender: TObject;
 begin
   // Handled bleibt False: die VCL bewegt die Auswahl danach selbst
   // (TCustomGrid.DoMouseWheel* verschiebt Row um eins). Wir bewaffnen nur
-  // den Timer - bei schnellem Drehen kollabieren alle Rasten zu EINEM
-  // Editor-Sprung auf die Ruhe-Zeile, 50 ms nachdem das Rad stillsteht.
-  // Vorher folgte der Editor dem Rad GAR NICHT - die Auswahl wanderte,
-  // der Fund im Editor blieb stehen.
+  // den Timer - alle Rasten kollabieren zu EINEM Editor-Sprung auf die
+  // Ruhe-Zeile, NAV_DELAY_WHEEL_MS nachdem das Rad stillsteht; jede Raste
+  // setzt die Frist neu, waehrend des Scrollens wird nichts geladen. (Der
+  // Click, den die VCL aus der Auswahlbewegung nachschiebt, bewaffnet
+  // genauso - s. GridClick.) Am Listenende bewegt das Rad nichts: dann
+  // laeuft die Frist ab, ohne dass etwas springt (kein Force).
   Handled := False;
-  ArmNavTimer(50, False);
+  ArmNavTimer(ntWheel);
 end;
 
-procedure TFindingsPropertiesFrame.ArmNavTimer(AIntervalMs: Integer;
-  AForce: Boolean);
+procedure TFindingsPropertiesFrame.ArmNavTimer(ATrigger: TNavTrigger);
+var
+  Timing : TNavTiming;
 begin
   if not Assigned(FNavTimer) then Exit;
+  Timing := NavTimingFor(ATrigger);
   FNavTimer.Enabled  := False;
-  FNavTimer.Interval := AIntervalMs;
-  FNavForce          := AForce;
+  FNavTimer.Interval := Timing.DelayMs;
+  FNavForce          := Timing.Force;
   FNavTimer.Enabled  := True;
 end;
 
