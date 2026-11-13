@@ -23,10 +23,22 @@ unit uEditorContextModel;
 // Charge B nur die Fund-Aktionen); OmittedLineIndex sagt dem Zeichner
 // (uIDEFindingActionMenu), wo die Hinweiszeile "%d weitere Funde" hingehoert
 // - vor den Kontextteil, nicht ans Ende.
+//
+// Schliessen aus der Fund-Navigation (2026-11-13): DecideModuleClose
+// entscheidet, ob uIDEEditorIntegration ein Modul OHNE die Rueckfrage der
+// IDE schliessen darf. Die IDE fuehrt eine Unit auch dann als geaendert,
+// wenn nur sie selbst Units des Formulars in die uses-Klausel eingetragen
+// hat - wer dann nur einen Fund anklickt, soll nicht gefragt werden. Ohne
+// Rueckfrage geht es NUR, wenn fuer jeden als geaendert gefuehrten Editor
+// die Inhaltsgleichheit bewiesen ist (mit der Datei oder mit dem
+// Vergleichsstand, den die Navigation direkt nach ihrem Sprung festhaelt);
+// jeder Zweifel heisst fragen. Der Host liest Puffer und Platte, diese Unit
+// vergleicht nur (BufferMatchesDisk) und entscheidet.
 
 interface
 
 uses
+  System.SysUtils,   // TBytes
   uFindingActions, uFindingActionMenu;
 
 type
@@ -48,6 +60,44 @@ type
     EndLine   : Integer;
     EndCol    : Integer;
   end;
+
+  // Art eines Datei-Editors eines Moduls: Quelltext (IOTASourceEditor - die
+  // Unit, oder eine DFM in der Textansicht), Formular-Designer
+  // (IOTAFormEditor) oder etwas, das der Host nicht kennt.
+  TModuleEditorKind = (mekSource, mekForm, mekOther);
+
+  // Ein Datei-Editor, wie der Host ihn unmittelbar vor dem Schliessen
+  // gelesen hat. Die Vergleichsfelder zaehlen nur fuer einen GEAENDERTEN
+  // Quelltext-Editor; der Host fuellt sie nur, wenn er sie belegt hat
+  // (Default(TModuleEditorState) heisst: nichts belegt).
+  TModuleEditorState = record
+    Kind               : TModuleEditorKind;
+    // IOTAEditor.Modified - die IDE fragte beim Schliessen nach.
+    Modified           : Boolean;
+    // Der Puffertext wurde gelesen (ein leerer Puffer ist gelesen).
+    BufferRead         : Boolean;
+    // Puffer inhaltsgleich mit der Datei auf der Platte (BufferMatchesDisk).
+    EqualsDisk         : Boolean;
+    // Es gibt einen Vergleichsstand: Puffertext und Dateiinhalt zu einem
+    // Zeitpunkt, an dem der Puffer nachweislich nichts vom Nutzer trug,
+    // aber schon alles, was die IDE selbst eintraegt.
+    HasBaseline        : Boolean;
+    // Puffer bytegleich mit dem Puffertext des Vergleichsstands.
+    EqualsBaseline     : Boolean;
+    // Die Datei auf der Platte ist bytegleich mit der zum Vergleichsstand.
+    // Ohne das bewiese EqualsBaseline nichts mehr: nach einem Speichern
+    // dazwischen waere ein von Hand zurueckgenommener Stand Nutzerarbeit.
+    DiskAsAtBaseline   : Boolean;
+  end;
+
+  TModuleCloseDecision = (
+    // Kein Editor gilt als geaendert: normal schliessen, die IDE fragt nicht.
+    mcdPlain,
+    // Geaendert gefuehrt, aber nachweislich nichts vom Nutzer: ohne
+    // Rueckfrage schliessen, die Aenderungen der IDE verfallen.
+    mcdForce,
+    // Eine Nutzeraenderung ist nicht ausgeschlossen: die IDE fragt.
+    mcdAsk);
 
 const
   // Die Form des Editor-Kontextmenues (seit AH13): Trenner vor dem ersten
@@ -94,6 +144,32 @@ function BuildEditorPopupModel(const ACtx: TEditorContext;
 // als Index in Entries, VOR dem Kontextteil (die Zeile gehoert zu den
 // Funden). Ohne Kontextteil = Length(Entries), also ans Ende wie bisher.
 function OmittedLineIndex(const AModel: TFindingMenuModel): Integer;
+
+// Bytegleich, gleiche Laenge. Zwei leere Folgen sind gleich.
+function SameBytes(const A, B: TBytes): Boolean;
+
+// Ist der Editor-Puffer (UTF-8-Bytes ohne BOM, wie IOTAEditReader sie
+// liefert) inhaltsgleich mit den ROHEN Bytes der Datei? Geprueft wird jede
+// Lesart, in der die IDE die Datei geladen haben kann:
+//   UTF-8-BOM            die Bytes hinter dem BOM
+//   UTF-16-BOM (LE/BE)   dekodiert und nach UTF-8 gewandelt
+//   ohne BOM             die Bytes selbst (UTF-8, ASCII), sonst als ANSI
+//                        (Codepage des Systems) dekodiert und nach UTF-8
+// True nur bei Gleichheit unter einer dieser Lesarten. Eine falsche Lesart
+// kann nur zu False fuehren (dann fragt die IDE) - fuer ein falsches True
+// muesste der Puffer zufaellig genau die Fehldekodierung der Datei tragen.
+function BufferMatchesDisk(const ABufferUtf8, ADiskBytes: TBytes): Boolean;
+
+// Darf das Modul ohne Rueckfrage zu? AEditors: alle Datei-Editoren des
+// Moduls. mcdForce nur, wenn mindestens einer als geaendert gilt und JEDER
+// geaenderte ein gelesener Quelltext-Editor ist, dessen Puffer der Datei
+// gleicht (EqualsDisk) oder dem Vergleichsstand bei unveraenderter Datei
+// (HasBaseline, EqualsBaseline, DiskAsAtBaseline). Ein geaenderter
+// Formular-Designer, ein unbekannter Editor, ein nicht gelesener Puffer
+// oder ein fehlender Beleg: mcdAsk. Nichts geaendert (auch: keine
+// Editoren): mcdPlain.
+function DecideModuleClose(
+  const AEditors: array of TModuleEditorState): TModuleCloseDecision;
 
 implementation
 
@@ -163,6 +239,84 @@ begin
   Result := Length(AModel.Entries) - AModel.ContextEntryCount;
   if Result < 0 then
     Result := 0;
+end;
+
+function SameBytes(const A, B: TBytes): Boolean;
+begin
+  // Kurzschluss: @A[0] wird bei leeren Folgen nicht gebildet.
+  Result := (Length(A) = Length(B))
+    and ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
+end;
+
+function HasPrefix(const ABytes: TBytes; const APrefix: array of Byte): Boolean;
+var
+  i : Integer;
+begin
+  Result := Length(ABytes) >= Length(APrefix);
+  if Result then
+    for i := 0 to High(APrefix) do
+      if ABytes[i] <> APrefix[i] then
+        Exit(False);
+end;
+
+function Utf8OfDecoded(AEncoding: TEncoding; const ABytes: TBytes;
+  AOffset: Integer): TBytes;
+// Die Bytes ab AOffset in AEncoding gelesen, als UTF-8 ohne BOM. Nichts
+// hinter AOffset (eine Datei nur aus dem BOM): leer.
+begin
+  Result := nil;
+  if Length(ABytes) <= AOffset then Exit;
+  Result := TEncoding.UTF8.GetBytes(
+    AEncoding.GetString(ABytes, AOffset, Length(ABytes) - AOffset));
+end;
+
+function BufferMatchesDisk(const ABufferUtf8, ADiskBytes: TBytes): Boolean;
+const
+  BOM_UTF8    : array[0..2] of Byte = ($EF, $BB, $BF);
+  BOM_UTF16LE : array[0..1] of Byte = ($FF, $FE);
+  BOM_UTF16BE : array[0..1] of Byte = ($FE, $FF);
+begin
+  if HasPrefix(ADiskBytes, BOM_UTF8) then
+    Exit(SameBytes(ABufferUtf8,
+      Copy(ADiskBytes, Length(BOM_UTF8), Length(ADiskBytes))));
+  if HasPrefix(ADiskBytes, BOM_UTF16LE) or HasPrefix(ADiskBytes, BOM_UTF16BE) then
+  begin
+    // Eine halbe Code-Einheit am Ende: keine Lesart, die die IDE gehabt
+    // haben kann.
+    if Odd(Length(ADiskBytes)) then Exit(False);
+    if HasPrefix(ADiskBytes, BOM_UTF16LE) then
+      Exit(SameBytes(ABufferUtf8, Utf8OfDecoded(TEncoding.Unicode, ADiskBytes, 2)));
+    Exit(SameBytes(ABufferUtf8,
+      Utf8OfDecoded(TEncoding.BigEndianUnicode, ADiskBytes, 2)));
+  end;
+  if SameBytes(ABufferUtf8, ADiskBytes) then Exit(True);
+  // Leere Datei, aber nicht leerer Puffer (oder umgekehrt): ungleich - und
+  // GetString auf einer leeren Folge braucht es nicht.
+  if (Length(ADiskBytes) = 0) or (Length(ABufferUtf8) = 0) then Exit(False);
+  Result := SameBytes(ABufferUtf8, Utf8OfDecoded(TEncoding.ANSI, ADiskBytes, 0));
+end;
+
+function ProvenUnedited(const AEditor: TModuleEditorState): Boolean;
+// Nur fuer einen geaenderten Editor gefragt.
+begin
+  Result := (AEditor.Kind = mekSource) and AEditor.BufferRead
+    and (AEditor.EqualsDisk
+      or (AEditor.HasBaseline and AEditor.EqualsBaseline
+        and AEditor.DiskAsAtBaseline));
+end;
+
+function DecideModuleClose(
+  const AEditors: array of TModuleEditorState): TModuleCloseDecision;
+var
+  i : Integer;
+begin
+  Result := mcdPlain;
+  for i := 0 to High(AEditors) do
+    if AEditors[i].Modified then
+    begin
+      if not ProvenUnedited(AEditors[i]) then Exit(mcdAsk);
+      Result := mcdForce;
+    end;
 end;
 
 end.

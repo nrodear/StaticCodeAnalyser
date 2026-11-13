@@ -3870,10 +3870,23 @@ procedure TFileClosingNotifier.FileNotification(
   NotifyCode: TOTAFileNotification; const FileName: string;
   var Cancel: Boolean);
 begin
+  // Spur: in welchem Zustand die IDE eine Unit oder DFM oeffnet - gemessen
+  // gleicht der Puffer hier noch der Datei; "geaendert" wird eine Unit erst
+  // spaeter (uIDEEditorIntegration, "Vergleichsstand").
+  if (NotifyCode = ofnFileOpened)
+     and (SameText(ExtractFileExt(FileName), '.pas')
+       or SameText(ExtractFileExt(FileName), '.dfm')) then
+    NavTraceState('ide: FileOpened ' + ExtractFileName(FileName), FileName);
   if NotifyCode <> ofnFileClosing then Exit;
   // Belegt in der Spur, dass ein Schliessen aus der Fund-Navigation
   // (TIDEEditor.ShowDfmAsTextAtLine) diese Abraeum-Haken wirklich erreicht.
   NavTrace('ide: FileClosing ' + ExtractFileName(FileName));
+  // Der Vergleichsstand der Fund-Navigation gilt nur fuer dieses Oeffnen.
+  try
+    TIDEEditor.NoteFileClosing(FileName);
+  except
+    // IDE-Teardown-Pfad: nie eine Exception in die IDE propagieren.
+  end;
   if Assigned(GHighlighter) then
     try
       GHighlighter.HandleFileClosing(FileName);
