@@ -139,33 +139,13 @@ end;
 class function TRdxAttrDuplicateFix.ReadMessage(const AMessage: TRdxFindingText;
   out AKey: string; out AFirstLine: Integer): Boolean;
 var
-  P, Q, E  : Integer;
   LineText : string;
-  Text     : string;
 begin
   AKey := '';
   AFirstLine := 0;
-  if AMessage.Args.TryGet(FA_NAME, AKey) and AMessage.Args.TryGet(FA_LINE, LineText) then
-  begin
-    AFirstLine := StrToIntDef(LineText, 0);
-    Exit((AKey <> '') and (AFirstLine > 0));
-  end;
-  AKey := '';
-  AFirstLine := 0;
-  Result := False;
-  Text := AMessage.Text;
-  P := Pos(KEY_OPEN, Text);
-  if P = 0 then Exit;
-  Inc(P, Length(KEY_OPEN));
-  Q := Pos(KEY_CLOSE, Text);
-  if Q < P then Exit;
-  AKey := Copy(Text, P, Q - P);
-  Inc(Q, Length(KEY_CLOSE));
-  E := Q;
-  while (E <= Length(Text)) and (Text[E] >= '0')
-        and (Text[E] <= '9') do
-    Inc(E);
-  AFirstLine := StrToIntDef(Copy(Text, Q, E - Q), 0);
+  AMessage.Args.TryGet(FA_NAME, AKey);
+  AMessage.Args.TryGet(FA_LINE, LineText);
+  AFirstLine := StrToIntDef(LineText, 0);
   Result := (AKey <> '') and (AFirstLine > 0);
 end;
 

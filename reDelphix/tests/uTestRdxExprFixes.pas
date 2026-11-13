@@ -58,9 +58,10 @@ begin
 end;
 
 // Die Meldung der Detektoren: 'at column N'.
-function AtColumn(ACol: Integer): string;
+function AtColumn(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Finding at column %d - test.', [ACol]);
+  Result.Text := Format('Finding at column %d - test.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 type

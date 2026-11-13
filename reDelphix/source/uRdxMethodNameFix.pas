@@ -1015,8 +1015,7 @@ begin
   APlan := Default(TRdxMethodNamePlan);
   ImplOnly := False;
   Head := Default(TRdxToken);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := MethodNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   APlan.Name := PascalName(Name);
   if not StartsLower(Name) then
     AReason := _(R_MN_NO_NAME)

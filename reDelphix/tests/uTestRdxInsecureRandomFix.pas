@@ -69,7 +69,7 @@ uses
   uRdxRecipeRunner,      // TRdxFixOutcome
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource, PlanFixIn
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxInsecureRandomFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxInsecureRandomFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
@@ -84,10 +84,11 @@ const
 // ---- Helfer ----
 
 // Die Meldung des Detektors fuer den Aufruf ACall (uInsecureRandom).
-function MsgFor(const ACall: string): string;
+function MsgFor(const ACall: string): TRdxFindingText;
 begin
-  Result := ACall + '(...) without prior Randomize - deterministic sequence '
-    + '(Seed=0 until Randomize)';
+  Result.Text := ACall + '(...) without prior Randomize - deterministic '
+    + 'sequence (Seed=0 until Randomize)';
+  Result.Args.Put(FA_NAME, ACall);
 end;
 
 // HEAD, DICE und die Zeilen ATail.
@@ -247,12 +248,12 @@ procedure TTestRdxInsecureRandomFix.Sca167_CallOf;
 var
   Reason : string;
 begin
-  Assert.AreEqual('Random', TRdxInsecureRandomFix.CallOf(MsgFor('Random')));
+  Assert.AreEqual('Random', TRdxInsecureRandomFix.CallOf(MsgFor('Random').Text));
   Assert.AreEqual('System.Random',
-    TRdxInsecureRandomFix.CallOf(MsgFor('System.Random')));
+    TRdxInsecureRandomFix.CallOf(MsgFor('System.Random').Text));
   Assert.AreEqual('RandomFrom',
-    TRdxInsecureRandomFix.CallOf(MsgFor('RandomFrom')));
-  Assert.AreEqual('', TRdxInsecureRandomFix.CallOf(MsgFor('Foo')));
+    TRdxInsecureRandomFix.CallOf(MsgFor('RandomFrom').Text));
+  Assert.AreEqual('', TRdxInsecureRandomFix.CallOf(MsgFor('Foo').Text));
   Assert.AreEqual('', TRdxInsecureRandomFix.CallOf('Random(...)'));
   // Ohne Aufruf in der Meldung keine Hilfe.
   Assert.AreEqual('', FixAt(DiceUnit(['end.']), 6, 'Foo', Reason));

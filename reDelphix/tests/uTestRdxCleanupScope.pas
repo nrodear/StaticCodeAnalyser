@@ -77,7 +77,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes,
+  uRdxBufferMath, uRdxCodeMap, uRdxCleanupFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply
 
 // ---- Helfer ----
@@ -90,10 +90,11 @@ begin
 end;
 
 // Die Meldung des Detektors uUnusedLocal.
-function VarMsg(const AName: string): string;
+function VarMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Unused local variable: %s (declared but never read or '
-    + 'written)', [AName]);
+  Result.Text := Format('Unused local variable: %s (declared but never '
+    + 'read or written)', [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // SCA053 fuer Zeile ALine: neuer Text oder '' bei Ablehnung (AReason). Die

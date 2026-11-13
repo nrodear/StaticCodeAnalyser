@@ -232,9 +232,6 @@ const
   // Property-Teile, hinter denen ein Methodenname Accessor ist.
   ACCESSOR_WORDS: array[0..4] of string = ('read', 'write', 'stored', 'add',
     'remove');
-  KEY_ROUTINE = 'Top-level routine ';
-  KEY_METHOD  = 'Private method ';
-  KEY_UNUSED  = ' appears unused';
   DOC_PREFIX  = '///';
   STACK_COND   = 'c';
   STACK_REGION = 'r';
@@ -883,18 +880,6 @@ begin
     Result := MsgStaleSuffix(_('%s is used in line %d', [AName, AHit.Line]));
 end;
 
-// Der Name aus der Meldung zwischen AKey und ' appears unused'; '' ohne
-// diese Form.
-function NameFromMessage(const AMessage, AKey: string): string;
-var
-  E : Integer;
-begin
-  Result := '';
-  E := Pos(KEY_UNUSED, AMessage);
-  if (Pos(AKey, AMessage) = 1) and (E > Length(AKey) + 1) then
-    Result := Trim(Copy(AMessage, Length(AKey) + 1, E - Length(AKey) - 1));
-end;
-
 // Der eine Kopf mit dem Namen AName auf ALine. AWhat sagt, was gesucht
 // wird: ein SCHON UEBERSETZTES Muster mit %s fuer den Namen ('of the
 // routine %s', de 'der Routine %s'). '' oder der Grund; AHead ist der
@@ -1442,8 +1427,7 @@ var
 begin
   APlan := Default(TRdxRoutinePlan);
   R := Default(TRdxRoutine);
-  if not AMessage.Args.TryGet(FA_NAME, APlan.Name) then
-    APlan.Name := NameFromMessage(AMessage.Text, KEY_ROUTINE);
+  AMessage.Args.TryGet(FA_NAME, APlan.Name);
   if APlan.Name = '' then
     AReason := _('the message has no routine name')
   else
@@ -1473,8 +1457,7 @@ begin
   APlan := Default(TRdxRoutinePlan);
   D := Default(TRdxRoutine);
   R := Default(TRdxRoutine);
-  if not AMessage.Args.TryGet(FA_NAME, Full) then
-    Full := NameFromMessage(AMessage.Text, KEY_METHOD);
+  AMessage.Args.TryGet(FA_NAME, Full);
   ClassPath := Copy(Full, 1, LastDelimiter('.', Full) - 1);
   APlan.Name := LastPart(Full);
   if (ClassPath = '') or (APlan.Name = '') then

@@ -823,19 +823,8 @@ begin
 end;
 
 // SCA054, SCA170: reine Textlogik - kein Check, kein offener
-// Quellstellen-Dienst.
-function ParamForm(
-  APlanner: TRdxPlannerOf<TRdxParamPlan>): TRdxPlanForm<TRdxParamPlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := ParamParts;
-  Result.Check := nil;
-  Result.NeedsOpen := False;
-end;
-
-// Wie ParamForm, aber fuer TRdxPlannerInOf<TRdxParamPlan> (Fix-Datenfeld
+// Quellstellen-Dienst. Fuer TRdxPlannerInOf<TRdxParamPlan> (Fix-Datenfeld
 // S3a-1) - ParamParts kennt nur APlan, bleibt unveraendert wiederverwendbar.
-// Betrifft nur SCA054 (MarkUnused) - SCA170 bleibt auf ParamForm/Run.
 function ParamFormIn(
   APlanner: TRdxPlannerInOf<TRdxParamPlan>): TRdxPlanFormIn<TRdxParamPlan>;
 begin
@@ -899,19 +888,9 @@ begin
   AOutcome.Edits := APlan.Edits;
 end;
 
-// SCA086: ohne Check, ohne Quellstellen-Dienst.
-function OutForm(
-  APlanner: TRdxPlannerOf<TRdxOutPlan>): TRdxPlanForm<TRdxOutPlan>;
-begin
-  Result.Planner := APlanner;
-  Result.Parts := OutParts;
-  Result.Check := nil;
-  Result.NeedsOpen := False;
-end;
-
-// Wie OutForm, aber fuer TRdxPlannerInOf<TRdxOutPlan> (Fix-Datenfeld S2) -
-// OutParts kennt nur APlan, nicht AMessage, bleibt also unveraendert
-// wiederverwendbar.
+// SCA086: ohne Check, ohne Quellstellen-Dienst. Fuer
+// TRdxPlannerInOf<TRdxOutPlan> (Fix-Datenfeld S2) - OutParts kennt nur
+// APlan, nicht AMessage, bleibt also unveraendert wiederverwendbar.
 function OutFormIn(
   APlanner: TRdxPlannerInOf<TRdxOutPlan>): TRdxPlanFormIn<TRdxOutPlan>;
 begin
@@ -1596,7 +1575,7 @@ function PlanHttps(APlaces: TSourcePlaces; ALines: TStrings;
 var
   Why : string;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxHttpsFix.Https);
   // rwE29: in Testcode vergleicht ein Test die Adresse oft woertlich;
   // rwE30: Testcode nur mit Merkmal, nicht schon wegen des Ordners - die
@@ -1880,7 +1859,7 @@ end;
 function PlanFormatLocale(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxFormatSettingsFix.FormatLocale);
   FormatSettingsDiskCheck(ALines, AFinding, lfFormatSettingsVar, Result);
 end;
@@ -1889,7 +1868,7 @@ end;
 function PlanFormatLocaleAlt(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxFormatSettingsFix.FormatLocaleInvariant);
   Result.Variant := 1;
   Result.ChangesBehavior := True;
@@ -2425,7 +2404,7 @@ end;
 function PlanParamName(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxParamNameFix.UsePlaceholder);
   if Result.Enabled then
     Result.Name := Result.Edits[0].NewText;
@@ -2476,7 +2455,7 @@ end;
 function PlanLoopBound(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
 begin
-  Result := MapFix(ALines, AFinding.LineInt, AFinding.Message,
+  Result := MapFixIn(ALines, AFinding.LineInt, FindingTextOf(AFinding),
     TRdxLoopBoundFix.LastIndex);
   Result.Name := TRdxLoopBoundFix.RangeAfter(AFinding.Message);
 end;

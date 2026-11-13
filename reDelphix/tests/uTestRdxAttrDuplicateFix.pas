@@ -47,7 +47,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uAttributeDuplicate,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
-  uRdxFixTable, uRdxAttrDuplicateFix,
+  uRdxFixTable, uRdxAttrDuplicateFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText
   uTestRdxTextKit;       // Join, Apply
@@ -65,11 +65,13 @@ begin
 end;
 
 // Die Meldung des Detektors (Name klein + Argumente, erste Zeile).
-function Msg(const AKey: string; AFirstLine: Integer): string;
+function Msg(const AKey: string; AFirstLine: Integer): TRdxFindingText;
 begin
-  Result := 'Duplicate attribute [' + AKey + '] (first seen at line '
+  Result.Text := 'Duplicate attribute [' + AKey + '] (first seen at line '
     + IntToStr(AFirstLine) + '). Identical attribute applied twice has no '
     + 'effect and is usually a copy-paste artefact.';
+  Result.Args.Put(FA_NAME, AKey);
+  Result.Args.Put(FA_LINE, IntToStr(AFirstLine));
 end;
 
 function Moved: string;
@@ -79,8 +81,8 @@ end;
 
 // Der Planer fuer Zeile ALine: der neue Text, oder '' bei Ablehnung
 // (AReason).
-function Plan(const ASource: string; ALine: Integer; const AMessage: string;
-  out AReason: string): string;
+function Plan(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -109,7 +111,7 @@ end;
 // Wie Plan, aber die Hilfe muss gelten (sonst scheitert der Test mit dem
 // Grund).
 function Applied(const ASource: string; ALine: Integer;
-  const AMessage: string): string;
+  const AMessage: TRdxFindingText): string;
 var
   R : string;
 begin
@@ -118,7 +120,7 @@ begin
 end;
 
 procedure AssertRefused(const ASource: string; ALine: Integer;
-  const AMessage, AReason: string);
+  const AMessage: TRdxFindingText; const AReason: string);
 var
   R : string;
 begin
@@ -324,11 +326,13 @@ begin
   F := nil;
   Old := nil;
   try
-    F := TLeakFinding.New('t.pas', '', FIRST + 1, Msg('test', FIRST),
+    F := TLeakFinding.New('t.pas', '', FIRST + 1, Msg('test', FIRST).Text,
       fkAttributeDuplicate);
+    F.FixArgs := Msg('test', FIRST).Args;
     // Der Fund zeigt auf den Routinenkopf, dort steht keine Attributzeile.
-    Old := TLeakFinding.New('t.pas', '', FIRST + 2, Msg('test', FIRST),
+    Old := TLeakFinding.New('t.pas', '', FIRST + 2, Msg('test', FIRST).Text,
       fkAttributeDuplicate);
+    Old.FixArgs := Msg('test', FIRST).Args;
     SL.Text := Wrap(['  [Test]', '  [Test]', '  procedure Foo;']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     S := TRdxFixTable.FixFor(nil, SL, Old, nil);
@@ -346,7 +350,8 @@ begin
   // Die Kennzeichnung setzt erst die Tabellenzeile (FixFor) - der Adapter
   // laesst sie auf dem Default, ein Test am Adapter pruefte nur diesen.
   Seen.Line := FIRST + 1;
-  Seen.Msg := Msg('test', FIRST);
+  Seen.Msg := Msg('test', FIRST).Text;
+  Seen.Args := Msg('test', FIRST).Args;
   Seen.Variant := '';
   O := PlanFixIn(Wrap(['  [Test]', '  [Test]', '  procedure Foo;']), 't.pas',
     fkAttributeDuplicate, Seen);

@@ -79,7 +79,7 @@ type
 // Die Hilfe AKind fuer Zeile ALine: neuer Text oder '' bei Ablehnung
 // (AReason).
 function Fix(AKind: TCleanKind; const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -106,7 +106,7 @@ end;
 
 // Keine Hilfe, und APart steht im Grund.
 procedure AssertRefused(AKind: TCleanKind; const ASource: string;
-  ALine: Integer; const AMessage, APart: string);
+  ALine: Integer; const AMessage: TRdxFindingText; const APart: string);
 var
   R : string;
 begin
@@ -128,10 +128,11 @@ begin
 end;
 
 // Die Meldung des Detektors uUnusedLocal.
-function VarMsg(const AName: string): string;
+function VarMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Unused local variable: %s (declared but never read or '
-    + 'written)', [AName]);
+  Result.Text := Format('Unused local variable: %s (declared but never '
+    + 'read or written)', [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Eine Unit, deren implementation ALines traegt (ab Zeile 4).
@@ -917,7 +918,7 @@ begin
   try
     SL.Text := Source;
     Map := TRdxCodeMap.Create(SL);
-    Msg.Text := VarMsg('NichtX');
+    Msg := VarMsg('NichtX');
     Msg.Args.Put(FA_NAME, 'X');
     Ok := TRdxCleanupFixes.UnusedLocalVar(Map, 7, Msg, E, R);
   finally

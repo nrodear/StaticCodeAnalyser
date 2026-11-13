@@ -108,10 +108,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if AMessage.Args.Col > 0 then
-    Col := AMessage.Args.Col
-  else
-    Col := ColumnFromMessage(AMessage.Text);
+  Col := AMessage.Args.Col;
   if Col <= 0 then
   begin
     AReason := MsgNoColumn;
@@ -142,15 +139,8 @@ end;
 function KeywordOf(const AMessage: TRdxFindingText; out AWord: string;
   out ACol: Integer): Boolean;
 begin
-  if AMessage.Args.TryGet(FA_NAME, AWord) and (AMessage.Args.Col > 0) then
-  begin
-    ACol := AMessage.Args.Col;
-  end
-  else
-  begin
-    AWord := QuotedText(AMessage.Text, '"');
-    ACol := NumberAfterKey(AMessage.Text, KEY_CURRENTLY);
-  end;
+  AMessage.Args.TryGet(FA_NAME, AWord);
+  ACol := AMessage.Args.Col;
   Result := (AWord <> '') and (ACol > 1);
 end;
 
@@ -407,8 +397,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if not AMessage.Args.TryGet(FA_TYPE, Target) then
-    Target := CastTargetOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_TYPE, Target);
   if Target = '' then
     AReason := _('the message has no type name')
   else if LooksLikeInterfaceName(Target) then

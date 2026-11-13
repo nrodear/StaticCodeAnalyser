@@ -70,10 +70,11 @@ uses
 
 // ---- Helfer ----
 
-function Msg(const AClass, AMethod: string): string;
+function Msg(const AClass, AMethod: string): TRdxFindingText;
 begin
-  Result := 'Private method ' + AClass + '.' + AMethod
+  Result.Text := 'Private method ' + AClass + '.' + AMethod
     + ' appears unused (no call within the unit)';
+  Result.Args.Put(FA_NAME, AClass + '.' + AMethod);
 end;
 
 // Eine Unit: ADecl im interface-Teil (ab Zeile 4, hinter 'type'), AImpl
@@ -92,8 +93,8 @@ begin
 end;
 
 // Neuer Text oder '' bei Ablehnung (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
-  out AReason: string): string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;

@@ -541,8 +541,7 @@ begin
   Cls := Default(TRdxToken);
   From := 1;
   APlan := Default(TRdxExceptionNamePlan);
-  if not AMessage.Args.TryGet(FA_NAME, APlan.OldName) then
-    APlan.OldName := ClassNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, APlan.OldName);
   if APlan.OldName = '' then
   begin
     AReason := _(R_EXC_FORM);

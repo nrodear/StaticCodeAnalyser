@@ -172,25 +172,9 @@ type
 
 // Die Art aus 'Depth d (kind from ...'; '' ohne.
 function KindOf(const AMessage: TRdxFindingText): string;
-var
-  p, q : Integer;
 begin
   Result := '';
-  if AMessage.Args.TryGet(FA_FORM, Result) then
-  begin
-    if not InList(Result, NEST_KINDS) then
-      Result := '';
-    Exit;
-  end;
-  if Copy(AMessage.Text, 1, Length(MSG_DEPTH)) <> MSG_DEPTH then
-    Exit;
-  p := Pos('(', AMessage.Text);
-  if p = 0 then
-    Exit;
-  q := p + 1;
-  while (q <= Length(AMessage.Text)) and CharInSet(AMessage.Text[q], ['a'..'z']) do
-    Inc(q);
-  Result := Copy(AMessage.Text, p + 1, q - p - 1);
+  AMessage.Args.TryGet(FA_FORM, Result);
   if not InList(Result, NEST_KINDS) then
     Result := '';
 end;

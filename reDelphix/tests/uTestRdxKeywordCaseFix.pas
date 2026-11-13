@@ -48,7 +48,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uLowercaseKeyword,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner,
-  uRdxFixTable, uRdxKeywordCaseFix,
+  uRdxFixTable, uRdxKeywordCaseFix, uFixArgs,
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uRdxText,              // MsgNoFileOpen (MapFix, E29)
   uTestRdxTextKit;       // Join, Apply
@@ -60,10 +60,12 @@ const
 // ---- Helfer ----
 
 // Die Meldung des Detektors (uLowercaseKeyword).
-function Msg(const AWord: string; ACol: Integer): string;
+function Msg(const AWord: string; ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Keyword "%s" should be lowercase ("%s") at column %d.',
-    [AWord, LowerCase(AWord), ACol]);
+  Result.Text := Format('Keyword "%s" should be lowercase ("%s") at '
+    + 'column %d.', [AWord, LowerCase(AWord), ACol]);
+  Result.Args.Put(FA_NAME, AWord);
+  Result.Args.Col := ACol;
 end;
 
 // Eine Unit mit Routine P und den Zeilen ALines als Rumpf (ab Zeile 6).
@@ -108,7 +110,7 @@ end;
 
 // Die Hilfe fuer die Meldung AMessage: neuer Text, '' bei Ablehnung.
 function TryFixMsg(const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -413,7 +415,8 @@ var
 begin
   Src := InBody(['  Begin', '  End;']);
   Seen.Line := 6;
-  Seen.Msg := Msg('Begin', 3);
+  Seen.Msg := Msg('Begin', 3).Text;
+  Seen.Args := Msg('Begin', 3).Args;
   Seen.Variant := '';
   O := PlanOf(Src, Seen);
   Assert.IsTrue(O.Enabled, O.Reason);
@@ -431,7 +434,8 @@ var
   Finding : TLeakFinding;
 begin
   Seen.Line := 6;
-  Seen.Msg := Msg('End', 7);
+  Seen.Msg := Msg('End', 7).Text;
+  Seen.Args := Msg('End', 7).Args;
   Seen.Variant := '';
   O := PlanOf(InBody(['  Foo.End := 1;']), Seen);
   Assert.IsFalse(O.Enabled);
@@ -439,8 +443,9 @@ begin
   Assert.AreEqual<Integer>(0, Integer(Length(O.Edits)));
   Assert.AreEqual('End', O.Name);
   // Ohne Zeilen: keine Datei.
-  Finding := TLeakFinding.New('t.pas', '', 6, Msg('End', 7),
+  Finding := TLeakFinding.New('t.pas', '', 6, Msg('End', 7).Text,
     fkLowercaseKeyword);
+  Finding.FixArgs := Msg('End', 7).Args;
   try
     O := TRdxFixTable.FixFor(nil, nil, Finding, nil);
   finally

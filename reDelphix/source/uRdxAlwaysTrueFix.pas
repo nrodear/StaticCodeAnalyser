@@ -146,21 +146,11 @@ function FormOf(const AMessage: TRdxFindingText): TRdxAtForm;
 var
   Code : string;
 begin
-  if AMessage.Args.TryGet(FA_FORM, Code) then
-  begin
-    if Code = FORM_LEN_GE then Exit(afLenGe);
-    if Code = FORM_ZERO_LE then Exit(afZeroLe);
-    if (Code = FORM_LEN_LT) or (Code = FORM_ZERO_GT) then Exit(afFalse);
-    Exit(afNone);
-  end;
-  if Pos(MSG_LEN_GE, AMessage.Text) > 0 then
-    Result := afLenGe
-  else if Pos(MSG_ZERO_LE, AMessage.Text) > 0 then
-    Result := afZeroLe
-  else if (Pos(MSG_LEN_LT, AMessage.Text) > 0) or (Pos(MSG_ZERO_GT, AMessage.Text) > 0) then
-    Result := afFalse
-  else
-    Result := afNone;
+  AMessage.Args.TryGet(FA_FORM, Code);
+  if Code = FORM_LEN_GE then Exit(afLenGe);
+  if Code = FORM_ZERO_LE then Exit(afZeroLe);
+  if (Code = FORM_LEN_LT) or (Code = FORM_ZERO_GT) then Exit(afFalse);
+  Exit(afNone);
 end;
 
 // 'Length(..)' an T - das Wort als Bezeichner (kein Glied 'X.Length'), die

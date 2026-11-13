@@ -634,8 +634,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := ReceiverOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
   begin
     AReason := _(R_TR_NO_NAME);

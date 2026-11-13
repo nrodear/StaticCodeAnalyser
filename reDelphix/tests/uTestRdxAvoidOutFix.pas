@@ -148,13 +148,18 @@ end;
 
 // Die Meldung des Detektors fuer Spalte ACol; ohne Spalte (0) eine Meldung
 // ohne 'at column'.
-function MessageAt(ACol: Integer): string;
+function MessageAt(ACol: Integer): TRdxFindingText;
 begin
+  Result := Default(TRdxFindingText);
   if ACol = 0 then
-    Result := '`out` parameter - prefer `var`.'
+    Result.Text := '`out` parameter - prefer `var`.'
   else
-    Result := Format('`out` parameter at column %d - prefer `var` (out clears '
-      + 'managed types on entry, leaves records uninitialized).', [ACol]);
+  begin
+    Result.Text := Format('`out` parameter at column %d - prefer `var` (out '
+      + 'clears managed types on entry, leaves records uninitialized).',
+      [ACol]);
+    Result.Args.Col := ACol;
+  end;
 end;
 
 // Die Zeile ALine von ASource.

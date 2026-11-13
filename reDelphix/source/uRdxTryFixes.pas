@@ -144,13 +144,6 @@ type
     Name : string;
   end;
 
-  // Die Form der Planer (uRdxFixTable: TryForm im Geruest TRdxFixFrame).
-  // Keine Regel nutzt diese Form mehr (Fix-Datenfeld S4: SCA109/SCA153
-  // umgestellt) - bleibt fuer bestehende Testsignaturen (PlanOf) stehen.
-  TRdxTryPlanner = function(AMap: TRdxCodeMap; ALine: Integer;
-    const AMessage: string; out APlan: TRdxTryPlan;
-    out AReason: string): Boolean;
-
   // *In-Form (Fix-Datenfeld S3b-2/S4): alle fuenf Planer von TRdxTryPlan
   // (MissingFinally/FreedOutsideFinally/GetMemWithoutFree/LockWithoutFinally/
   // UnpairedLock) sind darauf umgestellt.
@@ -230,10 +223,6 @@ uses
 
 const
   SPAN_TRY = 'try';
-  KEY_LOCK109  = 'Lock acquired (';
-  KEY_LOCK109E = ') but no enclosing';
-  KEY_LOCK153  = 'leaks the lock (';
-  KEY_LOCK153E = ')';
   ANY_CALL_109 = 'entercriticalsection(...)';
   // Eine Stufe der Liste darf so breit sein - sonst die Vorgabe
   // (IndentStep): eine ausgerichtete Zeile ('1: begin' und darunter weit
@@ -257,34 +246,6 @@ type
 
 { ---- kleine Helfer ---- }
 
-// Der Text zwischen AOpen und dem ersten ACloser dahinter; '' ohne.
-function MessagePart(const AMessage, AOpen, ACloser: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(AOpen, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(AOpen));
-  Q := Pos(ACloser, AMessage, P);
-  if Q > 0 then
-    Result := Copy(AMessage, P, Q - P);
-end;
-
-// Wie MessagePart, aber bis zur LETZTEN ')' (SCA153: '(FLocker.Lock)' am
-// Ende; 'EnterCriticalSection' hat keine Klammer darin).
-function MessageTail(const AMessage, AOpen: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(AOpen, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(AOpen));
-  Q := LastDelimiter(KEY_LOCK153E, AMessage);
-  if Q >= P then
-    Result := Copy(AMessage, P, Q - P);
-end;
 
 // Das erste Wort der Meldung (SCA009/SCA001: der Variablenname - so faellt
 // das Suffix ' (try/except ...)' weg, s. Kopf -, auch vor ' -
@@ -840,8 +801,7 @@ var
   Pair : TRdxPair;
 begin
   APlan := Default(TRdxTryPlan);
-  if not AMessage.Args.TryGet(FA_NAME, APlan.Name) then
-    APlan.Name := FirstWordOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, APlan.Name);
   Pair := Default(TRdxPair);
   Result := ObjectPair(AMap, ALine, APlan.Name, Pair);
   if Result = '' then
@@ -887,8 +847,7 @@ class function TRdxTryFixes.LockWithoutFinally(AMap: TRdxCodeMap;
 var
   LockName : string;
 begin
-  if not AMessage.Args.TryGet(FA_NAME, LockName) then
-    LockName := MessagePart(AMessage.Text, KEY_LOCK109, KEY_LOCK109E);
+  AMessage.Args.TryGet(FA_NAME, LockName);
   AReason := LockFix(AMap, ALine, LockName, Match109, APlan);
   Result := AReason = '';
 end;
@@ -899,8 +858,7 @@ class function TRdxTryFixes.UnpairedLock(AMap: TRdxCodeMap; ALine: Integer;
 var
   LockName : string;
 begin
-  if not AMessage.Args.TryGet(FA_NAME, LockName) then
-    LockName := MessageTail(AMessage.Text, KEY_LOCK153);
+  AMessage.Args.TryGet(FA_NAME, LockName);
   AReason := LockFix(AMap, ALine, LockName, Match153, APlan);
   Result := AReason = '';
 end;
@@ -919,8 +877,7 @@ var
 begin
   APlan := Default(TRdxTryPlan);
   Pair := Default(TRdxPair);
-  if not AMessage.Args.TryGet(FA_NAME, Func) then
-    Func := FirstWordOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Func);
   if Func = '' then
     AReason := _('the message has no allocation')
   else

@@ -71,7 +71,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.FixFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxMoveSizeFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxMoveSizeFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -87,14 +87,17 @@ begin
 end;
 
 // Die Meldung des Detektors (uMoveSizeOfPointer).
-function Msg(const ARoutine, APtr: string): string;
+function Msg(const ARoutine, APtr: string): TRdxFindingText;
 begin
-  Result := Format('%s(...) uses SizeOf(%s) which is only pointer size '
-    + '(4/8 bytes), not the buffer size', [ARoutine, APtr]);
+  Result.Text := Format('%s(...) uses SizeOf(%s) which is only pointer '
+    + 'size (4/8 bytes), not the buffer size', [ARoutine, APtr]);
+  Result.Args.Put(FA_NAME, ARoutine);
+  Result.Args.Put(FA_TYPE, APtr);
 end;
 
 // Der Planer fuer Zeile ALine: der neue Text, oder '' bei Ablehnung.
-function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   Map : TRdxCodeMap;
@@ -443,6 +446,7 @@ begin
     Places := TSourcePlaces.Create;
     F := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg,
       fkMoveSizeOfPointer);
+    F.FixArgs := ASeen.Args;
     SL.Text := ASource;
     if AOpen then
     begin
@@ -486,13 +490,15 @@ end;
 procedure TTestRdxMoveSizeDetector.Detector_ReportsLineAndType;
 var
   Seen : TArray<TSeen>;
+  Msg  : TRdxFindingText;
 begin
   Seen := Detect(Routine('procedure Foo(Src: PInteger; Dst: PInteger);',
     ['  Move(Src^, Dst^, SizeOf(PInteger));']));
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
   Assert.AreEqual<Integer>(LINE, Seen[0].Line, 'Zeile des Aufrufs');
-  Assert.AreEqual('Integer', TRdxMoveSizeFix.TargetTypeOf(Seen[0].Msg),
-    Seen[0].Msg);
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Assert.AreEqual('Integer', TRdxMoveSizeFix.TargetTypeOf(Msg), Seen[0].Msg);
 end;
 
 procedure TTestRdxMoveSizeDetector.Detector_RoundTrip;

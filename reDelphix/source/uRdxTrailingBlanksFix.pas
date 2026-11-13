@@ -55,14 +55,7 @@ const
 class function TRdxTrailingBlanksFix.ColumnOf(
   const AMessage: TRdxFindingText): Integer;
 begin
-  if AMessage.Args.Col > 0 then
-  begin
-    Result := AMessage.Args.Col;
-  end
-  else
-  begin
-    Result := NumberAfterKey(AMessage.Text, KEY_FROM);
-  end;
+  Result := AMessage.Args.Col;
 end;
 
 class function TRdxTrailingBlanksFix.TrimEnd(AMap: TRdxCodeMap;

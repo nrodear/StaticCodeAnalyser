@@ -104,15 +104,16 @@ begin
 end;
 
 // Die Meldung des Detektors fuer die Art AKind auf Zeile ALine.
-function Msg(const AKind: string; ALine: Integer): string;
+function Msg(const AKind: string; ALine: Integer): TRdxFindingText;
 begin
-  Result := Format('Depth 5 (%s from line %d, limit: 4)', [AKind, ALine]);
+  Result.Text := Format('Depth 5 (%s from line %d, limit: 4)', [AKind, ALine]);
+  Result.Args.Put(FA_FORM, AKind);
 end;
 
 // Der Planer fuer Zeile ALine mit der Meldung AMessage: der neue Text, oder
 // '' bei Ablehnung (AReason).
 function PlanMsg(const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   Map : TRdxCodeMap;
   E   : TRdxEdit;

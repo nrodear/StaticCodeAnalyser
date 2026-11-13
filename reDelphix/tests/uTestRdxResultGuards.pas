@@ -1,4 +1,4 @@
-unit uTestRdxResultGuards;
+﻿unit uTestRdxResultGuards;
 
 // Gegen-Review der Charge H5 (Charge H5c): die Fixtures des Pruefers als
 // Tests gegen uRdxResultFixes (SCA096/SCA097 seit Review Woche G08-04
@@ -70,7 +70,8 @@ uses
   System.SysUtils, System.Classes,
   uRdxCodeMap, uRdxResultFixes,
   uRdxInheritedFixes,  // SCA096/SCA097 (seit Review Woche G08-04)
-  uTestRdxTextKit;   // Join, Apply, LineStartingWith
+  uTestRdxTextKit,   // Join, Apply, LineStartingWith
+  uFixArgs;          // FA_NAME, FA_TYPE
 
 const
   MSG_CTOR = 'Constructor has no `inherited` call - parent class is not '
@@ -94,6 +95,21 @@ begin
   Result := Join(['unit u;']) + #13#10 + Join(AHead) + #13#10
     + Join(['interface', 'type']) + #13#10 + Join(ATypes) + #13#10
     + 'implementation' + #13#10 + Join(AImpl) + #13#10 + 'end.';
+end;
+
+// Die Meldung zu SCA121/SCA196 mit FixArgs (Fix-Datenfeld S6: der Planer
+// liest nur noch Args).
+function Msg121(const AName: string): TRdxFindingText;
+begin
+  Result.Text := Format(MSG_121, [AName]);
+  Result.Args.Put(FA_NAME, AName);
+end;
+
+function Msg196(const AName, AType: string): TRdxFindingText;
+begin
+  Result.Text := Format(MSG_196, [AName, AType]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_TYPE, AType);
 end;
 
 // Der Plan des Planers APlanner fuer die Zeile, die mit AHead beginnt;
@@ -201,7 +217,7 @@ var
 begin
   F := RunFixIn(TRdxResultFixes.ResultDefault, UnitWith(AHead, ATypes,
     ['function F(A: Integer): ' + AType + ';', 'begin', '  Log(A);', 'end;']),
-    'function F', Format(MSG_121, ['F']));
+    'function F', Msg121('F'));
   AReason := F.Reason;
   Result := '';
   if F.Text <> '' then
@@ -514,7 +530,7 @@ begin
     S := UnitWith(NO_HEAD, NO_TYPES, ['function F(A: Integer): TPt;',
       'begin', '  ' + B, 'end;']);
     AssertRefusedIn(TRdxResultFixes.ResultDefault, S, 'function F',
-      Format(MSG_121, ['F']), 'schreibt Result');
+      Msg121('F'), 'schreibt Result');
   end;
 end;
 
@@ -529,7 +545,7 @@ begin
     '  procedure Add(B: Byte);', '  begin', '    Result := Result + [B];',
     '  end;', 'begin', '  Add(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function F',
-    Format(MSG_121, ['F']));
+    Msg121('F'));
   Assert.AreEqual(StringReplace(S, '  Add(1);', '  Result := nil;'#13#10
     + '  Add(1);', []), F.Text, F.Reason);
 end;
@@ -548,17 +564,17 @@ begin
   S := UnitWith(NO_HEAD, STATIC_BYTES, ['function F: TBytes;', 'begin',
     '  Result[0] := 1;', 'end;']);
   AssertRefusedIn(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
-    Format(MSG_196, ['F', 'TBytes']), 'array ...');
+    Msg196('F', 'TBytes'), 'array ...');
   S := UnitWith(NO_HEAD, DYN_BYTES, ['function F: TBytes;', 'begin',
     '  Result[0] := 1;', 'end;']);
   F := RunFixIn(TRdxResultFixes.ManagedResultInit, S, 'Result[0]',
-    Format(MSG_196, ['F', 'TBytes']));
+    Msg196('F', 'TBytes'));
   Assert.AreNotEqual('', F.Text, F.Reason);
   Assert.AreEqual('Result := nil', F.Plan.Name);
   S := UnitWith(NO_HEAD, OWN_STRING, ['function F: RawUtf8;', 'begin',
     '  Result := Result + ''x'';', 'end;']);
   F := RunFixIn(TRdxResultFixes.ManagedResultInit, S, 'Result := Result',
-    Format(MSG_196, ['F', 'RawUtf8']));
+    Msg196('F', 'RawUtf8'));
   Assert.AreNotEqual('', F.Text, F.Reason);
   Assert.AreEqual('Result := ''''', F.Plan.Name);
 end;
@@ -596,37 +612,37 @@ begin
   S := UnitWith(NO_HEAD, BY_PROPERTY, ['function TFoo.GetMode: TMode;',
     'begin', '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
-    Format(MSG_121, ['GetMode']));
+    Msg121('GetMode'));
   Assert.AreEqual(StringReplace(S, '  Log(1);',
     '  Result := System.Low(TMode);'#13#10'  Log(1);', []), F.Text, F.Reason);
   S := UnitWith(NO_HEAD, BY_FIELD, ['function TFoo.GetMode: TMode;', 'begin',
     '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
-    Format(MSG_121, ['GetMode']));
+    Msg121('GetMode'));
   Assert.AreEqual('System.Low(TMode)', F.Plan.Name, F.Reason);
   // Ein Low der Klasse, der Unit oder ein Parameter Low stoeren nicht mehr.
   S := UnitWith(NO_HEAD, LOW_PROPERTY, ['function TRange.GetKind: TKind;',
     'begin', '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function TRange.GetKind',
-    Format(MSG_121, ['GetKind']));
+    Msg121('GetKind'));
   Assert.AreEqual(StringReplace(S, '  Log(1);',
     '  Result := System.Low(TKind);'#13#10'  Log(1);', []), F.Text, F.Reason);
   // Die Unit System selbst ('System.Exit') ist kein eigenes System.
   S := UnitWith(NO_HEAD, LOW_VAR, ['function GetKind: TKind;', 'begin',
     '  if Low > 0 then System.Exit;', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function GetKind',
-    Format(MSG_121, ['GetKind']));
+    Msg121('GetKind'));
   Assert.AreEqual('System.Low(TKind)', F.Plan.Name, F.Reason);
   S := UnitWith(NO_HEAD, BY_FIELD, ['function Pick(Low: Integer): TMode;',
     'begin', '  Log(Low);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function Pick',
-    Format(MSG_121, ['Pick']));
+    Msg121('Pick'));
   Assert.AreEqual('System.Low(TMode)', F.Plan.Name, F.Reason);
   // Ein eigenes System verdeckte die Unit: Default(T).
   S := UnitWith(NO_HEAD, OWN_SYSTEM, ['function TFoo.GetMode: TMode;',
     'begin', '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function TFoo.GetMode',
-    Format(MSG_121, ['GetMode']));
+    Msg121('GetMode'));
   Assert.AreEqual('Default(TMode)', F.Plan.Name, F.Reason);
 end;
 
@@ -654,30 +670,30 @@ begin
   S := UnitWith(NO_HEAD, ENUM_ONLY, ['function GetMode: TMode;', 'type',
     '  TMode = (xA, xB);', 'begin', '  Log(1);', 'end;']);
   AssertRefusedIn(TRdxResultFixes.ResultDefault, S, 'function GetMode',
-    Format(MSG_121, ['GetMode']), 'TMode ist auch im Deklarationsteil der '
+    Msg121('GetMode'), 'TMode ist auch im Deklarationsteil der '
     + 'Funktion definiert (Zeile 9)');
   // Auch ohne Definition der Unit (4358b769: 'Result := xA;').
   S := UnitWith(NO_HEAD, POINT_TYPES, ['function GetMode: TFremd;', 'type',
     '  TFremd = (xA, xB);', 'begin', '  Log(1);', 'end;']);
   AssertRefusedIn(TRdxResultFixes.ResultDefault, S, 'function GetMode',
-    Format(MSG_121, ['GetMode']), 'im Deklarationsteil der Funktion');
+    Msg121('GetMode'), 'im Deklarationsteil der Funktion');
   S := UnitWith(NO_HEAD, NESTED, ['function TC.F: TMode;', 'begin', '  Log(1);',
     'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function TC.F',
-    Format(MSG_121, ['F']));
+    Msg121('F'));
   Assert.AreEqual('Default(TMode)', F.Plan.Name, F.Reason);
   S := UnitWith(NO_HEAD, POINT_TYPES, ['procedure Other;', 'type',
     '  TPoint = ^Integer;', 'var', '  P: TPoint;', 'begin', '  P := nil;',
     'end;', 'function GetPos: TPoint;', 'begin', '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function GetPos',
-    Format(MSG_121, ['GetPos']));
+    Msg121('GetPos'));
   Assert.AreEqual('Default(TPoint)', F.Plan.Name, F.Reason);
   // Auf Unit-Ebene hinter einer Routine: das Literal bleibt.
   S := UnitWith(NO_HEAD, POINT_TYPES, ['procedure Other;', 'begin', 'end;',
     'type', '  TKind = (kA, kB);', 'function GetKind: TKind;', 'begin',
     '  Log(1);', 'end;']);
   F := RunFixIn(TRdxResultFixes.ResultDefault, S, 'function GetKind',
-    Format(MSG_121, ['GetKind']));
+    Msg121('GetKind'));
   Assert.AreEqual('System.Low(TKind)', F.Plan.Name, F.Reason);
 end;
 

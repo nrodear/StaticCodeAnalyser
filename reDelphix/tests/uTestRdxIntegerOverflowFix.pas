@@ -72,7 +72,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxIntegerOverflowFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxIntegerOverflowFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -95,13 +95,17 @@ begin
 end;
 
 // Die Meldung zu 'ATarget := ALeft * ARight'.
-function Msg(const ATarget, ALeft, ARight: string): string;
+function Msg(const ATarget, ALeft, ARight: string): TRdxFindingText;
 begin
-  Result := Format(MSG_FMT, [ATarget, ALeft, ARight]);
+  Result.Text := Format(MSG_FMT, [ATarget, ALeft, ARight]);
+  Result.Args.Put(FA_NAME, ATarget);
+  Result.Args.Put(FA_EXPR, ALeft);
+  Result.Args.Put(FA_EXPR2, ARight);
 end;
 
 // Der Planer fuer Zeile ALine mit der Meldung AMessage.
-function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out APlan: TRdxOverflowPlan; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -416,12 +420,15 @@ procedure TTestRdxIntegerOverflowDetector.Detector_ReportsLineAndMessage;
 var
   Seen : TArray<TSeen>;
   T, L, R : string;
+  Msg2 : TRdxFindingText;
 begin
   Seen := Detect(Wrap(['  Total := Count * Size;']));
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
   Assert.AreEqual<Integer>(STMT_LINE, Seen[0].Line, 'Zeile des Ziels');
-  Assert.AreEqual(Msg('Total', 'Count', 'Size'), Seen[0].Msg);
-  Assert.IsTrue(ProductOf(Seen[0].Msg, T, L, R), Seen[0].Msg);
+  Assert.AreEqual(Msg('Total', 'Count', 'Size').Text, Seen[0].Msg);
+  Msg2.Text := Seen[0].Msg;
+  Msg2.Args := Seen[0].Args;
+  Assert.IsTrue(ProductOf(Msg2, T, L, R), Seen[0].Msg);
   Assert.AreEqual('Count', L);
 end;
 
@@ -507,9 +514,13 @@ end;
 // Der Fund 'Total := Count * Size' auf STMT_LINE von Wrap (ohne Detektor -
 // der Typbeweis ist Sache des Adapters).
 function WrapSeen: TSeen;
+var
+  M : TRdxFindingText;
 begin
+  M := Msg('Total', 'Count', 'Size');
   Result.Line := STMT_LINE;
-  Result.Msg := Msg('Total', 'Count', 'Size');
+  Result.Msg := M.Text;
+  Result.Args := M.Args;
   Result.Variant := '';
 end;
 

@@ -114,14 +114,7 @@ const
 // (Fix-Datenfeld S2).
 function GotoColumn(const AMessage: TRdxFindingText): Integer;
 begin
-  if AMessage.Args.Col > 0 then
-  begin
-    Result := AMessage.Args.Col;
-  end
-  else
-  begin
-    Result := NumberAfterKey(AMessage.Text, KEY_COL);
-  end;
+  Result := AMessage.Args.Col;
 end;
 
 // Wie viele 'goto' stehen im Code von ALine?

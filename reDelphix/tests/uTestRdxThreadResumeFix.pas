@@ -70,19 +70,20 @@ uses
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource, PlanFixIn,
                          // FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxThreadResumeFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxThreadResumeFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
 // ---- Helfer ----
 
 // Die Meldung des Detektors fuer den Empfaenger AName (uConcurrencyExt).
-function MsgFor(const AName: string): string;
+function MsgFor(const AName: string): TRdxFindingText;
 begin
-  Result := Format('%s.Resume is deprecated since Delphi 2010 - prefer '
-    + '%s.Start or pass CreateSuspended=False to the constructor. Suppress '
-    + 'per line if this is not a TThread reference: // noinspection '
-    + 'ThreadResumeDeprecated', [AName, AName]);
+  Result.Text := Format('%s.Resume is deprecated since Delphi 2010 - '
+    + 'prefer %s.Start or pass CreateSuspended=False to the constructor. '
+    + 'Suppress per line if this is not a TThread reference: // '
+    + 'noinspection ThreadResumeDeprecated', [AName, AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 const
@@ -233,10 +234,10 @@ end;
 
 procedure TTestRdxThreadResumeFix.Sca113_ReceiverOf;
 begin
-  Assert.AreEqual('Worker', TRdxThreadResumeFix.ReceiverOf(MsgFor('Worker')));
-  Assert.AreEqual('FThread', TRdxThreadResumeFix.ReceiverOf(MsgFor('FThread')));
+  Assert.AreEqual('Worker', TRdxThreadResumeFix.ReceiverOf(MsgFor('Worker').Text));
+  Assert.AreEqual('FThread', TRdxThreadResumeFix.ReceiverOf(MsgFor('FThread').Text));
   Assert.AreEqual('', TRdxThreadResumeFix.ReceiverOf('Worker.Resume'));
-  Assert.AreEqual('', TRdxThreadResumeFix.ReceiverOf(MsgFor('')));
+  Assert.AreEqual('', TRdxThreadResumeFix.ReceiverOf(MsgFor('').Text));
   AssertRefused(InRun(['  Worker.Resume;']), '', _(R_TR_NO_NAME));
 end;
 

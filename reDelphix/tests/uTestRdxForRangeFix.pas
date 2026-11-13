@@ -44,7 +44,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog, uReversedForRange,
-  uRdxForRangeFix, uRdxRecipeRunner, uRdxFixTable,
+  uRdxForRangeFix, uRdxRecipeRunner, uRdxFixTable, uRdxCodeMap, uFixArgs,
   uRdxText,              // _(), MsgMovedSuffix (Gruende, E29)
   uTestRdxDetectorKit,   // TSeen, DetectSource
   uTestRdxTextKit;       // Join, Apply
@@ -54,10 +54,12 @@ const
   BODY_LINE = 8;
 
 // Die Meldung wie der Detektor sie schreibt.
-function RevMsg(AFrom, ATo: Int64; const ASnippet: string): string;
+function RevMsg(AFrom, ATo: Int64; const ASnippet: string): TRdxFindingText;
 begin
-  Result := Format('Reversed for-range: %d > %d (use `downto`?) - %s',
+  Result.Text := Format('Reversed for-range: %d > %d (use `downto`?) - %s',
     [AFrom, ATo, ASnippet]);
+  Result.Args.Put(FA_EXPR, IntToStr(AFrom));
+  Result.Args.Put(FA_EXPR2, IntToStr(ATo));
 end;
 
 // Eine Unit mit Routine P; ABody ist der Rumpf (erste Zeile = BODY_LINE).
@@ -74,8 +76,8 @@ begin
   TReversedForRangeDetector.AnalyzeUnit(Root, Path, Results);
 end;
 
-function PlanAt(const ASource: string; ALine: Integer; const AMessage: string;
-  AAlt: Boolean): TRdxFixOutcome;
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; AAlt: Boolean): TRdxFixOutcome;
 var
   SL : TStringList;
   F  : TLeakFinding;
@@ -83,7 +85,9 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', ALine, AMessage, fkReversedForRange);
+    F := TLeakFinding.New('t.pas', '', ALine, AMessage.Text,
+      fkReversedForRange);
+    F.FixArgs := AMessage.Args;
     SL.Text := ASource;
     if AAlt then
       Result := TRdxFixTable.AlternativeFixFor(nil, SL, F, nil)
@@ -96,7 +100,8 @@ begin
 end;
 
 // Der Text nach der Hilfe; '' ohne Hilfe (dann steht der Grund in AOutcome).
-function Fixed(const ASource: string; ALine: Integer; const AMessage: string;
+function Fixed(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AAlt: Boolean; out AOutcome: TRdxFixOutcome): string;
 begin
   AOutcome := PlanAt(ASource, ALine, AMessage, AAlt);
@@ -243,7 +248,7 @@ procedure TTestRdxForRangeFix.Refuse_CommentOrStringInHead;
 var
   O : TRdxFixOutcome;
   Alt : Boolean;
-  Msg : string;
+  Msg : TRdxFindingText;
 begin
   Msg := RevMsg(10, 1, 'for i := 10 to 1 do');
   for Alt in [False, True] do
@@ -272,7 +277,7 @@ end;
 procedure TTestRdxForRangeFix.Refuse_NoHeadOnLine;
 var
   O : TRdxFixOutcome;
-  Msg : string;
+  Msg : TRdxFindingText;
 begin
   Msg := RevMsg(10, 1, 'for i := 10 to 1 do');
   // Zeile verschoben: der Fund zeigt auf eine andere Zeile.
@@ -341,7 +346,7 @@ end;
 procedure TTestRdxForRangeFix.Refuse_HeadOverTwoLinesOrTyped;
 var
   O : TRdxFixOutcome;
-  Msg : string;
+  Msg : TRdxFindingText;
 begin
   Msg := RevMsg(10, 1, 'for i := 10 to 1 do');
   // Der Kopf geht ueber zwei Zeilen (der Detektor meldet das nicht).
@@ -424,11 +429,14 @@ var
   Src  : string;
   Seen : TArray<TSeen>;
   O    : TRdxFixOutcome;
+  Msg  : TRdxFindingText;
 begin
   Src := InUnit(['  for i := 10 to 1 do Foo(i); for j := 20 to 2 do Bar(j);']);
   Seen := DetectSource('rdx_forrange_', Src, fkReversedForRange, RunDetector);
   Assert.AreEqual<Integer>(1, Length(Seen), 'der Detektor meldet nur den vorderen');
-  Fixed(Src, Seen[0].Line, Seen[0].Msg, False, O);
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Fixed(Src, Seen[0].Line, Msg, False, O);
   Assert.IsFalse(O.Enabled);
   Assert.IsTrue(Pos(_(R_FORRANGE_MANY, [2]), O.Reason) > 0, O.Reason);
 end;

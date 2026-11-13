@@ -74,7 +74,7 @@ end;
 
 // Die Hilfe AKind fuer Zeile ALine: neuer Text oder '' bei Ablehnung.
 function Fix(AKind: TRdxDeclKind; const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -93,9 +93,9 @@ begin
       dkGuid:
         Ok := TRdxDeclFixes.InterfaceGuid(Map, ALine, AMessage, E, AReason);
       dkDupGuid:
-        Ok := TRdxDeclFixes.DuplicateInterfaceGuid(Map, ALine, AMessage, E, AReason);
+        Ok := TRdxDeclFixes.DuplicateInterfaceGuid(Map, ALine, AMessage.Text, E, AReason);
       dkUnitHeader:
-        Ok := TRdxDeclFixes.UnitHeaderSkeleton(Map, ALine, AMessage, E, AReason);
+        Ok := TRdxDeclFixes.UnitHeaderSkeleton(Map, ALine, AMessage.Text, E, AReason);
     else
       Ok := TRdxDeclFixes.MethodDirective(Map, ALine, AMessage, E, AReason);
     end;
@@ -138,19 +138,21 @@ begin
   end;
 end;
 
-function DocMsg(const AName: string): string;
+function DocMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Public member %s has no documentation comment above its '
-    + 'declaration. Recommended: a /// XMLDoc block, a { ... } or (* ... *) '
-    + 'descriptive comment, or one or more // lines directly above '
-    + 'explaining purpose + contract.', [AName]);
+  Result.Text := Format('Public member %s has no documentation comment '
+    + 'above its declaration. Recommended: a /// XMLDoc block, a { ... } or '
+    + '(* ... *) descriptive comment, or one or more // lines directly '
+    + 'above explaining purpose + contract.', [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
-function GuidMsg(const AName: string): string;
+function GuidMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Interface "%s" has no GUID - Supports() and '
+  Result.Text := Format('Interface "%s" has no GUID - Supports() and '
     + 'QueryInterface() cannot ask for it at run time. Add one with '
     + 'Ctrl+Shift+G.', [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 function DupGuidMsg(const AName: string): string;
@@ -161,17 +163,21 @@ begin
     + 'GUID with Ctrl+Shift+G.', [AName]);
 end;
 
-function ShadowMsg(const AName: string): string;
+function ShadowMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Method TDerived.%s shadows virtual TBase.%s - missing '
-    + '`override` (W1010)', [AName, AName]);
+  Result.Text := Format('Method TDerived.%s shadows virtual TBase.%s - '
+    + 'missing `override` (W1010)', [AName, AName]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_NAME2, 'TBase');
 end;
 
-function HidesMsg(const AName: string): string;
+function HidesMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Method TDerived.%s hides all inherited TBase.%s overloads '
-    + '(W1010) - signatures differ, so use `overload` or `reintroduce`; '
-    + '`override` would not compile', [AName, AName]);
+  Result.Text := Format('Method TDerived.%s hides all inherited TBase.%s '
+    + 'overloads (W1010) - signatures differ, so use `overload` or '
+    + '`reintroduce`; `override` would not compile', [AName, AName]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_NAME2, 'TDerived');
 end;
 
 // Eine Klasse im interface-Teil; ALines sind die Member (ab Zeile 6).
@@ -501,9 +507,9 @@ begin
     Fix(dkDirective, Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
       ['    procedure DoWork(A: Integer); virtual;']), 10, HidesMsg('DoWork'),
       R), R);
-  Assert.AreEqual(DIRECTIVE_OVERRIDE, TRdxDeclFixes.DirectiveFor(ShadowMsg('X')));
+  Assert.AreEqual(DIRECTIVE_OVERRIDE, TRdxDeclFixes.DirectiveFor(ShadowMsg('X').Text));
   Assert.AreEqual(DIRECTIVE_REINTRODUCE,
-    TRdxDeclFixes.DirectiveFor(HidesMsg('X')));
+    TRdxDeclFixes.DirectiveFor(HidesMsg('X').Text));
   Assert.AreEqual('', TRdxDeclFixes.DirectiveFor('Method TDerived.X is odd'));
   // 'override' neben 'overload': hinter das overload (Reihenfolge der
   // Sprachreferenz: overload vor der Bindung; Review Quick-Fix-Units
@@ -537,7 +543,7 @@ var
 begin
   Src := Hierarchy(['    procedure DoWork; virtual;'], DERIVED,
     ['    procedure DoWork;']);
-  FMsg.Text := ShadowMsg('AndereMethode');
+  FMsg := ShadowMsg('AndereMethode');
   FMsg.Args.Put(FA_NAME, 'DoWork');
   FMsg.Args.Put(FA_NAME2, 'TBase');
   Map := NewMap(Src);

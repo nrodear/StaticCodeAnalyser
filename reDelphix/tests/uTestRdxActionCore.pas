@@ -90,7 +90,7 @@ uses
   uRdxBufferMath,     // TRdxEdit, TRdxTextSource
   uRdxRecipeRunner,   // TRdxFixOutcome, Describe, FormatRewrite
   uRdxFixTable,       // FixFor, AlternativeFixFor, CaptionFor
-  uRdxActionCore,
+  uRdxActionCore, uFixArgs,
   uTestRdxTextKit;    // Join, TempName, WriteText, LineOf
 
 const
@@ -235,6 +235,7 @@ begin
   try
     F := TLeakFinding.New('t.pas', 'Foo', BODY + 1, 'Debug output: writeln',
       fkDebugOutput);
+    F.FixArgs.Put(FA_NAME, 'writeln');
     // Was der Anbieter bis E3 selbst rief - derselbe Text, dieselbe Sicht.
     Places := TSourcePlaces.Create;
     Places.SetIfdefDefines(TScanRequest.DefaultIfdefDefines);
@@ -903,6 +904,7 @@ var
 begin
   Result := Default(TRdxActionEntry);
   F := TLeakFinding.New('t.pas', '', ALine, AUnit, fkUnusedUses);
+  F.FixArgs.Put(FA_NAME, AUnit);
   try
     Entries := DescribeIn(ASrc, F);
   finally

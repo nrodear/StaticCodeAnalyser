@@ -67,16 +67,18 @@ uses
 // ---- Helfer ----
 
 // Die Meldung wie der Detektor sie schreibt.
-function GMsg(ACol: Integer): string;
+function GMsg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Grouped declaration at column %d (`A, B: Type`) - split '
-    + 'into one variable per line for clearer diffs and refactoring.', [ACol]);
+  Result.Text := Format('Grouped declaration at column %d (`A, B: Type`) - '
+    + 'split into one variable per line for clearer diffs and '
+    + 'refactoring.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // Die Hilfe fuer Zeile ALine, Spalte ACol: neuer Text oder '' bei Ablehnung
 // (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
-  out AReason: string): string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -183,7 +185,8 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
+    F := TLeakFinding.New('t.pas', '', 2, GMsg(3).Text, fkGroupedDeclaration);
+    F.FixArgs := GMsg(3).Args;
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);
@@ -361,7 +364,8 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', 2, GMsg(3), fkGroupedDeclaration);
+    F := TLeakFinding.New('t.pas', '', 2, GMsg(3).Text, fkGroupedDeclaration);
+    F.FixArgs := GMsg(3).Args;
     SL.Text := Join(['var', '  A, B: Integer;', 'begin']);
     O := TRdxFixTable.FixFor(nil, SL, F, nil);
     Assert.IsTrue(O.Enabled, O.Reason);

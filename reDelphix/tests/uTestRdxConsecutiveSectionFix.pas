@@ -65,7 +65,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxConsecutiveSectionFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxConsecutiveSectionFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, NewMap
 
@@ -79,17 +79,18 @@ begin
 end;
 
 // Die Meldung des Detektors fuer die Art AWord.
-function MessageOf(const AWord: string): string;
+function MessageOf(const AWord: string): TRdxFindingText;
 begin
-  Result := Format('Consecutive `%s` section - merge with the previous %s '
-    + 'block (one section keyword should declare all of them).',
-    [AWord, AWord]);
+  Result.Text := Format('Consecutive `%s` section - merge with the '
+    + 'previous %s block (one section keyword should declare all of '
+    + 'them).', [AWord, AWord]);
+  Result.Args.Put(FA_NAME, AWord);
 end;
 
 // Der Planer fuer Zeile ALine mit der Meldung AMessage: der neue Text, oder
 // '' bei Ablehnung (AReason).
 function PlanMsg(const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   Map : TRdxCodeMap;
   E   : TRdxEdit;
@@ -415,7 +416,8 @@ var
   O : TRdxFixOutcome;
 begin
   S.Line := 4;
-  S.Msg := MessageOf('var');
+  S.Msg := MessageOf('var').Text;
+  S.Args := MessageOf('var').Args;
   S.Variant := '';
   O := PlanSeen(InIntf(['var', '  A: Integer;', 'var', '  B: Integer;']), S);
   Assert.IsFalse(O.Enabled, 'gesperrt');

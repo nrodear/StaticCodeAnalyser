@@ -55,7 +55,7 @@ implementation
 uses
   System.SysUtils, System.Classes,
   uRdxBufferMath, uRdxCodeMap, uRdxText,
-  uRdxUnusedParameterFix,
+  uRdxUnusedParameterFix, uFixArgs,
   uTestRdxTextKit   // Join, Apply, NewMap
 {$IFNDEF FPC}
   , System.Generics.Collections,
@@ -68,14 +68,16 @@ uses
 // ---- Helfer ----
 
 // Die Meldung wie der Detektor sie schreibt.
-function UMsg(const AName: string): string;
+function UMsg(const AName: string): TRdxFindingText;
 begin
-  Result := Format('Unused parameter: %s (never read in method body)',
+  Result.Text := Format('Unused parameter: %s (never read in method body)',
     [AName]);
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // Der Plan fuer Zeile ALine mit der Meldung AMessage.
-function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out APlan: TRdxParamPlan; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;

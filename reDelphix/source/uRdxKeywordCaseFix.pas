@@ -205,15 +205,8 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not AMessage.Args.TryGet(FA_NAME, Kw) or (AMessage.Args.Col <= 0) then
-  begin
-    Kw := QuotedText(AMessage.Text, '"');
-    Col := ColumnFromMessage(AMessage.Text);
-  end
-  else
-  begin
-    Col := AMessage.Args.Col;
-  end;
+  AMessage.Args.TryGet(FA_NAME, Kw);
+  Col := AMessage.Args.Col;
   Lower := LowerCase(Kw);
   if (Kw = '') or (Col <= 0) then
   begin

@@ -281,8 +281,7 @@ var
   Nb       : Integer;
 begin
   ASite := Default(TRdxDebugSite);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := TRdxDebugOutputFix.CallNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
     Exit(_(R_DBG_NO_NAME));
   if (ALine < 1) or (ALine > AMap.LineCount) then

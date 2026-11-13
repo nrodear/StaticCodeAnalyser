@@ -170,7 +170,6 @@ const
   // (BRANCH_WORDS) stehen in uRdxCodeMap.
   // Davor beginnt kein Pfad ('A.B', 'R^.F', '&X', '@X').
   PATH_JOINERS: array[0..3] of string = ('.', '^', '&', '@');
-  KEY_SELF   = 'Self-assignment: ';
   KEY_ASSIGN = ' := ';
   // msgid (E29) fuer SCA080 und SCA047 - %s = MsgDecideByHand; der Trenner
   // '; ' bleibt im Satz (deutsch bisher '...; von Hand entscheiden').
@@ -300,32 +299,13 @@ end;
 // X, W1 und W2 aus '`if Cond then X := True else X := False` can be ...' -
 // FixArgs (FA_NAME/FA_EXPR/FA_EXPR2) vor der Meldung.
 function CondMessageOf(const AMessage: TRdxFindingText; out AMsg: TRdxCondMsg): Boolean;
-var
-  P, Q, R, S, E : Integer;
-  Text          : string;
 begin
   AMsg := Default(TRdxCondMsg);
-  if AMessage.Args.TryGet(FA_NAME, AMsg.Target)
-     and AMessage.Args.TryGet(FA_EXPR, AMsg.First)
-     and AMessage.Args.TryGet(FA_EXPR2, AMsg.Second) then
-  begin
-    AMsg.First := LowerCase(AMsg.First);
-    AMsg.Second := LowerCase(AMsg.Second);
-    Exit((AMsg.Target <> '') and (AMsg.First <> AMsg.Second)
-      and InList(AMsg.First, BOOL_WORDS) and InList(AMsg.Second, BOOL_WORDS));
-  end;
-  AMsg := Default(TRdxCondMsg);
-  Text := AMessage.Text;
-  P := Pos(' then ', Text);
-  Q := Pos(KEY_ASSIGN, Text, P + 1);
-  R := Pos(' else ', Text, Q + 1);
-  S := Pos(KEY_ASSIGN, Text, R + 1);
-  E := Pos('`', Text, S + 1);
-  if (P = 0) or (Q = 0) or (R = 0) or (S = 0) or (E = 0) then
-    Exit(False);
-  AMsg.Target := Copy(Text, P + 6, Q - P - 6);
-  AMsg.First := LowerCase(Copy(Text, Q + 4, R - Q - 4));
-  AMsg.Second := LowerCase(Copy(Text, S + 4, E - S - 4));
+  AMessage.Args.TryGet(FA_NAME, AMsg.Target);
+  AMessage.Args.TryGet(FA_EXPR, AMsg.First);
+  AMessage.Args.TryGet(FA_EXPR2, AMsg.Second);
+  AMsg.First := LowerCase(AMsg.First);
+  AMsg.Second := LowerCase(AMsg.Second);
   Result := (AMsg.Target <> '') and (AMsg.First <> AMsg.Second)
     and InList(AMsg.First, BOOL_WORDS) and InList(AMsg.Second, BOOL_WORDS);
 end;
@@ -645,20 +625,6 @@ end;
 
 { ---- SCA080 ---- }
 
-// 'exit' bzw. 'continue' aus '`exit;` directly before `end` ...'; ''
-// ohne diese Form.
-function JumpOf(const AMessage: string): string;
-var
-  Q : Integer;
-begin
-  Result := '';
-  Q := Pos(';`', AMessage);
-  if (Copy(AMessage, 1, 1) = '`') and (Q > 2) then
-    Result := LowerCase(Copy(AMessage, 2, Q - 2));
-  if not InList(Result, ['exit', 'continue']) then
-    Result := '';
-end;
-
 // Der eine Sprung AWord mit ';' dahinter auf ALine; jede weitere
 // Sprunganweisung (Exit, Continue, Break) auf der Zeile macht ihn
 // mehrdeutig. '' oder der Grund.
@@ -900,8 +866,7 @@ begin
   APlan := Default(TRdxFlowPlan);
   Jump := Default(TRdxToken);
   Semi := Default(TRdxToken);
-  if not AMessage.Args.TryGet(FA_FORM, JumpWord) then
-    JumpWord := JumpOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_FORM, JumpWord);
   if JumpWord = '' then
     AReason := _('the message has no jump statement')
   else
@@ -920,19 +885,6 @@ begin
 end;
 
 { ---- SCA047 ---- }
-
-// L aus 'Self-assignment: L := R (no-op or copy-paste)'; '' ohne diese
-// Form.
-function SelfTargetOf(const AMessage: string): string;
-var
-  Q : Integer;
-begin
-  Result := '';
-  Q := Pos(KEY_ASSIGN, AMessage);
-  if (Pos(KEY_SELF, AMessage) = 1) and (Q > Length(KEY_SELF) + 1) then
-    Result := Trim(Copy(AMessage, Length(KEY_SELF) + 1,
-      Q - Length(KEY_SELF) - 1));
-end;
 
 // Der Pfad ohne Leerraum und klein ('Pt . Y' -> 'pt.y') - wie der
 // Detektor vergleicht (Normalize). Zeichen fuer Zeichen, ohne
@@ -1109,8 +1061,7 @@ var
 begin
   APlan := Default(TRdxFlowPlan);
   Site := Default(TRdxStmtSite);
-  if not AMessage.Args.TryGet(FA_NAME, APlan.Target) then
-    APlan.Target := SelfTargetOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, APlan.Target);
   Key := PathKey(APlan.Target);
   if Key = '' then
     AReason := _('the message has no target')

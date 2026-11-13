@@ -108,7 +108,8 @@ uses
   uRdxPlacesRunner,      // R_USES_ONLY_CONDITIONAL (TTestRdxFreeKnownDetector)
   uRdxText,              // _, MsgByHand (TTestRdxFreeKnownDetector)
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer
-  uTestRdxTextKit;       // Join, Apply, TempName
+  uTestRdxTextKit,       // Join, Apply, TempName
+  uFixArgs;              // FA_NAME
 
 const
   // Eine Freigabe, die es nicht gibt: die Hilfen duerfen dort nichts lesen.
@@ -202,6 +203,7 @@ begin
   S.Line := LineOfOrFail(ASource, 'ABucket.Free;');
   S.Msg := 'ABucket.Free without subsequent ABucket := nil - prefer ' +
     'FreeAndNil(ABucket)';
+  S.Args.Put(FA_NAME, 'ABucket');
   O := PlanFixIn(ASource, 't.pas', fkFreeWithoutNil, S);
   Assert.IsFalse(O.Enabled, 'keine Hilfe');
   Assert.IsTrue(Pos('const-Parameter', O.Reason) > 0, O.Reason);

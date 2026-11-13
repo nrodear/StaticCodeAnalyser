@@ -349,42 +349,13 @@ end;
 
 class function TRdxFloatEqualityFix.Operands(const AMessage: TRdxFindingText;
   out ALeft, AOp, ARight: string): Boolean;
-var
-  P     : Integer;
-  Inner : string;
-  Text  : string;
 begin
   ALeft := '';
   AOp := '';
   ARight := '';
-  Result := False;
-  if not (AMessage.Args.TryGet(FA_EXPR, ALeft)
-     and AMessage.Args.TryGet(FA_OP, AOp)
-     and AMessage.Args.TryGet(FA_EXPR2, ARight)) then
-  begin
-    ALeft := '';
-    AOp := '';
-    ARight := '';
-    Text := AMessage.Text;
-    P := Pos(MSG_HEAD, Text);
-    if P = 0 then
-      Exit;
-    Inner := Copy(Text, P + Length(MSG_HEAD), MaxInt);
-    P := Pos(')', Inner);
-    if P = 0 then
-      Exit;
-    Inner := Copy(Inner, 1, P - 1);
-    P := Pos(' ', Inner);
-    if P = 0 then
-      Exit;
-    ALeft := Copy(Inner, 1, P - 1);
-    Inner := Copy(Inner, P + 1, MaxInt);
-    P := Pos(' ', Inner);
-    if P = 0 then
-      Exit;
-    AOp := Copy(Inner, 1, P - 1);
-    ARight := Copy(Inner, P + 1, MaxInt);
-  end;
+  AMessage.Args.TryGet(FA_EXPR, ALeft);
+  AMessage.Args.TryGet(FA_OP, AOp);
+  AMessage.Args.TryGet(FA_EXPR2, ARight);
   Result := (ALeft <> '') and (ARight <> '') and (Pos(' ', ARight) = 0)
     and ((AOp = '=') or (AOp = '<>'));
 end;

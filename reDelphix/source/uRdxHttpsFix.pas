@@ -35,7 +35,8 @@ interface
 uses
   System.Classes,    // TStrings
   uRdxBufferMath,    // TRdxEdit
-  uRdxCodeMap;       // TRdxCodeMap
+  uRdxCodeMap,       // TRdxCodeMap, TRdxFindingText
+  uFixArgs;          // FA_VALUE
 
 type
   // Der Planer von SCA115 (Form TRdxMapPlanner, uRdxFixRunner).
@@ -44,7 +45,7 @@ type
     // Das Schema des Literals aus der Meldung auf ALine: 'http://' ->
     // 'https://' (NewText), sonst der Grund.
     class function Https(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Der Grund, warum die URL (ohne Anfuehrungszeichen) keine Hilfe
@@ -670,14 +671,14 @@ begin
 end;
 
 class function TRdxHttpsFix.Https(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: TRdxFindingText; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L, Url : string;
   P, N   : Integer;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  Url := QuotedText(AMessage, QUOTE_CHAR);
+  AMessage.Args.TryGet(FA_VALUE, Url);
   AReason := TRdxHttpsFix.UrlReason(Url);
   if AReason <> '' then Exit;
   if AMap.StartsInside(ALine) then

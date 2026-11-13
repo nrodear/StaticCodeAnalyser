@@ -69,6 +69,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, PlanFixIn, FixAllWith
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxRoutineFixes, uRdxInheritedEmptyFix,
+  uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, LineOf, LineStartingWith, NewMap
 
@@ -111,14 +112,16 @@ begin
   Result := UnitWith(['  protected', BASE_PAINT], ['  protected'], BASE_IMPL);
 end;
 
-function MsgFor(const AMeth: string): string;
+function MsgFor(const AMeth: string): TRdxFindingText;
 begin
-  Result := Format(MSG_FMT, [AMeth]);
+  Result.Text := Format(MSG_FMT, [AMeth]);
+  Result.Args.Put(FA_NAME, AMeth);
 end;
 
 // Der Planer fuer Zeile ALine und Meldung AMsg: der neue Text, oder '' bei
 // Ablehnung (AReason).
-function PlanAt(const ASource: string; ALine: Integer; const AMsg: string;
+function PlanAt(const ASource: string; ALine: Integer;
+  const AMsg: TRdxFindingText;
   out AReason: string): string;
 var
   Map : TRdxCodeMap;
@@ -425,7 +428,7 @@ begin
   Assert.AreEqual('', PlanAt(Src, LineStartingWith(Src, PAINT_HEAD),
     'Method TFoo.Paint is empty', R), 'keine Hilfe');
   Assert.AreEqual(_(R_IE_MESSAGE), R);
-  Assert.AreEqual('Paint', TRdxInheritedEmptyFix.MethodNameOf(MsgFor('Paint')));
+  Assert.AreEqual('Paint', TRdxInheritedEmptyFix.MethodNameOf(MsgFor('Paint').Text));
 end;
 
 {$IFNDEF FPC}
@@ -455,13 +458,14 @@ end;
 // Die Hilfe fuer Zeile und Meldung ueber den Einstieg der Tabelle
 // (PlanFixIn: TRdxFixTable.FixFor, Adapter PlanInheritedMethodEmpty).
 function PlanVia(const ASource: string; ALine: Integer;
-  const AMsg: string): TRdxFixOutcome;
+  const AMsg: TRdxFindingText): TRdxFixOutcome;
 var
   S : TSeen;
 begin
   S := Default(TSeen);
   S.Line := ALine;
-  S.Msg := AMsg;
+  S.Msg := AMsg.Text;
+  S.Args := AMsg.Args;
   Result := PlanFixIn(ASource, 't.pas', fkInheritedMethodEmpty, S);
 end;
 
@@ -469,10 +473,13 @@ end;
 function PlanFirst(const ASource: string): TRdxFixOutcome;
 var
   Seen : TArray<TSeen>;
+  Msg  : TRdxFindingText;
 begin
   Seen := Detect(ASource);
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet einen Fund');
-  Result := PlanVia(ASource, Seen[0].Line, Seen[0].Msg);
+  Msg.Text := Seen[0].Msg;
+  Msg.Args := Seen[0].Args;
+  Result := PlanVia(ASource, Seen[0].Line, Msg);
 end;
 
 procedure TTestRdxInheritedEmptyDetector.Adapter_TwoEditsAndName;
@@ -523,7 +530,7 @@ begin
     + 'kein inherited)');
   Assert.AreEqual<Integer>(LineStartingWith(Src, PAINT_HEAD), Seen[0].Line,
     'Zeile des Implementierungskopfs');
-  Assert.AreEqual(MsgFor('Paint'), Seen[0].Msg);
+  Assert.AreEqual(MsgFor('Paint').Text, Seen[0].Msg);
 end;
 
 procedure TTestRdxInheritedEmptyDetector.Detector_RoundTrip;

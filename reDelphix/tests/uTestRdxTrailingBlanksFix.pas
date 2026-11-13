@@ -62,10 +62,11 @@ const
   FILE_NAME     = 't.pas';
 
 // Die Meldung, wie der Detektor sie schreibt.
-function BlanksMsg(ACol: Integer): string;
+function BlanksMsg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Trailing whitespace from column %d - configure editor '
-    + 'to trim on save.', [ACol]);
+  Result.Text := Format('Trailing whitespace from column %d - configure '
+    + 'editor to trim on save.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // Eine Unit mit den Zeilen ALines als Rumpf einer Routine (ab Zeile 6).
@@ -77,8 +78,8 @@ end;
 
 // Die Hilfe fuer Zeile ALine mit der Meldung AMessage ueber den Adapter der
 // Tabelle: neuer Text oder '' bei Ablehnung (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
-  out AReason: string): string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   SL      : TStringList;
   Finding : TLeakFinding;
@@ -88,8 +89,9 @@ begin
   SL := TStringList.Create;
   Finding := nil;
   try
-    Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage,
+    Finding := TLeakFinding.New(FILE_NAME, '', ALine, AMessage.Text,
       fkTrailingWhitespace);
+    Finding.FixArgs := AMessage.Args;
     SL.Text := ASource;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
     AReason := O.Reason;
@@ -274,7 +276,9 @@ var
   F : TLeakFinding;
   O : TRdxFixOutcome;
 begin
-  F := TLeakFinding.New(FILE_NAME, '', 6, BlanksMsg(11), fkTrailingWhitespace);
+  F := TLeakFinding.New(FILE_NAME, '', 6, BlanksMsg(11).Text,
+    fkTrailingWhitespace);
+  F.FixArgs := BlanksMsg(11).Args;
   try
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
   finally

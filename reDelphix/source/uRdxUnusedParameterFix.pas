@@ -823,8 +823,7 @@ var
   D    : TRdxParamDecl;
 begin
   APlan := Default(TRdxParamPlan);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := UnusedParamName(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   APlan.Name := Name;
   if Name = '' then
     AReason := _(R_UP_NO_NAME)

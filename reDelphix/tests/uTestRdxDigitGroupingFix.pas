@@ -71,6 +71,7 @@ uses
   uRdxMagicFixes,        // FileReason (der erwartete Grund des Adapters)
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // FixAllWith
+  uFixArgs,              // TFixArgs (S.Args)
   {$ENDIF}
   uRdxBufferMath, uRdxCodeMap, uRdxDigitGroupingFix,
   uRdxText,              // _() und die gemeinsamen Gruende
@@ -106,14 +107,19 @@ function PlanAt(const ASource: string; ALine, ACol: Integer;
   out AReason: string): string;
 var
   Map : TRdxCodeMap;
+  Msg : TRdxFindingText;
   E   : TRdxEdit;
   Ok  : Boolean;
 begin
   Result := '';
   AReason := '';
+  Msg := Default(TRdxFindingText);
+  Msg.Text := MessageAt(ACol);
+  if ACol <> 0 then
+    Msg.Args.Col := ACol;
   Map := NewMap(ASource);
   try
-    Ok := TRdxDigitGroupingFix.Group(Map, ALine, MessageAt(ACol), E, AReason);
+    Ok := TRdxDigitGroupingFix.Group(Map, ALine, Msg, E, AReason);
   finally
     Map.Free;
   end;
@@ -532,6 +538,8 @@ begin
   S.Line := BODY_LINE + 1;
   S.Msg := MessageAt(12);
   S.Variant := '';
+  S.Args := Default(TFixArgs);
+  S.Args.Col := 12;
   O := PlanSeen(InBody(['  X := Y * 1048576;']), S);
   Assert.IsFalse(O.Enabled, 'gesperrt');
   Assert.AreEqual(Moved, O.Reason);

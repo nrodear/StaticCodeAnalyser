@@ -56,7 +56,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, FixAllWith, AssertNoHelpWith
   uSCAConsts,            // TFindingKind, fk* (nur die Detektor-Fixture)
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxParensFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxParensFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply
 
@@ -69,15 +69,17 @@ begin
 end;
 
 // Die Meldung des Detektors fuer die Spalte ACol.
-function Msg(ACol: Integer): string;
+function Msg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Redundant double parentheses at column %d - drop the '
-    + 'outer `(...)` around the simple expression.', [ACol]);
+  Result.Text := Format('Redundant double parentheses at column %d - drop '
+    + 'the outer `(...)` around the simple expression.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // Die Hilfe fuer Zeile ALine mit der Meldung AMessage: neuer Text oder ''
 // bei Ablehnung (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   SL  : TStringList;

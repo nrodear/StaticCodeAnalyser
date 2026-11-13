@@ -304,8 +304,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   R := Default(TRdxRoutine);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := NameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
   begin
     AReason := _(R_FN_MESSAGE);

@@ -50,7 +50,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxCodeMap, uRdxFlowFixes,
+  uRdxCodeMap, uRdxFlowFixes, uFixArgs,
   uTestRdxTextKit;   // Join, Apply, InProc
 
 type
@@ -60,7 +60,7 @@ type
 
 // Der Plan der Hilfe AKind fuer Zeile ALine; AReason = '' heisst Hilfe.
 function PlanOf(AKind: TFlowKind; const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): TRdxFlowPlan;
+  const AMessage: TRdxFindingText; out AReason: string): TRdxFlowPlan;
 var
   SL  : TStringList;
   Map : TRdxCodeMap;
@@ -87,7 +87,7 @@ end;
 
 // Neuer Text oder '' bei Ablehnung (AReason).
 function Fix(AKind: TFlowKind; const ASource: string; ALine: Integer;
-  const AMessage: string; out AReason: string): string;
+  const AMessage: TRdxFindingText; out AReason: string): string;
 var
   P : TRdxFlowPlan;
 begin
@@ -99,7 +99,7 @@ end;
 
 // Keine Hilfe, und APart steht im Grund.
 procedure AssertRefused(AKind: TFlowKind; const ASource: string;
-  ALine: Integer; const AMessage, APart: string);
+  ALine: Integer; const AMessage: TRdxFindingText; const APart: string);
 var
   R : string;
 begin
@@ -115,22 +115,28 @@ begin
 end;
 
 // Die Meldungen der Detektoren.
-function CondMsg(const AX, AFirst, ASecond: string): string;
+function CondMsg(const AX, AFirst, ASecond: string): TRdxFindingText;
 begin
-  Result := Format('`if Cond then %s := %s else %s := %s` can be simplified '
-    + 'to `%s := Cond` (or `not Cond`).', [AX, AFirst, AX, ASecond, AX]);
+  Result.Text := Format('`if Cond then %s := %s else %s := %s` can be '
+    + 'simplified to `%s := Cond` (or `not Cond`).',
+    [AX, AFirst, AX, ASecond, AX]);
+  Result.Args.Put(FA_NAME, AX);
+  Result.Args.Put(FA_EXPR, AFirst);
+  Result.Args.Put(FA_EXPR2, ASecond);
 end;
 
-function JumpMsg(const AWord: string): string;
+function JumpMsg(const AWord: string): TRdxFindingText;
 begin
-  Result := Format('`%s;` directly before `end` is redundant - control flow '
-    + 'already leaves the block.', [AWord]);
+  Result.Text := Format('`%s;` directly before `end` is redundant - '
+    + 'control flow already leaves the block.', [AWord]);
+  Result.Args.Put(FA_FORM, AWord);
 end;
 
-function SelfMsg(const AX: string): string;
+function SelfMsg(const AX: string): TRdxFindingText;
 begin
-  Result := Format('Self-assignment: %s := %s (no-op or copy-paste)',
+  Result.Text := Format('Self-assignment: %s := %s (no-op or copy-paste)',
     [AX, AX]);
+  Result.Args.Put(FA_NAME, AX);
 end;
 
 // ---- SCA098 ----
@@ -240,21 +246,19 @@ begin
 end;
 
 procedure TTestRdxFlowFixes.Sca098_Refusals;
-const
-  MSG_OK = '`if Cond then Ok := True else Ok := False` can be simplified to '
-    + '`Ok := Cond` (or `not Cond`).';
 begin
   AssertRefused(wkCond, InProc(['  if A then Ok := True // weil', '  else Ok := '
-    + 'False;']), 6, MSG_OK, 'Kommentar');
+    + 'False;']), 6, CondMsg('Ok', 'True', 'False'), 'Kommentar');
   AssertRefused(wkCond, InProc(['  if A then Ok := True else Ok := False; '
-    + 'if B then Ok := True else Ok := False;']), 6, MSG_OK, 'mehrdeutig');
+    + 'if B then Ok := True else Ok := False;']), 6, CondMsg('Ok', 'True', 'False'),
+    'mehrdeutig');
   AssertRefused(wkCond, InProc(['  if A then Ok := True else Ok := False or '
-    + 'B;']), 6, MSG_OK, 'geht der Ausdruck weiter');
+    + 'B;']), 6, CondMsg('Ok', 'True', 'False'), 'geht der Ausdruck weiter');
   AssertRefused(wkCond, InProc(['  if A then begin Ok := True end else Ok := '
-    + 'False;']), 6, MSG_OK, 'verschoben');
+    + 'False;']), 6, CondMsg('Ok', 'True', 'False'), 'verschoben');
   // ';' vor dem else: das else gehoert zum case.
   AssertRefused(wkCond, InProc(['  case K of 1: if A then Ok := True; else '
-    + 'Ok := False; end;']), 6, MSG_OK, 'verschoben');
+    + 'Ok := False; end;']), 6, CondMsg('Ok', 'True', 'False'), 'verschoben');
   AssertRefused(wkCond, InProc(['  if A then Ok := True else Ok := False;']), 6,
     CondMsg('Other', 'True', 'False'), 'verschoben');
   AssertRefused(wkCond, InProc(['  if A then Ok := True else Ok := False;']), 6,

@@ -111,8 +111,6 @@ const
   // Davor beginnt ein Handler.
   HANDLER_PREV: array[0..1] of string = ('except', ';');
   KW_ON    = 'on';
-  KEY_HAND = 'handler on ';
-  KEY_HAS  = ' has empty body';
   RAISE_INLINE = ' raise;';
   RAISE_BLOCK  = ' raise; ';
   RAISE_STMT   = 'raise;';
@@ -145,20 +143,6 @@ type
     Last    : TRdxToken;   // ';' bzw. end
   end;
 
-// Der Typname aus der Meldung ('Typed exception handler on EFoo has empty
-// body - ...'); '' ohne.
-function TypeFromMessage(const AMessage: string): string;
-var
-  p, q : Integer;
-begin
-  Result := '';
-  p := Pos(KEY_HAND, AMessage);
-  if p = 0 then Exit;
-  Inc(p, Length(KEY_HAND));
-  q := Pos(KEY_HAS, AMessage);
-  if q > p then
-    Result := Copy(AMessage, p, q - p);
-end;
 
 // Beginnt an T ein Handler-Kopf 'on [E:] T do' - alles auf der Zeile von T?
 // Die Form, die der Detektor liest (nur ein einfacher Typname).
@@ -642,8 +626,7 @@ var
   Named : string;
 begin
   AEdit := Default(TRdxEdit);
-  if not AMessage.Args.TryGet(FA_NAME, Named) then
-    Named := TypeFromMessage(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Named);
   AReason := FindHead(AMap, ALine, Head);
   if AReason = '' then
     AReason := ReadBody(AMap, Head, Body);

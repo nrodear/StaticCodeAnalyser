@@ -455,20 +455,6 @@ begin
   Result := Copy(AName, 1, LastDelimiter('.', AName) - 1);
 end;
 
-// Der Text zwischen AKey und AStop in AMessage (Leerraum am Rand weg); ''
-// ohne beide.
-function TextBetween(const AMessage, AKey, AStop: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(AKey, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(AKey));
-  Q := Pos(AStop, AMessage, P);
-  if Q > P then
-    Result := Trim(Copy(AMessage, P, Q - P));
-end;
 
 // Steht T als erstes auf seiner Zeile (FirstOnLine), und die Zeile beginnt
 // nicht in einem Kommentar oder mehrzeiligen String? Erst dann zaehlt seine
@@ -1721,8 +1707,7 @@ begin
   Value := '';
   AReason := '';
   Scan := NewScan(AMap);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := TextBetween(AMessage.Text, KEY_FUNC, KEY_NEVER);
+  AMessage.Args.TryGet(FA_NAME, Name);
   if Name = '' then
     AReason := _('the message has no function name');
   if AReason = '' then
@@ -1762,10 +1747,8 @@ begin
   Edits := nil;
   AReason := '';
   Scan := NewScan(AMap);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := TextBetween(AMessage.Text, KEY_FUNC, KEY_READS);
-  if not AMessage.Args.TryGet(FA_TYPE, MsgType) then
-    MsgType := TextBetween(AMessage.Text, KEY_TYPE, KEY_TYPE_END);
+  AMessage.Args.TryGet(FA_NAME, Name);
+  AMessage.Args.TryGet(FA_TYPE, MsgType);
   if (Name = '') or (MsgType = '') then
     AReason := _('the message has no function or return type')
   // Der Name im Menue schon aus der Meldung (der Beweis folgt).

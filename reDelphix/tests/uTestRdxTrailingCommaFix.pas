@@ -60,7 +60,7 @@ uses
   uRdxRecipeRunner, uRdxFixTable,
   uTestRdxDetectorKit,   // TSeen, CatalogText, DetectSource, FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxTrailingCommaFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxTrailingCommaFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende (E29)
   uTestRdxTextKit;       // Join, Apply
 
@@ -73,15 +73,17 @@ begin
 end;
 
 // Die Meldung des Detektors fuer die Spalte ACol.
-function Msg(ACol: Integer): string;
+function Msg(ACol: Integer): TRdxFindingText;
 begin
-  Result := Format('Trailing comma in argument list at column %d - drop the '
-    + 'comma or add the missing argument.', [ACol]);
+  Result.Text := Format('Trailing comma in argument list at column %d - '
+    + 'drop the comma or add the missing argument.', [ACol]);
+  Result.Args.Col := ACol;
 end;
 
 // Die Hilfe fuer Zeile ALine mit der Meldung AMessage: neuer Text oder ''
 // bei Ablehnung (AReason).
-function Fix(const ASource: string; ALine: Integer; const AMessage: string;
+function Fix(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out AReason: string): string;
 var
   SL  : TStringList;
@@ -329,8 +331,9 @@ begin
   SL := TStringList.Create;
   F := nil;
   try
-    F := TLeakFinding.New('t.pas', '', LineOf(S, 'DoStuff'), Msg(15),
+    F := TLeakFinding.New('t.pas', '', LineOf(S, 'DoStuff'), Msg(15).Text,
       fkTrailingCommaArgList);
+    F.FixArgs := Msg(15).Args;
     // Ohne Zeilen: kein Puffer.
     O := TRdxFixTable.FixFor(nil, nil, F, nil);
     Assert.IsFalse(O.Enabled);

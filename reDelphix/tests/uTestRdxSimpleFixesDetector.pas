@@ -290,7 +290,8 @@ uses
   uRdxPlacesRunner,      // R_USES_CONDITIONAL, UsesReason (PlanUses)
   uRdxText,              // _, MsgByHand
   uTestRdxDetectorKit,   // TSeen, Detect-/Plan-/FixAll-Helfer (Charge H3c)
-  uTestRdxTextKit;       // Join, Apply
+  uTestRdxTextKit,       // Join, Apply
+  uFixArgs;              // FA_NAME
 
 // ---- Helfer (die gemeinsamen seit Charge H3c in uTestRdxDetectorKit) ----
 
@@ -1427,6 +1428,7 @@ begin
     '  TStringList.Create.Free;', 'end;', 'end.']);
   Seen.Line := 4;
   Seen.Msg := 'System.Classes';
+  Seen.Args.Put(FA_NAME, 'System.Classes');
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
   Assert.IsTrue(Pos('benutzt', Reason) > 0, Reason);
 end;
@@ -1448,6 +1450,7 @@ begin
     '  Exit;', 'end;', 'end.']);
   Seen.Line := 4;
   Seen.Msg := 'mormot.core.os';
+  Seen.Args.Put(FA_NAME, 'mormot.core.os');
   Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason),
     'Geschwister in uses: ' + Reason);
   Src := Join(['unit t;', 'interface', 'implementation',
@@ -1899,6 +1902,7 @@ var
 begin
   Seen.Line := 4;
   Seen.Msg := 'System.Classes';
+  Seen.Args.Put(FA_NAME, 'System.Classes');
   Assert.AreEqual<Integer>(0, PlanAltFix(Format(UNIT_007,
     ['uses System.Classes;']), fkUnusedUses, Seen).Variant,
     'nur SCA168 und SCA020 haben einen zweiten Eintrag');
@@ -1980,6 +1984,7 @@ begin
     'end.']);
   Seen.Line := 3;
   Seen.Msg := 'System.Math';
+  Seen.Args.Put(FA_NAME, 'System.Math');
   Assert.IsTrue(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason), Reason);
   Assert.AreEqual(Join(['unit t;', 'interface', 'uses System.Classes;',
     'type', '  TFoo = class(TComponent)', '  end;', 'implementation', 'uses',
@@ -2001,6 +2006,7 @@ begin
     '  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF} System.Math;', 'end.']);
   Seen.Line := 9;
   Seen.Msg := 'System.Math';
+  Seen.Args.Put(FA_NAME, 'System.Math');
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
   Assert.IsTrue(Pos('Direktive', Reason) > 0, Reason);
 end;
@@ -2020,6 +2026,7 @@ begin
     'end.']);
   Seen.Line := 5;
   Seen.Msg := 'System.Math';
+  Seen.Args.Put(FA_NAME, 'System.Math');
   Assert.IsFalse(PlanFix(Src, fkUnusedUses, Seen, Edits, Reason));
   Assert.IsTrue(Pos('System.Math', Reason) > 0, Reason);
 end;
@@ -2261,6 +2268,7 @@ begin
   try
     Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
       fkBeginEndRequired);
+    Finding.FixArgs := Seen[0].Args;
     SL.Text := Src;
     O := TRdxFixTable.FixFor(nil, SL, Finding, nil);
   finally

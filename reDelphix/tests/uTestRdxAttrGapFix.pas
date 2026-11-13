@@ -42,6 +42,7 @@ uses
   uAstNode, uMethodd12, uSCAConsts, uRuleCatalog,
   uAttributeMisalignment,
   uRdxBufferMath, uRdxCodeMap, uRdxRecipeRunner, uRdxFixTable, uRdxAttrGapFix,
+  uFixArgs,
   uTestRdxTextKit,       // Join, Apply
   uTestRdxDetectorKit;   // TSeen, DetectSource, CatalogText
 
@@ -67,10 +68,11 @@ const
 // ---- Helfer ----
 
 // Die Meldung des Detektors zu einem Attribut AName.
-function MessageOf(const AName: string): string;
+function MessageOf(const AName: string): TRdxFindingText;
 begin
-  Result := 'Attribute [' + AName + '] with blank line before target member '
-    + '- visually loose';
+  Result.Text := 'Attribute [' + AName + '] with blank line before target '
+    + 'member - visually loose';
+  Result.Args.Put(FA_NAME, AName);
 end;
 
 // ABody (Zeilen ab 6) in einer Klasse hinter 'public'.

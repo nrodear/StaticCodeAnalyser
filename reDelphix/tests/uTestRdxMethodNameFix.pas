@@ -106,7 +106,7 @@ uses
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn,
                          // FixAllWith
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxMethodNameFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxMethodNameFix, uFixArgs,
   uRdxText,              // _() und die gemeinsamen Gruende
   uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
@@ -136,7 +136,14 @@ begin
 end;
 
 // Der Planer fuer Zeile ALine mit der Meldung AMessage.
-function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
+function MsgFor(const AName: string): TRdxFindingText;
+begin
+  Result.Text := Format(MSG_FMT, [AName]);
+  Result.Args.Put(FA_NAME, AName);
+end;
+
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out APlan: TRdxMethodNamePlan; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -157,7 +164,7 @@ var
   P : TRdxMethodNamePlan;
   R : string;
 begin
-  Assert.IsTrue(PlanOf(ASource, ALine, Format(MSG_FMT, [AName]), P, R), R);
+  Assert.IsTrue(PlanOf(ASource, ALine, MsgFor(AName), P, R), R);
   Result := Apply(ASource, P.Edits);
 end;
 
@@ -168,7 +175,7 @@ var
   P : TRdxMethodNamePlan;
   R : string;
 begin
-  Assert.IsFalse(PlanOf(ASource, ALine, Format(MSG_FMT, [AName]), P, R),
+  Assert.IsFalse(PlanOf(ASource, ALine, MsgFor(AName), P, R),
     'keine Hilfe');
   Assert.AreEqual(AReason, R, 'Grund');
   Assert.AreEqual<Integer>(0, Length(P.Edits), 'keine Ersetzung');
@@ -186,7 +193,7 @@ begin
   // Zwei Ersetzungen in EINEM Plan, nur das Wort; der Name fuer den
   // Menuetext ist der neue.
   Assert.IsTrue(PlanOf(StdUnit('doWork', 'doWork'), DECL_LINE,
-    Format(MSG_FMT, ['doWork']), P, R), R);
+    MsgFor('doWork'), P, R), R);
   Assert.AreEqual('DoWork', P.Name, 'Name fuer den Menuetext');
   Assert.AreEqual<Integer>(2, Length(P.Edits), 'Deklaration und Implementierung');
   Assert.AreEqual<Integer>(DECL_LINE, P.Edits[0].Span.StartLine);
@@ -244,7 +251,7 @@ begin
   Assert.AreEqual(StdUnit('DoWork', 'DoWork'),
     Applied(StdUnit('doWork', 'DoWork'), DECL_LINE, 'doWork'));
   Assert.IsTrue(PlanOf(StdUnit('doWork', 'DoWork'), DECL_LINE,
-    Format(MSG_FMT, ['doWork']), P, R), R);
+    MsgFor('doWork'), P, R), R);
   Assert.AreEqual<Integer>(1, Length(P.Edits), 'nur die Deklaration');
   // Nur der erste Buchstabe: der Rest der Schreibweise bleibt.
   Assert.AreEqual(StdUnit('DoWork', 'Dowork'),
@@ -291,7 +298,7 @@ begin
   // "keine Klasse dieser Datei deklariert sie davor" - falsch.
   Src := UnitWith(['  public', '    procedure Visit(V: TObject); override;'],
     ['procedure TFoo.visit(V: TObject);', 'begin', 'end;']);
-  Assert.IsTrue(PlanOf(Src, IMPL_LINE, Format(MSG_FMT, ['visit']), P, R), R);
+  Assert.IsTrue(PlanOf(Src, IMPL_LINE, MsgFor('visit'), P, R), R);
   Assert.AreEqual('Visit', P.Name, 'Schreibweise der Deklaration');
   Assert.AreEqual<Integer>(1, Length(P.Edits), 'nur die Implementierung');
   Assert.AreEqual(StringReplace(Src, 'TFoo.visit', 'TFoo.Visit', []),
@@ -638,7 +645,7 @@ begin
   // R_MN_SPELLING mit zweimal demselben Namen und "Fund veraltet?".
   Src := UnitWith(['  public', '    procedure visitUnit(U: TObject); virtual;'],
     ['procedure TFoo.visitUnit(U: TObject);', 'begin', 'end;']);
-  Assert.IsTrue(PlanOf(Src, IMPL_LINE, Format(MSG_FMT, ['visitUnit']), P, R),
+  Assert.IsTrue(PlanOf(Src, IMPL_LINE, MsgFor('visitUnit'), P, R),
     R);
   Assert.AreEqual('VisitUnit', P.Name);
   Assert.AreEqual(StringReplace(Src, 'visitUnit', 'VisitUnit', [rfReplaceAll]),

@@ -326,14 +326,7 @@ var
   L     : string;
 begin
   AEdit := Default(TRdxEdit);
-  if AMessage.Args.Col > 0 then
-  begin
-    Col := AMessage.Args.Col;
-  end
-  else
-  begin
-    Col := ColumnFromMessage(AMessage.Text);
-  end;
+  Col := AMessage.Args.Col;
   if Col <= 0 then
     AReason := MsgNoColumn
   else

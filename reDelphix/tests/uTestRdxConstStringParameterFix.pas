@@ -74,15 +74,18 @@ uses
 // ---- Helfer ----
 
 // Die Meldung wie der Detektor sie schreibt.
-function CMsg(const AName, AType: string): string;
+function CMsg(const AName, AType: string): TRdxFindingText;
 begin
-  Result := Format('Parameter "%s: %s" should be declared as `const` - '
-    + 'avoids the refcount bump on each call and clarifies that the method '
-    + 'does not mutate the argument.', [AName, AType]);
+  Result.Text := Format('Parameter "%s: %s" should be declared as `const` '
+    + '- avoids the refcount bump on each call and clarifies that the '
+    + 'method does not mutate the argument.', [AName, AType]);
+  Result.Args.Put(FA_NAME, AName);
+  Result.Args.Put(FA_TYPE, AType);
 end;
 
 // Der Plan fuer Zeile ALine mit der Meldung AMessage.
-function PlanOf(const ASource: string; ALine: Integer; const AMessage: string;
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMessage: TRdxFindingText;
   out APlan: TRdxParamPlan; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -175,7 +178,7 @@ var
 begin
   Src := ImplUnit(['function Hash(s: string): Integer;', 'begin',
     '  Result := Length(s);', 'end;']);
-  Msg.Text := CMsg('andererName', 'AnsiString');
+  Msg := CMsg('andererName', 'AnsiString');
   Msg.Args.Put(FA_NAME, 's');
   Msg.Args.Put(FA_TYPE, 'string');
   Fixed := FixIn(Src, 4, Msg, R);

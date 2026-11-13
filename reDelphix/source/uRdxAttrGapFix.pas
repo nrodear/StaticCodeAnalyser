@@ -61,7 +61,6 @@ uses
 
 const
   SPAN_183 = 'sca183';
-  KEY_ATTR = 'Attribute [';
   // Die Gruende als englische msgids (E29), uebersetzt mit _() aus uRdxText;
   // Deutsch und Franzoesisch in i18n/de.po und i18n/fr.po. Das Ende
   // ' - Zeile verschoben? ...' haengt MsgMovedSuffix an.
@@ -93,22 +92,6 @@ const
   // Diese Woerter beginnen nie ein Feld oder einen Typ.
   NOT_NAMES: array[0..10] of string = ('end', 'case', 'else', 'begin', 'var',
     'const', 'type', 'strict', 'uses', 'initialization', 'finalization');
-
-// Der Name aus 'Attribute [Name] with blank line ...'; '' ohne.
-function AttrNameOf(const AMessage: string): string;
-var
-  P, Q : Integer;
-begin
-  Result := '';
-  P := Pos(KEY_ATTR, AMessage);
-  if P = 0 then Exit;
-  Inc(P, Length(KEY_ATTR));
-  Q := P;
-  while (Q <= Length(AMessage)) and (AMessage[Q] <> ']') do
-    Inc(Q);
-  if Q <= Length(AMessage) then
-    Result := Copy(AMessage, P, Q - P);
-end;
 
 // Die Klammerbilanz ('[' und '(' gegen ']' und ')') der Code-Zeichen von
 // ALine zwischen AFrom und ATo; > 0 heisst, das Attribut laeuft weiter.
@@ -224,8 +207,7 @@ var
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
-  if not AMessage.Args.TryGet(FA_NAME, Name) then
-    Name := AttrNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Name);
   AReason := AttrLineReason(AMap, ALine, Name, First);
   if AReason <> '' then Exit;
   // Die Leerzeilen: ab ALine + 1 bis vor die erste Zeile mit Inhalt.

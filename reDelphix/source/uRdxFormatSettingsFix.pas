@@ -253,11 +253,11 @@ type
     // SCA059, Hauptweg: drittes Argument ', FormatSettings' an das eine
     // Format auf ALine.
     class function FormatLocale(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
     // SCA059, Alt-Weg: ', TFormatSettings.Invariant'.
     class function FormatLocaleInvariant(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
       out AReason: string): Boolean; static;
 
     // Der Funktionsname der SCA128-Meldung, klein ('datetostr'); '' ohne
@@ -413,34 +413,6 @@ begin
   begin
     if T.IsWord and InList(T.Low, ANames) and (Before(AMap, T).Low <> '@') then
       AddToken(Result, T);
-    T := After(AMap, T);
-  end;
-end;
-
-// Setzt sich die Anweisung von ALine auf Folgezeilen fort und nennt dort
-// eines der Woerter ANames (nicht hinter '@')? Die Zeile des Treffers, 0
-// ohne. Die Anweisung endet am ';' bzw. an einem Schluesselwort aus
-// STATEMENT_STOP; gesucht wird hoechstens MAX_FOLLOW_LINES Zeilen weit.
-function FollowLineWith(AMap: TRdxCodeMap; ALine: Integer;
-  const ANames: array of string): Integer;
-var
-  T, P : TRdxToken;
-begin
-  Result := 0;
-  T := LastTokenOn(AMap, ALine);
-  if (T.Low = '') or InList(T.Low, STATEMENT_DONE) then
-    Exit;
-  P := T;
-  T := After(AMap, T);
-  while (T.Low <> '') and (T.Line - ALine <= MAX_FOLLOW_LINES) do
-  begin
-    if T.Low = ';' then
-      Exit;
-    if IsKeywordAfter(T, P) and InList(T.Low, STATEMENT_STOP) then
-      Exit;
-    if T.IsWord and InList(T.Low, ANames) and (P.Low <> '@') then
-      Exit(T.Line);
-    P := T;
     T := After(AMap, T);
   end;
 end;
@@ -2722,8 +2694,9 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not AMessage.Args.TryGet(FA_NAME, Want) then
-    Want := TRdxFormatSettingsFix.CalledNameOf(AMessage.Text);
+  AMessage.Args.TryGet(FA_NAME, Want);
+  if (Want <> '') and (LocaleIndex(Want) < 0) then
+    Want := '';
   if Want = '' then
   begin
     AReason := _(R_FS_NO_NAME);
@@ -2811,7 +2784,8 @@ end;
 // SCA059 fuer beide Wege. Seit rwE30 Stufe 2 auch das eine Format auf
 // einer Folgezeile der Anweisung (frmMain.pas:1519 - der Aufruf steht in
 // Zeile 1520) und eines, dessen Klammer tiefer schliesst.
-function PlanFormat(AMap: TRdxCodeMap; ALine: Integer; const AMessage: string;
+function PlanFormat(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: TRdxFindingText;
   AInvariant: Boolean; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   Fmt, Lit : string;
@@ -2824,7 +2798,7 @@ begin
   Result := False;
   AEdit := Default(TRdxEdit);
   AReason := '';
-  if not TRdxFormatSettingsFix.FloatSpecOf(AMessage, Fmt) then
+  if not AMessage.Args.TryGet(FA_VALUE, Fmt) then
   begin
     AReason := _(R_FL_NO_SPEC);
     Exit;
@@ -2916,14 +2890,14 @@ begin
 end;
 
 class function TRdxFormatSettingsFix.FormatLocale(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 begin
   Result := PlanFormat(AMap, ALine, AMessage, False, AEdit, AReason);
 end;
 
 class function TRdxFormatSettingsFix.FormatLocaleInvariant(AMap: TRdxCodeMap;
-  ALine: Integer; const AMessage: string; out AEdit: TRdxEdit;
+  ALine: Integer; const AMessage: TRdxFindingText; out AEdit: TRdxEdit;
   out AReason: string): Boolean;
 begin
   Result := PlanFormat(AMap, ALine, AMessage, True, AEdit, AReason);

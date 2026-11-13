@@ -80,7 +80,7 @@ uses
   uRdxFixTable,          // TRdxFixTable.CaptionFor
   uTestRdxDetectorKit,   // TSeen, DetectSource, CatalogText, PlanFixIn
   {$ENDIF}
-  uRdxBufferMath, uRdxCodeMap, uRdxObjectListFix,
+  uRdxBufferMath, uRdxCodeMap, uRdxObjectListFix, uFixArgs,
   uRdxText,              // _() und MsgMovedSuffix
   uTestRdxTextKit;       // Join, Apply, LineOf, NewMap
 
@@ -100,12 +100,14 @@ const
 
 // ---- Helfer ----
 
-function Msg(const AType, AVar, AAdded: string): string;
+function Msg(const AType, AVar, AAdded: string): TRdxFindingText;
 begin
-  Result := Format(MSG_FMT, [AType, LowerCase(AVar), AAdded, AType]);
+  Result.Text := Format(MSG_FMT, [AType, LowerCase(AVar), AAdded, AType]);
+  Result.Args.Put(FA_NAME, AType);
+  Result.Args.Put(FA_NAME2, LowerCase(AVar));
 end;
 
-function StdMsg: string;
+function StdMsg: TRdxFindingText;
 begin
   Result := Msg('TFoo', 'l', 'TFoo');
 end;
@@ -133,7 +135,8 @@ begin
 end;
 
 // Der Planer fuer Zeile ALine und Meldung AMsg.
-function PlanOf(const ASource: string; ALine: Integer; const AMsg: string;
+function PlanOf(const ASource: string; ALine: Integer;
+  const AMsg: TRdxFindingText;
   out APlan: TRdxObjectListPlan; out AReason: string): Boolean;
 var
   Map : TRdxCodeMap;
@@ -278,8 +281,8 @@ begin
   Assert.IsFalse(PlanOf(StdSrc, 12, 'TList<TFoo> gets a new TFoo.Create', P,
     R));
   Assert.AreEqual(_(R_OL_NO_MESSAGE), R);
-  Assert.AreEqual('TFoo', ListTypeArgOf(StdMsg));
-  Assert.AreEqual('l', ListVarOf(StdMsg));
+  Assert.AreEqual('TFoo', ListTypeArgOf(StdMsg.Text));
+  Assert.AreEqual('l', ListVarOf(StdMsg.Text));
 end;
 
 procedure TTestRdxObjectListFix.MovedLine_CommentOrString_NoHelp;
@@ -521,7 +524,7 @@ begin
   Seen := Detect(StdSrc);
   Assert.AreEqual<Integer>(1, Length(Seen), 'ein Fund');
   Assert.AreEqual<Integer>(12, Seen[0].Line, 'die Zeile des Add');
-  Assert.AreEqual(StdMsg, Seen[0].Msg);
+  Assert.AreEqual(StdMsg.Text, Seen[0].Msg);
   Assert.AreEqual('l', ListVarOf(Seen[0].Msg), 'Name klein');
   Assert.AreEqual('TFoo', ListTypeArgOf(Seen[0].Msg));
 end;

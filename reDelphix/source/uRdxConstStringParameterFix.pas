@@ -395,7 +395,7 @@ begin
   HasName := AMessage.Args.TryGet(FA_NAME, Name);
   if HasName then
     AMessage.Args.TryGet(FA_TYPE, Typ)
-  else if not ConstParamOf(AMessage.Text, Name, Typ) then
+  else
   begin
     AReason := _(R_CS_NO_NAME);
     Exit(False);
