@@ -710,6 +710,7 @@ uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
   uAnalyserTheme,       // IsLightColor, EnsureHintContrast, Farb-Cache
   uHintTextLayout,      // Kurzform + Kuerzung des Nur-Text-Hints (testbar)
+  uIDEEditorIntegration, // NavTrace - ofnFileClosing in der Ablaufspur
   uIDEFindingBulb,      // Gluehbirne an der Caret-Zeile: Editor vormerken
   uIDETheme,            // Subscribe - Marken beim Theme-Wechsel neu faerben
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
@@ -3870,6 +3871,9 @@ procedure TFileClosingNotifier.FileNotification(
   var Cancel: Boolean);
 begin
   if NotifyCode <> ofnFileClosing then Exit;
+  // Belegt in der Spur, dass ein Schliessen aus der Fund-Navigation
+  // (TIDEEditor.ShowDfmAsTextAtLine) diese Abraeum-Haken wirklich erreicht.
+  NavTrace('ide: FileClosing ' + ExtractFileName(FileName));
   if Assigned(GHighlighter) then
     try
       GHighlighter.HandleFileClosing(FileName);

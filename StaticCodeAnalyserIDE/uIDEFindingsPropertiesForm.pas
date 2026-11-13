@@ -56,12 +56,16 @@ type
     FThemeSub      : IInterface;
     FFindingsSub   : IInterface;
     // Suppress-Window fuer EditorViewActivated: ein Click auf einen Finding
-    // triggert OpenFileAtLine, das mehrere EditorViewActivated-Events feuern
-    // kann (M.Show, SafeCloseModule, transient empty buffer). Diese wuerden
-    // SetActiveFile triggern und das Grid clearen. Solange GetTickCount <
-    // FSuppressActivationUntil ist, ignoriert HandleEditorViewActivated alle
-    // Events. 250ms reichen fuer typische Event-Bursts ohne legitime
-    // User-Tab-Wechsel nennenswert zu blockieren.
+    // feuert mehrere EditorViewActivated-Events (Show; bei einem DFM-Fund
+    // schliesst die Unit, ein fremder Tab rueckt kurz nach, dann oeffnet
+    // die DFM). Diese wuerden SetActiveFile triggern und das Grid clearen.
+    // Waehrend des Sprungs selbst (FNavDepth > 0 - die Rueckfrage der IDE
+    // beim Schliessen kann beliebig lange offen stehen) und in den 250 ms
+    // danach (FSuppressActivationUntil, fuer nachlaufende Events) ignoriert
+    // HandleEditorViewActivated alle Events. Zaehler statt Flag: steht die
+    // Rueckfrage, kann ein Timer-Tick des Grids einen zweiten Klick
+    // hineinschieben - dessen Ende darf die Sperre des ersten nicht loesen.
+    FNavDepth                : Integer;
     FSuppressActivationUntil : Cardinal;
     // Re-Scan-Cache: pro Datei die Modification-Time vom letzten erfolgten
     // Scan. TriggerAutoScan skippt, wenn die Datei seit dem letzten Scan
@@ -388,16 +392,27 @@ procedure TFindingsPropertiesDockableForm.HandleEditorViewActivated(
 // UND triggern automatisch einen Single-File-Scan damit der Properties-
 // Panel-User die Findings sofort sieht ohne extra "Aktuelle Datei"-Klick.
 // SetActiveFile ist idempotent fuer SameText-Treffer - kein Flicker.
-// Suppress-Window: nach einem Finding-Click sendet ShowFileAtLine eine
-// Burst-Sequenz von Events; in den ersten 250ms ignorieren.
+// Suppress-Window: waehrend eines Finding-Clicks und 250 ms danach sendet
+// der Sprung eine Burst-Sequenz von Events - ignorieren (s. FNavDepth).
+var
+  ScanFile : string;
 begin
   if not Assigned(FFrame) then Exit;
-  if GetTickCount < FSuppressActivationUntil then
+  if (FNavDepth > 0) or (GetTickCount < FSuppressActivationUntil) then
   begin
     NavTrace('panel: ViewActivated UNTERDRUECKT ' + AFileName);
     Exit;
   end;
   NavTrace('panel: ViewActivated ' + AFileName);
+  // Eine .dfm als Text-Tab: ihre Funde liegen im Cache des Frames unter der
+  // Partner-.pas (dem Scan-Ziel). Erst die laden, dann wechselt SetActiveFile
+  // fuer die .dfm nur den Titel - sonst leerte der Wechsel von einem fremden
+  // Tab die Liste, und der Auto-Scan fuellte sie nicht (Paar unveraendert).
+  ScanFile := AFileName;
+  if not SameText(FFrame.CurrentFile, AFileName)
+     and ResolveScanFile(AFileName, ScanFile)
+     and not SameText(ScanFile, AFileName) then
+    FFrame.SetActiveFile(ScanFile);
   FFrame.SetActiveFile(AFileName);
   // Auto-Scan der neuen Datei. ACenterOnFirstFinding=False, sonst wuerde
   // der Editor bei jedem Tab-Wechsel auf den ersten Befund springen.
@@ -463,37 +478,40 @@ procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;
   Finding: TLeakFinding; Mode: TFindingNavMode);
 // Mode (fnmPreview/fnmActivate) steuert nur das FOKUS-Verhalten - das macht
 // der Frame selbst (Re-Focus ins Grid bei Preview). Der Editor-Sprung ist
-// fuer beide Modi identisch.
-// Soft-Navigate via TIDEEditor.ShowFileAtLine - bringt die Datei nach
-// vorne (oder oeffnet sie wenn noch nicht da), setzt den Caret und
-// schliesst NICHTS.
+// fuer beide Modi identisch: TIDEEditor.ShowFileCenteredAtLine bringt die
+// Datei nach vorne (oder oeffnet sie), setzt den Caret und zentriert - das
+// nur nach Erfolg.
 //
-// .dfm-Fund: ShowFileAtLine reicht an ShowDfmAsTextAtLine weiter - die DFM
-// wird ueber "Ansicht als Text" gezeigt, in BEIDEN Modi (Nico-Entscheid
-// 2026-11-13: auch der Einfachklick). Vorher landete der Klick mit der
-// .dfm-Zeilennummer in der .pas (Nutzer-Fund 2026-11-11; der erste Fix
-// ueber Close-and-Reopen im Activate-Modus griff nicht, weil OpenFile(.dfm)
-// bei vorhandener Partner-.pas wieder das Form-Modul oeffnet).
-// Zentriert wird nur nach ERFOLG: CenterCurrentViewOnLine setzt den Caret
-// der obersten Ansicht - nach einem gescheiterten Sprung waere das eine
-// fremde Datei.
+// .dfm-Fund: die DFM kommt als TEXT, in BEIDEN Modi (Nico-Entscheid
+// 2026-11-13: auch der Einfachklick). Die IDE zeigt sie nur als Text, wenn
+// die Unit nicht offen ist - der Sprung schliesst deren Modul deshalb
+// vorher (mit Rueckfrage der IDE bei ungespeicherten Aenderungen) und beim
+// naechsten .pas-Fund umgekehrt den DFM-Text. Vorher landete der Klick mit
+// der .dfm-Zeilennummer in der .pas (Nutzer-Fund 2026-11-11).
 var
+  Path  : string;
   Line  : Integer;
   Shown : Boolean;
 begin
   if not Assigned(Finding) then Exit;
-  if Finding.FileName = '' then Exit;
+  // Kopie statt Finding.FileName als const-Argument: der Fund gehoert der
+  // Liste des Frames und ueberlebt den Sprung nicht sicher.
+  Path := Finding.FileName;
+  if Path = '' then Exit;
   Line := StrToIntDef(Finding.LineNumber, 0);
   if Line <= 0 then Exit;
 
-  FSuppressActivationUntil := GetTickCount + 250;   // ms
-
   NavTrace(Format('panel: Klick EIN modus=%d %s:%d',
-    [Ord(Mode), ExtractFileName(Finding.FileName), Line]));
-  Shown := TIDEEditor.ShowFileAtLine(Finding.FileName, Line);
-  if Shown then
-    TIDEEditor.CenterCurrentViewOnLine(Line);
-  NavTrace('panel: Klick AUS ok=' + BoolToStr(Shown, True));
+    [Ord(Mode), ExtractFileName(Path), Line]));
+  Shown := False;
+  Inc(FNavDepth);
+  try
+    Shown := TIDEEditor.ShowFileCenteredAtLine(Path, Line);
+  finally
+    Dec(FNavDepth);
+    FSuppressActivationUntil := GetTickCount + 250;   // ms
+    NavTrace('panel: Klick AUS ok=' + BoolToStr(Shown, True));
+  end;
 end;
 
 procedure TFindingsPropertiesDockableForm.InitialPopulateFromActiveEditor;

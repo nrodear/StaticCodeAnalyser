@@ -44,17 +44,14 @@ type
   // Result-Code von OpenFileAtLine - damit der Aufrufer in der Status-Bar
   // den richtigen Hinweis zeigen kann.
   TOpenFileMode = (
-    ofmRegular,         // .pas oder DFM-im-Code-Editor: alles normal
+    ofmRegular,         // .pas - oder der DFM-Sprung kam nicht zustande
     ofmDfmAsText        // .dfm-Befund: die DFM steht NACHWEISLICH als Text
                         // im Code-Editor (ShowDfmAsTextAtLine = True)
     // Ein dritter Wert ofmDfmFallbackPas ("Companion-.pas war modifiziert,
-    // deshalb nur die .pas geoeffnet") stand hier bis 2026-08-18. Er wurde
-    // NIE zugewiesen: OpenFileAtLine setzt ausschliesslich ofmRegular und
-    // ofmDfmAsText, weil SafeCloseModule bewusst CloseModule(True)
-    // (save-if-dirty) benutzt statt eines Modified-Checks. Der Wert hat
-    // damit einen Fall beschrieben, den es im Code nicht gibt - samt
-    // totem Vergleich, unerreichbarem case-Zweig beim Aufrufer und zwei
-    // gepflegten Uebersetzungen.
+    // deshalb nur die .pas geoeffnet") stand hier bis 2026-08-18 und wurde
+    // nie zugewiesen. Den Fall gibt es weiter nicht: ein geaendertes
+    // Form-Modul schliesst die IDE erst nach ihrer eigenen Rueckfrage
+    // (s. CloseModuleOf in der Implementierung).
   );
 
   TIDEEditor = class
@@ -110,36 +107,35 @@ type
     // No-op bei nicht-verfuegbaren Services. LineNumber <= 0: die Datei
     // wird geoeffnet, nur der Cursor nicht gesetzt.
     //
-    // .dfm: laeuft ueber ShowDfmAsTextAtLine; ofmDfmAsText nur, wenn die
-    // DFM danach wirklich als Text gezeigt wird. Geschlossen wird NICHTS
-    // mehr - das fruehere Close-and-Reopen (Companion per CloseModule(True)
-    // schliessen, dann OpenFile(.dfm)) oeffnete bei vorhandener Partner-.pas
-    // wieder das Form-Modul, der Caret landete mit der DFM-Zeilennummer in
-    // der .pas (Nutzer-Fund 2026-11-11/13), und speicherte nebenbei eine
-    // modifizierte .pas ungefragt.
+    // .dfm: wie ShowDfmAsTextAtLine; ofmDfmAsText nur, wenn die DFM danach
+    // wirklich als Text gezeigt wird. .pas: wie ShowFileAtLine, nur dass
+    // die Datei auch bei LineNumber <= 0 geoeffnet wird.
     class function OpenFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): TOpenFileMode; static;
 
-    // Soft-Variante von OpenFileAtLine - KEIN Close-and-Reopen-Pattern
-    // fuer die Companion-Datei. Sinnvoll wenn der User aus einer Findings-
-    // Liste auf einen Befund klickt und die Datei bereits offen ist - die
-    // Original-Methode schliesst auch normale Form-Module (da
-    // FindModule(.dfm) das Foo-Modul liefert), was zu "Datei wird immer
-    // wieder neu geoeffnet" fuehrt.
-    // Wenn die Datei noch nicht offen ist: ActionSvc.OpenFile.
+    // Sprung aus einer Fundliste: bringt die Datei nach vorn (oeffnet sie
+    // noetigenfalls) und setzt den Caret. True, wenn der Caret gesetzt ist.
     // .dfm-Befunde gehen an ShowDfmAsTextAtLine - nie ein Sprung mit der
-    // DFM-Zeilennummer in die .pas.
-    // Liefert True wenn der Caret erfolgreich gesetzt wurde.
+    // DFM-Zeilennummer in die .pas. Bei einem .pas-Befund wird vorher nur
+    // EINES geschlossen: die DFM derselben Unit, wenn sie von einem
+    // DFM-Sprung noch als freistehender Text offen ist.
     class function ShowFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): Boolean; static;
 
+    // ShowFileAtLine und danach - NUR bei Erfolg - CenterCurrentViewOnLine:
+    // nach einem gescheiterten Sprung laege oben eine fremde Datei, und das
+    // Zentrieren setzte deren Caret auf die Fundzeile.
+    class function ShowFileCenteredAtLine(const AbsPath: string;
+      LineNumber: Integer): Boolean; static;
+
     // Zeigt eine .dfm als TEXT im Code-Editor und setzt den Caret auf
-    // LineNumber (<= 0: nur zeigen). Ist das Formular in der Designer-
-    // Ansicht (oder nur die Unit offen), wird ueber die IDE-Aktion
-    // "Ansicht als Text" (IOTAEditActions.SwapSourceFormView, Alt+F12)
-    // umgeschaltet - es wird kein Modul geschlossen und nichts gespeichert.
-    // True NUR, wenn der danach gezeigte Editor wirklich die .dfm ist;
-    // sonst bleibt der Caret unangetastet. Zurueck in den Designer: Alt+F12.
+    // LineNumber (<= 0: nur zeigen). Die IDE laedt eine DFM nur dann als
+    // Text, wenn ihr Form-Modul NICHT offen ist (gemessen 2026-11-13) - ist
+    // die Unit offen, wird ihr Modul deshalb zuerst geschlossen, auf dem
+    // normalen Weg der IDE: bei ungespeicherten Aenderungen fragt sie selbst,
+    // "Abbrechen" laesst alles, wie es ist. True NUR, wenn danach die
+    // oberste Ansicht wirklich die .dfm zeigt; sonst bleibt der Caret
+    // unangetastet.
     class function ShowDfmAsTextAtLine(const AbsPath: string;
                                        LineNumber: Integer): Boolean; static;
 
@@ -188,7 +184,7 @@ implementation
 
 uses
   Winapi.Windows,        // OutputDebugString; VOR System.SysUtils (FindClose-Falle)
-  System.SysUtils, System.IOUtils, System.StrUtils,
+  System.SysUtils, System.IOUtils,
   uCrashDiag,            // EStackExhausted - nie verschlucken
   uEditorContextModel;   // ApplyEditorBlock, CharColOfIndex - der getestete Kern
 
@@ -230,6 +226,13 @@ begin
   Result := nil;
 end;
 
+function NavTraceOn: Boolean;
+// Die Schalterdatei liegt - vor teuren Spurtexten (Modulzustand) fragen.
+begin
+  Result := FileExists(IncludeTrailingPathDelimiter(TPath.GetTempPath)
+    + NAVTRACE_SWITCH);
+end;
+
 procedure NavTrace(const AText: string);
 // Reine Win32-Aufrufe statt TFile: ein Schreibfehler ist dann ein
 // Rueckgabewert, keine Exception - die Spur darf die Navigation nie stoeren.
@@ -239,8 +242,8 @@ var
   Handle  : THandle;
   Written : DWORD;
 begin
+  if not NavTraceOn then Exit;
   Dir := IncludeTrailingPathDelimiter(TPath.GetTempPath);
-  if not FileExists(Dir + NAVTRACE_SWITCH) then Exit;
   Line := UTF8Encode(FormatDateTime('hh:nn:ss.zzz', Now,
     TFormatSettings.Invariant) + ' ' + AText + sLineBreak);
   Handle := CreateFile(PChar(Dir + NAVTRACE_FILE), FILE_APPEND_DATA,
@@ -273,10 +276,9 @@ begin
 end;
 
 function FindOrOpenModule(const AbsPath: string): IOTAModule;
-// Das Modul zu einer Datei - schon offen, sonst ueber File->Open. Mit
-// Partner-.pas liefert das fuer eine .dfm das FORM-MODUL (Unit +
-// Designer), ohne Partner die .dfm als freistehenden Text. nil ohne
-// Dienst oder wenn die IDE die Datei nicht oeffnet.
+// Das Modul zu einer Datei - schon offen, sonst ueber File->Open. nil ohne
+// Dienst oder wenn die IDE die Datei nicht oeffnet. Nicht fuer .dfm: bei
+// offenem Form-Modul liefert FindModule(.dfm) das Modul der UNIT.
 var
   ModSvc : IOTAModuleServices;
   ActSvc : IOTAActionServices;
@@ -316,84 +318,235 @@ end;
 function ViewShowsFile(const AView: IOTAEditView; const AbsPath: string): Boolean;
 begin
   Result := Assigned(AView) and Assigned(AView.Buffer)
-    and SameText(AView.Buffer.FileName, AbsPath);
+    and SameFileName(ExpandFileName(AView.Buffer.FileName),
+                     ExpandFileName(AbsPath));
 end;
 
-function SwapViewOfUnit(const AView: IOTAEditView;
-  const AbsPath: string): Boolean;
-// Loest "Ansicht als Text" auf AView aus - nur wenn AView nachweislich die
-// Unit zur DFM AbsPath zeigt. False mit Diagnose sonst.
+function EditorTag(const AEditor: IOTAEditor): string;
+// Fuer die Spur: Art, Datei und '*' fuer Modified - 'src:Foo.pas*'.
 var
-  Actions : IOTAEditActions;
+  Src  : IOTASourceEditor;
+  Form : IOTAFormEditor;
+begin
+  if not Assigned(AEditor) then Exit('nil');
+  if Supports(AEditor, IOTASourceEditor, Src) then
+    Result := 'src:'
+  else if Supports(AEditor, IOTAFormEditor, Form) then
+    Result := 'form:'
+  else
+    Result := '?:';
+  Result := Result + ExtractFileName(AEditor.FileName);
+  if AEditor.Modified then
+    Result := Result + '*';
+end;
+
+function ModuleStateText(const AFileName: string): string;
+// Fuer die Spur: was die IDE zu AFileName gerade fuehrt - '-' ohne Modul,
+// sonst 'Modul[Editor Editor]'.
+var
+  ModSvc : IOTAModuleServices;
+  Module : IOTAModule;
+  Tags   : TArray<string>;
+  i      : Integer;
+begin
+  Result := '-';
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  Module := ModSvc.FindModule(AFileName);
+  if not Assigned(Module) then Exit;
+  SetLength(Tags, Module.ModuleFileCount);
+  for i := 0 to High(Tags) do
+    Tags[i] := EditorTag(Module.ModuleFileEditors[i]);
+  Result := Format('%s[%s]', [ExtractFileName(Module.FileName),
+    string.Join(' ', Tags)]);
+end;
+
+procedure TraceState(const AWhat, AFileName: string);
+// Spurzeile mit Modulzustand - der Zustand wird nur bei laufender Spur
+// gelesen (er fasst jeden Datei-Editor des Moduls an).
+begin
+  if NavTraceOn then
+    NavTrace(Format('%s %s top=%s', [AWhat, ModuleStateText(AFileName),
+      ExtractFileName(TopViewFileName)]));
+end;
+
+function IsModuleOpen(const AFileName: string): Boolean;
+var
+  ModSvc : IOTAModuleServices;
+begin
+  Result := Supports(BorlandIDEServices, IOTAModuleServices, ModSvc)
+    and Assigned(ModSvc.FindModule(AFileName));
+end;
+
+function HasDfmTextEditor(const ADfmPath: string): Boolean;
+// Die IDE fuehrt die DFM als TEXT - freistehend oder in der Textansicht
+// ihres Form-Moduls.
+var
+  ModSvc : IOTAModuleServices;
+begin
+  Result := Supports(BorlandIDEServices, IOTAModuleServices, ModSvc)
+    and Assigned(DfmTextEditorOf(ModSvc.FindModule(ADfmPath)));
+end;
+
+function IsStandaloneDfmText(const ADfmPath: string): Boolean;
+// Die DFM ist als FREISTEHENDER Text offen: ihr Modul fuehrt einen
+// DFM-Texteditor, aber keine Unit.
+var
+  ModSvc : IOTAModuleServices;
+  Module : IOTAModule;
 begin
   Result := False;
-  if not Assigned(AView) or not Assigned(AView.Buffer)
-     or not SameText(ChangeFileExt(AView.Buffer.FileName, ''),
-                     ChangeFileExt(AbsPath, '')) then
-  begin
-    DfmNavLog('oberste Ansicht ist nicht die Unit: ' + AbsPath);
-    Exit;
-  end;
-  if not Supports(AView, IOTAEditActions, Actions) then
-  begin
-    DfmNavLog('Ansicht ohne IOTAEditActions: ' + AbsPath);
-    Exit;
-  end;
-  Actions.SwapSourceFormView;
-  Result := True;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  Module := ModSvc.FindModule(ADfmPath);
+  Result := Assigned(Module) and Assigned(DfmTextEditorOf(Module))
+    and not Assigned(FirstSourceEditorOf(Module));
 end;
 
-function SwapToDfmText(const AModule: IOTAModule;
-  const AbsPath: string): IOTAEditView;
-// Liefert die Ansicht, die die DFM als TEXT zeigt ("Ansicht als Text",
-// Alt+F12); nil mit Diagnose, wenn ein Schritt scheitert.
-// SwapSourceFormView ist ein UMSCHALTER und wirkt auf die OBERSTE Ansicht.
-// Deshalb ZUSTANDSBASIERT: erst die Unit dieses Moduls nach vorn, dann
-// lesen, was oben liegt. Zeigt die Ansicht schon die .dfm, wird NICHT
-// geschaltet - ein zweiter Aufruf (Vorschau-Klick + Doppelklick im
-// Datei-Fund-Panel) schaltete sonst wieder zurueck (Nutzer-Fund
-// 2026-11-13: bei offener .pas kam die DFM nicht). Geschaltet wird nur,
-// wenn oben nachweislich die Unit DIESES Moduls liegt - sonst schaltete
-// ein fremdes Formular um.
+function CloseModuleOf(const AFileName: string): Boolean;
+// Schliesst das Modul, das die IDE zu AFileName fuehrt, auf ihrem NORMALEN
+// Schliessen-Weg. True, wenn danach keines mehr offen ist (oder nie war).
+//
+// ToolsAPI.pas woertlich - IOTAModule50.CloseModule(ForceClosed): "allows
+// an add-in to force a module closed regardless of whether or not it is
+// modified. If ForceClosed is False, then calling this method has the same
+// behavior as Close"; IOTAModule40.Close: "Attempt to close this module.
+// True was successful and all references to this module must be released.
+// False if this module was not closed." Von Speichern steht bei
+// ForceClosed=True nichts - es schliesst auch ein geaendertes Modul ohne
+// Rueckfrage (der fruehere SafeCloseModule rief genau das und nannte es
+// "save-if-dirty"). Deshalb False: bei ungespeicherten Aenderungen fragt
+// die IDE selbst, "Abbrechen" liefert False und der Sprung unterbleibt -
+// nichts wird ungefragt verworfen, nichts ungefragt geschrieben.
+// Gemessen 2026-11-13: "geaendert" ist eine Unit auch OHNE Zutun des
+// Nutzers, wenn die IDE beim Laden des Formulars fehlende Units in die
+// uses-Klausel eintraegt (ShowcaseDemo\uOrderForm: FireDAC.Phys.PG) - dann
+// fragt sie bei jedem Schliessen. Und: ofnFileClosing feuert auch auf
+// diesem Weg (nach der Rueckfrage), die Abraeum-Haken von Highlighter und
+// Watch-Mode laufen also wie beim Schliessen von Hand.
+//
+// Refcount: waehrend CloseModule darf niemand einen Editor, Puffer oder
+// eine Ansicht des Moduls halten, sonst meldet die IDE "Der Referenzzaehler
+// von Instanz von Klasse TEditSource zeigt die Anzahl 1". Diese Routine
+// haelt nur das Modul; alles, was Editoren anfasst (TraceState,
+// IsModuleOpen), steht in eigenen Routinen, deren Interface-Temporaere beim
+// Ruecksprung frei sind. Dasselbe gilt fuer jeden Aufrufer bis zum Klick.
 var
-  EditorSvc : IOTAEditorServices;
-  ModSvc    : IOTAModuleServices;
-  PasEditor : IOTASourceEditor;
-  DfmEditor : IOTASourceEditor;
-  TopView   : IOTAEditView;
+  ModSvc : IOTAModuleServices;
+  Module : IOTAModule;
+  Closed : Boolean;
 begin
-  Result := nil;
-  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
+    Exit(False);
+  Module := ModSvc.FindModule(AFileName);
+  if not Assigned(Module) then Exit(True);
+  TraceState('close: vor', AFileName);
+  Closed := Module.CloseModule(False);
+  Module := nil;
+  Result := Closed and not IsModuleOpen(AFileName);
+  NavTrace(Format('close: %s CloseModule=%s geschlossen=%s',
+    [ExtractFileName(AFileName), BoolToStr(Closed, True),
+     BoolToStr(Result, True)]));
+end;
+
+function OpenDfmAsText(const ADfmPath: string): Boolean;
+// Die IDE laedt eine .dfm nur dann als TEXT, wenn ihr Form-Modul nicht
+// offen ist (gemessen 2026-11-13; bei offenem Modul liefert OpenFile den
+// Designer). Also: Form-Modul schliessen, DFM oeffnen, Ergebnis am Zustand
+// pruefen. FindModule(.dfm) liefert das Form-Modul; die Unit wird
+// zusaetzlich unter ihrem eigenen Namen geschlossen, falls sie ohne
+// geladenes Formular offen ist.
+// "Ansicht als Text" (IOTAEditActions.SwapSourceFormView) ist KEIN Ersatz,
+// ebenfalls gemessen: es greift nur aus der Designer-Ansicht und erst
+// asynchron, und es zeigt die vom Designer NEU serialisierte DFM - mit
+// anderen Zeilen als die Datei, auf die sich die Fundzeile bezieht
+// (uOrderForm: ExplicitTop/ExplicitWidth kamen hinzu), und das Formular
+// gilt danach als geaendert.
+var
+  ActSvc : IOTAActionServices;
+  Opened : Boolean;
+begin
+  Result := False;
+  if not CloseModuleOf(ADfmPath) then Exit;
+  if not CloseModuleOf(ChangeFileExt(ADfmPath, '.pas')) then Exit;
+  Opened := Supports(BorlandIDEServices, IOTAActionServices, ActSvc)
+    and ActSvc.OpenFile(ADfmPath);
+  TraceState('dfm: OpenFile=' + BoolToStr(Opened, True), ADfmPath);
+  Result := HasDfmTextEditor(ADfmPath);
+  if not Result then
+    DfmNavLog('die IDE fuehrt die DFM nach OpenFile nicht als Text: ' + ADfmPath);
+end;
+
+function ShowDfmText(const ADfmPath: string; ALine: Integer): Boolean;
+// Bringt den DFM-Texteditor nach vorn und setzt den Caret. True NUR, wenn
+// danach die oberste Ansicht nachweislich die DFM zeigt - die Aufrufer
+// zentrieren ueber die oberste Ansicht (CenterCurrentViewOnLine).
+var
+  ModSvc    : IOTAModuleServices;
+  EditorSvc : IOTAEditorServices;
+  Editor    : IOTASourceEditor;
+  View      : IOTAEditView;
+begin
+  Result := False;
   if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  PasEditor := FirstSourceEditorOf(AModule);
-  if not Assigned(PasEditor) then
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  Editor := DfmTextEditorOf(ModSvc.FindModule(ADfmPath));
+  if not Assigned(Editor) then Exit;
+  Editor.Show;
+  View := EditorSvc.TopView;
+  if not ViewShowsFile(View, ADfmPath) then
   begin
-    DfmNavLog('Modul ohne Unit-Editor: ' + AbsPath);
+    DfmNavLog('oberste Ansicht zeigt nicht die DFM: ' + ADfmPath);
     Exit;
   end;
-  DfmNavLog('swap: vor Show top=' + TopViewFileName);
-  PasEditor.Show;
-  TopView := EditorSvc.TopView;
-  DfmNavLog('swap: nach Show top=' + TopViewFileName);
-  if ViewShowsFile(TopView, AbsPath) then
+  Result := (ALine <= 0) or PlaceCaretInView(View, ALine);
+end;
+
+function DfmTextAtLine(const ADfmPath: string; ALine: Integer): Boolean;
+// Zustandsbasiert: steht die DFM schon als Text bereit, wird sie nur
+// gezeigt - nichts wird geschlossen. Sonst Form-Modul schliessen und die
+// DFM als Text oeffnen (OpenDfmAsText).
+begin
+  Result := False;
+  TraceState(Format('dfm: Start Zeile %d', [ALine]), ADfmPath);
+  if HasDfmTextEditor(ADfmPath) or OpenDfmAsText(ADfmPath) then
+    Result := ShowDfmText(ADfmPath, ALine);
+  TraceState('dfm: Ende ok=' + BoolToStr(Result, True), ADfmPath);
+end;
+
+function UnitAtLine(const AbsPath: string; ALine: Integer): Boolean;
+// Oeffnet eine Nicht-DFM-Datei und setzt den Caret; ALine <= 0: nur
+// oeffnen (False). Steht die DFM einer .pas noch als freistehender Text
+// offen (von einem DFM-Sprung), wird die zuerst geschlossen - sonst traefe
+// das Form-Modul beim Oeffnen auf den offenen Text-Puffer seiner eigenen
+// DFM. Lehnt der Nutzer das Schliessen ab, unterbleibt der Sprung.
+var
+  DfmPath   : string;
+  SrcEditor : IOTASourceEditor;
+begin
+  Result := False;
+  if SameText(ExtractFileExt(AbsPath), '.pas') then
   begin
-    DfmNavLog('swap: oben liegt schon die DFM - kein Umschalten');
-    Exit(TopView);
+    DfmPath := ChangeFileExt(AbsPath, '.dfm');
+    if IsStandaloneDfmText(DfmPath) and not CloseModuleOf(DfmPath) then Exit;
   end;
-  if not SwapViewOfUnit(TopView, AbsPath) then Exit;
-  TopView := nil;
-  TopView := EditorSvc.TopView;
-  DfmNavLog('swap: nach SwapSourceFormView top=' + TopViewFileName);
-  if ViewShowsFile(TopView, AbsPath) then
-    Exit(TopView);
-  DfmEditor := DfmTextEditorOf(ModSvc.FindModule(AbsPath));
-  if Assigned(DfmEditor) and (DfmEditor.EditViewCount > 0) then
-  begin
-    DfmNavLog('swap: DFM-Texteditor ueber das Modul gefunden');
-    DfmEditor.Show;
-    Exit(DfmEditor.GetEditView(0));
-  end;
-  DfmNavLog('nach "Ansicht als Text" zeigt nichts die DFM: ' + AbsPath);
+  SrcEditor := FirstSourceEditorOf(FindOrOpenModule(AbsPath));
+  if not Assigned(SrcEditor) or (ALine <= 0) then Exit;
+  SrcEditor.Show;   // Tab nach vorne bringen
+  Result := PlaceCaret(SrcEditor, ALine);
+end;
+
+var
+  // Eine Navigation laeuft: die Rueckfrage der IDE beim Schliessen ist
+  // modal, ein Timer-Tick einer Fundliste kaeme sonst mitten hinein.
+  GNavBusy : Boolean = False;
+
+function EnterNav(const AbsPath: string): Boolean;
+begin
+  Result := not GNavBusy;
+  if Result then
+    GNavBusy := True
+  else
+    NavTrace('nav: uebersprungen, eine Navigation laeuft noch: '
+      + ExtractFileName(AbsPath));
 end;
 
 class function TIDEEditor.TryGetCurrentPasFile(out APath: string): TCurrentFileResult;
@@ -595,80 +748,52 @@ end;
 
 class function TIDEEditor.OpenFileAtLine(const AbsPath: string;
   LineNumber: Integer): TOpenFileMode;
-var
-  SrcEditor : IOTASourceEditor;
 begin
   Result := ofmRegular;
-
-  if IsDfmFile(AbsPath) then
-  begin
-    if ShowDfmAsTextAtLine(AbsPath, LineNumber) then
+  if not EnterNav(AbsPath) then Exit;
+  try
+    if not IsDfmFile(AbsPath) then
+      UnitAtLine(AbsPath, LineNumber)
+    else if DfmTextAtLine(AbsPath, LineNumber) then
       Result := ofmDfmAsText;
-    Exit;
+  finally
+    GNavBusy := False;
   end;
-
-  SrcEditor := FirstSourceEditorOf(FindOrOpenModule(AbsPath));
-  if not Assigned(SrcEditor) or (LineNumber <= 0) then Exit;
-
-  // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits
-  // geoeffnet war und nur ein anderer Tab aktiv ist).
-  SrcEditor.Show;
-  PlaceCaret(SrcEditor, LineNumber);
 end;
 
 class function TIDEEditor.ShowDfmAsTextAtLine(const AbsPath: string;
   LineNumber: Integer): Boolean;
-var
-  Module    : IOTAModule;
-  DfmEditor : IOTASourceEditor;
-  DfmView   : IOTAEditView;
 begin
   Result := False;
-  if not IsDfmFile(AbsPath) then Exit;
-
-  DfmNavLog(Format('dfm: Start %s:%d top=%s',
-    [ExtractFileName(AbsPath), LineNumber, TopViewFileName]));
-  Module := FindOrOpenModule(AbsPath);
-  if not Assigned(Module) then
-  begin
-    DfmNavLog('kein Modul: ' + AbsPath);
-    Exit;
+  if not IsDfmFile(AbsPath) or not EnterNav(AbsPath) then Exit;
+  try
+    Result := DfmTextAtLine(AbsPath, LineNumber);
+  finally
+    GNavBusy := False;
   end;
-
-  DfmEditor := DfmTextEditorOf(Module);
-  if Assigned(DfmEditor) then
-  begin
-    DfmNavLog('dfm: Modul fuehrt DFM-Texteditor - nur zeigen');
-    DfmEditor.Show;
-    Result := (LineNumber <= 0) or PlaceCaret(DfmEditor, LineNumber);
-  end
-  else
-  begin
-    DfmView := SwapToDfmText(Module, AbsPath);
-    if Assigned(DfmView) then
-      Result := (LineNumber <= 0) or PlaceCaretInView(DfmView, LineNumber);
-  end;
-  DfmNavLog(Format('dfm: Ende ok=%s top=%s',
-    [BoolToStr(Result, True), TopViewFileName]));
 end;
 
 class function TIDEEditor.ShowFileAtLine(const AbsPath: string;
   LineNumber: Integer): Boolean;
-// Soft-Navigate - schliesst nichts. Ein normales Form-Modul (Foo.pas +
-// Foo.dfm) ist EIN Modul: FindModule(Foo.dfm) liefert das Foo-Modul.
-var
-  SrcEditor : IOTASourceEditor;
 begin
   Result := False;
-  if (AbsPath = '') or (LineNumber <= 0) then Exit;
-  if IsDfmFile(AbsPath) then
-    Exit(ShowDfmAsTextAtLine(AbsPath, LineNumber));
+  if (AbsPath = '') or (LineNumber <= 0) or not EnterNav(AbsPath) then Exit;
+  try
+    if IsDfmFile(AbsPath) then
+      Result := DfmTextAtLine(AbsPath, LineNumber)
+    else
+      Result := UnitAtLine(AbsPath, LineNumber);
+  finally
+    GNavBusy := False;
+  end;
+end;
 
-  SrcEditor := FirstSourceEditorOf(FindOrOpenModule(AbsPath));
-  if not Assigned(SrcEditor) then Exit;
-
-  SrcEditor.Show;   // Tab nach vorne bringen
-  Result := PlaceCaret(SrcEditor, LineNumber);
+class function TIDEEditor.ShowFileCenteredAtLine(const AbsPath: string;
+  LineNumber: Integer): Boolean;
+begin
+  Result := ShowFileAtLine(AbsPath, LineNumber);
+  if Result then
+    CenterCurrentViewOnLine(LineNumber);
 end;
 
 class procedure TIDEEditor.CenterCurrentViewOnLine(LineNumber: Integer);
