@@ -106,7 +106,7 @@ begin
 end;
 
 // Der Name AName als Text UND FixArgs.FA_NAME (Fix-Datenfeld S6) - diese
-// Datei nutzt den bloßen Namen als Stellvertreter fuer die Meldung.
+// Datei nutzt den blossen Namen als Stellvertreter fuer die Meldung.
 function NameMsg(const AName: string): TRdxFindingText;
 begin
   Result.Text := AName;

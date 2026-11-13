@@ -67,7 +67,7 @@ const
 // ---- Helfer ----
 
 // Der Name AName, als Text UND als FixArgs.FA_NAME (diese Datei nutzt den
-// bloßen Namen als Stellvertreter fuer die Meldung - FirstWordOf gab ihn
+// blossen Namen als Stellvertreter fuer die Meldung - FirstWordOf gab ihn
 // frueher unveraendert zurueck; Fix-Datenfeld S6 braucht jetzt beides).
 function NameMsg(const AName: string): TRdxFindingText;
 begin

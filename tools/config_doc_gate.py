@@ -112,6 +112,7 @@ NUR_ZUSTAND = {
     ('FindingsPropertiesPanel', 'Left'), ('FindingsPropertiesPanel', 'Top'),
     ('FindingsPropertiesPanel', 'Width'),
     ('FindingsPropertiesPanel', 'Height'),
+    ('FindingsPropertiesPanel', 'GridColWidths'),
     ('Grid', 'W'),
 }
 
