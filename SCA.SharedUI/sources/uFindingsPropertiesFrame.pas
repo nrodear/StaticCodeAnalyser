@@ -20,11 +20,13 @@
 // Layout (siehe Konzept_FindingsPropertiesPanel.md, Abschnitt "Layout"):
 //   +-- TPanel (Header, alTop) ---------------------+
 //   | TLabel  "<filename> (N Findings)"             |
-//   | TComboBox  All / Errors / Errors+Warnings     |
-//   | TEdit      Fuzzy-Filter ueber den Zeileninhalt |
+//   | [x][r][o] [TComboBox Schweregrad][TEdit Filter] |
 //   +-----------------------------------------------+
 //   | TStringGrid (alClient, virtual via GetCellText)|
 //   +-----------------------------------------------+
+// Combo und Filterfeld teilen sich den Platz rechts der Buttons je zur
+// Haelfte - immer gleich breit, gleich hoch, gleiche Oberkante
+// (LayoutToolbar).
 
 interface
 
@@ -58,10 +60,10 @@ type
   strict private
     FHeaderPanel   : TPanel;
     FHeaderLabel   : TLabel;
-    // Sub-Panel direkt unter dem Header-Label - traegt die drei Toolbar-
-    // Controls in fester Reihenfolge: [Clear][Reload] FSeverityCombo.
-    // Reihenfolge ergibt sich aus der Create-Reihenfolge in BuildControls
-    // ueber Align=alLeft (Clear+Reload) bzw. alClient (Combo).
+    // Sub-Panel direkt unter dem Header-Label - traegt die Toolbar-Controls
+    // in fester Reihenfolge: [Clear][Reload][ClearMarks] FSeverityCombo
+    // FSearchEdit. Die Buttons stehen ueber Align=alLeft (Create-
+    // Reihenfolge), Combo und Filterfeld positioniert LayoutToolbar.
     FToolbarPanel  : TPanel;
     FBtnClear      : TButton;
     FBtnReload     : TButton;
@@ -70,7 +72,12 @@ type
     // Fuzzy-Filter ueber den Inhalt aller sichtbaren Spalten - dieselbe
     // Bedienung wie das Suchfeld des Haupt-Grids (tippen = filtern,
     // entprellt), Treffer-Regel in uFuzzyComboSearch.FuzzyMatchRow.
+    // Steht in der Toolbar-Zeile rechts neben der Combo, immer so gross
+    // wie sie (Nutzer-Auftrag 2026-11-13).
     FSearchEdit    : TEdit;
+    // LayoutToolbar setzt Bounds, deren WM_SIZE wieder bei ToolbarResize
+    // ankommt - die Sperre haelt den Lauf einstufig.
+    FInToolbarLayout : Boolean;
     FSearchTimer   : TTimer;
     FGrid          : TStringGrid;
     // True, sobald der Nutzer eine Spalte gezogen hat ODER gespeicherte
@@ -135,6 +142,8 @@ type
     FNavForce        : Boolean;
     procedure BuildControls;
     procedure BuildGridConfig;
+    // Schweregrad-Combo und Filterfeld nebeneinander, gleich gross.
+    procedure LayoutToolbar;
     procedure EnsureComboItems;
     procedure ApplySeverityFilter;
     procedure UpdateHeader;
@@ -148,6 +157,12 @@ type
     // Items defensiv repopulieren, falls VCL sie waehrend der Re-Parent-
     // Sequenz verworfen hat.
     procedure CreateWnd; override;
+    // DPI-Wechsel: VCL skaliert erst die Bounds, dann CurrentPPI - nach dem
+    // ganzen Durchlauf die Toolbar-Zeile mit den Endwerten neu legen.
+    procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
+    // OnResize der Toolbar (neue Breite) UND der Combo (Windows gibt ihr
+    // die Hoehe erst mit dem Fenster und nach jedem Schriftwechsel neu).
+    procedure ToolbarResize(Sender: TObject);
     procedure SeverityComboChange(Sender: TObject);
     procedure SearchEditChange(Sender: TObject);
     procedure SearchTimerTick(Sender: TObject);
@@ -272,6 +287,21 @@ type
       read FOnClearEditorMarksRequested write FOnClearEditorMarksRequested;
   end;
 
+  // Ergebnis von SplitToolbarRest: zwei gleich breite Felder nebeneinander.
+  TToolbarSplit = record
+    FieldWidth : Integer;   // Breite JEDES der beiden Felder, nie negativ
+    FirstLeft  : Integer;   // linke Kante des ersten Felds
+    SecondLeft : Integer;   // linke Kante des zweiten Felds
+  end;
+
+// Teilt die Breite einer Toolbar-Zeile rechts ihrer Buttons in ZWEI gleich
+// breite Felder: [Buttons] Abstand [Feld 1] Abstand [Feld 2]. Beide bekommen
+// exakt dieselbe Breite; ein ungerades Restpixel bleibt rechts frei, und
+// reicht der Platz nicht, ist die Breite 0 statt negativ. Reine Rechnung -
+// der Frame legt damit Schweregrad-Combo und Filterfeld (LayoutToolbar).
+function SplitToolbarRest(AClientWidth, AButtonsWidth,
+  AGap: Integer): TToolbarSplit;
+
 implementation
 
 {$R *.dfm}
@@ -292,6 +322,8 @@ type
   // brauchen den Hook fuer die Stretching-Spaltenbreite (Message-Column).
   // Standard-VCL-Pattern - genauso wie TControlAccess in uIDEAnalyserForm.
   TStringGridAccess = class(TStringGrid);
+  // Derselbe Crack fuer die Schweregrad-Combo (LayoutToolbar).
+  TComboBoxAccess = class(TComboBox);
 
   // Meldet, wenn der NUTZER eine Spalte mit der Maus gezogen hat.
   // ColWidthsChanged feuert auch bei jeder programmatischen Breite (Aufbau,
@@ -347,6 +379,23 @@ const
   W_RULE_MIN = 120;
   // Entprellung des Suchfelds - Wert wie im Haupt-Grid (SearchChange).
   SEARCH_DEBOUNCE_MS = 200;
+  // Toolbar-Zeile, 96-DPI-Pixel (LayoutToolbar skaliert): Abstand vor der
+  // Schweregrad-Combo und zwischen Combo und Filterfeld; Oberkante der
+  // beiden Felder - der 1-px-Rand, den die Combo schon als alClient hatte.
+  TOOLBAR_GAP       = 4;
+  TOOLBAR_FIELD_TOP = 1;
+  // Hoehe der Combo, bis Windows ihr mit dem Fenster die echte gibt.
+  COMBO_START_H     = 24;
+
+function SplitToolbarRest(AClientWidth, AButtonsWidth,
+  AGap: Integer): TToolbarSplit;
+begin
+  Result.FieldWidth := (AClientWidth - AButtonsWidth - 2 * AGap) div 2;
+  if Result.FieldWidth < 0 then
+    Result.FieldWidth := 0;
+  Result.FirstLeft  := AButtonsWidth + AGap;
+  Result.SecondLeft := Result.FirstLeft + Result.FieldWidth + AGap;
+end;
 
 { TFindingsGrid }
 
@@ -405,16 +454,16 @@ procedure TFindingsPropertiesFrame.BuildControls;
 const
   BTN_SIZE = 26;   // quadratisch ("4-eckig") - 26 px DIP, skaliert
                    // ueber Form.Scaled wenn der User DPI != 96 fuehrt
-  SEARCH_H = 22;
 var
   Grid : TFindingsGrid;
 begin
   // ---- Header-Panel ----
-  // Header-Hoehe: 18 (Label) + 28 (Toolbar) + 2+22 (Suchfeld) + 8 (Padding).
+  // Header-Hoehe: 18 (Label) + 28 (Toolbar) + 6 (Padding) = ~52. Das
+  // Suchfeld hat keine eigene Zeile mehr - es steht in der Toolbar.
   FHeaderPanel := TPanel.Create(Self);
   FHeaderPanel.Parent    := Self;
   FHeaderPanel.Align     := alTop;
-  FHeaderPanel.Height    := 52 + SEARCH_H + 4;
+  FHeaderPanel.Height    := 52;
   FHeaderPanel.BevelOuter := bvNone;
   FHeaderPanel.Padding.SetBounds(6, 4, 6, 4);
   TIDEToolbar.ApplySegoeUI(FHeaderPanel);
@@ -427,9 +476,10 @@ begin
   TIDEToolbar.ApplySegoeUI(FHeaderLabel);
   FHeaderLabel.Font.Style := [fsBold];   // bold NACH ApplySegoeUI
 
-  // ---- Toolbar-Sub-Panel: [Clear][Reload] FSeverityCombo ----
-  // Liegt als alTop UNTER dem Label im Header. Reihenfolge der Children
-  // ergibt sich aus der Create-Sequenz + Align (alLeft+alLeft+alClient).
+  // ---- Toolbar-Sub-Panel: [Clear][Reload][ClearMarks] Combo Filter ----
+  // Liegt als alTop UNTER dem Label im Header. Die Buttons ordnen sich
+  // ueber die Create-Sequenz + alLeft; Combo und Filterfeld legt
+  // LayoutToolbar in den Rest. Tab-Reihenfolge = Create-Reihenfolge.
   FToolbarPanel := TPanel.Create(Self);
   FToolbarPanel.Parent     := FHeaderPanel;
   FToolbarPanel.Align      := alTop;
@@ -491,34 +541,40 @@ begin
   TIDEToolbar.ApplySegoeUI(FBtnClearMarks);
   FBtnClearMarks.Font.Size := 11;
 
-  // Severity-Combo - rechter Rest (alClient nach den drei alLeft).
+  // Severity-Combo - linke Haelfte des Rests rechts der drei Buttons.
+  // Kein Align: Position und Breite setzt LayoutToolbar.
   FSeverityCombo := TComboBox.Create(Self);
   FSeverityCombo.Parent    := FToolbarPanel;
-  FSeverityCombo.Align     := alClient;
-  FSeverityCombo.AlignWithMargins := True;
-  FSeverityCombo.Margins.SetBounds(4, 1, 0, 1);
-  FSeverityCombo.Height    := 24;   // expliziter Wert, sonst kann VCL beim
-                                    // Re-Parent (Dock-Recreate) auf 0 gehen
-                                    // und die Combo wird optisch verschluckt
+  FSeverityCombo.Height    := COMBO_START_H;   // expliziter Wert, sonst kann
+                                    // VCL beim Re-Parent (Dock-Recreate) auf
+                                    // 0 gehen und die Combo wird optisch
+                                    // verschluckt
   FSeverityCombo.Style     := csDropDownList;
   TIDEToolbar.ApplySegoeUI(FSeverityCombo);
   EnsureComboItems;
   FSeverityCombo.OnChange  := SeverityComboChange;
 
   // ---- Suchfeld: Fuzzy-Filter ueber den Zeileninhalt ----
-  // Eigene Zeile unter der Toolbar (alTop, Top hinter der Toolbar) - im
-  // schmal angedockten Panel waere neben Buttons + Combo kein Platz.
-  // TextHint ist der des Haupt-Grid-Suchfelds (gleiche msgid).
+  // Rechte Haelfte des Rests, in DERSELBEN Zeile wie die Combo und immer
+  // so gross wie sie (Nutzer-Auftrag 2026-11-13; vorher eine eigene Zeile
+  // unter der Toolbar). AutoSize aus: die Hoehe gibt die Combo vor, nicht
+  // die Schrift des Felds. TextHint ist der des Haupt-Grid-Suchfelds
+  // (gleiche msgid).
   FSearchEdit := TEdit.Create(Self);
-  FSearchEdit.Parent   := FHeaderPanel;
-  FSearchEdit.Top      := 100;          // sortiert es unter die Toolbar
-  FSearchEdit.Align    := alTop;
-  FSearchEdit.AlignWithMargins := True;
-  FSearchEdit.Margins.SetBounds(0, 2, 0, 0);
-  FSearchEdit.Height   := SEARCH_H;
+  FSearchEdit.Parent   := FToolbarPanel;
+  FSearchEdit.AutoSize := False;
   FSearchEdit.TextHint := _('Filter file / method / finding...');
   FSearchEdit.OnChange := SearchEditChange;
   TIDEToolbar.ApplySegoeUI(FSearchEdit);
+
+  // Neu legen bei neuer Toolbar-Breite UND wenn die Combo ihre Hoehe
+  // aendert: eine csDropDownList-Combo bekommt ihre Hoehe von Windows
+  // (Schrift), erst mit dem Fenster und nach jedem Schrift-/DPI-Wechsel.
+  // OnResize ist auf TComboBox protected - derselbe Class-Crack wie beim
+  // Grid (TStringGridAccess).
+  FToolbarPanel.OnResize := ToolbarResize;
+  TComboBoxAccess(FSeverityCombo).OnResize := ToolbarResize;
+  LayoutToolbar;
 
   // ---- Grid ----
   Grid := TFindingsGrid.Create(Self);
@@ -794,6 +850,61 @@ begin
   if Assigned(FHeaderPanel) and Assigned(FSeverityCombo) and
      Assigned(FSearchEdit) and Assigned(FGrid) then
     RefreshFromTheme;
+  // Nach dem Re-Parent stehen die Bounds der Toolbar-Felder evtl. auf den
+  // Werten vor dem Recreate - neu legen (prueft seine Felder selbst).
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.ChangeScale(M, D: Integer;
+  isDpiChange: Boolean);
+begin
+  inherited;
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.ToolbarResize(Sender: TObject);
+begin
+  LayoutToolbar;
+end;
+
+procedure TFindingsPropertiesFrame.LayoutToolbar;
+// Schweregrad-Combo und Filterfeld teilen sich den Platz rechts der drei
+// Buttons je zur Haelfte: beide bekommen DENSELBEN berechneten Wert als
+// Breite (kein "Rest per alClient" - das waere ein Rundungspixel mehr).
+// Hoehe und Oberkante gibt die Combo vor: eine csDropDownList-Combo laesst
+// sich nicht strecken, Windows legt ihre Hoehe aus der Schrift fest. Das
+// Filterfeld (AutoSize aus) uebernimmt deshalb die ZURUECKGELESENEN Werte
+// der Combo, nicht die gewuenschten. Gerechnet wird mit den wirklichen
+// Button-Breiten, nicht mit BTN_SIZE - die Buttons sind DPI-skaliert.
+// Laeuft auch beim DFM-Laden (Felder fehlen noch) und kann im Abbau noch
+// einmal ankommen (Felder zeigen dann auf freigegebene Controls).
+var
+  PPI   : Integer;
+  Split : TToolbarSplit;
+  H     : Integer;
+begin
+  if FInToolbarLayout or (csDestroying in ComponentState) then Exit;
+  // Das Filterfeld entsteht in BuildControls als LETZTES Toolbar-Control -
+  // steht es, stehen Panel, Buttons und Combo auch.
+  if not Assigned(FSearchEdit) then Exit;
+  FInToolbarLayout := True;
+  try
+    PPI := FToolbarPanel.CurrentPPI;
+    if PPI <= 0 then PPI := 96;
+    Split := SplitToolbarRest(FToolbarPanel.ClientWidth,
+      FBtnClear.Width + FBtnReload.Width + FBtnClearMarks.Width,
+      MulDiv(TOOLBAR_GAP, PPI, 96));
+    // Hoehe 0 kennt der Dock-Recreate (s. BuildControls) - dann die
+    // Start-Hoehe, Windows korrigiert sie mit dem Fenster.
+    H := FSeverityCombo.Height;
+    if H <= 0 then H := MulDiv(COMBO_START_H, PPI, 96);
+    FSeverityCombo.SetBounds(Split.FirstLeft,
+      MulDiv(TOOLBAR_FIELD_TOP, PPI, 96), Split.FieldWidth, H);
+    FSearchEdit.SetBounds(Split.SecondLeft, FSeverityCombo.Top,
+      FSeverityCombo.Width, FSeverityCombo.Height);
+  finally
+    FInToolbarLayout := False;
+  end;
 end;
 
 procedure TFindingsPropertiesFrame.EnsureComboItems;
