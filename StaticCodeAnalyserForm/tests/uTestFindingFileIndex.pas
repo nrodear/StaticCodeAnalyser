@@ -66,6 +66,7 @@ type
     [Test] procedure Delivery_FreesOldOnlyAfterDisplayDetached;
     [Test] procedure Delivery_AddFailure_SourceKeepsEveryFinding;
     [Test] procedure Delivery_Discard_EmptiesBothAndFreesOnce;
+    [Test] procedure Delivery_AppendFailure_KeepsOwnedAndSource;
   end;
 
 implementation
@@ -663,6 +664,45 @@ begin
     Source.Free;
   end;
   for i := 0 to 2 do
+    Assert.AreEqual<Integer>(1, GDestroyCount[i],
+      Format('Fund %d genau einmal frei (0 = Leck)', [i]));
+end;
+
+procedure TTestFindingFileIndex.Delivery_AppendFailure_KeepsOwnedAndSource;
+// Watch-Lauf (OnWatchFindings) haengt an. Altes Muster dort:
+// Findings.OwnsObjects := False VOR der Schleife - ein Wurf liess den Rest
+// bei niemandem. Jetzt: Bestand unveraendert, die Quelle besitzt weiter
+// alles, jeder Fund am Ende genau einmal frei.
+var
+  Owned, Source : TObjectList<TLeakFinding>;
+  i             : Integer;
+begin
+  ResetTracking(5);                         // 0..1 Bestand, 2..4 Watch-Lauf
+  Owned  := TObjectList<TLeakFinding>.Create(True);
+  Source := TObjectList<TLeakFinding>.Create(True);
+  try
+    AddTracked(Owned, 0, 1);
+    AddTracked(Source, 2, 4);
+    FAddsSeen  := 0;
+    FFailAtAdd := 2;                        // zweites ANGEHAENGTES Add wirft
+    Owned.OnNotify := FailAtNthAdd;
+    Assert.WillRaise(
+      procedure
+      begin
+        TFindingDelivery.Append(Owned, Source);
+      end, EOutOfMemory, 'das Anhaengen wirft weiter');
+    Owned.OnNotify := nil;
+    Assert.AreEqual<Integer>(2, Owned.Count, 'Bestand unveraendert');
+    Assert.IsTrue(Source.OwnsObjects, 'die Quelle besitzt weiter alles');
+    for i := 0 to 4 do
+      Assert.AreEqual<Integer>(0, GDestroyCount[i],
+        Format('Fund %d nicht vorzeitig frei', [i]));
+  finally
+    Owned.OnNotify := nil;
+    Owned.Free;
+    Source.Free;
+  end;
+  for i := 0 to 4 do
     Assert.AreEqual<Integer>(1, GDestroyCount[i],
       Format('Fund %d genau einmal frei (0 = Leck)', [i]));
 end;

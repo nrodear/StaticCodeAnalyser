@@ -108,6 +108,12 @@ type
     // ASource = nil: nur leeren.
     class procedure Deliver(ADisplayed: TList<TLeakFinding>;
       AOwned, ASource: TObjectList<TLeakFinding>); static;
+    // Wie Deliver, aber ANHAENGEN (Watch-Lauf je Datei): Kapazitaet fuer
+    // Bestand + ASource reservieren, umhaengen, dann ASource.OwnsObjects :=
+    // False. Wirft es, steht AOwned wie vorher da (der angehaengte Teil wird
+    // ohne Freigabe zurueckgenommen) und ASource besitzt weiter alles. Die
+    // Anzeige-Liste koppelt der Aufrufer VOR dem Loeschen alter Funde ab.
+    class procedure Append(AOwned, ASource: TObjectList<TLeakFinding>); static;
     // Rueckfall nach einem Fehler im Nachlauf: Anzeige zuerst, dann der
     // Besitz - beide Listen leer, alle Funde frei. nil-sicher.
     class procedure Discard(ADisplayed: TList<TLeakFinding>;
@@ -320,6 +326,33 @@ begin
     raise;
   end;
   // 5. Erst jetzt gibt die Quelle den Besitz ab.
+  ASource.OwnsObjects := False;
+end;
+
+class procedure TFindingDelivery.Append(AOwned,
+  ASource: TObjectList<TLeakFinding>);
+var
+  i, Base : Integer;
+  Owns    : Boolean;
+begin
+  if not Assigned(ASource) or (ASource.Count = 0) then Exit;
+  Base := AOwned.Count;
+  if AOwned.Capacity < Base + ASource.Count then
+    AOwned.Capacity := Base + ASource.Count;   // wirft: nichts umgehaengt
+  try
+    for i := 0 to ASource.Count - 1 do
+      AOwned.Add(ASource[i]);
+  except
+    Owns := AOwned.OwnsObjects;
+    AOwned.OwnsObjects := False;
+    try
+      while AOwned.Count > Base do
+        AOwned.Delete(AOwned.Count - 1);
+    finally
+      AOwned.OwnsObjects := Owns;
+    end;
+    raise;
+  end;
   ASource.OwnsObjects := False;
 end;
 
