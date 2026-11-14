@@ -36,7 +36,11 @@ type
     // Panel-Push-Methoden (idempotent, AV-sicher).
     procedure Findings(const T: string);
     procedure Progress(const T: string);
+    // Mode leert den Tooltip der Leiste; ModeWithHint zeigt T zusaetzlich
+    // als Tooltip - nur fuer Meldungen, die das schmale Panel abschneidet
+    // und deren Wortlaut zaehlt (Scan-Abbruch mit Ausweg).
     procedure Mode(const T: string);
+    procedure ModeWithHint(const T: string);
 
     // Direkt-Zugriff auf die TStatusBar - fuer ApplyThemeRecursive und
     // andere Faelle die das Widget brauchen. Setter weglassen, ist
@@ -82,8 +86,9 @@ begin
   // Letztes Panel: TStatusBar streckt es automatisch auf die uebrige
   // Breite wenn Width gross genug ist. 5000 reicht auch fuer 4K.
   with FBar.Panels.Add do begin Width := S(W_MODE);     Text := ''; end;
-  // Tooltip mit dem vollen Modus-Text (s. Mode) - eigener Schalter, die
-  // Leiste erbt ShowHint sonst vom Frame.
+  // Tooltip fuer lange Abbruch-Meldungen (s. ModeWithHint) - eigener
+  // Schalter, die Leiste erbt ShowHint sonst vom Frame. Ohne Hint-Text
+  // zeigt die VCL keinen Tooltip.
   FBar.ShowHint := True;
 end;
 
@@ -106,11 +111,22 @@ end;
 procedure TAnalyserStatusBar.Mode(const T: string);
 begin
   SetPanelText(2, T);
-  // Der volle Text auch als Tooltip (Review-Runde 2026-11-14, m7): im
-  // gedockten Fenster ist das Modus-Panel schmal, die Meldung eines
-  // Speicher-Abbruchs (Dateizahl und Ausweg, rund 170 Zeichen) war
-  // abgeschnitten. Mode ist der einzige Schreiber des Panels - der Tooltip
-  // zeigt also immer den aktuellen Text.
+  // Jeder gewoehnliche Text loescht den Tooltip einer frueheren Abbruch-
+  // Meldung (Review-Runde 2026-11-14): der Tooltip gilt der ganzen Leiste
+  // und zeigte sonst jeden Modus-Text auch ueber Fund- und Fortschritts-
+  // Panel.
+  if Assigned(FBar) then
+    FBar.Hint := '';
+end;
+
+procedure TAnalyserStatusBar.ModeWithHint(const T: string);
+begin
+  SetPanelText(2, T);
+  // Der volle Text auch als Tooltip (m7): im gedockten Fenster ist das
+  // Modus-Panel schmal, die Meldung eines Speicher-Abbruchs (Dateizahl und
+  // Ausweg, rund 170 Zeichen) war abgeschnitten. Mode und ModeWithHint
+  // sind die einzigen Schreiber des Panels - der Tooltip steht also genau
+  // so lange, wie die Meldung dasteht.
   if Assigned(FBar) then
     FBar.Hint := T;
 end;

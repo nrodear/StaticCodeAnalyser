@@ -130,6 +130,9 @@ type
     // Editor-Marker des Docks; das Argument ist der kurze Grund fuer die
     // Platzhalterzeile (m7). Optional wie FOnRunDone.
     FOnDiscardResults : TAnalyseStatusProc;
+    // Die Abbruch-Meldung selbst: Statuszeile UND Tooltip (Frame.
+    // StatusAbort). Optional - ohne ihn geht sie an FOnStatusMode.
+    FOnAbortStatus    : TAnalyseStatusProc;
     // Aktiver Worker-Slot; nil = idle. Nur UI-Thread.
     FWorker       : TBulkScanWorker;
     // Meldung eines fatalen Abbruchs (E2): Dateizahl und Ausweg.
@@ -154,7 +157,8 @@ type
                        AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
                        AOnFindings: TAnalyseFindingsProc;
                        AOnRunDone: TAnalyseDoneProc;
-                       AOnDiscardResults: TAnalyseStatusProc = nil); reintroduce;
+                       AOnDiscardResults: TAnalyseStatusProc = nil;
+                       AOnAbortStatus: TAnalyseStatusProc = nil); reintroduce;
     destructor Destroy; override;
 
     procedure RunAll(const APath: string);
@@ -385,6 +389,13 @@ begin
               FTooMany := True;
               Abort;
             end;
+            // (0, N) meldet die Engine VOR den Pre-Indizes (M3): nur die
+            // Dateizahl merken (oben), die Anzeige bleibt animiert. Bis
+            // 2026-11-14 (Review-Runde, NEW-2) stand dann waehrend des
+            // ganzen Pre-Index ein starres 'Datei 0 / N (0%)' da - der Scan
+            // sah haengengeblieben aus. Der erste echte Tick (1, N) schaltet.
+            if (Total >= 0) and (Current = 0) then
+              Exit;
             // Phasen-Wechsel Scan->Datei erzwingt einen Tick, damit der
             // Marquee->Normal-Switch nicht am Throttle haengt.
             force := (Total >= 0) and not FFilePhase;
@@ -478,7 +489,7 @@ constructor TAnalyseRunner.Create(AOwner: TComponent;
   AIgnoreList: TIgnoreList; AProgressBar: TProgressBar;
   AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
   AOnFindings: TAnalyseFindingsProc; AOnRunDone: TAnalyseDoneProc;
-  AOnDiscardResults: TAnalyseStatusProc);
+  AOnDiscardResults: TAnalyseStatusProc; AOnAbortStatus: TAnalyseStatusProc);
 begin
   inherited Create(AOwner);
   FProgress         := AProgress;
@@ -500,6 +511,7 @@ begin
   FOnFindings       := AOnFindings;
   FOnRunDone        := AOnRunDone;
   FOnDiscardResults := AOnDiscardResults;   // optional (nil-geprueft)
+  FOnAbortStatus    := AOnAbortStatus;      // optional (nil-geprueft)
 end;
 
 destructor TAnalyseRunner.Destroy;
@@ -707,6 +719,7 @@ procedure TAnalyseRunner.ReportFatalAbort(AWorker: TBulkScanWorker);
 var
   Files  : Integer;
   Memory : Boolean;
+  Msg    : string;
 begin
   // Speicher: im Worker gemerkt, oder die Uebergabe scheiterte an
   // EOutOfMemory (HandleScanDone, FFatal dort False).
@@ -731,21 +744,27 @@ begin
     if Files <= 0 then
       Files := AWorker.FFilesFound;
     if Files > 1 then
-      FOnStatusMode(Format(_('Not enough memory: the scan of %d files was ' +
+      Msg := Format(_('Not enough memory: the scan of %d files was ' +
         'aborted and its partial results discarded. Narrow the folder or ' +
         'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
-        [Files]))
+        [Files])
     else
       // Ohne Zahl (M3): eine Einzeldatei - deren Lauf meldet keinen
       // Fortschritt - oder ein Abbruch vor dem ersten Tick. Die Fassung
       // mit Zahl sagte dort '0 Dateien'.
-      FOnStatusMode(_('Not enough memory: the scan was aborted and its ' +
+      Msg := _('Not enough memory: the scan was aborted and its ' +
         'partial results discarded. Narrow the folder or use the 64-bit ' +
-        'command line (StaticCodeAnalyser.d12.exe --path ...).'));
+        'command line (StaticCodeAnalyser.d12.exe --path ...).');
   end
   else
     // Erschoepfter Stapel: verworfen wie oben, Meldung wie bisher.
-    FOnStatusMode(_('Analysis error: ') + AWorker.FErrorMsg);
+    Msg := _('Analysis error: ') + AWorker.FErrorMsg;
+  // Statuszeile und - ueber FOnAbortStatus - ihr Tooltip, solange die
+  // Meldung dasteht (das schmale Panel schneidet sie ab, m7).
+  if Assigned(FOnAbortStatus) then
+    FOnAbortStatus(Msg)
+  else
+    FOnStatusMode(Msg);
 end;
 
 procedure TAnalyseRunner.RunAll(const APath: string);

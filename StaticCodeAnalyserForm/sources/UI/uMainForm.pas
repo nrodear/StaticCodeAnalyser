@@ -846,6 +846,12 @@ begin
   else
     FScanFilesTotal := Total;
 
+  // (0, N) meldet die Engine VOR den Pre-Indizes (M3): nur die Zahl merken,
+  // die Anzeige bleibt, wie sie war (Review-Runde 2026-11-14, NEW-2) - sonst
+  // stand waehrend des ganzen Pre-Index ein starres 'Datei 0 / N (0%)' da.
+  if (Total >= 0) and (Current = 0) then
+    Exit;
+
   tick     := GetTickCount;
   doUpdate := (tick - FLastProgressTick > 100);
 
@@ -1054,7 +1060,26 @@ procedure TForm2.AppShowHint(var HintStr: string; var CanShow: Boolean;
 // die Maus die Zelle verlaesst (sonst bleibt der alte Tooltip kleben).
 var
   ACol, ARow : Integer;
+  Left2      : Integer;
 begin
+  // Tooltip der Statusleiste (m7; Review-Runde 2026-11-14): nur ueber
+  // Panel 2 und nur, solange es noch die Abbruch-Meldung zeigt, deren Text
+  // ShowMemoryAbort als Hint hinterlegt hat - ein spaeterer Text in Panel 2
+  // macht ihn stumm, statt ihm zu widersprechen. CursorRect je Bereich,
+  // damit die VCL beim Wechsel zwischen den Panels neu fragt.
+  if HintInfo.HintControl = StatusBar1 then
+  begin
+    Left2 := StatusBar1.Panels[0].Width + StatusBar1.Panels[1].Width;
+    if HintInfo.CursorPos.X >= Left2 then
+      HintInfo.CursorRect := Rect(Left2, 0, StatusBar1.ClientWidth,
+        StatusBar1.ClientHeight)
+    else
+      HintInfo.CursorRect := Rect(0, 0, Left2, StatusBar1.ClientHeight);
+    HintInfo.HintMaxWidth := 600;
+    CanShow := (HintInfo.CursorPos.X >= Left2) and (StatusBar1.Hint <> '')
+      and (StatusBar1.Panels[2].Text = StatusBar1.Hint);
+    Exit;
+  end;
   if HintInfo.HintControl <> ResultGrid then Exit;
 
   ResultGrid.MouseToCell(HintInfo.CursorPos.X, HintInfo.CursorPos.Y,

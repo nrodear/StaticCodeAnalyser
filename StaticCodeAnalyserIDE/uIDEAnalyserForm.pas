@@ -415,6 +415,9 @@ type
     procedure StatusFindings(const T: string);
     procedure StatusProgress(const T: string);
     procedure StatusMode(const T: string);
+    // Wie StatusMode, der Text zusaetzlich als Tooltip der Leiste - fuer die
+    // Abbruch-Meldung des Runners (m7), bis der naechste Text sie ersetzt.
+    procedure StatusAbort(const T: string);
     procedure TypeFilterChange(Sender: TObject);
     // Profile-Combo OnChange: schreibt die Auswahl nach [Rules] IdeProfile
     // (frisches Load davor, siehe Implementierung - sonst verschleppt der
@@ -1293,7 +1296,7 @@ begin
   FAnalyseRunner := TAnalyseRunner.Create(Self,
     FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
     StatusMode, StatusProgress, PopulateFindings, FinishAnalysis,
-    DiscardResultsAfterAbort);
+    DiscardResultsAfterAbort, StatusAbort);
 
   // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
   // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
@@ -1886,6 +1889,11 @@ begin
   if Assigned(FStatusBar) then FStatusBar.Mode(T);
 end;
 
+procedure TAnalyserFrame.StatusAbort(const T: string);
+begin
+  if Assigned(FStatusBar) then FStatusBar.ModeWithHint(T);
+end;
+
 
 // ---------------------------------------------------------------------------
 // Filter
@@ -2083,9 +2091,14 @@ begin
   // einmal - s. FApplyFilterDepth.
   if FApplyFilterDepth > 0 then Exit;
   // Ein Neuaufbau der Anzeige erledigt einen ausstehenden Malfehler-Reset
-  // und erlaubt nach einem neuen Malfehler wieder EINEN Reset (m6).
-  FDisplayFault     := False;
-  FDisplayResetUsed := False;
+  // und erlaubt nach einem neuen Malfehler wieder EINEN Reset (m6). Auch
+  // der Merker 'Reset unterwegs' faellt (NEW-4): ging die Nachricht
+  // verloren, weil Docken/Abdocken das Fenster-Handle neu erzeugte, koennte
+  // sonst kein spaeterer Malfehler je wieder einen Reset posten. Kommt sie
+  // doch noch an, steigt WMScaDisplayReset ohne Malfehler sofort aus.
+  FDisplayFault        := False;
+  FDisplayResetUsed    := False;
+  FDisplayResetPending := False;
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
@@ -2479,11 +2492,14 @@ begin
     StatusMode(_('[watch] updated %s (%d findings)',
       [ExtractFileName(FileName), Findings.Count]));
   except
-    // Fehlerpfad (m4): die Anzeige aus FAllFindings neu aufbauen - die Funde
-    // der uebrigen Dateien sind intakt; scheitert auch das, leer mit
-    // Platzhalterzeile. Die Meldung schreibt der Watch-Manager
+    // Auf erschoepftem Stapel nichts mehr umbauen - sofort weiter.
+    if ExceptObject is EStackExhausted then raise;
+    // Fehlerpfad (m4): Kacheln und Anzeige aus FAllFindings neu aufbauen -
+    // die Funde der uebrigen Dateien sind intakt; scheitert auch das, leer
+    // mit Platzhalterzeile. Die Meldung schreibt der Watch-Manager
     // (TWatchAnalyzer.DeliverResults).
     try
+      UpdateStats;
       ApplyFilter;
     except
       on EStackExhausted do raise;
