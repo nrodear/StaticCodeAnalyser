@@ -2234,7 +2234,7 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2998
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5854
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:825
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:1261
 msgid "Finding action failed: %s"
 msgstr ""
 
@@ -2920,7 +2920,7 @@ msgstr ""
 msgid "Nil dereference: access through a possibly nil reference"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:802
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:1238
 msgid "No actions for this line"
 msgstr ""
 
@@ -3811,7 +3811,7 @@ msgstr ""
 msgid "Split the if at \"and\""
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:634
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:1057
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 

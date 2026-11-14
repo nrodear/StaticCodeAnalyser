@@ -711,7 +711,7 @@ uses
   uAnalyserTheme,       // IsLightColor, EnsureHintContrast, Farb-Cache
   uHintTextLayout,      // Kurzform + Kuerzung des Nur-Text-Hints (testbar)
   uIDEEditorIntegration, // NavTrace - ofnFileClosing in der Ablaufspur
-  uIDEFindingBulb,      // Gluehbirne an der Caret-Zeile: Editor vormerken
+  uIDEFindingBulb,      // Gluehbirne an der Caret-Zeile: Editor vormerken, Spur
   uIDETheme,            // Subscribe - Marken beim Theme-Wechsel neu faerben
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
@@ -3116,6 +3116,7 @@ begin
   // sofort veraltet. Cache leeren, Overlay verbergen.
   // Die Gluehbirne zuerst und fuer JEDEN Editor (nicht nur FSavedEditor):
   // sie merkt nur vor und wandert danach aus ihrem Hilfsfenster mit.
+  BulbTraceEditorEvent('scrolled', Editor);   // Spur der Birne, aus ohne Schalter
   FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
   // F1: der Speicher wird gleich geleert - der Sichtzustand gilt als neu,
@@ -3793,6 +3794,7 @@ var
 begin
   // Gluehbirne: fuer JEDEN Editor vormerken, bewegt wird ausserhalb des
   // Zeichenpfads (uIDEFindingBulb).
+  BulbTraceEditorEvent('endpaint', Editor);   // Spur der Birne, aus ohne Schalter
   FindingBulbEditorChanged(Editor);
   if Editor <> FSavedEditor then Exit;
 
