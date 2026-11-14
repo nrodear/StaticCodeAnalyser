@@ -3,6 +3,7 @@
 interface
 
 uses
+  Winapi.Windows,  // ZUERST: SysUtils.RenameFile ist inline (H2443); dahinter gewinnt SysUtils.FindClose(TSearchRec)
   System.SysUtils, System.Classes, System.Masks, System.IOUtils,
   uSCAConsts,      // TSourceDialect - der Scan-Dialekt entscheidet die Dateimaske
   uIgnoreList;
