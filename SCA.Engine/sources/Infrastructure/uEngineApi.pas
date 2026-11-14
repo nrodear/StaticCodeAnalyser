@@ -365,7 +365,8 @@ uses
   uDetectorUtils,   // IsTestFixturePath (TFixtureFilter)
   uProjectFiles,    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
   uStaticFiles,     // TStaticFiles.ScanDialect - Dialekt-View-State (Lazarus A2)
-  uNotIncludedInProject;   // SCA194 - verwaiste .pas/.dfm im Projektordner
+  uNotIncludedInProject,   // SCA194 - verwaiste .pas/.dfm im Projektordner
+  uCrashDiag;              // IsFatalScanException (E3) - Baseline-Fangstellen
 
 // Der Engine-Lock (frueher die Variable GEngineLock hier) liegt seit
 // 2026-10-14 in uEngineLock - Vertrag und Begruendung dort. Hier bleibt nur
@@ -1027,10 +1028,26 @@ begin
   if (Req.BaselinePath <> '') or (Req.WriteBaselinePath <> '') then
   begin
     var BlScope := TBaselineScope.FromGlobals;
-    if Req.BaselinePath <> '' then
-      try TBaseline.Apply(Findings, Req.BaselinePath, BlScope); except end;
-    if Req.WriteBaselinePath <> '' then
-      try TBaseline.Write(Findings, Req.WriteBaselinePath, BlScope); except end;
+    // Ein kaputtes Baseline-File stoppt den Lauf nicht - erschoepfter
+    // Stapel/Speicher schon (E3): das Ergebnis waere sonst still ungefiltert.
+    // Die Funde gehoeren hier noch niemandem ausser dieser Routine.
+    try
+      if Req.BaselinePath <> '' then
+        try
+          TBaseline.Apply(Findings, Req.BaselinePath, BlScope);
+        except
+          if IsFatalScanException(ExceptObject) then raise;
+        end;
+      if Req.WriteBaselinePath <> '' then
+        try
+          TBaseline.Write(Findings, Req.WriteBaselinePath, BlScope);
+        except
+          if IsFatalScanException(ExceptObject) then raise;
+        end;
+    except
+      FreeAndNil(Findings);
+      raise;
+    end;
   end;
 
   Result := TScanResult.Create(Findings, BaseDir, Req.Profile);

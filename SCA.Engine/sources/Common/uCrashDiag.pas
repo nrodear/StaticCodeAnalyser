@@ -83,6 +83,42 @@ type
   EStackExhausted = EStackOverflow;
   {$WARN SYMBOL_DEPRECATED ON}
 
+  /// <summary>
+  ///   Fehlerinjektion fuer Tests: ein Test haengt eine Prozedur ein, die an
+  ///   der benannten Stelle des Scan-Pfads (SCAN_FAULT_*) wirft. Im Produkt
+  ///   bleibt der Haken nil; die Aufrufstellen pruefen nur Assigned, ohne
+  ///   Allokation.
+  /// </summary>
+  TScanFaultHook = procedure(const AWhere: string);
+
+const
+  /// Stellen fuer GScanFaultHook (nur Tests).
+  SCAN_FAULT_DETECTOR      = 'detector';      // je Detektor-Aufruf (RunAllDetectors)
+  SCAN_FAULT_INDEX_BUILD   = 'index';         // vor jedem Pre-Index-Build (ParseLeaks)
+  SCAN_FAULT_AST_CACHE_ADD = 'astcache.add';  // vor FCache.Add (TAstFileCache.Acquire)
+
+var
+  /// Test-Haken, s. TScanFaultHook. Nur aus Tests setzen und danach wieder
+  /// auf nil - der Scan ruft ihn aus seinem eigenen Thread.
+  GScanFaultHook : TScanFaultHook = nil;
+
+/// <summary>
+///   True fuer Ausnahmen, die kein Sammelfang des Scan-Pfads verschlucken
+///   darf: ein erschoepfter Stapel (EStackExhausted - die Schutzseite fehlt
+///   danach) und erschoepfter Speicher bzw. Adressraum (EOutOfMemory).
+///   Beide brechen den Scan ab, statt je Datei, Detektor oder Index als
+///   Fund oder stiller Ausfall gebucht zu werden (Nico-Entscheid E3,
+///   2026-11-14): ein Lauf, dem der Speicher ausging, endet als Abbruch,
+///   nicht als lueckenhaftes Ergebnis.
+/// </summary>
+/// <remarks>
+///   Muster an der Fangstelle: 'on E: Exception do begin if
+///   IsFatalScanException(E) then raise; ... end' bzw. im nackten except
+///   'if IsFatalScanException(ExceptObject) then raise;'. EAbort ist KEIN
+///   Fall hiervon - der Abbruch des Nutzers hat eigene Durchreichen.
+/// </remarks>
+function IsFatalScanException(E: TObject): Boolean;
+
 /// <summary>
 ///   Exception-Klasse und Meldung, bei EXTERNEN Exceptions zusaetzlich
 ///   NT-Statuscode und - soweit ermittelbar - die modulrelative
@@ -300,6 +336,12 @@ end;
 function CrashDiagModuleBase: UIntPtr;
 begin
   Result := UIntPtr(HInstance);
+end;
+
+function IsFatalScanException(E: TObject): Boolean;
+begin
+  // Beide Klassen stammen von Exception ab; 'is' ist nil-sicher (nil -> False).
+  Result := (E is EStackExhausted) or (E is EOutOfMemory);
 end;
 
 function DescribeException(E: Exception): string;

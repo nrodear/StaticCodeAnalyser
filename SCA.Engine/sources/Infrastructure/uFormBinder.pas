@@ -472,8 +472,8 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
       // nicht wieder her, Weiterlaufen korrumpiert still. Der Parent-
       // Parse rekursiert in dieselbe Parser-Tiefe wie der Hauptparse -
       // genau der Pfad, fuer den der Kontrakt geschrieben wurde.
-      on EStackExhausted do raise;
-      else ParentUnitNode := nil;
+      if IsFatalScanException(ExceptObject) then raise;
+      ParentUnitNode := nil;
     end;
     if ParentUnitNode = nil then Exit;
 
@@ -498,8 +498,8 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
           end;
         end;
       except
-        on EStackExhausted do raise;   // s. Vermerk am Parent-Parse oben
-        else ParentGraph := nil;
+        if IsFatalScanException(ExceptObject) then raise;
+        ParentGraph := nil;
       end;
     end;
 

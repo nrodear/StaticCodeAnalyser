@@ -128,7 +128,8 @@ uses
   System.StrUtils,
   uFileTextCache,   // TryLoadLinesWithFallback - Laden ohne Cache-Eintrag
   uStaticFiles,     // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
-  uDetectorUtils;
+  uDetectorUtils,
+  uCrashDiag;       // IsFatalScanException (E3)
 
 var
   // Perf Charge R3 (2026-10-26, Muster aus Q1/uUninitVar): Default-Comparer
@@ -403,7 +404,9 @@ begin
       except
         // Eine Datei, die sich nicht lesen laesst, kostet ihre GUIDs -
         // nicht den Index. Den Lesefehler meldet fkFileReadError im
-        // Hauptlauf ohnehin.
+        // Hauptlauf ohnehin. Erschoepfter Stapel/Speicher dagegen bricht
+        // den Lauf ab (E3) - der Build-Wrapper in ParseLeaks reicht durch.
+        if IsFatalScanException(ExceptObject) then raise;
         Continue;
       end;
     finally

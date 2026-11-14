@@ -186,6 +186,9 @@ implementation
 // noinspection-file EmptyExcept, ExceptOnException, GroupedDeclaration, LongParamList, MissingUnitHeader, NestedTry, NilComparison, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uCrashDiag;   // IsFatalScanException (E3) - Verzeichnis-Fangstelle in ScanRec
+
 const
   MAX_DEPTH       = 32;   // Schutz vor Symlink-Endlosschleifen
   EXCLUDED_DIRS  : array[0..7] of string = (
@@ -232,6 +235,7 @@ begin
   except
     on E: Exception do
     begin
+      if IsFatalScanException(E) then raise;   // E3: Abbruch, kein Lesefehler
       if Assigned(Errors) then
         Errors.Add(Format('Verzeichnis nicht lesbar: %s (%s)',
                           [Path, E.Message]));

@@ -132,9 +132,12 @@ begin
     // Stapelueberlauf und Abbruch NIE verschlucken (Kontrakt 2026-08-04
     // bzw. Cancel-Weg) - RunAllDetectors reicht beide bewusst durch,
     // dieser Fang liegt DAVOR und darf sie ihm nicht wegnehmen.
-    on EStackExhausted do raise;
     on EAbort do raise;
-    else Exit;
+    else
+    begin
+      if IsFatalScanException(ExceptObject) then raise;
+      Exit;
+    end;
   end;
 
   UnitNode := nil;
@@ -202,6 +205,7 @@ begin
             PasParser.Free;
           end;
         except
+          if IsFatalScanException(ExceptObject) then raise;   // E3
           UnitNode := nil;
         end;
       end;
@@ -247,8 +251,8 @@ begin
   except
     // AUSSER Stapelueberlauf und Abbruch (Kontrakt 2026-08-04): dieser
     // Sammelfang machte den Durchreich-Schutz in RunAllDetectors fuer
-    // die komplette DFM-Familie wirkungslos.
-    on EStackExhausted do raise;
+    // die komplette DFM-Familie wirkungslos. Seit 2026-11-14 (E3) ebenso
+    // fuer erschoepften Speicher - IsFatalScanException im else-Zweig.
     on EAbort do raise;
     // Der else-Zweig ist TRAGEND, nicht Kosmetik: ein except-Block, der
     // NUR on-Handler hat, re-raist alles Unpassende (Delphi-Semantik).
@@ -259,8 +263,8 @@ begin
     else
       // Parser-/Lookup-Crash bei degenerierten Eingaben nicht
       // propagieren. Der Pascal-Detektor-Lauf laeuft danach sauber
-      // weiter.
-      ;
+      // weiter - ausser bei erschoepftem Stapel/Speicher.
+      if IsFatalScanException(ExceptObject) then raise;
   end;
   finally
     // Auf JEDEM Weg hinaus - auch beim gewollten Re-Raise von

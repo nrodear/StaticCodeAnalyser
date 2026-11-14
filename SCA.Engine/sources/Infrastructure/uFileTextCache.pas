@@ -315,7 +315,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  Winapi.Windows, System.Math, System.IOUtils;
+  Winapi.Windows, System.Math, System.IOUtils,
+  uCrashDiag;   // IsFatalScanException (E3): Lade-Fangstellen reichen Stapel/Speicher durch
 
 // ---------------------------------------------------------------------------
 // Encoding-Analyse fuer den Datei-Encoding-Detektor (Konzept_FileEncodingDetector).
@@ -427,6 +428,9 @@ begin
   try
     Bytes := TFile.ReadAllBytes(FileName);
   except
+    // Unlesbar = False. Erschoepfter Stapel/Speicher ist kein Lesefehler
+    // der Datei, sondern ein Abbruch des Laufs (E3, uCrashDiag).
+    if IsFatalScanException(ExceptObject) then raise;
     Exit;
   end;
 
@@ -468,7 +472,10 @@ begin
     end;
     Result := True;
   except
-    // Belt-and-Suspenders fuer alles ausser der Dekodierung (Speicher).
+    // Belt-and-Suspenders fuer alles ausser der Dekodierung - nur nicht
+    // fuer erschoepften Stapel/Speicher (E3): die gingen sonst als
+    // 'Datei unlesbar' durch und der Lauf liefe im erschoepften Prozess weiter.
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 end;
 
@@ -575,6 +582,7 @@ begin
   try
     Bytes := TFile.ReadAllBytes(FileName);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3
     Exit;   // Readable bleibt False
   end;
   Result := ComputeFileEncodingInfo(Bytes);
@@ -925,6 +933,7 @@ begin
       FreeAndNil(Result);
   except
     FreeAndNil(Result);
+    if IsFatalScanException(ExceptObject) then raise;   // E3
   end;
 end;
 
@@ -992,15 +1001,20 @@ begin
     Lines.LoadFromFile(FileName);
     Result := True;
   except
+    // Erschoepfter Stapel/Speicher ist kein Kodierungsproblem: nicht mit
+    // der naechsten Kodierung weiterprobieren, sondern abbrechen (E3).
+    if IsFatalScanException(ExceptObject) then raise;
     try
       Lines.LoadFromFile(FileName, TEncoding.UTF8);
       Result := True;
     except
+      if IsFatalScanException(ExceptObject) then raise;
       try
         Lines.LoadFromFile(FileName, TEncoding.Unicode);
         Result := True;
       except
         // Datei unleserlich - Caller entscheidet was zu tun ist.
+        if IsFatalScanException(ExceptObject) then raise;
       end;
     end;
   end;
