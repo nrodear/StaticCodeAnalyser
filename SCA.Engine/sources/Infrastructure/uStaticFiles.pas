@@ -367,6 +367,28 @@ begin
   end;
 end;
 
+procedure RotateScanLog(const ALogPath: string);
+// Bewahrt das Log des VORIGEN Scans einmal auf (<Name>.prev.log), bevor
+// der neue Scan es neu anlegt. Bis 2026-11-14 ueberschrieb jeder Start
+// das Log - der Abbruch-Vermerk eines Laufs (=== ABBRUCH ===, Phase,
+// Datei) war nach dem naechsten Scan weg, ausgerechnet nach einem
+// Speicher-Abbruch, nach dem der Anwender sofort neu scannt.
+// Best-effort: ein gesperrtes oder schreibgeschuetztes Log darf den
+// Scan nicht verhindern.
+var
+  Prev : string;
+begin
+  try
+    if not FileExists(ALogPath) then Exit;
+    Prev := ChangeFileExt(ALogPath, '.prev.log');
+    if FileExists(Prev) then
+      System.SysUtils.DeleteFile(Prev);
+    System.SysUtils.RenameFile(ALogPath, Prev);
+  except
+    // Rotation ist Komfort, kein Vertrag - der Scan laeuft weiter.
+  end;
+end;
+
 class function TStaticFiles.TryGetAllPasFiles(const Path: string;
   out ErrorMsg: string;
   ATick: TScanTickProc;
@@ -414,6 +436,7 @@ begin
     Result := TStringList.Create;
     Errors := TStringList.Create;
     try
+      RotateScanLog(LogPath);   // Vorlauf aufheben (s. dort)
       LogStream := TStreamWriter.Create(LogPath, False, TEncoding.UTF8);
       Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
           + ' Pfad: ' + Path + ' ===');
