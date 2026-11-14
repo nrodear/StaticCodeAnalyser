@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7316 Zeilen, 352810 Bytes
-  CPoLines_de: array[0..7315] of string = (
+  // i18n\de.po - 7322 Zeilen, 353298 Bytes
+  CPoLines_de: array[0..7321] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7330,7 +7330,13 @@ const
     'msgstr "eine Blattkomponente, die nirgends referenziert wird - ihr L'#$00F6'schen entfernt sonst nichts"',
     '',
     'msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"',
-    'msgstr "die Handler-Methode gibt es in der Form-Klasse nicht - das Entfernen der Referenz bricht nichts, was vorher funktionierte"'
+    'msgstr "die Handler-Methode gibt es in der Form-Klasse nicht - das Entfernen der Referenz bricht nichts, was vorher funktionierte"',
+    '',
+    'msgid "Not enough memory: the scan of %d files was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."',
+    'msgstr "Zu wenig Arbeitsspeicher: der Scan von %d Dateien wurde abgebrochen, sein Teilergebnis verworfen. Ordner eingrenzen oder die 64-Bit-Kommandozeile verwenden (StaticCodeAnalyser.d12.exe --path ...)."',
+    '',
+    'msgid "Display reset after an error: %s"',
+    'msgstr "Anzeige nach einem Fehler zur'#$00FC'ckgesetzt: %s"'
   );
 
   // i18n\en.po - 268 Zeilen, 7196 Bytes
@@ -7605,8 +7611,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7312 Zeilen, 366909 Bytes
-  CPoLines_fr: array[0..7311] of string = (
+  // i18n\fr.po - 7318 Zeilen, 367414 Bytes
+  CPoLines_fr: array[0..7317] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14918,7 +14924,13 @@ const
     'msgstr "un composant feuille r'#$00E9'f'#$00E9'renc'#$00E9' nulle part - sa suppression n''enl'#$00E8've rien d''autre"',
     '',
     'msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"',
-    'msgstr "la m'#$00E9'thode du gestionnaire n''existe pas dans la classe de la fiche - supprimer la r'#$00E9'f'#$00E9'rence ne casse rien qui fonctionnait auparavant"'
+    'msgstr "la m'#$00E9'thode du gestionnaire n''existe pas dans la classe de la fiche - supprimer la r'#$00E9'f'#$00E9'rence ne casse rien qui fonctionnait auparavant"',
+    '',
+    'msgid "Not enough memory: the scan of %d files was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."',
+    'msgstr "M'#$00E9'moire insuffisante : l''analyse de %d fichiers a '#$00E9't'#$00E9' interrompue et son r'#$00E9'sultat partiel abandonn'#$00E9'. Restreignez le dossier ou utilisez la ligne de commande 64 bits (StaticCodeAnalyser.d12.exe --path ...)."',
+    '',
+    'msgid "Display reset after an error: %s"',
+    'msgstr "Affichage r'#$00E9'initialis'#$00E9' apr'#$00E8's une erreur : %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

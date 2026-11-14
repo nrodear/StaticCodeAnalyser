@@ -7310,3 +7310,9 @@ msgstr "un composant feuille référencé nulle part - sa suppression n'enlève 
 
 msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"
 msgstr "la méthode du gestionnaire n'existe pas dans la classe de la fiche - supprimer la référence ne casse rien qui fonctionnait auparavant"
+
+msgid "Not enough memory: the scan of %d files was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."
+msgstr "Mémoire insuffisante : l'analyse de %d fichiers a été interrompue et son résultat partiel abandonné. Restreignez le dossier ou utilisez la ligne de commande 64 bits (StaticCodeAnalyser.d12.exe --path ...)."
+
+msgid "Display reset after an error: %s"
+msgstr "Affichage réinitialisé après une erreur : %s"
