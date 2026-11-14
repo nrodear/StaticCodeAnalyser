@@ -1586,6 +1586,33 @@ begin
   end;
 end;
 
+function FatalKindOf(E: TObject): Integer;
+// Art eines fatalen Fehlers in einer Ausnahme, die aus einem Task entkam
+// (Review-Runde 2026-11-14, NEW-3): 0 = keiner, 1 = Speicher, 2 = Stapel -
+// dieselbe Kodierung wie FatalKind in RunParallelMainLoop. WaitForAll packt
+// solche Wuerfe in EAggregateException; gesucht wird in den inneren.
+var
+  i : Integer;
+begin
+  Result := 0;
+  if E is EAggregateException then
+  begin
+    for i := 0 to EAggregateException(E).Count - 1 do
+    begin
+      Result := FatalKindOf(EAggregateException(E).InnerExceptions[i]);
+      if Result <> 0 then
+        Exit;
+    end;
+  end
+  else if IsFatalScanException(E) then
+  begin
+    if E is EOutOfMemory then
+      Result := 1
+    else
+      Result := 2;
+  end;
+end;
+
 procedure RunParallelMainLoop(FileList: TStringList;
   Results: TObjectList<TLeakFinding>; MasterCtx: TAnalyzeContext;
   AIncludeUsesCheck: Boolean; AProgress: TProc<Integer, Integer>;
@@ -1722,9 +1749,17 @@ begin
     try
       TTask.WaitForAll(Tasks);
     except
-      // Ein Wurf, der doch aus einem Task entkam (EAggregateException), ist
-      // nachrangig, wenn vorher ein fataler Fehler gemerkt wurde - der geht
-      // unten mit seiner echten Klasse weiter.
+      // Ein Wurf, der doch aus einem Task entkam (EAggregateException): die
+      // Task-Einrichtung (TAnalyzeContext.Create, LeakyClasses.AddStrings)
+      // und ihr finally liegen AUSSERHALB des Datei-Fangs. Ist eine innere
+      // Ausnahme fatal, geht sie wie die gemerkten unten mit ihrer echten
+      // Klasse weiter - bis 2026-11-14 (Review-Runde, NEW-3) blieb
+      // FatalKind 0 und der Speicher-Abbruch ging als gewoehnliche
+      // Ausnahme weiter. Hinter einem schon gemerkten fatalen Fehler tritt
+      // der Wurf zurueck. Alle Tasks sind hier fertig - eine einfache
+      // Zuweisung genuegt.
+      if FatalKind = 0 then
+        FatalKind := FatalKindOf(ExceptObject);
       if FatalKind = 0 then raise;
     end;
 
