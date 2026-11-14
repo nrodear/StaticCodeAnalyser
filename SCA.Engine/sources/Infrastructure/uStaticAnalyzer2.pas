@@ -1608,6 +1608,11 @@ var
   AbortSeen   : Integer;   // 1 = EAbort in einem Worker
   FirstErr    : string;    // erste Nicht-EAbort-Worker-Exception
   ErrLock     : TCriticalSection;
+  // E3 (Review-Runde 2026-11-14, M1): fatale Worker-Ausnahme - 0 keine,
+  // 1 EOutOfMemory, 2 EStackExhausted. Nur per Interlocked gesetzt (keine
+  // Allokation im Fangzweig, der Speicher ist ja gerade aus); der Haupt-
+  // Thread wirft danach die ECHTE Klasse, VOR dem Merge.
+  FatalKind   : Integer;
 begin
   Total := FileList.Count;
 
@@ -1627,6 +1632,7 @@ begin
     CancelFlag := 0;
     AbortSeen  := 0;
     FirstErr   := '';
+    FatalKind  := 0;
 
     SetLength(Tasks, WorkerCount);
     for t := 0 to WorkerCount - 1 do
@@ -1676,6 +1682,19 @@ begin
                 end;
                 on E: Exception do
                 begin
+                  // Fatal (E3): nur merken, WELCHE Klasse - als Text (unten)
+                  // ginge sie verloren, und der Haupt-Thread warf bis
+                  // 2026-11-14 eine gewoehnliche Exception: 'Analyseabbruch'-
+                  // Fund, Bericht, Exit 3/4 statt Abbruch mit Exit 99.
+                  if IsFatalScanException(E) then
+                  begin
+                    if E is EOutOfMemory then
+                      TInterlocked.CompareExchange(FatalKind, 1, 0)
+                    else
+                      TInterlocked.CompareExchange(FatalKind, 2, 0);
+                    TInterlocked.Exchange(CancelFlag, 1);
+                    Break;
+                  end;
                   ErrLock.Enter;
                   try
                     if FirstErr = '' then
@@ -1700,7 +1719,25 @@ begin
           end;
         end);
 
-    TTask.WaitForAll(Tasks);
+    try
+      TTask.WaitForAll(Tasks);
+    except
+      // Ein Wurf, der doch aus einem Task entkam (EAggregateException), ist
+      // nachrangig, wenn vorher ein fataler Fehler gemerkt wurde - der geht
+      // unten mit seiner echten Klasse weiter.
+      if FatalKind = 0 then raise;
+    end;
+
+    // E3: fataler Worker-Fehler VOR dem Merge - kein halbes Ergebnis in
+    // Results (die Slots gibt das finally frei). EOutOfMemory: das
+    // vorgefertigte Objekt der RTL. Stapel: ein FRISCHES Objekt im Haupt-
+    // Thread statt des Worker-Objekts - dessen ExceptionRecord zeigt auf den
+    // Stapel des Worker-Threads, und DescribeException liest ihn.
+    case FatalKind of
+      1: OutOfMemoryError;
+      2: raise EStackExhausted.Create(
+           'Stapel erschoepft in einem Parallel-Worker - Scan abgebrochen');
+    end;
 
     // ---- Deterministischer Merge in Dateilisten-Reihenfolge ----
     MergeSlotsDeterministic(Slots, Results, MasterCtx.SuppressionMarkers,
@@ -2973,29 +3010,38 @@ begin
   Configs := TStringList.Create;
   IndexList := nil;   // VOR dem try - das finally ruft IndexList.Free
   try
-    SplitConfigFiles(AFiles, Copy, Configs);
-    // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
-    // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
-    // auf die Analyse-Liste zurueck (ASide.IndexFiles=nil).
-    // Nur wenn es Units zu analysieren gibt: eine Liste nur aus .ini
-    // braucht keinen Projektindex (Review Bereich C, Minor) - der
-    // Konfigurations-Durchlauf verankert sich ueber AIndexRoot selbst.
-    if (Copy.Count > 0) and (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
-    begin
-      IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
-      if IndexErr <> '' then
-        OutputDebugString(PChar('SCA IndexRoot: ' + IndexErr));
-      if IndexList <> nil then
+    // Alles vor ParseLeaks in eigener Klammer (Review-Runde 2026-11-14):
+    // TryGetAllPasFiles reicht erschoepften Stapel/Speicher jetzt durch (E3),
+    // und das finally unten kennt die Ergebnisliste nicht - ohne diese
+    // Klammer blieb sie liegen.
+    try
+      SplitConfigFiles(AFiles, Copy, Configs);
+      // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
+      // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
+      // auf die Analyse-Liste zurueck (ASide.IndexFiles=nil).
+      // Nur wenn es Units zu analysieren gibt: eine Liste nur aus .ini
+      // braucht keinen Projektindex (Review Bereich C, Minor) - der
+      // Konfigurations-Durchlauf verankert sich ueber AIndexRoot selbst.
+      if (Copy.Count > 0) and (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
       begin
-        // Union: Analyse-Dateien AUSSERHALB des IndexRoot gehoeren trotzdem
-        // in den Index (z.B. '..'-Includes ausserhalb des Common-Root).
-        IndexList.CaseSensitive := False;
-        IndexList.Sorted := True;
-        IndexList.Duplicates := dupIgnore;
-        IndexList.AddStrings(Copy);
-        if IndexList.Count = 0 then
-          FreeAndNil(IndexList);
+        IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
+        if IndexErr <> '' then
+          OutputDebugString(PChar('SCA IndexRoot: ' + IndexErr));
+        if IndexList <> nil then
+        begin
+          // Union: Analyse-Dateien AUSSERHALB des IndexRoot gehoeren trotzdem
+          // in den Index (z.B. '..'-Includes ausserhalb des Common-Root).
+          IndexList.CaseSensitive := False;
+          IndexList.Sorted := True;
+          IndexList.Duplicates := dupIgnore;
+          IndexList.AddStrings(Copy);
+          if IndexList.Count = 0 then
+            FreeAndNil(IndexList);
+        end;
       end;
+    except
+      FreeAndNil(Result);
+      raise;
     end;
     try
       ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck,

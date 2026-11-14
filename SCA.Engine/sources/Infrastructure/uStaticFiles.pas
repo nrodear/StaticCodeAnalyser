@@ -235,7 +235,12 @@ begin
   except
     on E: Exception do
     begin
-      if IsFatalScanException(E) then raise;   // E3: Abbruch, kein Lesefehler
+      // E3: Stapel/Speicher erschoepft ist ein Abbruch, kein Lesefehler.
+      // Wirkt seit 2026-11-14 (Review-Runde) auch wirklich: der Eintrags-
+      // Fang unten und TryGetAllPasFiles reichen den Wurf jetzt durch - bis
+      // dahin fing der Eintrags-Fang des Elternverzeichnisses ihn wieder
+      // ein und der Scan lief mit einer halben Dateiliste weiter.
+      if IsFatalScanException(E) then raise;
       if Assigned(Errors) then
         Errors.Add(Format('Verzeichnis nicht lesbar: %s (%s)',
                           [Path, E.Message]));
@@ -339,6 +344,10 @@ begin
         on EAbort do raise; // Abbruch durch Tick-Callback
         on E: Exception do
         begin
+          // Erschoepfter Stapel/Speicher - auch aus dem rekursiven Abstieg
+          // in ein Unterverzeichnis - bricht den Walk ab (E3); sonst kostet
+          // ein Fehler nur diesen Eintrag.
+          if IsFatalScanException(E) then raise;
           if Assigned(Errors) then
             Errors.Add(Format('Fehler bei "%s": %s',
                               [SearchRec.Name, E.Message]));
@@ -484,6 +493,17 @@ begin
       end;
       on E: Exception do
       begin
+        // E3: kein halbes Ergebnis - die Liste geht frei, der Wurf weiter
+        // (CLI: Exit 99 ohne Bericht; IDE/Standalone: Abbruch-Meldung).
+        if IsFatalScanException(E) then
+        begin
+          try
+            Log('ABBRUCH: ' + E.ClassName + ': ' + E.Message);
+          except
+          end;
+          FreeAndNil(Result);
+          raise;
+        end;
         ErrorMsg := 'Unerwarteter Fehler: ' + E.Message;
         Log('AUSNAHME: ' + E.ClassName + ': ' + E.Message);
       end;
