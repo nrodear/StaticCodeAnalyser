@@ -686,13 +686,20 @@ end;
 
 function LoadCacheLines(const FileName: string;
   out AEncInfo: TFileEncodingInfo): TCacheOwnedLines;
-// Zeilen fuer einen neuen Eintrag; nil bei Lesefehler (LoadFileSmart
-// faengt jeden selbst). Eigene Funktion: der Aufrufer uebernimmt das
-// Ergebnis in den Eintrag, eine try/finally-Klammer passt dort nicht.
+// Zeilen fuer einen neuen Eintrag; nil bei Lesefehler. LoadFileSmart faengt
+// jeden Lesefehler selbst - AUSSER erschoepftem Stapel/Speicher, den es seit
+// 2026-11-14 weiterreicht (E3). Dann geht die frische Liste hier frei, statt
+// liegen zu bleiben (Review-Runde). Eigene Funktion: der Aufrufer uebernimmt
+// das Ergebnis in den Eintrag, eine try/finally-Klammer passt dort nicht.
 begin
   Result := TCacheOwnedLines.Create;
-  if not LoadFileSmart(FileName, Result, @AEncInfo) then
+  try
+    if not LoadFileSmart(FileName, Result, @AEncInfo) then
+      FreeAndNil(Result);
+  except
     FreeAndNil(Result);
+    raise;
+  end;
 end;
 
 procedure TFileTextCache.DropEntry(Entry: TFileTextCacheEntry);

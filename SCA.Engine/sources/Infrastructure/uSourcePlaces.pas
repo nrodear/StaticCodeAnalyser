@@ -412,10 +412,18 @@ begin
   Close;
   Result := False;
   FLines := TStringList.Create;
-  if not LoadFileSmart(AFileName, FLines) then
-  begin
-    FreeAndNil(FLines);
-    Exit;
+  // LoadFileSmart reicht seit 2026-11-14 erschoepften Stapel/Speicher
+  // weiter (E3) - dann kein halboffener Zustand (Zeilen ohne Baum), sondern
+  // geschlossen und weiter (Review-Runde, wie beim Parse unten).
+  try
+    if not LoadFileSmart(AFileName, FLines) then
+    begin
+      FreeAndNil(FLines);
+      Exit;
+    end;
+  except
+    Close;
+    raise;
   end;
   // Den Text EINMAL dekodieren und genau ihn parsen (Review reDelphiX
   // 2026-10-07, Major 1): ParseFile las die Datei ein zweites Mal ueber

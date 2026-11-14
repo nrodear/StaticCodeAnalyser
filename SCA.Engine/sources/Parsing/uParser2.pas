@@ -407,9 +407,9 @@ var
 begin
   Result := False;
   try
-    // TFileStream statt TFile.ReadAllBytes: die Unit hat keine
-    // implementation-uses, und System.IOUtils nur hierfuer zu ziehen
-    // lohnt nicht.
+    // TFileStream statt TFile.ReadAllBytes: System.IOUtils nur hierfuer zu
+    // ziehen lohnt nicht (die implementation-uses traegt seit 2026-11-14
+    // nur uCrashDiag fuer die E3-Durchreiche).
     FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
     try
       SetLength(Bytes, FS.Size);
