@@ -94,6 +94,10 @@ type
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
     FDisplayedFindings : TList<TLeakFinding>;
+    // Dateizahl fuer die Speicher-Abbruchmeldung (E2/E3, 2026-11-14):
+    // Walk-Zaehler bzw. Gesamtzahl der Datei-Phase aus ProgressCallback.
+    FScanFilesFound    : Integer;
+    FScanFilesTotal    : Integer;
     // Aktueller BaseDir des letzten Analyse-Laufs - fuer Re-Filter im
     // Grid-Refresh (FillGridFromFindings braucht ihn).
     FCurrentBaseDir    : string;
@@ -409,7 +413,8 @@ uses
   uIDEToolbar,                    // TIDEToolbar.ApplySegoeUI - UI-Aligning mit IDE-Plugin
   uIDEColors,                     // IDE_BG_CHROME - Chrome-Panel-Hintergrund analog IDE
   uIgnoreList,                    // TIgnoreList.ConfigFilePath - Hamburger-Item
-  uProfileViewer;                 // ShowProfileViewer - Hamburger-Item
+  uProfileViewer,                 // ShowProfileViewer - Hamburger-Item
+  uFindingFileIndex;              // TFindingDelivery - ausnahmefeste Fund-Uebergabe (2026-11-14)
   // ShellAPI + uLocalization sind bereits im interface-uses (E2004-Schutz).
   // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
 
@@ -741,6 +746,8 @@ begin
   FCancelRequested  := False;
   FAbortReason      := '';
   FLastProgressTick := 0;
+  FScanFilesFound   := 0;
+  FScanFilesTotal   := 0;
   Screen.Cursor     := crAppStart;
   // Analyse-Ausloeser sperren: der Callback pumpt Nachrichten, und ein
   // zweiter Klick (der ungeduldige Normalfall) schachtelte sonst einen
@@ -817,6 +824,12 @@ begin
   // weiter - die App wirkte abgestuerzt, das Fenster blieb stehen.
   if FCancelRequested or Application.Terminated then
     Abort;
+
+  // Dateizahl fuer eine Abbruch-Meldung (E2) - bei JEDEM Tick.
+  if Total < 0 then
+    FScanFilesFound := Current
+  else
+    FScanFilesTotal := Total;
 
   tick     := GetTickCount;
   doUpdate := (tick - FLastProgressTick > 100);
@@ -1402,6 +1415,26 @@ begin
           else
             StatusBar1.Panels[2].Text := _('Analysis cancelled.');
         end;
+        // E3 (2026-11-14): erschoepfter Speicher bricht den Lauf in der
+        // Engine ab - kein Teilergebnis. Wie im IDE-Plugin (E2): das Grid
+        // leeren (alte Funde frei, Platzhalter) und Dateizahl samt Ausweg
+        // nennen. Statuszeile, kein Dialog - wie die uebrigen Meldungen.
+        on EOutOfMemory do
+        begin
+          FreeAndNil(findings);
+          try
+            FillGridFromFindings(nil, DirOfProjectPath(path));
+          except
+            // Leeren ist Nothilfe - die Meldung muss trotzdem ankommen.
+          end;
+          // Abbruch schon im Pre-Index: dann zaehlt der Walk.
+          if FScanFilesTotal <= 0 then
+            FScanFilesTotal := FScanFilesFound;
+          StatusBar1.Panels[2].Text := Format(_('Not enough memory: the scan of %d files was ' +
+            'aborted and its partial results discarded. Narrow the folder or ' +
+            'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
+            [FScanFilesTotal]);
+        end;
         // noinspection ExceptionTooGeneral
         // Catch-all an der Action-Grenze ist in dieser Form gewollt
         // (s. Dateikopf): eine Analyse-Exception darf die App nicht
@@ -1500,16 +1533,13 @@ procedure TForm2.FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
 // Uebernimmt die Findings ins FAllFindings-Feld + BaseDir + delegiert das
 // Grid-Befuellen an ApplyFilter. Damit greift Severity/Type/Search-Filter
 // auch beim ersten Befuellen.
-var
-  i : Integer;
 begin
-  FAllFindings.Clear;
-  if Assigned(Findings) then
-  begin
-    Findings.OwnsObjects := False;
-    for i := 0 to Findings.Count - 1 do
-      FAllFindings.Add(Findings[i]);
-  end;
+  // Ausnahmefest seit 2026-11-14 (OOM-Diagnose des Plugins, dieselbe Uebergabe
+  // wie im Dock): Anzeige-Liste ZUERST leeren, dann die alten Funde frei, die
+  // neuen ohne Leck-Fenster uebernehmen (TFindingDelivery). Bis dahin gab
+  // FAllFindings.Clear Funde frei, die FDisplayedFindings noch hielt, und
+  // OwnsObjects ging VOR dem Kopieren aus. Findings = nil: nur leeren.
+  TFindingDelivery.Deliver(FDisplayedFindings, FAllFindings, Findings);
   // BaseDir wechselt -> alle gecachten Rel-Paths sind ungueltig.
   if Assigned(FRelPathCache) then
     FRelPathCache.Clear;
