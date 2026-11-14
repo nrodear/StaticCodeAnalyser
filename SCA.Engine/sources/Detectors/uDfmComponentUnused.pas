@@ -52,7 +52,8 @@ implementation
 
 uses
   System.SysUtils, System.StrUtils, System.IOUtils,
-  uCompatSet;  // D11: THashSet<T>-Ersatz (D12: natives THashSet)
+  uCompatSet,  // D11: THashSet<T>-Ersatz (D12: natives THashSet)
+  uCrashDiag;  // IsFatalScanException (E3)
 
 function IsIdentCh(C: Char): Boolean; inline;
 begin
@@ -324,6 +325,7 @@ begin
   try
     Result := TFile.ReadAllText(APath);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3: Stapel/Speicher ist kein Lesefehler
     Result := '';
   end;
 end;

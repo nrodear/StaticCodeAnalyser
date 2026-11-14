@@ -104,7 +104,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uParser2;
+  uParser2,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 constructor TSymbolReferenceIndex.Create;
 begin
@@ -542,6 +543,7 @@ begin
         Root := Parser.ParseFile(PasFileName);
         OwnsRoot := True;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3 (Pfad ohne AST-Cache)
         Exit;
       end;
     finally
@@ -578,7 +580,9 @@ begin
         Root := Parser.ParseFile(PasFileName);
         OwnsRoot := True;
       except
-        // Defekte .pas - silent skip, wie bei uDfmRepoIndex
+        // Defekte .pas - silent skip, wie bei uDfmRepoIndex; Stapel/Speicher
+        // erschoepft bricht ab (E3, Pfad ohne AST-Cache).
+        if IsFatalScanException(ExceptObject) then raise;
         Exit;
       end;
     finally

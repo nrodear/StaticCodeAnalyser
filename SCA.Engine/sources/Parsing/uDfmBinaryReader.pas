@@ -69,7 +69,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  uCrashDiag;   // IsFatalScanException - Stapel/Speicher NICHT einpacken (E3)
 
 const
   // 'TPF0' - Standard-DFM-Binaer-Praefix ab Delphi 4
@@ -165,6 +166,7 @@ begin
     try
       Exit(TEncoding.UTF8.GetString(ABytes));
     except
+      if IsFatalScanException(ExceptObject) then raise;   // E3: kein Decode-Problem
       Exit(TEncoding.Default.GetString(ABytes));
     end;
   end;
@@ -195,10 +197,17 @@ begin
         // den Delphi 12 ohne Compat-Alias nicht setzt - daher E2003.
         ObjectBinaryToText(BinSrc, TxtDst);
       except
+        // Erschoepfter Stapel/Speicher geht UNVERPACKT weiter (E3,
+        // 2026-11-14): als EDfmBinaryReaderError verpackt verschluckten ihn
+        // uDfmAnalysisRunner und uFormBinder je Datei - mitten im Hauptlauf,
+        // also zur Spitze des Speicherbedarfs.
         on E: Exception do
+        begin
+          if IsFatalScanException(E) then raise;
           raise EDfmBinaryReaderError.CreateFmt(
             'Binary DFM conversion failed (%s): %s',
             [E.ClassName, E.Message]);
+        end;
       end;
       Result := TxtDst.DataString;
     finally
@@ -224,8 +233,11 @@ begin
     AStream.ReadBuffer(Bytes[0], N);
   except
     on E: Exception do
+    begin
+      if IsFatalScanException(E) then raise;   // unverpackt, s. ToText(TBytes)
       raise EDfmBinaryReaderError.CreateFmt(
         'Stream read failed (%s): %s', [E.ClassName, E.Message]);
+    end;
   end;
   Result := ToText(Bytes);
 end;
@@ -239,9 +251,12 @@ begin
     Bytes := TFile.ReadAllBytes(APath);
   except
     on E: Exception do
+    begin
+      if IsFatalScanException(E) then raise;   // unverpackt, s. ToText(TBytes)
       raise EDfmBinaryReaderError.CreateFmt(
         'Cannot read DFM file %s (%s): %s',
         [APath, E.ClassName, E.Message]);
+    end;
   end;
   Result := ToText(Bytes);
 end;

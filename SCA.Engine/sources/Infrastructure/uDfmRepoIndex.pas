@@ -115,7 +115,8 @@ implementation
 
 uses
   uParser2,
-  uStaticFiles;   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
+  uStaticFiles,   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
+  uCrashDiag;     // IsFatalScanException (E3)
 
 constructor TDfmRepoIndex.Create;
 begin
@@ -331,6 +332,7 @@ begin
         Parser.Free;
       end;
     except
+      if IsFatalScanException(ExceptObject) then raise;   // E3 (Pfad ohne AST-Cache)
       Exit;
     end;
   end;

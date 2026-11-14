@@ -104,7 +104,8 @@ implementation
 // konsumiert - UnusedPublicMember ist hier erwartet, nicht tot.
 
 uses
-  uParser2;
+  uParser2,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 const
   // Zyklus-/Tiefen-Schutz fuer die Elternketten-Traversierung. 32 ist weit
@@ -279,7 +280,9 @@ begin
         Root := Parser.ParseFile(PasFileName);
         OwnsRoot := True;
       except
-        // Defekte .pas - silent skip, wie bei uSymbolReferenceIndex.
+        // Defekte .pas - silent skip, wie bei uSymbolReferenceIndex;
+        // Stapel/Speicher erschoepft bricht ab (E3, Pfad ohne AST-Cache).
+        if IsFatalScanException(ExceptObject) then raise;
         Exit;
       end;
     finally

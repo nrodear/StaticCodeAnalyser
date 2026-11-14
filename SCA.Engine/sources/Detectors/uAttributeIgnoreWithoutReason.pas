@@ -34,7 +34,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uLocalization,   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 const
   // `[Ignore]` oder `[Ignore()]` (optional leere Klammern). Ein echtes
@@ -87,6 +88,7 @@ begin
       try
         if not RE.IsMatch(Code) then Continue;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3: Stapel/Speicher bricht ab
         Continue;  // defekte Regex auf Edge-Case -> Zeile skippen
       end;
       F            := TLeakFinding.Create;

@@ -69,7 +69,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uScaConfigDir;   // ScaConfigDir - die EINE Formel fuer die Ablage (G05-21)
+  uScaConfigDir,   // ScaConfigDir - die EINE Formel fuer die Ablage (G05-21)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 function MatchesMaskSafe(const AName, APattern: string): Boolean;
 // MatchesMask mit dem Schutz, den die Schwesterunit uPathOverrides
@@ -85,6 +86,7 @@ begin
   try
     Result := MatchesMask(AName, APattern);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3: kein Masken-Defekt
     Result := False; // Defekt-Mask -> kein Match (defensiv)
   end;
 end;

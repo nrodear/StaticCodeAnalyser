@@ -51,7 +51,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uLocalization,   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 const
   TESTFIXTURE_RE = '\[TestFixture\b';
@@ -172,6 +173,7 @@ begin
           end;
         end;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3: Stapel/Speicher bricht ab
         Continue;
       end;
       if InFixture then

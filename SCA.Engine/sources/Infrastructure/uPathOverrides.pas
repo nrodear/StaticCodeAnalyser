@@ -88,7 +88,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Masks, System.StrUtils, System.IniFiles;
+  System.Masks, System.StrUtils, System.IniFiles,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 var
   GRules : TList<TPathOverrideRule> = nil;
@@ -222,6 +223,7 @@ begin
   try
     Result := MatchesMask(PathN, GlobN);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3: kein Masken-Defekt
     Result := False; // Defekt-Mask -> kein Match (defensiv)
   end;
 end;

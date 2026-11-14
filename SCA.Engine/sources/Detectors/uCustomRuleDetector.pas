@@ -94,7 +94,8 @@ implementation
 
 uses
   System.IOUtils, System.StrUtils,
-  uYamlSubsetParser, uFileTextCache;
+  uYamlSubsetParser, uFileTextCache,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 { ---- Init / Done ---- }
 
@@ -257,9 +258,14 @@ begin
             R.PatternRegex := TRegEx.Create(R.Pattern, [roCompiled]);
           except
             on E: Exception do
+            begin
+              // Erschoepfter Stapel/Speicher unverpackt weiter (E3) - als
+              // gewoehnliche Exception verpackt verloere er seine Klasse.
+              if IsFatalScanException(E) then raise;
               raise Exception.CreateFmt(
                 'Custom rule %s: invalid regex "%s": %s',
                 [R.ID, R.Pattern, E.Message]);
+            end;
           end;
         end;
         Staged.Add(R);
