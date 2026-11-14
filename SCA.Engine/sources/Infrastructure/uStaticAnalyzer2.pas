@@ -2087,6 +2087,22 @@ begin
     var IndexFiles: TStringList := ASide.IndexFiles;
     if IndexFiles = nil then IndexFiles := FileList;
 
+    // Dateizahl des Laufs VOR den Pre-Indizes melden (Review-Runde
+    // 2026-11-14, M3): der erste Tick der Datei-Phase kam bisher erst aus dem
+    // Main-Loop - der wahrscheinlichste Speicher-Abbruch liegt aber hier, und
+    // Projekt-/Gruppen-/Listen-Laeufe haben keine Walk-Ticks. Alle
+    // Fortschritts-Abnehmer (IDE-Runner, Watch, Standalone) vertragen
+    // (0, Total): Marquee -> Normal, 'Datei 0 / N'. Semantik wie jeder Tick
+    // (SafeProgress): EAbort und fatale Ausnahmen gehen durch.
+    if FileList.Count > 0 then
+      SafeProgress(0, FileList.Count);
+
+    // E4 (offen, Nico-Entscheid 2026-11-14): die Pre-Index-Builds laden
+    // JEDE Datei der Index-Liste ohne das MaxFileBytes-Tor des Main-Loops
+    // (uDfmRepoIndex.Build, uInterfaceGuidIndex.Build). Seit E3 bricht eine
+    // einzelne Riesendatei, an der der Speicher ausgeht, damit den ganzen
+    // Lauf ab. Das Tor auch hier zu setzen kann Funde anderer Dateien
+    // verschieben (Index-Inhalt) und braucht eine A/B-Messung.
     LastPhase := 'Pre-Index: DfmRepoIndex.Build';
     Ctx.DfmRepoIndex := TDfmRepoIndex.Create;
     try
@@ -2112,6 +2128,8 @@ begin
     LastPhase := 'Pre-Index: SymbolRefIndex.Build';
     Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.SymbolRefIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
@@ -2130,6 +2148,8 @@ begin
     LastPhase := 'Pre-Index: TypeIndex.Build';
     Ctx.TypeIndex := TTypeIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.TypeIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
@@ -2148,6 +2168,8 @@ begin
     LastPhase := 'Pre-Index: InterfaceGuidIndex.Build';
     Ctx.InterfaceGuidIndex := TInterfaceGuidIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.InterfaceGuidIndex.Build(IndexFiles);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
@@ -2792,12 +2814,20 @@ begin
   try
     AnalyzeList.Add(FileName);
     try
+      // ANewLog = False (m8): der Index-Walk eines Einzeldatei-Scans haengt
+      // an das Scan-Log an, statt das Log des letzten Ordner-Scans
+      // wegzuschieben - Silent/Watch laufen bei jedem Speichern.
       IndexList := TStaticFiles.TryGetAllPasFiles(ProjectRoot, ScanErr,
-        nil, nil);
+        nil, nil, nil, False);
     except
       // Ohne Index laeuft der Single-File-Scan weiter - ausser bei
-      // erschoepftem Stapel/Speicher (E3).
-      if IsFatalScanException(ExceptObject) then raise;
+      // erschoepftem Stapel/Speicher (E3). Dann geht auch die Ergebnisliste
+      // frei - das finally unten kennt sie nicht (Review-Runde 2026-11-14).
+      if IsFatalScanException(ExceptObject) then
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       IndexList := nil;
     end;
     // Bei nil oder leerer IndexList faellt ParseLeaks intern auf

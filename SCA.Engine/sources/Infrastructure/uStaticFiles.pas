@@ -42,11 +42,17 @@ type
     // vor dem Hinzufuegen zur Ergebnisliste.
     // AConfigFiles (optional, SCA201): sammelt im selben Lauf die
     // Konfigurationsdateien (TConfigFiles); der Aufrufer besitzt die Liste.
+    // ANewLog (Review-Runde 2026-11-14, m8): True = dieser Walk beginnt ein
+    // neues Scan-Log (Vorlauf -> .prev.log, Log neu). False = nur
+    // anhaengen - fuer den Index-Walk der Einzeldatei-Scans (Silent, Watch,
+    // aktuelle Datei), die sonst bei JEDEM Speichern das Log eines
+    // abgebrochenen Ordner-Scans weggeschoben haetten.
     class function TryGetAllPasFiles(const Path: string;
       out ErrorMsg: string;
       ATick: TScanTickProc = nil;
       AIgnore: TIgnoreList = nil;
-      AConfigFiles: TStringList = nil): TStringList; static;
+      AConfigFiles: TStringList = nil;
+      ANewLog: Boolean = True): TStringList; static;
 
     class function ValidatePath(const Path: string): boolean;
 
@@ -402,7 +408,8 @@ class function TStaticFiles.TryGetAllPasFiles(const Path: string;
   out ErrorMsg: string;
   ATick: TScanTickProc;
   AIgnore: TIgnoreList;
-  AConfigFiles: TStringList): TStringList;
+  AConfigFiles: TStringList;
+  ANewLog: Boolean): TStringList;
 // Neue API: gibt Fehler explizit zurueck, damit Caller informieren kann.
 // ATick wird waehrend des Scans periodisch aufgerufen - Aufrufer kann
 // dort ProcessMessages machen oder per Abort den Scan abbrechen.
@@ -445,8 +452,11 @@ begin
     Result := TStringList.Create;
     Errors := TStringList.Create;
     try
-      RotateScanLog(LogPath);   // Vorlauf aufheben (s. dort)
-      LogStream := TStreamWriter.Create(LogPath, False, TEncoding.UTF8);
+      // Neues Log nur fuer einen eigenen Scan (ANewLog): Vorlauf aufheben
+      // (s. RotateScanLog), dann neu anlegen. Sonst anhaengen.
+      if ANewLog then
+        RotateScanLog(LogPath);
+      LogStream := TStreamWriter.Create(LogPath, not ANewLog, TEncoding.UTF8);
       Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
           + ' Pfad: ' + Path + ' ===');
     except
