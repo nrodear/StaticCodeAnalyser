@@ -1004,7 +1004,8 @@ Correspondance des codes de sortie avec `--fail-on error` :
   côté de conseils ou d'avertissements → **commit bloqué** ; un scan qui
   a sauté des fichiers ne doit pas ressembler à un scan propre
 - 99 = erreur d'outil (arguments invalides, profil inconnu, rapport non
-  inscriptible) → **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
+  inscriptible, mémoire épuisée pendant le scan - il s'interrompt alors et
+  n'écrit aucun rapport) → **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
   à un scan propre ; la règle `GEQ 3` ci-dessus couvre les deux.
 
 Sans `--fail-on`, le code de sortie est gradué (1 = conseils,

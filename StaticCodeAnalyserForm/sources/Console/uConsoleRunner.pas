@@ -17,7 +17,7 @@
 //   3  = mindestens 1 Error
 //   4  = mindestens 1 Read-Error (Parser-/IO-Fehler)
 //   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, unbekanntes Profil,
-//        VCS-Fehler bei --diff/--branch, ...)
+//        VCS-Fehler bei --diff/--branch, Speicher erschoepft, ...)
 //
 // Die Rangleiter 1-3 gewinnt gegen 4: ein Lauf mit Errors UND Lesefehlern
 // meldet 3. --fail-on darf einen Lauf mit Lesefehlern aber nicht auf 0
@@ -1008,7 +1008,7 @@ begin
   WriteLn('   3 = errors present');
   WriteLn('   4 = read errors (parser/IO), no higher tier reached');
   WriteLn('  99 = tool error (bad args, missing path, unknown profile, VCS failure');
-  WriteLn('       in --diff/--branch, ...)');
+  WriteLn('       in --diff/--branch, scan out of memory, ...)');
   WriteLn('');
   WriteLn('  The tiers outrank each other in that order: a run with errors AND');
   WriteLn('  read errors exits 3, not 4. --fail-on lowers a suppressed tier to');
@@ -2226,6 +2226,12 @@ begin
       on E: Exception do
       begin
         WriteLn(ErrOutput, 'Tool error: ', E.ClassName, ': ', E.Message);
+        // E3 (2026-11-14): erschoepfter Speicher bricht den Scan in der
+        // Engine ab, statt ein lueckenhaftes Ergebnis (SCA006 je Datei) zu
+        // liefern - Exit 99, kein Bericht. Der Ausweg gehoert zur Meldung.
+        if E is EOutOfMemory then
+          WriteLn(ErrOutput, 'The scan ran out of memory and was aborted; ' +
+            'no report was written. Narrow --path, or run the 64-bit build.');
         Exit(Integer(cecToolError));
       end;
     end;

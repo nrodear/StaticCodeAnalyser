@@ -967,7 +967,8 @@ Exit code mapping with `--fail-on error`:
 - 4 = read errors (files the scan could not read), also next to hints or
   warnings → **commit blocked**; a scan that skipped files must not look
   like a clean one
-- 99 = tool error (bad arguments, unknown profile, report not writable)
+- 99 = tool error (bad arguments, unknown profile, report not writable,
+  the scan ran out of memory - it is then aborted and writes no report)
   → **commit blocked**. A scan that never happened must not look like a clean one;
   the `GEQ 3` rule above covers both.
 
