@@ -2699,6 +2699,10 @@ var
   FileList : TStringList;
   Configs  : TStringList;
 begin
+  // Einzeldatei-Scans haengen nur an das Scan-Log an - die Kappung haelt
+  // es klein (Review-Runde 2026-11-14, NEW-1; s. TStaticFiles.CapScanLog).
+  // VOR dem Result: reicht sie Stapel/Speicher weiter, bleibt nichts liegen.
+  TStaticFiles.CapScanLog;
   Result := TObjectList<TLeakFinding>.Create(True);
   if Trim(FileName) = '' then
   begin
@@ -2785,6 +2789,12 @@ var
   IndexList   : TStringList;
   ScanErr     : string;
 begin
+  // Kappung VOR dem anhaengenden Index-Walk (Review-Runde 2026-11-14,
+  // NEW-1): ueber 1 MB wird das Log zu .prev.log - die Silent-Scans laufen
+  // bei jedem Tab-Wechsel und Speichern, ohne Grenze wuchs es um einige MB
+  // am Tag. VOR dem Result (s. AnalyzeOne); die Rueckfaelle unten auf
+  // AnalyzeOne kappen dort ein zweites Mal - folgenlos.
+  TStaticFiles.CapScanLog;
   Result := TObjectList<TLeakFinding>.Create(True);
   if Trim(FileName) = '' then
   begin
@@ -2817,8 +2827,8 @@ begin
     AnalyzeList.Add(FileName);
     try
       // slmAppendLog (m8): der Index-Walk eines Einzeldatei-Scans haengt an
-      // das Scan-Log an, statt das Log des letzten Ordner-Scans
-      // wegzuschieben - Silent/Watch laufen bei jedem Speichern.
+      // das Scan-Log an (eine Summenzeile), statt das Log des letzten
+      // Ordner-Scans wegzuschieben - Silent/Watch laufen bei jedem Speichern.
       IndexList := TStaticFiles.TryGetAllPasFiles(ProjectRoot, ScanErr,
         nil, nil, nil, slmAppendLog);
     except

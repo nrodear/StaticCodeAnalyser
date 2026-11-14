@@ -14,9 +14,12 @@ type
   TScanTickProc = reference to procedure(FilesFound: Integer);
 
   // Scan-Log eines Walks (Review-Runde 2026-11-14, m8): slmNewLog beginnt
-  // ein neues Log (Vorlauf -> .prev.log), slmAppendLog haengt an das
-  // laufende an. Aufzaehlung statt Boolean: am Aufrufer liest sich
-  // 'slmAppendLog', ein nacktes 'False' nicht.
+  // ein neues Log (Vorlauf -> .prev.log) mit allen Einzelheiten,
+  // slmAppendLog haengt an das laufende an - nur EINE Summenzeile, keine
+  // Zeile je uebersprungenem Eintrag (sonst wuchs das Log mit jedem
+  // Silent-Scan um eine Zeile je __history/.git-Ordner). Aufzaehlung statt
+  // Boolean: am Aufrufer liest sich 'slmAppendLog', ein nacktes 'False'
+  // nicht.
   TScanLogMode = (slmNewLog, slmAppendLog);
 
   TStaticFiles = class
@@ -50,15 +53,31 @@ type
     // Konfigurationsdateien (TConfigFiles); der Aufrufer besitzt die Liste.
     // ALogMode (Review-Runde 2026-11-14, m8): slmNewLog = dieser Walk
     // beginnt ein neues Scan-Log (Vorlauf -> .prev.log, Log neu).
-    // slmAppendLog = nur anhaengen - fuer den Index-Walk der Einzeldatei-
-    // Scans (Silent, Watch, aktuelle Datei), die sonst bei JEDEM Speichern
-    // das Log eines abgebrochenen Ordner-Scans weggeschoben haetten.
+    // slmAppendLog = nur anhaengen, eine Summenzeile - fuer den Index-Walk
+    // der Einzeldatei-Scans (Silent, Watch, aktuelle Datei), die sonst bei
+    // JEDEM Speichern das Log eines abgebrochenen Ordner-Scans weggeschoben
+    // haetten, und fuer die Partition der CLI (--dialect=auto). Die Groesse
+    // begrenzt nicht der Walk, sondern CapScanLog am Einzeldatei-Einstieg.
     class function TryGetAllPasFiles(const Path: string;
       out ErrorMsg: string;
       ATick: TScanTickProc = nil;
       AIgnore: TIgnoreList = nil;
       AConfigFiles: TStringList = nil;
       ALogMode: TScanLogMode = slmNewLog): TStringList; static;
+
+    // Scan-Log-Pflege (Review-Runde 2026-11-14, NEW-1/NEW-5). Beide sind
+    // best-effort: ein gesperrtes Log verhindert keinen Scan.
+    // StartNewScanLog: der Vorlauf wird .prev.log, der naechste Schreiber
+    // legt das Log neu an - fuer einen Lauf, dessen Walks nur anhaengen
+    // (CLI --dialect=auto im Mischbaum).
+    class procedure StartNewScanLog; static;
+    // CapScanLog: ueber SCAN_LOG_APPEND_CAP Bytes dasselbe - am Einstieg
+    // der wiederkehrenden Einzeldatei-Scans (TStaticAnalyzer2.AnalyzeLeaks/
+    // AnalyzeOne), die nur anhaengen. Bis dahin bleibt das Log eines
+    // abgebrochenen Ordner-Scans stehen, danach als .prev.log bis zur
+    // naechsten Kappung - bei rund 0,4 KB je Einzeldatei-Scan einige
+    // tausend Scans.
+    class procedure CapScanLog; static;
 
     class function ValidatePath(const Path: string): boolean;
 
@@ -410,6 +429,59 @@ begin
   end;
 end;
 
+const
+  // Obergrenze des Scan-Logs fuer die anhaengenden Einzeldatei-Scans
+  // (CapScanLog). 1 MB: ein Einzeldatei-Scan schreibt rund 0,4 KB (eine
+  // Walk-Summenzeile, die ParseLeaks-Zeilen der Datei).
+  SCAN_LOG_APPEND_CAP = 1024 * 1024;
+
+class procedure TStaticFiles.StartNewScanLog;
+begin
+  RotateScanLog(TIgnoreList.LogFilePath);
+end;
+
+class procedure TStaticFiles.CapScanLog;
+var
+  LogPath : string;
+begin
+  try
+    LogPath := TIgnoreList.LogFilePath;
+    if FileExists(LogPath) and (TFile.GetSize(LogPath) > SCAN_LOG_APPEND_CAP) then
+      RotateScanLog(LogPath);
+  except
+    // Kappung ist Komfort wie die Rotation - nur erschoepfter Stapel/
+    // Speicher geht weiter (E3).
+    if IsFatalScanException(ExceptObject) then raise;
+  end;
+end;
+
+function OpenWalkLog(const ALogPath, APath: string;
+  AMode: TScanLogMode): TStreamWriter;
+// Das Scan-Log eines Walks oeffnen: slmNewLog - Vorlauf aufheben
+// (RotateScanLog), neu anlegen, Kopfzeile; slmAppendLog - anhaengen, ohne
+// Kopfzeile (die Summenzeile am Ende traegt Zeit und Pfad, NEW-1). nil,
+// wenn das Log nicht zu oeffnen ist. Eigene Routine seit der Review-Runde
+// 2026-11-14 (der zweite Modus trieb TryGetAllPasFiles ueber die
+// Komplexitaetsschwelle); Verhalten wie vorher inline.
+begin
+  Result := nil;
+  try
+    if AMode = slmNewLog then
+      RotateScanLog(ALogPath);
+    Result := TStreamWriter.Create(ALogPath, AMode = slmAppendLog,
+      TEncoding.UTF8);
+    if AMode = slmNewLog then
+      Result.WriteLine('=== Scan gestartet: ' + FormatDateTime(
+        'yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
+        + ' Pfad: ' + APath + ' ===');
+  except
+    // Log-Datei optional - kein Hard-Fail. FreeAndNil statt nil-Zuweisung,
+    // sonst leakt der StreamWriter falls Create klappt aber die erste Zeile
+    // wirft (z.B. disk full).
+    FreeAndNil(Result);
+  end;
+end;
+
 class function TStaticFiles.TryGetAllPasFiles(const Path: string;
   out ErrorMsg: string;
   ATick: TScanTickProc;
@@ -457,21 +529,9 @@ begin
   try
     Result := TStringList.Create;
     Errors := TStringList.Create;
-    try
-      // Neues Log nur fuer einen eigenen Scan (slmNewLog): Vorlauf aufheben
-      // (s. RotateScanLog), dann neu anlegen. Sonst anhaengen.
-      if ALogMode = slmNewLog then
-        RotateScanLog(LogPath);
-      LogStream := TStreamWriter.Create(LogPath, ALogMode = slmAppendLog,
-        TEncoding.UTF8);
-      Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
-          + ' Pfad: ' + Path + ' ===');
-    except
-      // Log-Datei optional - kein Hard-Fail. FreeAndNil statt nil-Zuweisung,
-      // sonst leakt der StreamWriter falls Create klappt aber das erste Log()
-      // wirft (z.B. disk full).
-      FreeAndNil(LogStream);
-    end;
+    // Neues Log nur fuer einen eigenen Scan (slmNewLog), sonst anhaengen
+    // (s. OpenWalkLog). nil = ohne Log weiter.
+    LogStream := OpenWalkLog(LogPath, Path, ALogMode);
 
     if Path = '' then
     begin
@@ -485,22 +545,37 @@ begin
       Exit;
     end;
     try
-      if Assigned(AIgnore) then
+      if Assigned(AIgnore) and (ALogMode = slmNewLog) then
         Log(Format('Ignore-Liste aktiv: %d Muster aus %s',
                    [AIgnore.PatternCount, AIgnore.ConfigFilePath]));
       // ALogSkip-Callback: ScanRec ruft das pro skip-event (Ignore/Excluded
       // /Symlink). Capture LogStream direkt - nested procs (Log) sind in
-      // anonymous methods nicht referenzierbar (E2555).
+      // anonymous methods nicht referenzierbar (E2555). Beim Anhaengen
+      // (NEW-1) nur zaehlen: die Zeilen je Eintrag waren der Grossteil des
+      // Wachstums - je Silent-Scan eine Zeile je __history/.git-Ordner.
       var CaptStream := LogStream;
+      var Detail     := ALogMode = slmNewLog;
+      var Skipped    := 0;
       ScanRec(Path, Result, 0, Errors, ATick, AIgnore, TickCounter,
         procedure(S: string)
         begin
-          if Assigned(CaptStream) then
+          if not Detail then
+            Inc(Skipped)
+          else if Assigned(CaptStream) then
             try CaptStream.WriteLine(S); except end;
         end,
         AConfigFiles);
-      Log(Format('=== Scan fertig: %d Dateien, %d Eintraege gepruft ===',
-                 [Result.Count, TickCounter]));
+      if Detail then
+        Log(Format('=== Scan fertig: %d Dateien, %d Eintraege gepruft ===',
+                   [Result.Count, TickCounter]))
+      else
+        // Die EINE Zeile des anhaengenden Walks; Fehler nur gezaehlt - ein
+        // dauerhaft unlesbarer Ordner kaeme sonst bei jedem Scan neu dazu.
+        Log(Format('=== Walk (angehaengt) %s %s: %d Dateien, %d Eintraege, '
+                   + '%d uebersprungen, %d Fehler ===',
+                   [FormatDateTime('yyyy-mm-dd hh:nn:ss', Now,
+                     TFormatSettings.Invariant), Path, Result.Count,
+                    TickCounter, Skipped, Errors.Count]));
     except
       on EAbort do
       begin
@@ -526,8 +601,10 @@ begin
       end;
     end;
     if Errors.Count > 0 then
-    begin
       ErrorMsg := Errors.Text;
+    // Beim Anhaengen steht nur die Zahl in der Summenzeile (s. oben).
+    if (Errors.Count > 0) and (ALogMode = slmNewLog) then
+    begin
       Log('--- Fehler waehrend Scan ---');
       Log(Errors.Text);
     end;

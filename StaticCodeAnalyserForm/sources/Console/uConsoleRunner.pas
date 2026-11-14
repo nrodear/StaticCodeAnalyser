@@ -1321,10 +1321,14 @@ begin
   try
     // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
     // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+    // slmAppendLog (Review-Runde 2026-11-14, NEW-5): die Partition haengt
+    // eine Summenzeile an; das neue Log beginnt der Hauptlauf (ssRecursive)
+    // bzw. im Mischbaum StartNewScanLog unten. Bis dahin begannen Partition
+    // UND Hauptlauf je ein neues Log - das Log des vorigen Laufs war weg.
     TStaticFiles.ScanDialect := dlFpc;
     try
       AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
-        nil, Configs);
+        nil, Configs, slmAppendLog);
     finally
       TStaticFiles.ScanDialect := AltDialekt;
     end;
@@ -1356,6 +1360,12 @@ begin
           [PartDelphi.Count, PartFpc.Count]));
         PartDelphi.AddStrings(Configs);
         AlleDateien.AddStrings(Configs);
+        // Die beiden Listen-Laeufe beginnen kein neues Scan-Log, solange sie
+        // keinen Index-Walk haben (AnalyzeLeaksFromList walkt nur einen
+        // vorhandenen IndexRoot) - dann beginnt es hier, sonst wuchse es mit
+        // jedem Mischbaum-Lauf ohne Grenze (NEW-5).
+        if (Args.IndexRoot = '') or not DirectoryExists(Args.IndexRoot) then
+          TStaticFiles.StartNewScanLog;
         Req.Scope     := ssFileList;
         Req.Files     := PartDelphi.ToStringArray;
         Req.Dialect   := dlDelphi;
