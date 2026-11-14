@@ -1179,9 +1179,11 @@ begin
       AText  := TFile.ReadAllText(FileName, TEncoding.UTF8);
       Result := True;
     except
-      // noinspection ExceptionTooGeneral
       // Jede Lesefehlerart fuehrt zur selben Antwort ("keine Baseline");
-      // die konkrete Ursache steht im Klartext in AReason.
+      // die konkrete Ursache steht im Klartext in AReason. (Der Marker
+      // 'noinspection ExceptionTooGeneral' entfiel 2026-11-14: mit der
+      // E3-Durchreiche unten gibt der Handler weiter und gilt nicht mehr
+      // als zu allgemein.)
       on E: Exception do
       begin
         // E3: erschoepfter Stapel/Speicher ist kein 'unreadable' - Abbruch.

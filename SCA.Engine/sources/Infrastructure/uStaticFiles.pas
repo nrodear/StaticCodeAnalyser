@@ -13,6 +13,12 @@ type
   // (-> EAbort) ausloesen, wenn der User die Suche abbrechen will.
   TScanTickProc = reference to procedure(FilesFound: Integer);
 
+  // Scan-Log eines Walks (Review-Runde 2026-11-14, m8): slmNewLog beginnt
+  // ein neues Log (Vorlauf -> .prev.log), slmAppendLog haengt an das
+  // laufende an. Aufzaehlung statt Boolean: am Aufrufer liest sich
+  // 'slmAppendLog', ein nacktes 'False' nicht.
+  TScanLogMode = (slmNewLog, slmAppendLog);
+
   TStaticFiles = class
   private
     // VOR den Properties deklariert - Delphi verlangt das Feld textuell
@@ -42,17 +48,17 @@ type
     // vor dem Hinzufuegen zur Ergebnisliste.
     // AConfigFiles (optional, SCA201): sammelt im selben Lauf die
     // Konfigurationsdateien (TConfigFiles); der Aufrufer besitzt die Liste.
-    // ANewLog (Review-Runde 2026-11-14, m8): True = dieser Walk beginnt ein
-    // neues Scan-Log (Vorlauf -> .prev.log, Log neu). False = nur
-    // anhaengen - fuer den Index-Walk der Einzeldatei-Scans (Silent, Watch,
-    // aktuelle Datei), die sonst bei JEDEM Speichern das Log eines
-    // abgebrochenen Ordner-Scans weggeschoben haetten.
+    // ALogMode (Review-Runde 2026-11-14, m8): slmNewLog = dieser Walk
+    // beginnt ein neues Scan-Log (Vorlauf -> .prev.log, Log neu).
+    // slmAppendLog = nur anhaengen - fuer den Index-Walk der Einzeldatei-
+    // Scans (Silent, Watch, aktuelle Datei), die sonst bei JEDEM Speichern
+    // das Log eines abgebrochenen Ordner-Scans weggeschoben haetten.
     class function TryGetAllPasFiles(const Path: string;
       out ErrorMsg: string;
       ATick: TScanTickProc = nil;
       AIgnore: TIgnoreList = nil;
       AConfigFiles: TStringList = nil;
-      ANewLog: Boolean = True): TStringList; static;
+      ALogMode: TScanLogMode = slmNewLog): TStringList; static;
 
     class function ValidatePath(const Path: string): boolean;
 
@@ -409,7 +415,7 @@ class function TStaticFiles.TryGetAllPasFiles(const Path: string;
   ATick: TScanTickProc;
   AIgnore: TIgnoreList;
   AConfigFiles: TStringList;
-  ANewLog: Boolean): TStringList;
+  ALogMode: TScanLogMode): TStringList;
 // Neue API: gibt Fehler explizit zurueck, damit Caller informieren kann.
 // ATick wird waehrend des Scans periodisch aufgerufen - Aufrufer kann
 // dort ProcessMessages machen oder per Abort den Scan abbrechen.
@@ -452,11 +458,12 @@ begin
     Result := TStringList.Create;
     Errors := TStringList.Create;
     try
-      // Neues Log nur fuer einen eigenen Scan (ANewLog): Vorlauf aufheben
+      // Neues Log nur fuer einen eigenen Scan (slmNewLog): Vorlauf aufheben
       // (s. RotateScanLog), dann neu anlegen. Sonst anhaengen.
-      if ANewLog then
+      if ALogMode = slmNewLog then
         RotateScanLog(LogPath);
-      LogStream := TStreamWriter.Create(LogPath, not ANewLog, TEncoding.UTF8);
+      LogStream := TStreamWriter.Create(LogPath, ALogMode = slmAppendLog,
+        TEncoding.UTF8);
       Log('=== Scan gestartet: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Now, TFormatSettings.Invariant)
           + ' Pfad: ' + Path + ' ===');
     except

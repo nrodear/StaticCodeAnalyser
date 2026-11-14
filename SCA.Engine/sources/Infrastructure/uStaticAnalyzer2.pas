@@ -1737,6 +1737,8 @@ begin
       1: OutOfMemoryError;
       2: raise EStackExhausted.Create(
            'Stapel erschoepft in einem Parallel-Worker - Scan abgebrochen');
+    else
+      ; // 0: kein fataler Fehler - weiter zum Merge
     end;
 
     // ---- Deterministischer Merge in Dateilisten-Reihenfolge ----
@@ -2814,11 +2816,11 @@ begin
   try
     AnalyzeList.Add(FileName);
     try
-      // ANewLog = False (m8): der Index-Walk eines Einzeldatei-Scans haengt
-      // an das Scan-Log an, statt das Log des letzten Ordner-Scans
+      // slmAppendLog (m8): der Index-Walk eines Einzeldatei-Scans haengt an
+      // das Scan-Log an, statt das Log des letzten Ordner-Scans
       // wegzuschieben - Silent/Watch laufen bei jedem Speichern.
       IndexList := TStaticFiles.TryGetAllPasFiles(ProjectRoot, ScanErr,
-        nil, nil, nil, False);
+        nil, nil, nil, slmAppendLog);
     except
       // Ohne Index laeuft der Single-File-Scan weiter - ausser bei
       // erschoepftem Stapel/Speicher (E3). Dann geht auch die Ergebnisliste

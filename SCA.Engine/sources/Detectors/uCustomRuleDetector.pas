@@ -194,6 +194,26 @@ begin
   Result := lsWarning;
 end;
 
+function CompileRuleRegex(const ARule: TCustomRule): TRegEx;
+// Das Muster einer Regex-Regel vorkompilieren. Ein ungueltiges Muster wird
+// zur Meldung mit Regel-ID; erschoepfter Stapel/Speicher geht UNVERPACKT
+// weiter (E3) - als gewoehnliche Exception verpackt verloere er seine
+// Klasse. Eigene Routine seit der Review-Runde 2026-11-14: die Fangstelle
+// tief in LoadFromYaml trieb dessen kognitive Komplexitaet ueber die
+// Schwelle.
+begin
+  try
+    Result := TRegEx.Create(ARule.Pattern, [roCompiled]);
+  except
+    on E: Exception do
+    begin
+      if IsFatalScanException(E) then raise;
+      raise Exception.CreateFmt('Custom rule %s: invalid regex "%s": %s',
+        [ARule.ID, ARule.Pattern, E.Message]);
+    end;
+  end;
+end;
+
 class procedure TCustomRuleDetector.LoadFromYaml(const FileName: string);
 // ALLES ODER NICHTS (Review 2026-09-13). Frueher ging jede fertig geparste
 // Regel sofort nach FRules - eine Exception in Regel N liess die Regeln
@@ -253,21 +273,7 @@ begin
         // Regex pre-compilen damit RuntimeFehler im AnalyzeFile-Hot-Path
         // nicht jedes Match teurer machen.
         if R.PatternType = ptRegex then
-        begin
-          try
-            R.PatternRegex := TRegEx.Create(R.Pattern, [roCompiled]);
-          except
-            on E: Exception do
-            begin
-              // Erschoepfter Stapel/Speicher unverpackt weiter (E3) - als
-              // gewoehnliche Exception verpackt verloere er seine Klasse.
-              if IsFatalScanException(E) then raise;
-              raise Exception.CreateFmt(
-                'Custom rule %s: invalid regex "%s": %s',
-                [R.ID, R.Pattern, E.Message]);
-            end;
-          end;
-        end;
+          R.PatternRegex := CompileRuleRegex(R);
         Staged.Add(R);
       end;
     finally
