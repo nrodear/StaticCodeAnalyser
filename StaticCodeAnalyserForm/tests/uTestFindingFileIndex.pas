@@ -62,6 +62,9 @@ type
     [Test] procedure Sync_CountChanged_Rebuilds;
     [Test] procedure Sync_OtherList_Rebuilds;
     [Test] procedure Sync_NilList_EmptyIndex;
+    // Review-Runde 2026-11-14 (m11): ein Neubau, der mitten im Befuellen
+    // wirft, gilt nicht als gebaut - der naechste Sync baut neu.
+    [Test] procedure Sync_AfterFailedRebuild_RebuildsAgain;
     [Test] procedure FindingsStampOf_TakesNewestGeneration;
     [Test] procedure Delivery_FreesOldOnlyAfterDisplayDetached;
     [Test] procedure Delivery_AddFailure_SourceKeepsEveryFinding;
@@ -87,8 +90,28 @@ type
     destructor Destroy; override;
   end;
 
+  // Index, dessen Schluessel-Naht beim FailAt-ten Aufruf wirft (0 = nie) -
+  // wie der Speicher, der beim Anlegen eines Eimers ausgeht.
+  TFailingKeyIndex = class(TFindingFileIndex)
+  private
+    FFailAt : Integer;
+    FCalls  : Integer;
+  protected
+    function BucketKey(const AFileName: string): string; override;
+  public
+    property FailAt: Integer read FFailAt write FFailAt;
+  end;
+
 var
   GDestroyCount : TArray<Integer>;
+
+function TFailingKeyIndex.BucketKey(const AFileName: string): string;
+begin
+  Inc(FCalls);
+  if FCalls = FFailAt then
+    OutOfMemoryError;   // das RTL-Objekt, kein eigenes (EHeapException.AllowFree)
+  Result := inherited BucketKey(AFileName);
+end;
 
 constructor TTrackedFinding.CreateTracked(AId: Integer);
 begin
@@ -427,6 +450,39 @@ begin
     Assert.IsTrue(Hits >= 3, 'Vorbedingung: jede Datei findet sich');
     Assert.AreEqual<Integer>(0, Mismatches);
   finally
+    L.Free;
+  end;
+end;
+
+procedure TTestFindingFileIndex.Sync_AfterFailedRebuild_RebuildsAgain;
+// Alt (vor 2026-11-14): Rebuild setzte Quelle, Anzahl, Stempel und FBuilt
+// VOR dem Befuellen. Warf das Befuellen, hielt der naechste Sync mit
+// derselben Liste und demselben Stempel den halben Index fuer aktuell -
+// Builds bliebe 1, und die zweite Datei fehlte unter den Kandidaten.
+var
+  L   : TObjectList<TLeakFinding>;
+  Idx : TFailingKeyIndex;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  Idx := TFailingKeyIndex.Create;
+  try
+    AddFinding(L, 'src\One.pas', 1, 0, 'a');
+    AddFinding(L, 'src\Two.pas', 2, 0, 'b');
+    Idx.FailAt := 2;   // der erste Schluessel geht, der zweite wirft
+    Assert.WillRaise(
+      procedure
+      begin
+        Idx.Sync(L, 7);
+      end, EOutOfMemory, 'der Neubau wirft beim zweiten Schluessel');
+    Assert.IsNull(Idx.Candidates(NormalizePathForKey('src\One.pas')),
+      'kein halber Index nach dem Wurf');
+    Idx.FailAt := 0;
+    Idx.Sync(L, 7);   // gleiche Liste, gleiche Anzahl, gleicher Stempel
+    Assert.AreEqual<Integer>(2, Idx.Builds, 'der zweite Sync hat neu gebaut');
+    Assert.IsNotNull(Idx.Candidates(NormalizePathForKey('src\Two.pas')),
+      'die zweite Datei steht nach dem Neubau im Index');
+  finally
+    Idx.Free;
     L.Free;
   end;
 end;

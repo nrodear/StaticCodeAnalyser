@@ -57,6 +57,10 @@ type
     [Test] procedure IsFormFileName_FolgtDemDialekt;
     // P4.6: FindProjectRoot-Lazarus-Marker (A6/C5)
     [Test] procedure FindProjectRoot_LpiZaehltNurImFpcDialekt;
+    // Review-Runde 2026-11-14 (M4b): erschoepfter Speicher im Walk - hier
+    // aus dem Tick-Rueckruf eines Unterverzeichnisses - bricht ihn ab,
+    // statt eine halbe Dateiliste zu liefern.
+    [Test] procedure Walk_OutOfMemoryInSubdir_AbortsWalk;
   end;
 
 implementation
@@ -373,6 +377,33 @@ begin
   finally
     TStaticFiles.ScanDialect := Alt;
   end;
+end;
+
+procedure TTestStaticFiles.Walk_OutOfMemoryInSubdir_AbortsWalk;
+// Alt: der Eintrags-Fang des Unterverzeichnisses buchte den Wurf als
+// 'Fehler bei ...', der des Elternverzeichnisses haette ihn ebenso
+// gefangen, und TryGetAllPasFiles lieferte die halbe Liste - WillRaise rot.
+// 30 Dateien im Unterordner: der Tick kommt je 25 Eintraege, also im
+// rekursiven Abstieg. slmAppendLog - der Test haengt nur an das Scan-Log
+// an, statt das Log des Anwenders nach .prev.log zu schieben.
+var
+  i : Integer;
+begin
+  for i := 1 to 30 do
+    W(Format('sub\u%d.pas', [i]));
+  Assert.WillRaise(
+    procedure
+    var
+      Err : string;
+      L   : TStringList;
+    begin
+      L := TStaticFiles.TryGetAllPasFiles(FDir, Err,
+        procedure(AFound: Integer)
+        begin
+          OutOfMemoryError;   // das RTL-Objekt (EHeapException.AllowFree)
+        end, nil, nil, slmAppendLog);
+      L.Free;   // nur erreicht, wenn der Walk NICHT abbricht
+    end, EOutOfMemory, 'EOutOfMemory im Walk bricht ihn ab');
 end;
 
 initialization

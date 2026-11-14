@@ -102,6 +102,10 @@ type
     [Test] procedure FaultOom_InPreIndex_AbortsScan;
     [Test] procedure FaultOom_AtAstCacheAdd_AbortsScan;
     [Test] procedure AstCacheAddFailure_DoesNotLeakTree;
+    // Review-Runde 2026-11-14 (M1): auch der Parallel-Pfad (--parallel,
+    // TTask-Worker) bricht mit der echten Klasse ab. Listen-Pfad (ssFileList)
+    // wie RunProject - der rekursive Pfad bleibt tabu (Unit-Kopf).
+    [Test] procedure FaultOom_InParallelWorker_AbortsScan;
   end;
 
 implementation
@@ -112,7 +116,8 @@ uses
   uSCAConsts, uMethodd12,
   uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex,
   uGateStats,   // Gate/GateHit/GateStatsReport
-  uCrashDiag;   // IsFatalScanException, GScanFaultHook (E3-Tests)
+  uCrashDiag,   // IsFatalScanException, GScanFaultHook (E3-Tests)
+  uStaticAnalyzer2;   // gParallelDeclineReason - lief der Parallel-Pfad wirklich?
 
 const
   // Garantiert MEHRERE Befunde, darunter einen, der auch unter der
@@ -1238,14 +1243,22 @@ procedure TTestEngineApi.FatalScanException_StackAndMemoryOnly;
 // Das alte Muster (nur 'on EStackExhausted do raise') faellt am ersten
 // Assert - EOutOfMemory wurde dort verschluckt.
 var
-  E : Exception;
+  E    : Exception;
+  Seen : Boolean;
 begin
+  // Seen (Review-Runde 2026-11-14, m11): ohne den Merker liefe der Test
+  // still gruen, wenn OutOfMemoryError gar nicht wuerfe.
+  Seen := False;
   try
     OutOfMemoryError;
   except
     on X: EOutOfMemory do
+    begin
+      Seen := True;
       Assert.IsTrue(IsFatalScanException(X), 'EOutOfMemory ist fatal');
+    end;
   end;
+  Assert.IsTrue(Seen, 'OutOfMemoryError hat geworfen');
   E := EStackExhausted.Create('Test');
   try
     Assert.IsTrue(IsFatalScanException(E), 'EStackExhausted ist fatal');
@@ -1386,6 +1399,52 @@ begin
   Assert.IsTrue(AfterFails < Held div 2,
     Format('%d fehlgeschlagene Acquire hinterliessen %d Byte (ein Baum: %d)',
       [ROUNDS, AfterFails, Held]));
+end;
+
+procedure TTestEngineApi.FaultOom_InParallelWorker_AbortsScan;
+// Alt: der Task-Fang machte jede Ausnahme zum Text, der Haupt-Thread warf
+// nach dem Merge eine gewoehnliche Exception (bzw. buchte einen
+// Analyseabbruch-Fund) - WillRaise(EOutOfMemory) rot. Jetzt merkt der Task
+// die Klasse, und der Haupt-Thread wirft VOR dem Merge die echte.
+// gParallelDeclineReason leer = das Gate liess parallel laufen; sonst
+// pruefte der Test nur den seriellen Weg (FaultOom_InDetector_AbortsScan).
+var
+  Files : TArray<string>;
+begin
+  Files := [TPath.Combine(FDir, 'ParA.pas'), TPath.Combine(FDir, 'ParB.pas')];
+  TFile.WriteAllText(Files[0],
+    StringReplace(BUG_SRC, 'SampleBug', 'ParA', []), TEncoding.UTF8);
+  TFile.WriteAllText(Files[1],
+    StringReplace(BUG_SRC, 'SampleBug', 'ParB', []), TEncoding.UTF8);
+  GFaultAt := SCAN_FAULT_DETECTOR;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  try
+    Assert.WillRaise(
+      procedure
+      var
+        Req : TScanRequest;
+        Ses : TAnalysisSession;
+        R   : TScanResult;
+      begin
+        Req := TScanRequest.Init;
+        Req.Scope           := ssFileList;
+        Req.Files           := Files;
+        Req.Parallel        := True;
+        Req.ParallelWorkers := 2;
+        Ses := TAnalysisSession.Create;
+        try
+          R := Ses.Run(Req);
+          R.Free;   // nur erreicht, wenn der Scan NICHT abbricht
+        finally
+          Ses.Free;
+        end;
+      end, EOutOfMemory, 'EOutOfMemory im Parallel-Worker bricht den Scan ab');
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+  end;
+  Assert.AreEqual<string>('', gParallelDeclineReason,
+    'der Parallel-Pfad lief: ' + gParallelDeclineReason);
 end;
 
 initialization

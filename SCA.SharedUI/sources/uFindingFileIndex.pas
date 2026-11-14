@@ -72,6 +72,12 @@ type
     // Der Eimer zu AKey; legt ihn an, wenn es ihn noch nicht gibt.
     function BucketOf(const AKey: string): TList<TLeakFinding>;
     procedure Rebuild(AList: TList<TLeakFinding>; AStamp: UInt64);
+  protected
+    // Schluessel des Eimers fuer einen Dateinamen: NormalizePathForKey.
+    // Virtuell nur als Naht fuer die Tests (Review-Runde 2026-11-14, m11) -
+    // eine Unterklasse wirft hier, um einen Neubau mitten im Befuellen
+    // scheitern zu lassen.
+    function BucketKey(const AFileName: string): string; virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -201,6 +207,11 @@ begin
   inherited;
 end;
 
+function TFindingFileIndex.BucketKey(const AFileName: string): string;
+begin
+  Result := NormalizePathForKey(AFileName);
+end;
+
 function TFindingFileIndex.BucketOf(const AKey: string): TList<TLeakFinding>;
 begin
   if not FBuckets.TryGetValue(AKey, Result) then
@@ -244,7 +255,7 @@ begin
       if (Bucket = nil) or (F.FileName <> LastName) then
       begin
         LastName := F.FileName;
-        Bucket   := BucketOf(NormalizePathForKey(LastName));
+        Bucket   := BucketOf(BucketKey(LastName));
       end;
       Bucket.Add(F);
     end;
