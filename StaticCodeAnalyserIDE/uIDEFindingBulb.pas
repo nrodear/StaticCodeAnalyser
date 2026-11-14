@@ -56,9 +56,10 @@ unit uIDEFindingBulb;
 // %TEMP%\sca-bulbtrace.on liegt (Inhalt egal; eine eigene Schalterdatei,
 // nicht die der Fund-Navigation). Dann schreibt jeder UpdateEditor-Lauf
 // eine Zeile 'upd ...' nach %TEMP%\sca-bulbtrace.log - Caret-Zeile,
-// TopLine, Zeilenzustand, Zeichenrechteck, Rechenwert, die alte Suche ueber
-// LineState[V], die echte Caret-Lage (GetGUIThreadInfo), die gewaehlte
-// Quelle, die Birne vorher/nachher und der Ausstiegsgrund -, der
+// TopLine, Zeilenzustand, Zeichenrechteck, oberste Zeile, verschobene
+// Zeilen, Rechenwert, die alte Suche ueber LineState[V], die echte
+// Caret-Lage (GetGUIThreadInfo), die gewaehlte Quelle, die Birne
+// vorher/nachher und der Ausstiegsgrund -, der
 // LineHighlighter je EditorScrolled/EndPaint eine Zeile 'evt ...'. Der
 // Schalter wird hoechstens einmal je Sekunde geprueft; die Zeilen liegen im
 // Speicher und werden im Caret-Takt, beim Abbau und spaetestens ab
@@ -173,7 +174,8 @@ type
     Pitch      : Integer;              // Zeilenabstand
     WholeTop   : Integer;              // LS.WholeRect.Top
     CharPos    : TRect;                // GetCharacterPosPx(LeftColumn, EditorLine)
-    Source     : TCaretLineTopSource;  // woher die Oberkante kam
+    FirstTop   : Integer;              // GetCharacterPosPx(LeftColumn, TopLine).Top
+    Pick       : TCaretLineTop;        // PickCaretLineTop: Oberkante, Quelle, Zeilen
     OldTop     : Integer;              // Oberkante der Birne vor dem Lauf
     OldVisible : Boolean;
   end;
@@ -427,7 +429,8 @@ begin
   AProbe.Pitch      := PROBE_NONE;
   AProbe.WholeTop   := PROBE_NONE;
   AProbe.CharPos    := Rect(0, 0, 0, 0);
-  AProbe.Source     := ltsLineState;
+  AProbe.FirstTop   := PROBE_NONE;
+  AProbe.Pick       := Default(TCaretLineTop);
   AProbe.OldTop     := PROBE_NONE;
   AProbe.OldVisible := False;
   if ABulbs.TryGetValue(AEditorWnd, B) then
@@ -475,16 +478,19 @@ end;
 
 // Rechteck der Caret-Zeile aus ihrem Zeilenzustand ALS (s. FindCaretRect):
 // Hoehe = Zeilenabstand aus WholeRect, ersatzweise CharHeight; die
-// Oberkante waehlt PickCaretLineTop (uEditorBulbGeometry) zwischen
-// WholeRect und GetCharacterPosPx(LeftColumn, EditorLineNum). Bei
-// laufender Spur notiert es, was es gelesen und gewaehlt hat.
+// Oberkante bestimmt PickCaretLineTop (uEditorBulbGeometry) aus WholeRect,
+// GetCharacterPosPx(LeftColumn, EditorLineNum) fuer die Caret-Zeile und
+// GetCharacterPosPx(LeftColumn, TopLine) fuer die oberste sichtbare Zeile.
+// Bei laufender Spur notiert es, was es gelesen und gewaehlt hat.
 function CaretLineRect(const AState: INTACodeEditorState;
   const ALS: INTACodeEditorLineState; var AProbe: TBulbProbe): TRect;
 var
   Whole   : TRect;
   Pitch   : Integer;
   EdLine  : Integer;
+  Col     : Integer;
   CharPos : TRect;
+  First   : TRect;
   Pick    : TCaretLineTop;
 begin
   Whole := ALS.WholeRect;
@@ -492,15 +498,18 @@ begin
   if Pitch <= 0 then
     Pitch := AState.CharHeight;
   EdLine  := ALS.EditorLineNum;
-  CharPos := AState.GetCharacterPosPx(AState.LeftColumn, EdLine);
-  Pick    := PickCaretLineTop(Whole.Top, CharPos, Pitch);
+  Col     := AState.LeftColumn;
+  CharPos := AState.GetCharacterPosPx(Col, EdLine);
+  First   := AState.GetCharacterPosPx(Col, AState.TopLine);
+  Pick    := PickCaretLineTop(Whole.Top, CharPos, First, Pitch);
   Result  := Rect(Whole.Left, Pick.Top, Whole.Right, Pick.Top + Pitch);
   if not AProbe.Active then Exit;
   AProbe.EditorLine := EdLine;
   AProbe.Pitch      := Pitch;
   AProbe.WholeTop   := Whole.Top;
   AProbe.CharPos    := CharPos;
-  AProbe.Source     := Pick.Source;
+  AProbe.FirstTop   := First.Top;
+  AProbe.Pick       := Pick;
 end;
 
 // Spur: Text eines Werts, '-' fuer unbekannt (PROBE_NONE).
@@ -513,6 +522,7 @@ begin
 end;
 
 // Spur: was es nur mit dem Zeilenzustand der Caret-Zeile gibt - darunter
+// die Oberkante der obersten Zeile (first), die verschobenen Zeilen (rows),
 // der Rechenwert calc = (EditorLineNum - TopLine) * Pitch, der nur geloggt
 // und nie benutzt wird, und das ganze Zeichenrechteck (crect).
 function ProbeLineText(const AProbe: TBulbProbe): string;
@@ -522,13 +532,14 @@ var
   Calc : string;
 begin
   if AProbe.EditorLine = PROBE_NONE then
-    Exit('edline=- pitch=- whole=- cpos=- calc=- src=- crect=-');
+    Exit('edline=- pitch=- whole=- cpos=- first=- rows=- calc=- src=- crect=-');
   Calc := '-';
   if AProbe.TopLine <> PROBE_NONE then
     Calc := IntToStr((Int64(AProbe.EditorLine) - AProbe.TopLine) * AProbe.Pitch);
-  Result := Format('edline=%d pitch=%d whole=%d cpos=%d calc=%s src=%s '
-    + 'crect=%d,%d,%d,%d', [AProbe.EditorLine, AProbe.Pitch, AProbe.WholeTop,
-    AProbe.CharPos.Top, Calc, SOURCE_NAMES[AProbe.Source], AProbe.CharPos.Left,
+  Result := Format('edline=%d pitch=%d whole=%d cpos=%d first=%d rows=%d '
+    + 'calc=%s src=%s crect=%d,%d,%d,%d', [AProbe.EditorLine, AProbe.Pitch,
+    AProbe.WholeTop, AProbe.CharPos.Top, AProbe.FirstTop, AProbe.Pick.Rows,
+    Calc, SOURCE_NAMES[AProbe.Pick.Source], AProbe.CharPos.Left,
     AProbe.CharPos.Top, AProbe.CharPos.Right, AProbe.CharPos.Bottom]);
 end;
 
@@ -987,15 +998,17 @@ function TFindingBulbManager.FindCaretRect(AEditor: TWinControl;
 // sichtbar ist (gescrollt oder gefaltet).
 //
 // Das Rechteck kommt seit 2026-11-14 aus CaretLineRect: Hoehe wie bisher
-// aus WholeRect (ersatzweise CharHeight), die OBERKANTE aus
-// GetCharacterPosPx(LeftColumn, EditorLineNum), wenn PickCaretLineTop
-// (uEditorBulbGeometry) das Zeichenrechteck gelten laesst, sonst wie bisher
-// aus WholeRect. Anlass: beim schnellen Mausrad blieb die Birne stehen,
-// waehrend die Zeile wegscrollte - vermutlich nennt WholeRect nach einem
-// Blit-Scroll die Lage der letzten Malung (ungemessen; die Diagnose-Spur
-// zeichnet beide Werte auf). Ob die Zeile sichtbar ist, entscheidet weiter
-// nur IsLogicalLineVisible; liegt die neue Oberkante ausserhalb des Editors,
-// zeigt BulbBounds keine Birne.
+// aus WholeRect (ersatzweise CharHeight); die OBERKANTE ist die von
+// WholeRect, um so viele ganze Zeilen verschoben, wie
+// GetCharacterPosPx(LeftColumn, EditorLineNum) daneben liegt - sofern
+// PickCaretLineTop (uEditorBulbGeometry) das gelten laesst, unter anderem
+// nur, wenn GetCharacterPosPx(LeftColumn, TopLine) im obersten Zeilenband
+// beginnt; sonst wie bisher WholeRect. Anlass: beim schnellen Mausrad blieb
+// die Birne stehen, waehrend die Zeile wegscrollte - vermutlich nennt
+// WholeRect nach einem Blit-Scroll die Lage der letzten Malung (ungemessen;
+// die Diagnose-Spur zeichnet alle Werte auf). Ob die Zeile sichtbar ist,
+// entscheidet weiter nur IsLogicalLineVisible; liegt die neue Oberkante
+// ausserhalb des Editors, zeigt BulbBounds keine Birne.
 //
 // State.Refresh VOR dem Lesen - und das ist zugleich die Antwort auf H6
 // der Caret-Synthese ("laesst INTACodeEditorState.Refresh malen?"): diese

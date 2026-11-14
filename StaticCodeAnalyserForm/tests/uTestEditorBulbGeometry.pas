@@ -41,20 +41,35 @@ type
     [Test] procedure TooSmallHasNoBulb;
     // DPI-Skalierung, Untergrenze und PPI 0.
     [Test] procedure ScalesWithPpiAndHasMinimum;
-    // PickCaretLineTop - Zeilenzustand sagt Oberkante 100, Zeilenabstand
-    // 18. Gleiche Oberkante: das Zeichenrechteck gilt.
+    // PickCaretLineTop - wenn nicht anders genannt: Zeilenzustand 100,
+    // Zeilenabstand 18, Zeichenrechteck 18 hoch, oberste Zeile bei 0.
+    // Gleiche Oberkante: Zeichenrechteck, 0 Zeilen verschoben.
     [Test] procedure SameTopPicksCharPos;
-    // Um ganze Zeilen versetzt (+3, -2): das Zeichenrechteck gilt.
+    // Um ganze Zeilen versetzt (+3, -2).
     [Test] procedure ThreeLinesDownPicksCharPos;
     [Test] procedure TwoLinesUpPicksCharPos;
-    // Um einen Bruchteil einer Zeile versetzt: der Zeilenzustand gilt.
-    [Test] procedure PartLineOffsetKeepsLineState;
-    // Leeres oder verkehrtes Zeichenrechteck: der Zeilenzustand gilt, auch
-    // wenn der Versatz ganzzahlig waere.
+    // Innenrand: ein paar Pixel daneben runden auf ganze Zeilen.
+    [Test] procedure InnerMarginRoundsToWholeLines;
+    // Mehr als eine halbe Zeile daneben: die naechste ganze Zeile.
+    [Test] procedure PartLineRoundsToNearestLine;
+    // Genau eine halbe Zeile: von null weg; knapp darunter: 0 Zeilen.
+    [Test] procedure HalfLineRoundsAwayFromZero;
+    // Leeres oder verkehrtes Zeichenrechteck: Zeilenzustand.
     [Test] procedure EmptyCharPosKeepsLineState;
-    // Zeilenabstand 0 oder negativ: der Zeilenzustand gilt (und keine
-    // Division durch 0).
+    // Zeilenabstand 0 oder negativ: Zeilenzustand (und keine Division
+    // durch 0).
     [Test] procedure NoPitchKeepsLineState;
+    // Oberste Zeile weit unten (Bildschirmzeilen ab 1 gezaehlt):
+    // Zeilenzustand.
+    [Test] procedure FirstLineFarOffKeepsLineState;
+    // Oberste Zeile im obersten Band (17, -17): Zeichenrechteck ...
+    [Test] procedure FirstLineInsideTopBandPicksCharPos;
+    // ... auf der Bandgrenze (18, -18): Zeilenzustand.
+    [Test] procedure FirstLineOnBandEdgeKeepsLineState;
+    // Leeres oder verkehrtes Rechteck der obersten Zeile: Zeilenzustand.
+    [Test] procedure EmptyFirstLineKeepsLineState;
+    // Ergebnis ausserhalb von Integer: Zeilenzustand statt Bereichsfehler.
+    [Test] procedure HugeOffsetKeepsLineState;
   end;
 
 implementation
@@ -161,84 +176,144 @@ begin
   Assert.AreEqual(3, ScaleBulbValue(2, 144));
 end;
 
-// Zeichenrechteck eines Zeichens (Spalte 64..73); fuer PickCaretLineTop
-// zaehlen nur Top und Bottom.
+// Rechteck eines Zeichens (Spalte 64..73); fuer PickCaretLineTop zaehlen
+// nur Top und Bottom.
 function CharRect(ATop, ABottom: Integer): TRect;
 begin
   Result := Rect(64, ATop, 73, ABottom);
 end;
 
-procedure TTestEditorBulbGeometry.SameTopPicksCharPos;
-var
-  P : TCaretLineTop;
+// Zeichenzelle, 18 hoch ab ATop.
+function Cell(ATop: Integer): TRect;
 begin
-  // Versatz 100 - 100 = 0, 0 mod 18 = 0 -> Zeichenrechteck, Oberkante 100.
-  P := PickCaretLineTop(100, CharRect(100, 118), 18);
-  Assert.AreEqual<Integer>(Ord(ltsCharPos), Ord(P.Source), 'Quelle');
-  Assert.AreEqual<Integer>(100, P.Top);
+  Result := CharRect(ATop, ATop + 18);
+end;
+
+// Der Regelfall: Zeilenzustand 100, Zeilenabstand 18, oberste Zeile bei 0,
+// das Zeichen der Caret-Zeile ab ACharTop.
+function PickAt(ACharTop: Integer): TCaretLineTop;
+begin
+  Result := PickCaretLineTop(100, Cell(ACharTop), Cell(0), 18);
+end;
+
+// Quelle, Oberkante und Zeilenzahl eines Ergebnisses; AWhat nennt den Fall.
+procedure ExpectPick(const AGot: TCaretLineTop; ASource: TCaretLineTopSource;
+  ATop, ARows: Integer; const AWhat: string);
+begin
+  Assert.AreEqual<Integer>(Ord(ASource), Ord(AGot.Source), 'Quelle, ' + AWhat);
+  Assert.AreEqual<Integer>(ATop, AGot.Top, 'Oberkante, ' + AWhat);
+  Assert.AreEqual<Integer>(ARows, AGot.Rows, 'Zeilen, ' + AWhat);
+end;
+
+procedure TTestEditorBulbGeometry.SameTopPicksCharPos;
+begin
+  // d = 100 - 100 = 0 -> 0 Zeilen, Oberkante 100, Quelle Zeichenrechteck.
+  ExpectPick(PickAt(100), ltsCharPos, 100, 0, 'T=100');
 end;
 
 procedure TTestEditorBulbGeometry.ThreeLinesDownPicksCharPos;
-var
-  P : TCaretLineTop;
 begin
-  // 154 = 100 + 3 * 18: Versatz 54, 54 mod 18 = 0 -> Zeichenrechteck.
-  P := PickCaretLineTop(100, CharRect(154, 172), 18);
-  Assert.AreEqual<Integer>(Ord(ltsCharPos), Ord(P.Source), 'Quelle');
-  Assert.AreEqual<Integer>(154, P.Top, '100 + 3 * 18');
+  // d = 154 - 100 = 54 = 3 * 18 -> 3 Zeilen, 100 + 54 = 154.
+  ExpectPick(PickAt(154), ltsCharPos, 154, 3, 'T=154');
 end;
 
 procedure TTestEditorBulbGeometry.TwoLinesUpPicksCharPos;
-var
-  P : TCaretLineTop;
 begin
-  // 64 = 100 - 2 * 18: Versatz -36, -36 mod 18 = 0 -> Zeichenrechteck.
-  P := PickCaretLineTop(100, CharRect(64, 82), 18);
-  Assert.AreEqual<Integer>(Ord(ltsCharPos), Ord(P.Source), 'Quelle');
-  Assert.AreEqual<Integer>(64, P.Top, '100 - 2 * 18');
+  // d = 64 - 100 = -36 = -2 * 18 -> -2 Zeilen, 100 - 36 = 64.
+  ExpectPick(PickAt(64), ltsCharPos, 64, -2, 'T=64');
 end;
 
-procedure TTestEditorBulbGeometry.PartLineOffsetKeepsLineState;
-var
-  P : TCaretLineTop;
+procedure TTestEditorBulbGeometry.InnerMarginRoundsToWholeLines;
 begin
-  // Versatz +7: 7 mod 18 = 7 -> Zeilenzustand, Oberkante 100.
-  P := PickCaretLineTop(100, CharRect(107, 125), 18);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle bei +7');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante bei +7');
-  // Versatz -25 (eine Zeile und 7 Pixel nach oben): -25 mod 18 = -7.
-  P := PickCaretLineTop(100, CharRect(75, 93), 18);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle bei -25');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante bei -25');
+  // d = 57 (3 Zeilen und 3 px): 57 / 18 = 3,17 -> 3 Zeilen, 154.
+  ExpectPick(PickAt(157), ltsCharPos, 154, 3, 'T=157');
+  // d = 51 (3 Zeilen weniger 3 px): 2,83 -> 3 Zeilen, 154.
+  ExpectPick(PickAt(151), ltsCharPos, 154, 3, 'T=151');
+  // d = 7: 0,39 -> 0 Zeilen, 100 - die Quelle ist trotzdem das
+  // Zeichenrechteck (bis 2026-11-14 galt hier der Zeilenzustand).
+  ExpectPick(PickAt(107), ltsCharPos, 100, 0, 'T=107');
+end;
+
+procedure TTestEditorBulbGeometry.PartLineRoundsToNearestLine;
+begin
+  // d = 75 - 100 = -25: -1,39 -> -1 Zeile, 100 - 18 = 82.
+  ExpectPick(PickAt(75), ltsCharPos, 82, -1, 'T=75');
+end;
+
+procedure TTestEditorBulbGeometry.HalfLineRoundsAwayFromZero;
+begin
+  // d = 9, genau eine halbe Zeile -> von null weg: 1 Zeile, 118.
+  ExpectPick(PickAt(109), ltsCharPos, 118, 1, 'T=109');
+  // d = -9 -> -1 Zeile, 82.
+  ExpectPick(PickAt(91), ltsCharPos, 82, -1, 'T=91');
+  // Knapp darunter, d = 8 und -8: 0 Zeilen, 100.
+  ExpectPick(PickAt(108), ltsCharPos, 100, 0, 'T=108');
+  ExpectPick(PickAt(92), ltsCharPos, 100, 0, 'T=92');
 end;
 
 procedure TTestEditorBulbGeometry.EmptyCharPosKeepsLineState;
-var
-  P : TCaretLineTop;
 begin
-  // Top 154 waere um 3 ganze Zeilen versetzt - aber Bottom = Top: leer.
-  P := PickCaretLineTop(100, CharRect(154, 154), 18);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle, leer');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante, leer');
+  // Bottom = Top: leer, obwohl Top 154 genau 3 Zeilen daneben laege.
+  ExpectPick(PickCaretLineTop(100, CharRect(154, 154), Cell(0), 18),
+    ltsLineState, 100, 0, 'leer');
   // Bottom 136 < Top 154: verkehrt, ebenso leer.
-  P := PickCaretLineTop(100, CharRect(154, 136), 18);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle, verkehrt');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante, verkehrt');
+  ExpectPick(PickCaretLineTop(100, CharRect(154, 136), Cell(0), 18),
+    ltsLineState, 100, 0, 'verkehrt');
 end;
 
 procedure TTestEditorBulbGeometry.NoPitchKeepsLineState;
-var
-  P : TCaretLineTop;
 begin
-  // Zeilenabstand 0: kein Versatztest (mod 0) -> Zeilenzustand.
-  P := PickCaretLineTop(100, CharRect(154, 172), 0);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle bei 0');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante bei 0');
-  // Zeilenabstand -18: 54 mod -18 = 0 bestuende den Versatztest, aber
-  // nur ein positiver Abstand zaehlt -> Zeilenzustand.
-  P := PickCaretLineTop(100, CharRect(154, 172), -18);
-  Assert.AreEqual<Integer>(Ord(ltsLineState), Ord(P.Source), 'Quelle bei -18');
-  Assert.AreEqual<Integer>(100, P.Top, 'Oberkante bei -18');
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(0), 0),
+    ltsLineState, 100, 0, 'Pitch 0');
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(0), -18),
+    ltsLineState, 100, 0, 'Pitch -18');
+end;
+
+procedure TTestEditorBulbGeometry.FirstLineFarOffKeepsLineState;
+begin
+  // 8982 = 499 * 18: dort laege die oberste Zeile, zaehlte GetCharacterPosPx
+  // Bildschirmzeilen ab 1 und stuende TopLine auf 500. Ohne die Pruefung
+  // gaelte T=154 als 3 Zeilen.
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(8982), 18),
+    ltsLineState, 100, 0, 'First.Top 8982');
+end;
+
+procedure TTestEditorBulbGeometry.FirstLineInsideTopBandPicksCharPos;
+begin
+  // |17| < 18: im obersten Band -> wie T=154 sonst, 3 Zeilen, 154.
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(17), 18),
+    ltsCharPos, 154, 3, 'First.Top 17');
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(-17), 18),
+    ltsCharPos, 154, 3, 'First.Top -17');
+end;
+
+procedure TTestEditorBulbGeometry.FirstLineOnBandEdgeKeepsLineState;
+begin
+  // |18| >= 18: nicht mehr im obersten Band -> Zeilenzustand.
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(18), 18),
+    ltsLineState, 100, 0, 'First.Top 18');
+  ExpectPick(PickCaretLineTop(100, Cell(154), Cell(-18), 18),
+    ltsLineState, 100, 0, 'First.Top -18');
+end;
+
+procedure TTestEditorBulbGeometry.EmptyFirstLineKeepsLineState;
+begin
+  ExpectPick(PickCaretLineTop(100, Cell(154), CharRect(0, 0), 18),
+    ltsLineState, 100, 0, 'First leer');
+  ExpectPick(PickCaretLineTop(100, Cell(154), CharRect(0, -18), 18),
+    ltsLineState, 100, 0, 'First verkehrt');
+end;
+
+procedure TTestEditorBulbGeometry.HugeOffsetKeepsLineState;
+begin
+  // d = (High(Integer) - 1) - 5 = 2147483641 -> 119304647 Zeilen (Rest 13,
+  // aufgerundet); Top = 5 + 2147483646 = 2147483651 > High(Integer).
+  ExpectPick(PickCaretLineTop(5, CharRect(High(Integer) - 1, High(Integer)),
+    Cell(0), 18), ltsLineState, 5, 0, 'Top zu gross');
+  // Zeilenabstand 1: Top = 2147483646 passt, Rows = d = 4294967293 nicht.
+  ExpectPick(PickCaretLineTop(-High(Integer), CharRect(High(Integer) - 1,
+    High(Integer)), CharRect(0, 1), 1), ltsLineState, -High(Integer), 0,
+    'Rows zu gross');
 end;
 
 initialization
