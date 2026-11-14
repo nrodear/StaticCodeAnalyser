@@ -597,15 +597,16 @@ begin
       // Ueberlauf nicht wieder her; weiterlaufen heisst, mit einem
       // Prozess zu arbeiten, der still Speicher korrumpiert. Lieber ein
       // sichtbarer Absturz. Dieser dritte Scan-Pfad wurde bei der
-      // Inventur 2026-08-22 uebersehen.
-      on EStackExhausted do raise;
+      // Inventur 2026-08-22 uebersehen. Seit 2026-11-14 (E3) gilt dasselbe
+      // fuer erschoepften Speicher (IsFatalScanException): sonst ersetzte
+      // die leere Liste unten die Funde der Datei still durch NICHTS - ein
+      // lueckenhaftes Ergebnis statt eines Abbruchs. Die Funde des letzten
+      // Laufs bleiben stehen.
+      if IsFatalScanException(ExceptObject) then raise;
       // Sonstiger Detector-Crash darf das Plugin nicht reissen. Liste
       // leer lassen, damit DeliverResults sauber durchlaeuft.
-      else
-      begin
-        FreeAndNil(FResults);
-        FResults := TObjectList<TLeakFinding>.Create(True);
-      end;
+      FreeAndNil(FResults);
+      FResults := TObjectList<TLeakFinding>.Create(True);
     end;
 
     // Ergebnis muss auf dem UI-Thread an den Frame.

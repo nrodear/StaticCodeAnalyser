@@ -39,6 +39,10 @@ const
   // Parent vollstaendig gesetzt hat. WM_APP-Range ($8000-$BFFF) ist fuer
   // Application-Private-Use reserviert.
   WM_SCA_REFIT = WM_APP + 100;
+  // Anzeige-Reset nach einem Fehler beim Malen des Grids (2026-11-14):
+  // GridDrawCell darf im Paint nicht umbauen, es merkt den Fehler und
+  // postet diese Message; der Handler setzt ausserhalb des Paints zurueck.
+  WM_SCA_DISPLAY_RESET = WM_APP + 101;
 
 type
   TAnalyserFrame = class(TFrame)
@@ -258,7 +262,27 @@ type
     // finalen Dock-Bounds-Set leert und danach kein weiterer Resize-Event
     // eintrifft (z.B. weil csLoading in WMSize AdjustSize+Resize blockiert).
     FDockRefitTimer : TTimer;
+    // Malfehler im Grid (2026-11-14): gesetzt von GridDrawCell, geloescht
+    // von WMScaDisplayReset bzw. dem naechsten ApplyFilter. Solange True,
+    // malt GridDrawCell nichts - kein Fehlerdialog je Zelle und Repaint.
+    FDisplayFault    : Boolean;
+    FDisplayFaultMsg : string;
     procedure DockRefitTimerFired(Sender: TObject);
+    // Grid auf die Platzhalterzeile der (leeren) Anzeige-Liste, ohne
+    // Auswahl-Seiteneffekte. Wirft nie (Nothilfe im Fehlerpfad).
+    procedure ShowDisplayPlaceholder;
+    // Konsistent LEER nach einem Wurf in der Fund-Uebergabe: Anzeige zuerst,
+    // dann die Funde frei (TFindingDelivery.Discard), Generation weiter,
+    // Platzhalterzeile, Kacheln. Jeder Schritt einzeln gefangen.
+    procedure ResetToEmptyAfterFailure;
+    // Runner-Callback nach einem fatalen Abbruch (E2): Editor-Marker weg,
+    // Dock leer (Platzhalterzeile) - das Teilergebnis wird verworfen.
+    procedure DiscardResultsAfterAbort;
+    // E1 (2026-11-14): vor einem Bulk-Lauf alte Funde, Editor-Marker und
+    // transiente Caches frei - sonst lag die Spitze bei alt + neu.
+    procedure ReleaseResultsBeforeBulkScan;
+    // Statuszeile nach einem Anzeige-Fehler (Grid-Malen, Marker-Timer).
+    procedure ReportDisplayFault(const AMsg: string);
 
     // Vor jeder Analyse: INI neu laden, Custom-LeakyClasses + Excludes
     // registrieren, AutoDiscover-Flag setzen, DiscoveredClasses-Liste leeren.
@@ -564,6 +588,8 @@ type
     // SetParent postet WM_SCA_REFIT; zu diesem Zeitpunkt sind Bounds
     // korrekt gesetzt und csLoading ist geloescht.
     procedure WMScaRefit(var Message: TMessage); message WM_SCA_REFIT;
+    // Anzeige-Reset nach einem Malfehler (s. WM_SCA_DISPLAY_RESET).
+    procedure WMScaDisplayReset(var Message: TMessage); message WM_SCA_DISPLAY_RESET;
     // Zweiter Theme-Trigger neben dem INTAIDEThemingServicesNotifier.
     // Im Docked-Modus propagiert ApplyTheme(TopForm) nicht in den
     // Frame-Subtree (TopForm = IDE-Main, nicht unser Container);
@@ -1255,7 +1281,8 @@ begin
   // FinishAnalysis feuert via OnRunDone nach JEDEM Lauf-Ende.
   FAnalyseRunner := TAnalyseRunner.Create(Self,
     FAnalyseProgress, FRepoSettings, FIgnoreList, FProgressBar,
-    StatusMode, StatusProgress, PopulateFindings, FinishAnalysis);
+    StatusMode, StatusProgress, PopulateFindings, FinishAnalysis,
+    DiscardResultsAfterAbort);
 
   // Sucheingabe fuellt den Rest in der Mitte. MinWidth verhindert Kollaps
   // bei sehr schmal gedocktem Frame - sonst frisst Search-Edit als
@@ -2034,6 +2061,8 @@ begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
   if FApplyFilterDepth > 0 then Exit;
+  // Ein Neuaufbau der Anzeige erledigt einen ausstehenden Malfehler-Reset.
+  FDisplayFault := False;
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
@@ -2363,6 +2392,14 @@ begin
     // zieht niemand eine Generation, der Wert ist derselbe wie bisher.
     FFileGens.AddOrSetValue(NormalizePathForKey(FileName), NextFindingsGeneration);
 
+    // 0b) Anzeige abkoppeln, BEVOR Delete alte Funde freigibt (2026-11-14):
+    // warf ein Schritt zwischen Delete und ApplyFilter, zeigte
+    // FDisplayedFindings auf freigegebene Objekte - jedes Neumalen des
+    // Grids endete in 'Ungueltige Zeigeroperation'. ApplyFilter unten baut
+    // die Anzeige wieder auf.
+    FDisplayedFindings.Clear;
+    ShowDisplayPlaceholder;
+
     // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
     // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
     // .pas liefert die DFM-Funde mit dem Pfad der Formdatei neu mit
@@ -2381,10 +2418,11 @@ begin
                           UnitBase)) then
         FAllFindings.Delete(i);
 
-    // 2) Neue Findings einhaengen (Ownership-Transfer).
-    Findings.OwnsObjects := False;
-    for i := 0 to Findings.Count - 1 do
-      FAllFindings.Add(Findings[i]);
+    // 2) Neue Findings einhaengen (Ownership-Transfer) - ohne Leck-
+    // Fenster: Kapazitaet zuerst, Besitz der Quelle erst nach dem letzten
+    // Add (TFindingDelivery.Append; bis 2026-11-14 ging OwnsObjects VOR der
+    // Schleife aus, ein Wurf liess den Rest bei niemandem).
+    TFindingDelivery.Append(FAllFindings, Findings);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
@@ -2589,37 +2627,156 @@ begin
   if Assigned(FFilterSearch) then FFilterSearch.Resync;
 end;
 
+procedure TAnalyserFrame.ShowDisplayPlaceholder;
+// FDisplayedFindings ist hier leer (Aufrufer) -> PopulateGridFromDisplayed
+// setzt RowCount 2 und die Platzhalterzeile. FGridUpdating wie in ApplyFilter:
+// die Zeilen-Klemmung feuert GridSelectCell, der Waechter unterdrueckt die
+// Kopier-Seiteneffekte.
+begin
+  if not Assigned(FResultGrid) or not Assigned(FDisplayedFindings) then Exit;
+  FGridUpdating := True;
+  try
+    try
+      if Assigned(FClipCopyTimer) then
+        FClipCopyTimer.Enabled := False;
+      PopulateGridFromDisplayed;
+      UpdateHelp(FResultGrid.Row);
+    except
+      // Nothilfe im Fehlerpfad - darf die eigentliche Ausnahme nicht ersetzen.
+    end;
+  finally
+    FGridUpdating := False;
+  end;
+end;
+
+procedure TAnalyserFrame.ResetToEmptyAfterFailure;
+begin
+  try
+    TFindingDelivery.Discard(FDisplayedFindings, FAllFindings);
+  except
+  end;
+  FFindingsGen := NextFindingsGeneration;
+  try
+    if Assigned(FFileGens) then FFileGens.Clear;
+    if Assigned(FBaselineSet) then FBaselineSet.ReleaseContextHashes;
+  except
+  end;
+  ShowDisplayPlaceholder;
+  try
+    UpdateStats;
+  except
+  end;
+end;
+
+procedure TAnalyserFrame.DiscardResultsAfterAbort;
+begin
+  try
+    if Assigned(GHighlighter) then GHighlighter.Clear;
+    if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
+  except
+  end;
+  ResetToEmptyAfterFailure;
+  try
+    RebuildFilterCombos;
+  except
+  end;
+end;
+
+procedure TAnalyserFrame.ReleaseResultsBeforeBulkScan;
+begin
+  try
+    if Assigned(GHighlighter) then GHighlighter.Clear;
+    if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
+    ClearAllFindings;
+  except
+    // Freigabe vor dem Lauf ist eine Entlastung, kein Vorbedingung: der Lauf
+    // startet trotzdem (ClearAllFindings koppelt die Anzeige zuerst ab -
+    // der Stand ist auch nach einem Wurf konsistent).
+  end;
+  TAnalysisSession.ReleaseTransientCaches;
+end;
+
+procedure TAnalyserFrame.ReportDisplayFault(const AMsg: string);
+begin
+  try
+    StatusMode(Format(_('Display reset after an error: %s'), [AMsg]));
+  except
+  end;
+end;
+
+procedure TAnalyserFrame.WMScaDisplayReset(var Message: TMessage);
+// Ausserhalb des Paints: Anzeige-Liste leer, Platzhalterzeile, Meldung.
+// FAllFindings bleibt - ein Filterwechsel baut die Anzeige neu auf.
+begin
+  if not FDisplayFault then Exit;   // ApplyFilter kam zuvor
+  try
+    if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
+  except
+  end;
+  ShowDisplayPlaceholder;
+  FDisplayFault := False;
+  ReportDisplayFault(FDisplayFaultMsg);
+  if Assigned(FResultGrid) then
+    FResultGrid.Invalidate;
+end;
+
 procedure TAnalyserFrame.PopulateFindings(
   const findings: TObjectList<TLeakFinding>; const BaseDir: string);
-var
-  i: Integer;
+// Ausnahmefest seit 2026-11-14 (OOM-Diagnose, 'Pointer-Fehler' nach 'Zu
+// wenig Arbeitsspeicher'): bis dahin gab FAllFindings.Clear die alten Funde
+// frei, waehrend FDisplayedFindings sie noch hielt, und ein Wurf im Nachlauf
+// liess die Anzeige auf freigegebene Objekte zeigen. Jetzt: Anzeige zuerst
+// abkoppeln, Funde ohne Leck-Fenster uebernehmen (TFindingDelivery), und
+// scheitert der Nachlauf, ist das Dock konsistent LEER und die Ausnahme
+// geht in HandleScanDones Fehlerkanal.
 begin
-  FCurrentBaseDir := BaseDir;
-  findings.OwnsObjects := False;
-  FAllFindings.Clear;
-  for i := 0 to findings.Count - 1 do
-    FAllFindings.Add(findings[i]);
+  // Spitze senken: der Text-Cache des Scans wird nur fuer die contextHashes
+  // einer geladenen Baseline gebraucht (PrepareContextHashes unten); ohne
+  // 'nur neue Funde' rechnet PrepareContextHashes nichts (keine Context-
+  // Keys) und niemand im Nachlauf liest Quelltext - das Ergebnis ist
+  // identisch, nur ~0,25 GB Korpustext liegen nicht mehr waehrend der
+  // Uebergabe im 32-Bit-Prozess. HandleScanDone ruft den Hook danach ohnehin.
+  if not (Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew) then
+    TAnalysisSession.ReleaseTransientCaches;
+  // Generation ZUERST: FFileIndex zeigt gleich auf freigegebene Funde; der
+  // naechste Sync baut damit sicher neu (Lehre aus OnWatchFindings).
   FFindingsGen := NextFindingsGeneration;
   FFileGens.Clear;
-  UpdateStats;
-  // Baseline-Set fuer den "nur neue Funde"-Filter frisch laden (basiert auf
-  // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
-  // hat) - vor ApplyFilter, damit der erste Rebuild schon filtert.
-  RefreshBaselineSet;
-  // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
-  // rechnen, solange der Text-Cache noch warm ist. Der Aufrufer
-  // (TAnalyseRunner.HandleScanDone) leert ihn direkt nach dieser Routine
-  // ueber den G2-5-Hook, und der Anzeige-Filter darf pro Fund keine Datei
-  // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne den
-  // Aufruf verliert der Filter nur seine zweite Match-Quelle; ohne
-  // geladene Baseline mit contextHashes kostet er nichts.
-  if Assigned(FBaselineSet) then
-    FBaselineSet.PrepareContextHashes(FAllFindings);
-  // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - vor
-  // ApplyFilter damit die anschliessende Filterung schon gegen die
-  // ggf. zurueckgesetzte Auswahl arbeitet.
-  RebuildFilterCombos;
-  ApplyFilter;
+  FCurrentBaseDir := BaseDir;
+  try
+    // Anzeige abkoppeln -> alte Funde frei -> neue ohne Leck-Fenster
+    // uebernehmen. Wirft es, besitzt die Quelle (Worker) weiter alle neuen
+    // Funde und gibt sie frei; Anzeige und FAllFindings sind leer.
+    TFindingDelivery.Deliver(FDisplayedFindings, FAllFindings, findings);
+  finally
+    ShowDisplayPlaceholder;   // RowCount passend zur leeren Anzeige-Liste
+  end;
+  FFindingsGen := NextFindingsGeneration;
+  try
+    UpdateStats;
+    // Baseline-Set fuer den "nur neue Funde"-Filter frisch laden (basiert auf
+    // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
+    // hat) - vor ApplyFilter, damit der erste Rebuild schon filtert.
+    RefreshBaselineSet;
+    // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
+    // rechnen, solange der Text-Cache noch warm ist. Der Aufrufer
+    // (TAnalyseRunner.HandleScanDone) leert ihn direkt nach dieser Routine
+    // ueber den G2-5-Hook, und der Anzeige-Filter darf pro Fund keine Datei
+    // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne den
+    // Aufruf verliert der Filter nur seine zweite Match-Quelle; ohne
+    // geladene Baseline mit contextHashes kostet er nichts.
+    if Assigned(FBaselineSet) then
+      FBaselineSet.PrepareContextHashes(FAllFindings);
+    // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - vor
+    // ApplyFilter damit die anschliessende Filterung schon gegen die
+    // ggf. zurueckgesetzte Auswahl arbeitet.
+    RebuildFilterCombos;
+    ApplyFilter;
+  except
+    // Konsistent leer statt halb befuellt; HandleScanDone meldet.
+    ResetToEmptyAfterFailure;
+    raise;
+  end;
   // ApplyFilter -> HighlightAllFindingsInFile baut die Multi-File-Marker
   // bereits sauber neu auf (SetAllFindings ersetzt den gesamten internen
   // State). Ein zusaetzlicher GHighlighter.Clear ist nicht mehr noetig -
@@ -3341,6 +3498,13 @@ begin
     Exit;
   end;
   SaveRecentPath(FProjectPath.Text);
+  // E1 (Nico 2026-11-14): Ordner-/Projekt-/Gruppen-Lauf gibt die alten
+  // Funde, die Editor-Marker und die transienten Caches frei, BEVOR er
+  // startet - bis dahin lagen sie bis zur Uebergabe neben dem neuen Lauf
+  // (Spitze = alt + neu). Nur wenn der Runner frei ist: ein laufender Scan
+  // lehnt den Start ohnehin ab und behaelt sein Ergebnis.
+  if Assigned(FAnalyseRunner) and not FAnalyseRunner.IsBusy then
+    ReleaseResultsBeforeBulkScan;
   PrepareAnalysis;
   // Asynchron: RunAll kehrt sofort zurueck; FinishAnalysis kommt via
   // OnRunDone-Callback des Runners nach dem Lauf-Ende.
@@ -3497,10 +3661,13 @@ procedure TAnalyserFrame.ClearAllFindings;
 // laufen, wenn der Frame aufgebaut ist - was fuer alle heutigen Aufrufer
 // gilt, weil sie an Menuepunkten haengen.
 begin
-  if Assigned(FAllFindings) then FAllFindings.Clear;
+  // Anzeige ZUERST abkoppeln, dann die Funde frei (2026-11-14) - dieselbe
+  // Reihenfolge wie TFindingDelivery: nie zeigt FDisplayedFindings auf
+  // einen freigegebenen Fund, auch nicht zwischen zwei Zeilen.
+  if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
   FFindingsGen := NextFindingsGeneration;
   if Assigned(FFileGens) then FFileGens.Clear;
-  if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
+  if Assigned(FAllFindings) then FAllFindings.Clear;
   // Der vorab gerechnete contextHash-Speicher gehoert zu den Funden, die
   // hier gerade weggeworfen werden - ohne Funde hat er keinen Frager mehr.
   // Er ist zugleich der groesste Einzelposten des Plugins (gemessen
@@ -4588,9 +4755,28 @@ procedure TAnalyserFrame.GridDrawCell(Sender: TObject; ACol, ARow: Integer;
 // Felder werden pro Aufruf aktualisiert (2 Integer-Writes), die Closures
 // bleiben stabil.
 begin
+  // Malfehler (2026-11-14): im Paint wird nicht umgebaut und nicht gemeldet
+  // - jede Zelle jedes Repaints liefe sonst in einen IDE-Fehlerdialog. Der
+  // erste Fehler sperrt das Malen und postet den Reset (WMScaDisplayReset).
+  if FDisplayFault then Exit;
   FGridConfig.SortColumn     := FSortColumn;
   FGridConfig.SortDescending := FSortDescending;
-  TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, FGridConfig);
+  try
+    TFindingGridRenderer.DrawCell(Sender, ACol, ARow, Rect, State, FGridConfig);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+    begin
+      FDisplayFault := True;
+      try
+        FDisplayFaultMsg := E.Message;
+      except
+        FDisplayFaultMsg := '';
+      end;
+      if HandleAllocated then
+        PostMessage(Handle, WM_SCA_DISPLAY_RESET, 0, 0);
+    end;
+  end;
 end;
 
 procedure TAnalyserFrame.InstallGridWheelCoalescer;
@@ -4671,7 +4857,23 @@ begin
   if FHighlightDebounceTimer <> nil then
     FHighlightDebounceTimer.Enabled := False;
   if csDestroying in ComponentState then Exit;
-  HighlightAllFindingsInFile(FPendingHighlightFile);
+  // Gefangen seit 2026-11-14: der Marker-Neubau ueber ALLE angezeigten Funde
+  // ist die groesste zusammenhaengende Allokation des Docks (ein Eintrag je
+  // Fund). Ein EOutOfMemory hier lief als IDE-Fehlerdialog aus dem Timer -
+  // jetzt Marker weg, Meldung in die Statuszeile.
+  try
+    HighlightAllFindingsInFile(FPendingHighlightFile);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+    begin
+      try
+        if Assigned(GHighlighter) then GHighlighter.Clear;
+      except
+      end;
+      ReportDisplayFault(E.Message);
+    end;
+  end;
 end;
 
 procedure TAnalyserFrame.ScheduleHighlightRefresh(const AFileName: string);
