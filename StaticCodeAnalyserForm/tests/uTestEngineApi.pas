@@ -1255,7 +1255,7 @@ begin
   E := EAbort.Create('Test');
   try
     Assert.IsFalse(IsFatalScanException(E),
-      'EAbort hat eigene Durchreichen, ist aber kein Fall des Helfers');
+      'EAbort hat eigene Durchreichen und faellt nicht unter den Helfer');
   finally
     E.Free;
   end;

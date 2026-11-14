@@ -967,7 +967,9 @@ begin
       // von SCA201 erscheinen (Review Bereich C, Minor). Abbruch,
       // Stapelueberlauf und erschoepfter Speicher gehen durch.
       on EAbort do raise;
-      // noinspection ExceptionTooGeneral (Best-effort wie der Hauptlauf)
+      // Best-effort wie der Hauptlauf (der Marker 'ExceptionTooGeneral'
+      // entfiel 2026-11-14: der Fang reicht jetzt weiter und ist nicht mehr
+      // zu allgemein - der Self-Scan meldete ihn als ungenutzt).
       on E: Exception do
         if IsFatalScanException(E) then raise;
     end;
@@ -987,7 +989,6 @@ begin
     // Bewusst die Wurzelklasse - derselbe Schutz wie RunAllDetectors im
     // Hauptlauf (Review 2026-10-09): ein Fehler kostet nur diese Datei.
     // Stapel und Speicher erschoepft: Abbruch (IsFatalScanException).
-    // noinspection ExceptionTooGeneral
     on E: Exception do
     begin
       if IsFatalScanException(E) then raise;

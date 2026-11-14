@@ -94,7 +94,7 @@ constructor TTrackedFinding.CreateTracked(AId: Integer);
 begin
   inherited Create;
   FId := AId;
-  FileName   := 'C:\src\Unit' + IntToStr(AId) + '.pas';
+  FileName   := 'src\Unit' + IntToStr(AId) + '.pas';
   LineNumber := '1';
 end;
 
