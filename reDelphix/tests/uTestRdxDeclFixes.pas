@@ -435,7 +435,7 @@ begin
   // Fund veraltet: die GUID wurde inzwischen schon entfernt.
   Assert.AreEqual('', Fix(dkDupGuid, Join(['type', '  IFoo = interface',
     '    procedure Run;', '  end;']), 2, DupGuidMsg('IFoo'), R));
-  Assert.IsTrue(Pos('bracket', R) > 0, R);
+  Assert.IsTrue(Pos('GUID-Klammer', R) > 0, R);
   // COM-Import: safecall im Rumpf - die echte IID gehoert hinein.
   Assert.AreEqual('', Fix(dkDupGuid, Join(['type', '  IFoo = interface(IDispatch)',
     '    [''' + OLD_GUID_198 + ''']', '    function Get: Integer; safecall;',
