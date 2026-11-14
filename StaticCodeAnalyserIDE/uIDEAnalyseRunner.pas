@@ -127,8 +127,9 @@ type
     FOnFindings       : TAnalyseFindingsProc;
     FOnRunDone        : TAnalyseDoneProc;
     // E2 (2026-11-14): leert nach einem fatalen Abbruch Grid, Funde und
-    // Editor-Marker des Docks (Platzhalterzeile). Optional wie FOnRunDone.
-    FOnDiscardResults : TAnalyseDoneProc;
+    // Editor-Marker des Docks; das Argument ist der kurze Grund fuer die
+    // Platzhalterzeile (m7). Optional wie FOnRunDone.
+    FOnDiscardResults : TAnalyseStatusProc;
     // Aktiver Worker-Slot; nil = idle. Nur UI-Thread.
     FWorker       : TBulkScanWorker;
     // Meldung eines fatalen Abbruchs (E2): Dateizahl und Ausweg.
@@ -153,7 +154,7 @@ type
                        AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
                        AOnFindings: TAnalyseFindingsProc;
                        AOnRunDone: TAnalyseDoneProc;
-                       AOnDiscardResults: TAnalyseDoneProc = nil); reintroduce;
+                       AOnDiscardResults: TAnalyseStatusProc = nil); reintroduce;
     destructor Destroy; override;
 
     procedure RunAll(const APath: string);
@@ -346,10 +347,18 @@ begin
       // einmal - und zwar NACH den Pre-Index-Builds, die den Grossteil der
       // Zeit kosten. Ein wirksamer Abbruch braucht ein Cancel-Token in der
       // Engine-Facade.
+      // Die Dateizahl fuer eine Abbruch-Meldung (E2) haelt auch diese
+      // Closure fest (Review-Runde 2026-11-14, M3) - heute folgenlos, weil
+      // die Engine sie bei ssSingleFile nicht ruft; ReportFatalAbort nennt
+      // dann keine Zahl statt '0 Dateien'.
       if FKind = bkCurrent then
         Req.Progress :=
           procedure(Current, Total: Integer)
           begin
+            if Total < 0 then
+              FFilesFound := Current
+            else
+              FFilesTotal := Total;
             if TThread.CheckTerminated then Abort;
           end
       else
@@ -469,7 +478,7 @@ constructor TAnalyseRunner.Create(AOwner: TComponent;
   AIgnoreList: TIgnoreList; AProgressBar: TProgressBar;
   AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
   AOnFindings: TAnalyseFindingsProc; AOnRunDone: TAnalyseDoneProc;
-  AOnDiscardResults: TAnalyseDoneProc);
+  AOnDiscardResults: TAnalyseStatusProc);
 begin
   inherited Create(AOwner);
   FProgress         := AProgress;
@@ -696,25 +705,43 @@ procedure TAnalyseRunner.ReportFatalAbort(AWorker: TBulkScanWorker);
 // das Teilergebnis wird verworfen) und die Meldung in die Statuszeile -
 // ueber denselben Kanal wie jede andere Analyse-Meldung, kein Dialog.
 var
-  Files : Integer;
+  Files  : Integer;
+  Memory : Boolean;
 begin
+  // Speicher: im Worker gemerkt, oder die Uebergabe scheiterte an
+  // EOutOfMemory (HandleScanDone, FFatal dort False).
+  Memory := AWorker.FOutOfMemory or not AWorker.FFatal;
   if Assigned(FOnDiscardResults) then
     try
-      FOnDiscardResults;
+      // Kurzer Grund fuer die Platzhalterzeile des leeren Docks (Review-
+      // Runde 2026-11-14, m7) - die volle Meldung steht in der Statuszeile.
+      if Memory then
+        FOnDiscardResults(_('Not enough memory - see the status bar.'))
+      else
+        FOnDiscardResults(_('Analysis error - see the status bar.'));
     except
       // Das Leeren selbst darf die Meldung nicht verhindern.
     end;
-  if AWorker.FOutOfMemory or not AWorker.FFatal then
+  if Memory then
   begin
-    // Speicher: Dateizahl und Ausweg. Die Gesamtzahl der Datei-Phase,
-    // sonst der letzte Walk-Zaehler (Abbruch schon im Pre-Index).
+    // Speicher: Dateizahl und Ausweg. Die Gesamtzahl der Datei-Phase (seit
+    // der Review-Runde schon VOR den Pre-Indizes gemeldet, M3), sonst der
+    // letzte Walk-Zaehler.
     Files := AWorker.FFilesTotal;
     if Files <= 0 then
       Files := AWorker.FFilesFound;
-    FOnStatusMode(Format(_('Not enough memory: the scan of %d files was ' +
-      'aborted and its partial results discarded. Narrow the folder or ' +
-      'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
-      [Files]));
+    if Files > 1 then
+      FOnStatusMode(Format(_('Not enough memory: the scan of %d files was ' +
+        'aborted and its partial results discarded. Narrow the folder or ' +
+        'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
+        [Files]))
+    else
+      // Ohne Zahl (M3): eine Einzeldatei - deren Lauf meldet keinen
+      // Fortschritt - oder ein Abbruch vor dem ersten Tick. Die Fassung
+      // mit Zahl sagte dort '0 Dateien'.
+      FOnStatusMode(_('Not enough memory: the scan was aborted and its ' +
+        'partial results discarded. Narrow the folder or use the 64-bit ' +
+        'command line (StaticCodeAnalyser.d12.exe --path ...).'));
   end
   else
     // Erschoepfter Stapel: verworfen wie oben, Meldung wie bisher.

@@ -82,6 +82,9 @@ begin
   // Letztes Panel: TStatusBar streckt es automatisch auf die uebrige
   // Breite wenn Width gross genug ist. 5000 reicht auch fuer 4K.
   with FBar.Panels.Add do begin Width := S(W_MODE);     Text := ''; end;
+  // Tooltip mit dem vollen Modus-Text (s. Mode) - eigener Schalter, die
+  // Leiste erbt ShowHint sonst vom Frame.
+  FBar.ShowHint := True;
 end;
 
 procedure TAnalyserStatusBar.SetPanelText(Index: Integer; const T: string);
@@ -103,6 +106,13 @@ end;
 procedure TAnalyserStatusBar.Mode(const T: string);
 begin
   SetPanelText(2, T);
+  // Der volle Text auch als Tooltip (Review-Runde 2026-11-14, m7): im
+  // gedockten Fenster ist das Modus-Panel schmal, die Meldung eines
+  // Speicher-Abbruchs (Dateizahl und Ausweg, rund 170 Zeichen) war
+  // abgeschnitten. Mode ist der einzige Schreiber des Panels - der Tooltip
+  // zeigt also immer den aktuellen Text.
+  if Assigned(FBar) then
+    FBar.Hint := T;
 end;
 
 end.

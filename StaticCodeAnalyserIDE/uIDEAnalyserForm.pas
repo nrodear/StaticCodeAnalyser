@@ -267,6 +267,16 @@ type
     // malt GridDrawCell nichts - kein Fehlerdialog je Zelle und Repaint.
     FDisplayFault    : Boolean;
     FDisplayFaultMsg : string;
+    // Hoechstens EIN Reset unterwegs und hoechstens einer je Anzeige-Aufbau
+    // (Review-Runde 2026-11-14, m6): scheitert auch das Malen nach dem Reset,
+    // bleibt das Malen bis zum naechsten ApplyFilter gesperrt, statt dass
+    // Reset, Neumalen und Fehler ohne Ende kreisen.
+    FDisplayResetPending : Boolean;
+    FDisplayResetUsed    : Boolean;
+    // Kurzer Grund eines Scan-Abbruchs fuer die Platzhalterzeile (m7); leer
+    // = 'No entries for this filter.'. Gesetzt von DiscardResultsAfterAbort,
+    // geloescht von neuen Funden, ClearAllFindings und PrepareAnalysis.
+    FAbortPlaceholder    : string;
     procedure DockRefitTimerFired(Sender: TObject);
     // Grid auf die Platzhalterzeile der (leeren) Anzeige-Liste, ohne
     // Auswahl-Seiteneffekte. Wirft nie (Nothilfe im Fehlerpfad).
@@ -276,8 +286,9 @@ type
     // Platzhalterzeile, Kacheln. Jeder Schritt einzeln gefangen.
     procedure ResetToEmptyAfterFailure;
     // Runner-Callback nach einem fatalen Abbruch (E2): Editor-Marker weg,
-    // Dock leer (Platzhalterzeile) - das Teilergebnis wird verworfen.
-    procedure DiscardResultsAfterAbort;
+    // Dock leer, die Platzhalterzeile nennt den Abbruch mit AReason (m7) -
+    // das Teilergebnis wird verworfen.
+    procedure DiscardResultsAfterAbort(const AReason: string);
     // E1 (2026-11-14): vor einem Bulk-Lauf alte Funde, Editor-Marker und
     // transiente Caches frei - sonst lag die Spitze bei alt + neu.
     procedure ReleaseResultsBeforeBulkScan;
@@ -1991,7 +2002,17 @@ begin
     // Placeholder-Zeile bleibt explizit in Cells (GetCellText liest sie
     // dann via Fallback aus).
     FResultGrid.Rows[1].Clear;
-    FResultGrid.Cells[0, 1] := _('No entries for this filter.');
+    if FAbortPlaceholder <> '' then
+    begin
+      // Nach einem Scan-Abbruch (Review-Runde 2026-11-14, m7) hiesse 'No
+      // entries for this filter.' "der Filter blendet alles aus". Kurz in
+      // der Dateispalte, der Grund in der Befund-Spalte; die volle Meldung
+      // steht in der Statuszeile (auch als Tooltip, uIDEStatusBar).
+      FResultGrid.Cells[0, 1] := _('Scan aborted');
+      FResultGrid.Cells[4, 1] := FAbortPlaceholder;
+    end
+    else
+      FResultGrid.Cells[0, 1] := _('No entries for this filter.');
   end;
   FResultGrid.Invalidate;
 end;
@@ -2061,8 +2082,10 @@ begin
   // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
   // einmal - s. FApplyFilterDepth.
   if FApplyFilterDepth > 0 then Exit;
-  // Ein Neuaufbau der Anzeige erledigt einen ausstehenden Malfehler-Reset.
-  FDisplayFault := False;
+  // Ein Neuaufbau der Anzeige erledigt einen ausstehenden Malfehler-Reset
+  // und erlaubt nach einem neuen Malfehler wieder EINEN Reset (m6).
+  FDisplayFault     := False;
+  FDisplayResetUsed := False;
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
@@ -2385,6 +2408,11 @@ begin
   if not Assigned(Findings) then Exit;
 
   try
+  try
+    // Neue Funde: ein Abbruch-Platzhalter eines frueheren Laufs gilt nicht
+    // mehr (m7).
+    FAbortPlaceholder := '';
+
     // 0) Generation der Datei ZUERST weiterdrehen (Review Charge P): Delete
     // gibt Funde frei, auf die FFileIndex zeigt. Liefe zwischen Delete und
     // dem Weiterdrehen eine Ausnahme, bliebe der Stempel stehen und der
@@ -2396,9 +2424,20 @@ begin
     // warf ein Schritt zwischen Delete und ApplyFilter, zeigte
     // FDisplayedFindings auf freigegebene Objekte - jedes Neumalen des
     // Grids endete in 'Ungueltige Zeigeroperation'. ApplyFilter unten baut
-    // die Anzeige wieder auf.
+    // die Anzeige wieder auf. Das Grid selbst bleibt bis dahin stehen
+    // (Review-Runde 2026-11-14, m4): ein RowCount := 2 an dieser Stelle
+    // setzte Zeile und Scroll-Lage bei JEDEM Speichern zurueck. Bis
+    // ApplyFilter passt RowCount nicht zur leeren Liste - unschaedlich,
+    // jeder Zell-Leser (GetCellText, GetCellSeverity, UpdateHelp, Menues,
+    // Tooltip) prueft gegen FDisplayedFindings.Count.
     FDisplayedFindings.Clear;
-    ShowDisplayPlaceholder;
+
+    // 0c) Platz fuer die neuen Funde VOR dem Loeschen der alten (m9): ein
+    // Wurf der Reservierung laesst die bisherigen Funde der Datei stehen;
+    // danach kann das Einhaengen (TFindingDelivery.Append) nicht mehr am
+    // Wachsen der Liste scheitern. Nur wachsen, nie schrumpfen.
+    if FAllFindings.Capacity < FAllFindings.Count + Findings.Count then
+      FAllFindings.Capacity := FAllFindings.Count + Findings.Count;
 
     // 1) Alte Findings fuer DIESE Datei aus FAllFindings entfernen - und
     // die ihrer Formdatei (.dfm/.lfm gleichen Namens). Der Watch-Lauf der
@@ -2439,6 +2478,21 @@ begin
     ApplyFilter;
     StatusMode(_('[watch] updated %s (%d findings)',
       [ExtractFileName(FileName), Findings.Count]));
+  except
+    // Fehlerpfad (m4): die Anzeige aus FAllFindings neu aufbauen - die Funde
+    // der uebrigen Dateien sind intakt; scheitert auch das, leer mit
+    // Platzhalterzeile. Die Meldung schreibt der Watch-Manager
+    // (TWatchAnalyzer.DeliverResults).
+    try
+      ApplyFilter;
+    except
+      on EStackExhausted do raise;
+    else
+      FDisplayedFindings.Clear;
+      ShowDisplayPlaceholder;
+    end;
+    raise;
+  end;
   finally
     Findings.Free;
   end;
@@ -2664,12 +2718,16 @@ begin
   ShowDisplayPlaceholder;
   try
     UpdateStats;
+    // Fundzahl der leeren Liste - ohne ApplyFilter stuende sonst die Zahl
+    // des verworfenen Stands im Findings-Panel (Review-Runde 2026-11-14).
+    StatusFindings(Format(_('%d / %d findings'), [0, 0]));
   except
   end;
 end;
 
-procedure TAnalyserFrame.DiscardResultsAfterAbort;
+procedure TAnalyserFrame.DiscardResultsAfterAbort(const AReason: string);
 begin
+  FAbortPlaceholder := AReason;
   try
     if Assigned(GHighlighter) then GHighlighter.Clear;
     if Assigned(GAnnotationOverlay) then GAnnotationOverlay.HideOverlay;
@@ -2708,7 +2766,11 @@ procedure TAnalyserFrame.WMScaDisplayReset(var Message: TMessage);
 // Ausserhalb des Paints: Anzeige-Liste leer, Platzhalterzeile, Meldung.
 // FAllFindings bleibt - ein Filterwechsel baut die Anzeige neu auf.
 begin
+  FDisplayResetPending := False;
   if not FDisplayFault then Exit;   // ApplyFilter kam zuvor
+  // Der Reset ist verbraucht (m6): scheitert das Malen danach erneut,
+  // bleibt es bis zum naechsten ApplyFilter gesperrt (GridDrawCell).
+  FDisplayResetUsed := True;
   try
     if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
   except
@@ -2738,6 +2800,9 @@ begin
   // Uebergabe im 32-Bit-Prozess. HandleScanDone ruft den Hook danach ohnehin.
   if not (Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew) then
     TAnalysisSession.ReleaseTransientCaches;
+  // Neue Funde: ein Abbruch-Platzhalter eines frueheren Laufs gilt nicht
+  // mehr (m7).
+  FAbortPlaceholder := '';
   // Generation ZUERST: FFileIndex zeigt gleich auf freigegebene Funde; der
   // naechste Sync baut damit sicher neu (Lehre aus OnWatchFindings).
   FFindingsGen := NextFindingsGeneration;
@@ -2748,8 +2813,15 @@ begin
     // uebernehmen. Wirft es, besitzt die Quelle (Worker) weiter alle neuen
     // Funde und gibt sie frei; Anzeige und FAllFindings sind leer.
     TFindingDelivery.Deliver(FDisplayedFindings, FAllFindings, findings);
-  finally
-    ShowDisplayPlaceholder;   // RowCount passend zur leeren Anzeige-Liste
+  except
+    // Nur im Fehlerpfad auf die Platzhalterzeile (Review-Runde 2026-11-14,
+    // m4): im Normalweg baut ApplyFilter unten das Grid um und behaelt
+    // Zeile und Scroll-Lage - ein RowCount := 2 VOR ApplyFilter setzte sie
+    // bei jedem Lauf zurueck. Bis dahin passt RowCount nicht zur leeren
+    // Anzeige-Liste; unschaedlich, jeder Zell-Leser prueft gegen deren
+    // Count.
+    ResetToEmptyAfterFailure;
+    raise;
   end;
   FFindingsGen := NextFindingsGeneration;
   try
@@ -3359,6 +3431,7 @@ var
   Target : TMarkerTarget;
   Why    : string;
   Errs   : string;   // Anbieterfehler aus RunFirstAction, an jede Meldung
+  Placed : Boolean;
 begin
   Errs := '';
   if (TFindingActions.ProviderCount > 0)
@@ -3378,8 +3451,23 @@ begin
       Errs));
     Exit;
   end;
-  if not TSuppression.MarkerTargetFor(F.FileName, F.LineInt, F.Kind, Target,
-       Why) then
+  // Gefangen seit der Review-Runde 2026-11-14: MarkerTargetFor liest die
+  // Datei ueber AcquireLines, und LoadFileSmart reicht erschoepften Speicher
+  // seit E3 weiter (bis dahin schluckte es ihn: 'nicht lesbar'). An dieser
+  // UI-Grenze ist das ein Grund wie jeder andere - Statuszeile statt IDE-
+  // Fehlerdialog, wie vor E3. Nur EOutOfMemory: alles andere verhaelt sich
+  // wie bisher.
+  try
+    Placed := TSuppression.MarkerTargetFor(F.FileName, F.LineInt, F.Kind,
+      Target, Why);
+  except
+    on E: EOutOfMemory do
+    begin
+      Placed := False;
+      Why    := E.Message;
+    end;
+  end;
+  if not Placed then
   begin
     StatusMode(StatusWithErrors(
       Format(_('Suppress: cannot place the marker: %s'), [Why]), Errs));
@@ -3451,6 +3539,9 @@ procedure TAnalyserFrame.PrepareAnalysis(const AWatchedFile: string);
 var
   ProfileOverride: string;
 begin
+  // Ein neuer Lauf beginnt - der Abbruch-Platzhalter des vorigen gilt nicht
+  // mehr (m7); die Anzeige zeigt ihn bis zum naechsten Neuaufbau.
+  FAbortPlaceholder := '';
   if not Assigned(FRepoSettings) then Exit;
   // VOR dem Lesen des Combos: ein Projekt-Profil muss darin stehen,
   // bevor die Auswahl als Override gilt.
@@ -3661,6 +3752,9 @@ procedure TAnalyserFrame.ClearAllFindings;
 // laufen, wenn der Frame aufgebaut ist - was fuer alle heutigen Aufrufer
 // gilt, weil sie an Menuepunkten haengen.
 begin
+  // Leer heisst hier 'zurueckgesetzt', nicht 'abgebrochen' (m7) - auch der
+  // Start eines Ordner-Scans kommt hier vorbei (ReleaseResultsBeforeBulkScan).
+  FAbortPlaceholder := '';
   // Anzeige ZUERST abkoppeln, dann die Funde frei (2026-11-14) - dieselbe
   // Reihenfolge wie TFindingDelivery: nie zeigt FDisplayedFindings auf
   // einen freigegebenen Fund, auch nicht zwischen zwei Zeilen.
@@ -4773,8 +4867,13 @@ begin
       except
         FDisplayFaultMsg := '';
       end;
-      if HandleAllocated then
-        PostMessage(Handle, WM_SCA_DISPLAY_RESET, 0, 0);
+      // Hoechstens EIN Reset unterwegs, und nur einer je Anzeige-Aufbau
+      // (Review-Runde 2026-11-14, m6): scheitert auch das Malen nach dem
+      // Reset, bleibt das Malen bis zum naechsten ApplyFilter gesperrt -
+      // bis dahin kreisten Reset, Neumalen und Fehler ohne Ende.
+      if not FDisplayResetPending and not FDisplayResetUsed
+         and HandleAllocated then
+        FDisplayResetPending := PostMessage(Handle, WM_SCA_DISPLAY_RESET, 0, 0);
     end;
   end;
 end;
