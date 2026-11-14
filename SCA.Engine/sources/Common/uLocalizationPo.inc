@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 7322 Zeilen, 353298 Bytes
-  CPoLines_de: array[0..7321] of string = (
+  // i18n\de.po - 7340 Zeilen, 354196 Bytes
+  CPoLines_de: array[0..7339] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -7336,7 +7336,25 @@ const
     'msgstr "Zu wenig Arbeitsspeicher: der Scan von %d Dateien wurde abgebrochen, sein Teilergebnis verworfen. Ordner eingrenzen oder die 64-Bit-Kommandozeile verwenden (StaticCodeAnalyser.d12.exe --path ...)."',
     '',
     'msgid "Display reset after an error: %s"',
-    'msgstr "Anzeige nach einem Fehler zur'#$00FC'ckgesetzt: %s"'
+    'msgstr "Anzeige nach einem Fehler zur'#$00FC'ckgesetzt: %s"',
+    '',
+    'msgid "Not enough memory - see the status bar."',
+    'msgstr "Zu wenig Arbeitsspeicher - siehe Statuszeile."',
+    '',
+    'msgid "Analysis error - see the status bar."',
+    'msgstr "Analysefehler - siehe Statuszeile."',
+    '',
+    'msgid "Not enough memory: the scan was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."',
+    'msgstr "Zu wenig Arbeitsspeicher: der Scan wurde abgebrochen, sein Teilergebnis verworfen. Ordner eingrenzen oder die 64-Bit-Kommandozeile verwenden (StaticCodeAnalyser.d12.exe --path ...)."',
+    '',
+    'msgid "Scan aborted"',
+    'msgstr "Scan abgebrochen"',
+    '',
+    'msgid "Live analysis of %s: the findings could not be shown (%s)."',
+    'msgstr "Live-Analyse von %s: die Funde konnten nicht angezeigt werden (%s)."',
+    '',
+    'msgid "Live analysis of %s aborted (%s) - previous findings kept."',
+    'msgstr "Live-Analyse von %s abgebrochen (%s) - die bisherigen Funde bleiben."'
   );
 
   // i18n\en.po - 268 Zeilen, 7196 Bytes
@@ -7611,8 +7629,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 7318 Zeilen, 367414 Bytes
-  CPoLines_fr: array[0..7317] of string = (
+  // i18n\fr.po - 7336 Zeilen, 368364 Bytes
+  CPoLines_fr: array[0..7335] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -14930,7 +14948,25 @@ const
     'msgstr "M'#$00E9'moire insuffisante : l''analyse de %d fichiers a '#$00E9't'#$00E9' interrompue et son r'#$00E9'sultat partiel abandonn'#$00E9'. Restreignez le dossier ou utilisez la ligne de commande 64 bits (StaticCodeAnalyser.d12.exe --path ...)."',
     '',
     'msgid "Display reset after an error: %s"',
-    'msgstr "Affichage r'#$00E9'initialis'#$00E9' apr'#$00E8's une erreur : %s"'
+    'msgstr "Affichage r'#$00E9'initialis'#$00E9' apr'#$00E8's une erreur : %s"',
+    '',
+    'msgid "Not enough memory - see the status bar."',
+    'msgstr "M'#$00E9'moire insuffisante - voir la barre d'''#$00E9'tat."',
+    '',
+    'msgid "Analysis error - see the status bar."',
+    'msgstr "Erreur d''analyse - voir la barre d'''#$00E9'tat."',
+    '',
+    'msgid "Not enough memory: the scan was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."',
+    'msgstr "M'#$00E9'moire insuffisante : l''analyse a '#$00E9't'#$00E9' interrompue et son r'#$00E9'sultat partiel abandonn'#$00E9'. Restreignez le dossier ou utilisez la ligne de commande 64 bits (StaticCodeAnalyser.d12.exe --path ...)."',
+    '',
+    'msgid "Scan aborted"',
+    'msgstr "Analyse interrompue"',
+    '',
+    'msgid "Live analysis of %s: the findings could not be shown (%s)."',
+    'msgstr "Analyse en direct de %s : les r'#$00E9'sultats n''ont pas pu '#$00EA'tre affich'#$00E9's (%s)."',
+    '',
+    'msgid "Live analysis of %s aborted (%s) - previous findings kept."',
+    'msgstr "Analyse en direct de %s interrompue (%s) - les r'#$00E9'sultats pr'#$00E9'c'#$00E9'dents sont conserv'#$00E9's."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
