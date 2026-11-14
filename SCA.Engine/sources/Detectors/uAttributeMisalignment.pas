@@ -37,7 +37,8 @@ uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
   uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
-  uFixArgs;        // FA_NAME (Fix-Datenfeld S3b-2)
+  uFixArgs,        // FA_NAME (Fix-Datenfeld S3b-2)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 const
   ATTR_LINE_RE = '^\s*\[\s*[A-Za-z_]\w*';
@@ -72,6 +73,7 @@ begin
         M := RE.Match(Code);
         if not M.Success then Continue;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3: Stapel/Speicher bricht ab
         Continue;
       end;
       // FP-Fix 2026-06-21: Set-Literale in const-Decls
@@ -110,6 +112,7 @@ begin
         if Mn.Success and (Mn.Groups.Count >= 2) then
           AttrName := Mn.Groups[1].Value;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3
         AttrName := '?';
       end;
       F            := TLeakFinding.Create;

@@ -39,7 +39,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 const
   // Match attribute. Optional group fuer Args -> defensiv check auf
@@ -179,6 +180,8 @@ begin
         end;
       except
         // Defekte Zeile -> skip; Detector bleibt funktional fuer Rest.
+        // Erschoepfter Stapel/Speicher bricht dagegen ab (E3).
+        if IsFatalScanException(ExceptObject) then raise;
       end;
     end;
 

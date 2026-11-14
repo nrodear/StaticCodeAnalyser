@@ -94,6 +94,14 @@ type
     // Gefilterte Untermenge (Display-Filter via Severity/Type/Search).
     // Owned=False - die Findings gehoeren FAllFindings.
     FDisplayedFindings : TList<TLeakFinding>;
+    // Dateizahl fuer die Speicher-Abbruchmeldung (E2/E3, 2026-11-14):
+    // Walk-Zaehler bzw. Gesamtzahl der Datei-Phase aus ProgressCallback.
+    FScanFilesFound    : Integer;
+    FScanFilesTotal    : Integer;
+    // Kurzer Grund eines Speicher-Abbruchs fuer die Platzhalterzeile des
+    // leeren Grids (Review-Runde 2026-11-14, m7); leer = 'No findings.'.
+    // Gesetzt von ShowMemoryAbort, geloescht von BeginAnalysisUI.
+    FAbortPlaceholder  : string;
     // Aktueller BaseDir des letzten Analyse-Laufs - fuer Re-Filter im
     // Grid-Refresh (FillGridFromFindings braucht ihn).
     FCurrentBaseDir    : string;
@@ -359,8 +367,16 @@ type
       ALine: Integer): string;
     procedure ProjectpathChangedScope(Sender: TObject);
     procedure AnalyseSingleFile(const AFilePath: string);
+    // Wirft ein Schritt nach dem Aufruf, ist das Grid konsistent LEER
+    // (ResetGridToEmpty) und die Ausnahme geht weiter (m10).
     procedure FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
       const ABaseDir: string);
+    // Nothilfe im Fehlerpfad (Review-Runde 2026-11-14, m10): Anzeige-Liste
+    // zuerst, dann die Funde frei, Platzhalterzeile, Kacheln. Wirft nie.
+    procedure ResetGridToEmpty;
+    // E2 fuer alle drei Scan-Wege der Form (m10): Grid leer, Platzhalter
+    // nennt den Abbruch, Statuszeile (und ihr Tooltip) Dateizahl und Ausweg.
+    procedure ShowMemoryAbort;
     function  BuildClaudePrompt(F: TLeakFinding): string;
     function SelectPasFile: string;
     procedure LoadRecentPaths;
@@ -409,7 +425,8 @@ uses
   uIDEToolbar,                    // TIDEToolbar.ApplySegoeUI - UI-Aligning mit IDE-Plugin
   uIDEColors,                     // IDE_BG_CHROME - Chrome-Panel-Hintergrund analog IDE
   uIgnoreList,                    // TIgnoreList.ConfigFilePath - Hamburger-Item
-  uProfileViewer;                 // ShowProfileViewer - Hamburger-Item
+  uProfileViewer,                 // ShowProfileViewer - Hamburger-Item
+  uFindingFileIndex;              // TFindingDelivery - ausnahmefeste Fund-Uebergabe (2026-11-14)
   // ShellAPI + uLocalization sind bereits im interface-uses (E2004-Schutz).
   // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
 
@@ -741,6 +758,11 @@ begin
   FCancelRequested  := False;
   FAbortReason      := '';
   FLastProgressTick := 0;
+  FScanFilesFound   := 0;
+  FScanFilesTotal   := 0;
+  // Abbruch-Platzhalter und -Tooltip des vorigen Laufs gelten nicht mehr (m7).
+  FAbortPlaceholder := '';
+  StatusBar1.Hint   := '';
   Screen.Cursor     := crAppStart;
   // Analyse-Ausloeser sperren: der Callback pumpt Nachrichten, und ein
   // zweiter Klick (der ungeduldige Normalfall) schachtelte sonst einen
@@ -817,6 +839,18 @@ begin
   // weiter - die App wirkte abgestuerzt, das Fenster blieb stehen.
   if FCancelRequested or Application.Terminated then
     Abort;
+
+  // Dateizahl fuer eine Abbruch-Meldung (E2) - bei JEDEM Tick.
+  if Total < 0 then
+    FScanFilesFound := Current
+  else
+    FScanFilesTotal := Total;
+
+  // (0, N) meldet die Engine VOR den Pre-Indizes (M3): nur die Zahl merken,
+  // die Anzeige bleibt, wie sie war (Review-Runde 2026-11-14, NEW-2) - sonst
+  // stand waehrend des ganzen Pre-Index ein starres 'Datei 0 / N (0%)' da.
+  if (Total >= 0) and (Current = 0) then
+    Exit;
 
   tick     := GetTickCount;
   doUpdate := (tick - FLastProgressTick > 100);
@@ -1026,7 +1060,26 @@ procedure TForm2.AppShowHint(var HintStr: string; var CanShow: Boolean;
 // die Maus die Zelle verlaesst (sonst bleibt der alte Tooltip kleben).
 var
   ACol, ARow : Integer;
+  Left2      : Integer;
 begin
+  // Tooltip der Statusleiste (m7; Review-Runde 2026-11-14): nur ueber
+  // Panel 2 und nur, solange es noch die Abbruch-Meldung zeigt, deren Text
+  // ShowMemoryAbort als Hint hinterlegt hat - ein spaeterer Text in Panel 2
+  // macht ihn stumm, statt ihm zu widersprechen. CursorRect je Bereich,
+  // damit die VCL beim Wechsel zwischen den Panels neu fragt.
+  if HintInfo.HintControl = StatusBar1 then
+  begin
+    Left2 := StatusBar1.Panels[0].Width + StatusBar1.Panels[1].Width;
+    if HintInfo.CursorPos.X >= Left2 then
+      HintInfo.CursorRect := Rect(Left2, 0, StatusBar1.ClientWidth,
+        StatusBar1.ClientHeight)
+    else
+      HintInfo.CursorRect := Rect(0, 0, Left2, StatusBar1.ClientHeight);
+    HintInfo.HintMaxWidth := 600;
+    CanShow := (HintInfo.CursorPos.X >= Left2) and (StatusBar1.Hint <> '')
+      and (StatusBar1.Panels[2].Text = StatusBar1.Hint);
+    Exit;
+  end;
   if HintInfo.HintControl <> ResultGrid then Exit;
 
   ResultGrid.MouseToCell(HintInfo.CursorPos.X, HintInfo.CursorPos.Y,
@@ -1402,6 +1455,17 @@ begin
           else
             StatusBar1.Panels[2].Text := _('Analysis cancelled.');
         end;
+        // E3 (2026-11-14): erschoepfter Speicher bricht den Lauf in der
+        // Engine ab - kein Teilergebnis. Wie im IDE-Plugin (E2): das Grid
+        // leeren (alte Funde frei, Platzhalter) und Dateizahl samt Ausweg
+        // nennen. Statuszeile, kein Dialog - wie die uebrigen Meldungen.
+        // Ebenso, wenn erst die Uebergabe ans Grid am Speicher scheitert -
+        // dann zuerst frei, was die Quelle noch besitzt.
+        on EOutOfMemory do
+        begin
+          FreeAndNil(findings);
+          ShowMemoryAbort;
+        end;
         // noinspection ExceptionTooGeneral
         // Catch-all an der Action-Grenze ist in dieser Form gewollt
         // (s. Dateikopf): eine Analyse-Exception darf die App nicht
@@ -1473,16 +1537,26 @@ begin
           Res.Free;
           Ses.Free;
         end;
+        if Assigned(findings) then
+          FillGridFromFindings(findings, ExtractFilePath(AFilePath));
       except
+        // E2 auch fuer die Einzeldatei (Review-Runde 2026-11-14, m10): bis
+        // dahin ein Dialog 'Analysis error: Out of memory' ueber dem alten
+        // Grid. Jetzt wie der Ordner-Scan: Grid leer, Meldung in der
+        // Statuszeile - auch, wenn erst die Uebergabe ans Grid scheitert
+        // (die Uebergabe stand bisher ausserhalb dieses Fangs).
+        on EOutOfMemory do
+        begin
+          FreeAndNil(findings);
+          ShowMemoryAbort;
+          Exit;
+        end;
         on E: Exception do
         begin
           ShowMessage(_('Analysis error: ') + E.Message);
           Exit;
         end;
       end;
-
-      if Assigned(findings) then
-        FillGridFromFindings(findings, ExtractFilePath(AFilePath));
     finally
       findings.Free;
     end;
@@ -1500,44 +1574,121 @@ procedure TForm2.FillGridFromFindings(Findings: TObjectList<TLeakFinding>;
 // Uebernimmt die Findings ins FAllFindings-Feld + BaseDir + delegiert das
 // Grid-Befuellen an ApplyFilter. Damit greift Severity/Type/Search-Filter
 // auch beim ersten Befuellen.
-var
-  i : Integer;
 begin
-  FAllFindings.Clear;
-  if Assigned(Findings) then
-  begin
-    Findings.OwnsObjects := False;
-    for i := 0 to Findings.Count - 1 do
-      FAllFindings.Add(Findings[i]);
+  // Ausnahmefest seit 2026-11-14 (OOM-Diagnose des Plugins, dieselbe Uebergabe
+  // wie im Dock): Anzeige-Liste ZUERST leeren, dann die alten Funde frei, die
+  // neuen ohne Leck-Fenster uebernehmen (TFindingDelivery). Bis dahin gab
+  // FAllFindings.Clear Funde frei, die FDisplayedFindings noch hielt, und
+  // OwnsObjects ging VOR dem Kopieren aus. Findings = nil: nur leeren.
+  // Wirft ein Schritt danach (Speicher im Nachlauf), ist das Grid seit der
+  // Review-Runde (m10) konsistent LEER statt halb gefuellt, und die Ausnahme
+  // geht an den Aufrufer - der meldet sie.
+  try
+    TFindingDelivery.Deliver(FDisplayedFindings, FAllFindings, Findings);
+    // BaseDir wechselt -> alle gecachten Rel-Paths sind ungueltig.
+    if Assigned(FRelPathCache) then
+      FRelPathCache.Clear;
+    FCurrentBaseDir := ABaseDir;
+    // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
+    // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
+    UpdateStats;
+    // Baseline-Set VOR dem Combo-Umbau frisch laden: die Reduktion zaehlt
+    // auf der baseline-bereinigten Menge (Konsistenz mit dem Grid) und
+    // braeuchte sonst den Stand des VORIGEN Laufs. ApplyFilter laedt zwar
+    // selbst nach, aber erst NACH dem Umbau.
+    RefreshBaselineSet;
+    // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
+    // rechnen, solange der Text-Cache noch warm ist. EndAnalysisUI leert ihn
+    // gleich (G2-5-Hook), und der Anzeige-Filter darf pro Fund keine Datei
+    // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne diesen
+    // Aufruf verliert der Filter nur seine zweite Match-Quelle und arbeitet
+    // wie frueher allein ueber den Fingerprint; die Rechnung selbst kostet
+    // nichts, wenn keine Baseline mit contextHashes geladen ist.
+    // Assigned-Guard wie in RefreshBaselineSet - dasselbe Feld, dieselbe
+    // Vorsicht.
+    if Assigned(FBaselineSet) then
+      FBaselineSet.PrepareContextHashes(FAllFindings);
+    // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
+    // ApplyFilter laufen damit die anschliessende Filter-Application schon
+    // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
+    RebuildFilterCombos;
+    ApplyFilter;
+  except
+    ResetGridToEmpty;
+    raise;
   end;
-  // BaseDir wechselt -> alle gecachten Rel-Paths sind ungueltig.
-  if Assigned(FRelPathCache) then
-    FRelPathCache.Clear;
-  FCurrentBaseDir := ABaseDir;
-  // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
-  // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
-  UpdateStats;
-  // Baseline-Set VOR dem Combo-Umbau frisch laden: die Reduktion zaehlt
-  // auf der baseline-bereinigten Menge (Konsistenz mit dem Grid) und
-  // braeuchte sonst den Stand des VORIGEN Laufs. ApplyFilter laedt zwar
-  // selbst nach, aber erst NACH dem Umbau.
-  RefreshBaselineSet;
-  // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
-  // rechnen, solange der Text-Cache noch warm ist. EndAnalysisUI leert ihn
-  // gleich (G2-5-Hook), und der Anzeige-Filter darf pro Fund keine Datei
-  // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne diesen
-  // Aufruf verliert der Filter nur seine zweite Match-Quelle und arbeitet
-  // wie frueher allein ueber den Fingerprint; die Rechnung selbst kostet
-  // nichts, wenn keine Baseline mit contextHashes geladen ist.
-  // Assigned-Guard wie in RefreshBaselineSet - dasselbe Feld, dieselbe
-  // Vorsicht.
-  if Assigned(FBaselineSet) then
-    FBaselineSet.PrepareContextHashes(FAllFindings);
-  // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
-  // ApplyFilter laufen damit die anschliessende Filter-Application schon
-  // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
-  RebuildFilterCombos;
-  ApplyFilter;
+end;
+
+procedure TForm2.ResetGridToEmpty;
+begin
+  try
+    TFindingDelivery.Discard(FDisplayedFindings, FAllFindings);
+  except
+  end;
+  try
+    if Assigned(FRelPathCache) then FRelPathCache.Clear;
+    if Assigned(FBaselineSet) then FBaselineSet.ReleaseContextHashes;
+  except
+  end;
+  FGridUpdating := True;
+  try
+    try
+      // Wie der 0-Treffer-Pfad von ApplyFilter, aber ohne dessen Baseline-
+      // Nachladen - das kann im Fehlerpfad selbst am Speicher scheitern.
+      ResultGrid.RowCount := 2;
+      ResultGrid.Rows[1].Clear;
+      if FAbortPlaceholder <> '' then
+      begin
+        ResultGrid.Cells[0, 1] := _('Scan aborted');
+        ResultGrid.Cells[3, 1] := FAbortPlaceholder;
+      end
+      else
+        ResultGrid.Cells[0, 1] := _('No findings.');
+      ResultGrid.Invalidate;
+      StatusFindings(Format(_('%d / %d findings'), [0, 0]));
+      UpdateStats;
+      RebuildFilterCombos;
+    except
+      // Nothilfe - darf die eigentliche Ausnahme nicht ersetzen.
+    end;
+  finally
+    FGridUpdating := False;
+  end;
+  try
+    UpdateHintPanelToSelection;
+  except
+  end;
+end;
+
+procedure TForm2.ShowMemoryAbort;
+var
+  Files : Integer;
+  Msg   : string;
+begin
+  // Kurzer Grund fuer die Platzhalterzeile (m7) - die volle Meldung steht in
+  // der Statuszeile und, weil Panel 2 sie abschneidet, in ihrem Tooltip.
+  FAbortPlaceholder := _('Not enough memory - see the status bar.');
+  ResetGridToEmpty;
+  // Die Gesamtzahl der Datei-Phase (seit der Review-Runde schon VOR den
+  // Pre-Indizes gemeldet, M3), sonst der Walk-Zaehler.
+  Files := FScanFilesTotal;
+  if Files <= 0 then
+    Files := FScanFilesFound;
+  if Files > 1 then
+    Msg := Format(_('Not enough memory: the scan of %d files was ' +
+      'aborted and its partial results discarded. Narrow the folder or ' +
+      'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
+      [Files])
+  else
+    // Ohne Zahl (M3): eine Einzeldatei (ihr Lauf meldet keinen Fortschritt)
+    // oder ein Abbruch vor dem ersten Tick - die Fassung mit Zahl sagte
+    // dort '0 Dateien'.
+    Msg := _('Not enough memory: the scan was aborted and its ' +
+      'partial results discarded. Narrow the folder or use the 64-bit ' +
+      'command line (StaticCodeAnalyser.d12.exe --path ...).');
+  StatusBar1.Panels[2].Text := Msg;
+  StatusBar1.Hint     := Msg;
+  StatusBar1.ShowHint := True;
 end;
 
 procedure TForm2.SnapshotFilterItems;
@@ -1987,7 +2138,16 @@ begin
 
   if FDisplayedFindings.Count = 0 then
   begin
-    if FAllFindings.Count = 0 then
+    if (FAllFindings.Count = 0) and (FAbortPlaceholder <> '') then
+    begin
+      // Nach einem Speicher-Abbruch (Review-Runde 2026-11-14, m7) hiesse
+      // 'No findings.' "der Scan fand nichts" - und 'Done. No findings.'
+      // ueberschriebe die Abbruch-Meldung in der Statuszeile.
+      ResultGrid.Cells[0, 1] := _('Scan aborted');
+      ResultGrid.Cells[3, 1] := FAbortPlaceholder;
+      StatusFindings(Format(_('%d / %d findings'), [0, 0]));
+    end
+    else if FAllFindings.Count = 0 then
     begin
       ResultGrid.Cells[0, 1] := _('No findings.');
       StatusFindings(Format(_('%d / %d findings'), [0, 0]));
@@ -2681,6 +2841,16 @@ begin
         FillGridFromFindings(Findings, StartDir);
       except
         on EAbort do ;
+        // E2 auch fuer die geaenderten Dateien (Review-Runde 2026-11-14,
+        // m10) - bis dahin 'Analysis error: Out of memory' ueber dem
+        // alten Grid.
+        on EOutOfMemory do
+        begin
+          FreeAndNil(Findings);
+          ShowMemoryAbort;
+        end;
+        // noinspection ExceptionTooGeneral
+        // Catch-all an der Action-Grenze wie in AnalyseAllClasses (s. dort).
         on E: Exception do
           StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
       end;

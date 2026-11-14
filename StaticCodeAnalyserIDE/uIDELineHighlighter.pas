@@ -2124,6 +2124,18 @@ var
   LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
   EntryList : TList<TFindingMarkEntry>;
   Group     : TList<TFindingMarkEntry>;
+  // Alter Satz ZUERST frei, Neuaufbau in einen LOKALEN Satz, Tausch am Ende
+  // (2026-11-14, Review-Runde m5). Bis 2026-11-14 wurde direkt in
+  // FMarksByFile gebaut - ein Wurf mittendrin (EOutOfMemory beim Marker-
+  // Neubau ueber alle Funde) liess einen halb gebauten Satz stehen, zu dem
+  // der uebersprungene Rest (ResetState, Save-Notifier, Line-Tracker) nicht
+  // mehr passte. Die erste Abhilfe (alten Satz bis zum Tausch behalten)
+  // hielt alt + neu zugleich - genau die Spitze, an der der Speicher
+  // ausgeht. Jetzt: wirft der Neubau, ist der Satz LEER statt halb, und der
+  // Aufrufer (HighlightDebounceFire) raeumt mit Clear auch Notifier und
+  // Tracker ab.
+  NewMarks  : TObjectDictionary<string, TFileMarks>;
+  OldMarks  : TObjectDictionary<string, TFileMarks>;
 begin
   // Overlay sofort verbergen — im Hover-Modus erscheint es erst wieder,
   // wenn die Maus eine markierte Zeile beruehrt.
@@ -2134,56 +2146,74 @@ begin
   // damit die alten Stripes weggemalt werden.
   InvalidateAllLines;
 
-  // Kompletter Reset: alle bestehenden Pro-Datei-Buckets weg.
-  // doOwnsValues -> innere Dictionaries werden hier freigegeben.
+  // Alten Satz frei, BEVOR der neue entsteht (m5, s. NewMarks oben).
   FMarksByFile.Clear;
 
-  // Phase 1: Eintraege nach (file, line) gruppieren ohne zu mergen.
-  // doOwnsValues kaskadiert: aeusseres -> mittleres -> innere TList.
-  PerLine := TObjectDictionary<string,
-              TObjectDictionary<Integer,
-                TList<TFindingMarkEntry>>>.Create([doOwnsValues]);
+  NewMarks := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
   try
-    for i := 0 to High(AEntries) do
-    begin
-      if AEntries[i].Line <= 0 then Continue;
-      FileKey := NormalizePath(AEntries[i].FileName);
-      if FileKey = '' then Continue;
-
-      if not PerLine.TryGetValue(FileKey, LineMap) then
+    // Phase 1: Eintraege nach (file, line) gruppieren ohne zu mergen.
+    // doOwnsValues kaskadiert: aeusseres -> mittleres -> innere TList.
+    PerLine := TObjectDictionary<string,
+                TObjectDictionary<Integer,
+                  TList<TFindingMarkEntry>>>.Create([doOwnsValues]);
+    try
+      for i := 0 to High(AEntries) do
       begin
-        LineMap := TObjectDictionary<Integer,
-                     TList<TFindingMarkEntry>>.Create([doOwnsValues]);
-        PerLine.Add(FileKey, LineMap);
+        if AEntries[i].Line <= 0 then Continue;
+        FileKey := NormalizePath(AEntries[i].FileName);
+        if FileKey = '' then Continue;
+
+        if not PerLine.TryGetValue(FileKey, LineMap) then
+        begin
+          LineMap := TObjectDictionary<Integer,
+                       TList<TFindingMarkEntry>>.Create([doOwnsValues]);
+          PerLine.Add(FileKey, LineMap);
+        end;
+
+        if not LineMap.TryGetValue(AEntries[i].Line, EntryList) then
+        begin
+          EntryList := TList<TFindingMarkEntry>.Create;
+          LineMap.Add(AEntries[i].Line, EntryList);
+        end;
+        EntryList.Add(AEntries[i]);
       end;
 
-      if not LineMap.TryGetValue(AEntries[i].Line, EntryList) then
+      // Phase 2: pro Gruppe Mark synthetisieren und im neuen Satz ablegen.
+      for FileKey in PerLine.Keys do
       begin
-        EntryList := TList<TFindingMarkEntry>.Create;
-        LineMap.Add(AEntries[i].Line, EntryList);
+        LineMap := PerLine[FileKey];
+        Bucket := TFileMarks.Create;
+        // Wirft das Add, gehoert der Eimer noch niemandem (bis 2026-11-14
+        // ein Leck je Datei) - selbst freigeben und weiterreichen.
+        try
+          NewMarks.Add(FileKey, Bucket);
+        except
+          Bucket.Free;
+          raise;
+        end;
+
+        for var LineNo in LineMap.Keys do
+        begin
+          Group := LineMap[LineNo];
+          if Group.Count = 0 then Continue;
+          Mark := BuildMarkForLineGroup(Group);
+          Bucket.AddOrSetValue(LineNo, Mark);
+        end;
+
+        ApplySpanCoverage(Bucket);
       end;
-      EntryList.Add(AEntries[i]);
+    finally
+      PerLine.Free;
     end;
 
-    // Phase 2: pro Gruppe Mark synthetisieren und in FMarksByFile ablegen.
-    for FileKey in PerLine.Keys do
-    begin
-      LineMap := PerLine[FileKey];
-      Bucket := TFileMarks.Create;
-      FMarksByFile.Add(FileKey, Bucket);
-
-      for var LineNo in LineMap.Keys do
-      begin
-        Group := LineMap[LineNo];
-        if Group.Count = 0 then Continue;
-        Mark := BuildMarkForLineGroup(Group);
-        Bucket.AddOrSetValue(LineNo, Mark);
-      end;
-
-      ApplySpanCoverage(Bucket);
-    end;
+    // Tausch: der fertige Satz wird DER Satz; der alte ist oben schon
+    // geleert, sein Objekt geht hier frei.
+    OldMarks     := FMarksByFile;
+    FMarksByFile := NewMarks;
+    NewMarks     := nil;
+    OldMarks.Free;
   finally
-    PerLine.Free;
+    NewMarks.Free;   // nil nach dem Tausch; sonst der halbe Neubau
   end;
 
   if Assigned(FEditorEventsObj) then

@@ -94,6 +94,18 @@ type
     // P5.7: FPC-Define-Satz unter dlFpc (A6/C7)
     [Test] procedure FpcDialektErgaenztFpcDefine_LeakImFpcZweigSichtbar;
     [Test] procedure DelphiDialektErgaenztKeinFpcDefine;
+    // E3 (2026-11-14): erschoepfter Speicher bricht den Scan ab, statt je
+    // Detektor/Index/Datei als Fund gebucht zu werden. Fehlerinjektion ueber
+    // uCrashDiag.GScanFaultHook (Single-File-Pfad, s. Unit-Kopf).
+    [Test] procedure FatalScanException_StackAndMemoryOnly;
+    [Test] procedure FaultOom_InDetector_AbortsScan;
+    [Test] procedure FaultOom_InPreIndex_AbortsScan;
+    [Test] procedure FaultOom_AtAstCacheAdd_AbortsScan;
+    [Test] procedure AstCacheAddFailure_DoesNotLeakTree;
+    // Review-Runde 2026-11-14 (M1): auch der Parallel-Pfad (--parallel,
+    // TTask-Worker) bricht mit der echten Klasse ab. Listen-Pfad (ssFileList)
+    // wie RunProject - der rekursive Pfad bleibt tabu (Unit-Kopf).
+    [Test] procedure FaultOom_InParallelWorker_AbortsScan;
   end;
 
 implementation
@@ -103,7 +115,9 @@ uses
   System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex,
-  uGateStats;   // Gate/GateHit/GateStatsReport
+  uGateStats,   // Gate/GateHit/GateStatsReport
+  uCrashDiag,   // IsFatalScanException, GScanFaultHook (E3-Tests)
+  uStaticAnalyzer2;   // gParallelDeclineReason - lief der Parallel-Pfad wirklich?
 
 const
   // Garantiert MEHRERE Befunde, darunter einen, der auch unter der
@@ -123,6 +137,66 @@ const
     '  ShowMessage(Format(''%s ist %d Jahre alt'', [UserId]));'#13#10 +
     'end;'#13#10 +
     'end.';
+
+// ---- E3-Fehlerinjektion ---------------------------------------------------
+
+var
+  // Stelle (SCAN_FAULT_*), an der RaiseOomAtFaultPoint wirft; '' = nie.
+  GFaultAt : string = '';
+
+procedure RaiseOomAtFaultPoint(const AWhere: string);
+// Der Test-Haken: wirft an GFaultAt die ECHTE Ausnahme der RTL.
+// OutOfMemoryError wirft das vorgefertigte EOutOfMemory-Objekt - ein eigenes
+// Exemplar (EOutOfMemory.Create) gaebe EHeapException nie frei.
+begin
+  if AWhere = GFaultAt then
+    OutOfMemoryError;
+end;
+
+// Belegte Bytes des Speichermanagers (klein + mittel + gross).
+function AllocatedBytes: Int64;
+var
+  St : TMemoryManagerState;
+  i  : Integer;
+begin
+  {$WARN SYMBOL_PLATFORM OFF}
+  GetMemoryManagerState(St);
+  {$WARN SYMBOL_PLATFORM ON}
+  Result := Int64(St.TotalAllocatedMediumBlockSize)
+    + Int64(St.TotalAllocatedLargeBlockSize);
+  for i := Low(St.SmallBlockTypeStates) to High(St.SmallBlockTypeStates) do
+    Result := Result + Int64(St.SmallBlockTypeStates[i].AllocatedBlockCount)
+      * Int64(St.SmallBlockTypeStates[i].UseableBlockSize);
+end;
+
+// Eine Unit mit AProcs kleinen Routinen - gross genug, dass ein Baum sich in
+// AllocatedBytes deutlich vom Rauschen abhebt.
+function BigUnitSource(AProcs: Integer): string;
+var
+  SB : TStringBuilder;
+  i  : Integer;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit BigUnit;'#13#10'interface'#13#10'implementation'#13#10);
+    for i := 1 to AProcs do
+      SB.Append(Format(
+        'procedure P%d(A: Integer);'#13#10 +
+        'var'#13#10 +
+        '  B: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  B := A + %d;'#13#10 +
+        '  if B > 10 then'#13#10 +
+        '    B := B * 2'#13#10 +
+        '  else'#13#10 +
+        '    B := B - 1;'#13#10 +
+        'end;'#13#10, [i, i]));
+    SB.Append('end.');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
 
 { Helpers }
 
@@ -1162,6 +1236,215 @@ begin
     FreeAndNil(gGateHits);
   end;
   Assert.IsNull(gGateHits, 'danach wieder aus');
+end;
+
+procedure TTestEngineApi.FatalScanException_StackAndMemoryOnly;
+// Vertrag des zentralen Helfers: genau Stapel und Speicher sind fatal.
+// Das alte Muster (nur 'on EStackExhausted do raise') faellt am ersten
+// Assert - EOutOfMemory wurde dort verschluckt.
+var
+  E    : Exception;
+  Seen : Boolean;
+begin
+  // Seen (Review-Runde 2026-11-14, m11): ohne den Merker liefe der Test
+  // still gruen, wenn OutOfMemoryError gar nicht wuerfe.
+  Seen := False;
+  try
+    OutOfMemoryError;
+  except
+    on X: EOutOfMemory do
+    begin
+      Seen := True;
+      Assert.IsTrue(IsFatalScanException(X), 'EOutOfMemory ist fatal');
+    end;
+  end;
+  Assert.IsTrue(Seen, 'OutOfMemoryError hat geworfen');
+  E := EStackExhausted.Create('Test');
+  try
+    Assert.IsTrue(IsFatalScanException(E), 'EStackExhausted ist fatal');
+  finally
+    E.Free;
+  end;
+  E := EAbort.Create('Test');
+  try
+    Assert.IsFalse(IsFatalScanException(E),
+      'EAbort hat eigene Durchreichen und faellt nicht unter den Helfer');
+  finally
+    E.Free;
+  end;
+  E := EAccessViolation.Create('Test');
+  try
+    Assert.IsFalse(IsFatalScanException(E), 'eine AV kostet nur ihre Datei');
+  finally
+    E.Free;
+  end;
+  E := Exception.Create('Test');
+  try
+    Assert.IsFalse(IsFatalScanException(E), 'gewoehnliche Ausnahme');
+  finally
+    E.Free;
+  end;
+  Assert.IsFalse(IsFatalScanException(nil), 'nil');
+end;
+
+procedure TTestEngineApi.FaultOom_InDetector_AbortsScan;
+// Alt: RunAllDetectors buchte EOutOfMemory je Detektor als 'Detector X
+// failed: EOutOfMemory' und der Scan lieferte ein Ergebnis - WillRaise rot.
+begin
+  GFaultAt := SCAN_FAULT_DETECTOR;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  try
+    Assert.WillRaise(
+      procedure
+      var
+        R : TScanResult;
+      begin
+        R := RunSingle(BUG_SRC, '');
+        R.Free;   // nur erreicht, wenn der Scan NICHT abbricht
+      end, EOutOfMemory, 'EOutOfMemory im Detektor bricht den Scan ab');
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+  end;
+end;
+
+procedure TTestEngineApi.FaultOom_InPreIndex_AbortsScan;
+// Alt: der Wrapper um DfmRepoIndex.Build verschluckte alles ausser
+// EStackExhausted - der Index fiel still weg, der Scan lief weiter.
+begin
+  GFaultAt := SCAN_FAULT_INDEX_BUILD;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  try
+    Assert.WillRaise(
+      procedure
+      var
+        R : TScanResult;
+      begin
+        R := RunSingle(BUG_SRC, '');
+        R.Free;
+      end, EOutOfMemory, 'EOutOfMemory im Pre-Index bricht den Scan ab');
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+  end;
+end;
+
+procedure TTestEngineApi.FaultOom_AtAstCacheAdd_AbortsScan;
+// Alt: der Pre-Index-Wrapper verschluckte den Wurf aus Acquire, der Main-
+// Loop parste die Datei erneut und buchte den zweiten Wurf als
+// 'Lesefehler: EOutOfMemory' - ein Ergebnis statt eines Abbruchs.
+begin
+  GFaultAt := SCAN_FAULT_AST_CACHE_ADD;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  try
+    Assert.WillRaise(
+      procedure
+      var
+        R : TScanResult;
+      begin
+        R := RunSingle(BUG_SRC, '');
+        R.Free;
+      end, EOutOfMemory, 'EOutOfMemory beim Cache-Add bricht den Scan ab');
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+  end;
+end;
+
+procedure TTestEngineApi.AstCacheAddFailure_DoesNotLeakTree;
+// Alt: wirft FCache.Add, gehoert der frisch geparste Baum niemandem - je
+// fehlgeschlagenem Acquire ein ganzer AST als Leck (hier ROUNDS Baeume,
+// also ein Vielfaches von Held). Jetzt gibt Acquire ihn frei.
+const
+  ROUNDS = 5;
+var
+  Fn         : string;
+  Cache      : TAstFileCache;
+  Before     : Int64;
+  Held       : Int64;
+  AfterFails : Int64;
+  i          : Integer;
+begin
+  Fn := TPath.Combine(FDir, 'BigUnit.pas');
+  TFile.WriteAllText(Fn, BigUnitSource(400), TEncoding.UTF8);
+  // Groesse EINES Baums: was ein erfolgreiches Acquire im Cache haelt.
+  Cache := TAstFileCache.Create;
+  try
+    Before := AllocatedBytes;
+    Assert.IsNotNull(Cache.Acquire(Fn), 'Kontrolle: die Datei parst');
+    Held := AllocatedBytes - Before;
+  finally
+    Cache.Free;
+  end;
+  Assert.IsTrue(Held > 100000,
+    Format('Baum gross genug fuer die Messung (%d Byte)', [Held]));
+  GFaultAt := SCAN_FAULT_AST_CACHE_ADD;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  Cache := TAstFileCache.Create;
+  try
+    Before := AllocatedBytes;
+    for i := 1 to ROUNDS do
+      try
+        Cache.Acquire(Fn);
+        Assert.Fail('Acquire haette werfen muessen');
+      except
+        on EOutOfMemory do ;   // erwartet - der Baum muss trotzdem frei sein
+      end;
+    AfterFails := AllocatedBytes - Before;
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+    Cache.Free;
+  end;
+  Assert.IsTrue(AfterFails < Held div 2,
+    Format('%d fehlgeschlagene Acquire hinterliessen %d Byte (ein Baum: %d)',
+      [ROUNDS, AfterFails, Held]));
+end;
+
+procedure TTestEngineApi.FaultOom_InParallelWorker_AbortsScan;
+// Alt: der Task-Fang machte jede Ausnahme zum Text, der Haupt-Thread warf
+// nach dem Merge eine gewoehnliche Exception (bzw. buchte einen
+// Analyseabbruch-Fund) - WillRaise(EOutOfMemory) rot. Jetzt merkt der Task
+// die Klasse, und der Haupt-Thread wirft VOR dem Merge die echte.
+// gParallelDeclineReason leer = das Gate liess parallel laufen; sonst
+// pruefte der Test nur den seriellen Weg (FaultOom_InDetector_AbortsScan).
+var
+  Files : TArray<string>;
+begin
+  Files := [TPath.Combine(FDir, 'ParA.pas'), TPath.Combine(FDir, 'ParB.pas')];
+  TFile.WriteAllText(Files[0],
+    StringReplace(BUG_SRC, 'SampleBug', 'ParA', []), TEncoding.UTF8);
+  TFile.WriteAllText(Files[1],
+    StringReplace(BUG_SRC, 'SampleBug', 'ParB', []), TEncoding.UTF8);
+  GFaultAt := SCAN_FAULT_DETECTOR;
+  GScanFaultHook := RaiseOomAtFaultPoint;
+  try
+    Assert.WillRaise(
+      procedure
+      var
+        Req : TScanRequest;
+        Ses : TAnalysisSession;
+        R   : TScanResult;
+      begin
+        Req := TScanRequest.Init;
+        Req.Scope           := ssFileList;
+        Req.Files           := Files;
+        Req.Parallel        := True;
+        Req.ParallelWorkers := 2;
+        Ses := TAnalysisSession.Create;
+        try
+          R := Ses.Run(Req);
+          R.Free;   // nur erreicht, wenn der Scan NICHT abbricht
+        finally
+          Ses.Free;
+        end;
+      end, EOutOfMemory, 'EOutOfMemory im Parallel-Worker bricht den Scan ab');
+  finally
+    GScanFaultHook := nil;
+    GFaultAt := '';
+  end;
+  Assert.AreEqual<string>('', gParallelDeclineReason,
+    'der Parallel-Pfad lief: ' + gParallelDeclineReason);
 end;
 
 initialization

@@ -133,7 +133,8 @@ uses
   System.RegularExpressions, System.IOUtils,
   uDetectorUtils, uFileTextCache,
   uRegExMatches,   // CachedEx - Muster je Thread einmal kompiliert
-  uFixArgs;        // FA_NAME (Fix-Datenfeld S3a-2)
+  uFixArgs,        // FA_NAME (Fix-Datenfeld S3a-2)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 // Liest die zur PAS-Datei gehoerende DFM (gleicher Pfad mit .dfm-Extension)
 // und extrahiert alle Event-Handler-Werte. Pattern:
@@ -162,7 +163,10 @@ begin
   try
     DfmText := TFile.ReadAllText(DfmPath);
   except
-    // Datei-IO-Fehler -> wie "keine DFM"
+    // Datei-IO-Fehler -> wie "keine DFM". Erschoepfter Stapel/Speicher
+    // dagegen bricht den Scan ab (E3) - sonst galten die Event-Handler der
+    // Form als unbenutzt (Fehlalarme statt Abbruch).
+    if IsFatalScanException(ExceptObject) then raise;
     Exit;
   end;
   // Perf (Charge R2 2026-10-26): kompilierte Instanz aus dem Thread-Cache

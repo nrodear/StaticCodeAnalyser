@@ -206,6 +206,10 @@ configuration des détecteurs :
 Un fichier de projet non résoluble donne un résultat avec un seul résultat
 `fkFileReadError` au lieu d'une exception.
 
+Une pile épuisée ou une mémoire épuisée (`EStackExhausted`, `EOutOfMemory` ;
+`uCrashDiag.IsFatalScanException`) n'est jamais comptée comme résultat : `Run`
+libère le résultat partiel et lève l'exception, la CLI termine avec le code 99.
+
 ### 3.6 Profils
 
 Un profil est une liste blanche de types de résultats. `''` (vide) =

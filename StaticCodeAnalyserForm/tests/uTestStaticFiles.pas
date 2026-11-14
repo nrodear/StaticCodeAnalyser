@@ -21,6 +21,12 @@
 // im finally. Der residente Testprozess teilt den State mit allen
 // anderen Fixtures - ein liegengelassener dlFpc wuerde fremde Tests
 // unzuverlaessig machen (dokumentierte Projektlehre).
+//
+// SCAN-LOG: TryGetAllPasFiles schreibt nach %APPDATA%\StaticCodeAnalyser.
+// Setup lenkt APPDATA des Prozesses fuer die Dauer jedes Tests in ein
+// eigenes Temp-Verzeichnis um (ScaConfigDir liest die Variable bei jedem
+// Aufruf), TearDown stellt sie wieder her - bis 2026-11-14 rotierte jeder
+// Lauf dieser Fixture das Scan-Log des Entwicklers.
 
 interface
 
@@ -32,6 +38,11 @@ type
   TTestStaticFiles = class
   private
     FDir : string;
+    // APPDATA-Umleitung (s. Unit-Kopf): Ziel, alter Wert, und ob Setup sie
+    // gesetzt hat - nur dann stellt TearDown zurueck.
+    FAppDataDir : string;
+    FAppDataAlt : string;
+    FAppDataSet : Boolean;
     function W(const ARel: string): string;
     function Sammle: TArray<string>;
   public
@@ -57,26 +68,52 @@ type
     [Test] procedure IsFormFileName_FolgtDemDialekt;
     // P4.6: FindProjectRoot-Lazarus-Marker (A6/C5)
     [Test] procedure FindProjectRoot_LpiZaehltNurImFpcDialekt;
+    // Review-Runde 2026-11-14 (M4b): erschoepfter Speicher im Walk - hier
+    // aus dem Tick-Rueckruf eines Unterverzeichnisses - bricht ihn ab,
+    // statt eine halbe Dateiliste zu liefern.
+    [Test] procedure Walk_OutOfMemoryInSubdir_AbortsWalk;
   end;
 
 implementation
 
 uses
+  Winapi.Windows,   // SetEnvironmentVariable (APPDATA-Umleitung) - VOR SysUtils,
+                    // damit dessen gleichnamige Routinen gewinnen
   System.SysUtils, System.Classes, System.IOUtils,
   uSCAConsts, uStaticFiles;
+
+const
+  // Die Variable, aus der ScaConfigDir die Ablage des Scan-Logs bildet.
+  APPDATA_VAR = 'APPDATA';
 
 procedure TTestStaticFiles.Setup;
 begin
   FDir := TPath.Combine(TPath.GetTempPath,
     'sca_dialekt_' + TGUID.NewGuid.ToString.Trim(['{', '}']));
   TDirectory.CreateDirectory(FDir);
+  // Scan-Log umlenken (s. Unit-Kopf) - AUSSERHALB von FDir, sonst sammelte
+  // der Walk die Log-Ablage mit.
+  FAppDataDir := FDir + '_appdata';
+  TDirectory.CreateDirectory(FAppDataDir);
+  FAppDataAlt := GetEnvironmentVariable(APPDATA_VAR);
+  FAppDataSet := SetEnvironmentVariable(APPDATA_VAR, PChar(FAppDataDir));
 end;
 
 procedure TTestStaticFiles.TearDown;
 begin
+  if FAppDataSet then
+  begin
+    if FAppDataAlt <> '' then
+      SetEnvironmentVariable(APPDATA_VAR, PChar(FAppDataAlt))
+    else
+      SetEnvironmentVariable(APPDATA_VAR, nil);
+    FAppDataSet := False;
+  end;
   try
     if (FDir <> '') and TDirectory.Exists(FDir) then
       TDirectory.Delete(FDir, True);
+    if (FAppDataDir <> '') and TDirectory.Exists(FAppDataDir) then
+      TDirectory.Delete(FAppDataDir, True);
   except
   end;
 end;
@@ -373,6 +410,33 @@ begin
   finally
     TStaticFiles.ScanDialect := Alt;
   end;
+end;
+
+procedure TTestStaticFiles.Walk_OutOfMemoryInSubdir_AbortsWalk;
+// Alt: der Eintrags-Fang des Unterverzeichnisses buchte den Wurf als
+// 'Fehler bei ...', der des Elternverzeichnisses haette ihn ebenso
+// gefangen, und TryGetAllPasFiles lieferte die halbe Liste - WillRaise rot.
+// 30 Dateien im Unterordner: der Tick kommt je 25 Eintraege, also im
+// rekursiven Abstieg. slmAppendLog wie der Index-Walk der Einzeldatei-
+// Scans; das Log landet in der umgelenkten Ablage (Setup).
+var
+  i : Integer;
+begin
+  for i := 1 to 30 do
+    W(Format('sub\u%d.pas', [i]));
+  Assert.WillRaise(
+    procedure
+    var
+      Err : string;
+      L   : TStringList;
+    begin
+      L := TStaticFiles.TryGetAllPasFiles(FDir, Err,
+        procedure(AFound: Integer)
+        begin
+          OutOfMemoryError;   // das RTL-Objekt (EHeapException.AllowFree)
+        end, nil, nil, slmAppendLog);
+      L.Free;   // nur erreicht, wenn der Walk NICHT abbricht
+    end, EOutOfMemory, 'EOutOfMemory im Walk bricht ihn ab');
 end;
 
 initialization

@@ -82,7 +82,8 @@ implementation
 uses
   uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.SysUtils, System.IOUtils,
-  uDfmParser, uDfmBinaryReader;
+  uDfmParser, uDfmBinaryReader,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 class function TFrameResolver.IsFrameInstance(Node: TComponentNode): Boolean;
 begin
@@ -126,6 +127,9 @@ begin
       Result.Free;
       Result := nil;
     end;
+    // Erschoepfter Stapel/Speicher bricht den Scan ab (E3) - Result ist
+    // oben bereits frei.
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 end;
 

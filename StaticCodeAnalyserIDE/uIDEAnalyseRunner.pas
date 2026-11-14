@@ -90,6 +90,15 @@ type
     FTooMany   : Boolean;
     FCancelled : Boolean;
     FErrorMsg  : string;
+    // E3 (2026-11-14): Abbruch an erschoepftem Stapel oder Speicher
+    // (IsFatalScanException). Das Teilergebnis ist dann schon verworfen.
+    FFatal     : Boolean;
+    FOutOfMemory : Boolean;   // Teilfall von FFatal: EOutOfMemory
+    // Dateizahl fuer die Abbruch-Meldung (E2): Walk-Zaehler (Total < 0)
+    // bzw. Gesamtzahl der Datei-Phase. Nur der Worker schreibt, der UI-
+    // Thread liest nach Synchronize.
+    FFilesFound : Integer;
+    FFilesTotal : Integer;
     FFindings  : TObjectList<TLeakFinding>;
     FBaseDir   : string;
     procedure QueueProgress(ACurrent, ATotal: Integer);
@@ -117,8 +126,17 @@ type
     FOnStatusProgress : TAnalyseStatusProc;
     FOnFindings       : TAnalyseFindingsProc;
     FOnRunDone        : TAnalyseDoneProc;
+    // E2 (2026-11-14): leert nach einem fatalen Abbruch Grid, Funde und
+    // Editor-Marker des Docks; das Argument ist der kurze Grund fuer die
+    // Platzhalterzeile (m7). Optional wie FOnRunDone.
+    FOnDiscardResults : TAnalyseStatusProc;
+    // Die Abbruch-Meldung selbst: Statuszeile UND Tooltip (Frame.
+    // StatusAbort). Optional - ohne ihn geht sie an FOnStatusMode.
+    FOnAbortStatus    : TAnalyseStatusProc;
     // Aktiver Worker-Slot; nil = idle. Nur UI-Thread.
     FWorker       : TBulkScanWorker;
+    // Meldung eines fatalen Abbruchs (E2): Dateizahl und Ausweg.
+    procedure ReportFatalAbort(AWorker: TBulkScanWorker);
     function  StartWorker(AKind: TBulkScanKind; const APath: string;
       const AFiles: TArray<string>; ATotalKnown: Integer): Boolean;
     // Vom Worker via TThread.Queue: UI-Progress (Marquee/Normal, Texte,
@@ -138,7 +156,9 @@ type
                        AProgressBar: TProgressBar;
                        AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
                        AOnFindings: TAnalyseFindingsProc;
-                       AOnRunDone: TAnalyseDoneProc); reintroduce;
+                       AOnRunDone: TAnalyseDoneProc;
+                       AOnDiscardResults: TAnalyseStatusProc = nil;
+                       AOnAbortStatus: TAnalyseStatusProc = nil); reintroduce;
     destructor Destroy; override;
 
     procedure RunAll(const APath: string);
@@ -331,10 +351,18 @@ begin
       // einmal - und zwar NACH den Pre-Index-Builds, die den Grossteil der
       // Zeit kosten. Ein wirksamer Abbruch braucht ein Cancel-Token in der
       // Engine-Facade.
+      // Die Dateizahl fuer eine Abbruch-Meldung (E2) haelt auch diese
+      // Closure fest (Review-Runde 2026-11-14, M3) - heute folgenlos, weil
+      // die Engine sie bei ssSingleFile nicht ruft; ReportFatalAbort nennt
+      // dann keine Zahl statt '0 Dateien'.
       if FKind = bkCurrent then
         Req.Progress :=
           procedure(Current, Total: Integer)
           begin
+            if Total < 0 then
+              FFilesFound := Current
+            else
+              FFilesTotal := Total;
             if TThread.CheckTerminated then Abort;
           end
       else
@@ -346,6 +374,12 @@ begin
             tick  : Cardinal;
             force : Boolean;
           begin
+            // Dateizahl fuer eine Abbruch-Meldung festhalten (E2) - vor
+            // Abbruch-Pruefung und Drossel, also bei JEDEM Tick.
+            if Total < 0 then
+              FFilesFound := Current
+            else
+              FFilesTotal := Total;
             // Cancel (CancelRun/Detach/IDE-Shutdown): EAbort im Worker-
             // Kontext - die Engine raeumt ihre Result-Liste selbst auf.
             if TThread.CheckTerminated then
@@ -355,6 +389,13 @@ begin
               FTooMany := True;
               Abort;
             end;
+            // (0, N) meldet die Engine VOR den Pre-Indizes (M3): nur die
+            // Dateizahl merken (oben), die Anzeige bleibt animiert. Bis
+            // 2026-11-14 (Review-Runde, NEW-2) stand dann waehrend des
+            // ganzen Pre-Index ein starres 'Datei 0 / N (0%)' da - der Scan
+            // sah haengengeblieben aus. Der erste echte Tick (1, N) schaltet.
+            if (Total >= 0) and (Current = 0) then
+              Exit;
             // Phasen-Wechsel Scan->Datei erzwingt einen Tick, damit der
             // Marquee->Normal-Switch nicht am Throttle haengt.
             force := (Total >= 0) and not FFilePhase;
@@ -380,37 +421,49 @@ begin
     except
       on EAbort do
         FCancelled := True;   // Cancel ODER Datei-Limit (FTooMany unterscheidet)
-      // Ein erschoepfter Stapel wird NIE verschluckt - dieselbe Regel, die
-      // die Engine an jeder ihrer Verschluck-Stellen einhaelt (Vorbild
-      // uStaticAnalyzer2.pas: 'on EStackExhausted do raise'). Windows
-      // stellt die Schutzseite nach einem Ueberlauf nicht wieder her;
-      // weiterlaufen heisst, mit einem Prozess zu arbeiten, der still
-      // Speicher korrumpiert. Genau dieses Schadensbild hat die AV-Jagd
-      // vom 2026-08-04 gekostet. Bis 2026-08-22 fing dieser Sammelfang
-      // ihn mit ab (Inventur: der Bezeichner kam im ganzen Plugin nicht
-      // ein einziges Mal vor).
-      on EStackExhausted do raise;
+      // Erschoepfter Stapel oder Speicher (IsFatalScanException, E3): der
+      // Scan ist ABGEBROCHEN. Die Engine hat ihr Teilergebnis bereits
+      // freigegeben; FFindings ist hier nil (Ses.Run kehrte nicht zurueck),
+      // FreeAndNil nur als Netz. Bewusst NICHT mehr weiterreichen: bis
+      // 2026-11-14 stand hier 'on EStackExhausted do raise' - die Ausnahme
+      // sprang am Synchronize(DeliverResults) vorbei, HandleScanDone lief
+      // nie, FWorker blieb belegt und das Dock zeigte bis zum Schliessen
+      // des Fensters 'An analysis is already running'. Nicht verschluckt
+      // im Sinn der Regel von 2026-08-04 ist der Stapel trotzdem: dieser
+      // Thread rechnet nach dem Abbruch nichts mehr, er meldet nur noch
+      // das Ende und endet - seine verlorene Schutzseite stirbt mit ihm.
       on E: Exception do
+      begin
+        if IsFatalScanException(E) then
+        begin
+          FFatal       := True;
+          FOutOfMemory := E is EOutOfMemory;
+          FreeAndNil(FFindings);
+        end;
         FErrorMsg := E.Message;
+      end;
     end;
-
-    // Ergebnis auf den UI-Thread. Engine-Lock ist hier bereits frei
-    // (Run zurueckgekehrt) -> deadlock-frei. FIFO der Sync-Queue
-    // garantiert: alle vorher gequeueten Progress-Ticks laufen VOR
-    // DeliverResults; danach endet Execute. Freigegeben wird der Worker
-    // nicht hier, sondern durch GBulkWorkers (Reap/Join) - FreeOnTerminate
-    // ist aus. Es kann also kein Queue-Eintrag einen toten Worker
-    // referenzieren.
-    Synchronize(DeliverResults);
   finally
-    // Netz fuer den Fall, dass Synchronize(DeliverResults) GAR NICHT lief -
-    // etwa weil oben eine Exception vor dem Aufruf flog oder der Thread
-    // vorher endete. Der Kommentar nannte hier bis 2026-08-19 den
-    // Detach-Fall; den gibt es nicht: DeliverResults setzt FFindings
-    // bedingungslos auf nil und gibt die Liste in seinem eigenen finally
-    // frei, auch wenn FRunner schon detacht ist. Nach einem gelaufenen
-    // DeliverResults ist FFindings immer nil und dieser Aufruf folgenlos.
-    FreeAndNil(FFindings);
+    // Ergebnis auf den UI-Thread - seit 2026-11-14 im finally, damit das
+    // Lauf-Ende AUF JEDEM WEG gemeldet wird: auch wenn der Fangzweig oben
+    // selbst wirft (E.Message unter Speichernot). Ohne diese Meldung bleibt
+    // FWorker belegt, das Dock sperrt jeden weiteren Lauf, und nur das
+    // Schliessen des Fensters half (OOM-Diagnose). Engine-Lock ist hier
+    // bereits frei (Run zurueckgekehrt) -> deadlock-frei. FIFO der
+    // Sync-Queue garantiert: alle vorher gequeueten Progress-Ticks laufen
+    // VOR DeliverResults; danach endet Execute. Freigegeben wird der
+    // Worker nicht hier, sondern durch GBulkWorkers (Reap/Join) -
+    // FreeOnTerminate ist aus. Es kann also kein Queue-Eintrag einen toten
+    // Worker referenzieren.
+    try
+      Synchronize(DeliverResults);
+    finally
+      // Netz fuer den Fall, dass Synchronize(DeliverResults) nicht bis
+      // zum Ende lief. DeliverResults setzt FFindings bedingungslos auf
+      // nil und gibt die Liste in seinem eigenen finally frei, auch wenn
+      // FRunner schon detacht ist - danach ist dieser Aufruf folgenlos.
+      FreeAndNil(FFindings);
+    end;
   end;
 end;
 
@@ -435,7 +488,8 @@ constructor TAnalyseRunner.Create(AOwner: TComponent;
   AProgress: TAnalyseProgressController; ARepoSettings: TRepoSettings;
   AIgnoreList: TIgnoreList; AProgressBar: TProgressBar;
   AOnStatusMode, AOnStatusProgress: TAnalyseStatusProc;
-  AOnFindings: TAnalyseFindingsProc; AOnRunDone: TAnalyseDoneProc);
+  AOnFindings: TAnalyseFindingsProc; AOnRunDone: TAnalyseDoneProc;
+  AOnDiscardResults: TAnalyseStatusProc; AOnAbortStatus: TAnalyseStatusProc);
 begin
   inherited Create(AOwner);
   FProgress         := AProgress;
@@ -456,6 +510,8 @@ begin
   FOnStatusProgress := AOnStatusProgress;
   FOnFindings       := AOnFindings;
   FOnRunDone        := AOnRunDone;
+  FOnDiscardResults := AOnDiscardResults;   // optional (nil-geprueft)
+  FOnAbortStatus    := AOnAbortStatus;      // optional (nil-geprueft)
 end;
 
 destructor TAnalyseRunner.Destroy;
@@ -595,7 +651,12 @@ begin
   FWorker := nil;   // Slot frei - Objekt bleibt in GBulkWorkers (Reap)
 
   try
-    if AWorker.FErrorMsg <> '' then
+    if AWorker.FFatal then
+      // E2/E3 (2026-11-14): Stapel oder Speicher erschoepft - das
+      // Teilergebnis ist schon im Worker verworfen; das Dock wird geleert
+      // (Platzhalterzeile) und die Meldung nennt Dateizahl und Ausweg.
+      ReportFatalAbort(AWorker)
+    else if AWorker.FErrorMsg <> '' then
       FOnStatusMode(_('Analysis error: ') + AWorker.FErrorMsg)
     else
     begin
@@ -615,7 +676,14 @@ begin
         // sichtbarer Absturz als ein Prozess, der stumm weiterrechnet.
         on EStackExhausted do raise;
         on E: Exception do
-          FOnStatusMode(_('Analysis error: ') + E.Message);
+          // PopulateFindings hat sich auf einen konsistenten LEEREN Stand
+          // zurueckgesetzt (TFindingDelivery.Discard) und reicht hierher
+          // weiter. Unter Speichernot dieselbe Meldung wie beim Abbruch im
+          // Worker (E2) - nach dem Abbruch ist das Dock leer.
+          if E is EOutOfMemory then
+            ReportFatalAbort(AWorker)
+          else
+            FOnStatusMode(_('Analysis error: ') + E.Message);
       end;
       if AWorker.FTooMany then
         FOnStatusMode(Format(
@@ -634,8 +702,69 @@ begin
     // "Write baseline" laedt seine ContextHashes lazy nach - langsamer,
     // aber korrekt; der Adressraum steht dem naechsten Scan wieder zur
     // Verfuegung, statt dass der Prozess weiterwaechst.
-    TAnalysisSession.ReleaseTransientCaches;
+    // Leer gefangen (2026-11-14): ein Wurf hier liefe ueber Synchronize in
+    // den Worker und verschwaende dort - das Freigeben ist ein Angebot,
+    // kein Vertrag, und der Lauf ist an dieser Stelle schon abgeschlossen.
+    try
+      TAnalysisSession.ReleaseTransientCaches;
+    except
+    end;
   end;
+end;
+
+procedure TAnalyseRunner.ReportFatalAbort(AWorker: TBulkScanWorker);
+// UI-Thread. Dock leeren (Platzhalterzeile, Funde und Marker frei - E2:
+// das Teilergebnis wird verworfen) und die Meldung in die Statuszeile -
+// ueber denselben Kanal wie jede andere Analyse-Meldung, kein Dialog.
+var
+  Files  : Integer;
+  Memory : Boolean;
+  Msg    : string;
+begin
+  // Speicher: im Worker gemerkt, oder die Uebergabe scheiterte an
+  // EOutOfMemory (HandleScanDone, FFatal dort False).
+  Memory := AWorker.FOutOfMemory or not AWorker.FFatal;
+  if Assigned(FOnDiscardResults) then
+    try
+      // Kurzer Grund fuer die Platzhalterzeile des leeren Docks (Review-
+      // Runde 2026-11-14, m7) - die volle Meldung steht in der Statuszeile.
+      if Memory then
+        FOnDiscardResults(_('Not enough memory - see the status bar.'))
+      else
+        FOnDiscardResults(_('Analysis error - see the status bar.'));
+    except
+      // Das Leeren selbst darf die Meldung nicht verhindern.
+    end;
+  if Memory then
+  begin
+    // Speicher: Dateizahl und Ausweg. Die Gesamtzahl der Datei-Phase (seit
+    // der Review-Runde schon VOR den Pre-Indizes gemeldet, M3), sonst der
+    // letzte Walk-Zaehler.
+    Files := AWorker.FFilesTotal;
+    if Files <= 0 then
+      Files := AWorker.FFilesFound;
+    if Files > 1 then
+      Msg := Format(_('Not enough memory: the scan of %d files was ' +
+        'aborted and its partial results discarded. Narrow the folder or ' +
+        'use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...).'),
+        [Files])
+    else
+      // Ohne Zahl (M3): eine Einzeldatei - deren Lauf meldet keinen
+      // Fortschritt - oder ein Abbruch vor dem ersten Tick. Die Fassung
+      // mit Zahl sagte dort '0 Dateien'.
+      Msg := _('Not enough memory: the scan was aborted and its ' +
+        'partial results discarded. Narrow the folder or use the 64-bit ' +
+        'command line (StaticCodeAnalyser.d12.exe --path ...).');
+  end
+  else
+    // Erschoepfter Stapel: verworfen wie oben, Meldung wie bisher.
+    Msg := _('Analysis error: ') + AWorker.FErrorMsg;
+  // Statuszeile und - ueber FOnAbortStatus - ihr Tooltip, solange die
+  // Meldung dasteht (das schmale Panel schneidet sie ab, m7).
+  if Assigned(FOnAbortStatus) then
+    FOnAbortStatus(Msg)
+  else
+    FOnStatusMode(Msg);
 end;
 
 procedure TAnalyseRunner.RunAll(const APath: string);

@@ -964,12 +964,14 @@ begin
     except
       // Best-effort wie im Hauptlauf: ein Marker-Fehler degradiert nur das
       // Unused-Tracking dieser Datei - er darf nicht als "Detector failed"
-      // von SCA201 erscheinen (Review Bereich C, Minor). Abbruch und
-      // Stapelueberlauf gehen durch.
+      // von SCA201 erscheinen (Review Bereich C, Minor). Abbruch,
+      // Stapelueberlauf und erschoepfter Speicher gehen durch.
       on EAbort do raise;
-      on EStackExhausted do raise;
-      // noinspection ExceptionTooGeneral, EmptyOnHandler (Best-effort wie der Hauptlauf)
-      on Exception do ;
+      // Best-effort wie der Hauptlauf (der Marker 'ExceptionTooGeneral'
+      // entfiel 2026-11-14: der Fang reicht jetzt weiter und ist nicht mehr
+      // zu allgemein - der Self-Scan meldete ihn als ungenutzt).
+      on E: Exception do
+        if IsFatalScanException(E) then raise;
     end;
 end;
 
@@ -984,13 +986,15 @@ begin
     ScanConfigFile(AFile, AAnchor, Results, AContext);
   except
     on EAbort do raise;
-    on EStackExhausted do raise;
     // Bewusst die Wurzelklasse - derselbe Schutz wie RunAllDetectors im
     // Hauptlauf (Review 2026-10-09): ein Fehler kostet nur diese Datei.
-    // noinspection ExceptionTooGeneral
+    // Stapel und Speicher erschoepft: Abbruch (IsFatalScanException).
     on E: Exception do
+    begin
+      if IsFatalScanException(E) then raise;
       Results.Add(NewFileErrorFinding(AFile, Format(DETECTOR_FAILED_FMT,
         [KIND_META[fkHardcodedIpInConfig].Name, DescribeException(E)])));
+    end;
   end;
 end;
 
@@ -1303,6 +1307,8 @@ begin
     if HasTimeCb then
       Watch := TStopwatch.StartNew;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_DETECTOR);   // nur Tests (uCrashDiag)
       gDetectors[i].Run(Root, FileName, Results, AContext);
     except
       // User-Cancel (EAbort) muss durchgereicht werden, damit die
@@ -1314,10 +1320,11 @@ begin
       // stellt sie nicht wieder her), jeder weitere tiefe Abstieg
       // korrumpiert wortlos Speicher. Begruendung im Detail:
       // uAstFileCache.Acquire. Gilt fuer ALLE Verschluck-Stellen der
-      // Scan-Schleife, auch kuenftige.
-      on EStackExhausted do raise;
+      // Scan-Schleife, auch kuenftige - und seit 2026-11-14 (E3) ebenso
+      // fuer erschoepften Speicher: IsFatalScanException.
       on E: Exception do
       begin
+        if IsFatalScanException(E) then raise;
         // Diagnose-Stapel (SCA_CRASH_STACK): Rahmen in die eigene Datei,
         // NIE in den Meldetext (Fund-Identitaet). Aus = sofort zurueck.
         CrashStackReport('Detektor ' + gDetectors[i].Name, FileName, E);
@@ -1467,9 +1474,9 @@ begin
   except
     // Guard-Page nach Overflow unwiederbringlich weg - s.
     // uAstFileCache.Acquire. NIE verschlucken.
-    on EStackExhausted do raise;
     on E: Exception do
     begin
+      if IsFatalScanException(E) then raise;
       AddSlotError(AFileName, 'Datei-Existenzpruefung fehlgeschlagen: ' + E.Message);
       Exit;
     end;
@@ -1480,9 +1487,9 @@ begin
   except
     // Guard-Page nach Overflow unwiederbringlich weg - s.
     // uAstFileCache.Acquire. NIE verschlucken.
-    on EStackExhausted do raise;
     on E: Exception do
     begin
+      if IsFatalScanException(E) then raise;
       AddSlotError(AFileName, 'Dateigroesse nicht ermittelbar: ' + E.Message);
       Exit;
     end;
@@ -1511,9 +1518,9 @@ begin
     except
       // Guard-Page nach Overflow unwiederbringlich weg - s.
       // uAstFileCache.Acquire. NIE verschlucken.
-      on EStackExhausted do raise;
       on E: Exception do
       begin
+        if IsFatalScanException(E) then raise;
         CrashStackReport('Parser (parallel)', AFileName, E);
         SlotLog('  PARSER-FEHLER: ' + DescribeException(E));
         AddSlotError(AFileName, 'Lesefehler: ' + DescribeException(E));
@@ -1566,8 +1573,8 @@ begin
       on EAbort do raise;
       // Guard-Page nach Overflow unwiederbringlich weg - s.
       // uAstFileCache.Acquire. NIE verschlucken.
-      on EStackExhausted do raise;
-      on Exception do ;
+      on E: Exception do
+        if IsFatalScanException(E) then raise;
     end;
   finally
     // Pendant zum seriellen finally: AST-Evict + Text-Cache-Entlastung.
@@ -1576,6 +1583,33 @@ begin
     AWorkerCtx.AstFileCache.Evict(AFileName);
     if AWorkerCtx.FileTextCache <> nil then
       AWorkerCtx.FileTextCache.RemoveFile(AFileName);
+  end;
+end;
+
+function FatalKindOf(E: TObject): Integer;
+// Art eines fatalen Fehlers in einer Ausnahme, die aus einem Task entkam
+// (Review-Runde 2026-11-14, NEW-3): 0 = keiner, 1 = Speicher, 2 = Stapel -
+// dieselbe Kodierung wie FatalKind in RunParallelMainLoop. WaitForAll packt
+// solche Wuerfe in EAggregateException; gesucht wird in den inneren.
+var
+  i : Integer;
+begin
+  Result := 0;
+  if E is EAggregateException then
+  begin
+    for i := 0 to EAggregateException(E).Count - 1 do
+    begin
+      Result := FatalKindOf(EAggregateException(E).InnerExceptions[i]);
+      if Result <> 0 then
+        Exit;
+    end;
+  end
+  else if IsFatalScanException(E) then
+  begin
+    if E is EOutOfMemory then
+      Result := 1
+    else
+      Result := 2;
   end;
 end;
 
@@ -1601,6 +1635,11 @@ var
   AbortSeen   : Integer;   // 1 = EAbort in einem Worker
   FirstErr    : string;    // erste Nicht-EAbort-Worker-Exception
   ErrLock     : TCriticalSection;
+  // E3 (Review-Runde 2026-11-14, M1): fatale Worker-Ausnahme - 0 keine,
+  // 1 EOutOfMemory, 2 EStackExhausted. Nur per Interlocked gesetzt (keine
+  // Allokation im Fangzweig, der Speicher ist ja gerade aus); der Haupt-
+  // Thread wirft danach die ECHTE Klasse, VOR dem Merge.
+  FatalKind   : Integer;
 begin
   Total := FileList.Count;
 
@@ -1620,6 +1659,7 @@ begin
     CancelFlag := 0;
     AbortSeen  := 0;
     FirstErr   := '';
+    FatalKind  := 0;
 
     SetLength(Tasks, WorkerCount);
     for t := 0 to WorkerCount - 1 do
@@ -1669,6 +1709,19 @@ begin
                 end;
                 on E: Exception do
                 begin
+                  // Fatal (E3): nur merken, WELCHE Klasse - als Text (unten)
+                  // ginge sie verloren, und der Haupt-Thread warf bis
+                  // 2026-11-14 eine gewoehnliche Exception: 'Analyseabbruch'-
+                  // Fund, Bericht, Exit 3/4 statt Abbruch mit Exit 99.
+                  if IsFatalScanException(E) then
+                  begin
+                    if E is EOutOfMemory then
+                      TInterlocked.CompareExchange(FatalKind, 1, 0)
+                    else
+                      TInterlocked.CompareExchange(FatalKind, 2, 0);
+                    TInterlocked.Exchange(CancelFlag, 1);
+                    Break;
+                  end;
                   ErrLock.Enter;
                   try
                     if FirstErr = '' then
@@ -1693,7 +1746,35 @@ begin
           end;
         end);
 
-    TTask.WaitForAll(Tasks);
+    try
+      TTask.WaitForAll(Tasks);
+    except
+      // Ein Wurf, der doch aus einem Task entkam (EAggregateException): die
+      // Task-Einrichtung (TAnalyzeContext.Create, LeakyClasses.AddStrings)
+      // und ihr finally liegen AUSSERHALB des Datei-Fangs. Ist eine innere
+      // Ausnahme fatal, geht sie wie die gemerkten unten mit ihrer echten
+      // Klasse weiter - bis 2026-11-14 (Review-Runde, NEW-3) blieb
+      // FatalKind 0 und der Speicher-Abbruch ging als gewoehnliche
+      // Ausnahme weiter. Hinter einem schon gemerkten fatalen Fehler tritt
+      // der Wurf zurueck. Alle Tasks sind hier fertig - eine einfache
+      // Zuweisung genuegt.
+      if FatalKind = 0 then
+        FatalKind := FatalKindOf(ExceptObject);
+      if FatalKind = 0 then raise;
+    end;
+
+    // E3: fataler Worker-Fehler VOR dem Merge - kein halbes Ergebnis in
+    // Results (die Slots gibt das finally frei). EOutOfMemory: das
+    // vorgefertigte Objekt der RTL. Stapel: ein FRISCHES Objekt im Haupt-
+    // Thread statt des Worker-Objekts - dessen ExceptionRecord zeigt auf den
+    // Stapel des Worker-Threads, und DescribeException liest ihn.
+    case FatalKind of
+      1: OutOfMemoryError;
+      2: raise EStackExhausted.Create(
+           'Stapel erschoepft in einem Parallel-Worker - Scan abgebrochen');
+    else
+      ; // 0: kein fataler Fehler - weiter zum Merge
+    end;
 
     // ---- Deterministischer Merge in Dateilisten-Reihenfolge ----
     MergeSlotsDeterministic(Slots, Results, MasterCtx.SuppressionMarkers,
@@ -1795,9 +1876,9 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackExhausted do raise;
         on E: Exception do
         begin
+          if IsFatalScanException(E) then raise;
           Results.Add('ERROR ' + FileName + ': ' + E.Message);
           Continue;
         end;
@@ -1854,15 +1935,14 @@ class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
       AProgress(Current, Total);
     except
       on EAbort do raise; // User-Cancel muss durchgereicht werden!
-      // Guard-Page nach Overflow unwiederbringlich weg - s.
-      // uAstFileCache.Acquire. NIE verschlucken.
-      on EStackExhausted do raise;
+      // Erschoepfter Stapel (Guard-Page weg, s. uAstFileCache.Acquire) und
+      // erschoepfter Speicher (E3) NIE verschlucken - IsFatalScanException.
       // Ohne diesen else-Zweig reicht ein except-Block, der nur on-Handler
       // nennt, jede ANDERE Ausnahme weiter - der Kommentar behauptete bis
       // 2026-10-14 das Gegenteil (Review Bereich C, Major 9). Jetzt
       // wirklich verschluckt: eine Ausnahme im Fortschritts-Rueckruf des
       // Hosts darf den Scan nicht abreissen, sie kostet nur diese Anzeige.
-      else ;
+      else if IsFatalScanException(ExceptObject) then raise;
     end;
   end;
 
@@ -2044,17 +2124,36 @@ begin
     var IndexFiles: TStringList := ASide.IndexFiles;
     if IndexFiles = nil then IndexFiles := FileList;
 
+    // Dateizahl des Laufs VOR den Pre-Indizes melden (Review-Runde
+    // 2026-11-14, M3): der erste Tick der Datei-Phase kam bisher erst aus dem
+    // Main-Loop - der wahrscheinlichste Speicher-Abbruch liegt aber hier, und
+    // Projekt-/Gruppen-/Listen-Laeufe haben keine Walk-Ticks. Alle
+    // Fortschritts-Abnehmer (IDE-Runner, Watch, Standalone) vertragen
+    // (0, Total): Marquee -> Normal, 'Datei 0 / N'. Semantik wie jeder Tick
+    // (SafeProgress): EAbort und fatale Ausnahmen gehen durch.
+    if FileList.Count > 0 then
+      SafeProgress(0, FileList.Count);
+
+    // E4 (offen, Nico-Entscheid 2026-11-14): die Pre-Index-Builds laden
+    // JEDE Datei der Index-Liste ohne das MaxFileBytes-Tor des Main-Loops
+    // (uDfmRepoIndex.Build, uInterfaceGuidIndex.Build). Seit E3 bricht eine
+    // einzelne Riesendatei, an der der Speicher ausgeht, damit den ganzen
+    // Lauf ab. Das Tor auch hier zu setzen kann Funde anderer Dateien
+    // verschieben (Index-Inhalt) und braucht eine A/B-Messung.
     LastPhase := 'Pre-Index: DfmRepoIndex.Build';
     Ctx.DfmRepoIndex := TDfmRepoIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.DfmRepoIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
       // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
       // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
-      // Verschluck-Stellen, auch kuenftige).
-      on EStackExhausted do raise;
-      else
+      // Verschluck-Stellen, auch kuenftige). Seit 2026-11-14 (E3) gilt
+      // dasselbe fuer erschoepften Speicher: frueher fiel der Index dann
+      // still weg und die Cross-Unit-Detektoren schwiegen, ohne Spur.
+      if IsFatalScanException(ExceptObject) then raise;
       FreeAndNil(Ctx.DfmRepoIndex);   // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -2066,14 +2165,15 @@ begin
     LastPhase := 'Pre-Index: SymbolRefIndex.Build';
     Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.SymbolRefIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
       // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
       // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
       // Verschluck-Stellen, auch kuenftige).
-      on EStackExhausted do raise;
-      else
+      if IsFatalScanException(ExceptObject) then raise;
       FreeAndNil(Ctx.SymbolRefIndex);     // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -2085,14 +2185,15 @@ begin
     LastPhase := 'Pre-Index: TypeIndex.Build';
     Ctx.TypeIndex := TTypeIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.TypeIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
       // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
       // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
       // Verschluck-Stellen, auch kuenftige).
-      on EStackExhausted do raise;
-      else
+      if IsFatalScanException(ExceptObject) then raise;
       FreeAndNil(Ctx.TypeIndex);          // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -2104,14 +2205,15 @@ begin
     LastPhase := 'Pre-Index: InterfaceGuidIndex.Build';
     Ctx.InterfaceGuidIndex := TInterfaceGuidIndex.Create;
     try
+      if Assigned(GScanFaultHook) then
+        GScanFaultHook(SCAN_FAULT_INDEX_BUILD);   // nur Tests (uCrashDiag)
       Ctx.InterfaceGuidIndex.Build(IndexFiles);
     except
       // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
       // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
       // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
       // Verschluck-Stellen, auch kuenftige).
-      on EStackExhausted do raise;
-      else
+      if IsFatalScanException(ExceptObject) then raise;
       FreeAndNil(Ctx.InterfaceGuidIndex);
     end;
 
@@ -2213,9 +2315,9 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackExhausted do raise;
         on E: Exception do
         begin
+          if IsFatalScanException(E) then raise;
           AddFileError(FileName, 'Datei-Existenzpruefung fehlgeschlagen: ' + E.Message);
           Continue;
         end;
@@ -2227,9 +2329,9 @@ begin
       except
         // Guard-Page nach Overflow unwiederbringlich weg - s.
         // uAstFileCache.Acquire. NIE verschlucken.
-        on EStackExhausted do raise;
         on E: Exception do
         begin
+          if IsFatalScanException(E) then raise;
           AddFileError(FileName, 'Dateigroesse nicht ermittelbar: ' + E.Message);
           Continue;
         end;
@@ -2271,9 +2373,9 @@ begin
         except
           // Guard-Page nach Overflow unwiederbringlich weg - s.
           // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackExhausted do raise;
           on E: Exception do
           begin
+            if IsFatalScanException(E) then raise;
             CrashStackReport('Parser', FileName, E);
             LogLine('  PARSER-FEHLER: ' + DescribeException(E));
             AddFileError(FileName, 'Lesefehler: ' + DescribeException(E));
@@ -2363,11 +2465,14 @@ begin
           // weiter. User-Cancel (EAbort) bleibt durchgereicht.
           on EAbort do raise;
           // Guard-Page nach Overflow unwiederbringlich weg - s.
-          // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackExhausted do raise;
+          // uAstFileCache.Acquire. NIE verschlucken; ebenso erschoepften
+          // Speicher (IsFatalScanException, E3).
           on E: Exception do
+          begin
+            if IsFatalScanException(E) then raise;
             Results.Add(NewFileErrorFinding(FileName,
               'AutoDiscovery failed: ' + DescribeException(E)));
+          end;
         end;
 
         // Custom-Rules (aus analyser-rules.yml) NACH den built-in
@@ -2384,11 +2489,14 @@ begin
             // melden + weiter. EAbort bleibt durchgereicht.
             on EAbort do raise;
             // Guard-Page nach Overflow unwiederbringlich weg - s.
-            // uAstFileCache.Acquire. NIE verschlucken.
-            on EStackExhausted do raise;
+            // uAstFileCache.Acquire. NIE verschlucken; ebenso erschoepften
+            // Speicher (IsFatalScanException, E3).
             on E: Exception do
+            begin
+              if IsFatalScanException(E) then raise;
               Results.Add(NewFileErrorFinding(FileName,
                 'CustomRules failed: ' + DescribeException(E)));
+            end;
           end;
 
         LastPhase := Format('File %d/%d: RunAllDetectors', [i + 1, Total]);
@@ -2440,8 +2548,8 @@ begin
           on EAbort do raise;
           // Guard-Page nach Overflow unwiederbringlich weg - s.
           // uAstFileCache.Acquire. NIE verschlucken.
-          on EStackExhausted do raise;
-          on Exception do ;
+          on E: Exception do
+            if IsFatalScanException(E) then raise;
         end;
       finally
         LastPhase := Format('File %d/%d: finally Root.Free/Evict', [i + 1, Total]);
@@ -2562,7 +2670,9 @@ begin
   try
     TSuppression.ApplyToFindings(Results, PreMarkers, @PostEnKinds);
   except
-    // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren
+    // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren - ausser
+    // erschoepftem Stapel/Speicher (E3): dann ist der Lauf ein Abbruch.
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 
   // Evidenz-Politik (K2 Stufe 1, 2026-08-26): Severity-Deckel nach
@@ -2574,7 +2684,8 @@ begin
   try
     TEvidenceTiering.ApplyToFindings(Results, PostMinSev);
   except
-    // Politik-Fehler duerfen das Ergebnis nicht zerstoeren
+    // Politik-Fehler duerfen das Ergebnis nicht zerstoeren (ausser E3)
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 
   // Path-Overrides anwenden (analyser.ini [PathOverrides]). Wird nach
@@ -2582,7 +2693,8 @@ begin
   try
     TPathOverrides.ApplyToFindings(Results);
   except
-    // Path-Override-Fehler duerfen das Ergebnis nicht zerstoeren
+    // Path-Override-Fehler duerfen das Ergebnis nicht zerstoeren (ausser E3)
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 
   // Konfidenz-Schwellwert anwenden (PostMinConf = per-Scan-Snapshot von
@@ -2593,7 +2705,8 @@ begin
   try
     TConfidenceFilter.ApplyToFindings(Results, PostMinConf);
   except
-    // Filter-Fehler duerfen das Ergebnis nicht zerstoeren
+    // Filter-Fehler duerfen das Ergebnis nicht zerstoeren (ausser E3)
+    if IsFatalScanException(ExceptObject) then raise;
   end;
 
   finally
@@ -2621,6 +2734,10 @@ var
   FileList : TStringList;
   Configs  : TStringList;
 begin
+  // Einzeldatei-Scans haengen nur an das Scan-Log an - die Kappung haelt
+  // es klein (Review-Runde 2026-11-14, NEW-1; s. TStaticFiles.CapScanLog).
+  // VOR dem Result: reicht sie Stapel/Speicher weiter, bleibt nichts liegen.
+  TStaticFiles.CapScanLog;
   Result := TObjectList<TLeakFinding>.Create(True);
   if Trim(FileName) = '' then
   begin
@@ -2659,13 +2776,25 @@ begin
       // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
       // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
       // (Review Woche G02-05).
-      on EStackExhausted do
-      begin
-        FreeAndNil(Result);
-        raise;
-      end;
+      // Seit 2026-11-14 (E3) ebenso erschoepfter Speicher: kein
+      // 'Analyseabbruch'-Fund mit einem halben, ungefilterten Ergebnis
+      // mehr, sondern ein Abbruch - IsFatalScanException.
       on E: Exception do
-        AddError('Analyseabbruch: ' + DescribeException(E));
+      begin
+        if IsFatalScanException(E) then
+        begin
+          FreeAndNil(Result);
+          raise;
+        end;
+        // Wirft schon das Anhaengen der Meldung (Speicher), gehoert die
+        // Liste niemandem mehr - freigeben statt liegen lassen.
+        try
+          AddError('Analyseabbruch: ' + DescribeException(E));
+        except
+          FreeAndNil(Result);
+          raise;
+        end;
+      end;
     end;
   finally
     Configs.Free;
@@ -2695,6 +2824,12 @@ var
   IndexList   : TStringList;
   ScanErr     : string;
 begin
+  // Kappung VOR dem anhaengenden Index-Walk (Review-Runde 2026-11-14,
+  // NEW-1): ueber 1 MB wird das Log zu .prev.log - die Silent-Scans laufen
+  // bei jedem Tab-Wechsel und Speichern, ohne Grenze wuchs es um einige MB
+  // am Tag. VOR dem Result (s. AnalyzeOne); die Rueckfaelle unten auf
+  // AnalyzeOne kappen dort ein zweites Mal - folgenlos.
+  TStaticFiles.CapScanLog;
   Result := TObjectList<TLeakFinding>.Create(True);
   if Trim(FileName) = '' then
   begin
@@ -2726,9 +2861,20 @@ begin
   try
     AnalyzeList.Add(FileName);
     try
+      // slmAppendLog (m8): der Index-Walk eines Einzeldatei-Scans haengt an
+      // das Scan-Log an (eine Summenzeile), statt das Log des letzten
+      // Ordner-Scans wegzuschieben - Silent/Watch laufen bei jedem Speichern.
       IndexList := TStaticFiles.TryGetAllPasFiles(ProjectRoot, ScanErr,
-        nil, nil);
+        nil, nil, nil, slmAppendLog);
     except
+      // Ohne Index laeuft der Single-File-Scan weiter - ausser bei
+      // erschoepftem Stapel/Speicher (E3). Dann geht auch die Ergebnisliste
+      // frei - das finally unten kennt sie nicht (Review-Runde 2026-11-14).
+      if IsFatalScanException(ExceptObject) then
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
       IndexList := nil;
     end;
     // Bei nil oder leerer IndexList faellt ParseLeaks intern auf
@@ -2750,13 +2896,25 @@ begin
       // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
       // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
       // (Review Woche G02-05).
-      on EStackExhausted do
-      begin
-        FreeAndNil(Result);
-        raise;
-      end;
+      // Seit 2026-11-14 (E3) ebenso erschoepfter Speicher: kein
+      // 'Analyseabbruch'-Fund mit einem halben, ungefilterten Ergebnis
+      // mehr, sondern ein Abbruch - IsFatalScanException.
       on E: Exception do
-        AddError('Analyseabbruch: ' + DescribeException(E));
+      begin
+        if IsFatalScanException(E) then
+        begin
+          FreeAndNil(Result);
+          raise;
+        end;
+        // Wirft schon das Anhaengen der Meldung (Speicher), gehoert die
+        // Liste niemandem mehr - freigeben statt liegen lassen.
+        try
+          AddError('Analyseabbruch: ' + DescribeException(E));
+        except
+          FreeAndNil(Result);
+          raise;
+        end;
+      end;
     end;
   finally
     IndexList.Free;
@@ -2819,14 +2977,26 @@ begin
     end;
     on E: Exception do
     begin
-      // Nicht-EAbort-Fehler im Verzeichnis-Scan (z.B. OOM): frueher
-      // propagierte er ungefangen aus der Funktion -> die bereits erzeugte
-      // Result-Liste leakte (kein umschliessendes try/finally). Jetzt als
-      // Finding melden und die (nicht-leere) Liste sauber zurueckgeben.
+      // Nicht-EAbort-Fehler im Verzeichnis-Scan: frueher propagierte er
+      // ungefangen aus der Funktion -> die bereits erzeugte Result-Liste
+      // leakte (kein umschliessendes try/finally). Jetzt als Finding melden
+      // und die (nicht-leere) Liste sauber zurueckgeben.
+      // Ausnahme seit 2026-11-14 (E3): erschoepfter Stapel/Speicher bricht
+      // ab - Listen frei, weiterreichen (IsFatalScanException).
       // (FileList ist hier unassigned - Wurf VOR dem Return -> KEIN FileList.Free;
       //  das folgende ParseLeaks-try/finally wird per Exit bewusst uebersprungen.)
-      AddError('Verzeichnis-Scan fehlgeschlagen: ' + E.Message);
       Configs.Free;
+      if IsFatalScanException(E) then
+      begin
+        FreeAndNil(Result);
+        raise;
+      end;
+      try
+        AddError('Verzeichnis-Scan fehlgeschlagen: ' + E.Message);
+      except
+        FreeAndNil(Result);
+        raise;
+      end;
       Exit;
     end;
   end;
@@ -2863,13 +3033,25 @@ begin
       // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
       // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
       // (Review Woche G02-05).
-      on EStackExhausted do
-      begin
-        FreeAndNil(Result);
-        raise;
-      end;
+      // Seit 2026-11-14 (E3) ebenso erschoepfter Speicher: kein
+      // 'Analyseabbruch'-Fund mit einem halben, ungefilterten Ergebnis
+      // mehr, sondern ein Abbruch - IsFatalScanException.
       on E: Exception do
-        AddError('Analyseabbruch: ' + DescribeException(E));
+      begin
+        if IsFatalScanException(E) then
+        begin
+          FreeAndNil(Result);
+          raise;
+        end;
+        // Wirft schon das Anhaengen der Meldung (Speicher), gehoert die
+        // Liste niemandem mehr - freigeben statt liegen lassen.
+        try
+          AddError('Analyseabbruch: ' + DescribeException(E));
+        except
+          FreeAndNil(Result);
+          raise;
+        end;
+      end;
     end;
   finally
     FileList.Free;
@@ -2905,29 +3087,38 @@ begin
   Configs := TStringList.Create;
   IndexList := nil;   // VOR dem try - das finally ruft IndexList.Free
   try
-    SplitConfigFiles(AFiles, Copy, Configs);
-    // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
-    // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
-    // auf die Analyse-Liste zurueck (ASide.IndexFiles=nil).
-    // Nur wenn es Units zu analysieren gibt: eine Liste nur aus .ini
-    // braucht keinen Projektindex (Review Bereich C, Minor) - der
-    // Konfigurations-Durchlauf verankert sich ueber AIndexRoot selbst.
-    if (Copy.Count > 0) and (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
-    begin
-      IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
-      if IndexErr <> '' then
-        OutputDebugString(PChar('SCA IndexRoot: ' + IndexErr));
-      if IndexList <> nil then
+    // Alles vor ParseLeaks in eigener Klammer (Review-Runde 2026-11-14):
+    // TryGetAllPasFiles reicht erschoepften Stapel/Speicher jetzt durch (E3),
+    // und das finally unten kennt die Ergebnisliste nicht - ohne diese
+    // Klammer blieb sie liegen.
+    try
+      SplitConfigFiles(AFiles, Copy, Configs);
+      // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
+      // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
+      // auf die Analyse-Liste zurueck (ASide.IndexFiles=nil).
+      // Nur wenn es Units zu analysieren gibt: eine Liste nur aus .ini
+      // braucht keinen Projektindex (Review Bereich C, Minor) - der
+      // Konfigurations-Durchlauf verankert sich ueber AIndexRoot selbst.
+      if (Copy.Count > 0) and (AIndexRoot <> '') and DirectoryExists(AIndexRoot) then
       begin
-        // Union: Analyse-Dateien AUSSERHALB des IndexRoot gehoeren trotzdem
-        // in den Index (z.B. '..'-Includes ausserhalb des Common-Root).
-        IndexList.CaseSensitive := False;
-        IndexList.Sorted := True;
-        IndexList.Duplicates := dupIgnore;
-        IndexList.AddStrings(Copy);
-        if IndexList.Count = 0 then
-          FreeAndNil(IndexList);
+        IndexList := TStaticFiles.TryGetAllPasFiles(AIndexRoot, IndexErr);
+        if IndexErr <> '' then
+          OutputDebugString(PChar('SCA IndexRoot: ' + IndexErr));
+        if IndexList <> nil then
+        begin
+          // Union: Analyse-Dateien AUSSERHALB des IndexRoot gehoeren trotzdem
+          // in den Index (z.B. '..'-Includes ausserhalb des Common-Root).
+          IndexList.CaseSensitive := False;
+          IndexList.Sorted := True;
+          IndexList.Duplicates := dupIgnore;
+          IndexList.AddStrings(Copy);
+          if IndexList.Count = 0 then
+            FreeAndNil(IndexList);
+        end;
       end;
+    except
+      FreeAndNil(Result);
+      raise;
     end;
     try
       ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck,
@@ -2944,13 +3135,25 @@ begin
       // EAbort-Zweig frei: der residente Wirt (IDE) lebt weiter, die
       // Liste mit allen bis dahin gesammelten Funden bliebe sonst liegen
       // (Review Woche G02-05).
-      on EStackExhausted do
-      begin
-        FreeAndNil(Result);
-        raise;
-      end;
+      // Seit 2026-11-14 (E3) ebenso erschoepfter Speicher: kein
+      // 'Analyseabbruch'-Fund mit einem halben, ungefilterten Ergebnis
+      // mehr, sondern ein Abbruch - IsFatalScanException.
       on E: Exception do
-        AddError('Analyseabbruch: ' + DescribeException(E));
+      begin
+        if IsFatalScanException(E) then
+        begin
+          FreeAndNil(Result);
+          raise;
+        end;
+        // Wirft schon das Anhaengen der Meldung (Speicher), gehoert die
+        // Liste niemandem mehr - freigeben statt liegen lassen.
+        try
+          AddError('Analyseabbruch: ' + DescribeException(E));
+        except
+          FreeAndNil(Result);
+          raise;
+        end;
+      end;
     end;
   finally
     IndexList.Free;

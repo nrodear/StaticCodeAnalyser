@@ -593,7 +593,8 @@ uses
   System.Generics.Defaults,  // TComparer - TBaselineMatcher.FindingOrder
   uJsonFormat,             // JsonFormatEscaped - Format(2) escaped keine
                            // Steuerzeichen (s. TBaseline.Write)
-  uFindingFingerprint;
+  uFindingFingerprint,
+  uCrashDiag;              // IsFatalScanException (E3)
 
 // Zielverzeichnis einer zu schreibenden Datei bei Bedarf anlegen - so,
 // wie es der Kontrakt am Unit-Kopf fuer den .sca-Ordner zusagt. Bis
@@ -1178,11 +1179,15 @@ begin
       AText  := TFile.ReadAllText(FileName, TEncoding.UTF8);
       Result := True;
     except
-      // noinspection ExceptionTooGeneral
       // Jede Lesefehlerart fuehrt zur selben Antwort ("keine Baseline");
-      // die konkrete Ursache steht im Klartext in AReason.
+      // die konkrete Ursache steht im Klartext in AReason. (Der Marker
+      // 'noinspection ExceptionTooGeneral' entfiel 2026-11-14: mit der
+      // E3-Durchreiche unten gibt der Handler weiter und gilt nicht mehr
+      // als zu allgemein.)
       on E: Exception do
       begin
+        // E3: erschoepfter Stapel/Speicher ist kein 'unreadable' - Abbruch.
+        if IsFatalScanException(E) then raise;
         AReason := 'unreadable: ' + E.Message;
       end;
     end;
@@ -2157,6 +2162,7 @@ begin
   try
     Raw := TFile.ReadAllText(BaselineFile, TEncoding.UTF8);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3: Abbruch statt leeres Set
     Exit;   // nicht lesbar -> leeres Set (kein Fehler)
   end;
   Root := TJSONObject.ParseJSONValue(Raw);

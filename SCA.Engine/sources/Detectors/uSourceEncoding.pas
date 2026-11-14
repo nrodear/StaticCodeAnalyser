@@ -97,7 +97,8 @@ implementation
 uses
   System.Character, System.IOUtils, System.StrUtils, uFileTextCache, uLexer,
   uStaticFiles,   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
-  uLocalization;  // N_ - feste S4-Meldung (ANSI unter dlFpc) als msgid
+  uLocalization,  // N_ - feste S4-Meldung (ANSI unter dlFpc) als msgid
+  uCrashDiag;     // IsFatalScanException (E3)
 
 const
   // S3: die bekannten Homoglyphen - Buchstaben, die in den ueblichen
@@ -160,6 +161,7 @@ begin
     if not TFile.Exists(FileName) then Exit;
     Bytes := TFile.ReadAllBytes(FileName);
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3: Abbruch statt 'unlesbar'
     Exit;   // unlesbar -> kein Gate, bisheriges Verhalten
   end;
   Len    := Length(Bytes);

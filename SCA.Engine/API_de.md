@@ -200,6 +200,10 @@ Konfiguration kommt:
 Eine nicht auflösbare Projektdatei liefert ein Ergebnis mit genau einem
 `fkFileReadError`-Fund statt einer Exception.
 
+Ein erschöpfter Stapel oder erschöpfter Speicher (`EStackExhausted`,
+`EOutOfMemory`; `uCrashDiag.IsFatalScanException`) wird nie als Fund gebucht:
+`Run` gibt das Teilergebnis frei und wirft die Exception, die CLI endet mit Exit 99.
+
 ### 3.6 Profile
 
 Ein Profil ist eine Whitelist von Befund-Arten. `''` (leer) = **alle**

@@ -393,7 +393,12 @@ type
     FUsesCheck    : Boolean;
     FStartGen     : Integer;
     FResults      : TObjectList<TLeakFinding>;
+    // Abbruch an erschoepftem Stapel/Speicher (E3; Review-Runde 2026-11-14,
+    // m9) - statt DeliverResults meldet DeliverFatal den Abbruch.
+    FFatal        : Boolean;
+    FFatalMsg     : string;
     procedure DeliverResults;
+    procedure DeliverFatal;
   protected
     procedure Execute; override;
   public
@@ -591,25 +596,37 @@ begin
         Ses.Free;
       end;
     except
-      // Ein erschoepfter Stapel wird NIE verschluckt - dieselbe Regel wie
-      // in den beiden Schwester-Pfaden (uIDEAnalyseRunner.Execute und
-      // HandleScanDone): Windows stellt die Schutzseite nach einem
-      // Ueberlauf nicht wieder her; weiterlaufen heisst, mit einem
-      // Prozess zu arbeiten, der still Speicher korrumpiert. Lieber ein
-      // sichtbarer Absturz. Dieser dritte Scan-Pfad wurde bei der
-      // Inventur 2026-08-22 uebersehen.
-      on EStackExhausted do raise;
-      // Sonstiger Detector-Crash darf das Plugin nicht reissen. Liste
-      // leer lassen, damit DeliverResults sauber durchlaeuft.
+      // Erschoepfter Stapel oder Speicher (IsFatalScanException, E3): der
+      // Lauf ist ABGEBROCHEN - kein Ergebnis, die Funde des letzten Laufs
+      // dieser Datei bleiben stehen (die leere Liste unten ersetzte sie
+      // sonst still durch NICHTS). Bis 2026-11-14 (Review-Runde, m9) ging
+      // die Ausnahme hier weiter: sie verschwand ungelesen in
+      // TThread.FatalException, und die Statuszeile blieb auf 'Analysing:
+      // X' stehen. Jetzt meldet DeliverFatal den Abbruch. Verschluckt im
+      // Sinn der Regel von 2026-08-04 (Stapel nie verschlucken) ist der
+      // Stapel trotzdem nicht: dieser Thread rechnet danach nichts mehr,
+      // er meldet nur noch und endet - seine verlorene Schutzseite stirbt
+      // mit ihm (wie im Bulk-Runner, uIDEAnalyseRunner.Execute).
+      if IsFatalScanException(ExceptObject) then
+      begin
+        FFatal := True;
+        FFatalMsg := (ExceptObject as Exception).Message;
+        FreeAndNil(FResults);
+      end
       else
       begin
+        // Sonstiger Detector-Crash darf das Plugin nicht reissen. Liste
+        // leer lassen, damit DeliverResults sauber durchlaeuft.
         FreeAndNil(FResults);
         FResults := TObjectList<TLeakFinding>.Create(True);
       end;
     end;
 
-    // Ergebnis muss auf dem UI-Thread an den Frame.
-    Synchronize(DeliverResults);
+    // Ergebnis (bzw. Abbruch) muss auf dem UI-Thread an den Frame.
+    if FFatal then
+      Synchronize(DeliverFatal)
+    else
+      Synchronize(DeliverResults);
   finally
     // Wenn DeliverResults die Liste nicht uebernommen hat, hier freigeben.
     if Assigned(FResults) then
@@ -627,7 +644,9 @@ procedure TWatchAnalyzer.DeliverResults;
 // koennte zwischenzeitlich Generation gebumpt haben - z.B. weil
 // manuelle Analyse die Liste ohnehin neu fuellt).
 var
-  Local : TObjectList<TLeakFinding>;
+  Local  : TObjectList<TLeakFinding>;
+  Handed : TObjectList<TLeakFinding>;
+  Msg    : string;
 begin
   if not Assigned(GWatchMode) then Exit;
   if not GWatchMode.IsCurrentGeneration(FStartGen) then Exit;
@@ -640,27 +659,74 @@ begin
   FResults := nil;
 
   try
-    // Phase-2 Multi-Subscriber: Subscriber kriegen die Liste BORROWED.
-    // Sie duerfen nicht freed, modifizieren nur lesend; persistente
-    // Kopien klonen sie selbst. Dispatch laeuft VOR FOnFindings, weil
-    // der die Liste danach uebernimmt + freed.
-    GWatchMode.DispatchToSubscribers(FFileName, Local);
+    try
+      // Phase-2 Multi-Subscriber: Subscriber kriegen die Liste BORROWED.
+      // Sie duerfen nicht freed, modifizieren nur lesend; persistente
+      // Kopien klonen sie selbst. Dispatch laeuft VOR FOnFindings, weil
+      // der die Liste danach uebernimmt + freed.
+      GWatchMode.DispatchToSubscribers(FFileName, Local);
 
-    if Assigned(GWatchMode.FOnFindings) then
-    begin
-      // Ownership-Transfer: primaerer Callback uebernimmt die Liste (setzt
-      // OwnsObjects:=False und freed sie nach dem Reinkopieren in
-      // Frame.FAllFindings). Wir geben unsere Ref auf, damit das finally
-      // unten keinen Double-Free macht.
-      GWatchMode.FOnFindings(FFileName, Local);
-      Local := nil;
+      if Assigned(GWatchMode.FOnFindings) then
+      begin
+        // Ownership-Transfer: der primaere Callback uebernimmt die Liste in
+        // JEDEM Fall - er gibt sie auch frei, wenn er wirft (OnWatchFindings:
+        // try/finally Findings.Free). Deshalb die eigene Ref VOR dem Aufruf
+        // aufgeben: bis 2026-11-14 stand 'Local := nil' erst danach, ein
+        // Wurf im Callback haette die Liste im finally unten ein zweites
+        // Mal freigegeben.
+        Handed := Local;
+        Local  := nil;
+        GWatchMode.FOnFindings(FFileName, Handed);
+      end;
+    except
+      // Wirft die Uebernahme (z.B. Speicher beim Einhaengen), ging die
+      // Ausnahme bis 2026-11-14 ueber Synchronize in den Worker und
+      // verschwand dort ungelesen; die Statuszeile blieb auf 'Analysing: X'
+      // (Review-Runde, m9). Jetzt eine Meldung; der Frame hat seine Anzeige
+      // selbst konsistent gemacht (OnWatchFindings). Erschoepfter Stapel
+      // nie verschlucken - wie in den Schwester-Pfaden.
+      on EStackExhausted do raise;
+      on E: Exception do
+      begin
+        try
+          Msg := Format(_('Live analysis of %s: the findings could not be ' +
+            'shown (%s).'), [ExtractFileName(FFileName), E.Message]);
+        except
+          on EStackExhausted do raise;
+        else
+          Msg := '';   // unter Speichernot: wenigstens 'Analysing: X' beenden
+        end;
+        GWatchMode.DoStatus(Msg);
+      end;
     end;
   finally
     // Falls niemand uebernommen hat (kein Primary-Callback, oder Exception
-    // bevor Ownership-Transfer abgeschlossen war), freed wir hier. Bei
-    // erfolgreichem Transfer ist Local = nil und FreeAndNil ein No-op.
+    // vor der Uebergabe), freed wir hier. Nach der Uebergabe ist Local =
+    // nil und FreeAndNil ein No-op.
     FreeAndNil(Local);
   end;
+end;
+
+procedure TWatchAnalyzer.DeliverFatal;
+// UI-Thread (via Synchronize). Abbruch an erschoepftem Stapel/Speicher
+// (m9): KEIN FOnFindings - die Funde des letzten Laufs dieser Datei bleiben
+// im Dock und als Editor-Marker stehen; 'Analysing: X' endet mit der
+// Abbruch-Meldung. Eine veraltete Generation (manueller Lauf dazwischen)
+// meldet nichts - die Statuszeile gehoert dann dem neuen Lauf.
+var
+  Msg : string;
+begin
+  if not Assigned(GWatchMode) then Exit;
+  if not GWatchMode.IsCurrentGeneration(FStartGen) then Exit;
+  try
+    Msg := Format(_('Live analysis of %s aborted (%s) - previous findings ' +
+      'kept.'), [ExtractFileName(FFileName), FFatalMsg]);
+  except
+    on EStackExhausted do raise;
+  else
+    Msg := '';   // unter Speichernot: wenigstens 'Analysing: X' beenden
+  end;
+  GWatchMode.DoStatus(Msg);
 end;
 
 { ---- TWatchModeManager ---- }

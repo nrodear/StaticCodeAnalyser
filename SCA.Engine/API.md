@@ -197,6 +197,10 @@ on the request:
 An unresolvable project file yields a result with a single `fkFileReadError`
 finding instead of an exception.
 
+An exhausted stack or exhausted memory (`EStackExhausted`, `EOutOfMemory`;
+`uCrashDiag.IsFatalScanException`) is never booked as a finding: `Run` frees
+the partial result and raises the exception, the CLI exits 99.
+
 ### 3.6 Profiles
 
 A profile is a whitelist of finding kinds. `''` (empty) = **all** detectors.

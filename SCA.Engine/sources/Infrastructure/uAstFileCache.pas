@@ -135,9 +135,13 @@ begin
       // ist exakt das Schadensbild solcher stillen Stapel-Korruption.
       // Durchreichen -> der Top-Level-Handler beendet den Scan geordnet
       // als 'Analyseabbruch' mit Exit-Code statt still weiterzulaufen.
-      on EStackExhausted do raise;
+      // Seit 2026-11-14 (E3) gilt dasselbe fuer erschoepften Speicher: ein
+      // EOutOfMemory im Parser wurde hier als Parse-Fehler gebucht und
+      // erschien je Datei als 'Lesefehler: EOutOfMemory' - der Scan lief
+      // im erschoepften Prozess weiter. IsFatalScanException deckt beide.
       on E: Exception do
       begin
+        if IsFatalScanException(E) then raise;
         // NICHT E.Message allein: das war 2026-08-04 der Grund, warum eine
         // Zugriffsverletzung auf genau einer Korpusdatei nicht auswertbar
         // war. Die RTL-Meldung nennt weder die Exception-Klasse noch eine
@@ -151,7 +155,20 @@ begin
       end;
     end;
     if Result <> nil then
-      FCache.Add(K, Result)
+    begin
+      // Wirft das Add (Wachstum des Dictionary unter Speicherdruck), gehoert
+      // der frisch geparste Baum weder dem Cache noch dem Aufrufer, der nur
+      // die Ausnahme sieht - bis 2026-11-14 blieb er als Leck liegen, je
+      // Datei ein ganzer AST. Jetzt hier freigeben und weiterreichen.
+      try
+        if Assigned(GScanFaultHook) then
+          GScanFaultHook(SCAN_FAULT_AST_CACHE_ADD);
+        FCache.Add(K, Result);
+      except
+        FreeAndNil(Result);
+        raise;
+      end;
+    end
     else
       FFailed.AddOrSetValue(K, 'Parser lieferte kein Ergebnis');
   finally

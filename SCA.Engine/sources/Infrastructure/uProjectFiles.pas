@@ -85,7 +85,8 @@ implementation
 uses
   System.IOUtils, System.Variants, System.StrUtils,
   Winapi.ActiveX,
-  Xml.XMLDoc, Xml.XMLIntf;
+  Xml.XMLDoc, Xml.XMLIntf,
+  uCrashDiag;   // IsFatalScanException (E3)
 
 type
   // COM-Init-Guard (siehe Unit-Header). Init stellt sicher, dass COM auf dem
@@ -145,6 +146,7 @@ begin
   except
     on E: Exception do
     begin
+      if IsFatalScanException(E) then raise;   // E3
       if Assigned(AWarnings) then
         AWarnings.Add(Format('Include nicht aufloesbar (%s): %s',
           [E.Message, AInclude]));
@@ -201,6 +203,9 @@ begin
       on E: Exception do
       begin
         FreeAndNil(Result);
+        // E3: erschoepfter Stapel/Speicher ist kein 'nicht lesbar' der
+        // Projektdatei, sondern ein Abbruch des Laufs.
+        if IsFatalScanException(E) then raise;
         AErrorMsg := Format('%s nicht lesbar: %s', [AXmlFile, E.Message]);
       end;
     end;
@@ -346,6 +351,11 @@ begin
     on E: Exception do
     begin
       ADoc := nil;
+      if IsFatalScanException(E) then
+      begin
+        Com.Done;   // wie auf dem normalen Weg, dann Abbruch (E3)
+        raise;
+      end;
       AErrorMsg := Format('%s nicht lesbar: %s', [AXmlFile, E.Message]);
     end;
   end;

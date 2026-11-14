@@ -267,6 +267,9 @@ implementation
 // GodClass/LargeClass: Parser ist ein einziger Top-Down-Walker pro Datei,
 // Method-pro-Statement-Kind = unvermeidbarer Fan-Out (~80 Parse-Methoden).
 
+uses
+  uCrashDiag;   // IsFatalScanException (E3): die Lade-Fangstellen reichen Stapel/Speicher durch
+
 { Methoden-Direktiven nach dem Semikolon }
 function IsMethodDirective(K: TTokenKind): Boolean;
 begin
@@ -404,9 +407,9 @@ var
 begin
   Result := False;
   try
-    // TFileStream statt TFile.ReadAllBytes: die Unit hat keine
-    // implementation-uses, und System.IOUtils nur hierfuer zu ziehen
-    // lohnt nicht.
+    // TFileStream statt TFile.ReadAllBytes: System.IOUtils nur hierfuer zu
+    // ziehen lohnt nicht (die implementation-uses traegt seit 2026-11-14
+    // nur uCrashDiag fuer die E3-Durchreiche).
     FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
     try
       SetLength(Bytes, FS.Size);
@@ -416,6 +419,10 @@ begin
       FS.Free;
     end;
   except
+    // Unlesbar = False; erschoepfter Stapel/Speicher bricht ab (E3) - sonst
+    // meldete ParseFile 'Datei nicht lesbar' und der Cache buchte einen
+    // Lesefehler statt eines Abbruchs.
+    if IsFatalScanException(ExceptObject) then raise;
     Exit;
   end;
   Off := 0;
@@ -433,8 +440,11 @@ begin
   try
     ALines.LoadFromFile(FileName);
   except
+    // Kein Kodierungsproblem, sondern ein Abbruch (E3): nicht weiterprobieren.
+    if IsFatalScanException(ExceptObject) then raise;
     try ALines.LoadFromFile(FileName, TEncoding.UTF8);
     except
+      if IsFatalScanException(ExceptObject) then raise;
       Result := LoadAnsiWithoutBom(FileName, ALines);
     end;
   end;

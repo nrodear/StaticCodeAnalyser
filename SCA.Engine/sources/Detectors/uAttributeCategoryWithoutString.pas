@@ -32,7 +32,8 @@ implementation
 uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils,
-  uLocalization;   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uLocalization,   // N_ - feste Meldung als msgid markiert (Anzeige uebersetzt)
+  uCrashDiag;      // IsFatalScanException (E3)
 
 const
   CATEGORY_NO_ARG_RE = '\[Category\s*\]';
@@ -61,6 +62,7 @@ begin
       try
         if not RE.IsMatch(Code) then Continue;
       except
+        if IsFatalScanException(ExceptObject) then raise;   // E3: Stapel/Speicher bricht ab
         Continue;
       end;
       // FP-Fix 2026-06-21: Array-Index `Foo[Category]` wurde als Attribute

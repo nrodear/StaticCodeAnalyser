@@ -7314,3 +7314,27 @@ msgstr "eine Blattkomponente, die nirgends referenziert wird - ihr Löschen entf
 
 msgid "the handler method does not exist in the form class - removing the reference breaks nothing that worked before"
 msgstr "die Handler-Methode gibt es in der Form-Klasse nicht - das Entfernen der Referenz bricht nichts, was vorher funktionierte"
+
+msgid "Not enough memory: the scan of %d files was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."
+msgstr "Zu wenig Arbeitsspeicher: der Scan von %d Dateien wurde abgebrochen, sein Teilergebnis verworfen. Ordner eingrenzen oder die 64-Bit-Kommandozeile verwenden (StaticCodeAnalyser.d12.exe --path ...)."
+
+msgid "Display reset after an error: %s"
+msgstr "Anzeige nach einem Fehler zurückgesetzt: %s"
+
+msgid "Not enough memory - see the status bar."
+msgstr "Zu wenig Arbeitsspeicher - siehe Statuszeile."
+
+msgid "Analysis error - see the status bar."
+msgstr "Analysefehler - siehe Statuszeile."
+
+msgid "Not enough memory: the scan was aborted and its partial results discarded. Narrow the folder or use the 64-bit command line (StaticCodeAnalyser.d12.exe --path ...)."
+msgstr "Zu wenig Arbeitsspeicher: der Scan wurde abgebrochen, sein Teilergebnis verworfen. Ordner eingrenzen oder die 64-Bit-Kommandozeile verwenden (StaticCodeAnalyser.d12.exe --path ...)."
+
+msgid "Scan aborted"
+msgstr "Scan abgebrochen"
+
+msgid "Live analysis of %s: the findings could not be shown (%s)."
+msgstr "Live-Analyse von %s: die Funde konnten nicht angezeigt werden (%s)."
+
+msgid "Live analysis of %s aborted (%s) - previous findings kept."
+msgstr "Live-Analyse von %s abgebrochen (%s) - die bisherigen Funde bleiben."

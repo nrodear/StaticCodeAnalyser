@@ -986,7 +986,8 @@ Exit-Code-Mapping mit `--fail-on error`:
   Hints oder Warnings → **commit blockiert**; ein Scan, der Dateien
   übersprungen hat, darf nicht wie ein sauberer aussehen
 - 99 = Werkzeugfehler (ungültige Argumente, unbekanntes Profil, Report
-  nicht schreibbar) → **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
+  nicht schreibbar, dem Scan ging der Speicher aus - er bricht dann ab und
+  schreibt keinen Report) → **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
   nicht wie ein sauberer Scan aussehen; die `GEQ 3`-Regel oben fängt
   beide mit.
 

@@ -112,6 +112,7 @@ uses
   uStaticFiles,   // IsUnitLikeFile/IsFormFileName + .pp-Schluessel (Lazarus A4)
   System.IOUtils,
   uDetectorUtils,    // UsesNamesOfText (uses-Scan, SCA195)
+  uCrashDiag,        // IsFatalScanException (E3)
   uFileTextCache;    // AcquireLines/ReleaseLines - Projektdateien liegen nach
                      // dem Hauptscan im Cache (uses-Scan praktisch I/O-frei);
                      // Orphans/Testkontext laufen ueber den Fallback-Load
@@ -178,6 +179,7 @@ begin
   try
     Result := LowerCase(TPath.GetFullPath(APath));
   except
+    if IsFatalScanException(ExceptObject) then raise;   // E3
     Result := LowerCase(APath);
   end;
 end;

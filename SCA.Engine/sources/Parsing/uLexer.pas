@@ -261,7 +261,8 @@ procedure LexerIfdefClear;
 implementation
 
 uses
-  System.IOUtils;   // TFile/TPath fuer das Include-Define-Tracking
+  System.IOUtils,   // TFile/TPath fuer das Include-Define-Tracking
+  uCrashDiag;       // IsFatalScanException (E3)
 
 // noinspection-file AvoidOut, BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ConsecutiveSection, CyclomaticComplexity, DeepNesting, FreeAndNilHint, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, MultipleExit, NilComparison, PublicMemberWithoutDoc, RaisingRawException, RedundantBoolean, RedundantConditional, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember
 // Lexer-Token-Builder: kurze char-/keyword-Concats. MultipleExit = guard-
@@ -1040,6 +1041,9 @@ begin
     if not TFile.Exists(Pfad) then Exit;
     IncText := TFile.ReadAllText(Pfad);
   except
+    // Ausnahme von 'best-effort': erschoepfter Stapel/Speicher bricht den
+    // Scan ab (E3), statt das Include still zu uebergehen.
+    if IsFatalScanException(ExceptObject) then raise;
     Exit;
   end;
   if Length(IncText) > 1024 * 1024 then Exit;
@@ -1350,7 +1354,9 @@ begin
   try
     Result := EvalOrExpr(ABody, P);
   except
-    // Parser-Crash bei pathologischem Body -> konservativ Active
+    // Parser-Crash bei pathologischem Body -> konservativ Active; erschoepfter
+    // Stapel/Speicher ist kein Body-Problem und bricht ab (E3).
+    if IsFatalScanException(ExceptObject) then raise;
     Result := True;
   end;
 end;

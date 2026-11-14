@@ -17,15 +17,36 @@ unit uTestFindingFileIndex;
 //
 // UNGEDECKT bleibt die IDE-Seite: dass jeder Schreiber von FAllFindings
 // eine Generation weiterdreht (uIDEAnalyserForm, Handtest).
+//
+// TFindingDelivery (OOM-Diagnose 2026-11-14): die Uebergabe einer neuen
+// Fundliste an Besitz- und Anzeige-Liste des Docks. Abgesichert:
+//   * die alten Funde werden erst frei, wenn die Anzeige-Liste schon leer
+//     ist - gemessen IM Moment der Freigabe (Notify-Haken der Besitzliste);
+//   * wirft das Umhaengen, besitzt die Quelle weiter ALLE Funde: kein Leck,
+//     kein Doppelbesitz - jeder Fund wird am Ende genau einmal frei;
+//   * Discard nach einem Fehler im Nachlauf leert beide Listen, jeder Fund
+//     genau einmal frei.
 
 interface
 
 uses
-  DUnitX.TestFramework;
+  DUnitX.TestFramework,
+  System.Generics.Collections,
+  uMethodd12;                   // TLeakFinding (Signatur der Notify-Haken)
 
 type
   [TestFixture]
   TTestFindingFileIndex = class
+  private
+    // Zustand der Notify-Haken (TFindingDelivery-Tests).
+    FDisplayed          : TList<TLeakFinding>;
+    FMaxDisplayedAtFree : Integer;
+    FAddsSeen           : Integer;
+    FFailAtAdd          : Integer;
+    procedure RecordDisplayedAtFree(Sender: TObject; const Item: TLeakFinding;
+      Action: TCollectionNotification);
+    procedure FailAtNthAdd(Sender: TObject; const Item: TLeakFinding;
+      Action: TCollectionNotification);
   public
     [Test] procedure SameFindingFile_SlashAndCase_Match;
     [Test] procedure SameFindingFile_OtherLength_NoMatch;
@@ -41,17 +62,90 @@ type
     [Test] procedure Sync_CountChanged_Rebuilds;
     [Test] procedure Sync_OtherList_Rebuilds;
     [Test] procedure Sync_NilList_EmptyIndex;
+    // Review-Runde 2026-11-14 (m11): ein Neubau, der mitten im Befuellen
+    // wirft, gilt nicht als gebaut - der naechste Sync baut neu.
+    [Test] procedure Sync_AfterFailedRebuild_RebuildsAgain;
     [Test] procedure FindingsStampOf_TakesNewestGeneration;
+    [Test] procedure Delivery_FreesOldOnlyAfterDisplayDetached;
+    [Test] procedure Delivery_AddFailure_SourceKeepsEveryFinding;
+    [Test] procedure Delivery_Discard_EmptiesBothAndFreesOnce;
+    [Test] procedure Delivery_AppendFailure_KeepsOwnedAndSource;
   end;
 
 implementation
 
 uses
   System.SysUtils,
-  System.Generics.Collections,
-  uMethodd12,                   // TLeakFinding
   uPathNormalize,               // NormalizePathForKey
   uFindingFileIndex;
+
+type
+  // Fund mit Freigabe-Zaehler: GDestroyCount[Id] zaehlt, wie oft er frei
+  // wurde - 0 = Leck, 1 = richtig, mehr = Doppelfreigabe.
+  TTrackedFinding = class(TLeakFinding)
+  private
+    FId : Integer;
+  public
+    constructor CreateTracked(AId: Integer);
+    destructor Destroy; override;
+  end;
+
+  // Index, dessen Schluessel-Naht beim FailAt-ten Aufruf wirft (0 = nie) -
+  // wie der Speicher, der beim Anlegen eines Eimers ausgeht.
+  TFailingKeyIndex = class(TFindingFileIndex)
+  private
+    FFailAt : Integer;
+    FCalls  : Integer;
+  protected
+    function BucketKey(const AFileName: string): string; override;
+  public
+    property FailAt: Integer read FFailAt write FFailAt;
+  end;
+
+var
+  GDestroyCount : TArray<Integer>;
+
+function TFailingKeyIndex.BucketKey(const AFileName: string): string;
+begin
+  Inc(FCalls);
+  if FCalls = FFailAt then
+    OutOfMemoryError;   // das RTL-Objekt, kein eigenes (EHeapException.AllowFree)
+  Result := inherited BucketKey(AFileName);
+end;
+
+constructor TTrackedFinding.CreateTracked(AId: Integer);
+begin
+  inherited Create;
+  FId := AId;
+  FileName   := 'src\Unit' + IntToStr(AId) + '.pas';
+  LineNumber := '1';
+end;
+
+destructor TTrackedFinding.Destroy;
+begin
+  if (FId >= 0) and (FId < Length(GDestroyCount)) then
+    Inc(GDestroyCount[FId]);
+  inherited;
+end;
+
+// Neue Zaehler fuer ACount Funde (Ids 0..ACount-1).
+procedure ResetTracking(ACount: Integer);
+var
+  i : Integer;
+begin
+  SetLength(GDestroyCount, ACount);
+  for i := 0 to ACount - 1 do
+    GDestroyCount[i] := 0;
+end;
+
+// AList bekommt die Funde AFrom..ATo (Ids).
+procedure AddTracked(AList: TList<TLeakFinding>; AFrom, ATo: Integer);
+var
+  i : Integer;
+begin
+  for i := AFrom to ATo do
+    AList.Add(TTrackedFinding.CreateTracked(i));
+end;
 
 // Ein Fund in AList (Eigentum der Liste).
 function AddFinding(AList: TList<TLeakFinding>; const AFile: string;
@@ -360,6 +454,39 @@ begin
   end;
 end;
 
+procedure TTestFindingFileIndex.Sync_AfterFailedRebuild_RebuildsAgain;
+// Alt (vor 2026-11-14): Rebuild setzte Quelle, Anzahl, Stempel und FBuilt
+// VOR dem Befuellen. Warf das Befuellen, hielt der naechste Sync mit
+// derselben Liste und demselben Stempel den halben Index fuer aktuell -
+// Builds bliebe 1, und die zweite Datei fehlte unter den Kandidaten.
+var
+  L   : TObjectList<TLeakFinding>;
+  Idx : TFailingKeyIndex;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  Idx := TFailingKeyIndex.Create;
+  try
+    AddFinding(L, 'src\One.pas', 1, 0, 'a');
+    AddFinding(L, 'src\Two.pas', 2, 0, 'b');
+    Idx.FailAt := 2;   // der erste Schluessel geht, der zweite wirft
+    Assert.WillRaise(
+      procedure
+      begin
+        Idx.Sync(L, 7);
+      end, EOutOfMemory, 'der Neubau wirft beim zweiten Schluessel');
+    Assert.IsNull(Idx.Candidates(NormalizePathForKey('src\One.pas')),
+      'kein halber Index nach dem Wurf');
+    Idx.FailAt := 0;
+    Idx.Sync(L, 7);   // gleiche Liste, gleiche Anzahl, gleicher Stempel
+    Assert.AreEqual<Integer>(2, Idx.Builds, 'der zweite Sync hat neu gebaut');
+    Assert.IsNotNull(Idx.Candidates(NormalizePathForKey('src\Two.pas')),
+      'die zweite Datei steht nach dem Neubau im Index');
+  finally
+    Idx.Free;
+    L.Free;
+  end;
+end;
+
 procedure TTestFindingFileIndex.Sync_SameState_NoRebuild;
 var
   L   : TObjectList<TLeakFinding>;
@@ -487,6 +614,194 @@ begin
   finally
     Gens.Free;
   end;
+end;
+
+procedure TTestFindingFileIndex.RecordDisplayedAtFree(Sender: TObject;
+  const Item: TLeakFinding; Action: TCollectionNotification);
+// cnRemoved kommt bei TObjectList VOR der Freigabe: genau der Moment, in
+// dem die Anzeige-Liste nichts mehr halten darf.
+begin
+  if (Action = cnRemoved) and Assigned(FDisplayed)
+     and (FDisplayed.Count > FMaxDisplayedAtFree) then
+    FMaxDisplayedAtFree := FDisplayed.Count;
+end;
+
+procedure TTestFindingFileIndex.FailAtNthAdd(Sender: TObject;
+  const Item: TLeakFinding; Action: TCollectionNotification);
+// Simuliert das Scheitern des Umhaengens beim FFailAtAdd-ten Add - mit der
+// echten Ausnahme der RTL (OutOfMemoryError wirft das vorgefertigte Objekt,
+// das nie freigegeben wird und daher auch nicht leckt).
+begin
+  if Action <> cnAdded then Exit;
+  Inc(FAddsSeen);
+  if FAddsSeen = FFailAtAdd then
+    OutOfMemoryError;
+end;
+
+procedure TTestFindingFileIndex.Delivery_FreesOldOnlyAfterDisplayDetached;
+// Altes Muster (PopulateFindings bis 2026-11-14): FAllFindings.Clear VOR
+// FDisplayedFindings.Clear - hier gaebe das FMaxDisplayedAtFree = 3, die
+// Anzeige zeigte im Moment der Freigabe auf drei sterbende Funde.
+var
+  Owned, Source : TObjectList<TLeakFinding>;
+  Displayed     : TList<TLeakFinding>;
+  i             : Integer;
+begin
+  ResetTracking(5);                         // 0..2 alt, 3..4 neu
+  Owned     := TObjectList<TLeakFinding>.Create(True);
+  Source    := TObjectList<TLeakFinding>.Create(True);
+  Displayed := TList<TLeakFinding>.Create;
+  try
+    AddTracked(Owned, 0, 2);
+    Displayed.AddRange(Owned);
+    AddTracked(Source, 3, 4);
+    FDisplayed := Displayed;
+    FMaxDisplayedAtFree := 0;
+    Owned.OnNotify := RecordDisplayedAtFree;
+    TFindingDelivery.Deliver(Displayed, Owned, Source);
+    Owned.OnNotify := nil;
+    Assert.AreEqual<Integer>(0, FMaxDisplayedAtFree,
+      'beim Freigeben der alten Funde hielt die Anzeige noch Zeiger');
+    for i := 0 to 2 do
+      Assert.AreEqual<Integer>(1, GDestroyCount[i],
+        Format('alter Fund %d genau einmal frei', [i]));
+    Assert.AreEqual<Integer>(0, Displayed.Count, 'Anzeige leer');
+    Assert.AreEqual<Integer>(2, Owned.Count, 'neue Funde uebernommen');
+    Assert.IsFalse(Source.OwnsObjects, 'Quelle hat den Besitz abgegeben');
+    FreeAndNil(Source);
+    Assert.AreEqual<Integer>(0, GDestroyCount[3] + GDestroyCount[4],
+      'die Quelle gibt uebernommene Funde nicht frei');
+  finally
+    FDisplayed := nil;
+    Owned.OnNotify := nil;
+    Displayed.Free;
+    Source.Free;
+    Owned.Free;
+  end;
+  for i := 3 to 4 do
+    Assert.AreEqual<Integer>(1, GDestroyCount[i],
+      Format('neuer Fund %d genau einmal frei', [i]));
+end;
+
+procedure TTestFindingFileIndex.Delivery_AddFailure_SourceKeepsEveryFinding;
+// Altes Muster: findings.OwnsObjects := False VOR der Kopierschleife - ein
+// Wurf beim zweiten Add liess Fund 2 bei niemandem zurueck (Zaehler 0) und
+// die Quelle ohne Besitz. Hier muss jeder Fund genau einmal frei werden.
+var
+  Owned, Source : TObjectList<TLeakFinding>;
+  Displayed     : TList<TLeakFinding>;
+  i             : Integer;
+begin
+  ResetTracking(3);
+  Owned     := TObjectList<TLeakFinding>.Create(True);
+  Source    := TObjectList<TLeakFinding>.Create(True);
+  Displayed := TList<TLeakFinding>.Create;
+  try
+    AddTracked(Source, 0, 2);
+    FAddsSeen  := 0;
+    FFailAtAdd := 2;
+    Owned.OnNotify := FailAtNthAdd;
+    Assert.WillRaise(
+      procedure
+      begin
+        TFindingDelivery.Deliver(Displayed, Owned, Source);
+      end, EOutOfMemory, 'das Umhaengen wirft weiter');
+    Owned.OnNotify := nil;
+    Assert.AreEqual<Integer>(0, Owned.Count, 'halbe Kopie zurueckgenommen');
+    Assert.IsTrue(Source.OwnsObjects, 'die Quelle besitzt weiter alles');
+    Assert.AreEqual<Integer>(3, Source.Count, 'die Quelle ist vollstaendig');
+    for i := 0 to 2 do
+      Assert.AreEqual<Integer>(0, GDestroyCount[i],
+        Format('Fund %d nicht vorzeitig frei', [i]));
+  finally
+    Owned.OnNotify := nil;
+    Displayed.Free;
+    Owned.Free;
+    Source.Free;
+  end;
+  for i := 0 to 2 do
+    Assert.AreEqual<Integer>(1, GDestroyCount[i],
+      Format('Fund %d genau einmal frei (0 = Leck)', [i]));
+end;
+
+procedure TTestFindingFileIndex.Delivery_AppendFailure_KeepsOwnedAndSource;
+// Watch-Lauf (OnWatchFindings) haengt an. Altes Muster dort:
+// Findings.OwnsObjects := False VOR der Schleife - ein Wurf liess den Rest
+// bei niemandem. Jetzt: Bestand unveraendert, die Quelle besitzt weiter
+// alles, jeder Fund am Ende genau einmal frei.
+var
+  Owned, Source : TObjectList<TLeakFinding>;
+  i             : Integer;
+begin
+  ResetTracking(5);                         // 0..1 Bestand, 2..4 Watch-Lauf
+  Owned  := TObjectList<TLeakFinding>.Create(True);
+  Source := TObjectList<TLeakFinding>.Create(True);
+  try
+    AddTracked(Owned, 0, 1);
+    AddTracked(Source, 2, 4);
+    FAddsSeen  := 0;
+    FFailAtAdd := 2;                        // zweites ANGEHAENGTES Add wirft
+    Owned.OnNotify := FailAtNthAdd;
+    Assert.WillRaise(
+      procedure
+      begin
+        TFindingDelivery.Append(Owned, Source);
+      end, EOutOfMemory, 'das Anhaengen wirft weiter');
+    Owned.OnNotify := nil;
+    Assert.AreEqual<Integer>(2, Owned.Count, 'Bestand unveraendert');
+    Assert.IsTrue(Source.OwnsObjects, 'die Quelle besitzt weiter alles');
+    for i := 0 to 4 do
+      Assert.AreEqual<Integer>(0, GDestroyCount[i],
+        Format('Fund %d nicht vorzeitig frei', [i]));
+  finally
+    Owned.OnNotify := nil;
+    Owned.Free;
+    Source.Free;
+  end;
+  for i := 0 to 4 do
+    Assert.AreEqual<Integer>(1, GDestroyCount[i],
+      Format('Fund %d genau einmal frei (0 = Leck)', [i]));
+end;
+
+procedure TTestFindingFileIndex.Delivery_Discard_EmptiesBothAndFreesOnce;
+// Nachlauf scheitert (im Dock: UpdateStats/RebuildFilterCombos/ApplyFilter
+// werfen EOutOfMemory) -> Discard: Anzeige und Besitz leer, nichts zweimal
+// frei. Die Anzeige wird dabei VOR den Funden geleert.
+var
+  Owned, Source : TObjectList<TLeakFinding>;
+  Displayed     : TList<TLeakFinding>;
+  i             : Integer;
+begin
+  ResetTracking(2);
+  Owned     := TObjectList<TLeakFinding>.Create(True);
+  Source    := TObjectList<TLeakFinding>.Create(True);
+  Displayed := TList<TLeakFinding>.Create;
+  try
+    AddTracked(Source, 0, 1);
+    TFindingDelivery.Deliver(Displayed, Owned, Source);
+    Displayed.AddRange(Owned);              // Nachlauf hatte schon angefangen
+    FDisplayed := Displayed;
+    FMaxDisplayedAtFree := 0;
+    Owned.OnNotify := RecordDisplayedAtFree;
+    TFindingDelivery.Discard(Displayed, Owned);
+    Owned.OnNotify := nil;
+    Assert.AreEqual<Integer>(0, FMaxDisplayedAtFree,
+      'Discard gab Funde frei, die die Anzeige noch hielt');
+    Assert.AreEqual<Integer>(0, Displayed.Count, 'Anzeige leer');
+    Assert.AreEqual<Integer>(0, Owned.Count, 'Besitz leer');
+    for i := 0 to 1 do
+      Assert.AreEqual<Integer>(1, GDestroyCount[i],
+        Format('Fund %d genau einmal frei', [i]));
+  finally
+    FDisplayed := nil;
+    Owned.OnNotify := nil;
+    Displayed.Free;
+    Owned.Free;
+    Source.Free;
+  end;
+  for i := 0 to 1 do
+    Assert.AreEqual<Integer>(1, GDestroyCount[i],
+      Format('Fund %d nach allen Free genau einmal frei', [i]));
 end;
 
 end.

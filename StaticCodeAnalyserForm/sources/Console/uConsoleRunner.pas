@@ -17,7 +17,7 @@
 //   3  = mindestens 1 Error
 //   4  = mindestens 1 Read-Error (Parser-/IO-Fehler)
 //   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, unbekanntes Profil,
-//        VCS-Fehler bei --diff/--branch, ...)
+//        VCS-Fehler bei --diff/--branch, Speicher erschoepft, ...)
 //
 // Die Rangleiter 1-3 gewinnt gegen 4: ein Lauf mit Errors UND Lesefehlern
 // meldet 3. --fail-on darf einen Lauf mit Lesefehlern aber nicht auf 0
@@ -169,6 +169,11 @@ type
     // unabhaengig von seiner Severity - nie in Errors/Warnings/Hints.
     class procedure CountBySeverity(const Findings: TObjectList<TLeakFinding>;
       out Errors, Warnings, Hints, ReadErrors: Integer); static;
+    // Zusatzzeile zur 'Tool error'-Meldung auf stderr fuer eine Ausnahme der
+    // Klasse AClass ('' = keine). Public fuer die Tests (Review-Runde
+    // 2026-11-14, m13): beim Speicher-Abbruch der Ausweg - je Bitbreite,
+    // der 64-Bit-Build empfahl bis dahin sich selbst.
+    class function ToolErrorHint(AClass: TClass): string; static;
   private
     class procedure WriteHelp; static;
     class procedure WriteVersion; static;
@@ -1008,7 +1013,7 @@ begin
   WriteLn('   3 = errors present');
   WriteLn('   4 = read errors (parser/IO), no higher tier reached');
   WriteLn('  99 = tool error (bad args, missing path, unknown profile, VCS failure');
-  WriteLn('       in --diff/--branch, ...)');
+  WriteLn('       in --diff/--branch, scan out of memory, ...)');
   WriteLn('');
   WriteLn('  The tiers outrank each other in that order: a run with errors AND');
   WriteLn('  read errors exits 3, not 4. --fail-on lowers a suppressed tier to');
@@ -1316,10 +1321,14 @@ begin
   try
     // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
     // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+    // slmAppendLog (Review-Runde 2026-11-14, NEW-5): die Partition haengt
+    // eine Summenzeile an; das neue Log beginnt der Hauptlauf (ssRecursive)
+    // bzw. im Mischbaum StartNewScanLog unten. Bis dahin begannen Partition
+    // UND Hauptlauf je ein neues Log - das Log des vorigen Laufs war weg.
     TStaticFiles.ScanDialect := dlFpc;
     try
       AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
-        nil, Configs);
+        nil, Configs, slmAppendLog);
     finally
       TStaticFiles.ScanDialect := AltDialekt;
     end;
@@ -1351,6 +1360,12 @@ begin
           [PartDelphi.Count, PartFpc.Count]));
         PartDelphi.AddStrings(Configs);
         AlleDateien.AddStrings(Configs);
+        // Die beiden Listen-Laeufe beginnen kein neues Scan-Log, solange sie
+        // keinen Index-Walk haben (AnalyzeLeaksFromList walkt nur einen
+        // vorhandenen IndexRoot) - dann beginnt es hier, sonst wuchse es mit
+        // jedem Mischbaum-Lauf ohne Grenze (NEW-5).
+        if (Args.IndexRoot = '') or not DirectoryExists(Args.IndexRoot) then
+          TStaticFiles.StartNewScanLog;
         Req.Scope     := ssFileList;
         Req.Files     := PartDelphi.ToStringArray;
         Req.Dialect   := dlDelphi;
@@ -2226,6 +2241,13 @@ begin
       on E: Exception do
       begin
         WriteLn(ErrOutput, 'Tool error: ', E.ClassName, ': ', E.Message);
+        // E3 (2026-11-14): erschoepfter Speicher bricht den Scan in der
+        // Engine ab, statt ein lueckenhaftes Ergebnis (SCA006 je Datei) zu
+        // liefern - Exit 99, kein Bericht. Der Ausweg gehoert zur Meldung
+        // (ToolErrorHint, je Bitbreite).
+        var Hint := ToolErrorHint(E.ClassType);
+        if Hint <> '' then
+          WriteLn(ErrOutput, Hint);
         Exit(Integer(cecToolError));
       end;
     end;
@@ -2578,6 +2600,20 @@ begin
         // des case nicht prueft; am Verhalten aendert er nichts.
     end;
   end;
+end;
+
+class function TConsoleRunner.ToolErrorHint(AClass: TClass): string;
+begin
+  Result := '';
+  if Assigned(AClass) and AClass.InheritsFrom(EOutOfMemory) then
+    {$IFDEF CPU32BITS}
+    Result := 'The scan ran out of memory and was aborted; no report was ' +
+      'written. Narrow --path, or run the 64-bit build.';
+    {$ELSE}
+    // Der 64-Bit-Build hat keinen groesseren Bruder - nur Eingrenzen hilft.
+    Result := 'The scan ran out of memory and was aborted; no report was ' +
+      'written. Narrow --path.';
+    {$ENDIF}
 end;
 
 class procedure TConsoleRunner.WriteSummary(

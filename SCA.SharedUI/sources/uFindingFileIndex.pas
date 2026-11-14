@@ -72,6 +72,12 @@ type
     // Der Eimer zu AKey; legt ihn an, wenn es ihn noch nicht gibt.
     function BucketOf(const AKey: string): TList<TLeakFinding>;
     procedure Rebuild(AList: TList<TLeakFinding>; AStamp: UInt64);
+  protected
+    // Schluessel des Eimers fuer einen Dateinamen: NormalizePathForKey.
+    // Virtuell nur als Naht fuer die Tests (Review-Runde 2026-11-14, m11) -
+    // eine Unterklasse wirft hier, um einen Neubau mitten im Befuellen
+    // scheitern zu lassen.
+    function BucketKey(const AFileName: string): string; virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -86,6 +92,38 @@ type
     function HasFile(const AFile, AFileKey: string): Boolean;
     // Zahl der Neubauten seit Create - fuer die Tests.
     property Builds: Integer read FBuilds;
+  end;
+
+  // Uebergabe einer neuen Fundliste an die Listen des Docks, ausnahmefest
+  // (OOM-Diagnose 2026-11-14). Das Dock haelt die Funde in einer BESITZENDEN
+  // Liste (AOwned) und zeigt sie ueber eine NICHT besitzende (ADisplayed).
+  // Bis dahin gab PopulateFindings die alten Funde frei, bevor die Anzeige
+  // geleert war: warf ein Schritt dazwischen (EOutOfMemory im Nachlauf),
+  // zeigte die Anzeige-Liste auf freigegebene Objekte, und jedes Neumalen
+  // des Grids endete in 'Ungueltige Zeigeroperation'. Dazu gab die Quelle
+  // ihren Besitz VOR dem Kopieren ab - ein Wurf im Kopieren liess den Rest
+  // der Funde als Leck zurueck. Reine Listenlogik, ohne VCL und ToolsAPI,
+  // getestet in TestProject (uTestFindingFileIndex).
+  TFindingDelivery = class
+  public
+    // Reihenfolge: ADisplayed leeren -> AOwned leeren (gibt die alten Funde
+    // frei; niemand zeigt mehr darauf) -> Kapazitaet fuer alle Funde von
+    // ASource reservieren -> umhaengen -> erst dann ASource.OwnsObjects :=
+    // False. Wirft die Reservierung oder ein Add, ist AOwned leer und
+    // ASource besitzt weiter ALLE Funde (kein Leck, kein Doppelbesitz).
+    // ASource = nil: nur leeren.
+    class procedure Deliver(ADisplayed: TList<TLeakFinding>;
+      AOwned, ASource: TObjectList<TLeakFinding>); static;
+    // Wie Deliver, aber ANHAENGEN (Watch-Lauf je Datei): Kapazitaet fuer
+    // Bestand + ASource reservieren, umhaengen, dann ASource.OwnsObjects :=
+    // False. Wirft es, steht AOwned wie vorher da (der angehaengte Teil wird
+    // ohne Freigabe zurueckgenommen) und ASource besitzt weiter alles. Die
+    // Anzeige-Liste koppelt der Aufrufer VOR dem Loeschen alter Funde ab.
+    class procedure Append(AOwned, ASource: TObjectList<TLeakFinding>); static;
+    // Rueckfall nach einem Fehler im Nachlauf: Anzeige zuerst, dann der
+    // Besitz - beide Listen leer, alle Funde frei. nil-sicher.
+    class procedure Discard(ADisplayed: TList<TLeakFinding>;
+      AOwned: TObjectList<TLeakFinding>); static;
   end;
 
 implementation
@@ -169,6 +207,11 @@ begin
   inherited;
 end;
 
+function TFindingFileIndex.BucketKey(const AFileName: string): string;
+begin
+  Result := NormalizePathForKey(AFileName);
+end;
+
 function TFindingFileIndex.BucketOf(const AKey: string): TList<TLeakFinding>;
 begin
   if not FBuckets.TryGetValue(AKey, Result) then
@@ -190,29 +233,41 @@ var
   Bucket   : TList<TLeakFinding>;
   LastName : string;
 begin
-  FBuckets.Clear;
-  FSource := AList;
+  // Gebaut heisst VOLLSTAENDIG gebaut (2026-11-14): Stempel, Quelle und
+  // FBuilt standen bis dahin schon VOR dem Befuellen - warf das Befuellen
+  // (Speicher), hielt Sync den halben Index fuer aktuell und lieferte bis
+  // zum naechsten Schreiben der Liste unvollstaendige Kandidaten.
+  FBuilt  := False;
+  FSource := nil;
   FCount  := 0;
+  FBuckets.Clear;
+  Inc(FBuilds);
+  if Assigned(AList) then
+  try
+    // Die Funde einer Datei stehen meist hintereinander: den Schluessel des
+    // vorigen Namens wiederverwenden spart die Normalisierung je Fund.
+    // Bucket = nil heisst: noch kein Fund gesehen.
+    Bucket   := nil;
+    LastName := '';
+    for F in AList do
+    begin
+      if not Assigned(F) then Continue;
+      if (Bucket = nil) or (F.FileName <> LastName) then
+      begin
+        LastName := F.FileName;
+        Bucket   := BucketOf(BucketKey(LastName));
+      end;
+      Bucket.Add(F);
+    end;
+  except
+    FBuckets.Clear;   // kein halber Index - der naechste Sync baut neu
+    raise;
+  end;
+  FSource := AList;
+  if Assigned(AList) then
+    FCount := AList.Count;
   FStamp  := AStamp;
   FBuilt  := True;
-  Inc(FBuilds);
-  if not Assigned(AList) then Exit;
-  FCount := AList.Count;
-  // Die Funde einer Datei stehen meist hintereinander: den Schluessel des
-  // vorigen Namens wiederverwenden spart die Normalisierung je Fund.
-  // Bucket = nil heisst: noch kein Fund gesehen.
-  Bucket   := nil;
-  LastName := '';
-  for F in AList do
-  begin
-    if not Assigned(F) then Continue;
-    if (Bucket = nil) or (F.FileName <> LastName) then
-    begin
-      LastName := F.FileName;
-      Bucket   := BucketOf(NormalizePathForKey(LastName));
-    end;
-    Bucket.Add(F);
-  end;
 end;
 
 procedure TFindingFileIndex.Sync(AList: TList<TLeakFinding>; AStamp: UInt64);
@@ -246,6 +301,79 @@ begin
   for F in Bucket do
     if SameFindingFile(F.FileName, AFile, AFileKey) then
       Exit(True);
+end;
+
+{ TFindingDelivery }
+
+class procedure TFindingDelivery.Deliver(ADisplayed: TList<TLeakFinding>;
+  AOwned, ASource: TObjectList<TLeakFinding>);
+var
+  i    : Integer;
+  Owns : Boolean;
+begin
+  // 1. Anzeige abkoppeln, BEVOR ein alter Fund frei wird.
+  if Assigned(ADisplayed) then
+    ADisplayed.Clear;
+  // 2. Alte Funde frei - niemand zeigt mehr darauf.
+  AOwned.Clear;
+  if not Assigned(ASource) then Exit;
+  // 3. Platz fuer alle reservieren: wirft das (Speicher), besitzt ASource
+  //    weiter alles und AOwned ist leer.
+  AOwned.Capacity := ASource.Count;
+  // 4. Umhaengen. Mit reservierter Kapazitaet reallokiert Add nicht mehr;
+  //    wirft es trotzdem (Notify-Haken), wird die halbe Kopie OHNE Freigabe
+  //    zurueckgenommen - die Funde gehoeren weiter ASource.
+  try
+    for i := 0 to ASource.Count - 1 do
+      AOwned.Add(ASource[i]);
+  except
+    Owns := AOwned.OwnsObjects;
+    AOwned.OwnsObjects := False;
+    try
+      AOwned.Clear;
+    finally
+      AOwned.OwnsObjects := Owns;
+    end;
+    raise;
+  end;
+  // 5. Erst jetzt gibt die Quelle den Besitz ab.
+  ASource.OwnsObjects := False;
+end;
+
+class procedure TFindingDelivery.Append(AOwned,
+  ASource: TObjectList<TLeakFinding>);
+var
+  i, Base : Integer;
+  Owns    : Boolean;
+begin
+  if not Assigned(ASource) or (ASource.Count = 0) then Exit;
+  Base := AOwned.Count;
+  if AOwned.Capacity < Base + ASource.Count then
+    AOwned.Capacity := Base + ASource.Count;   // wirft: nichts umgehaengt
+  try
+    for i := 0 to ASource.Count - 1 do
+      AOwned.Add(ASource[i]);
+  except
+    Owns := AOwned.OwnsObjects;
+    AOwned.OwnsObjects := False;
+    try
+      while AOwned.Count > Base do
+        AOwned.Delete(AOwned.Count - 1);
+    finally
+      AOwned.OwnsObjects := Owns;
+    end;
+    raise;
+  end;
+  ASource.OwnsObjects := False;
+end;
+
+class procedure TFindingDelivery.Discard(ADisplayed: TList<TLeakFinding>;
+  AOwned: TObjectList<TLeakFinding>);
+begin
+  if Assigned(ADisplayed) then
+    ADisplayed.Clear;
+  if Assigned(AOwned) then
+    AOwned.Clear;
 end;
 
 end.
