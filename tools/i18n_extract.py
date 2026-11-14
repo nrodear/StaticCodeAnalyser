@@ -27,6 +27,20 @@ Kommentare ({...}, (*...*), //...) und Strings werden korrekt uebersprungen,
 d. h. ein "_(" in einem Kommentar oder in einem Literal (z. B. in den
 Fix-Hint-Codebeispielen von uFixHint.pas) erzeugt KEINEN Eintrag.
 
+Welche Dateien zaehlen, sagt der GIT-INDEX (git ls-files), nicht der
+Arbeitsbaum (2026-11-14). Die CI prueft --check in einem frischen
+Checkout, und der enthaelt nur getrackte Dateien. Der fruehere rglob las
+lokal auch ungetrackte und ignorierte Units mit (z. B. Kopien unter
+reDelphix/tools/fpc-pruefstand/) - sobald eine davon "_(" traegt, landen
+ihre Strings in der lokal erzeugten template.pot, und die CI meldet
+STALE, waehrend --check lokal gruen ist (oder umgekehrt). Aus dem Index
+kommt nur die LISTE, gelesen wird weiter der Arbeitsbaum: eine geaenderte
+Unit zaehlt mit ihrem aktuellen Text, eine neue erst nach 'git add'.
+Ungetrackte, nicht ignorierte Quellen mit "_(" nennt das Tool auf stderr
+("nicht im Index (git add?)"), ohne Einfluss auf Ergebnis und Exit-Code.
+Ohne git, ausserhalb eines Repos oder wenn der Index unter --root keine
+Datei kennt, gilt wie bisher der Arbeitsbaum - mit Hinweis auf stderr.
+
 Nutzung:
   python tools/i18n_extract.py                 # i18n/template.pot schreiben
   python tools/i18n_extract.py --check         # nur pruefen (CI, Exit 1 bei Diff)
@@ -40,17 +54,19 @@ Nutzung:
 Zeilenumbrueche) aus, damit zeilenbasierte Werkzeuge wie comm/diff in
 tools/i18n_audit.sh damit rechnen koennen.
 
-Idempotenz: Die Ausgabe haengt ausschliesslich vom Quellbaum ab (feste
-POT-Creation-Date-Konstante, msgids alphabetisch sortiert, Referenzen
-sortiert). Zweimal laufen lassen aendert nichts.
+Idempotenz: Die Ausgabe haengt ausschliesslich von den getrackten
+Quelldateien ab (feste POT-Creation-Date-Konstante, msgids alphabetisch
+sortiert, Referenzen sortiert). Zweimal laufen lassen aendert nichts.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -632,20 +648,69 @@ def _read_array_const_arg(sc: _Scanner, i: int,
 # Quellbaum
 # --------------------------------------------------------------------------
 
-def iter_sources(root: Path):
-    """Alle Pascal-Quelldateien unterhalb root, ohne EXCLUDED_DIRS."""
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
+def _is_source(rel: PurePath) -> bool:
+    """Endung aus SOURCE_SUFFIXES, kein Ordner aus EXCLUDED_DIRS, kein
+    Wurzelordner aus EXCLUDED_ROOT_DIRS (rel relativ zu root). EIN Filter
+    fuer Index und Rueckfall, damit beide Wege dieselben Dateien meinen."""
+    if rel.suffix.lower() not in SOURCE_SUFFIXES:
+        return False
+    dirs = rel.parts[:-1]
+    if any(part in EXCLUDED_DIRS for part in dirs):
+        return False
+    return not (dirs and dirs[0] in EXCLUDED_ROOT_DIRS)
+
+
+def _git_ls_files(root: Path, *options: str) -> tuple[list[str], str]:
+    """'git ls-files -z' in root. Rueckgabe: (Pfade relativ zu root mit
+    '/', Grund). Der Grund ist leer, wenn git lief, sonst nennt er die
+    Ursache (git fehlt, root liegt in keinem Repo, ...). -z liefert die
+    Pfade ungequotet, auch mit Nicht-ASCII-Zeichen."""
+    try:
+        res = subprocess.run(["git", "ls-files", "-z", *options],
+                             cwd=root, capture_output=True)
+    except OSError as exc:
+        return [], str(exc)
+    if res.returncode != 0:
+        lines = res.stderr.decode("utf-8", "replace").strip().splitlines()
+        return [], lines[0] if lines else f"git-Exit {res.returncode}"
+    # Ein Pfad mit Merge-Konflikt steht je Stufe einmal im Index (bis zu
+    # dreimal) - gelesen wird jede Datei trotzdem genau einmal.
+    paths = (os.fsdecode(p) for p in res.stdout.split(b"\0") if p)
+    return list(dict.fromkeys(paths)), ""
+
+
+def _warn_untracked(root: Path) -> None:
+    """Ungetrackte, nicht ignorierte Quelldateien mit "_(" auf stderr
+    nennen. Sie zaehlen nicht mit (die CI sieht sie nicht) - wer vergisst,
+    sie einzuchecken, verliert ihre msgids sonst still."""
+    others = _git_ls_files(root, "--others", "--exclude-standard")[0]
+    for rel in sorted(others):
+        path = root / rel
+        if not (_is_source(PurePosixPath(rel)) and path.is_file()):
             continue
-        if path.suffix.lower() not in SOURCE_SUFFIXES:
+        try:
+            text = read_text(path)
+        except OSError:
             continue
-        rel = path.relative_to(root)
-        dirs = rel.parts[:-1]
-        if any(part in EXCLUDED_DIRS for part in dirs):
-            continue
-        if dirs and dirs[0] in EXCLUDED_ROOT_DIRS:
-            continue
-        yield path
+        if "_(" in text:
+            print(f"WARN: nicht im Index (git add?): {rel}", file=sys.stderr)
+
+
+def iter_sources(root: Path) -> list[Path]:
+    """Alle Pascal-Quelldateien unterhalb root, ohne EXCLUDED_DIRS - die
+    Liste aus dem Git-Index, nicht aus dem Arbeitsbaum (s. Modulkopf)."""
+    tracked, why = _git_ls_files(root)
+    if not why and not tracked:
+        why = "der Index kennt unter root keine Datei"
+    if why:
+        # Rueckfall wie vor 2026-11-14: rglob ueber den Arbeitsbaum.
+        print(f"HINWEIS: kein Git-Index ({why}) - Dateien aus dem "
+              "Arbeitsbaum, ungetrackte zaehlen mit.", file=sys.stderr)
+        return [p for p in sorted(root.rglob("*"))
+                if p.is_file() and _is_source(p.relative_to(root))]
+    _warn_untracked(root)
+    return [root / rel for rel in tracked
+            if _is_source(PurePosixPath(rel)) and (root / rel).is_file()]
 
 
 def read_text(path: Path) -> str:
