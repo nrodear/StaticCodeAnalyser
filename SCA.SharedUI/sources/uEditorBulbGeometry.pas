@@ -12,6 +12,20 @@ unit uEditorBulbGeometry;
 // Uebernommen aus dem Prototyp EditorLamp (mess/editor-bulb f8917083), dort
 // in der IDE gemessen: C2/C3/C7/C8 gruen (Nico 2026-10-08). Getestet in
 // TestProject (uTestEditorBulbGeometry).
+//
+// OBERKANTE DER CARET-ZEILE (PickCaretLineTop, 2026-11-14): beim schnellen
+// Mausrad blieb die Birne auf ihrer Bildschirmhoehe stehen, waehrend die
+// Zeile wegscrollte. Vermutung, noch ungemessen: der Editor schiebt beim
+// Scrollen den Inhalt per GDI-Blit und malt die Caret-Zeile nicht neu - ihr
+// Zeilenzustand (LogicalLineState[..].WholeRect) nennt dann die Lage der
+// LETZTEN Malung, also die alte Hoehe. GetCharacterPosPx rechnet die Lage
+// eines Zeichens vermutlich aus dem aktuellen Bildausschnitt. Die Regel ist
+// NUR ein Plausibilitaetstest der Koordinaten: ein nicht leeres
+// Zeichenrechteck, das gegen den Zeilenzustand um ganze Zeilen versetzt
+// liegt, spricht dasselbe Koordinatensystem. Einen falschen Zeilenversatz
+// erkennt sie nicht - ein Rechteck, das eine ganze Zeile daneben liegt,
+// gilt genauso. Faellt der Test durch, gilt der Zeilenzustand wie bis
+// 2026-11-13.
 
 interface
 
@@ -40,6 +54,17 @@ type
     Gap          : Integer;  // Abstand zur Code-Kante (schon skaliert)
   end;
 
+  // Woher die Oberkante der Caret-Zeile stammt (PickCaretLineTop).
+  TCaretLineTopSource = (
+    ltsLineState,   // Zeilenzustand (WholeRect.Top) - das Verhalten bis 2026-11-13
+    ltsCharPos      // Zeichenrechteck (GetCharacterPosPx)
+  );
+
+  TCaretLineTop = record
+    Top    : Integer;              // Oberkante der Caret-Zeile im Client
+    Source : TCaretLineTopSource;  // ... und woher sie stammt
+  end;
+
 // Pixel bei 96 DPI -> Pixel bei APPI (kaufmaennisch gerundet); APPI <= 0
 // gilt als 96.
 function ScaleBulbValue(AValue96, APPI: Integer): Integer;
@@ -49,6 +74,15 @@ function ScaleBulbSize(ABase96, APPI: Integer): Integer;
 
 // True und das Rechteck, wenn die Birne ganz sichtbar Platz hat.
 function BulbBounds(const AIn: TEditorBulbInput; out ARect: TRect): Boolean;
+
+// Oberkante der Caret-Zeile aus zwei Quellen (s. Kopf): ALineStateTop ist
+// die Oberkante laut Zeilenzustand, ACharPosRect das Rechteck eines
+// Zeichens derselben Zeile (GetCharacterPosPx), APitch der Zeilenabstand.
+// Das Zeichenrechteck gilt, wenn es nicht leer ist (Bottom > Top), APitch
+// > 0 ist und (ACharPosRect.Top - ALineStateTop) mod APitch = 0; sonst
+// gilt ALineStateTop.
+function PickCaretLineTop(ALineStateTop: Integer; const ACharPosRect: TRect;
+  APitch: Integer): TCaretLineTop;
 
 implementation
 
@@ -98,6 +132,23 @@ begin
 
   ARect := Rect(X, Y, X + Size, Y + Size);
   Result := True;
+end;
+
+function PickCaretLineTop(ALineStateTop: Integer; const ACharPosRect: TRect;
+  APitch: Integer): TCaretLineTop;
+begin
+  Result.Top    := ALineStateTop;
+  Result.Source := ltsLineState;
+  if ACharPosRect.Bottom <= ACharPosRect.Top then
+    Exit;
+  if APitch <= 0 then
+    Exit;
+  // Int64: auch ein wildes Rechteck laesst die Differenz nicht ueberlaufen
+  // ($Q+ in den Paketen).
+  if (Int64(ACharPosRect.Top) - ALineStateTop) mod APitch <> 0 then
+    Exit;
+  Result.Top    := ACharPosRect.Top;
+  Result.Source := ltsCharPos;
 end;
 
 end.

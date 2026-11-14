@@ -52,6 +52,20 @@ unit uIDEFindingBulb;
 // juengeren Quelle, Dock oder Silent-/Auto-Scan - seit 2026-10-10 nie
 // gemischt).
 //
+// DIAGNOSE-SPUR (2026-11-14), standardmaessig AUS: nur solange
+// %TEMP%\sca-bulbtrace.on liegt (Inhalt egal; eine eigene Schalterdatei,
+// nicht die der Fund-Navigation). Dann schreibt jeder UpdateEditor-Lauf
+// eine Zeile 'upd ...' nach %TEMP%\sca-bulbtrace.log - Caret-Zeile,
+// TopLine, Zeilenzustand, Zeichenrechteck, Rechenwert, die alte Suche ueber
+// LineState[V], die echte Caret-Lage (GetGUIThreadInfo), die gewaehlte
+// Quelle, die Birne vorher/nachher und der Ausstiegsgrund -, der
+// LineHighlighter je EditorScrolled/EndPaint eine Zeile 'evt ...'. Der
+// Schalter wird hoechstens einmal je Sekunde geprueft; die Zeilen liegen im
+// Speicher und werden im Caret-Takt, beim Abbau und spaetestens ab
+// BULBTRACE_MAX_LINES Zeilen gesammelt angehaengt. Ohne Schalter: kein
+// Text, keine zusaetzliche Editor-Abfrage, kein Dateizugriff ausser der
+// Pruefung. Kein Egress.
+//
 // Anmeldung als UI-Element 'EditorBulb' (SortKey 35, nach dem
 // LineHighlighter, dessen Notifier die Ereignisse liefert), Not-Aus
 // [UI] Element.EditorBulb=0. Abgebaut wird ueber dieselbe Registry
@@ -88,6 +102,19 @@ procedure UnregisterFindingBulb;
 // Faltung): nur vormerken. Ohne angemeldete Birne ein No-op.
 procedure FindingBulbEditorChanged(const AEditor: TWinControl);
 
+// Diagnose-Spur (s. DIAGNOSE-SPUR im Kopf). True, solange
+// %TEMP%\sca-bulbtrace.on liegt - geprueft hoechstens einmal je Sekunde.
+// Vor jedem Spurtext fragen: ohne Schalter soll kein Text entstehen.
+function BulbTraceOn: Boolean;
+// Eine Zeile Spur, Zeitstempel davor; gepuffert und gesammelt an
+// %TEMP%\sca-bulbtrace.log angehaengt. Ohne Schalter ein No-op. Wirft nie
+// (ausser einem erschoepften Stapel und EAbort, wie ueberall hier).
+procedure BulbTrace(const AText: string);
+// Fuer den Editor-Notifier: eine Zeile 'evt <AEvent> ed=$<HWND>'. Ohne
+// Schalter nur die Abfrage, kein Text. Wirft nie (wie BulbTrace).
+procedure BulbTraceEditorEvent(const AEvent: string;
+  const AEditor: TWinControl);
+
 implementation
 
 // noinspection-file ExceptionTooGeneral
@@ -98,6 +125,8 @@ implementation
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
   System.Types, System.Generics.Collections, Vcl.Forms, Vcl.Menus,
+  System.IOUtils,         // TPath - %TEMP% der Diagnose-Spur
+  System.Diagnostics,     // TStopwatch - Zeitspalte der Diagnose-Spur
   ToolsAPI, ToolsAPI.Editor,
   uCrashDiag,             // EStackExhausted - nie verschlucken
   uFindingActions,        // ProviderCount, TFindingAction
@@ -113,8 +142,42 @@ const
   TIMER_CARET         = 1;     // Caret-Zeile nachfuehren (Tastatur loest kein Paint aus)
   CARET_POLL_MS       = 250;
   SIG_SEP             = #1;    // Trenner im Fingerabdruck der Funde einer Zeile
+  // Diagnose-Spur (s. Kopf): Schalter- und Logdatei in %TEMP%, wie oft der
+  // Schalter geprueft wird, ab wie vielen gepufferten Zeilen spaetestens
+  // angehaengt wird.
+  BULBTRACE_SWITCH    = 'sca-bulbtrace.on';
+  BULBTRACE_FILE      = 'sca-bulbtrace.log';
+  BULBTRACE_CHECK_MS  = 1000;
+  BULBTRACE_MAX_LINES = 2000;
+  MSEC_PER_SEC        = 1000.0;           // Spur: Stopwatch-Ticks -> ms
+  MAX_VISIBLE_SCAN    = 600;              // Spur: Obergrenze der alten Suche (vor 20a7e671)
+  PROBE_NONE          = Low(Integer);     // Spur: Wert unbekannt
 
 type
+  // Wie ein UpdateEditor-Lauf endete (Diagnose-Spur): no-editor heisst auch
+  // "kein Anbieter", line-hidden auch "kein Editorzustand".
+  TBulbOutcome = (boNone, boNoEditor, boNoCaret, boLineHidden, boNoHelp,
+    boNoBounds, boShown, boError);
+
+  // Was ein UpdateEditor-Lauf fuer die Diagnose-Spur festhaelt. Gefuellt
+  // und gelesen nur, wenn Active (StartBulbProbe); ohne Spur bleibt es bei
+  // Active = False und dem Ausstiegsgrund. PROBE_NONE = unbekannt.
+  TBulbProbe = record
+    Active     : Boolean;              // Spur lief bei Laufbeginn
+    Outcome    : TBulbOutcome;
+    CaretLine  : Integer;              // logische Caret-Zeile
+    TopLine    : Integer;              // State.TopLine
+    EditorTop  : Integer;              // State.EditorRect.Top
+    LoopTop    : Integer;              // Oberkante nach der alten Suche LineState[V]
+    EditorLine : Integer;              // LS.EditorLineNum
+    Pitch      : Integer;              // Zeilenabstand
+    WholeTop   : Integer;              // LS.WholeRect.Top
+    CharPos    : TRect;                // GetCharacterPosPx(LeftColumn, EditorLine)
+    Source     : TCaretLineTopSource;  // woher die Oberkante kam
+    OldTop     : Integer;              // Oberkante der Birne vor dem Lauf
+    OldVisible : Boolean;
+  end;
+
   // Eine vorgemerkte Birne (RetireBulb) und der Editor, dessen Kind sie
   // ist. Parent ist nur ein Zeiger zum VERGLEICH in Notification - er wird
   // nie dereferenziert, der Editor kann laengst tot sein.
@@ -146,6 +209,7 @@ type
     FDoomed     : TList<TDoomedBulb>;
     FMenu       : TPopupMenu;
     FActions    : TArray<TFindingAction>;   // die des zuletzt geoeffneten Menues
+    FProbe      : TBulbProbe;               // Diagnose-Spur des laufenden UpdateEditor
     procedure WndProc(var Msg: TMessage);
     procedure Schedule(const AEditor: TWinControl);
     procedure ProcessPending;
@@ -202,6 +266,326 @@ var
 begin
   for i := 0 to High(AErrors) do
     BulbLog('finding action provider failed - ' + AErrors[i]);
+end;
+
+{ ---- Diagnose-Spur (s. Kopf), standardmaessig aus ---- }
+
+var
+  GTraceChecked    : Boolean = False;  // Schalter schon einmal geprueft
+  GTraceCheckedAt  : UInt64 = 0;       // ... zuletzt um (GetTickCount64)
+  GTraceOn         : Boolean = False;  // ... mit diesem Ergebnis
+  GTraceSwitchPath : string = '';      // %TEMP%\sca-bulbtrace.on
+  GTraceLogPath    : string = '';      // %TEMP%\sca-bulbtrace.log
+  GTraceBuf        : TStringBuilder = nil;  // gepufferte Zeilen, ab der ersten Zeile
+  GTraceLines      : Integer = 0;      // ... ihre Zahl
+  GTraceClock      : TStopwatch;       // Zeitspalte, laeuft ab der ersten Zeile
+  GTraceFmt        : TFormatSettings;  // Invariant, ab der ersten Zeile
+
+function TraceSwitchExists: Boolean;
+// Die Pfade einmal aus %TEMP%; ohne TEMP keine Spur.
+var
+  Dir : string;
+begin
+  if GTraceSwitchPath = '' then
+  begin
+    Dir := TPath.GetTempPath;
+    if Dir = '' then Exit(False);
+    Dir := IncludeTrailingPathDelimiter(Dir);
+    GTraceSwitchPath := Dir + BULBTRACE_SWITCH;
+    GTraceLogPath    := Dir + BULBTRACE_FILE;
+  end;
+  Result := FileExists(GTraceSwitchPath);
+end;
+
+function BulbTraceOn: Boolean;
+// Zwischen zwei Pruefungen gilt das letzte Ergebnis. Laeuft die Uhr
+// rueckwaerts, wird neu geprueft; die Differenz entsteht erst nach dem
+// Vergleich - unter $Q+ liefe sie sonst in eine Ausnahme (wie
+// uBulbDecision.ElapsedMs).
+var
+  NowMs : UInt64;
+begin
+  NowMs := GetTickCount64;
+  if GTraceChecked and (NowMs >= GTraceCheckedAt)
+     and (NowMs - GTraceCheckedAt < BULBTRACE_CHECK_MS) then
+    Exit(GTraceOn);
+  GTraceChecked   := True;
+  GTraceCheckedAt := NowMs;
+  try
+    GTraceOn := TraceSwitchExists;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+    begin
+      GTraceOn := False;
+      BulbLog('trace switch ' + E.Message);
+    end;
+  end;
+  Result := GTraceOn;
+end;
+
+procedure FlushBulbTrace;
+// Gepufferte Zeilen gesammelt anhaengen: im Caret-Takt (PollCaret), beim
+// Abbau des Managers, spaetestens ab BULBTRACE_MAX_LINES (BulbTrace) und in
+// der finalization. Reine Win32-Aufrufe wie NavTrace (uIDEEditorIntegration):
+// ein Schreibfehler ist ein Rueckgabewert, die Zeilen sind dann verloren.
+// Ohne gepufferte Zeile ein No-op.
+var
+  Data    : UTF8String;
+  Handle  : THandle;
+  Written : DWORD;
+begin
+  if GTraceLines = 0 then Exit;
+  try
+    Data := UTF8Encode(GTraceBuf.ToString);
+    GTraceBuf.Clear;
+    GTraceLines := 0;
+    Handle := CreateFile(PChar(GTraceLogPath), FILE_APPEND_DATA,
+      FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_ALWAYS,
+      FILE_ATTRIBUTE_NORMAL, 0);
+    if Handle = INVALID_HANDLE_VALUE then Exit;
+    WriteFile(Handle, PAnsiChar(Data)^, Length(Data), Written, nil);
+    CloseHandle(Handle);
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('trace flush ' + E.Message);
+  end;
+end;
+
+procedure BulbTrace(const AText: string);
+// Zeitstempel: Uhrzeit (hh:nn:ss.zzz) und die Stopwatch in ms mit einer
+// Nachkommastelle - die Uhrzeit fuer den Abgleich mit dem Erleben, die
+// Stopwatch fuer Abstaende unter einer Millisekunde.
+var
+  Ms : Double;
+begin
+  if not BulbTraceOn then Exit;
+  try
+    if not Assigned(GTraceBuf) then
+    begin
+      GTraceBuf   := TStringBuilder.Create;
+      GTraceFmt   := TFormatSettings.Invariant;
+      GTraceClock := TStopwatch.StartNew;
+    end;
+    Ms := 0;
+    if TStopwatch.Frequency > 0 then
+      Ms := GTraceClock.ElapsedTicks * MSEC_PER_SEC / TStopwatch.Frequency;
+    GTraceBuf.Append(FormatDateTime('hh:nn:ss.zzz', Now, GTraceFmt))
+      .Append(' ').Append(FormatFloat('0.0', Ms, GTraceFmt))
+      .Append(' ').Append(AText).Append(sLineBreak);
+    Inc(GTraceLines);
+    if GTraceLines >= BULBTRACE_MAX_LINES then
+      FlushBulbTrace;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('trace ' + E.Message);
+  end;
+end;
+
+procedure BulbTraceEditorEvent(const AEvent: string;
+  const AEditor: TWinControl);
+// Das Handle nur, wenn es schon da ist - die Spur legt keins an.
+var
+  H : HWND;
+begin
+  if not BulbTraceOn then Exit;
+  try
+    H := 0;
+    if Assigned(AEditor) and AEditor.HandleAllocated then
+      H := AEditor.Handle;
+    BulbTrace(Format('evt %s ed=$%.8x', [AEvent, NativeUInt(H)]));
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('trace event ' + E.Message);
+  end;
+end;
+
+// Spur: Anfang eines UpdateEditor-Laufs. Ohne Schalter nur die Abfrage
+// (AProbe.Active = False); mit Schalter alle Werte auf unbekannt und die
+// Lage der Birne VOR dem Lauf. Keine Methode: der Manager steht an der
+// Methodengrenze (SCA138) - so wenig wie die Helfer darunter.
+procedure StartBulbProbe(var AProbe: TBulbProbe; AEditorWnd: HWND;
+  ABulbs: TDictionary<HWND, TSCABulbButton>);
+var
+  B : TSCABulbButton;
+begin
+  AProbe.Active := BulbTraceOn;
+  if not AProbe.Active then Exit;
+  AProbe.Outcome    := boNone;
+  AProbe.CaretLine  := PROBE_NONE;
+  AProbe.TopLine    := PROBE_NONE;
+  AProbe.EditorTop  := PROBE_NONE;
+  AProbe.LoopTop    := PROBE_NONE;
+  AProbe.EditorLine := PROBE_NONE;
+  AProbe.Pitch      := PROBE_NONE;
+  AProbe.WholeTop   := PROBE_NONE;
+  AProbe.CharPos    := Rect(0, 0, 0, 0);
+  AProbe.Source     := ltsLineState;
+  AProbe.OldTop     := PROBE_NONE;
+  AProbe.OldVisible := False;
+  if ABulbs.TryGetValue(AEditorWnd, B) then
+  begin
+    AProbe.OldTop     := B.Top;
+    AProbe.OldVisible := B.Visible;
+  end;
+end;
+
+// Spur: Vergleichswerte aus dem Editorzustand, NACHDEM FindCaretRect fuer
+// die Birne gelesen hat - TopLine, EditorRect.Top und die Oberkante der
+// Caret-Zeile nach der alten Suche (vor 20a7e671): LineState[V] fuer V =
+// TopLine bis BottomLine, hoechstens MAX_VISIBLE_SCAN Schritte. Nur bei
+// laufender Spur; die Birne benutzt keinen dieser Werte, und ein Fehler
+// kostet nur die Werte.
+procedure ProbeEditorState(var AProbe: TBulbProbe;
+  const AState: INTACodeEditorState; ACaretLine: Integer);
+var
+  V, Last : Integer;
+  LS      : INTACodeEditorLineState;
+begin
+  try
+    AProbe.CaretLine := ACaretLine;
+    AProbe.TopLine   := AState.TopLine;
+    AProbe.EditorTop := AState.EditorRect.Top;
+    Last := AState.BottomLine;
+    if Last - AProbe.TopLine > MAX_VISIBLE_SCAN then
+      Last := AProbe.TopLine + MAX_VISIBLE_SCAN;
+    for V := AProbe.TopLine to Last do
+    begin
+      LS := AState.LineState[V];
+      if Assigned(LS) and (LS.LogicalLineNum = ACaretLine) then
+      begin
+        AProbe.LoopTop := LS.WholeRect.Top;
+        Break;
+      end;
+    end;
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('trace probe ' + E.Message);
+  end;
+end;
+
+// Rechteck der Caret-Zeile aus ihrem Zeilenzustand ALS (s. FindCaretRect):
+// Hoehe = Zeilenabstand aus WholeRect, ersatzweise CharHeight; die
+// Oberkante waehlt PickCaretLineTop (uEditorBulbGeometry) zwischen
+// WholeRect und GetCharacterPosPx(LeftColumn, EditorLineNum). Bei
+// laufender Spur notiert es, was es gelesen und gewaehlt hat.
+function CaretLineRect(const AState: INTACodeEditorState;
+  const ALS: INTACodeEditorLineState; var AProbe: TBulbProbe): TRect;
+var
+  Whole   : TRect;
+  Pitch   : Integer;
+  EdLine  : Integer;
+  CharPos : TRect;
+  Pick    : TCaretLineTop;
+begin
+  Whole := ALS.WholeRect;
+  Pitch := Whole.Bottom - Whole.Top;
+  if Pitch <= 0 then
+    Pitch := AState.CharHeight;
+  EdLine  := ALS.EditorLineNum;
+  CharPos := AState.GetCharacterPosPx(AState.LeftColumn, EdLine);
+  Pick    := PickCaretLineTop(Whole.Top, CharPos, Pitch);
+  Result  := Rect(Whole.Left, Pick.Top, Whole.Right, Pick.Top + Pitch);
+  if not AProbe.Active then Exit;
+  AProbe.EditorLine := EdLine;
+  AProbe.Pitch      := Pitch;
+  AProbe.WholeTop   := Whole.Top;
+  AProbe.CharPos    := CharPos;
+  AProbe.Source     := Pick.Source;
+end;
+
+// Spur: Text eines Werts, '-' fuer unbekannt (PROBE_NONE).
+function ProbeText(AValue: Integer): string;
+begin
+  if AValue = PROBE_NONE then
+    Result := '-'
+  else
+    Result := IntToStr(AValue);
+end;
+
+// Spur: was es nur mit dem Zeilenzustand der Caret-Zeile gibt - darunter
+// der Rechenwert calc = (EditorLineNum - TopLine) * Pitch, der nur geloggt
+// und nie benutzt wird, und das ganze Zeichenrechteck (crect).
+function ProbeLineText(const AProbe: TBulbProbe): string;
+const
+  SOURCE_NAMES : array[TCaretLineTopSource] of string = ('linestate', 'charpos');
+var
+  Calc : string;
+begin
+  if AProbe.EditorLine = PROBE_NONE then
+    Exit('edline=- pitch=- whole=- cpos=- calc=- src=- crect=-');
+  Calc := '-';
+  if AProbe.TopLine <> PROBE_NONE then
+    Calc := IntToStr((Int64(AProbe.EditorLine) - AProbe.TopLine) * AProbe.Pitch);
+  Result := Format('edline=%d pitch=%d whole=%d cpos=%d calc=%s src=%s '
+    + 'crect=%d,%d,%d,%d', [AProbe.EditorLine, AProbe.Pitch, AProbe.WholeTop,
+    AProbe.CharPos.Top, Calc, SOURCE_NAMES[AProbe.Source], AProbe.CharPos.Left,
+    AProbe.CharPos.Top, AProbe.CharPos.Right, AProbe.CharPos.Bottom]);
+end;
+
+// Spur: wo Windows den Caret dieses Threads sieht (GetGUIThreadInfo) - in
+// Client-Koordinaten von hwndCaret; caretwnd=ed heisst, er gehoert dem
+// Editor AEditorWnd.
+function GuiCaretText(AEditorWnd: HWND): string;
+var
+  Info : TGUIThreadInfo;
+  Wnd  : string;
+begin
+  Info := Default(TGUIThreadInfo);
+  Info.cbSize := SizeOf(Info);
+  if not GetGUIThreadInfo(GetCurrentThreadId, Info) or (Info.hwndCaret = 0) then
+    Exit('caret=- caretwnd=none');
+  if Info.hwndCaret = AEditorWnd then
+    Wnd := 'ed'
+  else
+    Wnd := Format('$%.8x', [NativeUInt(Info.hwndCaret)]);
+  Result := Format('caret=%d caretwnd=%s', [Info.rcCaret.Top, Wnd]);
+end;
+
+// Spur: die eine Zeile eines UpdateEditor-Laufs - ProcessPending ruft sie
+// danach, nur bei laufender Spur. Werte aus AProbe, dazu die echte
+// Caret-Lage und die Birne nach dem Lauf; etop = EditorRect.Top.
+procedure TraceBulbRun(const AProbe: TBulbProbe; AEditorWnd: HWND;
+  ABulbs: TDictionary<HWND, TSCABulbButton>);
+const
+  OUTCOME_NAMES : array[TBulbOutcome] of string = ('none', 'no-editor',
+    'no-caret', 'line-hidden', 'no-help', 'no-bounds', 'shown', 'error');
+  YES_NO : array[Boolean] of string = ('no', 'yes');
+var
+  B      : TSCABulbButton;
+  NewTop : Integer;
+  NewVis : Boolean;
+begin
+  try
+    NewTop := PROBE_NONE;
+    NewVis := False;
+    if ABulbs.TryGetValue(AEditorWnd, B) then
+    begin
+      NewTop := B.Top;
+      NewVis := B.Visible;
+    end;
+    BulbTrace(Format('upd ed=$%.8x line=%s top=%s %s loop=%s %s '
+      + 'bulb=%s->%s vis=%s->%s exit=%s etop=%s', [NativeUInt(AEditorWnd),
+      ProbeText(AProbe.CaretLine), ProbeText(AProbe.TopLine),
+      ProbeLineText(AProbe), ProbeText(AProbe.LoopTop),
+      GuiCaretText(AEditorWnd), ProbeText(AProbe.OldTop), ProbeText(NewTop),
+      YES_NO[AProbe.OldVisible], YES_NO[NewVis], OUTCOME_NAMES[AProbe.Outcome],
+      ProbeText(AProbe.EditorTop)]));
+  except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    on E: Exception do
+      BulbLog('trace run ' + E.Message);
+  end;
 end;
 
 { TFindingBulbManager }
@@ -263,6 +647,9 @@ begin
   FreeAndNil(FBulbs);
   FreeAndNil(FEditors);
   FFindingsAt := nil;
+  // Spur: was noch gepuffert ist, jetzt anhaengen - der Takt laeuft nicht
+  // mehr.
+  FlushBulbTrace;
   inherited Destroy;
 end;
 
@@ -443,7 +830,12 @@ begin
   Items := FPending.ToArray;
   FPending.Clear;
   for H in Items do
+  begin
     UpdateEditor(H);
+    // Spur: je Lauf eine Zeile (s. Kopf); ohne Schalter nichts.
+    if FProbe.Active then
+      TraceBulbRun(FProbe, H, FBulbs);
+  end;
 end;
 
 // Tastatur bewegt den Caret ohne Paint-Ereignis, und ein neuer Scan
@@ -458,6 +850,8 @@ var
   D        : TBulbDecision;
 begin
   if FDestroying then Exit;
+  // Spur: gepufferte Zeilen im Takt anhaengen (ohne Zeilen ein No-op).
+  FlushBulbTrace;
   try
     // Ohne Anbieter gibt es keine Hilfe (Monolith: nie), bei inaktiver IDE
     // bewegt sich kein Caret - dann keine Runde je Sekunde (Review
@@ -592,6 +986,17 @@ function TFindingBulbManager.FindCaretRect(AEditor: TWinControl;
 // TopLine bis BottomLine (Review 2026-10-14). False, wenn die Zeile nicht
 // sichtbar ist (gescrollt oder gefaltet).
 //
+// Das Rechteck kommt seit 2026-11-14 aus CaretLineRect: Hoehe wie bisher
+// aus WholeRect (ersatzweise CharHeight), die OBERKANTE aus
+// GetCharacterPosPx(LeftColumn, EditorLineNum), wenn PickCaretLineTop
+// (uEditorBulbGeometry) das Zeichenrechteck gelten laesst, sonst wie bisher
+// aus WholeRect. Anlass: beim schnellen Mausrad blieb die Birne stehen,
+// waehrend die Zeile wegscrollte - vermutlich nennt WholeRect nach einem
+// Blit-Scroll die Lage der letzten Malung (ungemessen; die Diagnose-Spur
+// zeichnet beide Werte auf). Ob die Zeile sichtbar ist, entscheidet weiter
+// nur IsLogicalLineVisible; liegt die neue Oberkante ausserhalb des Editors,
+// zeigt BulbBounds keine Birne.
+//
 // State.Refresh VOR dem Lesen - und das ist zugleich die Antwort auf H6
 // der Caret-Synthese ("laesst INTACodeEditorState.Refresh malen?"): diese
 // Routine laeuft nach JEDEM EndPaint des Editors (Notifier -> Schedule ->
@@ -613,14 +1018,19 @@ begin
   if not Assigned(State) then Exit;
   State.Refresh;
   ACodeLeft := State.CodeLeftEdge;
-  if not State.IsLogicalLineVisible(ACaretLine) then Exit;
-  LS := State.LogicalLineState[ACaretLine];
-  if not Assigned(LS) or (LS.LogicalLineNum <> ACaretLine) then Exit;
-  ALineRect := LS.WholeRect;
-  if ALineRect.Bottom <= ALineRect.Top then
-    ALineRect.Bottom := ALineRect.Top + State.CharHeight;
-  ALineText := LS.Text;
-  Result := True;
+  LS := nil;
+  if State.IsLogicalLineVisible(ACaretLine) then
+    LS := State.LogicalLineState[ACaretLine];
+  Result := Assigned(LS) and (LS.LogicalLineNum = ACaretLine);
+  if Result then
+  begin
+    ALineRect := CaretLineRect(State, LS, FProbe);
+    ALineText := LS.Text;
+  end;
+  // Spur: die Vergleichswerte erst NACH den Lesungen der Birne - die alte
+  // Suche soll nicht beeinflussen, was die Birne sieht.
+  if FProbe.Active then
+    ProbeEditorState(FProbe, State, ACaretLine);
 end;
 
 function TFindingBulbManager.BulbFor(AEditorWnd: HWND;
@@ -667,16 +1077,22 @@ var
   PPI      : Integer;
   D        : TBulbDecision;
 begin
+  // Spur (s. Kopf): ohne Schalter nur die Abfrage; die Zeile zu diesem Lauf
+  // schreibt ProcessPending danach (TraceBulbRun), den Ausstiegsgrund
+  // vermerkt jeder Ausgang unten.
+  StartBulbProbe(FProbe, AEditorWnd, FBulbs);
   Ed := EditorOf(AEditorWnd);
   // Ohne Anbieter keine ToolsAPI-Beruehrung (Review 2026-10-14).
   if not Assigned(Ed) or (TFindingActions.ProviderCount = 0) then
   begin
+    FProbe.Outcome := boNoEditor;
     HideBulb(AEditorWnd);
     Exit;
   end;
   try
     if not CaretOf(Ed, FileName, Line) then
     begin
+      FProbe.Outcome := boNoCaret;
       HideBulb(AEditorWnd);
       Exit;
     end;
@@ -685,6 +1101,7 @@ begin
     // alle 250 ms neu, bis die Zeile wieder sichtbar ist.
     if not FindCaretRect(Ed, Line, LineRect, CodeLeft, LineText) then
     begin
+      FProbe.Outcome := boLineHidden;
       if not FDecisions.TryGetValue(AEditorWnd, D) then
         D.Reset;
       D.NoteLineHidden(FileName, Line, GetTickCount64);
@@ -694,6 +1111,7 @@ begin
     end;
     if not WantsBulb(AEditorWnd, FileName, Line, LineText) then
     begin
+      FProbe.Outcome := boNoHelp;
       HideBulb(AEditorWnd);
       Exit;
     end;
@@ -708,6 +1126,7 @@ begin
     Inp.Gap          := ScaleBulbValue(BULB_GAP_96, PPI);
     if not BulbBounds(Inp, R) then
     begin
+      FProbe.Outcome := boNoBounds;
       HideBulb(AEditorWnd);
       Exit;
     end;
@@ -717,12 +1136,16 @@ begin
       B.BoundsRect := R;
     if not B.Visible then
       B.Visible := True;
+    FProbe.Outcome := boShown;
   except
     on EStackExhausted do raise;
     on EAbort do raise;
     // Sonst kostet ein Fehler nur die Birne dieses Editors.
     on E: Exception do
+    begin
+      FProbe.Outcome := boError;
       BulbLog('UpdateEditor ' + E.Message);
+    end;
   end;
 end;
 
@@ -867,5 +1290,9 @@ finalization
       + 'tear it down');
     FreeAndNil(GBulbManager);
   end;
+  // Spur: den Rest anhaengen und den Puffer freigeben - Ereigniszeilen des
+  // LineHighlighters koennen nach dem Abbau des Managers gekommen sein.
+  FlushBulbTrace;
+  FreeAndNil(GTraceBuf);
 
 end.
