@@ -108,6 +108,18 @@ type
     [Test] procedure ProjektProfilWurzel_FolgtDemScanZiel;
   end;
 
+  // ---- Speicher-Abbruch: Hinweis auf stderr (Review-Runde 2026-11-14) ----
+  // Eigene Fixture. Der Exit 99 selbst ist hier nicht greifbar (Run laedt
+  // die echte analyser.ini, s. TTestProfilPruefung) - gepinnt wird die
+  // Zusatzzeile, die Run beim Speicher-Abbruch schreibt: der Ausweg je
+  // Bitbreite (m13). Bis dahin empfahl der 64-Bit-Build sich selbst.
+  [TestFixture]
+  TTestToolErrorHint = class
+  public
+    [Test] procedure OutOfMemory_NenntAuswegJeBitbreite;
+    [Test] procedure AndereAusnahme_KeinHinweis;
+  end;
+
 implementation
 
 uses
@@ -641,11 +653,41 @@ begin
     '--file: der Ordner der Datei');
 end;
 
+{ TTestToolErrorHint }
+
+procedure TTestToolErrorHint.OutOfMemory_NenntAuswegJeBitbreite;
+// Mit der Klasse, nicht mit einer Instanz: EOutOfMemory-Objekte gibt die
+// RTL nie frei (EHeapException.AllowFree) - ein Create hier waere ein Leck.
+var
+  Hint : string;
+begin
+  Hint := TConsoleRunner.ToolErrorHint(EOutOfMemory);
+  Assert.IsTrue(Pos('Narrow --path', Hint) > 0,
+    'der Ausweg Eingrenzen steht in jeder Bitbreite da: ' + Hint);
+  Assert.IsTrue(Pos('no report was written', Hint) > 0,
+    'die Zeile sagt, dass kein Bericht entstand: ' + Hint);
+  {$IFDEF CPU32BITS}
+  Assert.IsTrue(Pos('64-bit build', Hint) > 0,
+    '32 Bit: der Hinweis nennt den 64-Bit-Build: ' + Hint);
+  {$ELSE}
+  Assert.IsTrue(Pos('64-bit', Hint) = 0,
+    '64 Bit: kein Verweis auf den 64-Bit-Build (das ist dieser): ' + Hint);
+  {$ENDIF}
+end;
+
+procedure TTestToolErrorHint.AndereAusnahme_KeinHinweis;
+begin
+  Assert.AreEqual('', TConsoleRunner.ToolErrorHint(EConvertError),
+    'eine gewoehnliche Ausnahme bekommt keine Zusatzzeile');
+  Assert.AreEqual('', TConsoleRunner.ToolErrorHint(nil), 'nil: keine Zeile');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestStackReserveGuard);
   TDUnitX.RegisterTestFixture(TTestConsoleExitCode);
   TDUnitX.RegisterTestFixture(TTestEffektiverUsesCheck);
   TDUnitX.RegisterTestFixture(TTestAktiveRegelAnzahl);
   TDUnitX.RegisterTestFixture(TTestProfilPruefung);
+  TDUnitX.RegisterTestFixture(TTestToolErrorHint);
 
 end.

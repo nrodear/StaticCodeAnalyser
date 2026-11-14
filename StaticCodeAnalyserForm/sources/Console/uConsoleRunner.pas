@@ -169,6 +169,11 @@ type
     // unabhaengig von seiner Severity - nie in Errors/Warnings/Hints.
     class procedure CountBySeverity(const Findings: TObjectList<TLeakFinding>;
       out Errors, Warnings, Hints, ReadErrors: Integer); static;
+    // Zusatzzeile zur 'Tool error'-Meldung auf stderr fuer eine Ausnahme der
+    // Klasse AClass ('' = keine). Public fuer die Tests (Review-Runde
+    // 2026-11-14, m13): beim Speicher-Abbruch der Ausweg - je Bitbreite,
+    // der 64-Bit-Build empfahl bis dahin sich selbst.
+    class function ToolErrorHint(AClass: TClass): string; static;
   private
     class procedure WriteHelp; static;
     class procedure WriteVersion; static;
@@ -2228,10 +2233,11 @@ begin
         WriteLn(ErrOutput, 'Tool error: ', E.ClassName, ': ', E.Message);
         // E3 (2026-11-14): erschoepfter Speicher bricht den Scan in der
         // Engine ab, statt ein lueckenhaftes Ergebnis (SCA006 je Datei) zu
-        // liefern - Exit 99, kein Bericht. Der Ausweg gehoert zur Meldung.
-        if E is EOutOfMemory then
-          WriteLn(ErrOutput, 'The scan ran out of memory and was aborted; ' +
-            'no report was written. Narrow --path, or run the 64-bit build.');
+        // liefern - Exit 99, kein Bericht. Der Ausweg gehoert zur Meldung
+        // (ToolErrorHint, je Bitbreite).
+        var Hint := ToolErrorHint(E.ClassType);
+        if Hint <> '' then
+          WriteLn(ErrOutput, Hint);
         Exit(Integer(cecToolError));
       end;
     end;
@@ -2584,6 +2590,20 @@ begin
         // des case nicht prueft; am Verhalten aendert er nichts.
     end;
   end;
+end;
+
+class function TConsoleRunner.ToolErrorHint(AClass: TClass): string;
+begin
+  Result := '';
+  if Assigned(AClass) and AClass.InheritsFrom(EOutOfMemory) then
+    {$IFDEF CPU32BITS}
+    Result := 'The scan ran out of memory and was aborted; no report was ' +
+      'written. Narrow --path, or run the 64-bit build.';
+    {$ELSE}
+    // Der 64-Bit-Build hat keinen groesseren Bruder - nur Eingrenzen hilft.
+    Result := 'The scan ran out of memory and was aborted; no report was ' +
+      'written. Narrow --path.';
+    {$ENDIF}
 end;
 
 class procedure TConsoleRunner.WriteSummary(
