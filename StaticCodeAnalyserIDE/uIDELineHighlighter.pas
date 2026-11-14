@@ -2124,12 +2124,16 @@ var
   LineMap   : TObjectDictionary<Integer, TList<TFindingMarkEntry>>;
   EntryList : TList<TFindingMarkEntry>;
   Group     : TList<TFindingMarkEntry>;
-  // Neuaufbau in LOKALE Strukturen, Tausch erst am Ende (2026-11-14): bis
-  // dahin leerte die Routine FMarksByFile ZUERST und baute dann hinein - ein
-  // Wurf mittendrin (EOutOfMemory beim Marker-Neubau ueber alle Funde) liess
-  // einen halb gebauten Satz stehen, und der danach uebersprungene Rest
-  // (ResetState, Save-Notifier, Line-Tracker) passte nicht mehr zu ihm.
-  // Jetzt bleibt bei einem Wurf der alte Satz vollstaendig stehen.
+  // Alter Satz ZUERST frei, Neuaufbau in einen LOKALEN Satz, Tausch am Ende
+  // (2026-11-14, Review-Runde m5). Bis 2026-11-14 wurde direkt in
+  // FMarksByFile gebaut - ein Wurf mittendrin (EOutOfMemory beim Marker-
+  // Neubau ueber alle Funde) liess einen halb gebauten Satz stehen, zu dem
+  // der uebersprungene Rest (ResetState, Save-Notifier, Line-Tracker) nicht
+  // mehr passte. Die erste Abhilfe (alten Satz bis zum Tausch behalten)
+  // hielt alt + neu zugleich - genau die Spitze, an der der Speicher
+  // ausgeht. Jetzt: wirft der Neubau, ist der Satz LEER statt halb, und der
+  // Aufrufer (HighlightDebounceFire) raeumt mit Clear auch Notifier und
+  // Tracker ab.
   NewMarks  : TObjectDictionary<string, TFileMarks>;
   OldMarks  : TObjectDictionary<string, TFileMarks>;
 begin
@@ -2141,6 +2145,9 @@ begin
   // Alte Markierungen invalidieren BEVOR die neue Liste gesetzt wird,
   // damit die alten Stripes weggemalt werden.
   InvalidateAllLines;
+
+  // Alten Satz frei, BEVOR der neue entsteht (m5, s. NewMarks oben).
+  FMarksByFile.Clear;
 
   NewMarks := TObjectDictionary<string, TFileMarks>.Create([doOwnsValues]);
   try
@@ -2199,8 +2206,8 @@ begin
       PerLine.Free;
     end;
 
-    // Tausch: der fertige Satz wird DER Satz, der alte geht frei
-    // (doOwnsValues -> innere Dictionaries mit).
+    // Tausch: der fertige Satz wird DER Satz; der alte ist oben schon
+    // geleert, sein Objekt geht hier frei.
     OldMarks     := FMarksByFile;
     FMarksByFile := NewMarks;
     NewMarks     := nil;
