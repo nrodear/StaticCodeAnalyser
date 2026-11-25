@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 207 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 208 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -211,6 +211,7 @@ All 207 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA205](#sca205) | Function name read in its own body is a recursive call | **Error** | Bug | `uFunctionNameResult.pas` |
 | [SCA206](#sca206) | Formatter off/on marker malformed or unpaired | Hint | Code Smell | `uFormatterMarker.pas` |
 | [SCA207](#sca207) | Non-ASCII identifier that tools break | Warning | Bug | `uSourceEncoding.pas` |
+| [SCA208](#sca208) | Floating-point literal that can crash the Delphi 12 IDE | Hint | Code Smell | `uFloatLiteralIdeCrash.pas` |
 
 ---
 
@@ -5778,4 +5779,38 @@ The first message is the Delphi scan (Warning); the other two are `--dialect=fpc
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA207.md`._
+## SCA208
+**Floating-point literal that can crash the Delphi 12 IDE**
+
+> Unit contains a floating-point literal - showing it in the editor can crash the Delphi 12 IDE (a fault in the IDE parser, the code is correct)
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Code Smell |
+| Tags | `ide`, `delphi-12`, `tooling` |
+| Detector | `uFloatLiteralIdeCrash.pas` |
+
+The unit contains a floating-point literal such as `4.90`, `1e5` or `1.5E-3`. The code is correct; the fault lies in the Delphi 12 IDE: as soon as the unit is shown in the editor, the managed IDE parser behind code folding and Error Insight can fail with an unmasked floating-point exception, and the IDE terminates with a stack overflow in clr.dll (0xC00000FD). Whether it happens depends on the machine (the x87 control word of the IDE process), so the rule marks files at risk, not certain crashes. Observed with Delphi 12.1 Community Edition, before and after Patch 1; with Delphi 13 the crash was not seen in a single observation. Literals in inactive `{$IFDEF}` branches count as well (the editor shows them), and so do literals in a file included with `{$I}` or `{$INCLUDE}`: they are reported in the including unit at the directive, and the message names the literal, the include file and its line. One finding per file, at the first literal. The rule is off by default: it is not in the default profile, only in strict and style. Where the crash occurs, a possible workaround is to write the value without a floating-point literal, for example as a quotient of integers (`490 / 100`) - a workaround for the IDE fault, not a style recommendation.
+
+```pascal
+// BAD
+Price := 4.90;  // floating-point literal - showing this unit can crash the Delphi 12 IDE
+
+// GOOD
+Price := 490 / 100;  // workaround for the IDE fault: the same value without a floating-point literal
+```
+
+**Not reported:** numbers in comments and string literals (also `StrToFloat('4.90')`); integers, hex literals, ranges (`1..5` as subrange, array bound or case label) and integer division (`49 / 10`); a method call on an integer literal (`5.ToString`, `5.Equals(5)` - no digit after the dot, an identifier right behind it); an include file scanned on its own (`.inc` - showing it is harmless, the including unit is reported). `X := 1.;` (a dot followed by neither a digit nor an identifier) was not measured and is reported.
+
+What the messages look like:
+
+```
+Floating-point literal `4.90`: Delphi 12 may crash while showing this unit (IDE parser fault, clr.dll 0xC00000FD)
+Floating-point literal `4.90` in include file Rates.inc, line 2: Delphi 12 may crash while showing this unit (IDE parser fault, clr.dll 0xC00000FD)
+```
+
+The second form is a literal that stands only in a file included with `{$I}`; the finding sits at the directive.
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA208.md`._

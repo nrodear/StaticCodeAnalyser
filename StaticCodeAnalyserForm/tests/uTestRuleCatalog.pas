@@ -693,12 +693,14 @@ procedure TTestRuleCatalog.ProfileDefaultExcludesExactlyTheStyleRules;
 // entscheidet das Team-Profil"): genau diese acht reinen Konventions-Regeln
 // sind aus 'default' raus - die ersten sieben zusammen 48,1 % aller Funde
 // auf dem Referenzkorpus. Nicht mehr und nicht weniger; jede spaetere
-// stille Erweiterung der Liste faellt hier auf.
+// stille Erweiterung der Liste faellt hier auf. Dazu seit 2026-11-25 als
+// neunte SCA208 FloatLiteralIdeCrash (IDE-Hinweis, standardmaessig aus).
 const
-  EXPECTED : array[0..7] of string = (
+  EXPECTED : array[0..8] of string = (
     'PublicMemberWithoutDoc', 'NilComparison', 'BeginEndRequired',
     'WithStatement', 'ClassPerFile', 'DfmHardcodedCaption',
-    'IfElseBegin', 'FunctionNameAsResult');
+    'IfElseBegin', 'FunctionNameAsResult',
+    'FloatLiteralIdeCrash');
 var
   D     : TFindingKinds;
   K     : TFindingKind;
@@ -728,7 +730,7 @@ begin
            + 'Liste - stille Verkleinerung?', [N]));
   end;
   Assert.AreEqual<Integer>(Length(EXPECTED), Miss,
-    'default muss GENAU die acht beschlossenen Regeln weglassen');
+    'default muss GENAU die neun beschlossenen Regeln weglassen');
 end;
 
 procedure TTestRuleCatalog.ProfileUnknownFallsBackToAll;

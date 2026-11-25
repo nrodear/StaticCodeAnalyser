@@ -78,6 +78,7 @@ uses
   uTestFunctionNameResult in 'uTestFunctionNameResult.pas',
   uTestFuncNameScanText in 'uTestFuncNameScanText.pas',
   uTestFormatterMarker in 'uTestFormatterMarker.pas',
+  uTestFloatLiteralIdeCrash in 'uTestFloatLiteralIdeCrash.pas',
   uTestIpAddressScanKit in 'uTestIpAddressScanKit.pas',
   uTestIpAddressScanGrammar in 'uTestIpAddressScanGrammar.pas',
   uTestIpAddressScanClasses in 'uTestIpAddressScanClasses.pas',

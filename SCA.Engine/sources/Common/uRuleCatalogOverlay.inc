@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..206] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..207] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2945,12 +2945,32 @@ const
         'hlen mit, weil der Formatter auch sie formatiert. Behebung: die Datei als UTF-8 mit BOM speichern (Delphi) oder den Bezeichner in ASCII umbenennen (ae, oe, ue, ss) - f' +
         #$00FC + 'r Free Pascal hilft nur der ASCII-Name. SCA185 meldet dasselbe fehlende BOM f' +
         #$00FC + 'r die Datei als Ganzes; Doppelg' + #$00E4 + 'nger-Buchstaben meldet SCA193.'
+    ),
+    // SCA208
+    (
+      RuleID   : 'SCA208';
+      Name     : 'Gleitkomma-Literal, an dem die Delphi-12-IDE abst' + #$00FC + 'rzen kann';
+      ShortDesc: 'Unit enth' + #$00E4 +
+        'lt ein Gleitkomma-Literal - sie im Editor anzuzeigen kann die Delphi-12-IDE zum Absturz bringen (Fehler im IDE-Parser, der Code ist korrekt)';
+      FullDesc : 'Die Unit enth' + #$00E4 +
+        'lt ein Gleitkomma-Literal wie 4.90, 1e5 oder 1.5E-3. Der Code ist korrekt; der Fehler liegt in der Delphi-12-IDE: Sobald die Unit im Editor angezeigt wird, kann der verwaltete IDE-Parser hinter Code-Faltung und Error Insight an einer unmaskierten Gle' +
+        'itkomma-Ausnahme scheitern, und die IDE endet mit einem Stapel' + #$00FC +
+        'berlauf in clr.dll (0xC00000FD). Ob es passiert, h' + #$00E4 +
+        'ngt vom Rechner ab (dem x87-Steuerwort des IDE-Prozesses); die Regel markiert deshalb gef' +
+        #$00E4 + 'hrdete Dateien, keine sicheren Abst' + #$00FC +
+        'rze. Beobachtet mit Delphi 12.1 Community Edition, vor und nach Patch 1; bei Delphi 13 trat der Absturz in einer Einzelbeobachtung nicht auf. Literale in inaktiven {$IFDEF}-Zweigen z' +
+        #$00E4 +
+        'hlen mit (der Editor zeigt sie), ebenso Literale in einer per {$I} oder {$INCLUDE} eingebundenen Datei: Sie werden in der einbindenden Unit an der Direktive gemeldet, die Meldung nennt das Literal, die Include-Datei und deren Zeile. Ein Fund je Datei' +
+        ', am ersten Literal. Die Regel ist standardm' + #$00E4 + #$00DF +
+        'ig aus: Sie steht nicht im Profil default, nur in strict und style. Wo der Absturz auftritt, ist eine m' +
+        #$00F6 +
+        'gliche Umgehung, den Wert ohne Gleitkomma-Literal zu schreiben, etwa als Quotient ganzer Zahlen (490 / 100) - eine Umgehung des IDE-Fehlers, keine Stilempfehlung.'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..206] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..207] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -6861,6 +6881,42 @@ const
         'aide. SCA185 signale le m' + #$00EA +
         'me BOM manquant pour le fichier dans son ensemble ; les lettres sosies rel' + #$00E8 +
         'vent de SCA193.'
+    ),
+    // SCA208
+    (
+      RuleID   : 'SCA208';
+      Name     : 'Litt' + #$00E9 + 'ral ' + #$00E0 +
+        ' virgule flottante qui peut faire planter l''IDE Delphi 12';
+      ShortDesc: 'L''unit' + #$00E9 + ' contient un litt' + #$00E9 + 'ral ' + #$00E0 +
+        ' virgule flottante - l''afficher dans l''' + #$00E9 +
+        'diteur peut faire planter l''IDE Delphi 12 (d' + #$00E9 +
+        'faut de l''analyseur de l''IDE, le code est correct)';
+      FullDesc : 'L''unit' + #$00E9 + ' contient un litt' + #$00E9 + 'ral ' + #$00E0 +
+        ' virgule flottante comme 4.90, 1e5 ou 1.5E-3. Le code est correct ; le d' + #$00E9 +
+        'faut se trouve dans l''IDE Delphi 12 : d' + #$00E8 + 's que l''unit' + #$00E9 +
+        ' est affich' + #$00E9 + 'e dans l''' + #$00E9 + 'diteur, l''analyseur g' + #$00E9 + 'r' +
+        #$00E9 + ' de l''IDE qui sert au repliement de code et ' + #$00E0 + ' Error Insight peut ' +
+        #$00E9 + 'chouer sur une exception de virgule flottante non masqu' + #$00E9 +
+        'e, et l''IDE se termine par un d' + #$00E9 +
+        'bordement de pile dans clr.dll (0xC00000FD). Cela d' + #$00E9 +
+        'pend de la machine (le mot de contr' + #$00F4 + 'le x87 du processus de l''IDE) ; la r' +
+        #$00E8 + 'gle marque donc des fichiers ' + #$00E0 +
+        ' risque, pas des plantages certains. Observ' + #$00E9 +
+        ' avec Delphi 12.1 Community Edition, avant et apr' + #$00E8 +
+        's le Patch 1 ; avec Delphi 13, le plantage n''a pas ' + #$00E9 + 't' + #$00E9 +
+        ' vu lors d''une observation isol' + #$00E9 + 'e. Les litt' + #$00E9 +
+        'raux dans des branches {$IFDEF} inactives comptent aussi (l''' + #$00E9 +
+        'diteur les affiche), de m' + #$00EA + 'me que les litt' + #$00E9 +
+        'raux d''un fichier inclus par {$I} ou {$INCLUDE} : ils sont signal' + #$00E9 +
+        's dans l''unit' + #$00E9 + ' qui inclut, ' + #$00E0 +
+        ' la directive, et le message nomme le litt' + #$00E9 +
+        'ral, le fichier inclus et sa ligne. Un signalement par fichier, au premier litt' + #$00E9 +
+        'ral. La r' + #$00E8 + 'gle est d' + #$00E9 + 'sactiv' + #$00E9 + 'e par d' + #$00E9 +
+        'faut : elle ne figure pas dans le profil default, seulement dans strict et style. L' +
+        #$00E0 + ' o' + #$00F9 + ' le plantage se produit, un contournement possible consiste ' +
+        #$00E0 + ' ' + #$00E9 + 'crire la valeur sans litt' + #$00E9 + 'ral ' + #$00E0 +
+        ' virgule flottante, par exemple comme quotient d''entiers (490 / 100) - un contournement du d' +
+        #$00E9 + 'faut de l''IDE, pas une recommandation de style.'
     )
   );
 

@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 207 detector rules. Click an ID for full details.
+All 208 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -211,6 +211,7 @@ All 207 detector rules. Click an ID for full details.
 | [SCA205](SCA205.md) | Function name read in its own body is a recursive call | Error | Bug | `uFunctionNameResult.pas` |
 | [SCA206](SCA206.md) | Formatter off/on marker malformed or unpaired | Hint | Code Smell | `uFormatterMarker.pas` |
 | [SCA207](SCA207.md) | Non-ASCII identifier that tools break | Warning | Bug | `uSourceEncoding.pas` |
+| [SCA208](SCA208.md) | Floating-point literal that can crash the Delphi 12 IDE | Hint | Code Smell | `uFloatLiteralIdeCrash.pas` |
 
 ---
 

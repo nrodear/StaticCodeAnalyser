@@ -174,6 +174,7 @@ uses
   uLoopPastHighBound,    // SCA203 - for-Schleife einen Index zu weit
   uFunctionNameResult,   // SCA204/SCA205 - Funktionsname statt Result
   uFormatterMarker,      // SCA206 - Formatter-Marker {(*} / {*)} kaputt oder ohne Partner
+  uFloatLiteralIdeCrash, // SCA208 - Gleitkomma-Literal, Absturzrisiko Delphi-12-IDE
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -775,6 +776,11 @@ begin
   // '{(* }' durch den Vorfilter (Entscheid E4).
   AddD('FormatterMarker', fkFormatterMarker,
        TFormatterMarkerDetector.AnalyzeUnit, ['(*', '*)']);
+  // SCA208 (2026-11-25): ohne Vorfilter-Token - '.', 'e' und Ziffern stehen
+  // in jeder Datei, ein Token waere keine NOTWENDIGE Bedingung (wie SCA200).
+  // Laeuft nur in Profilen, die die Regel fuehren (nicht default).
+  AddD('FloatLiteralIdeCrash', fkFloatLiteralIdeCrash,
+       TFloatLiteralIdeCrashDetector.AnalyzeUnit);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);

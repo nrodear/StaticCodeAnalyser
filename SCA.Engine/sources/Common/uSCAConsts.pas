@@ -794,16 +794,26 @@ type
                                  //          Start im offenen Bereich). Hint, nur
                                  //          Formatierung (GExperts/CnWizards/JCF), nie
                                  //          das Kompilat. Nico-Entscheide 2026-11-06.
-    fkFragileNonAsciiIdentifier  // SCA207 - Bezeichner mit Nicht-ASCII-Buchstaben, den
+    fkFragileNonAsciiIdentifier, // SCA207 - Bezeichner mit Nicht-ASCII-Buchstaben, den
                                  //          Werkzeuge zerlegen: Delphi nur in UTF-8
                                  //          OHNE BOM (IDE/Formatter lesen ANSI),
                                  //          Warning; FPC jede Datei (nur ASCII-
                                  //          Bezeichner), Error. uSourceEncoding S4.
                                  //          Nico-Entscheide 2026-11-06.
+    fkFloatLiteralIdeCrash       // SCA208 - Gleitkomma-Literal in der Unit: Delphi 12
+                                 //          kann beim Anzeigen abstuerzen (IDE-Parser,
+                                 //          clr.dll 0xC00000FD). Hint, ein Fund je
+                                 //          Datei am ersten Literal; nicht im default-
+                                 //          Profil (strict/style). 2026-11-25.
+                                 //          In 'style', obwohl keine Konventionsregel:
+                                 //          der Fallback bildet default als AllKinds -
+                                 //          style (uRuleCatalog.LoadFallback), und
+                                 //          uTestRuleCatalog verlangt jedes Kind in
+                                 //          default oder style.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 207 belegt (SCA207),
+  // tragen hoechstens 256 Elemente - aktuell sind 208 belegt (SCA208),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1093,7 +1103,8 @@ const
     (Name: 'FunctionNameAsResult';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFunctionNameAsResult
     (Name: 'FunctionNameRecursion';      FindingType: ftBug;          DefaultSeverity: lsError),   // fkFunctionNameRecursion
     (Name: 'FormatterMarker';            FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkFormatterMarker
-    (Name: 'FragileNonAsciiIdentifier';  FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkFragileNonAsciiIdentifier
+    (Name: 'FragileNonAsciiIdentifier';  FindingType: ftBug;          DefaultSeverity: lsWarning), // fkFragileNonAsciiIdentifier
+    (Name: 'FloatLiteralIdeCrash';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkFloatLiteralIdeCrash
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1479,6 +1490,13 @@ begin
     // bleiben U-Umlaut und sz heil). Der FPC-Zweig setzt fcHigh am Fund
     // (Baubruch). EIGENER Case-Zweig (SCA040-Lehre).
     fkFragileNonAsciiIdentifier: Result := fcMedium;
+
+    // SCA208 FloatLiteralIdeCrash (neu 2026-11-25): das Literal ist sicher
+    // erkannt, ob Delphi 12 daran abstuerzt, haengt aber am Rechner (x87-
+    // Steuerwort der IDE) - dieselbe Lage wie SCA207. fcMedium haelt die
+    // Regel sichtbar, sobald ein Profil sie einschaltet. EIGENER Case-Zweig
+    // (SCA040-Lehre).
+    fkFloatLiteralIdeCrash: Result := fcMedium;
 
     // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
     // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die

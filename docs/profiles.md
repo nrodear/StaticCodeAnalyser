@@ -1,7 +1,7 @@
 ﻿# Scan profiles
 
 A **profile** is a named set of rules. It answers one question: *which of
-the 207 detectors run in this scan?* Everything else - severity floor,
+the 208 detectors run in this scan?* Everything else - severity floor,
 confidence floor, suppressions, baseline - filters afterwards. The
 profile decides what is looked for in the first place.
 
@@ -9,15 +9,15 @@ profile decides what is looked for in the first place.
 
 | Profile | Rules | What it is for |
 |---|---|---|
-| `strict` | 207 | Everything; in the CLI it also switches on SCA007 (unused uses), in the EXE and the IDE plugin it does not (see below). The completeness promise hangs on this one - rules at confidence low still need `[Rules] MinConfidence=low`, see below. |
-| `default` | 199 | Everything except the eight pure-convention rules of `style`. Those eight account for roughly half of all findings on a large code base - which is why they are not in the default. |
-| `selftest-quiet` | 196 | Everything except eleven rules switched off for the self-scan (among them `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Not a subset of `default`: it keeps five of the `style` rules. Used when this repository scans itself. |
+| `strict` | 208 | Everything; in the CLI it also switches on SCA007 (unused uses), in the EXE and the IDE plugin it does not (see below). The completeness promise hangs on this one - rules at confidence low still need `[Rules] MinConfidence=low`, see below. |
+| `default` | 199 | Everything except the nine rules of `style`: eight pure-convention rules, which account for roughly half of all findings on a large code base, and SCA208 (floating-point literals that can crash the Delphi 12 IDE), which is off by default. |
+| `selftest-quiet` | 197 | Everything except eleven rules switched off for the self-scan (among them `BeginEndRequired`, `TooLongLine`, `UnsortedUses`, `ConcatToFormat`, `NestedTry`). Not a subset of `default`: it keeps six of the `style` rules. Used when this repository scans itself. |
 | `code-quality` | 27 | Maintainability: dead code, long methods, complexity, unused uses (SCA007 only with `[Detectors] UsesCheck=1`). |
 | `ide-fast` | 21 | Small enough to run on every file you open in the IDE. Bugs and security, no style. |
 | `dfm-only` | 20 | The form-file checks alone. |
 | `bugs-only` | 21 | Defects only - no smells, no conventions. |
 | `security` | 9 | Vulnerabilities and hotspots only. |
-| `style` | 8 | The pure-convention rules that `default` leaves out. |
+| `style` | 9 | The rules that `default` leaves out: the pure-convention rules and SCA208. |
 
 Counts are measured against the current catalogue, not estimated.
 
@@ -71,7 +71,7 @@ Each entry is a list of tokens, applied **left to right**:
 
 | Token | Effect |
 |---|---|
-| `*` | all 207 kinds |
+| `*` | all 208 kinds |
 | `Kind` | add this kind |
 | `!Kind` or `-Kind` | remove this kind |
 

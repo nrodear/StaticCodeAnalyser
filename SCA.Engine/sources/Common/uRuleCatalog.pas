@@ -1407,7 +1407,7 @@ begin
   FProfiles.AddOrSetValue('style',
     [fkPublicMemberWithoutDoc, fkNilComparison, fkBeginEndRequired,
      fkWithStatement, fkClassPerFile, fkDfmHardcodedCaption,
-     fkIfElseBegin, fkFunctionNameAsResult]);
+     fkIfElseBegin, fkFunctionNameAsResult, fkFloatLiteralIdeCrash]); // SCA208: aus (s. uSCAConsts)
   // 'default' = alles ausser 'style'. Bewusst als Differenz gebildet und
   // nicht als zweite Liste: so kann ein neues Kind hier gar nicht erst
   // durchfallen, und der Fallback bleibt automatisch synchron mit der

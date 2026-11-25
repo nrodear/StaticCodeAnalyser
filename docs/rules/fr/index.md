@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 207 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 208 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -211,6 +211,7 @@ Les 207 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA205](SCA205.md) | Le nom de la fonction lu dans son propre corps est un appel récursif | Error | Bug | `uFunctionNameResult.pas` |
 | [SCA206](SCA206.md) | Marqueur de désactivation du formateur mal écrit ou sans partenaire | Hint | Code Smell | `uFormatterMarker.pas` |
 | [SCA207](SCA207.md) | Identificateur non-ASCII que les outils cassent | Warning | Bug | `uSourceEncoding.pas` |
+| [SCA208](SCA208.md) | Littéral à virgule flottante qui peut faire planter l'IDE Delphi 12 | Hint | Code Smell | `uFloatLiteralIdeCrash.pas` |
 
 ---
 

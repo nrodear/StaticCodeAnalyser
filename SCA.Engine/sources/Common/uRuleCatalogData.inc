@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..206] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..207] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2865,6 +2865,18 @@ const
         '  Groesse: Integer;  // written with o-umlaut and sharp s - the formatter inserts blanks into the name';
       GoodEx   : '// the same file saved as UTF-8 WITH BOM - or an ASCII name' + #13#10 + 'var' + #13#10 +
         '  Groesse: Integer;';
+      Anchor   : '';
+      FixMode  : '';
+      EditorHelp: False;
+      EditorHelps: ''
+    ),
+    // SCA208
+    (
+      RuleID   : 'SCA208';
+      Name     : 'Floating-point literal that can crash the Delphi 12 IDE';
+      ShortDesc: 'Unit contains a floating-point literal - showing it in the editor can crash the Delphi 12 IDE (a fault in the IDE parser, the code is correct)';
+      BadEx    : 'Price := 4.90;  // floating-point literal - showing this unit can crash the Delphi 12 IDE';
+      GoodEx   : 'Price := 490 / 100;  // workaround for the IDE fault: the same value without a floating-point literal';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;

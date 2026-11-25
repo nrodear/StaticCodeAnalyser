@@ -18,6 +18,7 @@ uses
   uLoopPastHighBound,    // SCA203 - liest die Code-Sicht (FindingsOfFile)
   uFunctionNameResult,   // SCA204/SCA205 - liest den Quelltext (FindingsOfFile)
   uFormatterMarker,      // SCA206 - liest den Dateitext (FindingsOfFile)
+  uFloatLiteralIdeCrash, // SCA208 - liest den Dateitext (FindingsOfFile)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
@@ -309,6 +310,9 @@ begin
         // SCA206: eigener Kommentar-Lauf ueber den Dateitext (AcquireLines),
         // der AST bleibt ungenutzt.
         TFormatterMarkerDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA208: eigener Lexer-Lauf ueber den Dateitext (AcquireLines), dazu
+        // {$I}-Dateien neben der Temp-Datei; der AST bleibt ungenutzt.
+        TFloatLiteralIdeCrashDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);

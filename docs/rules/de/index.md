@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 207 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 208 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -211,6 +211,7 @@ Alle 207 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA205](SCA205.md) | Funktionsname im eigenen Rumpf gelesen ist ein rekursiver Aufruf | Error | Bug | `uFunctionNameResult.pas` |
 | [SCA206](SCA206.md) | Formatter-Marker zum Aus- und Einschalten falsch geschrieben oder ohne Partner | Hint | Code Smell | `uFormatterMarker.pas` |
 | [SCA207](SCA207.md) | Nicht-ASCII-Bezeichner, den Werkzeuge zerlegen | Warning | Bug | `uSourceEncoding.pas` |
+| [SCA208](SCA208.md) | Gleitkomma-Literal, an dem die Delphi-12-IDE abstürzen kann | Hint | Code Smell | `uFloatLiteralIdeCrash.pas` |
 
 ---
 

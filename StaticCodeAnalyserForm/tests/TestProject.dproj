@@ -169,6 +169,7 @@
         <DCCReference Include="uTestFunctionNameResult.pas"/>
         <DCCReference Include="uTestFuncNameScanText.pas"/>
         <DCCReference Include="uTestFormatterMarker.pas"/>
+        <DCCReference Include="uTestFloatLiteralIdeCrash.pas"/>
         <DCCReference Include="uTestIpAddressScanKit.pas"/>
         <DCCReference Include="uTestIpAddressScanGrammar.pas"/>
         <DCCReference Include="uTestIpAddressScanClasses.pas"/>

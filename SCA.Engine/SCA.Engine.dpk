@@ -208,6 +208,7 @@ contains
   uFuncNameResultScan in 'sources\Detectors\uFuncNameResultScan.pas',
   uFunctionNameResult in 'sources\Detectors\uFunctionNameResult.pas',
   uFormatterMarker in 'sources\Detectors\uFormatterMarker.pas',
+  uFloatLiteralIdeCrash in 'sources\Detectors\uFloatLiteralIdeCrash.pas',
   uHardcodedSecret in 'sources\Detectors\uHardcodedSecret.pas',
   uHardcodedString in 'sources\Detectors\uHardcodedString.pas',
   uIfElseBegin in 'sources\Detectors\uIfElseBegin.pas',
