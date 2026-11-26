@@ -2953,18 +2953,28 @@ const
       ShortDesc: 'Unit enth' + #$00E4 +
         'lt ein Gleitkomma-Literal - sie im Editor anzuzeigen kann die Delphi-12-IDE zum Absturz bringen (Fehler im IDE-Parser, der Code ist korrekt)';
       FullDesc : 'Die Unit enth' + #$00E4 +
-        'lt ein Gleitkomma-Literal wie 4.90, 1e5 oder 1.5E-3. Der Code ist korrekt; der Fehler liegt in der Delphi-12-IDE: Sobald die Unit im Editor angezeigt wird, kann der verwaltete IDE-Parser hinter Code-Faltung und Error Insight an einer unmaskierten Gle' +
-        'itkomma-Ausnahme scheitern, und die IDE endet mit einem Stapel' + #$00FC +
-        'berlauf in clr.dll (0xC00000FD). Ob es passiert, h' + #$00E4 +
-        'ngt vom Rechner ab (dem x87-Steuerwort des IDE-Prozesses); die Regel markiert deshalb gef' +
-        #$00E4 + 'hrdete Dateien, keine sicheren Abst' + #$00FC +
-        'rze. Beobachtet mit Delphi 12.1 Community Edition, vor und nach Patch 1; bei Delphi 13 trat der Absturz in einer Einzelbeobachtung nicht auf. Literale in inaktiven {$IFDEF}-Zweigen z' +
+        'lt ein Gleitkomma-Literal wie 4.90, 1e5 oder 1.5E-3. Der Code ist korrekt; der Fehler liegt in der Delphi-12-IDE: Wird die Unit im Editor angezeigt, kann der verwaltete IDE-Parser hinter Error Insight beim JIT-Kompilieren an einer unmaskierten x87-Gl' +
+        'eitkomma-Ausnahme scheitern, und die IDE endet mit einem Stapel' + #$00FC +
+        'berlauf in clr.dll (0xC00000FD). Beobachtet auf einem Rechner mit Delphi 12.1 Community Edition, vor und nach Patch 1, trat der Absturz nur auf, wenn alles zusammenkam: Delphi 12; ein anderer Code-Insight-Anbieter als der LSP-Anbieter (der klassische' +
+        ' Anbieter Borland.CodeInsight.Pascal oder einer aus einem Drittpaket); eine Error-Insight-Stufe ungleich None (ErrorInsightLevel ungleich 0); und die Unit im Editor angezeigt. Mit dem LSP-Anbieter (Werkseinstellung) rief die IDE den betroffenen Parse' +
+        'r nicht auf und st' + #$00FC + 'rzte nicht ab. Derselbe Aufrufstapel wird auch f' + #$00FC +
+        'r Refactoring-Befehle berichtet (nicht gemessen). Bei Delphi 13 trat der Absturz in einer Einzelbeobachtung nicht auf. Ob es passiert, kann zus' +
+        #$00E4 + 'tzlich vom Rechner abh' + #$00E4 + 'ngen; die Regel markiert deshalb gef' + #$00E4 +
+        'hrdete Dateien, keine sicheren Abst' + #$00FC +
+        'rze. Auf diesem Rechner beobachtete Umgehungen, ohne Quelltext zu ' + #$00E4 +
+        'ndern: Code Insight auf den LSP-Anbieter stellen; die Error-Insight-Stufe auf None setzen (die Fehlermarkierung entf' +
+        #$00E4 +
+        'llt, die Code-Faltung bleibt); oder die IDE mit der Umgebungsvariablen COMPlus_JITMinOpts=1 starten, nur f' +
+        #$00FC + 'r den IDE-Prozess gesetzt, nicht f' + #$00FC +
+        'r das ganze Benutzerkonto (die Fehlermarkierung bleibt). Diese IDE-Einstellungen sind der bessere Weg - der Quelltext muss f' +
+        #$00FC +
+        'r diesen Fehler nicht umgeschrieben werden. Literale in inaktiven {$IFDEF}-Zweigen z' +
         #$00E4 +
         'hlen mit (der Editor zeigt sie), ebenso Literale in einer per {$I} oder {$INCLUDE} eingebundenen Datei: Sie werden in der einbindenden Unit an der Direktive gemeldet, die Meldung nennt das Literal, die Include-Datei und deren Zeile. Ein Fund je Datei' +
         ', am ersten Literal. Die Regel ist standardm' + #$00E4 + #$00DF +
-        'ig aus: Sie steht nicht im Profil default, nur in strict und style. Wo der Absturz auftritt, ist eine m' +
-        #$00F6 +
-        'gliche Umgehung, den Wert ohne Gleitkomma-Literal zu schreiben, etwa als Quotient ganzer Zahlen (490 / 100) - eine Umgehung des IDE-Fehlers, keine Stilempfehlung.'
+        'ig aus: Sie steht nicht im Profil default, nur in strict und style. Nur wo sich die IDE-Einstellungen nicht ' +
+        #$00E4 +
+        'ndern lassen, kann man den Wert ohne Gleitkomma-Literal schreiben, etwa als Quotient ganzer Zahlen (490 / 100) - eine Umgehung des IDE-Fehlers, keine Stilempfehlung.'
     )
   );
 
@@ -6893,18 +6903,31 @@ const
         'faut de l''analyseur de l''IDE, le code est correct)';
       FullDesc : 'L''unit' + #$00E9 + ' contient un litt' + #$00E9 + 'ral ' + #$00E0 +
         ' virgule flottante comme 4.90, 1e5 ou 1.5E-3. Le code est correct ; le d' + #$00E9 +
-        'faut se trouve dans l''IDE Delphi 12 : d' + #$00E8 + 's que l''unit' + #$00E9 +
-        ' est affich' + #$00E9 + 'e dans l''' + #$00E9 + 'diteur, l''analyseur g' + #$00E9 + 'r' +
-        #$00E9 + ' de l''IDE qui sert au repliement de code et ' + #$00E0 + ' Error Insight peut ' +
-        #$00E9 + 'chouer sur une exception de virgule flottante non masqu' + #$00E9 +
-        'e, et l''IDE se termine par un d' + #$00E9 +
-        'bordement de pile dans clr.dll (0xC00000FD). Cela d' + #$00E9 +
-        'pend de la machine (le mot de contr' + #$00F4 + 'le x87 du processus de l''IDE) ; la r' +
-        #$00E8 + 'gle marque donc des fichiers ' + #$00E0 +
-        ' risque, pas des plantages certains. Observ' + #$00E9 +
-        ' avec Delphi 12.1 Community Edition, avant et apr' + #$00E8 +
-        's le Patch 1 ; avec Delphi 13, le plantage n''a pas ' + #$00E9 + 't' + #$00E9 +
-        ' vu lors d''une observation isol' + #$00E9 + 'e. Les litt' + #$00E9 +
+        'faut se trouve dans l''IDE Delphi 12 : lorsque l''unit' + #$00E9 + ' est affich' + #$00E9 +
+        'e dans l''' + #$00E9 + 'diteur, l''analyseur g' + #$00E9 + 'r' + #$00E9 +
+        ' de l''IDE qui sert ' + #$00E0 +
+        ' Error Insight peut, pendant sa compilation JIT, rencontrer une exception de virgule flottante x87 non masqu' +
+        #$00E9 + 'e, et l''IDE se termine par un d' + #$00E9 +
+        'bordement de pile dans clr.dll (0xC00000FD). Observ' + #$00E9 +
+        ' sur une machine avec Delphi 12.1 Community Edition, avant et apr' + #$00E8 +
+        's le Patch 1, le plantage n''est survenu que lorsque tout ' + #$00E9 + 'tait r' + #$00E9 +
+        'uni : Delphi 12 ; un fournisseur Code Insight autre que le fournisseur LSP (le fournisseur classique Borland.CodeInsight.Pascal ou celui d''un paquet tiers) ; un niveau Error Insight diff' +
+        #$00E9 + 'rent de None (ErrorInsightLevel diff' + #$00E9 + 'rent de 0) ; et l''unit' +
+        #$00E9 + ' affich' + #$00E9 + 'e dans l''' + #$00E9 + 'diteur. Avec le fournisseur LSP (r' +
+        #$00E9 + 'glage d''usine), l''IDE n''a pas appel' + #$00E9 + ' l''analyseur concern' +
+        #$00E9 + ' et n''a pas plant' + #$00E9 + '. La m' + #$00EA + 'me pile d''appels est signal' +
+        #$00E9 + 'e pour des commandes de refactoring (non mesur' + #$00E9 +
+        '). Avec Delphi 13, le plantage n''a pas ' + #$00E9 + 't' + #$00E9 +
+        ' vu lors d''une observation isol' + #$00E9 + 'e. Cela peut aussi d' + #$00E9 +
+        'pendre de la machine ; la r' + #$00E8 + 'gle marque donc des fichiers ' + #$00E0 +
+        ' risque, pas des plantages certains. Contournements observ' + #$00E9 +
+        's sur cette machine, sans modifier le source : passer Code Insight au fournisseur LSP ; r' +
+        #$00E9 + 'gler le niveau Error Insight sur None (le marquage des erreurs dispara' + #$00EE +
+        't, le repliement de code reste) ; ou d' + #$00E9 +
+        'marrer l''IDE avec la variable d''environnement COMPlus_JITMinOpts=1, d' + #$00E9 +
+        'finie pour le seul processus de l''IDE et non pour tout le compte utilisateur (le marquage des erreurs reste). Ces r' +
+        #$00E9 + 'glages de l''IDE sont la meilleure voie - le code source n''a pas ' + #$00E0 + ' ' +
+        #$00EA + 'tre r' + #$00E9 + #$00E9 + 'crit pour ce d' + #$00E9 + 'faut. Les litt' + #$00E9 +
         'raux dans des branches {$IFDEF} inactives comptent aussi (l''' + #$00E9 +
         'diteur les affiche), de m' + #$00EA + 'me que les litt' + #$00E9 +
         'raux d''un fichier inclus par {$I} ou {$INCLUDE} : ils sont signal' + #$00E9 +
@@ -6912,9 +6935,10 @@ const
         ' la directive, et le message nomme le litt' + #$00E9 +
         'ral, le fichier inclus et sa ligne. Un signalement par fichier, au premier litt' + #$00E9 +
         'ral. La r' + #$00E8 + 'gle est d' + #$00E9 + 'sactiv' + #$00E9 + 'e par d' + #$00E9 +
-        'faut : elle ne figure pas dans le profil default, seulement dans strict et style. L' +
-        #$00E0 + ' o' + #$00F9 + ' le plantage se produit, un contournement possible consiste ' +
-        #$00E0 + ' ' + #$00E9 + 'crire la valeur sans litt' + #$00E9 + 'ral ' + #$00E0 +
+        'faut : elle ne figure pas dans le profil default, seulement dans strict et style. Seulement l' +
+        #$00E0 + ' o' + #$00F9 + ' les r' + #$00E9 + 'glages de l''IDE ne peuvent pas ' + #$00EA +
+        'tre modifi' + #$00E9 + 's, on peut ' + #$00E9 + 'crire la valeur sans litt' + #$00E9 +
+        'ral ' + #$00E0 +
         ' virgule flottante, par exemple comme quotient d''entiers (490 / 100) - un contournement du d' +
         #$00E9 + 'faut de l''IDE, pas une recommandation de style.'
     )

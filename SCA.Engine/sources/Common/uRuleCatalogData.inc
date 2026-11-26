@@ -2876,7 +2876,7 @@ const
       Name     : 'Floating-point literal that can crash the Delphi 12 IDE';
       ShortDesc: 'Unit contains a floating-point literal - showing it in the editor can crash the Delphi 12 IDE (a fault in the IDE parser, the code is correct)';
       BadEx    : 'Price := 4.90;  // floating-point literal - showing this unit can crash the Delphi 12 IDE';
-      GoodEx   : 'Price := 490 / 100;  // workaround for the IDE fault: the same value without a floating-point literal';
+      GoodEx   : 'Price := 490 / 100;  // only if the IDE settings cannot be changed: the same value without a floating-point literal';
       Anchor   : '';
       FixMode  : '';
       EditorHelp: False;
